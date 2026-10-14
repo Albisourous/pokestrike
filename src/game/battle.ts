@@ -17,7 +17,10 @@ import {
   zapPower,
   blastPower,
   bumpCooldown,
+  roleOf,
+  ROLE_MODS,
 } from './stats';
+import type { Role } from './stats';
 
 export interface Rect {
   x: number;
@@ -52,6 +55,11 @@ interface Unit {
   flashT: number; // white hit flash
   cd: number; // player bump-super recharge in shots; 0 = ready
   lastBump: number; // last time a pass-through triggered this ally
+  role: Role; // stat-derived archetype
+  pow: number; // role damage multiplier
+  rngMul: number; // role super-range multiplier
+  launch: number; // role launch-speed multiplier
+  cdMod: number; // shots off the super cooldown
   lastHit: Map<number, number>; // shooter uid -> game time
 }
 
@@ -188,6 +196,9 @@ export class Battle {
     this.genObstacles();
     const n = team.length;
     team.forEach((def, i) => {
+      const role = roleOf(def.stats, def.healer);
+      const m = ROLE_MODS[role];
+      const hp = Math.round(playerHp(def.stats) * m.hp);
       this.players.push({
         uid: nextUid++,
         def,
@@ -198,8 +209,8 @@ export class Battle {
         vx: 0,
         vy: 0,
         r: 26,
-        hp: playerHp(def.stats),
-        maxHp: playerHp(def.stats),
+        hp,
+        maxHp: hp,
         timer: 0,
         drift: 0,
         wx: 0,
@@ -214,6 +225,11 @@ export class Battle {
         flashT: 0,
         cd: 0,
         lastBump: -1,
+        role,
+        pow: m.pow,
+        rngMul: m.range,
+        launch: m.launch,
+        cdMod: m.cdMod,
         lastHit: new Map(),
       });
     });
@@ -282,6 +298,11 @@ export class Battle {
       flashT: 0,
       cd: 0,
       lastBump: -1,
+      role: 'wild',
+      pow: 1,
+      rngMul: 1,
+      launch: 1,
+      cdMod: 0,
       lastHit: new Map(),
     }));
     this.waveBanner = 1.4;
@@ -312,7 +333,7 @@ export class Battle {
     const u = this.active;
     // direction from the pull; power from release timing on the charge meter
     const charge = this.charge();
-    const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * (0.4 + 0.6 * charge);
+    const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.lastHit.clear();
@@ -626,7 +647,7 @@ export class Battle {
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     const mult = effectiveness(shooter.def.type, e.def.type);
-    const dmg = physDamage(shooter.def.stats.atk, e.def.stats.def, mult);
+    const dmg = Math.round(physDamage(shooter.def.stats.atk, e.def.stats.def, mult) * shooter.pow);
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     const c = TYPE_COLOR[shooter.def.type];
@@ -667,25 +688,27 @@ export class Battle {
       this.shower(p.x, p.y, 5, '#8890b8', 90, 'dot');
       return;
     }
-    p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult));
+    p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult) - p.cdMod);
     this.bumpsThisShot.add(p.uid);
     p.flashT = 0.25;
     // rocks give cover: supers can't hit targets they can't see
     const near = (radius: number) =>
       this.enemies.filter(
-        (e) => !e.dead && dist(p, e) <= radius + e.r && !this.losBlocked(p.x, p.y, e.x, e.y),
+        (e) => !e.dead && dist(p, e) <= radius * p.rngMul + e.r && !this.losBlocked(p.x, p.y, e.x, e.y),
       );
     const nearest = (from: Unit, radius: number) =>
       this.enemies
-        .filter((e) => !e.dead && dist(from, e) <= radius + e.r && !this.losBlocked(from.x, from.y, e.x, e.y))
+        .filter((e) => !e.dead && dist(from, e) <= radius * p.rngMul + e.r && !this.losBlocked(from.x, from.y, e.x, e.y))
         .sort((a, b) => dist(from, a) - dist(from, b))[0];
     const phys = bumpIsPhysical(p.def.type);
     const eff = (e: Unit) => effectiveness(p.def.type, e.def.type);
     // Physical bump attacks roll Attack vs Defense; elemental ones SpA vs SpD.
     const bumpDmg = (e: Unit, power: number) =>
-      phys
-        ? physDamage(p.def.stats.atk, e.def.stats.def, eff(e), power)
-        : specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), power);
+      Math.round(
+        (phys
+          ? physDamage(p.def.stats.atk, e.def.stats.def, eff(e), power)
+          : specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), power)) * p.pow,
+      );
     const color = TYPE_COLOR[p.def.type];
 
     switch (p.def.type) {
@@ -708,7 +731,7 @@ export class Battle {
         for (let i = 0; i < 3; i++) {
           const next = this.enemies
             .filter(
-              (e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190 &&
+              (e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190 * p.rngMul &&
                 !this.losBlocked(from.x, from.y, e.x, e.y),
             )
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
@@ -829,6 +852,17 @@ export class Battle {
           this.shower(e.x, e.y, 8, '#ffffff', 240, 'streak');
           this.hurt(e, bumpDmg(e, 1.4), '#9df0ff');
         }
+      }
+    }
+    // healer role: every super also mends the team
+    if (p.role === 'healer') {
+      for (const pl of this.players) {
+        if (pl.dead) continue;
+        const heal = Math.max(1, Math.round(pl.maxHp * 0.15));
+        pl.hp = Math.min(pl.hp + heal, pl.maxHp);
+        pl.flashT = 0.15;
+        this.texts.push({ x: pl.x, y: pl.y - pl.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
+        this.converge(pl.x, pl.y, 5, '#6fdc6f', 'leaf');
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -1000,6 +1034,7 @@ export class Battle {
   }
 
   private damagePlayer(p: Unit, dmg: number) {
+    if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     p.hp -= dmg;
     p.flashT = 0.15;
     this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });

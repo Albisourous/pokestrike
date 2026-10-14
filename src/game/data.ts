@@ -10,6 +10,7 @@ export interface SpeciesDef {
   type: PokeType;
   stats: Stats; // canonical base stats: hp/atk/def/spa/spd/spe
   melee?: boolean; // enemy lunges at you when its timer hits 0 (instead of zapping)
+  healer?: boolean; // bump super also heals the team
 }
 
 const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe: number): Stats => ({
@@ -20,10 +21,10 @@ const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe:
 export const ROSTER: SpeciesDef[] = [
   { id: 25, name: 'Pikachu', type: 'electric', stats: st(35, 55, 40, 50, 50, 90) },
   { id: 4, name: 'Charmander', type: 'fire', stats: st(39, 52, 43, 60, 50, 65) },
-  { id: 1, name: 'Bulbasaur', type: 'grass', stats: st(45, 49, 49, 65, 65, 45) },
+  { id: 1, name: 'Bulbasaur', type: 'grass', stats: st(45, 49, 49, 65, 65, 45), healer: true },
   { id: 7, name: 'Squirtle', type: 'water', stats: st(44, 48, 65, 50, 64, 43) },
   { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55) },
-  { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20) },
+  { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20), healer: true },
   { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90) },
   { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55) },
   { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110) },
@@ -32,23 +33,34 @@ export const ROSTER: SpeciesDef[] = [
   { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55) },
   { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
   { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
-  { id: 3, name: 'Venusaur', type: 'grass', stats: st(80, 82, 83, 100, 100, 80) },
+  { id: 3, name: 'Venusaur', type: 'grass', stats: st(80, 82, 83, 100, 100, 80), healer: true },
   { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120) },
-  { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60) },
+  { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60), healer: true },
   { id: 76, name: 'Golem', type: 'rock', stats: st(80, 120, 130, 55, 65, 45) },
 ];
 
 export const DRAFT_ROUNDS = 4;
 export const DRAFT_OFFERS = 3;
 
-// Shuffle pool indices; each draft round offers the next DRAFT_OFFERS picks.
+// Each draft round offers 3 picks with distinct types — encourages a varied
+// team so no single type dominates a run.
 export function draftOrder(rng: () => number): number[] {
-  const idx = ROSTER.map((_, i) => i);
-  for (let i = idx.length - 1; i > 0; i--) {
+  const pool = ROSTER.map((_, i) => i);
+  for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [idx[i], idx[j]] = [idx[j], idx[i]];
+    [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  return idx;
+  const order: number[] = [];
+  for (let r = 0; r < DRAFT_ROUNDS; r++) {
+    const types = new Set<string>();
+    for (let k = 0; k < DRAFT_OFFERS; k++) {
+      let pick = pool.findIndex((i) => !types.has(ROSTER[i].type));
+      if (pick === -1) pick = 0; // pool ran dry of new types — allow a repeat
+      types.add(ROSTER[pool[pick]].type);
+      order.push(pool.splice(pick, 1)[0]);
+    }
+  }
+  return order;
 }
 
 const ENEMY_DB: SpeciesDef[] = [

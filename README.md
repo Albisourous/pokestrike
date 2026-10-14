@@ -28,9 +28,11 @@ Open the printed URL. Works on desktop and touch.
    and after the boss the arena **descends a depth** with bigger, tougher
    waves (another boss every 3rd depth) until you wipe.
 2. **Draft your team** — four rounds, one of three Pokémon each round, from an
-   18-species pool. Cards show the real base stats and whether the bump attack
-   is physical or special. Build for type coverage: a tank, a fast shooter,
-   a big special attacker, a healer — your call.
+   18-species pool. Every round offers **three different types** so teams stay
+   varied. Cards show each mon's **role** — read its stats at a glance:
+   **SPEEDSTER** (fast shot, combos), **TANK** (huge HP), **SNIPER**
+   (long-range super, frail), **BRUISER** (heavy hits), **HEALER** (super
+   heals the team), plus what the bump super actually does.
 3. **Pull back to aim** — drag direction sets your launch angle. **Power is
    timing**: a charge meter ping-pongs while you hold — release at the top for
    a full-speed `PERFECT!` launch.

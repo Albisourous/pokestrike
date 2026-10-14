@@ -2,7 +2,7 @@ import { sprite, itemSprite } from '../core/assets';
 import { SpeciesDef } from './data';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR } from './types';
-import { bumpIsPhysical } from './stats';
+import { bumpIsPhysical, roleOf, ROLE_BLURB, TYPE_MOVE } from './stats';
 
 export const W = 540;
 export const H = 960;
@@ -156,21 +156,21 @@ export function drawDraft(
     ctx.font = `bold 16px ${SERIF}`;
     ctx.fillStyle = PARCH;
     ctx.fillText(def.name, r.x + r.w / 2, r.y + 128);
+    const role = roleOf(def.stats, def.healer);
     ctx.font = 'bold 11px system-ui';
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(def.type.toUpperCase(), r.x + r.w / 2, r.y + 146);
+    ctx.fillText(`${def.type.toUpperCase()} · ${role.toUpperCase()}`, r.x + r.w / 2, r.y + 146);
 
-    ctx.font = '12px system-ui';
+    // role tagline + what the super does — no raw stats
+    ctx.font = '10px system-ui';
     ctx.fillStyle = '#a8b0d8';
-    const s = def.stats;
-    ctx.fillText(`HP ${s.hp}   ATK ${s.atk}   DEF ${s.def}`, r.x + r.w / 2, r.y + 180);
-    ctx.fillText(`SPA ${s.spa}   SPD ${s.spd}   SPE ${s.spe}`, r.x + r.w / 2, r.y + 200);
+    ctx.fillText(ROLE_BLURB[role], r.x + r.w / 2, r.y + 178);
     ctx.fillStyle = '#8890b8';
-    ctx.font = '11px system-ui';
+    ctx.fillText(TYPE_MOVE[def.type], r.x + r.w / 2, r.y + 198);
     ctx.fillText(
-      bumpIsPhysical(def.type) ? 'bump: physical' : 'bump: special',
+      bumpIsPhysical(def.type) ? 'rolls Attack' : 'rolls Sp. Atk',
       r.x + r.w / 2,
-      r.y + 226,
+      r.y + 218,
     );
   });
 
