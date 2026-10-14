@@ -58,6 +58,7 @@ interface Unit {
   dotDmg: number;
   flashT: number; // white hit flash
   cd: number; // player bump-super recharge in shots; 0 = ready
+  cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
   caught: boolean; // already boxed (master ball) — skip the catch roll
@@ -228,7 +229,13 @@ export class Battle {
   frictionMult = 1; // float stone: lower = ball slides further
   belt = 0; // expert belt: bonus on super-effective hits
   captureChance = 0.06; // odds a defeated enemy joins your box
-  masterArmed = false; // master ball relic: catch strongest on next wave
+  bossCatch = 0; // heavy ball: extra catch chance vs bosses
+  masterArmed = false; // master ball relic: next KO is a guaranteed catch
+  takenMult = 1; // zinc/eviolite: incoming damage multiplier
+  foeCdMult = 1; // bright powder: enemy attack-timer multiplier
+  slowImmune = false; // air balloon: tall grass doesn't slow the ball
+  koHeal = 0; // exp share: heal team this fraction on each KO
+  lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   box: SpeciesDef[] = []; // captured mons — swap one in between waves
   swapped = false; // one swap per reward break
   boxSel = -1; // box index picked for swapping
@@ -280,6 +287,7 @@ export class Battle {
         dotDmg: 0,
         flashT: 0,
         cd: 0,
+        cdMax: 1,
         lastBump: -1,
         role,
         caught: false,
@@ -365,7 +373,7 @@ export class Battle {
       r: s.boss ? 46 : 26,
       hp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
       maxHp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
-      timer: s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER,
+      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult,
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       wx: 0,
       wy: 0,
@@ -378,6 +386,7 @@ export class Battle {
       dotDmg: 0,
       flashT: 0,
       cd: 0,
+      cdMax: 1,
       lastBump: -1,
       role: 'wild',
       caught: false,
@@ -395,11 +404,6 @@ export class Battle {
     }
     const boss = this.enemies.find((e) => e.boss);
     if (boss) cry(boss.def.id, 0.5); // boss roars on entry
-    // armed Master Ball fires on the fresh wave — usually nabs the boss
-    if (this.masterArmed) {
-      this.masterArmed = false;
-      this.captureStrongest();
-    }
   }
 
   // --- input (logical coords) ---
@@ -441,6 +445,11 @@ export class Battle {
     this.addShake(3);
     sfx('launch');
     buzz(15);
+    if (this.lifeDrain > 0) {
+      for (const p of this.players) {
+        if (!p.dead) p.hp = Math.max(1, p.hp - Math.round(p.maxHp * this.lifeDrain));
+      }
+    }
     if (charge > 0.93) {
       this.texts.push({ x: u.x, y: u.y - u.r - 14, text: 'PERFECT!', t: 1, color: '#ffd84d', big: true });
       this.screenFlash('#ffd84d', 0.12);
@@ -564,6 +573,7 @@ export class Battle {
           }
         } else if (inside) {
           if (hz.kind === 'slow') {
+            if (this.slowImmune) continue; // air balloon floats over grass
             // tall grass: heavy drag + kicked-up leaves
             const dmp = Math.exp(-4.5 * h);
             u.vx *= dmp;
@@ -811,6 +821,12 @@ export class Battle {
     if (e.hp <= 0) {
       e.dead = true;
       this.bruise(e.x, e.y, 700); // a mon went down here — the field remembers
+      // exp share: every KO feeds the team a little
+      if (this.koHeal > 0) {
+        for (const p of this.players) {
+          if (!p.dead) p.hp = Math.min(p.hp + Math.round(p.maxHp * this.koHeal), p.maxHp);
+        }
+      }
       // faint anim: the sprite spins out and fades while the rings land
       this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: e.boss ? 0.8 : 0.45, life: e.boss ? 0.8 : 0.45 });
       sfx('ko');
@@ -818,8 +834,11 @@ export class Battle {
       // capture complete: stacked loops + release sparkle
       this.loops.push({ x: e.x, y: e.y, r: e.r + 20, t: 0.7, life: 0.7, color: '#ffffff' });
       this.loops.push({ x: e.x, y: e.y, r: e.r + 30, t: 0.9, life: 0.9, color: '#9df0ff' });
-      // small chance it actually joins your team (balls raise this)
-      const caught = !e.caught && this.rng() < this.captureChance;
+      // small chance it actually joins your team (balls raise this);
+      // an armed master ball never fails — first KO catches, guaranteed
+      const master = !e.caught && this.masterArmed;
+      const caught = master || (!e.caught && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0));
+      if (master) this.masterArmed = false;
       this.texts.push({
         x: e.x, y: e.y - e.r - 22,
         text: `${e.def.name.toUpperCase()} ${caught ? 'CAUGHT!' : 'FAINTED!'}`,
@@ -832,7 +851,7 @@ export class Battle {
         this.screenFlash('#ffd84d', 0.2);
         this.converge(e.x, e.y, 10, '#ffd84d', 'wisp');
         // real poké ball drops in and does the triple-wiggle
-        this.balls.push({ x: e.x, y: e.y, item: 'poke-ball', t: 1.15, life: 1.15 });
+        this.balls.push({ x: e.x, y: e.y, item: master ? 'master-ball' : 'poke-ball', t: 1.15, life: 1.15 });
         sfx('caught');
         cry(e.def.id, 0.45);
         buzz([30, 50, 30, 50, 60]);
@@ -903,6 +922,7 @@ export class Battle {
       return;
     }
     p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult) - p.cdMod);
+    p.cdMax = p.cd;
     this.bumpsThisShot.add(p.uid);
     p.flashT = 0.25;
     // move callout, freeze-frame, and a white converge flash on the caster
@@ -1180,21 +1200,6 @@ export class Battle {
     this.nextTurn();
   }
 
-  // Master Ball relic: capture the strongest enemy outright. Armed by the
-  // perk, fires right after the next wave spawns (boss has the most HP).
-  private captureStrongest() {
-    const e = this.enemies.filter((x) => !x.dead).sort((a, b) => b.hp - a.hp)[0];
-    if (!e) return;
-    this.converge(e.x, e.y, 12, '#f0e6ff', 'wisp');
-    this.screenFlash('#c898ff', 0.15);
-    e.caught = true;
-    this.box.push(e.def); // master ball never fails
-    this.balls.push({ x: e.x, y: e.y, item: 'master-ball', t: 1.15, life: 1.15 });
-    sfx('caught');
-    cry(e.def.id, 0.5);
-    this.texts.push({ x: e.x, y: e.y - e.r - 40, text: `${e.def.name.toUpperCase()} CAUGHT!`, t: 1.5, color: '#ffd84d', big: true });
-    this.hurt(e, e.hp + 999, '#9df0ff');
-  }
 
   // true if a rock blocks the straight line a→b (cover blocks abilities)
   private losBlocked(ax: number, ay: number, bx: number, by: number) {
@@ -1256,7 +1261,7 @@ export class Battle {
 
   private resolveEnemyTurn() {
     for (const e of this.pendingAttacks) {
-      e.timer = e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER;
+      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult;
       if (e.boss) {
         const R = 170;
         this.burst(e.x, e.y, R, '#f85888', 0.55);
@@ -1312,6 +1317,7 @@ export class Battle {
   }
 
   private damagePlayer(p: Unit, dmg: number) {
+    dmg = Math.max(1, Math.round(dmg * this.takenMult));
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP

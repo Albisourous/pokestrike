@@ -1,6 +1,6 @@
 import type { Battle } from './battle';
 
-export type Rarity = 'common' | 'uncommon' | 'rare';
+export type Rarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 
 export interface Perk {
   id: string;
@@ -15,22 +15,33 @@ export const RARITY_COLOR: Record<Rarity, string> = {
   common: '#a8b0c8',
   uncommon: '#5a9bf0',
   rare: '#f0b02f',
+  legendary: '#c05df0',
 };
+
+const heal = (frac: number) => (b: Battle) =>
+  b.players.forEach((p) => { if (!p.dead) p.hp = Math.min(p.hp + p.maxHp * frac, p.maxHp); });
 
 // Between-wave relics — pick 1 of 3, real held-item flavor. Effects live as
 // multipliers/flags on Battle so they never touch the shared SpeciesDef table.
 export const PERKS: Perk[] = [
-  {
-    id: 'restore', name: 'Max Potion', item: 'max-potion',
-    desc: 'heal your team to full',
-    rarity: 'rare',
-    apply: (b) => b.players.forEach((p) => { if (!p.dead) p.hp = p.maxHp; }),
-  },
+  // --- common: vitamins, berries, balls, small bumps ---
   {
     id: 'potion', name: 'Potion', item: 'potion',
     desc: 'heal everyone for 50%',
     rarity: 'common',
-    apply: (b) => b.players.forEach((p) => { if (!p.dead) p.hp = Math.min(p.hp + p.maxHp / 2, p.maxHp); }),
+    apply: heal(0.5),
+  },
+  {
+    id: 'oran', name: 'Oran Berry', item: 'oran-berry',
+    desc: 'heal everyone for 20%',
+    rarity: 'common',
+    apply: heal(0.2),
+  },
+  {
+    id: 'sitrus', name: 'Sitrus Berry', item: 'sitrus-berry',
+    desc: 'heal everyone for 35%',
+    rarity: 'common',
+    apply: heal(0.35),
   },
   {
     id: 'hpup', name: 'HP Up', item: 'hp-up',
@@ -43,16 +54,46 @@ export const PERKS: Perk[] = [
     }),
   },
   {
+    id: 'protein', name: 'Protein', item: 'protein',
+    desc: '+10% contact damage',
+    rarity: 'common',
+    apply: (b) => { b.physMult *= 1.1; },
+  },
+  {
+    id: 'iron', name: 'Iron', item: 'iron',
+    desc: '+15% max HP',
+    rarity: 'common',
+    apply: (b) => b.players.forEach((p) => { if (!p.dead) p.maxHp = Math.round(p.maxHp * 1.15); }),
+  },
+  {
+    id: 'calcium', name: 'Calcium', item: 'calcium',
+    desc: '+10% super damage',
+    rarity: 'common',
+    apply: (b) => { b.specMult *= 1.1; },
+  },
+  {
+    id: 'carbos', name: 'Carbos', item: 'carbos',
+    desc: '+10% launch speed',
+    rarity: 'common',
+    apply: (b) => { b.launchBoost *= 1.1; },
+  },
+  {
+    id: 'direhit', name: 'Dire Hit', item: 'dire-hit',
+    desc: '+10% chance hits crit x2',
+    rarity: 'common',
+    apply: (b) => { b.critCh += 0.1; },
+  },
+  {
+    id: 'razorclaw', name: 'Razor Claw', item: 'razor-claw',
+    desc: '+8% chance hits crit x2',
+    rarity: 'common',
+    apply: (b) => { b.critCh += 0.08; },
+  },
+  {
     id: 'muscle', name: 'Muscle Band', item: 'muscle-band',
     desc: '+15% all your damage',
     rarity: 'common',
     apply: (b) => { b.dmgMult *= 1.15; },
-  },
-  {
-    id: 'claw', name: 'Quick Claw', item: 'quick-claw',
-    desc: 'supers recharge 1 shot sooner',
-    rarity: 'uncommon',
-    apply: (b) => { b.cdMult *= 0.66; },
   },
   {
     id: 'scarf', name: 'Choice Scarf', item: 'choice-scarf',
@@ -61,10 +102,10 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.launchBoost *= 1.12; },
   },
   {
-    id: 'leftovers', name: 'Leftovers', item: 'leftovers',
-    desc: 'team heals 6% after every shot',
-    rarity: 'uncommon',
-    apply: (b) => { b.regen += 0.06; },
+    id: 'cband', name: 'Choice Band', item: 'choice-band',
+    desc: '+25% contact damage',
+    rarity: 'common',
+    apply: (b) => { b.physMult *= 1.25; },
   },
   {
     id: 'greatball', name: 'Great Ball', item: 'great-ball',
@@ -73,10 +114,30 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.captureChance += 0.05; },
   },
   {
-    id: 'ultraball', name: 'Ultra Ball', item: 'ultra-ball',
-    desc: '+10% catch chance',
+    id: 'duskball', name: 'Dusk Ball', item: 'dusk-ball',
+    desc: '+8% catch chance',
+    rarity: 'common',
+    apply: (b) => { b.captureChance += 0.08; },
+  },
+  {
+    id: 'helmet', name: 'Rocky Helmet', item: 'rocky-helmet',
+    desc: 'attackers take 10 recoil',
+    rarity: 'common',
+    apply: (b) => { b.thorns += 10; },
+  },
+  {
+    id: 'fstone', name: 'Float Stone', item: 'float-stone',
+    desc: 'ball slides 35% further',
+    rarity: 'common',
+    apply: (b) => { b.frictionMult *= 0.65; },
+  },
+
+  // --- uncommon: real held items, mid power ---
+  {
+    id: 'moomoo', name: 'Moomoo Milk', item: 'moomoo-milk',
+    desc: 'heal everyone for 70%',
     rarity: 'uncommon',
-    apply: (b) => { b.captureChance += 0.1; },
+    apply: heal(0.7),
   },
   {
     id: 'revive', name: 'Revive', item: 'revive',
@@ -88,21 +149,45 @@ export const PERKS: Perk[] = [
         dead.dead = false;
         dead.hp = Math.round(dead.maxHp * 0.4);
       } else {
-        b.players.forEach((p) => { p.hp = Math.min(p.hp + p.maxHp / 2, p.maxHp); });
+        heal(0.5)(b);
       }
     },
   },
   {
-    id: 'mball', name: 'Master Ball', item: 'master-ball',
-    desc: 'auto-catch the strongest enemy next wave',
-    rarity: 'rare',
-    apply: (b) => { b.masterArmed = true; },
+    id: 'claw', name: 'Quick Claw', item: 'quick-claw',
+    desc: 'supers recharge 1 shot sooner',
+    rarity: 'uncommon',
+    apply: (b) => { b.cdMult *= 0.66; },
   },
   {
-    id: 'cband', name: 'Choice Band', item: 'choice-band',
-    desc: '+25% contact damage',
-    rarity: 'common',
-    apply: (b) => { b.physMult *= 1.25; },
+    id: 'leftovers', name: 'Leftovers', item: 'leftovers',
+    desc: 'team heals 6% after every shot',
+    rarity: 'uncommon',
+    apply: (b) => { b.regen += 0.06; },
+  },
+  {
+    id: 'expshare', name: 'Exp. Share', item: 'exp-share',
+    desc: 'team heals 8% on every KO',
+    rarity: 'uncommon',
+    apply: (b) => { b.koHeal += 0.08; },
+  },
+  {
+    id: 'ultraball', name: 'Ultra Ball', item: 'ultra-ball',
+    desc: '+10% catch chance',
+    rarity: 'uncommon',
+    apply: (b) => { b.captureChance += 0.1; },
+  },
+  {
+    id: 'friendball', name: 'Friend Ball', item: 'friend-ball',
+    desc: '+12% catch chance',
+    rarity: 'uncommon',
+    apply: (b) => { b.captureChance += 0.12; },
+  },
+  {
+    id: 'heavyball', name: 'Heavy Ball', item: 'heavy-ball',
+    desc: '+25% catch chance vs bosses',
+    rarity: 'uncommon',
+    apply: (b) => { b.bossCatch += 0.25; },
   },
   {
     id: 'cspecs', name: 'Choice Specs', item: 'choice-specs',
@@ -115,18 +200,6 @@ export const PERKS: Perk[] = [
     desc: '+25% super range for all',
     rarity: 'uncommon',
     apply: (b) => b.players.forEach((p) => { p.rngMul *= 1.25; }),
-  },
-  {
-    id: 'sash', name: 'Focus Sash', item: 'focus-sash',
-    desc: 'each ally survives one KO at 1 HP',
-    rarity: 'rare',
-    apply: (b) => b.players.forEach((p) => { p.sash = true; }),
-  },
-  {
-    id: 'helmet', name: 'Rocky Helmet', item: 'rocky-helmet',
-    desc: 'attackers take 10 recoil',
-    rarity: 'common',
-    apply: (b) => { b.thorns += 10; },
   },
   {
     id: 'metro', name: 'Metronome', item: 'metronome',
@@ -153,10 +226,10 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.leech += 0.05; },
   },
   {
-    id: 'fstone', name: 'Float Stone', item: 'float-stone',
-    desc: 'ball slides 35% further',
-    rarity: 'common',
-    apply: (b) => { b.frictionMult *= 0.65; },
+    id: 'bigroot', name: 'Big Root', item: 'big-root',
+    desc: 'heal weakest ally 4% of damage',
+    rarity: 'uncommon',
+    apply: (b) => { b.leech += 0.04; },
   },
   {
     id: 'ebelt', name: 'Expert Belt', item: 'expert-belt',
@@ -165,23 +238,131 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.belt += 0.3; },
   },
   {
+    id: 'zinc', name: 'Zinc', item: 'zinc',
+    desc: 'team takes 15% less damage',
+    rarity: 'uncommon',
+    apply: (b) => { b.takenMult *= 0.85; },
+  },
+  {
+    id: 'elixir', name: 'Elixir', item: 'elixir',
+    desc: 'all supers are ready now',
+    rarity: 'uncommon',
+    apply: (b) => b.players.forEach((p) => { p.cd = 0; }),
+  },
+  {
+    id: 'bpowder', name: 'Bright Powder', item: 'bright-powder',
+    desc: 'enemies attack 20% slower',
+    rarity: 'uncommon',
+    apply: (b) => { b.foeCdMult *= 1.2; },
+  },
+  {
+    id: 'balloon', name: 'Air Balloon', item: 'air-balloon',
+    desc: 'grass no longer slows your ball',
+    rarity: 'uncommon',
+    apply: (b) => { b.slowImmune = true; },
+  },
+
+  // --- rare: strong single effects ---
+  {
+    id: 'restore', name: 'Max Potion', item: 'max-potion',
+    desc: 'heal your team to full',
+    rarity: 'rare',
+    apply: heal(1),
+  },
+  {
+    id: 'sash', name: 'Focus Sash', item: 'focus-sash',
+    desc: 'each ally survives one KO at 1 HP',
+    rarity: 'rare',
+    apply: (b) => b.players.forEach((p) => { p.sash = true; }),
+  },
+  {
     id: 'pherb', name: 'Power Herb', item: 'power-herb',
     desc: 'all supers recharge 1 sooner',
     rarity: 'rare',
     apply: (b) => b.players.forEach((p) => { p.cdMod += 1; }),
   },
+  {
+    id: 'eviolite', name: 'Eviolite', item: 'eviolite',
+    desc: 'team takes 25% less damage',
+    rarity: 'rare',
+    apply: (b) => { b.takenMult *= 0.75; },
+  },
+  {
+    id: 'machobrace', name: 'Macho Brace', item: 'macho-brace',
+    desc: '+30% damage, -12% launch speed',
+    rarity: 'rare',
+    apply: (b) => {
+      b.dmgMult *= 1.3;
+      b.launchBoost *= 0.88;
+    },
+  },
+
+  // --- legendary: run-defining relics ---
+  {
+    id: 'mball', name: 'Master Ball', item: 'master-ball',
+    desc: 'next enemy you KO joins your box',
+    rarity: 'legendary',
+    apply: (b) => { b.masterArmed = true; },
+  },
+  {
+    id: 'sacredash', name: 'Sacred Ash', item: 'sacred-ash',
+    desc: 'revive all fallen allies at 60%',
+    rarity: 'legendary',
+    apply: (b) => b.players.forEach((p) => {
+      if (p.dead) {
+        p.dead = false;
+        p.hp = Math.round(p.maxHp * 0.6);
+      }
+    }),
+  },
+  {
+    id: 'souldew', name: 'Soul Dew', item: 'soul-dew',
+    desc: '+20% damage & super range',
+    rarity: 'legendary',
+    apply: (b) => {
+      b.dmgMult *= 1.2;
+      b.players.forEach((p) => { p.rngMul *= 1.2; });
+    },
+  },
+  {
+    id: 'adamant', name: 'Adamant Orb', item: 'adamant-orb',
+    desc: '+30% contact & +15% launch',
+    rarity: 'legendary',
+    apply: (b) => {
+      b.physMult *= 1.3;
+      b.launchBoost *= 1.15;
+    },
+  },
+  {
+    id: 'lustrous', name: 'Lustrous Orb', item: 'lustrous-orb',
+    desc: '+30% super & +15% range',
+    rarity: 'legendary',
+    apply: (b) => {
+      b.specMult *= 1.3;
+      b.players.forEach((p) => { p.rngMul *= 1.15; });
+    },
+  },
+  {
+    id: 'lifeorb', name: 'Life Orb', item: 'life-orb',
+    desc: '+30% damage, team -4% HP per shot',
+    rarity: 'legendary',
+    apply: (b) => {
+      b.dmgMult *= 1.3;
+      b.lifeDrain += 0.04;
+    },
+  },
 ];
 
 // Roll a rarity tier, then pick within it — an empty tier trickles down to
 // the next lower one (StS-style), so commons stay common but no slot ever
-// comes up blank. Rare 10% / uncommon 35% / common 55%.
-const TIERS: Rarity[] = ['rare', 'uncommon', 'common'];
+// comes up blank. Legendary 4% / rare 12% / uncommon 34% / common 50%.
+const TIERS: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
 export function rollPerks(rng: () => number): Perk[] {
   const pool = [...PERKS];
   const out: Perk[] = [];
   for (let i = 0; i < 3 && pool.length; i++) {
     const roll = rng();
-    let tier = roll < 0.1 ? 0 : roll < 0.45 ? 1 : 2;
+    let tier = roll < 0.04 ? 0 : roll < 0.16 ? 1 : roll < 0.5 ? 2 : 3;
     let cands: Perk[] = [];
     for (; tier < TIERS.length; tier++) {
       cands = pool.filter((p) => p.rarity === TIERS[tier]);

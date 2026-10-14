@@ -30,7 +30,7 @@ export function draftCardRect(i: number) {
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
-export const FREE_BTN = { x: W / 2 - 140, y: 680, w: 280, h: 64 };
+export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -284,22 +284,37 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number
   drawWildMons(ctx, t);
 
   const cx = W / 2;
-  const cy = 350;
-  drawRingLine(ctx, cx, cy + 12, 214, 180, t);
-  drawCrest(ctx, cx, cy, 140);
-  drawRingMons(ctx, t, cx, cy + 12, 214, 180);
+  const cy = 300;
+  drawRingLine(ctx, cx, cy + 8, 210, 168, t);
+  drawCrest(ctx, cx, cy, 132);
+  drawRingMons(ctx, t, cx, cy + 8, 210, 168);
 
   ctx.textAlign = 'center';
-  logoWord(ctx, 'POKÉ', cx, cy - 42, 30, 190);
-  logoWord(ctx, 'STRIKE', cx, cy + 118, 56, 480);
+  logoWord(ctx, 'POKÉ', cx, cy - 36, 26, 170);
+
+  // STRIKE sits clear of the ring on its own banner, like a game box logo
+  ctx.save();
+  ctx.fillStyle = 'rgba(10,14,32,0.85)';
+  ctx.beginPath();
+  ctx.moveTo(cx - 240, 545);
+  ctx.lineTo(cx + 240, 545);
+  ctx.lineTo(cx + 220, 615);
+  ctx.lineTo(cx - 220, 615);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#c8a44d';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+  logoWord(ctx, 'STRIKE', cx, 598, 52, 430);
 
   // the loop, in one line
-  pixelText(ctx, 'pull back. launch. bounce.', cx, 615, 12);
-  pixelText(ctx, 'DRAFT · LAUNCH · COMBO · CAPTURE · RELICS', cx, 648, 9, 'rgba(255,255,255,0.85)');
+  pixelText(ctx, 'pull back. launch. bounce.', cx, 668, 11);
+  pixelText(ctx, 'DRAFT · LAUNCH · COMBO · CAPTURE · RELICS', cx, 696, 8, 'rgba(255,255,255,0.85)');
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
 
-  if (best !== null) pixelText(ctx, `best clear ${best.toFixed(1)}s`, cx, 830, 10);
+  if (best !== null) pixelText(ctx, `best clear ${best.toFixed(1)}s`, cx, 845, 9);
 }
 
 export function drawDraft(
