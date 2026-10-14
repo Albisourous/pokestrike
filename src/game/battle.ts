@@ -129,6 +129,7 @@ export class Battle {
   private dragging = false;
   private dragStart: Vec = vec();
   private dragNow: Vec = vec();
+  private dragT = 0; // hold time while dragging — drives the power meter
   private stopTimer = 0;
   private enemyPhaseT = 0;
   private pendingAttacks: Unit[] = [];
@@ -212,6 +213,7 @@ export class Battle {
   pointerDown(p: Vec) {
     if (this.phase !== 'aim') return;
     this.dragging = true;
+    this.dragT = 0;
     this.dragStart = { ...p };
     this.dragNow = { ...p };
   }
@@ -228,7 +230,9 @@ export class Battle {
     if (pullLen < 12) return;
     const dir = norm(pull);
     const u = this.active;
-    const speed = Math.min(pullLen, SHOT_MAX_DRAG) * POWER * launchMult(u.def.stats);
+    // direction from the pull; power from release timing on the charge meter
+    const charge = this.charge();
+    const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.lastHit.clear();
@@ -240,12 +244,26 @@ export class Battle {
     this.burst(u.x, u.y, u.r * 2.2, c, 0.3);
     this.shower(u.x, u.y, 8, c, 220, 'streak');
     this.addShake(3);
+    if (charge > 0.93) {
+      this.texts.push({ x: u.x, y: u.y - u.r - 14, text: 'PERFECT!', t: 1, color: '#ffd84d', big: true });
+      this.screenFlash('#ffd84d', 0.12);
+      this.burst(u.x, u.y, u.r * 3.2, '#ffd84d', 0.35);
+    }
+  }
+
+  // Power meter: ping-pongs 0→1→0 while held (1.1s per direction).
+  // Release near the top for a full-power launch.
+  private charge() {
+    const P = 1.1;
+    const ph = this.dragT % (2 * P);
+    return ph < P ? ph / P : 2 - ph / P;
   }
 
   // --- simulation ---
 
   update(dt: number) {
     this.time += dt;
+    if (this.dragging) this.dragT += dt;
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
     for (const z of this.zaps) z.t -= dt;
@@ -1023,8 +1041,7 @@ export class Battle {
     const pullLen = len(pull);
     if (pullLen < 12) return;
     const dir = norm(pull);
-    const power = Math.min(pullLen, SHOT_MAX_DRAG);
-    const frac = power / SHOT_MAX_DRAG;
+    const frac = this.charge();
     const color = TYPE_COLOR[u.def.type];
 
     // rubber band: unit -> drag point
@@ -1035,20 +1052,25 @@ export class Battle {
     ctx.lineTo(this.dragNow.x, this.dragNow.y);
     ctx.stroke();
 
-    // power meter arc around the unit
-    ctx.strokeStyle = color;
+    // charge meter arc around the unit — full sweep = max power
+    ctx.strokeStyle = '#ffffff22';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(u.x, u.y, u.r + 10, -Math.PI / 2, Math.PI * 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = frac > 0.93 ? '#ffd84d' : color;
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.arc(u.x, u.y, u.r + 10, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
     ctx.stroke();
 
-    // launch arrow: unit -> opposite direction, glows at full power
-    const ex = u.x + dir.x * power * 1.4;
-    const ey = u.y + dir.y * power * 1.4;
+    // launch arrow: unit -> opposite direction, length + glow from charge
+    const ex = u.x + dir.x * (50 + frac * 160);
+    const ey = u.y + dir.y * (50 + frac * 160);
     ctx.save();
-    if (frac > 0.95) {
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 12;
+    if (frac > 0.93) {
+      ctx.shadowColor = '#ffd84d';
+      ctx.shadowBlur = 16;
     }
     ctx.strokeStyle = color;
     ctx.lineWidth = 4;

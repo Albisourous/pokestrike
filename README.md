@@ -30,13 +30,17 @@ Open the printed URL. Works on desktop and touch.
    18-species pool. Cards show the real base stats and whether the bump attack
    is physical or special. Build for type coverage: a tank, a fast shooter,
    a big special attacker, a healer — your call.
-3. **Drag anywhere** on the arena to pull back (like a slingshot), release to
-   launch the active Pokémon.
+3. **Pull back to aim** — drag direction sets your launch angle. **Power is
+   timing**: a charge meter ping-pongs while you hold — release at the top for
+   a full-speed `PERFECT!` launch.
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune).
 5. **Bump your own teammates** to trigger their signature attack. Enemies
    creep toward your team and attack on a **countdown** — kill them or keep
    moving.
+6. **Share your result** — the result screen shows a Wordle-style emoji grid
+   (🟩 cleared waves, 🟥 where you fell) plus your drafted team as type-colored
+   squares. Tap **SHARE RESULT** to post or copy it — streak included.
 
 ## Real stats, real roles
 

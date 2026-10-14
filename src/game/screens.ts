@@ -26,6 +26,7 @@ export function draftCardRect(i: number) {
 }
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
+export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const DAILY_BTN = { x: W / 2 - 140, y: 640, w: 280, h: 64 };
 export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
 
@@ -194,11 +195,18 @@ export function drawDraft(
   ctx.fillText('tip: bounce off allies to trigger their attack', W / 2, 810);
 }
 
+export interface ShareGrid {
+  waves: string; // emoji squares, one per wave
+  team: string; // emoji squares, one per drafted mon
+  copied: boolean;
+}
+
 export function drawResult(
   ctx: CanvasRenderingContext2D,
   res: RunResult,
   best: number | null,
   extra: string | null,
+  share: ShareGrid | null,
 ) {
   ctx.fillStyle = '#0b0e1add';
   ctx.fillRect(0, 0, W, H);
@@ -206,22 +214,30 @@ export function drawResult(
   ctx.textAlign = 'center';
   ctx.font = `bold 52px ${SERIF}`;
   ctx.fillStyle = res.won ? '#6fdc6f' : '#ff6b6b';
-  ctx.fillText(res.won ? 'STAGE CLEAR!' : 'WIPED OUT', W / 2, 320);
+  ctx.fillText(res.won ? 'STAGE CLEAR!' : 'WIPED OUT', W / 2, 300);
 
   ctx.font = '20px system-ui';
   ctx.fillStyle = '#fff';
-  ctx.fillText(`${res.shots} shots · ${res.time.toFixed(1)}s`, W / 2, 380);
+  ctx.fillText(`${res.shots} shots · ${res.time.toFixed(1)}s`, W / 2, 355);
   if (extra) {
     ctx.font = 'bold 20px system-ui';
     ctx.fillStyle = '#f8d030';
-    ctx.fillText(extra, W / 2, 420);
+    ctx.fillText(extra, W / 2, 395);
   } else if (res.won && best !== null) {
     ctx.font = '16px system-ui';
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`best: ${best.toFixed(1)}s`, W / 2, 415);
+    ctx.fillText(`best: ${best.toFixed(1)}s`, W / 2, 390);
+  }
+
+  if (share) {
+    ctx.font = '30px system-ui';
+    ctx.fillText(share.waves, W / 2, 465);
+    ctx.font = '24px system-ui';
+    ctx.fillText(share.team, W / 2, 510);
   }
 
   button(ctx, RETRY_BTN, 'PLAY AGAIN', true);
+  button(ctx, SHARE_BTN, share?.copied ? 'COPIED!' : 'SHARE RESULT', true);
 }
 
 export function drawHud(ctx: CanvasRenderingContext2D, wave: number, waves: number, shots: number, stageName: string) {

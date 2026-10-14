@@ -14,11 +14,13 @@ import {
   drawHud,
   draftCardRect,
   RETRY_BTN,
+  SHARE_BTN,
   DAILY_BTN,
   FREE_BTN,
   inRect,
 } from './game/screens';
-import type { RunResult } from './game/screens';
+import type { RunResult, ShareGrid } from './game/screens';
+import type { PokeType } from './game/types';
 
 type Scene = 'loading' | 'title' | 'draft' | 'battle' | 'result';
 type Mode = 'daily' | 'free';
@@ -38,6 +40,8 @@ let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
 let stage = makeStage(dateSeed());
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
+let share: ShareGrid | null = null;
+let shareText = '';
 let best: number | null = null;
 let streak = 0;
 let dailyDone = false;
@@ -80,6 +84,41 @@ function toLogical(e: PointerEvent) {
   return vec((e.clientX - r.left - ox) / scale, (e.clientY - r.top - oy) / scale);
 }
 
+// Wordle-style emoji grid for sharing daily results.
+const TYPE_SQ: Record<PokeType, string> = {
+  fire: '🟥', water: '🟦', grass: '🟩', electric: '🟨', psychic: '🟪',
+  rock: '🟫', poison: '🟪', normal: '⬜', flying: '🟦', fighting: '🟧',
+  ghost: '⬛',
+};
+
+function buildShare(b: Battle, won: boolean) {
+  const cleared = won ? b.waveCount : b.waveIndex;
+  const waves =
+    '🟩'.repeat(cleared) + (won ? '' : '🟥') + '⬛'.repeat(b.waveCount - cleared - (won ? 0 : 1));
+  const team = draft.picked.map((i) => TYPE_SQ[ROSTER[i].type]).join('');
+  return { waves, team, copied: false };
+}
+
+async function shareResult() {
+  try {
+    if (navigator.share) {
+      await navigator.share({ text: shareText });
+      return;
+    }
+    await navigator.clipboard.writeText(shareText);
+  } catch {
+    try {
+      await navigator.clipboard.writeText(shareText);
+    } catch {
+      /* not a secure context — grid is on screen for a screenshot anyway */
+    }
+  }
+  if (share) {
+    share.copied = true;
+    setTimeout(() => share && (share.copied = false), 1500);
+  }
+}
+
 // --- input routing ---
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -111,11 +150,14 @@ canvas.addEventListener('pointerdown', (e) => {
   } else if (scene === 'battle') {
     battle?.pointerDown(p);
   } else if (scene === 'result') {
-    if (inRect(p.x, p.y, RETRY_BTN)) {
+    if (inRect(p.x, p.y, SHARE_BTN)) {
+      shareResult();
+    } else if (inRect(p.x, p.y, RETRY_BTN)) {
       draft = { order: [], picked: [] };
       battle = null;
       result = null;
       resultExtra = null;
+      share = null;
       scene = 'title';
     }
   }
@@ -140,6 +182,7 @@ function update(dt: number) {
     battle.update(dt);
     if (battle.phase === 'won' || battle.phase === 'lost') {
       result = { won: battle.phase === 'won', shots: battle.shots, time: battle.time };
+      share = buildShare(battle, result.won);
       if (result.won) {
         if (mode === 'daily') {
           const seed = dateSeed();
@@ -159,6 +202,13 @@ function update(dt: number) {
           // storage unavailable
         }
       }
+      shareText = [
+        `Pokéstrike ${stage.name}`,
+        share.waves,
+        `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${mode === 'daily' ? ` · 🔥 streak ${streak}` : ''}`,
+        share.team,
+        'https://albisourous.github.io/pokestrike/',
+      ].join('\n');
       scene = 'result';
     }
   }
@@ -212,7 +262,7 @@ function render() {
         drawHud(ctx, battle.waveIndex, battle.waveCount, battle.shots, battle.stage.name);
         battle.render(ctx);
       }
-      if (result) drawResult(ctx, result, best, resultExtra);
+      if (result) drawResult(ctx, result, best, resultExtra, share);
       break;
   }
   ctx.restore();
