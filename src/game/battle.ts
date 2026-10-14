@@ -412,8 +412,7 @@ export class Battle {
   // One-way ledges: a dirt bank you can only hop in `ang`'s direction.
   private genLedges() {
     this.ledges = [];
-    if (this.rng() < 0.4) return; // some waves get none
-    const n = this.rng() < 0.35 ? 2 : 1;
+    const n = 2; // DEBUG force ledges
     for (let k = 0; k < n; k++) {
       for (let tries = 0; tries < 8; tries++) {
         const L: Ledge = {
