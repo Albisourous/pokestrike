@@ -42,14 +42,31 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
+// Conquest-style chrome: dark indigo panel, gold double border, serif text.
+const GOLD = '#c8a44d';
+const PARCH = '#f0e6c8';
+const SERIF = 'Georgia, "Times New Roman", serif';
+
+function trim(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2;
+  roundRect(ctx, r.x, r.y, r.w, r.h, rad);
+  ctx.stroke();
+  ctx.strokeStyle = '#c8a44d55';
+  ctx.lineWidth = 1;
+  roundRect(ctx, r.x + 4, r.y + 4, r.w - 8, r.h - 8, Math.max(rad - 4, 2));
+  ctx.stroke();
+}
+
 function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string, on: boolean) {
-  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-  ctx.fillStyle = on ? '#f8d030' : '#2a3560';
+  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+  ctx.fillStyle = on ? '#1b2140' : '#12152b';
   ctx.fill();
-  ctx.font = 'bold 22px system-ui';
+  trim(ctx, r, 10);
+  ctx.font = `bold 21px ${SERIF}`;
   ctx.textAlign = 'center';
-  ctx.fillStyle = on ? '#1b1f36' : '#8890b8';
-  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 8);
+  ctx.fillStyle = on ? PARCH : '#6a7090';
+  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 7);
 }
 
 export function drawTitle(
@@ -62,14 +79,24 @@ export function drawTitle(
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'grove', t);
 
   ctx.textAlign = 'center';
-  ctx.font = 'bold 56px system-ui';
+  ctx.font = `bold 56px ${SERIF}`;
   ctx.fillStyle = '#f8d030';
   ctx.strokeStyle = '#2a3560';
   ctx.lineWidth = 8;
   ctx.strokeText('POKÉSTRIKE', W / 2, 300);
   ctx.fillText('POKÉSTRIKE', W / 2, 300);
 
-  ctx.font = '18px system-ui';
+  // gold rule lines flanking the tagline, conquest-style
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1.5;
+  for (const y of [352, 356]) {
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - 170, y);
+    ctx.lineTo(W / 2 + 170, y);
+    ctx.stroke();
+  }
+
+  ctx.font = '16px system-ui';
   ctx.fillStyle = '#8890b8';
   ctx.fillText('pull back. launch. bounce.', W / 2, 340);
 
@@ -99,7 +126,7 @@ export function drawDraft(
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6);
 
   ctx.textAlign = 'center';
-  ctx.font = 'bold 34px system-ui';
+  ctx.font = `bold 34px ${SERIF}`;
   ctx.fillStyle = '#f8d030';
   ctx.fillText(`DRAFT — PICK ${picked.length + 1} OF 4`, W / 2, 120);
   ctx.font = '17px system-ui';
@@ -109,18 +136,19 @@ export function drawDraft(
 
   offers.forEach((def, i) => {
     const r = draftCardRect(i);
-    roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    ctx.strokeStyle = TYPE_COLOR[def.type];
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    trim(ctx, r, 10);
+    // type ribbon across the top of the card
+    ctx.fillStyle = TYPE_COLOR[def.type];
+    ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
     const img = sprite(def.id);
     ctx.drawImage(img, r.x + r.w / 2 - 44, r.y + 18, 88, 88);
 
-    ctx.font = 'bold 16px system-ui';
-    ctx.fillStyle = '#fff';
+    ctx.font = `bold 16px ${SERIF}`;
+    ctx.fillStyle = PARCH;
     ctx.fillText(def.name, r.x + r.w / 2, r.y + 128);
     ctx.font = 'bold 11px system-ui';
     ctx.fillStyle = TYPE_COLOR[def.type];
@@ -155,8 +183,8 @@ export function drawDraft(
     const def = picked[i];
     if (def) {
       ctx.drawImage(sprite(def.id), sx + 14, 668, 48, 48);
-      ctx.font = '10px system-ui';
-      ctx.fillStyle = '#fff';
+      ctx.font = `10px ${SERIF}`;
+      ctx.fillStyle = PARCH;
       ctx.fillText(def.name, sx + 38, 740);
     }
   }
@@ -176,7 +204,7 @@ export function drawResult(
   ctx.fillRect(0, 0, W, H);
 
   ctx.textAlign = 'center';
-  ctx.font = 'bold 52px system-ui';
+  ctx.font = `bold 52px ${SERIF}`;
   ctx.fillStyle = res.won ? '#6fdc6f' : '#ff6b6b';
   ctx.fillText(res.won ? 'STAGE CLEAR!' : 'WIPED OUT', W / 2, 320);
 

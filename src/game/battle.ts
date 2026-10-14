@@ -939,18 +939,27 @@ export class Battle {
     if (this.waveBanner > 0) {
       const pop = Math.min(this.waveBanner, 1);
       const scaleIn = 1 + Math.max(0, this.waveBanner - 1.1) * 2.4;
-      ctx.globalAlpha = pop;
-      ctx.font = `bold ${Math.round(38 * scaleIn)}px system-ui`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 5;
+      const cy = a.y + a.h / 2;
       const label =
         this.waveIndex + 1 === this.waveCount
           ? 'BOSS BATTLE'
           : `WAVE ${this.waveIndex + 1} / ${this.waveCount}`;
-      ctx.strokeText(label, a.x + a.w / 2, a.y + a.h / 2);
-      ctx.fillText(label, a.x + a.w / 2, a.y + a.h / 2);
+      ctx.globalAlpha = pop;
+      // hanging ribbon, conquest-style
+      ctx.fillStyle = '#101430ee';
+      ctx.fillRect(0, cy - 34, W_CANVAS_FALLBACK, 68);
+      ctx.strokeStyle = '#c8a44d';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, cy - 34);
+      ctx.lineTo(W_CANVAS_FALLBACK, cy - 34);
+      ctx.moveTo(0, cy + 34);
+      ctx.lineTo(W_CANVAS_FALLBACK, cy + 34);
+      ctx.stroke();
+      ctx.font = `bold ${Math.round(34 * scaleIn)}px Georgia, serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#f0e6c8';
+      ctx.fillText(label, a.x + a.w / 2, cy + 12);
       ctx.globalAlpha = 1;
     }
   }
