@@ -1,10 +1,6 @@
-// Stage backdrops are real ripped art: each theme is a Gen-5 battle
-// background panel sliced from the spriters-resource DS sheet and
-// pre-scaled to the arena (public/sprites/bg/<theme>.png). Props
-// (pines, boulders, pond) are ripped overworld metatiles. Only the
-// clip, pool surface FX, and ripples are drawn procedurally.
-
-import { itemSprite } from '../core/assets';
+// Stage backdrops are flat for now — a theme-tinted field, a plain pool
+// where movement rules need one, and a darker rim for the wall. Real
+// Gracidea/RSE scenery replaces this when the asset pass is ready.
 
 export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
 export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
@@ -14,38 +10,35 @@ export const hash = (n: number) => {
   return s - Math.floor(s);
 };
 
-// Prop ring around the arena, like an overworld tree/rock line: BW pine
-// pair in the grove, boulders in cave and volcano, open air in the sky.
-const WALL_PROP: Record<Theme, { name: string; s: number } | null> = {
-  grove: { name: 'bg/pine', s: 42 },
-  cavern: { name: 'rock', s: 28 },
-  volcano: { name: 'rock', s: 28 },
-  sky: null,
+const GROUND: Record<Theme, string> = {
+  grove: '#3e8e3c',
+  cavern: '#4c4658',
+  volcano: '#40281e',
+  sky: '#82c2e6',
+};
+const RIM: Record<Theme, string> = {
+  grove: '#2a6428',
+  cavern: '#322d40',
+  volcano: '#241610',
+  sky: '#5490ba',
 };
 
-export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: number; w: number; h: number }, theme: Theme, t: number) {
-  const spec = WALL_PROP[theme];
-  if (!spec) return;
-  const img = itemSprite(spec.name);
-  if (!img) return;
-  const s = spec.s;
-  const step = s * 0.72;
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  const blit = (x: number, y: number, bob = 0) =>
-    ctx.drawImage(img, x - s / 2, y + bob - s / 2, s, (s * img.height) / img.width);
-  let i = 0;
-  for (let x = a.x; x <= a.x + a.w; x += step, i++) {
-    const bob = Math.sin(t * 1.2 + i) * 1.2; // grove pines sway a touch
-    blit(x, a.y - 5, theme === 'grove' ? bob * 0.4 : 0);
-    blit(x + step / 2, a.y + a.h + 5, theme === 'grove' ? -bob * 0.4 : 0);
-  }
-  i = 0;
-  for (let y = a.y; y <= a.y + a.h; y += step, i++) {
-    blit(a.x - 5, y + step / 2);
-    blit(a.x + a.w + 5, y);
-  }
-  ctx.restore();
+function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Flat rim marking the arena edge — the prop ring returns with real art.
+export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: number; w: number; h: number }, theme: Theme) {
+  ctx.strokeStyle = RIM[theme];
+  ctx.lineWidth = 8;
+  rr(ctx, a.x, a.y, a.w, a.h, 18);
+  ctx.stroke();
 }
 
 export function drawBackdrop(
@@ -58,52 +51,27 @@ export function drawBackdrop(
 ) {
   const { x, y, w, h } = rect;
   ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+  rr(ctx, x, y, w, h, r);
   ctx.clip();
 
-  // the ripped battle ground — already baked at arena size
-  const bg = itemSprite(`bg/${theme}`);
-  if (bg) ctx.drawImage(bg, x, y, w, h);
-  else {
-    ctx.fillStyle = '#2a4a2a';
-    ctx.fillRect(x, y, w, h);
-  }
+  ctx.fillStyle = GROUND[theme];
+  ctx.fillRect(x, y, w, h);
 
-  // pond / lava pool — real pond metatile on land themes, ripped flame
-  // texture clipped to the pool ellipse on the volcano
+  // flat pond / lava pool, sized to the collision region in battle.setPool
   if (pool) {
     const px = x + w * pool.nx, py = y + h * pool.ny;
-    const pond = itemSprite('pond');
-    const lava = itemSprite('bg/lava');
-    if (theme === 'volcano') {
-      // cooled-crust rim, then molten surface
-      ctx.fillStyle = '#3a1c0e';
-      ctx.beginPath();
-      ctx.ellipse(px, py, 48, 35, 0, 0, Math.PI * 2);
-      ctx.fill();
-      if (lava) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.ellipse(px, py, 40, 27, 0, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(lava, px - 40, py - 27, 80, 54);
-        ctx.restore();
-      }
-    } else if (pond) {
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      const pw = 112, ph = 93;
-      ctx.drawImage(pond, px - pw / 2, py - ph / 2, pw, ph);
-      ctx.restore();
-    }
+    const lava = theme === 'volcano';
+    const rx = lava ? 40 : 42, ry = lava ? 27 : 30;
+    ctx.fillStyle = lava ? '#2a1408' : 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(px, py, rx + 7, ry + 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = lava ? '#e85818' : '#3f88d0';
+    ctx.beginPath();
+    ctx.ellipse(px, py, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
     // expanding ripples — lava pulses ember rings instead
-    ctx.strokeStyle = theme === 'volcano' ? '#ffb060' : 'rgba(255,255,255,0.5)';
+    ctx.strokeStyle = lava ? '#ffb060' : 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 2;
     for (let i = 0; i < 2; i++) {
       const prog = (t * 0.5 + i * 0.5) % 1;

@@ -5,7 +5,7 @@ import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ELITES } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
-import { drawBackdrop, drawWall, THEMES, hash as hashSeed } from './bg';
+import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
 import type { PokeType } from './types';
@@ -64,7 +64,6 @@ interface Unit {
   cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
-  caught: boolean; // already boxed (master ball) — skip the catch roll
   revealed?: boolean; // enemies: flushed out of tall grass — until then they're hidden
   sash: boolean; // focus sash: survive one lethal hit at 1 HP
   pow: number; // role damage multiplier
@@ -206,7 +205,7 @@ export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
 
 const STOP_SPEED = 45;
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
-const SHOT_MAX_DRAG = 190;
+const BASE_SHOT_SPEED = 190; // base launch speed — pull distance only aims
 const POWER = 8;
 const WALL_REST = 0.92;
 const UNIT_REST = 0.9;
@@ -232,6 +231,7 @@ export class Battle {
   private dragging = false;
   private dragStart: Vec = vec();
   private dragNow: Vec = vec();
+  private dragT = 0; // hold time while dragging — drives the timing meter
 
   private stopTimer = 0;
   private enemyPhaseT = 0;
@@ -256,7 +256,7 @@ export class Battle {
   private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
-  // relic mods + endless depth
+  // relic mods
   dmgMult = 1;
   cdMult = 1;
   launchBoost = 1;
@@ -294,7 +294,7 @@ export class Battle {
   lastRecruit: SpeciesDef | null = null; // stage's guaranteed catch, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
-  private obstacles: { x: number; y: number; r: number; prop: 'tree' | 'rock'; flip: boolean }[];
+  private obstacles: { x: number; y: number; r: number; prop: 'tree' | 'rock' }[];
   private theme: Theme; // current wave's scene — rotates each wave
   private hazards: Hazard[] = [];
   private ledges: Ledge[] = []; // one-way jump ledges, RSE-style
@@ -306,7 +306,6 @@ export class Battle {
     team: SpeciesDef[],
     public stage: StageDef,
     private rng: () => number = Math.random,
-    private endless = false,
   ) {
     this.theme = stage.theme;
     this.setPool();
@@ -348,7 +347,6 @@ export class Battle {
         cdMax: cd,
         lastBump: -1,
         role,
-        caught: false,
         sash: false,
         pow: m.pow,
         rngMul: m.range,
@@ -383,7 +381,6 @@ export class Battle {
           prop: this.rng() < (this.theme === 'grove' || this.theme === 'sky' ? 0.75 : 0.25)
             ? ('tree' as const)
             : ('rock' as const),
-          flip: this.rng() < 0.5,
         };
         if (
           !this.inPool(o.x, o.y, o.r) &&
@@ -517,7 +514,6 @@ export class Battle {
       cdMax: 1,
       lastBump: -1,
       role: 'wild',
-      caught: false,
       sash: false,
       pow: 1,
       rngMul: 1,
@@ -525,7 +521,7 @@ export class Battle {
       cdMod: 0,
       lastHit: new Map(),
     }));
-    // mons that can't swim/scorch shouldn't stand in the pond/lava
+    // mons that can't cross the pond/lava shouldn't stand in it
     for (const e of this.enemies)
       if (!this.canCrossPool(e) && this.inPool(e.x, e.y, e.r)) this.poolPush(e);
     this.waveBanner = 1.4;
@@ -542,6 +538,7 @@ export class Battle {
   pointerDown(p: Vec) {
     if (this.phase !== 'aim') return;
     this.dragging = true;
+    this.dragT = 0;
 
     this.dragStart = { ...p };
     this.dragNow = { ...p };
@@ -559,12 +556,11 @@ export class Battle {
     if (pullLen < 12) return;
     const dir = norm(pull);
     const u = this.active;
-    // direction and power both come from the pull — farther back hits harder
+    // direction from the pull; power from release timing on the meter
     const charge = this.charge();
-    const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
+    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
-    u.lastHit.clear();
     this.bumpsThisShot.clear();
     this.shotCombo = 0;
     this.kosThisShot = 0;
@@ -603,11 +599,13 @@ export class Battle {
     }
   }
 
-  // Power is pull distance, pool-cue style: drag farther to hit harder.
-  // Reaching the dashed guide ring's edge is the full-power PERFECT launch.
+  // Power meter: ping-pongs 0→1→0 while held (0.85s per direction) —
+  // release in the gold zone for a full-power launch. Pull distance only
+  // aims; it no longer feeds power.
   private charge() {
-    const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
-    return Math.min(1, len(pull) / SHOT_MAX_DRAG);
+    const P = 0.85;
+    const ph = this.dragT % (2 * P);
+    return ph < P ? ph / P : 2 - ph / P;
   }
 
   // --- simulation ---
@@ -618,6 +616,7 @@ export class Battle {
     if (hit) this.hitStop -= dt0;
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
+    if (this.dragging) this.dragT += dt;
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
     for (const z of this.zaps) z.t -= dt;
@@ -1138,8 +1137,8 @@ export class Battle {
       }
       // small chance it actually joins your team (balls raise this);
       // an armed master ball never fails — first KO catches, guaranteed
-      const master = !e.caught && this.masterArmed;
-      const caught = master || (!e.caught && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0));
+      const master = this.masterArmed;
+      const caught = master || this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0);
       if (master) this.masterArmed = false;
       if (caught) {
         // absorbed by the ball — shrinks in place, no faint spin
@@ -1571,10 +1570,7 @@ export class Battle {
   private waveCleared() {
     // last-kill slow-mo — the kill shot gets a beat to land
     this.hitStop = Math.max(this.hitStop, 0.35);
-    if (
-      this.waveIndex + 1 >= this.waveCount &&
-      (!this.endless || this.depth >= FINAL_DEPTH)
-    ) {
+    if (this.waveIndex + 1 >= this.waveCount && this.depth >= FINAL_DEPTH) {
       this.phase = 'won';
       this.screenFlash('#ffd84d', 0.35);
       this.addShake(10);
@@ -1744,7 +1740,6 @@ export class Battle {
         p.hp = Math.min(p.hp + Math.ceil(p.maxHp * this.regen), p.maxHp);
       }
     }
-    const waveAt = this.waveIndex;
     // poison ticks first
     for (const e of this.enemies) {
       if (e.dotTicks > 0) {
@@ -1761,11 +1756,6 @@ export class Battle {
       this.enterReward();
       return;
     }
-    if (this.waveIndex !== waveAt) {
-      this.nextTurn();
-      return;
-    }
-
     this.pendingAttacks = [];
     for (const e of this.enemies) {
       e.timer--;
@@ -2020,34 +2010,28 @@ export class Battle {
       );
     }
 
-    // arena: overworld-style backdrop + themed sprite wall
+    // arena: theme-tinted backdrop + rim
     drawBackdrop(ctx, a, 18, this.theme, this.time);
-    drawWall(ctx, a, this.theme, this.time);
+    drawWall(ctx, a, this.theme);
 
     for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const w of this.waves) this.drawWave(ctx, w);
     for (const z of this.zaps) this.drawZap(ctx, z);
     for (const b of this.bolts) this.drawBolt(ctx, b);
 
-    // obstacles are real overworld land pieces — RSE ball trees and
-    // smashable boulders, picked per obstacle so groves feel wooded and
-    // caves feel rocky
+    // obstacles — flat discs until the real prop pass lands
     for (const o of this.obstacles) {
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.beginPath();
       ctx.ellipse(o.x, o.y + o.r * 0.55, o.r * 0.95, o.r * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      const prop = itemSprite(o.prop);
-      if (prop) {
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        const s = o.r * 2.1;
-        ctx.translate(o.x, o.y);
-        if (o.flip) ctx.scale(-1, 1);
-        const sh = (s * prop.height) / prop.width;
-        ctx.drawImage(prop, -s / 2, -sh / 2, s, sh);
-        ctx.restore();
-      }
+      ctx.fillStyle = o.prop === 'tree' ? '#2e6b2e' : '#7a7568';
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.r * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
 
     // one-way ledges — dirt bank with the cliff face on the blocked side and
@@ -2059,23 +2043,11 @@ export class Battle {
       const hl = L.len / 2;
       ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.fillRect(-6, -hl + 4, 18, L.len);
-      const face = itemSprite('bg/ledge');
-      if (face) {
-        // ripped dirt-bank texture, rotated so it runs along the ledge
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        ctx.rotate(Math.PI / 2);
-        ctx.drawImage(face, -hl, -8, L.len, 17);
-        ctx.restore();
-        // high side stays lit, cliff face gets shaded
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(0, -hl, 8, L.len);
-      } else {
-        ctx.fillStyle = '#c9a877';
-        ctx.fillRect(-9, -hl, 9, L.len);
-        ctx.fillStyle = '#6b4a26';
-        ctx.fillRect(0, -hl, 8, L.len);
-      }
+      // flat dirt bank until the real prop pass lands
+      ctx.fillStyle = '#c9a877';
+      ctx.fillRect(-9, -hl, 9, L.len);
+      ctx.fillStyle = '#6b4a26';
+      ctx.fillRect(0, -hl, 8, L.len);
       // chevrons point the legal hop direction
       ctx.strokeStyle = '#ffe9b0';
       ctx.lineWidth = 2.5;
@@ -2094,28 +2066,11 @@ export class Battle {
     for (const hz of this.hazards) {
       ctx.save();
       if (hz.kind === 'slow') {
-        // tall grass — real ripped BW tufts packed into the patch
+        // tall grass — flat dark patch until the real tuft pass lands
         ctx.fillStyle = 'rgba(30,60,26,0.4)';
         ctx.beginPath();
         ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
-        const tuft = itemSprite('bg/grass');
-        if (tuft) {
-          ctx.save();
-          ctx.imageSmoothingEnabled = false;
-          for (let i = 0; i < 9; i++) {
-            const a = hashSeed(hz.x + i * 13) * Math.PI * 2;
-            const rr = hz.r * hashSeed(hz.y + i * 7) * 0.62;
-            const gx = hz.x + Math.cos(a) * rr, gy = hz.y + Math.sin(a) * rr * 0.8;
-            const s = 34 + hashSeed(i * 3 + hz.x) * 10;
-            ctx.save();
-            ctx.translate(gx, gy);
-            if (hashSeed(i * 11 + hz.y) < 0.5) ctx.scale(-1, 1);
-            ctx.drawImage(tuft, -s / 2, -s * 0.3, s, s * 0.4);
-            ctx.restore();
-          }
-          ctx.restore();
-        }
         // something's rustling in there — darker blades shiver
         if (this.enemies.some((e) => this.hidden(e) && dist(e, hz) < hz.r)) {
           ctx.strokeStyle = '#1e4020';
@@ -2131,23 +2086,12 @@ export class Battle {
           }
         }
       } else if (hz.kind === 'ice') {
-        // ice sheet — ripped snow-field texture under a gloss pass
+        // ice sheet — flat pale patch under a gloss pass
         const pulse = 0.85 + Math.sin(this.time * 3) * 0.08;
-        const ice = itemSprite('bg/ice');
-        if (ice) {
-          ctx.save();
-          ctx.globalAlpha = 0.75;
-          ctx.beginPath();
-          ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
-          ctx.clip();
-          ctx.drawImage(ice, hz.x - hz.r, hz.y - hz.r * 0.78, hz.r * 2, hz.r * 1.56);
-          ctx.restore();
-        } else {
-          ctx.fillStyle = 'rgba(160,216,239,0.28)';
-          ctx.beginPath();
-          ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.fillStyle = 'rgba(160,216,239,0.28)';
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.strokeStyle = '#c8f0ff';
         ctx.lineWidth = 2.5;
         ctx.globalAlpha = 0.9;
@@ -2346,7 +2290,7 @@ export class Battle {
       ctx.fillStyle = '#e8ecff';
       ctx.fillText(
         this.shots === 0
-          ? 'pull back to aim — farther back = more power'
+          ? 'pull back to aim — release in the gold'
           : 'bounce through allies to fire their supers',
         a.x + a.w / 2,
         a.y + a.h - 16,
@@ -2394,25 +2338,16 @@ export class Battle {
       drawMon(ctx, u.def.id, 0, 0, u.r * 2.6);
       ctx.restore();
       ctx.globalAlpha = 1;
-      // real grass tuft thrown over it, swaying — the rustle is the tell
-      const tuft = itemSprite('bg/grass');
+      // flat grass blades thrown over it, swaying — the rustle is the tell
       const wig = Math.sin(this.time * 9 + u.x) * 2;
-      if (tuft) {
-        ctx.save();
-        ctx.imageSmoothingEnabled = false;
-        const s = u.r * 2.6;
-        ctx.drawImage(tuft, u.x - s / 2 + wig, u.y - u.r * 0.5, s, s * 0.45);
-        ctx.restore();
-      } else {
-        ctx.strokeStyle = '#2c5a28';
-        ctx.lineWidth = 3;
-        for (let i = -2; i <= 2; i++) {
-          const bx = u.x + i * u.r * 0.45;
-          ctx.beginPath();
-          ctx.moveTo(bx - 4, u.y + u.r * 0.7);
-          ctx.quadraticCurveTo(bx + wig, u.y - u.r * 0.9, bx + 4 + wig, u.y + u.r * 0.5);
-          ctx.stroke();
-        }
+      ctx.strokeStyle = '#2c5a28';
+      ctx.lineWidth = 3;
+      for (let i = -2; i <= 2; i++) {
+        const bx = u.x + i * u.r * 0.45;
+        ctx.beginPath();
+        ctx.moveTo(bx - 4, u.y + u.r * 0.7);
+        ctx.quadraticCurveTo(bx + wig, u.y - u.r * 0.9, bx + 4 + wig, u.y + u.r * 0.5);
+        ctx.stroke();
       }
       if (Math.random() < 0.02 && this.particles.length < MAX_PARTICLES)
         this.particles.push({ x: u.x + (Math.random() - 0.5) * u.r, y: u.y - u.r, vx: (Math.random() - 0.5) * 60, vy: -60, t: 0.5, life: 0.5, size: 4, color: '#58a848', shape: 'leaf', grav: 200 });
@@ -2597,7 +2532,8 @@ export class Battle {
 
     // predicted path: one bounce worth — banking off walls + rocks,
     // stopping at the first contact. Any further is noise. Cached on a
-    // quantized signature so the sim only reruns when the aim actually moves.
+    // quantized signature; the ping-pong frac churns it while held, but it
+    // still skips recomputing on frames where nothing moved.
     const sig = [
       Math.round(this.dragNow.x / 6),
       Math.round(this.dragNow.y / 6),
@@ -2608,7 +2544,7 @@ export class Battle {
     if (sig !== this.aimCache.sig) {
       this.aimCache.sig = sig;
       const speed =
-        SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * frac);
+        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * frac);
       let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
       const dots: Vec[] = [];
       let hit: Unit | null = null;
@@ -2708,57 +2644,6 @@ export class Battle {
         ctx.globalAlpha = 1;
       }
     }
-
-    // the cue: a stick that slides back along the aim line with your pull —
-    // the pool-hall tell that distance, not time, is what charges the shot
-    {
-      const back = u.r + 12 + Math.min(pullLen, SHOT_MAX_DRAG) * 0.65;
-      const tx = u.x - dir.x * back;
-      const ty = u.y - dir.y * back;
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = '#5a3a20';
-      ctx.lineWidth = 8;
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(u.x - dir.x * (back + 120), u.y - dir.y * (back + 120));
-      ctx.stroke();
-      ctx.strokeStyle = frac > 0.93 ? '#ffd84d' : '#d9a05f';
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.moveTo(tx, ty);
-      ctx.lineTo(u.x - dir.x * (back + 120), u.y - dir.y * (back + 120));
-      ctx.stroke();
-      ctx.fillStyle = '#f0f0f0';
-      ctx.beginPath();
-      ctx.arc(tx, ty, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.lineCap = 'butt';
-    }
-
-    // rubber band: unit -> drag point
-    ctx.strokeStyle = '#ffffff33';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(u.x, u.y);
-    ctx.lineTo(this.dragNow.x, this.dragNow.y);
-    ctx.stroke();
-
-    // guide ring: pulling out to its edge is a full-power shot
-    ctx.strokeStyle = '#ffffff2e';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 8]);
-    ctx.beginPath();
-    ctx.arc(this.dragStart.x, this.dragStart.y, SHOT_MAX_DRAG, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.fillStyle = frac > 0.93 ? '#ffd84d' : color;
-    ctx.beginPath();
-    ctx.arc(this.dragNow.x, this.dragNow.y, 9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#0a0e20';
-    ctx.lineWidth = 2;
-    ctx.stroke();
 
     // styler rings: two counter-rotating dashed circles while aiming
     for (const [rr, sp, dash] of [[u.r + 18, 2.2, 14], [u.r + 26, -1.6, 22]] as const) {

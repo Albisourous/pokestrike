@@ -32,7 +32,7 @@ export const ROSTER: SpeciesDef[] = [
 ];
 
 export const DRAFT_ROUNDS = 4;
-export const DRAFT_OFFERS = 3;
+const DRAFT_OFFERS = 3;
 
 // Each draft round offers 3 picks with distinct types — encourages a varied
 // team so no single type dominates a run. The roster is dealt without
@@ -117,13 +117,6 @@ export interface StageDef {
   name: string;
   theme: Theme;
   waves: WaveSpawn[][];
-  obstacles: Obstacle[]; // rocks your ball banks off — normalized coords
-}
-
-export interface Obstacle {
-  nx: number;
-  ny: number;
-  nr: number; // radius as a fraction of arena width
 }
 
 const THEME_NAME: Record<Theme, string> = {
@@ -176,11 +169,6 @@ export function makeStage(seed: number, name?: string): StageDef {
       [add(), add(), add(), elite()],
       [...gymPack(boss, 2, rng, slot), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
     ],
-    // 1-3 rocks drawn from the same slot pool, so they never overlap spawns
-    obstacles: Array.from({ length: 1 + Math.floor(rng() * 3) }, () => ({
-      ...slot(),
-      nr: 0.05 + rng() * 0.035,
-    })),
   };
 }
 

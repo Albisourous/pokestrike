@@ -111,7 +111,7 @@ const RING_MONS: [number, number][] = [
   [76, 54], [3, 56], [9, 54], [68, 54], [59, 56], [131, 56],
 ];
 
-// Wild mons roaming the field edges — the PokéSurvivor "alive world" feel.
+// Wild mons roaming the field edges — an "alive world" title backdrop.
 // [id, anchorX, anchorY, wander range]
 const WILD_MONS: [number, number, number, number][] = [
   [19, 80, 120, 26],   // Rattata skitters top-left
@@ -122,46 +122,9 @@ const WILD_MONS: [number, number, number, number][] = [
 ];
 
 function drawField(ctx: CanvasRenderingContext2D) {
-  // base grass — the real ripped Gen-5 battle ground
-  const bg = itemSprite('bg/grove');
-  if (bg) ctx.drawImage(bg, 0, 0, W, H);
-  else {
-    ctx.fillStyle = '#459233';
-    ctx.fillRect(0, 0, W, H);
-  }
-
-  // scattered tall-grass clumps — the same ripped tufts as the route grass
-  const tuft = itemSprite('bg/grass');
-  if (tuft) {
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    for (let i = 0; i < 16; i++) {
-      const x = hashSeed(i * 31 + 7) * W;
-      const y = 100 + hashSeed(i * 57 + 3) * (H - 140);
-      const s = 30 + hashSeed(i * 13) * 14;
-      ctx.drawImage(tuft, x - s / 2, y - s * 0.2, s, s * 0.4);
-    }
-    ctx.restore();
-  }
-
-  // overworld props at the edges — real extracted metatiles
-  const prop = (name: string, x: number, y: number, s: number) => {
-    const img = itemSprite(name);
-    if (!img) return;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + s * 0.34, s * 0.42, s * 0.14, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, x - s / 2, y - s / 2, s, (s * img.height) / img.width);
-    ctx.restore();
-  };
-  prop('tree', 36, 250, 64);
-  prop('tree', 506, 250, 64);
-  prop('rock', 56, 832, 46);
-  prop('tree', 108, 846, 40);
-  prop('pond', 464, 792, 104);
+  // flat grass field until the real scenery pass lands
+  ctx.fillStyle = '#3e8e3c';
+  ctx.fillRect(0, 0, W, H);
 
   // vignette
   const v = ctx.createRadialGradient(W / 2, H * 0.4, 140, W / 2, H * 0.4, H * 0.75);
@@ -171,22 +134,11 @@ function drawField(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, W, H);
 }
 
-// Tall-grass clump — ripped BW grass the wild mons stand in.
-function grassClump(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
-  const tuft = itemSprite('bg/grass');
-  if (!tuft) return;
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(tuft, x - r, y - r * 0.4, r * 2, r * 0.8);
-  ctx.restore();
-}
-
 function drawRingMons(ctx: CanvasRenderingContext2D, t: number, cx: number, cy: number, rx: number, ry: number) {
   RING_MONS.forEach(([id, size], i) => {
     const a = -Math.PI / 2 + (i / RING_MONS.length) * Math.PI * 2;
     const x = cx + Math.cos(a) * rx;
     const y = cy + Math.sin(a) * ry;
-    grassClump(ctx, x, y + size * 0.42, size * 0.55); // standing in route grass
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
     ctx.ellipse(x, y + size * 0.38, size * 0.42, size * 0.15, 0, 0, Math.PI * 2);

@@ -30,8 +30,8 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/gracidea/` — the art canon (see Direction): `creatures`, `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
 - `public/sprites/<id>.png` — 72×72 overworld mon icons sliced from the gracidea creatures atlas
-- `public/sprites/bg/<theme>.png` — RSE tileset scenery: backdrops and prop pieces (`bg/<prop>` loads via `itemSprite`)
 - `public/sprites/items/<name>.png` — the existing icon set: items, perks, UI bits
+- `public/sprites/cries/<id>.ogg` — mon cries, one per roster id, played lazily by `cry()`
 
 ## Conventions
 
@@ -43,7 +43,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Physics tunables are named consts at the top of `battle.ts`.
 - Asset canon is the Gracidea pack (see Direction). Mon sprites are 72×72 icons sliced from the creatures atlas; new scenery/props come from `sprites/gracidea/` the same way.
-- All scenery is ripped game art, never procedural shapes. New scenery = slice or blit real assets; don't invent blobs.
+- Scenery is flat placeholder drawing until the gracidea prop pass lands — new scenery still means slice or blit from the pack, never invented blobs.
 
 ## Installed agent tooling (`.devin/`)
 

@@ -6,7 +6,6 @@ import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES } from './game/data';
-import { THEMES } from './game/bg';
 import {
   W,
   H,
@@ -202,7 +201,7 @@ canvas.addEventListener('pointerdown', (e) => {
       draft.picked.push(offers[i]);
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(arenaRect(), draft.picked.map((i) => ROSTER[i]), stage, Math.random, true);
+        battle = new Battle(arenaRect(), draft.picked.map((i) => ROSTER[i]), stage, Math.random);
         // ?dev exposes the live battle for poking around during playtests
         if (new URLSearchParams(location.search).has('dev'))
           (window as unknown as { __battle: Battle }).__battle = battle;
@@ -435,15 +434,6 @@ function render() {
 Promise.all([
   loadAll(ALL_SPRITE_IDS),
   loadItem('poke-ball'),
-  loadItem('pond'),
-  loadItem('tree'),
-  loadItem('rock'),
-  ...THEMES.map((theme) => loadItem(`bg/${theme}`)),
-  loadItem('bg/lava'),
-  loadItem('bg/ice'),
-  loadItem('bg/grass'),
-  loadItem('bg/pine'),
-  loadItem('bg/ledge'),
   ...PERKS.map((p) => loadItem(p.item)),
   document.fonts.load('12px "Press Start 2P"'), // force pixel-font fetch before first paint
 ])

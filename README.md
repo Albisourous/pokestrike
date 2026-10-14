@@ -38,9 +38,8 @@ Open the printed URL. Works on desktop and touch.
    heals the team), plus what the bump super actually does.
 3. **Pull back to aim** — drag direction sets your launch angle and a dotted
    **guide line** previews the ball's banks off walls and rocks, ending in a
-   target ring on whatever it would hit first. **Power is pull distance**,
-   8 Ball Pool style — a cue slides back as you drag and the farther you
-   pull, the harder the launch. Reach the dashed guide ring's edge for a
+   target ring on whatever it would hit first. **Power is timing**: a
+   meter ping-pongs while you hold — release in the gold zone for a
    full-power `PERFECT!` shot (slow-mo + speedlines included).
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune).
@@ -148,7 +147,7 @@ src/
            perks.ts, bg.ts,                     # relics + themed backdrops
            battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
-public/  sprites/ (mons, bg, gracidea, cries), manifest.webmanifest, sw.js, icons
+public/  sprites/ (mons, gracidea, cries), manifest.webmanifest, sw.js, icons
 ```
 
 ## Art & credit
@@ -162,9 +161,9 @@ ripped Pokémon textures), vendored into `public/sprites/gracidea/`:
 - `npcs` — trainer sprites, destined for gym leaders
 
 One source is what keeps the theme cohesive: new art gets sliced or blitted
-from the pack, never procedural shapes. Mons render from 72×72 overworld
-icons (`sprites/<id>.png`) sliced from the creatures atlas; scenery in
-`sprites/bg/` is RSE tileset art.
+from the pack, never invented shapes. Mons render from 72×72 overworld
+icons (`sprites/<id>.png`) sliced from the creatures atlas; scenery is
+placeholder flats until the prop pass slices it from the tileset atlas.
 
 Pokémon is © Nintendo / Game Freak / Creatures Inc. This is a fan-made,
 non-commercial project — not affiliated with or endorsed by them.
