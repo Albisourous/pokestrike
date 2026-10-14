@@ -1,5 +1,5 @@
 import { sprite } from '../core/assets';
-import { SpeciesDef, ROSTER, STAGE } from './data';
+import { SpeciesDef, ROSTER } from './data';
 import { TYPE_COLOR } from './types';
 
 export const W = 540;
@@ -29,6 +29,8 @@ export function cellRect(i: number) {
 
 export const START_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 64 };
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
+export const DAILY_BTN = { x: W / 2 - 140, y: 640, w: 280, h: 64 };
+export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -53,7 +55,13 @@ function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: num
   ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 8);
 }
 
-export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number | null) {
+export function drawTitle(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  best: number | null,
+  streak: number,
+  dailyDone: boolean,
+) {
   ctx.fillStyle = '#0b0e1a';
   ctx.fillRect(0, 0, W, H);
 
@@ -62,32 +70,30 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number
   ctx.fillStyle = '#f8d030';
   ctx.strokeStyle = '#2a3560';
   ctx.lineWidth = 8;
-  ctx.strokeText('POKÉSTRIKE', W / 2, 340);
-  ctx.fillText('POKÉSTRIKE', W / 2, 340);
+  ctx.strokeText('POKÉSTRIKE', W / 2, 300);
+  ctx.fillText('POKÉSTRIKE', W / 2, 300);
 
   ctx.font = '18px system-ui';
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('pull back. launch. bounce.', W / 2, 390);
+  ctx.fillText('pull back. launch. bounce.', W / 2, 340);
 
   // bouncing sprite teaser
   const bob = Math.sin(t * 2) * 18;
   const img = sprite(25);
-  ctx.drawImage(img, W / 2 - 60, 470 + bob, 120, 120);
+  ctx.drawImage(img, W / 2 - 60, 390 + bob, 120, 120);
 
-  ctx.font = 'bold 20px system-ui';
-  ctx.fillStyle = '#fff';
-  ctx.globalAlpha = 0.6 + Math.sin(t * 4) * 0.4;
-  ctx.fillText('TAP TO START', W / 2, 700);
-  ctx.globalAlpha = 1;
+  button(ctx, DAILY_BTN, dailyDone ? 'DAILY · CLEARED' : 'DAILY STRIKE', true);
+  button(ctx, FREE_BTN, 'FREE PLAY', true);
 
-  if (best !== null) {
-    ctx.font = '16px system-ui';
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(`best clear: ${best.toFixed(1)}s`, W / 2, 760);
-  }
+  ctx.font = '16px system-ui';
+  ctx.fillStyle = '#8890b8';
+  const stats: string[] = [];
+  if (streak > 0) stats.push(`streak ${streak}`);
+  if (best !== null) stats.push(`best clear ${best.toFixed(1)}s`);
+  ctx.fillText(stats.join('  ·  '), W / 2, 830);
 }
 
-export function drawSelect(ctx: CanvasRenderingContext2D, picks: number[]) {
+export function drawSelect(ctx: CanvasRenderingContext2D, picks: number[], stageName: string) {
   ctx.fillStyle = '#0b0e1a';
   ctx.fillRect(0, 0, W, H);
 
@@ -97,7 +103,7 @@ export function drawSelect(ctx: CanvasRenderingContext2D, picks: number[]) {
   ctx.fillText('PICK YOUR TEAM', W / 2, 120);
   ctx.font = '17px system-ui';
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(`${picks.length} / 4 — ${STAGE.name} awaits`, W / 2, 160);
+  ctx.fillText(`${picks.length} / 4 — ${stageName} awaits`, W / 2, 160);
 
   ROSTER.forEach((def: SpeciesDef, i: number) => {
     const r = cellRect(i);
@@ -139,7 +145,12 @@ export function drawSelect(ctx: CanvasRenderingContext2D, picks: number[]) {
   ctx.fillText('tip: bounce off allies to trigger their attack', W / 2, 820);
 }
 
-export function drawResult(ctx: CanvasRenderingContext2D, res: RunResult, best: number | null) {
+export function drawResult(
+  ctx: CanvasRenderingContext2D,
+  res: RunResult,
+  best: number | null,
+  extra: string | null,
+) {
   ctx.fillStyle = '#0b0e1add';
   ctx.fillRect(0, 0, W, H);
 
@@ -151,7 +162,11 @@ export function drawResult(ctx: CanvasRenderingContext2D, res: RunResult, best: 
   ctx.font = '20px system-ui';
   ctx.fillStyle = '#fff';
   ctx.fillText(`${res.shots} shots · ${res.time.toFixed(1)}s`, W / 2, 380);
-  if (res.won && best !== null) {
+  if (extra) {
+    ctx.font = 'bold 20px system-ui';
+    ctx.fillStyle = '#f8d030';
+    ctx.fillText(extra, W / 2, 420);
+  } else if (res.won && best !== null) {
     ctx.font = '16px system-ui';
     ctx.fillStyle = '#ffd84d';
     ctx.fillText(`best: ${best.toFixed(1)}s`, W / 2, 415);

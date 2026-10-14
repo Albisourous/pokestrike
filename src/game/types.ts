@@ -7,7 +7,9 @@ export type PokeType =
   | 'psychic'
   | 'rock'
   | 'poison'
-  | 'flying';
+  | 'flying'
+  | 'fighting'
+  | 'ghost';
 
 // attacker -> { defenderType: multiplier }; unlisted pairs are 1x
 const CHART: Record<PokeType, Partial<Record<PokeType, number>>> = {
@@ -17,9 +19,11 @@ const CHART: Record<PokeType, Partial<Record<PokeType, number>>> = {
   electric: { water: 2, flying: 2, grass: 0.5, electric: 0.5 },
   psychic: { poison: 2, psychic: 0.5 },
   rock: { fire: 2, flying: 2 },
-  poison: { grass: 2, poison: 0.5, rock: 0.5 },
-  flying: { grass: 2, electric: 0.5, rock: 0.5 },
-  normal: { rock: 0.5 },
+  poison: { grass: 2, poison: 0.5, rock: 0.5, ghost: 0.5 },
+  flying: { grass: 2, fighting: 2, electric: 0.5, rock: 0.5 },
+  normal: { rock: 0.5, ghost: 0 },
+  fighting: { normal: 2, rock: 2, poison: 0.5, flying: 0.5, ghost: 0, psychic: 0.5 },
+  ghost: { psychic: 2, ghost: 2, normal: 0 },
 };
 
 export const effectiveness = (atk: PokeType, def: PokeType) => CHART[atk][def] ?? 1;
@@ -34,4 +38,6 @@ export const TYPE_COLOR: Record<PokeType, string> = {
   rock: '#b8a038',
   poison: '#a040a0',
   flying: '#a890f0',
+  fighting: '#c03028',
+  ghost: '#705898',
 };

@@ -22,8 +22,11 @@ interface Unit {
   hp: number;
   maxHp: number;
   timer: number; // enemy countdown; attacks when it hits 0
+  drift: number; // enemy approach speed (u/s); players always 0
   boss: boolean;
   dead: boolean;
+  dotTicks: number; // poison ticks remaining
+  dotDmg: number;
   lastHit: Map<number, number>; // shooter uid -> game time
 }
 
@@ -56,6 +59,14 @@ interface Particle {
   t: number;
   color: string;
 }
+interface Orb {
+  x: number;
+  y: number;
+  target: Unit;
+  dmg: number;
+  t: number;
+  color: string;
+}
 
 export type Phase = 'aim' | 'shot' | 'enemy' | 'won' | 'lost';
 
@@ -66,7 +77,6 @@ const WALL_REST = 0.92;
 const UNIT_REST = 0.9;
 const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
-const BUMP_RADIUS = 150;
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 
@@ -93,6 +103,7 @@ export class Battle {
   private zaps: Zap[] = [];
   private bursts: Burst[] = [];
   private particles: Particle[] = [];
+  private orbs: Orb[] = [];
 
   constructor(
     public arena: Rect,
@@ -113,8 +124,11 @@ export class Battle {
         hp: def.hp,
         maxHp: def.hp,
         timer: 0,
+        drift: 0,
         boss: false,
         dead: false,
+        dotTicks: 0,
+        dotDmg: 0,
         lastHit: new Map(),
       });
     });
@@ -143,8 +157,11 @@ export class Battle {
       hp: s.def.hp,
       maxHp: s.def.hp,
       timer: ENEMY_BASE_TIMER,
+      drift: s.boss ? 16 : 26 + Math.random() * 14,
       boss: !!s.boss,
       dead: false,
+      dotTicks: 0,
+      dotDmg: 0,
       lastHit: new Map(),
     }));
     this.waveBanner = 1.4;
@@ -199,6 +216,10 @@ export class Battle {
     this.particles = this.particles.filter((p) => p.t > 0);
     if (this.waveBanner > 0) this.waveBanner -= dt;
 
+    this.stepOrbs(dt);
+    if (this.phase === 'shot' || this.phase === 'aim' || this.phase === 'enemy') {
+      this.stepEnemyMovement(dt);
+    }
     if (this.phase === 'shot') this.stepShot(dt);
     else if (this.phase === 'enemy') {
       this.enemyPhaseT -= dt;
@@ -235,6 +256,90 @@ export class Battle {
     } else {
       this.stopTimer = 0;
     }
+  }
+
+  // Enemies creep toward the nearest player; knockback velocity decays fast.
+  private stepEnemyMovement(dt: number) {
+    const alive = this.players.filter((p) => !p.dead);
+    for (const e of this.enemies) {
+      const kn = Math.exp(-4 * dt);
+      e.vx *= kn;
+      e.vy *= kn;
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      if (alive.length > 0) {
+        const target = alive.reduce((a, b) => (dist(e, a) < dist(e, b) ? a : b));
+        const d = dist(e, target);
+        if (d > e.r + target.r + 6) {
+          const dir = norm({ x: target.x - e.x, y: target.y - e.y });
+          e.x += dir.x * e.drift * dt;
+          e.y += dir.y * e.drift * dt;
+        }
+      }
+      this.clampToArena(e);
+      for (const p of this.players) {
+        if (!p.dead) this.separate(e, p);
+      }
+    }
+    // pairwise separation between enemies
+    for (let i = 0; i < this.enemies.length; i++) {
+      for (let j = i + 1; j < this.enemies.length; j++) {
+        this.separatePair(this.enemies[i], this.enemies[j]);
+      }
+    }
+  }
+
+  private clampToArena(u: Unit) {
+    const a = this.arena;
+    u.x = Math.min(Math.max(u.x, a.x + u.r), a.x + a.w - u.r);
+    u.y = Math.min(Math.max(u.y, a.y + u.r), a.y + a.h - u.r);
+  }
+
+  // Push mover m out of static o.
+  private separate(m: Unit, o: Unit) {
+    const rr = m.r + o.r;
+    const d = dist(m, o);
+    if (d >= rr || d === 0) return;
+    const n = norm({ x: m.x - o.x, y: m.y - o.y });
+    m.x = o.x + n.x * rr;
+    m.y = o.y + n.y * rr;
+  }
+
+  // Push two movers apart, splitting the correction.
+  private separatePair(a: Unit, b: Unit) {
+    const rr = a.r + b.r;
+    const d = dist(a, b);
+    if (d >= rr || d === 0) return;
+    const n = norm({ x: b.x - a.x, y: b.y - a.y });
+    const push = (rr - d) / 2;
+    a.x -= n.x * push;
+    a.y -= n.y * push;
+    b.x += n.x * push;
+    b.y += n.y * push;
+  }
+
+  // Homing orbs from water bump attacks.
+  private stepOrbs(dt: number) {
+    for (const o of this.orbs) {
+      o.t -= dt;
+      if (o.target.dead) {
+        const next = this.enemies.find((e) => !e.dead);
+        if (next) o.target = next;
+        else {
+          o.t = 0;
+          continue;
+        }
+      }
+      const dir = norm({ x: o.target.x - o.x, y: o.target.y - o.y });
+      o.x += dir.x * 620 * dt;
+      o.y += dir.y * 620 * dt;
+      if (dist(o, o.target) < o.target.r + 6) {
+        this.hurt(o.target, o.dmg, '#9df0ff');
+        this.spark(o.x, o.y, '#6890f0');
+        o.t = 0;
+      }
+    }
+    this.orbs = this.orbs.filter((o) => o.t > 0);
   }
 
   private hitWalls(u: Unit) {
@@ -275,45 +380,155 @@ export class Battle {
     return true;
   }
 
+  // Central damage path so every source (contact, bump, orb, dot) behaves alike.
+  private hurt(e: Unit, dmg: number, color: string, suffix = '') {
+    if (e.dead) return;
+    e.hp -= dmg;
+    this.texts.push({
+      x: e.x,
+      y: e.y - e.r - 8,
+      text: `${dmg}${suffix}`,
+      t: 0.9,
+      color,
+    });
+    if (e.hp <= 0) {
+      e.dead = true;
+      this.bursts.push({ x: e.x, y: e.y, r: e.r * 2.5, t: 0.4, color: '#ffffff' });
+      if (this.enemies.every((x) => x.dead)) this.waveCleared();
+    }
+  }
+
   private strikeEnemy(shooter: Unit, e: Unit) {
     const last = e.lastHit.get(shooter.uid) ?? -1;
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     const mult = effectiveness(shooter.def.type, e.def.type);
     const dmg = Math.round(shooter.def.atk * mult);
-    e.hp -= dmg;
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
-    this.texts.push({
-      x: e.x,
-      y: e.y - e.r - 8,
-      text: mult > 1 ? `${dmg}!` : `${dmg}`,
-      t: 0.9,
-      color,
-    });
+    this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     this.spark(e.x, e.y, TYPE_COLOR[shooter.def.type]);
-    if (e.hp <= 0) {
-      e.dead = true;
-      this.bursts.push({ x: e.x, y: e.y, r: e.r * 2.5, t: 0.4, color: '#ffffff' });
-      if (this.enemies.every((x) => x.dead || x === e)) this.waveCleared();
-    }
   }
 
+  // Bump an ally mid-shot: it fires its type's signature attack.
   private bumpAlly(p: Unit) {
     if (this.bumpsThisShot.has(p.uid)) return;
     this.bumpsThisShot.add(p.uid);
-    this.bursts.push({ x: p.x, y: p.y, r: BUMP_RADIUS, t: 0.35, color: TYPE_COLOR[p.def.type] });
-    for (const e of this.enemies) {
-      if (e.dead) continue;
-      if (dist(p, e) <= BUMP_RADIUS + e.r) {
-        const dmg = Math.round(p.def.atk * 0.8 * effectiveness(p.def.type, e.def.type));
-        e.hp -= dmg;
-        this.texts.push({ x: e.x, y: e.y - e.r - 8, text: `${dmg}`, t: 0.9, color: '#9df0ff' });
-        this.spark(e.x, e.y, TYPE_COLOR[p.def.type]);
-        if (e.hp <= 0) e.dead = true;
+    const near = (radius: number) =>
+      this.enemies.filter((e) => !e.dead && dist(p, e) <= radius + e.r);
+    const nearest = (from: Unit, radius: number) =>
+      this.enemies
+        .filter((e) => !e.dead && dist(from, e) <= radius + e.r)
+        .sort((a, b) => dist(from, a) - dist(from, b))[0];
+    const atk = p.def.atk;
+    const eff = (e: Unit) => effectiveness(p.def.type, e.def.type);
+    const color = TYPE_COLOR[p.def.type];
+
+    switch (p.def.type) {
+      case 'fire': // radial blast
+        this.bursts.push({ x: p.x, y: p.y, r: 150, t: 0.35, color });
+        for (const e of near(150)) this.hurt(e, Math.round(atk * 0.9 * eff(e)), '#9df0ff');
+        break;
+      case 'electric': {
+        // chain lightning: up to 3 jumps between enemies
+        let from: Unit = p;
+        const hit = new Set<number>();
+        let mult = 1;
+        for (let i = 0; i < 3; i++) {
+          const next = this.enemies
+            .filter((e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190)
+            .sort((a, b) => dist(from, a) - dist(from, b))[0];
+          if (!next) break;
+          hit.add(next.uid);
+          this.zaps.push({ x1: from.x, y1: from.y, x2: next.x, y2: next.y, t: 0.35 });
+          this.hurt(next, Math.round(atk * mult * eff(next)), '#9df0ff');
+          mult *= 0.7;
+          from = next;
+        }
+        break;
+      }
+      case 'grass': {
+        // drain field: damage nearby enemies, heal the team
+        this.bursts.push({ x: p.x, y: p.y, r: 140, t: 0.35, color });
+        let dealt = 0;
+        for (const e of near(140)) {
+          const dmg = Math.round(atk * 0.8 * eff(e));
+          dealt += dmg;
+          this.hurt(e, dmg, '#9df0ff');
+        }
+        const heal = Math.max(Math.round(dealt * 0.25), 4);
+        for (const pl of this.players) {
+          if (pl.dead) continue;
+          pl.hp = Math.min(pl.hp + heal, pl.maxHp);
+          this.texts.push({ x: pl.x, y: pl.y - pl.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f' });
+        }
+        break;
+      }
+      case 'water':
+        // homing water orbs at the 3 nearest enemies
+        near(Infinity)
+          .sort((a, b) => dist(p, a) - dist(p, b))
+          .slice(0, 3)
+          .forEach((e) => {
+            this.orbs.push({
+              x: p.x,
+              y: p.y,
+              target: e,
+              dmg: Math.round(atk * 0.9 * eff(e)),
+              t: 2.5,
+              color,
+            });
+          });
+        break;
+      case 'psychic': // telekinetic shove
+      case 'flying': {
+        const radius = p.def.type === 'psychic' ? 160 : 200;
+        const knock = p.def.type === 'psychic' ? 340 : 280;
+        const mult = p.def.type === 'psychic' ? 0.8 : 0.5;
+        this.bursts.push({ x: p.x, y: p.y, r: radius, t: 0.35, color });
+        for (const e of near(radius)) {
+          const dir = norm({ x: e.x - p.x, y: e.y - p.y });
+          e.vx += dir.x * knock;
+          e.vy += dir.y * knock;
+          this.hurt(e, Math.round(atk * mult * eff(e)), '#9df0ff');
+        }
+        break;
+      }
+      case 'poison':
+        // toxin: small hit now, plus 2 ticks at the end of your shots
+        this.bursts.push({ x: p.x, y: p.y, r: 140, t: 0.35, color });
+        for (const e of near(140)) {
+          e.dotTicks = 2;
+          e.dotDmg = Math.round(atk * 0.5);
+          this.hurt(e, Math.round(atk * 0.7 * eff(e)), '#9df0ff');
+        }
+        break;
+      case 'rock':
+      case 'fighting': {
+        // heavy hit on the nearest enemy
+        const e = nearest(p, 200);
+        if (e) {
+          this.bursts.push({ x: e.x, y: e.y, r: e.r * 2, t: 0.3, color });
+          this.hurt(e, Math.round(atk * 1.8 * eff(e)), '#9df0ff');
+        }
+        break;
+      }
+      case 'ghost': {
+        // hex: hit every enemy weakly
+        for (const e of near(Infinity)) this.hurt(e, Math.round(atk * 0.55 * eff(e)), '#9df0ff');
+        this.bursts.push({ x: p.x, y: p.y, r: 220, t: 0.4, color });
+        break;
+      }
+      default: {
+        // normal: quick tackle on the nearest enemy
+        const e = nearest(p, 180);
+        if (e) {
+          this.zaps.push({ x1: p.x, y1: p.y, x2: e.x, y2: e.y, t: 0.25 });
+          this.hurt(e, Math.round(atk * 1.4 * eff(e)), '#9df0ff');
+        }
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
-    if (this.enemies.length === 0) this.waveCleared();
+    if (this.enemies.length === 0 && this.phase !== 'won') this.waveCleared();
   }
 
   private waveCleared() {
@@ -328,6 +543,22 @@ export class Battle {
     const u = this.active;
     u.vx = 0;
     u.vy = 0;
+    const waveAt = this.waveIndex;
+    // poison ticks first
+    for (const e of this.enemies) {
+      if (e.dotTicks > 0) {
+        e.dotTicks--;
+        this.hurt(e, e.dotDmg, '#a040a0');
+      }
+    }
+    this.enemies = this.enemies.filter((e) => !e.dead);
+    // dots cleared the wave mid-check: fresh wave keeps full timers
+    if (this.phase === 'won') return;
+    if (this.waveIndex !== waveAt) {
+      this.nextTurn();
+      return;
+    }
+
     this.pendingAttacks = [];
     for (const e of this.enemies) {
       e.timer--;
@@ -417,6 +648,16 @@ export class Battle {
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
 
+    for (const o of this.orbs) {
+      ctx.fillStyle = o.color;
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
     for (const p of this.particles) {
       ctx.globalAlpha = Math.max(p.t / 0.35, 0);
       ctx.fillStyle = p.color;
@@ -478,8 +719,15 @@ export class Battle {
     ctx.fillStyle = pct > 0.5 ? '#6fdc6f' : pct > 0.25 ? '#ffd84d' : '#ff6b6b';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
 
-    // enemy attack countdown
     if (u.side === 'enemy') {
+      // poisoned indicator
+      if (u.dotTicks > 0) {
+        ctx.fillStyle = '#a040a0';
+        ctx.beginPath();
+        ctx.arc(u.x - u.r + 4, u.y - u.r + 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // attack countdown
       ctx.fillStyle = '#000a';
       ctx.beginPath();
       ctx.arc(u.x + u.r - 2, u.y - u.r + 2, 11, 0, Math.PI * 2);
