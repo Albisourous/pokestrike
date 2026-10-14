@@ -1,5 +1,7 @@
 import { itemSprite, drawMon } from '../core/assets';
 import { SpeciesDef } from './data';
+import { RARITY_COLOR } from './perks';
+import type { Rarity } from './perks';
 import { drawBackdrop, hash as hashSeed } from './bg';
 import { TYPE_COLOR } from './types';
 import { bumpIsPhysical, roleOf, ROLE_BLURB, TYPE_MOVE } from './stats';
@@ -77,15 +79,15 @@ function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: num
   ctx.fillStyle = on ? '#1b2140' : '#12152b';
   ctx.fill();
   trim(ctx, r, 10);
-  ctx.font = `bold 21px ${SERIF}`;
+  ctx.font = `13px ${PIXEL_FONT}`;
   ctx.textAlign = 'center';
   ctx.fillStyle = on ? PARCH : '#6a7090';
-  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 7);
+  ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 5);
 }
 
 // --- title screen: grass field, pokeball crest, arced fan-logo wordmark ---
 
-const TITLE_FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
+const PIXEL_FONT = '"Press Start 2P", "Courier New", monospace';
 
 // Mons standing the ring around the logo — all ids are in ALL_SPRITE_IDS.
 const RING_MONS: [number, number][] = [
@@ -217,43 +219,48 @@ function drawCrest(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: num
   ctx.fill();
 }
 
-// Letters fan out along a dipped baseline — the classic fan-logo look.
+// Pixel wordmark — chunky font with a hard offset shadow, fan-game style.
+// Shrinks to fit maxW so it never runs off the field.
 function logoWord(
   ctx: CanvasRenderingContext2D,
   text: string,
   cx: number,
   baseY: number,
   size: number,
-  dip: number,
-  tilt: number,
+  maxW: number,
 ) {
   ctx.save();
-  ctx.font = `900 ${size}px ${TITLE_FONT}`;
-  const chars = [...text];
-  const gap = size * 0.04;
-  const widths = chars.map((c) => ctx.measureText(c).width);
-  const total = widths.reduce((a, b) => a + b, 0) + gap * (chars.length - 1);
-  const x0 = cx - total / 2;
-  let x = x0;
-  chars.forEach((ch, i) => {
-    const t01 = total ? (x + widths[i] / 2 - x0) / total : 0.5;
-    ctx.save();
-    ctx.translate(x, baseY + Math.pow(Math.abs(2 * t01 - 1), 1.4) * dip);
-    ctx.rotate((t01 - 0.5) * tilt);
-    ctx.transform(1, 0, -0.14, 1, 0, 0);
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = size * 0.18;
-    ctx.strokeStyle = '#20386e';
-    ctx.strokeText(ch, 0, 0);
-    const lg = ctx.createLinearGradient(0, -size, 0, 0);
-    lg.addColorStop(0, '#fff3a0');
-    lg.addColorStop(0.45, '#ffcb05');
-    lg.addColorStop(1, '#f09c1c');
-    ctx.fillStyle = lg;
-    ctx.fillText(ch, 0, 0);
-    ctx.restore();
-    x += widths[i] + gap;
-  });
+  ctx.font = `${size}px ${PIXEL_FONT}`;
+  ctx.textAlign = 'center';
+  const w = ctx.measureText(text).width;
+  if (w > maxW) {
+    size = Math.max(8, Math.floor(size * (maxW / w)));
+    ctx.font = `${size}px ${PIXEL_FONT}`;
+  }
+  const off = Math.max(3, Math.round(size * 0.14));
+  ctx.fillStyle = '#1e3260';
+  ctx.fillText(text, cx + off, baseY + off);
+  ctx.fillStyle = '#ffcb05';
+  ctx.fillText(text, cx, baseY);
+  ctx.restore();
+}
+
+// Small pixel UI text — tagline, captions, stats.
+function pixelText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  baseY: number,
+  size: number,
+  color = '#f0e6c8',
+) {
+  ctx.save();
+  ctx.font = `${size}px ${PIXEL_FONT}`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillText(text, cx + 2, baseY + 2);
+  ctx.fillStyle = color;
+  ctx.fillText(text, cx, baseY);
   ctx.restore();
 }
 
@@ -283,32 +290,16 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number
   drawRingMons(ctx, t, cx, cy + 12, 214, 180);
 
   ctx.textAlign = 'center';
-  logoWord(ctx, 'POKÉ', cx, cy - 52, 42, 7, 0.4);
-  logoWord(ctx, 'STRIKE', cx, cy + 112, 88, 15, 0.5);
-
-  ctx.font = `italic 19px ${SERIF}`;
-  ctx.fillStyle = PARCH;
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 5;
-  ctx.fillText('pull back. launch. bounce.', cx, 618);
-  ctx.shadowBlur = 0;
+  logoWord(ctx, 'POKÉ', cx, cy - 42, 30, 190);
+  logoWord(ctx, 'STRIKE', cx, cy + 118, 56, 480);
 
   // the loop, in one line
-  ctx.font = 'bold 13px system-ui';
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.shadowColor = 'rgba(0,0,0,0.4)';
-  ctx.shadowBlur = 4;
-  ctx.fillText('DRAFT  ·  LAUNCH  ·  COMBO  ·  CAPTURE  ·  RELICS', cx, 650);
-  ctx.shadowBlur = 0;
+  pixelText(ctx, 'pull back. launch. bounce.', cx, 615, 12);
+  pixelText(ctx, 'DRAFT · LAUNCH · COMBO · CAPTURE · RELICS', cx, 648, 9, 'rgba(255,255,255,0.85)');
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
 
-  ctx.font = '16px system-ui';
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.shadowColor = 'rgba(0,0,0,0.4)';
-  ctx.shadowBlur = 4;
-  if (best !== null) ctx.fillText(`best clear ${best.toFixed(1)}s`, cx, 830);
-  ctx.shadowBlur = 0;
+  if (best !== null) pixelText(ctx, `best clear ${best.toFixed(1)}s`, cx, 830, 10);
 }
 
 export function drawDraft(
@@ -396,7 +387,7 @@ export interface ShareGrid {
 
 export function drawReward(
   ctx: CanvasRenderingContext2D,
-  offers: { name: string; item: string; desc: string }[],
+  offers: { name: string; item: string; desc: string; rarity: Rarity }[],
   depth: number,
   box: SpeciesDef[],
   team: SpeciesDef[],
@@ -421,7 +412,7 @@ export function drawReward(
     ctx.fillStyle = '#12162b';
     ctx.fill();
     trim(ctx, r, 10);
-    ctx.fillStyle = GOLD;
+    ctx.fillStyle = RARITY_COLOR[perk.rarity];
     ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
     // item sprite on a gold-rimmed plinth
@@ -442,6 +433,9 @@ export function drawReward(
     ctx.font = `bold 15px ${SERIF}`;
     ctx.fillStyle = PARCH;
     ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);
+    ctx.font = 'bold 9px system-ui';
+    ctx.fillStyle = RARITY_COLOR[perk.rarity];
+    ctx.fillText(perk.rarity.toUpperCase(), r.x + r.w / 2, r.y + 134);
     ctx.font = '12px system-ui';
     ctx.fillStyle = '#a8b0d8';
     // two-line desc

@@ -98,8 +98,11 @@ function buildShare(b: Battle, won: boolean) {
 }
 
 // Offers for the current round — never re-offer a species already on the
-// team; top up from unpicked species when the deal runs dry.
+// team; top up from unpicked species when the deal runs dry. Rolled ONCE
+// per round and cached: re-rolling in render would flicker the cards.
+let offerCache: number[] | null = null;
 function draftOffers(): number[] {
+  if (offerCache) return offerCache;
   const offers = draft.order
     .slice(draft.picked.length * 3)
     .filter((i) => !draft.picked.includes(i))
@@ -114,6 +117,7 @@ function draftOffers(): number[] {
     }
     offers.push(...extra.slice(0, 3 - offers.length));
   }
+  offerCache = offers;
   return offers;
 }
 
@@ -146,6 +150,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
       draft = { order: draftOrder(Math.random), picked: [] };
+      offerCache = null;
       stage = makeStage(randSeed());
       scene = 'draft';
     }
@@ -157,6 +162,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       cry(ROSTER[offers[i]].id, 0.5); // picked mon calls out
       draft.picked.push(offers[i]);
+      offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, Math.random, true);
         scene = 'battle';
@@ -322,6 +328,7 @@ Promise.all([
   loadAll(ALL_SPRITE_IDS),
   loadItem('poke-ball'),
   ...PERKS.map((p) => loadItem(p.item)),
+  document.fonts.load('12px "Press Start 2P"'), // force pixel-font fetch before first paint
 ])
   .then(() => {
     scene = 'title';

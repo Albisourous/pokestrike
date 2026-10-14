@@ -228,6 +228,7 @@ export class Battle {
   frictionMult = 1; // float stone: lower = ball slides further
   belt = 0; // expert belt: bonus on super-effective hits
   captureChance = 0.06; // odds a defeated enemy joins your box
+  masterArmed = false; // master ball relic: catch strongest on next wave
   box: SpeciesDef[] = []; // captured mons — swap one in between waves
   swapped = false; // one swap per reward break
   boxSel = -1; // box index picked for swapping
@@ -394,6 +395,11 @@ export class Battle {
     }
     const boss = this.enemies.find((e) => e.boss);
     if (boss) cry(boss.def.id, 0.5); // boss roars on entry
+    // armed Master Ball fires on the fresh wave — usually nabs the boss
+    if (this.masterArmed) {
+      this.masterArmed = false;
+      this.captureStrongest();
+    }
   }
 
   // --- input (logical coords) ---
@@ -1174,8 +1180,9 @@ export class Battle {
     this.nextTurn();
   }
 
-  // Master Ball relic: capture the strongest enemy outright.
-  captureStrongest() {
+  // Master Ball relic: capture the strongest enemy outright. Armed by the
+  // perk, fires right after the next wave spawns (boss has the most HP).
+  private captureStrongest() {
     const e = this.enemies.filter((x) => !x.dead).sort((a, b) => b.hp - a.hp)[0];
     if (!e) return;
     this.converge(e.x, e.y, 12, '#f0e6ff', 'wisp');

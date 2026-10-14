@@ -47,7 +47,11 @@ export function sprite(id: number): HTMLImageElement {
   return img;
 }
 
-// Draw a Pokémon centered at x,y at `size` px — static sprite.
+// Draw a Pokémon centered at x,y at `size` px — static sprite. Nearest-
+// neighbor keeps the pixel art crisp at non-integer scales.
 export function drawMon(ctx: CanvasRenderingContext2D, id: number, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
   ctx.drawImage(sprite(id), x - size / 2, y - size / 2, size, size);
+  ctx.restore();
 }
