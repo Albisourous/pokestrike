@@ -143,6 +143,7 @@ export function drawBackdrop(
   r: number,
   theme: Theme,
   t: number,
+  pool: { nx: number; ny: number } | null = { nx: 0.78, ny: 0.2 },
 ) {
   const c = CFG[theme];
   const { x, y, w, h } = rect;
@@ -190,14 +191,16 @@ export function drawBackdrop(
   }
 
   // a pond / lava pool / pit blob for landmark variety
-  const px = x + w * 0.78, py = y + h * 0.2;
-  ctx.fillStyle = c.poolEdge;
-  blob(ctx, px, py, 52, 36, 42, 8);
-  ctx.fillStyle = c.pool;
-  blob(ctx, px, py, 44, 29, 43, 8);
-  if (theme === 'grove' || theme === 'sky') {
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    blob(ctx, px - 10, py - 8, 16, 6, 44, 5);
+  if (pool) {
+    const px = x + w * pool.nx, py = y + h * pool.ny;
+    ctx.fillStyle = c.poolEdge;
+    blob(ctx, px, py, 52, 36, 42, 8);
+    ctx.fillStyle = c.pool;
+    blob(ctx, px, py, 44, 29, 43, 8);
+    if (theme === 'grove' || theme === 'sky') {
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      blob(ctx, px - 10, py - 8, 16, 6, 44, 5);
+    }
   }
 
   // grove extras: little flowers

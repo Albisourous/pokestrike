@@ -90,34 +90,110 @@ export function drawTitle(
   streak: number,
   dailyDone: boolean,
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'grove', t);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'grove', t, { nx: 0.12, ny: 0.9 });
 
   ctx.textAlign = 'center';
   ctx.font = `bold 56px ${SERIF}`;
   ctx.fillStyle = '#f8d030';
   ctx.strokeStyle = '#2a3560';
   ctx.lineWidth = 8;
-  ctx.strokeText('POKÉSTRIKE', W / 2, 300);
-  ctx.fillText('POKÉSTRIKE', W / 2, 300);
+  ctx.strokeText('POKÉSTRIKE', W / 2, 250);
+  ctx.fillText('POKÉSTRIKE', W / 2, 250);
 
   // gold rule lines flanking the tagline, conquest-style
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 1.5;
-  for (const y of [352, 356]) {
+  for (const y of [288, 292]) {
     ctx.beginPath();
     ctx.moveTo(W / 2 - 170, y);
     ctx.lineTo(W / 2 + 170, y);
     ctx.stroke();
   }
-
   ctx.font = '16px system-ui';
-  ctx.fillStyle = '#8890b8';
-  ctx.fillText('pull back. launch. bounce.', W / 2, 340);
+  ctx.fillStyle = '#4a6238';
+  ctx.fillText('pull back. launch. bounce.', W / 2, 278);
 
-  // bouncing sprite teaser
-  const bob = Math.sin(t * 2) * 18;
-  const img = sprite(25);
-  ctx.drawImage(img, W / 2 - 60, 390 + bob, 120, 120);
+  // mini-arena diorama: the game in one frame
+  const D = { x: 55, y: 320, w: 430, h: 280 };
+  ctx.save();
+  roundRect(ctx, D.x, D.y, D.w, D.h, 14);
+  ctx.clip();
+  drawBackdrop(ctx, D, 14, 'grove', t, null);
+  // rock + tall grass
+  ctx.fillStyle = '#3c6e44';
+  ctx.strokeStyle = '#1d4026';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(D.x + 330, D.y + 180);
+  ctx.lineTo(D.x + 365, D.y + 165);
+  ctx.lineTo(D.x + 385, D.y + 190);
+  ctx.lineTo(D.x + 372, D.y + 215);
+  ctx.lineTo(D.x + 338, D.y + 212);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = '#3f7a3a';
+  ctx.beginPath();
+  ctx.ellipse(D.x + 90, D.y + 90, 52, 38, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.drawImage(sprite(43), D.x + 72, D.y + 46, 38, 38); // Oddish in the grass
+  // enemies with capture rings
+  const foes: [number, number, number, number][] = [
+    [94, D.x + 300, D.y + 80, 0.6],   // Gengar, 60% caught
+    [66, D.x + 180, D.y + 60, 0.25],  // Machop
+    [74, D.x + 360, D.y + 130, 0.85], // Geodude nearly caught
+  ];
+  for (const [id, fx, fy, pct] of foes) {
+    const bob = Math.sin(t * 2.4 + fx) * 4;
+    ctx.drawImage(sprite(id), fx - 24, fy - 24 + bob, 48, 48);
+    ctx.strokeStyle = '#9df0ff';
+    ctx.lineWidth = 2.5;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.arc(fx, fy + bob, 32, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  // floating damage + combo text
+  ctx.font = 'bold 18px system-ui';
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('24!', D.x + 300, D.y + 38 + Math.sin(t * 3) * 4);
+  ctx.fillStyle = '#f8d030';
+  ctx.fillText(`COMBO ×${1 + Math.floor(t % 3)}`, D.x + 90, D.y + 30 + Math.sin(t * 2.2) * 4);
+  // launched Pikachu: trail dots, dashed aim arc, styler rings
+  const px = D.x + 110 + Math.sin(t * 1.4) * 30;
+  const py = D.y + 200;
+  ctx.fillStyle = '#f8d03088';
+  for (let i = 1; i <= 5; i++) {
+    ctx.globalAlpha = 0.6 - i * 0.1;
+    ctx.beginPath();
+    ctx.arc(px - i * 16, py + i * 7, 6 - i * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.drawImage(sprite(25), px - 26, py - 26, 52, 52);
+  for (const [rr, sp] of [[34, 2], [42, -1.4]] as const) {
+    ctx.strokeStyle = '#9df0ff';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.7;
+    ctx.setLineDash([12, 8]);
+    ctx.lineDashOffset = t * 50 * sp;
+    ctx.beginPath();
+    ctx.arc(px, py, rr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+  // gold frame over the diorama
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2;
+  roundRect(ctx, D.x, D.y, D.w, D.h, 14);
+  ctx.stroke();
+  // the loop, in one line
+  ctx.font = 'bold 13px system-ui';
+  ctx.fillStyle = '#3c4c30';
+  ctx.fillText('DRAFT  ·  LAUNCH  ·  COMBO  ·  CAPTURE  ·  RELICS', W / 2, 630);
 
   button(ctx, DAILY_BTN, dailyDone ? 'DAILY · CLEARED' : 'DAILY STRIKE', true);
   button(ctx, FREE_BTN, 'FREE PLAY', true);

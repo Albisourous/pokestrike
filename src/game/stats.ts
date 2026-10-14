@@ -80,6 +80,21 @@ export const ROLE_BLURB: Record<Role, string> = {
   wild: 'a bit of everything',
 };
 
+// Real move names, shouted when the super fires.
+export const MOVE_NAME: Record<PokeType, string> = {
+  fire: 'FIRE BLAST',
+  electric: 'THUNDER',
+  grass: 'GIGA DRAIN',
+  water: 'HYDRO PUMP',
+  psychic: 'PSYCHIC',
+  flying: 'HURRICANE',
+  poison: 'SLUDGE BOMB',
+  rock: 'STONE EDGE',
+  fighting: 'CLOSE COMBAT',
+  ghost: 'SHADOW BALL',
+  normal: 'QUICK ATTACK',
+};
+
 // What each type's bump super does — shown on draft cards.
 export const TYPE_MOVE: Record<PokeType, string> = {
   fire: 'meteor storm, nearby',
