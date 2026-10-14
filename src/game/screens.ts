@@ -297,6 +297,8 @@ function logoWord(
   baseY: number,
   size: number,
   maxW: number,
+  fill = '#ffcb05',
+  shade = '#1e3260',
 ) {
   ctx.save();
   ctx.font = `${size}px ${PIXEL_FONT}`;
@@ -307,9 +309,9 @@ function logoWord(
     ctx.font = `${size}px ${PIXEL_FONT}`;
   }
   const off = Math.max(3, Math.round(size * 0.14));
-  ctx.fillStyle = '#1e3260';
+  ctx.fillStyle = shade;
   ctx.fillText(text, cx + off, baseY + off);
-  ctx.fillStyle = '#ffcb05';
+  ctx.fillStyle = fill;
   ctx.fillText(text, cx, baseY);
   ctx.restore();
 }
@@ -412,27 +414,13 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number
   drawRingMons(ctx, t, cx, cy + 8, 210, 168);
 
   ctx.textAlign = 'center';
-  logoWord(ctx, 'POKÉ', cx, cy - 36, 26, 170);
-
-  // STRIKE sits clear of the ring on its own banner, like a game box logo
-  ctx.save();
-  ctx.fillStyle = 'rgba(10,14,32,0.85)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 240, 545);
-  ctx.lineTo(cx + 240, 545);
-  ctx.lineTo(cx + 220, 615);
-  ctx.lineTo(cx - 220, 615);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = '#c8a44d';
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
-  logoWord(ctx, 'STRIKE', cx, 598, 52, 430);
+  // the ball IS the logo: POKÉ on the red half, STRIKE on the white
+  logoWord(ctx, 'POKÉ', cx, cy - 58, 26, 170);
+  logoWord(ctx, 'STRIKE', cx, cy + 108, 30, 190, '#22336a', '#c8d0e8');
 
   // the loop, in one line
-  pixelText(ctx, 'pull back. launch. bounce.', cx, 668, 11);
-  pixelText(ctx, 'DRAFT · LAUNCH · COMBO · CAPTURE · RELICS', cx, 696, 8, 'rgba(255,255,255,0.85)');
+  pixelText(ctx, 'pull back. launch. bounce.', cx, 600, 11);
+  pixelText(ctx, 'DRAFT · LAUNCH · COMBO · CAPTURE · RELICS', cx, 628, 8, 'rgba(255,255,255,0.85)');
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
 

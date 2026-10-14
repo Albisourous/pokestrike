@@ -1,5 +1,6 @@
 const cache = new Map<number, HTMLImageElement>();
 const itemCache = new Map<string, HTMLImageElement>();
+const animCache = new Map<number, HTMLImageElement>();
 
 function loadImg(src: string, label: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -13,6 +14,10 @@ function loadImg(src: string, label: string): Promise<HTMLImageElement> {
 export function loadSprite(id: number): Promise<HTMLImageElement> {
   const hit = cache.get(id);
   if (hit) return Promise.resolve(hit);
+  // animated strip rides along; missing file just means "stay static"
+  loadImg(`sprites/anim/${id}.png`, `anim ${id}`)
+    .then((img) => animCache.set(id, img))
+    .catch(() => {});
   return loadImg(`sprites/${id}.png`, `sprite ${id}`).then((img) => {
     cache.set(id, img);
     return img;
@@ -47,11 +52,21 @@ export function sprite(id: number): HTMLImageElement {
   return img;
 }
 
-// Draw a Pokémon centered at x,y at `size` px — static sprite. Nearest-
-// neighbor keeps the pixel art crisp at non-integer scales.
+// Draw a Pokémon centered at x,y at `size` px. When an animated strip is
+// loaded (vertical stack of square cells, Essentials-style) we step frames
+// at ~12fps; otherwise the static sprite is drawn. Nearest-neighbor keeps
+// the pixel art crisp at non-integer scales.
 export function drawMon(ctx: CanvasRenderingContext2D, id: number, x: number, y: number, size: number) {
+  const sheet = animCache.get(id);
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(sprite(id), x - size / 2, y - size / 2, size, size);
+  if (sheet) {
+    const w = sheet.width;
+    const frames = Math.round(sheet.height / w);
+    const f = Math.floor(performance.now() / 80 + id * 0.6) % frames;
+    ctx.drawImage(sheet, 0, f * w, w, w, x - size / 2, y - size / 2, size, size);
+  } else {
+    ctx.drawImage(sprite(id), x - size / 2, y - size / 2, size, size);
+  }
   ctx.restore();
 }
