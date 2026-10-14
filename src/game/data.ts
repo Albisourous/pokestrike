@@ -155,8 +155,8 @@ function gymPack(
   });
 }
 
-// Random stage: 3 waves + a boss. Same seed -> same stage, so the Daily
-// Strike is identical for everyone while Free Play rolls a fresh seed.
+// A stage def bundles a 3-stage stretch: wild, wild + elite, gym boss.
+// Same seed -> same stretch; Free Play rolls a fresh seed each run.
 export function makeStage(seed: number, name?: string): StageDef {
   const rng = mulberry32(seed);
   const boss = BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)];

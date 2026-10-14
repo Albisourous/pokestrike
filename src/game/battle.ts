@@ -2349,7 +2349,7 @@ export class Battle {
       ctx.fillStyle = '#e8ecff';
       ctx.fillText(
         this.shots === 0
-          ? 'pull back to aim — farther back = more power'
+          ? 'pull back to aim — release in the gold'
           : 'bounce through allies to fire their supers',
         a.x + a.w / 2,
         a.y + a.h - 16,
@@ -2769,6 +2769,9 @@ export class Battle {
       ctx.strokeRect(bx - 4, by - 4, bw + 8, bh + 8);
       ctx.fillStyle = '#ffffff1c';
       ctx.fillRect(bx, by, bw, bh);
+      // gold zone = the perfect-release window the fill ping-pongs into
+      ctx.fillStyle = '#ffd84d33';
+      ctx.fillRect(bx + bw * 0.93, by, bw * 0.07, bh);
       ctx.save();
       if (maxed) {
         ctx.shadowColor = '#ffd84d';

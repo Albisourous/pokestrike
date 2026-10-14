@@ -384,7 +384,7 @@ export function drawDraft(
   stageName: string,
   t: number,
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, { nx: 0.08, ny: 0.05 });
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
 
   ctx.textAlign = 'center';
   ctx.font = `18px ${PIXEL_FONT}`;

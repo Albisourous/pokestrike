@@ -1,10 +1,9 @@
 # Pokéstrike
 
-**Pokémon × Monster Strike** — a quick daily-run browser game. Pull back, launch
-your Pokémon, and bounce it around the arena to smash wild Pokémon and the boss.
-
-Built to be played for 5–10 minutes a day: pick a team of 4, climb 9 stages,
-beat all three gym leaders, keep your streak alive.
+**Monster Strike physics in a Pokémon skin, with a Slay the Spire climb.**
+Pull back, launch your Pokémon, and bounce it around the arena smashing wild
+mons — draft a team of 4, climb 9 stages, and take down all three gym
+leaders to win the run.
 
 | Title | Draft | Battle |
 | --- | --- | --- |
@@ -39,16 +38,18 @@ Open the printed URL. Works on desktop and touch.
    heals the team), plus what the bump super actually does.
 3. **Pull back to aim** — drag direction sets your launch angle and a dotted
    **guide line** previews the ball's banks off walls and rocks, ending in a
-   target ring on whatever it would hit first. **Power is timing**: a charge
-   meter ping-pongs while you hold — release at the top for a full-speed
-   `PERFECT!` launch (slow-mo + speedlines included).
+   target ring on whatever it would hit first. **Power is distance**: the
+   farther you pull, the harder the launch — drag into the gold zone for a
+   full-power `PERFECT!` shot (slow-mo + speedlines included).
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune).
 5. **Bump your own teammates** — every pass-through is a combo link (gold
-   arc + rising ×N counter, escalating hit-stop and flashes). The ally's
-   signature **super** fires only if it's recharged — cooldowns tick down
-   per shot (cyan bubble shows shots left). Enemies creep and dart toward
-   your team and attack on a **countdown** — kill them or keep moving.
+   arc + rising ×N counter, escalating hit-stop and flashes). Each ally's
+   signature **super** starts uncharged and builds one notch per shot — the
+   type-colored ring around a mon fills as it charges, and when it goes
+   gold the move name lights up and the next bump fires the super. Enemies
+   creep and dart toward your team and attack on a **countdown** — kill
+   them or keep moving.
 6. **Read the field** — every wave re-themes the arena (grove, cavern,
    caldera, sky). Ponds wall off everything but Water/Flying, lava
    everything but Fire/Rock/Flying; dirt **ledges** hop one way like RSE;
@@ -133,8 +134,9 @@ worker (`public/sw.js`) registered only in production builds.
   mechanic formulas in `src/game/stats.ts`, the type chart in
   `src/game/types.ts`, stages as wave lists with normalized arena coords.
   Adding a Pokémon is a data change, not a code change.
-- **Daily mode** — `makeDailyStage(seed)` uses a seeded RNG so everyone gets
-  the same waves and boss each day; the streak lives in localStorage.
+- **Seeded stages** — `makeStage(seed)` builds the opening 3-stage stretch;
+  `rollWave` generates deeper stages. Free Play rolls a fresh seed each
+  run — a daily mode can reuse the same seeding later.
 - **Fixed logical resolution** — 540×960 letterboxed to any window.
 
 ```
@@ -145,24 +147,33 @@ src/
            perks.ts, bg.ts,                     # relics + themed backdrops
            battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
-public/  sprites/, manifest.webmanifest, sw.js, icons
+public/  sprites/ (mons, bg, gracidea, cries), manifest.webmanifest, sw.js, icons
 ```
 
-## Sprites & credit
+## Art & credit
 
-All Pokémon use one consistent theme: **Generation V (Black/White) pixel
-sprites** from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) —
-`public/sprites/<id>.png` is the static 96×96 front sprite and
-`public/sprites/anim/<id>.png` is the matching animated strip (converted from
-the Gen V animated GIFs). Everything is vendored so the game runs offline after
-install — when adding a species, keep it in the same Gen V theme.
+All game art comes from **one source** — the
+[Gracidea](https://github.com/lowlighter/gracidea) pack (RSE / Gen 3-era
+ripped Pokémon textures), vendored into `public/sprites/gracidea/`:
+
+- `creatures` — Pokémon sprites; the target look for every mon
+- `tileset` — scenery: grounds, trees, rocks, ledges, ponds
+- `npcs` — trainer sprites, destined for gym leaders
+
+One source is what keeps the theme cohesive: new art gets sliced or blitted
+from the pack, never procedural shapes. Mons render from 72×72 overworld
+icons (`sprites/<id>.png`) sliced from the creatures atlas; scenery in
+`sprites/bg/` is RSE tileset art.
 
 Pokémon is © Nintendo / Game Freak / Creatures Inc. This is a fan-made,
 non-commercial project — not affiliated with or endorsed by them.
 
-## Roadmap ideas
+## Roadmap
 
-- Gauge shot ("tap at the right moment" critical hits)
-- Strike shots: per-Pokémon charged abilities (Thunderbolt lines, Surf wave)
-- Evolution rewards and a roster you grow over days
-- Shared daily leaderboard
+The climb is the game — replayability grows in this order, simple first:
+
+- More run variety: species, relics, stage themes
+- Daily Strike returns as a seeded climb (the seed plumbing already exists)
+- Ascension-style modifiers: beat the climb, unlock harder runs
+- Unlockables: wins put new starters and relics into the pool
+- Evolution rewards and roster growth

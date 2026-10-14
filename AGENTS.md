@@ -1,7 +1,16 @@
 # Pokéstrike
 
-Pokémon × Monster Strike browser game. TypeScript + Canvas 2D, no game engine.
-Vite dev server, 540×960 letterboxed logical space, custom circle physics.
+Monster Strike pull-and-bounce combat in a Pokémon skin, with a Slay the
+Spire run structure. TypeScript + Canvas 2D, no game engine. Vite dev
+server, 540×960 letterboxed logical space, custom circle physics.
+
+## Direction
+
+- North star: **Monster Strike physics · Pokémon pixel-art theme · StS progression**. If a change serves none of the three, it's scope creep.
+- One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd). Daily/endless modes are future work — don't build for them.
+- Single art source: the [Gracidea](https://github.com/lowlighter/gracidea) pack (RSE/Gen-3 style), vendored at `public/sprites/gracidea/` — `creatures` (mons), `tileset` (scenery), `npcs` (trainers). New art is sliced or blitted from the pack, never procedural shapes.
+- Anti-goals: no monetization mechanics, no non-Pokémon content.
+- Replayability, in order: run variety → seeded daily climb → ascension modifiers → unlockables. Keep it simple until the core is solid.
 
 ## Commands
 
@@ -13,14 +22,16 @@ Vite dev server, 540×960 letterboxed logical space, custom circle physics.
 ## Layout
 
 - `src/core/` — engine plumbing: `vec.ts` (vector math), `loop.ts` (rAF loop), `assets.ts` (sprite cache), `audio.ts` (synth SFX + haptics)
-- `src/game/data.ts` — all content: roster/enemy species with canonical base stats, stage waves (normalized arena coords), daily-stage generator
+- `src/game/data.ts` — all content: roster/enemy species with canonical base stats, stage waves (normalized arena coords), seeded stage generator
 - `src/game/stats.ts` — stat-to-mechanic formulas (Atk/Def = physical, SpA/SpD = special, Spe = movement)
 - `src/game/types.ts` — Pokémon type chart + colors
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering
 - `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
-- `public/sprites/<id>.png` — Gen 5 (Black/White) front sprites, 96×96 (id = Pokédex number); `sprites/anim/<id>.png` — matching BW animated vertical strip
-- `public/sprites/bg/<theme>.png` — ripped DS battle grounds, arena-sized; `sprites/gracidea/` — overworld tileset atlas (16px frames, magenta key, index in `tileset.json`)
+- `public/sprites/gracidea/` — the art canon (see Direction): `creatures`, `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
+- `public/sprites/<id>.png` — 72×72 overworld mon icons sliced from the gracidea creatures atlas
+- `public/sprites/bg/<theme>.png` — RSE tileset scenery: backdrops and prop pieces (`bg/<prop>` loads via `itemSprite`)
+- `public/sprites/items/<name>.png` — the existing icon set: items, perks, UI bits
 
 ## Conventions
 
@@ -31,8 +42,8 @@ Vite dev server, 540×960 letterboxed logical space, custom circle physics.
   `BUMP_CD` (all in `stats.ts`). Keep them in sync when changing a super.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Physics tunables are named consts at the top of `battle.ts`.
-- Sprite theme is Gen 5 (Black/White) pixel art — statics from `versions/generation-v/black-white/` in PokeAPI/sprites, anim strips converted from the same generation's animated GIFs. New species must match this theme; this is a non-commercial fan project.
-- All scenery is ripped game art, never procedural shapes: arena grounds are DS battle-background panels, props are overworld metatiles/tileset frames. New scenery = slice or blit real assets; don't invent blobs.
+- Asset canon is the Gracidea pack (see Direction). Mon sprites are 72×72 icons sliced from the creatures atlas; new scenery/props come from `sprites/gracidea/` the same way.
+- All scenery is ripped game art, never procedural shapes. New scenery = slice or blit real assets; don't invent blobs.
 
 ## Installed agent tooling (`.devin/`)
 
