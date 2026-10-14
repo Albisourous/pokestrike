@@ -15,8 +15,8 @@ import {
   START_BTN,
   RETRY_BTN,
   inRect,
-  RunResult,
 } from './game/screens';
+import type { RunResult } from './game/screens';
 
 type Scene = 'loading' | 'title' | 'select' | 'battle' | 'result';
 
@@ -100,6 +100,9 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerup', () => {
   if (scene === 'battle') battle?.pointerUp();
 });
+canvas.addEventListener('pointercancel', () => {
+  if (scene === 'battle') battle?.pointerUp();
+});
 
 // --- game loop ---
 
@@ -130,8 +133,6 @@ function render() {
   ctx.restore();
 
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(-ox, -oy, innerWidth / scale, innerHeight / scale); // clip handled by fill above
   switch (scene) {
     case 'loading':
       ctx.fillStyle = '#0b0e1a';

@@ -211,13 +211,15 @@ export class Battle {
     const sub = 2;
     const h = dt / sub;
     for (let i = 0; i < sub; i++) {
+      const wave = this.enemies; // spawnWave swaps this array on wave clear
       const damp = Math.exp(-FRICTION * h);
       u.vx *= damp;
       u.vy *= damp;
       u.x += u.vx * h;
       u.y += u.vy * h;
       this.hitWalls(u);
-      for (const e of this.enemies) {
+      for (const e of wave) {
+        if (this.enemies !== wave) break;
         if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
       }
       for (const p of this.players) {
