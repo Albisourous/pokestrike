@@ -1845,6 +1845,35 @@ export class Battle {
       }
     }
 
+    // one-way ledges — dirt bank with the cliff face on the blocked side and
+    // chevrons showing the direction you can hop, like the RSE jump ledges
+    for (const L of this.ledges) {
+      ctx.save();
+      ctx.translate(L.x, L.y);
+      ctx.rotate(L.ang); // local +x = allowed direction, strip runs along +y
+      const hl = L.len / 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.2)';
+      ctx.fillRect(-6, -hl + 4, 18, L.len);
+      ctx.fillStyle = '#c9a877'; // high-side dirt lip
+      ctx.fillRect(-9, -hl, 9, L.len);
+      ctx.fillStyle = '#6b4a26'; // the cliff face — the wall side
+      ctx.fillRect(0, -hl, 8, L.len);
+      ctx.fillStyle = '#4e3418';
+      for (let y = -hl + 8; y < hl - 4; y += 14) ctx.fillRect(1, y, 5, 3);
+      // chevrons point the legal hop direction
+      ctx.strokeStyle = '#ffe9b0';
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 0.85;
+      for (let y = -hl + 12; y < hl - 6; y += 26) {
+        ctx.beginPath();
+        ctx.moveTo(2, y - 5);
+        ctx.lineTo(9, y);
+        ctx.lineTo(2, y + 5);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // hazard pads: themed floor zones with a sprite marker on top
     for (const hz of this.hazards) {
       ctx.save();
@@ -1887,6 +1916,51 @@ export class Battle {
           ctx.arc(hz.x + Math.cos(a) * rr, hz.y + Math.sin(a) * rr * 0.72, 2.5, 0, Math.PI * 2);
           ctx.fill();
         }
+        // something's rustling in there — darker blades shiver
+        if (this.enemies.some((e) => this.hidden(e) && dist(e, hz) < hz.r)) {
+          ctx.strokeStyle = '#1e4020';
+          ctx.lineWidth = 3.5;
+          for (let i = 0; i < 8; i++) {
+            const a = this.time * 6 + i * 0.8;
+            const gx = hz.x + Math.cos(i * 2.4) * hz.r * 0.4;
+            const gy = hz.y + Math.sin(i * 1.9) * hz.r * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(gx - 4, gy + 6);
+            ctx.quadraticCurveTo(gx + Math.sin(a) * 4, gy - 10, gx + 4, gy + 4);
+            ctx.stroke();
+          }
+        }
+      } else if (hz.kind === 'ice') {
+        // ice sheet — pale glossy patch, you slide straight through
+        const pulse = 0.85 + Math.sin(this.time * 3) * 0.08;
+        ctx.fillStyle = 'rgba(160,216,239,0.28)';
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#c8f0ff';
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r * 0.92, hz.r * 0.74, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // glossy slide streaks
+        ctx.globalAlpha = 0.55;
+        ctx.lineWidth = 3;
+        for (let i = -1; i <= 1; i++) {
+          ctx.beginPath();
+          ctx.moveTo(hz.x - hz.r * 0.6, hz.y + i * hz.r * 0.28 + hz.r * 0.2);
+          ctx.lineTo(hz.x + hz.r * 0.55, hz.y + i * hz.r * 0.28 - hz.r * 0.18);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        // sparkle
+        ctx.fillStyle = '#fff';
+        const tw = (this.time * 2.2) % 1;
+        ctx.globalAlpha = Math.max(0, 0.8 - tw);
+        ctx.beginPath();
+        ctx.arc(hz.x + hz.r * 0.3, hz.y - hz.r * 0.3, 3 + tw * 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       } else if (hz.kind === 'speed') {
         // charge pad — soft electric glow + pulsing rings + Magnemite
         const pulse = 0.75 + Math.sin(this.time * 5) * 0.15;
@@ -2304,8 +2378,30 @@ export class Battle {
           }
           bounced = true;
         }
+        // ledges + pool play by the same rules in the preview — a wall is a wall
+        for (const L of this.ledges) {
+          const nx = Math.cos(L.ang), ny = Math.sin(L.ang);
+          const s = (sx - L.x) * nx + (sy - L.y) * ny;
+          const t = -(sx - L.x) * ny + (sy - L.y) * nx;
+          if (s > 0 && s < u.r + 5 && Math.abs(t) < L.len / 2 + u.r * 0.3 && svx * nx + svy * ny < 0) {
+            sx += nx * (u.r + 5 - s);
+            sy += ny * (u.r + 5 - s);
+            const vn = svx * nx + svy * ny;
+            svx -= (1 + WALL_REST) * vn * nx;
+            svy -= (1 + WALL_REST) * vn * ny;
+            bounced = true;
+          }
+        }
+        if (this.pool && !this.canCrossPool(u)) {
+          const w = this.pool;
+          const qx = (sx - w.x) / (w.rx + u.r * 0.55), qy = (sy - w.y) / (w.ry + u.r * 0.55);
+          if (qx * qx + qy * qy < 1) { bounced = true; break sim; }
+        }
         for (const e of this.enemies)
-          if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) { hit = e; break sim; }
+          if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) {
+            if (!this.hidden(e)) hit = e; // concealed mons don't give a lock-on
+            break sim;
+          }
         // allies aren't checked — the ball passes through them, and figuring
         // out which ones you'll link is the skill
         if (i % 2 === 0) dots.push({ x: sx, y: sy });
