@@ -38,9 +38,10 @@ Open the printed URL. Works on desktop and touch.
    heals the team), plus what the bump super actually does.
 3. **Pull back to aim** — drag direction sets your launch angle and a dotted
    **guide line** previews the ball's banks off walls and rocks, ending in a
-   target ring on whatever it would hit first. **Power is timing**: a meter
-   ping-pongs while you hold — release in the gold zone for a full-power
-   `PERFECT!` shot (slow-mo + speedlines included).
+   target ring on whatever it would hit first. **Power is pull distance**,
+   8 Ball Pool style — a cue slides back as you drag and the farther you
+   pull, the harder the launch. Reach the dashed guide ring's edge for a
+   full-power `PERFECT!` shot (slow-mo + speedlines included).
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune).
 5. **Bump your own teammates** — every pass-through is a combo link (gold

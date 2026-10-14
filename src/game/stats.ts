@@ -32,8 +32,8 @@ export const specDamage = (spa: number, spd: number, mult = 1, power = 1) =>
 
 // Role-based HP: players need to survive a few rounds, bosses are sponges.
 export const playerHp = (s: Stats) => 60 + Math.round(s.hp * 1.15);
-export const enemyHp = (s: Stats) => 40 + Math.round(s.hp * 0.9);
-export const bossHp = (s: Stats) => Math.round(s.hp * 5.8);
+export const enemyHp = (s: Stats) => 50 + Math.round(s.hp * 1.0);
+export const bossHp = (s: Stats) => Math.round(s.hp * 6.4);
 
 // Speed -> motion. Spe 90 ≈ 1.35x launch; enemies approach at ~30 u/s.
 export const launchMult = (s: Stats) => 0.75 + s.spe / 150;

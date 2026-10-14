@@ -232,7 +232,6 @@ export class Battle {
   private dragging = false;
   private dragStart: Vec = vec();
   private dragNow: Vec = vec();
-  private dragT = 0; // hold time while dragging — drives the timing bar
 
   private stopTimer = 0;
   private enemyPhaseT = 0;
@@ -478,6 +477,7 @@ export class Battle {
 
   private spawnWave(i: number) {
     this.waveIndex = i;
+    this.hpScale = 1 + this.depth * 0.25 + i * 0.12; // wave 3 mobs are +24% tanky
     // each wave is a new scene — rotate theme, re-roll obstacles + hazards
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
@@ -542,7 +542,6 @@ export class Battle {
   pointerDown(p: Vec) {
     if (this.phase !== 'aim') return;
     this.dragging = true;
-    this.dragT = 0;
 
     this.dragStart = { ...p };
     this.dragNow = { ...p };
@@ -560,7 +559,7 @@ export class Battle {
     if (pullLen < 12) return;
     const dir = norm(pull);
     const u = this.active;
-    // direction from the pull; power from release timing on the meter
+    // direction and power both come from the pull — farther back hits harder
     const charge = this.charge();
     const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
@@ -604,13 +603,11 @@ export class Battle {
     }
   }
 
-  // Power meter: ping-pongs 0→1→0 while held (0.85s per direction) —
-  // release in the gold zone for a full-power launch. Pull distance only
-  // aims; it no longer feeds power.
+  // Power is pull distance, pool-cue style: drag farther to hit harder.
+  // Reaching the dashed guide ring's edge is the full-power PERFECT launch.
   private charge() {
-    const P = 0.85;
-    const ph = this.dragT % (2 * P);
-    return ph < P ? ph / P : 2 - ph / P;
+    const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
+    return Math.min(1, len(pull) / SHOT_MAX_DRAG);
   }
 
   // --- simulation ---
@@ -621,7 +618,6 @@ export class Battle {
     if (hit) this.hitStop -= dt0;
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
-    if (this.dragging) this.dragT += dt;
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
     for (const z of this.zaps) z.t -= dt;
@@ -1844,8 +1840,9 @@ export class Battle {
   }
 
   private damagePlayer(p: Unit, dmg: number) {
-    // foes hit harder the deeper the run goes — depth 6 lands ~1.7x
-    dmg = Math.max(1, Math.round(dmg * this.takenMult * (1 + this.depth * 0.12)));
+    // foes hit harder the deeper the run goes — depth 6 lands ~1.7x;
+    // +15% base pressure, +8% per wave so wave 3 actually threatens
+    dmg = Math.max(1, Math.round(dmg * this.takenMult * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08)));
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
@@ -2349,7 +2346,7 @@ export class Battle {
       ctx.fillStyle = '#e8ecff';
       ctx.fillText(
         this.shots === 0
-          ? 'pull back to aim — release in the gold'
+          ? 'pull back to aim — farther back = more power'
           : 'bounce through allies to fire their supers',
         a.x + a.w / 2,
         a.y + a.h - 16,
@@ -2712,6 +2709,32 @@ export class Battle {
       }
     }
 
+    // the cue: a stick that slides back along the aim line with your pull —
+    // the pool-hall tell that distance, not time, is what charges the shot
+    {
+      const back = u.r + 12 + Math.min(pullLen, SHOT_MAX_DRAG) * 0.65;
+      const tx = u.x - dir.x * back;
+      const ty = u.y - dir.y * back;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = '#5a3a20';
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(u.x - dir.x * (back + 120), u.y - dir.y * (back + 120));
+      ctx.stroke();
+      ctx.strokeStyle = frac > 0.93 ? '#ffd84d' : '#d9a05f';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.moveTo(tx, ty);
+      ctx.lineTo(u.x - dir.x * (back + 120), u.y - dir.y * (back + 120));
+      ctx.stroke();
+      ctx.fillStyle = '#f0f0f0';
+      ctx.beginPath();
+      ctx.arc(tx, ty, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineCap = 'butt';
+    }
+
     // rubber band: unit -> drag point
     ctx.strokeStyle = '#ffffff33';
     ctx.lineWidth = 2;
@@ -2719,6 +2742,15 @@ export class Battle {
     ctx.moveTo(u.x, u.y);
     ctx.lineTo(this.dragNow.x, this.dragNow.y);
     ctx.stroke();
+
+    // guide ring: pulling out to its edge is a full-power shot
+    ctx.strokeStyle = '#ffffff2e';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 8]);
+    ctx.beginPath();
+    ctx.arc(this.dragStart.x, this.dragStart.y, SHOT_MAX_DRAG, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
 
     ctx.fillStyle = frac > 0.93 ? '#ffd84d' : color;
     ctx.beginPath();

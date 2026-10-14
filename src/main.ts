@@ -36,7 +36,10 @@ type Scene = 'loading' | 'title' | 'draft' | 'battle' | 'result';
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
-const ARENA = { x: 24, y: 110, w: W - 48, h: H - 190 };
+// extra logical space the letterbox leaves above/below the 960 box on
+// tall phone screens — the arena grows into it instead of black bars
+let viewPad = 0;
+const arenaRect = () => ({ x: 24, y: 72 - viewPad, w: W - 48, h: H - 92 + viewPad * 2 });
 const BEST_KEY = 'pokestrike_best_clear';
 
 const randSeed = () => (Math.random() * 2 ** 31) | 0;
@@ -79,6 +82,8 @@ function resize() {
   scale = Math.min(vw / W, vh / H);
   ox = (vw - W * scale) / 2;
   oy = (vh - H * scale) / 2;
+  viewPad = Math.max(0, vh / scale - H) / 2;
+  if (battle) Object.assign(battle.arena, arenaRect());
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
 }
 addEventListener('resize', resize);
@@ -129,21 +134,38 @@ function draftOffers(): number[] {
   return offers;
 }
 
-async function shareResult() {
+// navigator.clipboard rejects on iOS Safari even in a gesture — the
+// textarea + execCommand trick still works there, so it's the fallback
+async function copyText(): Promise<boolean> {
   try {
-    if (navigator.share) {
+    await navigator.clipboard.writeText(shareText);
+    return true;
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = shareText;
+    ta.readOnly = true;
+    ta.style.cssText = 'position:fixed;top:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length); // iOS needs the explicit range
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  }
+}
+
+async function shareResult() {
+  // native sheet first: on iOS it's the reliable path and has a Copy
+  // action built in
+  if (navigator.share) {
+    try {
       await navigator.share({ text: shareText });
       return;
-    }
-    await navigator.clipboard.writeText(shareText);
-  } catch {
-    try {
-      await navigator.clipboard.writeText(shareText);
     } catch {
-      /* not a secure context — grid is on screen for a screenshot anyway */
+      /* cancelled or unsupported payload — fall through to copy */
     }
   }
-  if (share) {
+  if ((await copyText()) && share) {
     share.copied = true;
     setTimeout(() => share && (share.copied = false), 1500);
   }
@@ -180,7 +202,7 @@ canvas.addEventListener('pointerdown', (e) => {
       draft.picked.push(offers[i]);
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, Math.random, true);
+        battle = new Battle(arenaRect(), draft.picked.map((i) => ROSTER[i]), stage, Math.random, true);
         // ?dev exposes the live battle for poking around during playtests
         if (new URLSearchParams(location.search).has('dev'))
           (window as unknown as { __battle: Battle }).__battle = battle;
@@ -291,6 +313,16 @@ canvas.addEventListener(
 
 // --- game loop ---
 
+// HUD lives in the strip above the arena — on tall screens that strip is
+// partly the top letterbox, so shift it up along with the arena
+function hud(name: string) {
+  if (!battle) return;
+  ctx.save();
+  ctx.translate(0, -viewPad);
+  drawHud(ctx, battle.waveIndex, battle.shots, name);
+  ctx.restore();
+}
+
 function update(dt: number) {
   t += dt;
   if (scene === 'battle' && battle) {
@@ -366,12 +398,7 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        drawHud(
-          ctx,
-          battle.waveIndex,
-          battle.shots,
-          battle.eliteWave ? `${battle.stage.name} · ELITE` : battle.stage.name,
-        );
+        hud(battle.eliteWave ? `${battle.stage.name} · ELITE` : battle.stage.name);
         battle.render(ctx);
         if (battle.phase === 'reward')
           drawReward(
@@ -396,7 +423,7 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        drawHud(ctx, battle.waveIndex, battle.shots, battle.stage.name);
+        hud(battle.stage.name);
         battle.render(ctx);
       }
       if (result) drawResult(ctx, result, best, resultExtra, share);
