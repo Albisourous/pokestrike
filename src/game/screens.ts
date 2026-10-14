@@ -1,5 +1,5 @@
 import { itemSprite, drawMon } from '../core/assets';
-import { SpeciesDef } from './data';
+import { SpeciesDef, TOTAL_STAGES } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, hash as hashSeed } from './bg';
@@ -43,6 +43,11 @@ export function perkCardRect(i: number) {
 export function boxSlotRect(i: number, n: number) {
   const w = 56, gap = 10;
   return { x: W / 2 - (n * (w + gap) - gap) / 2 + i * (w + gap), y: 640, w, h: 56 };
+}
+// Path choice on the reward screen: 0 = safe route, 1 = elite road.
+export function pathBtnRect(i: number) {
+  const w = 210, gap = 16;
+  return { x: W / 2 - (w + gap / 2) + i * (w + gap), y: 898, w, h: 44 };
 }
 export function teamSlotRect(i: number) {
   const w = 100, gap = 14;
@@ -108,26 +113,26 @@ const WILD_MONS: [number, number, number, number][] = [
 ];
 
 function drawField(ctx: CanvasRenderingContext2D) {
-  // base grass — deep meadow gradient, no tiles, no grid
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#4f9c38');
-  g.addColorStop(0.5, '#459233');
-  g.addColorStop(1, '#357a27');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
+  // base grass — the real ripped Gen-5 battle ground
+  const bg = itemSprite('bg/grove');
+  if (bg) ctx.drawImage(bg, 0, 0, W, H);
+  else {
+    ctx.fillStyle = '#459233';
+    ctx.fillRect(0, 0, W, H);
+  }
 
-  // grass tufts: little 3-blade clusters scattered everywhere
-  ctx.strokeStyle = '#2e6420';
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < 110; i++) {
-    const x = hashSeed(i * 31 + 7) * W;
-    const y = hashSeed(i * 57 + 3) * H;
-    for (let b = -1; b <= 1; b++) {
-      ctx.beginPath();
-      ctx.moveTo(x + b * 2.5, y);
-      ctx.lineTo(x + b * 3.5, y - (b === 0 ? 6 : 4));
-      ctx.stroke();
+  // scattered tall-grass clumps — the same ripped tufts as the route grass
+  const tuft = itemSprite('bg/grass');
+  if (tuft) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    for (let i = 0; i < 16; i++) {
+      const x = hashSeed(i * 31 + 7) * W;
+      const y = 100 + hashSeed(i * 57 + 3) * (H - 140);
+      const s = 30 + hashSeed(i * 13) * 14;
+      ctx.drawImage(tuft, x - s / 2, y - s * 0.2, s, s * 0.4);
     }
+    ctx.restore();
   }
 
   // overworld props at the edges — real extracted metatiles
@@ -157,20 +162,14 @@ function drawField(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, W, H);
 }
 
-// Tall-grass clump — the route grass wild mons pop out of, Gen-5 style.
+// Tall-grass clump — ripped BW grass the wild mons stand in.
 function grassClump(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
-  ctx.fillStyle = '#2e6420';
-  ctx.beginPath();
-  ctx.ellipse(x, y, r, r * 0.42, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#1e4a14';
-  ctx.lineWidth = 2;
-  for (let b = -3; b <= 3; b++) {
-    ctx.beginPath();
-    ctx.moveTo(x + b * r * 0.22, y + r * 0.2);
-    ctx.lineTo(x + b * r * 0.28, y - (b % 2 === 0 ? r * 0.5 : r * 0.28));
-    ctx.stroke();
-  }
+  const tuft = itemSprite('bg/grass');
+  if (!tuft) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(tuft, x - r, y - r * 0.4, r * 2, r * 0.8);
+  ctx.restore();
 }
 
 function drawRingMons(ctx: CanvasRenderingContext2D, t: number, cx: number, cy: number, rx: number, ry: number) {
@@ -455,23 +454,39 @@ export interface ShareGrid {
 export function drawReward(
   ctx: CanvasRenderingContext2D,
   offers: { name: string; item: string; desc: string; rarity: Rarity }[],
-  depth: number,
   box: SpeciesDef[],
   team: SpeciesDef[],
   selBox: number,
   swapped: boolean,
   catchPct: number,
+  recruit: SpeciesDef | null,
+  next: { stage: number; gym: boolean; rolled: boolean },
+  pathElite: boolean,
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
 
   ctx.textAlign = 'center';
+  // the stage's guaranteed catch announces itself — beat a gym, take the ace
+  if (recruit) {
+    drawMon(ctx, recruit.id, W / 2 - 120, 250, 44);
+    ctx.font = `10px ${PIXEL_FONT}`;
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`${recruit.name.toUpperCase()} JOINS YOUR BOX!`, W / 2 + 40, 258);
+  }
+
   ctx.font = `20px ${PIXEL_FONT}`;
   ctx.fillStyle = '#f8d030';
   ctx.fillText('CHOOSE A RELIC', W / 2, 300);
   ctx.font = `9px ${PIXEL_FONT}`;
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(depth > 0 ? `depth ${depth + 1} — the waves get meaner` : 'the stage is not done with you', W / 2, 335);
+  ctx.fillText(
+    next.gym
+      ? `stage ${next.stage} of ${TOTAL_STAGES} — a gym leader waits`
+      : `stage ${next.stage} of ${TOTAL_STAGES} — the waves get meaner`,
+    W / 2,
+    335,
+  );
 
   offers.forEach((perk, i) => {
     const r = perkCardRect(i);
@@ -560,6 +575,21 @@ export function drawReward(
     W / 2,
     880,
   );
+
+  // path choice — StS greed: the safe route, or the elite road (bigger
+  // fight, richer relics, a guaranteed elite to catch). Fixed stages and
+  // gyms just show what's next.
+  ctx.font = `8px ${PIXEL_FONT}`;
+  if (next.gym) {
+    ctx.fillStyle = '#f85888';
+    ctx.fillText('NEXT: GYM LEADER', W / 2, 926);
+  } else if (next.rolled) {
+    button(ctx, pathBtnRect(0), 'ROUTE', !pathElite);
+    button(ctx, pathBtnRect(1), 'ELITE ★', pathElite);
+  } else {
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`NEXT: STAGE ${next.stage}`, W / 2, 926);
+  }
 }
 
 export function drawResult(
@@ -632,14 +662,35 @@ export function drawResult(
   button(ctx, SHARE_BTN, share?.copied ? 'COPIED!' : 'SHARE RESULT', true);
 }
 
-export function drawHud(ctx: CanvasRenderingContext2D, wave: number, waves: number, shots: number, stageName: string) {
+export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string) {
   ctx.fillStyle = '#8890b8';
   ctx.font = `9px ${PIXEL_FONT}`;
   ctx.textAlign = 'left';
   ctx.fillText(stageName, 30, 44);
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#fff';
-  ctx.fillText(wave + 1 === waves ? 'BOSS' : `WAVE ${wave + 1}/${waves}`, W / 2, 44);
+  // run map in miniature: a pip per stage, gyms as diamonds — the whole
+  // 9-stage climb is visible from the first fight
+  const gap = 22;
+  const x0 = W / 2 - ((TOTAL_STAGES - 1) * gap) / 2;
+  for (let i = 0; i < TOTAL_STAGES; i++) {
+    const x = x0 + i * gap;
+    const y = 40;
+    const gym = (i + 1) % 3 === 0;
+    ctx.fillStyle = i < wave ? '#ffd84d' : i === wave ? '#ffffff' : '#3a4066';
+    if (gym) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 7);
+      ctx.lineTo(x + 6, y);
+      ctx.lineTo(x, y + 7);
+      ctx.lineTo(x - 6, y);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   ctx.textAlign = 'right';
+  ctx.fillStyle = '#fff';
   ctx.fillText(`SHOTS ${shots}`, W - 30, 44);
 }

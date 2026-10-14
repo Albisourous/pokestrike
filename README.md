@@ -3,8 +3,8 @@
 **Pokémon × Monster Strike** — a quick daily-run browser game. Pull back, launch
 your Pokémon, and bounce it around the arena to smash wild Pokémon and the boss.
 
-Built to be played for 5–10 minutes a day: pick a team of 4, clear 2 waves,
-beat the boss, keep your streak alive.
+Built to be played for 5–10 minutes a day: pick a team of 4, climb 9 stages,
+beat all three gym leaders, keep your streak alive.
 
 | Title | Draft | Battle |
 | --- | --- | --- |
@@ -23,13 +23,17 @@ The game is also deployed to GitHub Pages on every push to `main`
 
 Open the printed URL. Works on desktop and touch.
 
-1. Pick **Daily Strike** (same seeded stage *and* same draft offers for
-   everyone, streak tracked) or **Free Play** — an endless run: random stage,
-   and after the boss the arena **descends a depth** with bigger, tougher
-   waves (another boss every 3rd depth) until you wipe.
-2. **Draft your team** — four rounds, one of three Pokémon each round, from an
-   18-species pool. Every round offers **three different types** so teams stay
-   varied. Cards show each mon's **role** — read its stats at a glance:
+1. Pick **Free Play** — a 9-stage climb (Slay the Spire style): random wild
+   stages, a **gym leader** every 3rd stage, bigger and meaner packs as you
+   go, and a win only when the third gym falls. Enemy typing is hidden (`?`)
+   until a mon takes a hit or attacks — you learn the matchup by engaging.
+   Gym leaders bring same-type entourages, and every gym you beat lets you
+   **keep the leader's ace** for your own team.
+2. **Draft your team** — four rounds, one of three Pokémon each round, from a
+   10-species pool of unevolved starters. Every round offers **three
+   different types** so teams stay varied — the heavy hitters (Gengar,
+   Snorlax, Dragonite…) aren't in the draft at all; you catch them mid-run.
+   Cards show each mon's **role** — read its stats at a glance:
    **SPEEDSTER** (fast shot, combos), **TANK** (huge HP), **SNIPER**
    (long-range super, frail), **BRUISER** (heavy hits), **HEALER** (super
    heals the team), plus what the bump super actually does.
@@ -45,12 +49,28 @@ Open the printed URL. Works on desktop and touch.
    signature **super** fires only if it's recharged — cooldowns tick down
    per shot (cyan bubble shows shots left). Enemies creep and dart toward
    your team and attack on a **countdown** — kill them or keep moving.
-6. **Choose a relic between waves** (Slay the Spire style): heals, +max HP,
+6. **Read the field** — every wave re-themes the arena (grove, cavern,
+   caldera, sky). Ponds wall off everything but Water/Flying, lava
+   everything but Fire/Rock/Flying; dirt **ledges** hop one way like RSE;
+   hazard pads slow you in tall grass, keep you sliding on ice, or fling
+   you along an arrow — and wild mons hide in the grass until you get
+   close. Rocks and trees give cover: supers can't hit what they can't see.
+7. **Catch 'em** — a Ranger-style ring on each enemy fills as its HP drops;
+   a KO has a chance to send it to your **box** (`CAUGHT!` ball wiggle and
+   all), and every cleared stage guarantees **one recruit** — beat a gym
+   leader and their ace joins you. Swap a boxed mon onto the team between
+   stages (one swap per break). Evolved **elites** (gold ring) start
+   appearing from stage 2 and get common deeper in. Bosses can be caught
+   mid-fight too — a Master Ball relic never fails.
+8. **Choose a relic between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
-   run — draft for synergy, relic for the holes.
-7. **Share your result** — the result screen shows a Wordle-style emoji grid
-   (🟩 cleared waves, 🟥 where you fell) plus your drafted team as type-colored
-   squares. Tap **SHARE RESULT** to post or copy it — streak included.
+   run — draft for synergy, relic for the holes. Then pick your **path**:
+   the safe **ROUTE**, or the **ELITE** road — a bigger fight with a
+   guaranteed elite spawn, and the next relic offer rolls uncommon-or-better.
+9. **Share your result** — the result screen shows a Wordle-style emoji grid
+   (🟩 cleared waves, 🟥 where you fell), your drafted team as type-colored
+   squares, and rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS
+   THIEF, SPEED CLEAR…). Tap **SHARE RESULT** to post or copy it.
 
 ## Real stats, real roles
 
@@ -73,23 +93,25 @@ hit it with special bump attacks instead. Damage mitigation is
 `60 / (60 + def)` — a defender at 60 takes about half damage.
 
 Supers shout their real move name (`PIKACHU used THUNDER!`), forked lightning
-strikes, meteors rain, KOs spin out, and everything is backed by synthesized
-WebAudio SFX + haptics — no audio assets.
+hops enemy to enemy, fire rings sweep the field, KOs spin out into faint
+ghosts, and everything is backed by a procedural chiptune soundtrack
+(title / battle / victory) plus synthesized WebAudio SFX and haptics — no
+audio assets.
 
 ## Bump attacks by type
 
 | Type | Ally bump attack |
 | --- | --- |
-| Fire | Radial blast around the ally |
-| Electric | Chain lightning — jumps between up to 3 enemies |
-| Grass | Drain field — damages enemies, heals your team |
-| Water | Homing water orbs chase the 3 nearest enemies |
-| Psychic | Telekinetic shove — damage + knocks enemies back |
-| Flying | Wide gust — weaker shove over a bigger radius |
-| Poison | Toxin — immediate hit plus damage ticks after your shots |
-| Rock / Fighting | Heavy blow on the nearest enemy |
-| Ghost | Hex — weak hit on every enemy on the field |
-| Normal | Quick tackle on the nearest enemy |
+| Fire | Flame Burst — a fire ring sweeps outward from the ally; enemies burn as the front passes over them and get shoved back |
+| Electric | Chain lightning — hops between up to 3 enemies, each arc landing a beat apart with a sky strike |
+| Grass | Drain field — damages enemies, heals your whole team by a quarter of what it dealt |
+| Water | Hydro Pump — three homing orbs corkscrew into the nearest enemies and splash on impact |
+| Psychic | Telekinetic shove — damage plus a real knockback impulse that flings enemies off walls and each other |
+| Flying | Hurricane — a vortex drags every nearby enemy into a pile on the ally, setting up your next combo |
+| Poison | Toxic — immediate hit plus poison that ticks a cut of max HP after each of your shots; re-toxining stacks it |
+| Rock / Fighting | Meteor fist — the nearest enemy eats a one-two of falling rock; the second hit leaves a crater |
+| Ghost | Hex — wisps converge from the dark, weak hit on every enemy on the field |
+| Normal | Quick Attack — the ally physically dashes to the nearest enemy, slams it, and snaps back |
 
 ## Install it like an app
 
@@ -117,8 +139,9 @@ worker (`public/sw.js`) registered only in production builds.
 ```
 src/
   core/    vec.ts, loop.ts, assets.ts, rng.ts,  # engine plumbing
-           audio.ts                             # synthesized sfx + haptics
+           audio.ts                             # chiptune music + synth sfx + haptics
   game/    types.ts, data.ts, stats.ts,         # rules + stat formulas
+           perks.ts, bg.ts,                     # relics + themed backdrops
            battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
 public/  sprites/, manifest.webmanifest, sw.js, icons

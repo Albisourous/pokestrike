@@ -5,7 +5,8 @@ import { loadAll, loadItem } from './core/assets';
 import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES } from './game/data';
+import { THEMES } from './game/bg';
 import {
   W,
   H,
@@ -18,6 +19,7 @@ import {
   perkCardRect,
   boxSlotRect,
   teamSlotRect,
+  pathBtnRect,
   RETRY_BTN,
   SHARE_BTN,
   FREE_BTN,
@@ -91,9 +93,9 @@ const TYPE_SQ: Record<PokeType, string> = {
 };
 
 function buildShare(b: Battle, won: boolean) {
-  const cleared = won ? b.waveCount : b.waveIndex;
+  const cleared = won ? TOTAL_STAGES : b.waveIndex;
   const waves =
-    '🟩'.repeat(cleared) + (won ? '' : '🟥') + '⬛'.repeat(b.waveCount - cleared - (won ? 0 : 1));
+    '🟩'.repeat(cleared) + (won ? '' : '🟥') + '⬛'.repeat(TOTAL_STAGES - cleared - (won ? 0 : 1));
   const team = draft.picked.map((i) => TYPE_SQ[ROSTER[i].type]).join('');
   return { waves, team, copied: false };
 }
@@ -174,6 +176,9 @@ canvas.addEventListener('pointerdown', (e) => {
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, Math.random, true);
+        // ?dev exposes the live battle for poking around during playtests
+        if (new URLSearchParams(location.search).has('dev'))
+          (window as unknown as { __battle: Battle }).__battle = battle;
         scene = 'battle';
         sceneMusic();
       }
@@ -181,6 +186,16 @@ canvas.addEventListener('pointerdown', (e) => {
     }
   } else if (scene === 'battle') {
     if (battle?.phase === 'reward') {
+      // path choice: safe route vs the elite road — rolled stages only
+      if (battle.nextIsRolled && !battle.nextIsGym) {
+        for (let i = 0; i < 2; i++) {
+          if (inRect(p.x, p.y, pathBtnRect(i))) {
+            battle.pathElite = i === 1;
+            sfx('ui');
+            return;
+          }
+        }
+      }
       // box first: pick a catch, then a teammate slot to swap into
       for (let i = 0; i < battle.box.length; i++) {
         if (inRect(p.x, p.y, boxSlotRect(i, battle.box.length))) {
@@ -256,7 +271,7 @@ function update(dt: number) {
           // storage unavailable
         }
       } else {
-        resultExtra = `reached depth ${battle.depth + 1}`;
+        resultExtra = `reached stage ${battle.waveIndex + 1} of ${TOTAL_STAGES}`;
       }
       shareText = [
         `Pokéstrike ${stage.name}`,
@@ -310,21 +325,26 @@ function render() {
         drawHud(
           ctx,
           battle.waveIndex,
-          battle.waveCount,
           battle.shots,
-          battle.depth > 0 ? `${battle.stage.name} · DEPTH ${battle.depth}` : battle.stage.name,
+          battle.eliteWave ? `${battle.stage.name} · ELITE` : battle.stage.name,
         );
         battle.render(ctx);
         if (battle.phase === 'reward')
           drawReward(
             ctx,
             battle.rewardOffers,
-            battle.depth,
             battle.box,
             battle.players.map((p) => p.def),
             battle.boxSel,
             battle.swapped,
             battle.captureChance,
+            battle.lastRecruit,
+            {
+              stage: battle.waveIndex + 2,
+              gym: battle.nextIsGym,
+              rolled: battle.nextIsRolled,
+            },
+            battle.pathElite,
           );
       }
       break;
@@ -332,7 +352,7 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        drawHud(ctx, battle.waveIndex, battle.waveCount, battle.shots, battle.stage.name);
+        drawHud(ctx, battle.waveIndex, battle.shots, battle.stage.name);
         battle.render(ctx);
       }
       if (result) drawResult(ctx, result, best, resultExtra, share);
@@ -347,6 +367,12 @@ Promise.all([
   loadItem('pond'),
   loadItem('tree'),
   loadItem('rock'),
+  ...THEMES.map((theme) => loadItem(`bg/${theme}`)),
+  loadItem('bg/lava'),
+  loadItem('bg/ice'),
+  loadItem('bg/grass'),
+  loadItem('bg/pine'),
+  loadItem('bg/ledge'),
   ...PERKS.map((p) => loadItem(p.item)),
   document.fonts.load('12px "Press Start 2P"'), // force pixel-font fetch before first paint
 ])

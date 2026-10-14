@@ -99,6 +99,11 @@ export const ALL_SPRITE_IDS = [
 
 const ENEMY_POOL = ENEMY_DB.slice(0, 9);
 const BOSS_POOL = ENEMY_DB.slice(9);
+const FOES = [...ENEMY_POOL, ...ELITES];
+
+// A run is 9 stages; every third is a gym boss. Stages 1-3 are the seeded
+// stage, 4-9 are rolled as depth 1..6.
+export const TOTAL_STAGES = 9;
 
 // Enemy placement is normalized arena coords (0..1), so stages are
 // resolution-independent.
@@ -135,6 +140,21 @@ const SLOTS: [number, number][] = [
   [0.35, 0.72], [0.65, 0.72], [0.5, 0.6], [0.85, 0.62],
 ];
 
+// Gym flavor: the boss's entourage shares its type when the pools have
+// candidates — every gym leader runs a little mono-type gym.
+function gymPack(
+  boss: SpeciesDef,
+  n: number,
+  rng: () => number,
+  slot: () => { nx: number; ny: number },
+): WaveSpawn[] {
+  const same = FOES.filter((d) => d.type === boss.type);
+  return Array.from({ length: n }, () => {
+    const pool = same.length && rng() < 0.7 ? same : ENEMY_POOL;
+    return { def: pool[Math.floor(rng() * pool.length)], ...slot() };
+  });
+}
+
 // Random stage: 3 waves + a boss. Same seed -> same stage, so the Daily
 // Strike is identical for everyone while Free Play rolls a fresh seed.
 export function makeStage(seed: number, name?: string): StageDef {
@@ -154,7 +174,7 @@ export function makeStage(seed: number, name?: string): StageDef {
     waves: [
       [add(), add(), add()],
       [add(), add(), add(), elite()],
-      [add(), add(), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
+      [...gymPack(boss, 2, rng, slot), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
     ],
     // 1-3 rocks drawn from the same slot pool, so they never overlap spawns
     obstacles: Array.from({ length: 1 + Math.floor(rng() * 3) }, () => ({
@@ -164,9 +184,10 @@ export function makeStage(seed: number, name?: string): StageDef {
   };
 }
 
-// Endless mode: roll the next wave past the boss. Bigger packs each depth,
-// an extra boss every 3rd.
-export function rollWave(rng: () => number, depth: number): WaveSpawn[] {
+// Roll the next stage (depth 1..6 = stages 4..9). Bigger packs each depth,
+// a gym boss every 3rd. `elite` (picked on the reward screen) packs the
+// wave tighter and guarantees a capturable elite.
+export function rollWave(rng: () => number, depth: number, elite = false): WaveSpawn[] {
   const slots = [...SLOTS];
   const slot = () => {
     const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
@@ -179,10 +200,12 @@ export function rollWave(rng: () => number, depth: number): WaveSpawn[] {
       : ENEMY_POOL[Math.floor(rng() * ENEMY_POOL.length)],
     ...slot(),
   });
-  const n = Math.min(3 + Math.floor(depth / 2), 6);
-  const wave: WaveSpawn[] = Array.from({ length: n }, add);
-  if (depth % 3 === 0) {
-    wave.push({ def: BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)], nx: 0.5, ny: 0.3, boss: true });
+  const boss = depth % 3 === 0 ? BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)] : null;
+  const n = Math.min(3 + Math.floor(depth / 2), 6) + (elite ? 1 : 0);
+  const wave: WaveSpawn[] = boss ? gymPack(boss, n, rng, slot) : Array.from({ length: n }, add);
+  if (elite && !boss) {
+    wave.push({ def: ELITES[Math.floor(rng() * ELITES.length)], ...slot() });
   }
+  if (boss) wave.push({ def: boss, nx: 0.5, ny: 0.3, boss: true });
   return wave;
 }

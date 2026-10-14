@@ -356,13 +356,14 @@ export const PERKS: Perk[] = [
 // Roll a rarity tier, then pick within it — an empty tier trickles down to
 // the next lower one (StS-style), so commons stay common but no slot ever
 // comes up blank. Legendary 4% / rare 12% / uncommon 34% / common 50%.
+// `cap` clamps the worst tier offered — elite stages pay out uncommon+.
 const TIERS: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
-export function rollPerks(rng: () => number): Perk[] {
+export function rollPerks(rng: () => number, cap = 3): Perk[] {
   const pool = [...PERKS];
   const out: Perk[] = [];
   for (let i = 0; i < 3 && pool.length; i++) {
     const roll = rng();
-    let tier = roll < 0.04 ? 0 : roll < 0.16 ? 1 : roll < 0.5 ? 2 : 3;
+    let tier = Math.min(roll < 0.04 ? 0 : roll < 0.16 ? 1 : roll < 0.5 ? 2 : 3, cap);
     let cands: Perk[] = [];
     for (; tier < TIERS.length; tier++) {
       cands = pool.filter((p) => p.rarity === TIERS[tier]);

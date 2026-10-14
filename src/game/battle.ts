@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, itemSprite } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave } from './data';
+import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ELITES } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES, hash as hashSeed } from './bg';
@@ -205,6 +205,7 @@ interface Ledge {
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
 
 const STOP_SPEED = 45;
+const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
 const SHOT_MAX_DRAG = 190;
 const POWER = 8;
 const WALL_REST = 0.92;
@@ -231,6 +232,7 @@ export class Battle {
   private dragging = false;
   private dragStart: Vec = vec();
   private dragNow: Vec = vec();
+  private dragT = 0; // hold time while dragging — drives the timing bar
 
   private stopTimer = 0;
   private enemyPhaseT = 0;
@@ -287,8 +289,11 @@ export class Battle {
   perksTaken = 0;
   swapped = false; // one swap per reward break
   boxSel = -1; // box index picked for swapping
-  depth = 0; // endless acts survived past the boss wave
+  depth = 0; // rolled stages survived past the opening trio
   rewardOffers: Perk[] = [];
+  pathElite = false; // reward-screen choice: take the elite road next
+  eliteWave = false; // the wave just cleared was an elite one (bigger payout)
+  lastRecruit: SpeciesDef | null = null; // stage's guaranteed catch, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
   private obstacles: { x: number; y: number; r: number; prop: 'tree' | 'rock'; flip: boolean }[];
@@ -536,6 +541,7 @@ export class Battle {
   pointerDown(p: Vec) {
     if (this.phase !== 'aim') return;
     this.dragging = true;
+    this.dragT = 0;
 
     this.dragStart = { ...p };
     this.dragNow = { ...p };
@@ -553,7 +559,7 @@ export class Battle {
     if (pullLen < 12) return;
     const dir = norm(pull);
     const u = this.active;
-    // direction from the pull; power from pull-back distance — 8 Ball Pool style
+    // direction from the pull; power from release timing on the meter
     const charge = this.charge();
     const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
@@ -597,14 +603,13 @@ export class Battle {
     }
   }
 
-  // Power: how far you pulled back, 0..1 across SHOT_MAX_DRAG — pull to
-  // the edge of the guide ring for a full-power launch.
+  // Power meter: ping-pongs 0→1→0 while held (0.85s per direction) —
+  // release in the gold zone for a full-power launch. Pull distance only
+  // aims; it no longer feeds power.
   private charge() {
-    return Math.min(
-      len({ x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y }) /
-        SHOT_MAX_DRAG,
-      1,
-    );
+    const P = 0.85;
+    const ph = this.dragT % (2 * P);
+    return ph < P ? ph / P : 2 - ph / P;
   }
 
   // --- simulation ---
@@ -615,7 +620,7 @@ export class Battle {
     if (hit) this.hitStop -= dt0;
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
-
+    if (this.dragging) this.dragT += dt;
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
     for (const z of this.zaps) z.t -= dt;
@@ -791,8 +796,9 @@ export class Battle {
       }
       for (const e of wave) {
         if (this.enemies !== wave) break;
-        // getting close flushes hidden mons out of the tall grass
-        if (!e.revealed && dist(u, e) < u.r + e.r + 68) this.reveal(e);
+        // getting close flushes hidden mons out of the tall grass — regular
+        // foes keep their '?' chip until they take a hit or attack
+        if (this.hidden(e) && dist(u, e) < u.r + e.r + 68) this.reveal(e);
         if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
       }
       for (const p of this.players) {
@@ -980,8 +986,14 @@ export class Battle {
       const tx = d.back ? d.ox : d.e.x;
       const ty = d.back ? d.oy : d.e.y;
       const dir = norm({ x: tx - d.u.x, y: ty - d.u.y });
-      d.u.x += dir.x * SP * dt;
-      d.u.y += dir.y * SP * dt;
+      const left = dist(d.u, { x: tx, y: ty });
+      if (left <= SP * dt) {
+        d.u.x = tx;
+        d.u.y = ty;
+      } else {
+        d.u.x += dir.x * SP * dt;
+        d.u.y += dir.y * SP * dt;
+      }
       if (this.particles.length < MAX_PARTICLES) {
         this.particles.push({
           x: d.u.x, y: d.u.y, vx: 0, vy: 0,
@@ -990,11 +1002,7 @@ export class Battle {
         });
       }
       if (d.back) {
-        if (dist(d.u, { x: d.ox, y: d.oy }) < 8) {
-          d.u.x = d.ox;
-          d.u.y = d.oy;
-          d.done = true;
-        }
+        if (d.u.x === d.ox && d.u.y === d.oy) d.done = true;
       } else if (!d.e.dead && dist(d.u, d.e) < d.u.r + d.e.r + 4) {
         this.hurt(d.e, d.dmg, '#9df0ff');
         this.slash(d.e.x, d.e.y, '#ffffff');
@@ -1580,7 +1588,10 @@ export class Battle {
   private waveCleared() {
     // last-kill slow-mo — the kill shot gets a beat to land
     this.hitStop = Math.max(this.hitStop, 0.35);
-    if (this.waveIndex + 1 >= this.waveCount && !this.endless) {
+    if (
+      this.waveIndex + 1 >= this.waveCount &&
+      (!this.endless || this.depth >= FINAL_DEPTH)
+    ) {
       this.phase = 'won';
       this.screenFlash('#ffd84d', 0.35);
       this.addShake(10);
@@ -1621,10 +1632,40 @@ export class Battle {
     sfx('caught');
   }
 
+  // What comes after the reward break — for the path-choice UI.
+  get nextIsGym() {
+    const n = this.waveIndex + 1;
+    return n < this.waveCount
+      ? this.stage.waves[n].some((s) => s.boss)
+      : (this.depth + 1) % 3 === 0;
+  }
+  get nextIsRolled() {
+    return this.waveIndex + 1 >= this.waveCount;
+  }
+
+  // The stage's guaranteed catch — the card reward of the run. Beating a
+  // gym always nets the leader's ace (even a dupe — it's the gym's prize);
+  // anything else prefers a species you don't already own.
+  private rollRecruit() {
+    const spawns = this.stage.waves[this.waveIndex];
+    const fresh = spawns.filter((s) => !this.box.includes(s.def));
+    const boss = fresh.find((s) => s.boss) ?? spawns.find((s) => s.boss);
+    if (boss) return boss.def;
+    const pool = fresh.length ? fresh : spawns;
+    return pool[Math.floor(this.rng() * pool.length)].def;
+  }
+
   private enterReward() {
     this.swapped = false;
     this.boxSel = -1;
-    this.rewardOffers = rollPerks(this.rng);
+    // elite stages pay out uncommon-or-better relics — the risk has a price
+    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 2 : 3);
+    this.eliteWave = false;
+    this.lastRecruit = this.rollRecruit();
+    if (this.lastRecruit) {
+      this.box.push(this.lastRecruit);
+      sfx('caught');
+    }
     for (const p of this.players) {
       p.vx = 0;
       p.vy = 0;
@@ -1641,10 +1682,12 @@ export class Battle {
     this.rewardOffers = [];
     const next = this.waveIndex + 1;
     if (next >= this.waveCount) {
-      // endless: descend a depth — bigger packs, scaled HP
+      // next stage is rolled, not fixed — descend, maybe via the elite road
       this.depth++;
       this.hpScale = 1 + this.depth * 0.25;
-      this.stage.waves.push(rollWave(this.rng, this.depth));
+      this.eliteWave = this.pathElite;
+      this.pathElite = false;
+      this.stage.waves.push(rollWave(this.rng, this.depth, this.eliteWave));
     }
     this.spawnWave(next);
     this.nextTurn();
@@ -1671,7 +1714,7 @@ export class Battle {
     else if (!won && this.depth >= 2) b.push({ name: 'DEEP DIVER', rarity: 'uncommon' });
     // a wipe still shows what you cleared — waveIndex = waves survived
     if (!won && this.waveIndex >= 1) {
-      b.push({ name: `WAVE ${this.waveIndex} CLEAR`, rarity: this.waveIndex >= 3 ? 'rare' : 'uncommon' });
+      b.push({ name: `STAGE ${this.waveIndex} CLEAR`, rarity: this.waveIndex >= 5 ? 'rare' : 'uncommon' });
     }
     if (!b.length) b.push({ name: 'TRAINER', rarity: 'common' });
     const ORD: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
@@ -1801,7 +1844,8 @@ export class Battle {
   }
 
   private damagePlayer(p: Unit, dmg: number) {
-    dmg = Math.max(1, Math.round(dmg * this.takenMult));
+    // foes hit harder the deeper the run goes — depth 6 lands ~1.7x
+    dmg = Math.max(1, Math.round(dmg * this.takenMult * (1 + this.depth * 0.12)));
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
@@ -2028,7 +2072,8 @@ export class Battle {
         const s = o.r * 2.1;
         ctx.translate(o.x, o.y);
         if (o.flip) ctx.scale(-1, 1);
-        ctx.drawImage(prop, -s / 2, -s / 2, s, s);
+        const sh = (s * prop.height) / prop.width;
+        ctx.drawImage(prop, -s / 2, -sh / 2, s, sh);
         ctx.restore();
       }
     }
@@ -2042,12 +2087,23 @@ export class Battle {
       const hl = L.len / 2;
       ctx.fillStyle = 'rgba(0,0,0,0.2)';
       ctx.fillRect(-6, -hl + 4, 18, L.len);
-      ctx.fillStyle = '#c9a877'; // high-side dirt lip
-      ctx.fillRect(-9, -hl, 9, L.len);
-      ctx.fillStyle = '#6b4a26'; // the cliff face — the wall side
-      ctx.fillRect(0, -hl, 8, L.len);
-      ctx.fillStyle = '#4e3418';
-      for (let y = -hl + 8; y < hl - 4; y += 14) ctx.fillRect(1, y, 5, 3);
+      const face = itemSprite('bg/ledge');
+      if (face) {
+        // ripped dirt-bank texture, rotated so it runs along the ledge
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        ctx.rotate(Math.PI / 2);
+        ctx.drawImage(face, -hl, -8, L.len, 17);
+        ctx.restore();
+        // high side stays lit, cliff face gets shaded
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(0, -hl, 8, L.len);
+      } else {
+        ctx.fillStyle = '#c9a877';
+        ctx.fillRect(-9, -hl, 9, L.len);
+        ctx.fillStyle = '#6b4a26';
+        ctx.fillRect(0, -hl, 8, L.len);
+      }
       // chevrons point the legal hop direction
       ctx.strokeStyle = '#ffe9b0';
       ctx.lineWidth = 2.5;
@@ -2066,43 +2122,27 @@ export class Battle {
     for (const hz of this.hazards) {
       ctx.save();
       if (hz.kind === 'slow') {
-        // tall grass — a soft dark tint + dense jagged blades, no flat oval
+        // tall grass — real ripped BW tufts packed into the patch
         ctx.fillStyle = 'rgba(30,60,26,0.4)';
         ctx.beginPath();
         ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
-        // blade ring around the rim
-        ctx.strokeStyle = '#2c5a28';
-        ctx.lineWidth = 3;
-        for (let i = 0; i < 22; i++) {
-          const a = (i / 22) * Math.PI * 2;
-          const bx = hz.x + Math.cos(a) * hz.r * 0.94;
-          const by = hz.y + Math.sin(a) * hz.r * 0.75;
-          ctx.beginPath();
-          ctx.moveTo(bx - 4, by);
-          ctx.quadraticCurveTo(bx, by - 13, bx + 4, by);
-          ctx.stroke();
-        }
-        // inner blades, lighter — dense enough to read as a patch
-        ctx.strokeStyle = '#58a848';
-        ctx.lineWidth = 2.5;
-        for (let i = 0; i < 30; i++) {
-          const a = hashSeed(hz.x + i * 13) * Math.PI * 2;
-          const rr = hz.r * (0.3 + hashSeed(hz.y + i * 7) * 0.6);
-          const gx = hz.x + Math.cos(a) * rr, gy = hz.y + Math.sin(a) * rr * 0.8;
-          ctx.beginPath();
-          ctx.moveTo(gx - 3, gy);
-          ctx.quadraticCurveTo(gx, gy - 9, gx + 3, gy);
-          ctx.stroke();
-        }
-        // tiny flowers poking through
-        ctx.fillStyle = '#ffd84d';
-        for (let i = 0; i < 3; i++) {
-          const a = hashSeed(hz.x + i * 31) * Math.PI * 2;
-          const rr = hz.r * (0.4 + hashSeed(hz.y + i * 17) * 0.4);
-          ctx.beginPath();
-          ctx.arc(hz.x + Math.cos(a) * rr, hz.y + Math.sin(a) * rr * 0.72, 2.5, 0, Math.PI * 2);
-          ctx.fill();
+        const tuft = itemSprite('bg/grass');
+        if (tuft) {
+          ctx.save();
+          ctx.imageSmoothingEnabled = false;
+          for (let i = 0; i < 9; i++) {
+            const a = hashSeed(hz.x + i * 13) * Math.PI * 2;
+            const rr = hz.r * hashSeed(hz.y + i * 7) * 0.62;
+            const gx = hz.x + Math.cos(a) * rr, gy = hz.y + Math.sin(a) * rr * 0.8;
+            const s = 34 + hashSeed(i * 3 + hz.x) * 10;
+            ctx.save();
+            ctx.translate(gx, gy);
+            if (hashSeed(i * 11 + hz.y) < 0.5) ctx.scale(-1, 1);
+            ctx.drawImage(tuft, -s / 2, -s * 0.3, s, s * 0.4);
+            ctx.restore();
+          }
+          ctx.restore();
         }
         // something's rustling in there — darker blades shiver
         if (this.enemies.some((e) => this.hidden(e) && dist(e, hz) < hz.r)) {
@@ -2119,12 +2159,23 @@ export class Battle {
           }
         }
       } else if (hz.kind === 'ice') {
-        // ice sheet — pale glossy patch, you slide straight through
+        // ice sheet — ripped snow-field texture under a gloss pass
         const pulse = 0.85 + Math.sin(this.time * 3) * 0.08;
-        ctx.fillStyle = 'rgba(160,216,239,0.28)';
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
-        ctx.fill();
+        const ice = itemSprite('bg/ice');
+        if (ice) {
+          ctx.save();
+          ctx.globalAlpha = 0.75;
+          ctx.beginPath();
+          ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(ice, hz.x - hz.r, hz.y - hz.r * 0.78, hz.r * 2, hz.r * 1.56);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = 'rgba(160,216,239,0.28)';
+          ctx.beginPath();
+          ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
         ctx.strokeStyle = '#c8f0ff';
         ctx.lineWidth = 2.5;
         ctx.globalAlpha = 0.9;
@@ -2335,10 +2386,10 @@ export class Battle {
       const pop = Math.min(this.waveBanner, 1);
       const scaleIn = 1 + Math.max(0, this.waveBanner - 1.1) * 2.4;
       const cy = a.y + a.h / 2;
-      const label =
-        this.waveIndex + 1 === this.waveCount
-          ? 'BOSS BATTLE'
-          : `WAVE ${this.waveIndex + 1} / ${this.waveCount}`;
+      const gym = this.enemies.find((e) => e.boss);
+      const label = gym
+        ? `GYM LEADER ${gym.def.name.toUpperCase()}`
+        : `STAGE ${this.waveIndex + 1} / ${TOTAL_STAGES}`;
       ctx.globalAlpha = pop;
       // hanging ribbon, conquest-style
       ctx.fillStyle = '#101430ee';
@@ -2371,16 +2422,25 @@ export class Battle {
       drawMon(ctx, u.def.id, 0, 0, u.r * 2.6);
       ctx.restore();
       ctx.globalAlpha = 1;
-      // blades swaying over it — the rustle is the tell
-      ctx.strokeStyle = '#2c5a28';
-      ctx.lineWidth = 3;
-      const wig = Math.sin(this.time * 9 + u.x) * 3;
-      for (let i = -2; i <= 2; i++) {
-        const bx = u.x + i * u.r * 0.45;
-        ctx.beginPath();
-        ctx.moveTo(bx - 4, u.y + u.r * 0.7);
-        ctx.quadraticCurveTo(bx + wig, u.y - u.r * 0.9, bx + 4 + wig, u.y + u.r * 0.5);
-        ctx.stroke();
+      // real grass tuft thrown over it, swaying — the rustle is the tell
+      const tuft = itemSprite('bg/grass');
+      const wig = Math.sin(this.time * 9 + u.x) * 2;
+      if (tuft) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        const s = u.r * 2.6;
+        ctx.drawImage(tuft, u.x - s / 2 + wig, u.y - u.r * 0.5, s, s * 0.45);
+        ctx.restore();
+      } else {
+        ctx.strokeStyle = '#2c5a28';
+        ctx.lineWidth = 3;
+        for (let i = -2; i <= 2; i++) {
+          const bx = u.x + i * u.r * 0.45;
+          ctx.beginPath();
+          ctx.moveTo(bx - 4, u.y + u.r * 0.7);
+          ctx.quadraticCurveTo(bx + wig, u.y - u.r * 0.9, bx + 4 + wig, u.y + u.r * 0.5);
+          ctx.stroke();
+        }
       }
       if (Math.random() < 0.02 && this.particles.length < MAX_PARTICLES)
         this.particles.push({ x: u.x + (Math.random() - 0.5) * u.r, y: u.y - u.r, vx: (Math.random() - 0.5) * 60, vy: -60, t: 0.5, life: 0.5, size: 4, color: '#58a848', shape: 'leaf', grav: 200 });
@@ -2392,13 +2452,14 @@ export class Battle {
     const pop = u.spawnT <= 0 ? 1 : 1 - Math.min(u.spawnT, 0.3) / 0.3;
     const sc = 0.2 + 0.8 * (1 + 2.7 * Math.pow(pop - 1, 3) + 1.7 * Math.pow(pop - 1, 2));
 
-    // team base ring — gold allies, red enemies, readable at a glance
+    // team base ring — gold allies, red enemies, gold elites, readable at a glance
+    const elite = u.side === 'enemy' && !u.boss && ELITES.includes(u.def);
     ctx.globalAlpha = pop;
-    ctx.fillStyle = u.side === 'player' ? 'rgba(248,208,48,0.30)' : 'rgba(255,80,80,0.22)';
+    ctx.fillStyle = u.side === 'player' ? 'rgba(248,208,48,0.30)' : elite ? 'rgba(255,216,77,0.22)' : 'rgba(255,80,80,0.22)';
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = u.side === 'player' ? '#f8d030' : '#ff5050';
+    ctx.strokeStyle = u.side === 'player' ? '#f8d030' : elite ? '#ffd84d' : '#ff5050';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
@@ -2465,6 +2526,20 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
       ctx.fillText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
+      // typing stays unknown until the mon is flushed out — a '?' chip that
+      // flips to its type the first time it takes a hit or attacks
+      const tx = u.x - u.r - 4;
+      const ty = u.y - u.r + 2;
+      ctx.fillStyle = u.revealed ? TYPE_COLOR[u.def.type] : '#101430';
+      ctx.strokeStyle = u.revealed ? '#0a0e20' : '#5a6284';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(tx, ty, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.font = `7px ${PIXEL_FONT}`;
+      ctx.fillStyle = u.revealed ? '#fff' : '#8890b8';
+      ctx.fillText(u.revealed ? u.def.type.slice(0, 2).toUpperCase() : '?', tx, ty + 3);
     } else {
       // charge pips under the hp bar: cyan fills one per turn banked toward
       // the super; a pulsing gold ring means READY — pass it to fire
@@ -2649,17 +2724,6 @@ export class Battle {
     ctx.lineTo(this.dragNow.x, this.dragNow.y);
     ctx.stroke();
 
-    // 8 Ball Pool guide ring at the drag origin — pull to the edge for max
-    // power; the knob shows where your finger sits on that scale
-    ctx.strokeStyle = '#ffffff';
-    ctx.globalAlpha = 0.18;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([10, 8]);
-    ctx.beginPath();
-    ctx.arc(this.dragStart.x, this.dragStart.y, SHOT_MAX_DRAG, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
     ctx.fillStyle = frac > 0.93 ? '#ffd84d' : color;
     ctx.beginPath();
     ctx.arc(this.dragNow.x, this.dragNow.y, 9, 0, Math.PI * 2);
