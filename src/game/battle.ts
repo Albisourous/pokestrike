@@ -2,6 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
 import { SpeciesDef, StageDef } from './data';
 import { drawBackdrop } from './bg';
+import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
 import {
   playerHp,
@@ -150,7 +151,7 @@ export class Battle {
   private slashes: Slash[] = [];
   private flashes: ScreenFlash[] = [];
   private shake = 0;
-  private obstacles: { x: number; y: number; r: number }[];
+  private obstacles: { x: number; y: number; r: number; pts: { a: number; d: number }[] }[];
 
   constructor(
     public arena: Rect,
@@ -161,6 +162,11 @@ export class Battle {
       x: arena.x + arena.w * o.nx,
       y: arena.y + arena.h * o.ny,
       r: arena.w * o.nr,
+      // irregular polygon silhouette per rock
+      pts: Array.from({ length: 7 }, (_, k) => ({
+        a: (k / 7) * Math.PI * 2,
+        d: 0.72 + Math.random() * 0.42,
+      })),
     }));
     const n = team.length;
     team.forEach((def, i) => {
@@ -957,32 +963,82 @@ export class Battle {
 
     // arena
     drawBackdrop(ctx, a, 18, this.stage.theme, this.time);
-    ctx.strokeStyle = '#2a3560';
-    ctx.lineWidth = 3;
+    // rail: dark track + gold trim + traveling shimmer + corner studs
+    ctx.strokeStyle = '#101530';
+    ctx.lineWidth = 10;
     this.roundRect(ctx, a.x, a.y, a.w, a.h, 18);
     ctx.stroke();
-    // subtle inner glow
-    ctx.strokeStyle = '#5adfff11';
-    ctx.lineWidth = 8;
-    this.roundRect(ctx, a.x + 4, a.y + 4, a.w - 8, a.h - 8, 15);
+    ctx.strokeStyle = '#c8a44d';
+    ctx.lineWidth = 2;
+    this.roundRect(ctx, a.x - 1, a.y - 1, a.w + 2, a.h + 2, 19);
     ctx.stroke();
+    ctx.strokeStyle = '#c8a44d44';
+    this.roundRect(ctx, a.x + 5, a.y + 5, a.w - 10, a.h - 10, 14);
+    ctx.stroke();
+    ctx.save();
+    ctx.strokeStyle = '#f0e6c8';
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.5;
+    ctx.setLineDash([26, 110]);
+    ctx.lineDashOffset = -(this.time * 90) % 136;
+    this.roundRect(ctx, a.x + 2, a.y + 2, a.w - 4, a.h - 4, 16);
+    ctx.stroke();
+    ctx.restore();
+    for (const [cx, cy] of [
+      [a.x, a.y], [a.x + a.w, a.y], [a.x, a.y + a.h], [a.x + a.w, a.y + a.h],
+    ] as const) {
+      ctx.fillStyle = '#c8a44d';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f0e6c8';
+      ctx.beginPath();
+      ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const z of this.zaps) this.drawZap(ctx, z);
 
-    // arena rocks
+    // themed obstacles: mossy boulders / glowing crystals / cracked obsidian
+    const rock = ROCK_STYLE[this.stage.theme];
     for (const o of this.obstacles) {
-      ctx.fillStyle = '#262e52';
+      ctx.save();
+      if (rock.glow) {
+        ctx.shadowColor = rock.crack;
+        ctx.shadowBlur = 10;
+      }
       ctx.beginPath();
-      ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+      o.pts.forEach((p, i) => {
+        const px = o.x + Math.cos(p.a) * o.r * p.d;
+        const py = o.y + Math.sin(p.a) * o.r * p.d;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.fillStyle = rock.fill;
       ctx.fill();
-      ctx.strokeStyle = '#101530';
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = rock.rim;
       ctx.lineWidth = 3;
       ctx.stroke();
-      ctx.fillStyle = '#3a4470';
+      // top facet
+      ctx.fillStyle = rock.facet;
       ctx.beginPath();
-      ctx.arc(o.x - o.r * 0.28, o.y - o.r * 0.32, o.r * 0.45, 0, Math.PI * 2);
+      ctx.arc(o.x - o.r * 0.22, o.y - o.r * 0.26, o.r * 0.42, 0, Math.PI * 2);
       ctx.fill();
+      // cracks / moss veins in the theme accent
+      ctx.strokeStyle = rock.crack;
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = 0.8;
+      for (const p of [o.pts[1], o.pts[4]]) {
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y);
+        ctx.lineTo(o.x + Math.cos(p.a) * o.r * p.d * 0.85, o.y + Math.sin(p.a) * o.r * p.d * 0.85);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
     }
 
     for (const e of this.enemies) this.drawUnit(ctx, e);
@@ -1324,3 +1380,10 @@ export class Battle {
 
 // flashes are drawn in logical coords; arena is at most this wide
 const W_CANVAS_FALLBACK = 540;
+
+const ROCK_STYLE: Record<Theme, { fill: string; rim: string; facet: string; crack: string; glow: boolean }> = {
+  grove: { fill: '#2a3d2e', rim: '#121f15', facet: '#3f5c43', crack: '#78c850', glow: false },
+  cavern: { fill: '#26305c', rim: '#111630', facet: '#3d4d8f', crack: '#9db4ff', glow: true },
+  volcano: { fill: '#381a12', rim: '#1a0a06', facet: '#55291c', crack: '#ff7a30', glow: true },
+  sky: { fill: '#2c3f74', rim: '#131c38', facet: '#4660a8', crack: '#cfe4ff', glow: false },
+};
