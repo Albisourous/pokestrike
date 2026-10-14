@@ -35,9 +35,10 @@ Open the printed URL. Works on desktop and touch.
    a full-speed `PERFECT!` launch.
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune).
-5. **Bump your own teammates** to trigger their signature attack. Enemies
-   creep toward your team and attack on a **countdown** — kill them or keep
-   moving.
+5. **Bump your own teammates** to trigger their signature attack — each one
+   then **recharges** for a few seconds (cyan countdown bubble; bigger AoE
+   attacks sit longer). Enemies creep and dart toward your team and attack
+   on a **countdown** — kill them or keep moving.
 6. **Share your result** — the result screen shows a Wordle-style emoji grid
    (🟩 cleared waves, 🟥 where you fell) plus your drafted team as type-colored
    squares. Tap **SHARE RESULT** to post or copy it — streak included.

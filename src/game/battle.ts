@@ -14,6 +14,7 @@ import {
   bumpIsPhysical,
   zapPower,
   blastPower,
+  bumpCooldown,
 } from './stats';
 
 export interface Rect {
@@ -47,6 +48,7 @@ interface Unit {
   dotTicks: number; // poison ticks remaining
   dotDmg: number;
   flashT: number; // white hit flash
+  cd: number; // player bump-attack recharge; 0 = ready
   lastHit: Map<number, number>; // shooter uid -> game time
 }
 
@@ -185,6 +187,7 @@ export class Battle {
         dotTicks: 0,
         dotDmg: 0,
         flashT: 0,
+        cd: 0,
         lastHit: new Map(),
       });
     });
@@ -224,6 +227,7 @@ export class Battle {
       dotTicks: 0,
       dotDmg: 0,
       flashT: 0,
+      cd: 0,
       lastHit: new Map(),
     }));
     this.waveBanner = 1.4;
@@ -298,6 +302,9 @@ export class Battle {
     this.flashes = this.flashes.filter((f) => f.t > 0);
     for (const u of [...this.players, ...this.enemies]) {
       if (u.flashT > 0) u.flashT -= dt;
+    }
+    for (const p of this.players) {
+      if (p.cd > 0) p.cd -= dt;
     }
     this.shake *= Math.exp(-6 * dt);
     for (const p of this.particles) {
@@ -561,6 +568,12 @@ export class Battle {
   private bumpAlly(p: Unit) {
     if (this.bumpsThisShot.has(p.uid)) return;
     this.bumpsThisShot.add(p.uid);
+    if (p.cd > 0) {
+      // still recharging — a dull fizzle instead of the attack
+      this.shower(p.x, p.y, 4, '#8890b8', 90, 'dot');
+      return;
+    }
+    p.cd = bumpCooldown(p.def.type);
     p.flashT = 0.25;
     const near = (radius: number) =>
       this.enemies.filter((e) => !e.dead && dist(p, e) <= radius + e.r);
@@ -1107,6 +1120,19 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
       ctx.fillText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
+    } else if (u.cd > 0) {
+      // bump attack recharging — cyan countdown bubble
+      ctx.fillStyle = '#000a';
+      ctx.beginPath();
+      ctx.arc(u.x + u.r - 2, u.y - u.r + 2, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#5adfff66';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.font = 'bold 13px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#5adfff';
+      ctx.fillText(`${Math.ceil(u.cd)}`, u.x + u.r - 2, u.y - u.r + 7);
     }
   }
 
