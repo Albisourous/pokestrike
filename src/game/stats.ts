@@ -14,10 +14,11 @@ export interface Stats {
 const PHYS_BUMP: ReadonlySet<PokeType> = new Set(['normal', 'rock', 'fighting']);
 export const bumpIsPhysical = (t: PokeType) => PHYS_BUMP.has(t);
 
-// Bump supers recharge over SHOTS — bigger effects sit longer.
+// Bump supers recharge over SHOTS, starting at zero charge — bigger effects
+// take longer to build so each firing is an event, not spam.
 const BUMP_CD: Record<PokeType, number> = {
-  normal: 1, fighting: 2, rock: 2, flying: 2, water: 2,
-  electric: 2, grass: 2, poison: 2, fire: 3, ghost: 3, psychic: 3,
+  normal: 2, fighting: 3, rock: 3, flying: 3, water: 3,
+  electric: 3, grass: 3, poison: 3, fire: 4, ghost: 4, psychic: 4,
 };
 export const bumpCooldown = (t: PokeType) => BUMP_CD[t];
 
@@ -88,7 +89,7 @@ export const MOVE_NAME: Record<PokeType, string> = {
   water: 'HYDRO PUMP',
   psychic: 'PSYCHIC',
   flying: 'HURRICANE',
-  poison: 'SLUDGE BOMB',
+  poison: 'TOXIC',
   rock: 'STONE EDGE',
   fighting: 'CLOSE COMBAT',
   ghost: 'SHADOW BALL',
@@ -97,15 +98,15 @@ export const MOVE_NAME: Record<PokeType, string> = {
 
 // What each type's bump super does — shown on draft cards.
 export const TYPE_MOVE: Record<PokeType, string> = {
-  fire: 'meteor storm, nearby',
-  electric: 'chain lightning',
+  fire: 'flame ring shockwave',
+  electric: 'chain lightning x3',
   grass: 'drain foes, heal team',
   water: 'homing orbs x3',
   psychic: 'telekinetic shove',
-  flying: 'wide gust knockback',
-  poison: 'toxic cloud + dot',
-  rock: 'meteor fist',
-  fighting: 'meteor fist',
+  flying: 'vortex pulls foes in',
+  poison: 'toxic dot — stacks',
+  rock: 'meteor fist one-two',
+  fighting: 'meteor fist one-two',
   ghost: 'wisp barrage, all foes',
-  normal: 'dash slash',
+  normal: 'quick-attack lunge',
 };

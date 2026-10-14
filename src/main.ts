@@ -18,6 +18,8 @@ import {
   draftCardRect,
   perkCardRect,
   boxSlotRect,
+  boxScrollMax,
+  BOX_STRIP,
   teamSlotRect,
   pathBtnRect,
   RETRY_BTN,
@@ -49,6 +51,9 @@ let share: ShareGrid | null = null;
 let shareText = '';
 let best: number | null = null;
 let t = 0;
+// box strip scroll: offset in px + an in-progress drag (tap = drag that never moved)
+let boxScroll = 0;
+let boxDrag: { x0: number; s0: number; moved: boolean } | null = null;
 
 try {
   const raw = localStorage.getItem(BEST_KEY);
@@ -196,15 +201,12 @@ canvas.addEventListener('pointerdown', (e) => {
           }
         }
       }
-      // box first: pick a catch, then a teammate slot to swap into
-      for (let i = 0; i < battle.box.length; i++) {
-        if (inRect(p.x, p.y, boxSlotRect(i, battle.box.length))) {
-          battle.boxSel = battle.boxSel === i ? -1 : i;
-          sfx('ui');
-          return;
-        }
+      // box strip swallows the pointer — release decides tap vs scroll drag
+      if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
+        boxDrag = { x0: p.x, s0: boxScroll, moved: false };
+        return;
       }
-      if (battle.boxSel >= 0 && !battle.swapped) {
+      if (battle.boxSel >= 0) {
         for (let i = 0; i < battle.players.length; i++) {
           if (inRect(p.x, p.y, teamSlotRect(i))) {
             battle.swapFromBox(battle.boxSel, i);
@@ -236,15 +238,56 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
-  if (scene === 'battle') battle?.pointerMove(toLogical(e));
+  const p = toLogical(e);
+  if (boxDrag) {
+    if (Math.abs(p.x - boxDrag.x0) > 6) boxDrag.moved = true;
+    if (battle)
+      boxScroll = Math.min(
+        Math.max(boxDrag.s0 + boxDrag.x0 - p.x, 0),
+        boxScrollMax(battle.box.length),
+      );
+    return;
+  }
+  if (scene === 'battle') battle?.pointerMove(p);
 });
 
-canvas.addEventListener('pointerup', () => {
+canvas.addEventListener('pointerup', (e) => {
+  if (boxDrag) {
+    const { moved } = boxDrag;
+    boxDrag = null;
+    // a drag that never moved is a tap: pick a catch, then a teammate to swap into
+    if (!moved && scene === 'battle' && battle?.phase === 'reward') {
+      const p = toLogical(e);
+      if (inRect(p.x, p.y, BOX_STRIP)) {
+        for (let i = 0; i < battle.box.length; i++) {
+          if (!inRect(p.x, p.y, boxSlotRect(i, battle.box.length, boxScroll))) continue;
+          battle.boxSel = battle.boxSel === i ? -1 : i;
+          sfx('ui');
+          break;
+        }
+      }
+    }
+    return;
+  }
   if (scene === 'battle') battle?.pointerUp();
 });
 canvas.addEventListener('pointercancel', () => {
+  boxDrag = null;
   if (scene === 'battle') battle?.pointerUp();
 });
+
+// wheel/trackpad scroll for desktop playtests — drag is the primary control
+canvas.addEventListener(
+  'wheel',
+  (e) => {
+    if (scene !== 'battle' || battle?.phase !== 'reward') return;
+    const max = boxScrollMax(battle.box.length);
+    if (max <= 0) return;
+    e.preventDefault();
+    boxScroll = Math.min(Math.max(boxScroll + e.deltaX + e.deltaY, 0), max);
+  },
+  { passive: false },
+);
 
 // --- game loop ---
 
@@ -252,6 +295,7 @@ function update(dt: number) {
   t += dt;
   if (scene === 'battle' && battle) {
     battle.update(dt);
+    if (battle.phase !== 'reward') boxScroll = 0;
     if (battle.phase === 'won' || battle.phase === 'lost') {
       result = {
         won: battle.phase === 'won',
@@ -336,7 +380,7 @@ function render() {
             battle.box,
             battle.players.map((p) => p.def),
             battle.boxSel,
-            battle.swapped,
+            boxScroll,
             battle.captureChance,
             battle.lastRecruit,
             {

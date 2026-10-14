@@ -40,9 +40,18 @@ export const inRect = (x: number, y: number, r: { x: number; y: number; w: numbe
 export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
-export function boxSlotRect(i: number, n: number) {
-  const w = 56, gap = 10;
-  return { x: W / 2 - (n * (w + gap) - gap) / 2 + i * (w + gap), y: 640, w, h: 56 };
+// The box is a fixed window into a horizontally scrolling row — catches can
+// outgrow 540px, so the row scrolls instead of centering off-screen.
+export const BOX_STRIP = { x: 24, y: 640, w: W - 48, h: 56 };
+const BOX_SLOT = 56;
+const BOX_GAP = 10;
+export function boxScrollMax(n: number) {
+  return Math.max(0, n * (BOX_SLOT + BOX_GAP) - BOX_GAP - BOX_STRIP.w);
+}
+export function boxSlotRect(i: number, n: number, scroll = 0) {
+  const content = n * (BOX_SLOT + BOX_GAP) - BOX_GAP;
+  const off = Math.max(0, (BOX_STRIP.w - content) / 2);
+  return { x: BOX_STRIP.x + off + i * (BOX_SLOT + BOX_GAP) - scroll, y: BOX_STRIP.y, w: BOX_SLOT, h: BOX_SLOT };
 }
 // Path choice on the reward screen: 0 = safe route, 1 = elite road.
 export function pathBtnRect(i: number) {
@@ -457,7 +466,7 @@ export function drawReward(
   box: SpeciesDef[],
   team: SpeciesDef[],
   selBox: number,
-  swapped: boolean,
+  boxScroll: number,
   catchPct: number,
   recruit: SpeciesDef | null,
   next: { stage: number; gym: boolean; rolled: boolean },
@@ -527,7 +536,7 @@ export function drawReward(
     ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 168);
   });
 
-  // captured box — tap a catch, then a teammate, to swap (once per break)
+  // captured box — tap a catch, then a teammate, to swap
   ctx.font = `9px ${PIXEL_FONT}`;
   ctx.fillStyle = '#8890b8';
   ctx.fillText(`BOX — catch rate ${Math.round(catchPct * 100)}%`, W / 2, 620);
@@ -536,8 +545,12 @@ export function drawReward(
     ctx.fillStyle = '#5a6284';
     ctx.fillText('nothing caught yet — defeats sometimes capture', W / 2, 668);
   }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(BOX_STRIP.x - 4, BOX_STRIP.y - 6, BOX_STRIP.w + 8, BOX_STRIP.h + 12);
+  ctx.clip();
   box.forEach((def, i) => {
-    const r = boxSlotRect(i, box.length);
+    const r = boxSlotRect(i, box.length, boxScroll);
     roundRect(ctx, r.x, r.y, r.w, r.h, 8);
     ctx.fillStyle = '#12162b';
     ctx.fill();
@@ -549,6 +562,14 @@ export function drawReward(
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 52);
   });
+  ctx.restore();
+  const maxScroll = boxScrollMax(box.length);
+  if (maxScroll > 0) {
+    ctx.font = `9px ${PIXEL_FONT}`;
+    ctx.fillStyle = '#8890b8';
+    if (boxScroll > 0) ctx.fillText('◀', BOX_STRIP.x - 14, BOX_STRIP.y + 34);
+    if (boxScroll < maxScroll) ctx.fillText('▶', BOX_STRIP.x + BOX_STRIP.w + 14, BOX_STRIP.y + 34);
+  }
 
   ctx.font = `9px ${PIXEL_FONT}`;
   ctx.fillStyle = '#8890b8';
@@ -558,7 +579,7 @@ export function drawReward(
     roundRect(ctx, r.x, r.y, r.w, r.h, 8);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    ctx.strokeStyle = selBox >= 0 && !swapped ? GOLD : '#2a3560';
+    ctx.strokeStyle = selBox >= 0 ? GOLD : '#2a3560';
     ctx.lineWidth = 1.5;
     ctx.stroke();
     ctx.fillStyle = TYPE_COLOR[def.type];
@@ -571,7 +592,7 @@ export function drawReward(
   ctx.font = `7px ${PIXEL_FONT}`;
   ctx.fillStyle = '#5a6284';
   ctx.fillText(
-    swapped ? 'swap used' : selBox >= 0 ? 'tap a teammate to swap in' : 'tap a box mon, then a teammate — once per break',
+    selBox >= 0 ? 'tap a teammate to swap in' : 'tap a box mon, then a teammate',
     W / 2,
     880,
   );

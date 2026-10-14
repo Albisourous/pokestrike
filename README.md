@@ -58,8 +58,9 @@ Open the printed URL. Works on desktop and touch.
 7. **Catch 'em** — a Ranger-style ring on each enemy fills as its HP drops;
    a KO has a chance to send it to your **box** (`CAUGHT!` ball wiggle and
    all), and every cleared stage guarantees **one recruit** — beat a gym
-   leader and their ace joins you. Swap a boxed mon onto the team between
-   stages (one swap per break). Evolved **elites** (gold ring) start
+   leader and their ace joins you. Swap boxed mons onto the team freely
+   between stages — HP follows the mon, so benching never heals or
+   revives. Evolved **elites** (gold ring) start
    appearing from stage 2 and get common deeper in. Bosses can be caught
    mid-fight too — a Master Ball relic never fails.
 8. **Choose a relic between stages** (Slay the Spire style): heals, +max HP,

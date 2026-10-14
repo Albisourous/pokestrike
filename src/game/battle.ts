@@ -255,7 +255,6 @@ export class Battle {
   private bolts: Bolt[] = []; // forked lightning
   private ghosts: Ghost[] = []; // KO'd sprites spinning out
   private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
-  private scorch: { x: number; y: number; r: number; a: number }[] = []; // battle scars on the field
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods + endless depth
@@ -280,14 +279,14 @@ export class Battle {
   slowImmune = false; // air balloon: tall grass doesn't slow the ball
   koHeal = 0; // exp share: heal team this fraction on each KO
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
-  box: SpeciesDef[] = []; // captured mons — swap one in between waves
+  box: SpeciesDef[] = []; // captured mons — swap in between stages
+  boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
   maxCombo = 0; // best pass-chain in a single shot
   maxKos = 0; // most enemies one shot downed
   totalKos = 0; // enemies downed all run
   caughtBoss = false;
   perksTaken = 0;
-  swapped = false; // one swap per reward break
   boxSel = -1; // box index picked for swapping
   depth = 0; // rolled stages survived past the opening trio
   rewardOffers: Perk[] = [];
@@ -319,6 +318,8 @@ export class Battle {
       const role = roleOf(def.stats, def.healer);
       const m = ROLE_MODS[role];
       const hp = Math.round(playerHp(def.stats) * m.hp);
+      // supers start at zero charge — each shot banks a turn toward firing
+      const cd = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - m.cdMod);
       this.players.push({
         uid: nextUid++,
         def,
@@ -344,8 +345,8 @@ export class Battle {
         dotDmg: 0,
         flashT: 0,
         spawnT: 0.3 + i * 0.06,
-        cd: 0,
-        cdMax: 1,
+        cd,
+        cdMax: cd,
         lastBump: -1,
         role,
         caught: false,
@@ -693,7 +694,6 @@ export class Battle {
       for (const o of this.obstacles) {
         if (this.collide(u, o)) {
           this.shower(u.x, u.y, 4, '#8a94c8', 160, 'streak');
-          this.bruise(u.x, u.y, len({ x: u.vx, y: u.vy }));
         }
       }
       // one-way ledges — hop through going `ang`, wall coming back
@@ -713,7 +713,6 @@ export class Battle {
           u.vy -= (1 + WALL_REST) * vn * ny;
           this.wallSpark(u.x, u.y, nx, ny);
           this.shower(u.x, u.y, 4, '#a08050', 140, 'streak');
-          this.bruise(u.x, u.y, len({ x: u.vx, y: u.vy }));
         } else if (vn > 0 && Math.abs(s) < u.r && Math.abs(t) < L.len / 2 && L.armed) {
           L.armed = false; // hopped the ledge — dust puff + a little kick
           u.vx += nx * 90;
@@ -743,7 +742,6 @@ export class Battle {
           }
           const wet = this.theme === 'volcano';
           this.shower(u.x, u.y, 5, wet ? '#ffb060' : '#9df0ff', 170, 'dot');
-          this.bruise(u.x, u.y, len({ x: u.vx, y: u.vy }));
           if (!this.wasInPool) sfx('splash');
         }
         if (inside && !this.wasInPool && this.canCrossPool(u)) {
@@ -1018,38 +1016,25 @@ export class Battle {
     this.dashes = this.dashes.filter((d) => !d.done);
   }
 
-  // Pokémon Arena touch: hard impacts bruise the field — a dark scorch
-  // patch that stays for the whole battle.
-  private bruise(x: number, y: number, speed: number) {
-    if (speed < 320) return;
-    this.scorch.push({ x, y, r: 14 + Math.min(speed / 60, 22), a: Math.min(speed / 900, 0.4) });
-    if (this.scorch.length > 36) this.scorch.shift();
-  }
-
   private hitWalls(u: Unit) {
     const a = this.arena;
-    const speed = len({ x: u.vx, y: u.vy });
     if (u.x - u.r < a.x) {
       u.x = a.x + u.r;
       u.vx = -u.vx * WALL_REST;
       this.wallSpark(u.x - u.r, u.y, 1, 0);
-      this.bruise(u.x - u.r, u.y, speed);
     } else if (u.x + u.r > a.x + a.w) {
       u.x = a.x + a.w - u.r;
       u.vx = -u.vx * WALL_REST;
       this.wallSpark(u.x + u.r, u.y, -1, 0);
-      this.bruise(u.x + u.r, u.y, speed);
     }
     if (u.y - u.r < a.y) {
       u.y = a.y + u.r;
       u.vy = -u.vy * WALL_REST;
       this.wallSpark(u.x, u.y - u.r, 0, 1);
-      this.bruise(u.x, u.y - u.r, speed);
     } else if (u.y + u.r > a.y + a.h) {
       u.y = a.y + a.h - u.r;
       u.vy = -u.vy * WALL_REST;
       this.wallSpark(u.x, u.y + u.r, 0, -1);
-      this.bruise(u.x, u.y + u.r, speed);
     }
   }
 
@@ -1139,7 +1124,8 @@ export class Battle {
     this.loops.push({ x: e.x, y: e.y, r: e.r + 12, t: 0.5, life: 0.5, color: '#9df0ff' });
     if (e.hp <= 0) {
       e.dead = true;
-      this.bruise(e.x, e.y, 700); // a mon went down here — the field remembers
+      // every KO feeds the team's supers — kills are the fast lane to READY
+      for (const p of this.players) this.chargeUp(p);
       // multi-KO callouts — chaining kills in one shot should feel huge
       this.kosThisShot++;
       this.totalKos++;
@@ -1180,6 +1166,7 @@ export class Battle {
       });
       if (caught) {
         this.box.push(e.def);
+        this.boxHp.push(1);
         if (e.boss) this.caughtBoss = true;
         this.screenFlash('#ffd84d', 0.2);
         this.converge(e.x, e.y, 10, '#ffd84d', 'wisp');
@@ -1347,12 +1334,13 @@ export class Battle {
       text: `${p.def.name.toUpperCase()} used ${MOVE_NAME[p.def.type]}!`,
       t: 1.05, color: TYPE_COLOR[p.def.type], big: true,
     });
-    this.hitStop = Math.max(this.hitStop, 0.09);
-    this.converge(p.x, p.y, 7, '#ffffff', 'streak');
+    this.hitStop = Math.max(this.hitStop, 0.18);
+    this.converge(p.x, p.y, 10, '#ffffff', 'streak');
+    const color = TYPE_COLOR[p.def.type];
+    this.screenFlash(color, 0.08);
     sfx(SUPER_SFX[p.def.type]);
     cry(p.def.id, 0.35);
     buzz(20);
-    const color = TYPE_COLOR[p.def.type];
 
     switch (p.def.type) {
       case 'fire': {
@@ -1371,7 +1359,7 @@ export class Battle {
             e.vy += dir.y * 170;
             this.burst(e.x, e.y, 34, '#f08030', 0.22);
             this.shower(e.x, e.y, 6, '#ffb060', 220, 'ember');
-            this.hurt(e, bumpDmg(e, 1.0), '#9df0ff');
+            this.hurt(e, bumpDmg(e, 1.6), '#9df0ff');
           },
         });
         break;
@@ -1381,7 +1369,7 @@ export class Battle {
         let from: Unit = p;
         const chain: { a: Vec; e: Unit; mult: number }[] = [];
         const hit = new Set<number>();
-        let mult = 1;
+        let mult = 1.3;
         for (let i = 0; i < 3; i++) {
           const next = this.enemies
             .filter(
@@ -1419,12 +1407,12 @@ export class Battle {
         this.converge(p.x, p.y, 14, color, 'leaf');
         let dealt = 0;
         for (const e of near(140)) {
-          const dmg = bumpDmg(e, 0.8);
+          const dmg = bumpDmg(e, 1.1);
           dealt += dmg;
           this.zap(e.x, e.y, p.x, p.y, '#78c850');
           this.hurt(e, dmg, '#9df0ff');
         }
-        const heal = Math.max(Math.round(dealt * 0.25), 4);
+        const heal = Math.max(Math.round(dealt * 0.35), 4);
         for (const pl of this.players) {
           if (pl.dead) continue;
           pl.hp = Math.min(pl.hp + heal, pl.maxHp);
@@ -1445,7 +1433,7 @@ export class Battle {
               x: p.x,
               y: p.y,
               target: e,
-              dmg: bumpDmg(e, 0.7),
+              dmg: bumpDmg(e, 1.0),
               t: 2.5,
               wob: i * 2.1,
               color,
@@ -1465,9 +1453,9 @@ export class Battle {
         this.addShake(7);
         for (const e of near(radius)) {
           const dir = norm({ x: e.x - p.x, y: e.y - p.y });
-          e.vx += dir.x * 620;
-          e.vy += dir.y * 620;
-          this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
+          e.vx += dir.x * 720;
+          e.vy += dir.y * 720;
+          this.hurt(e, bumpDmg(e, 1.2), '#9df0ff');
         }
         break;
       }
@@ -1494,9 +1482,9 @@ export class Battle {
         }
         for (const e of near(radius)) {
           const dir = norm({ x: p.x - e.x, y: p.y - e.y });
-          e.vx += dir.x * 560;
-          e.vy += dir.y * 560;
-          this.hurt(e, bumpDmg(e, 0.4), '#9df0ff');
+          e.vx += dir.x * 640;
+          e.vy += dir.y * 640;
+          this.hurt(e, bumpDmg(e, 0.7), '#9df0ff');
         }
         break;
       }
@@ -1508,8 +1496,8 @@ export class Battle {
         this.screenFlash('#a040a0', 0.12);
         for (const e of near(140)) {
           e.dotTicks = Math.min(e.dotTicks + 2, 6);
-          e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.07));
-          this.hurt(e, bumpDmg(e, 0.7), '#9df0ff');
+          e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
+          this.hurt(e, bumpDmg(e, 1.0), '#9df0ff');
         }
         break;
       case 'rock':
@@ -1520,7 +1508,7 @@ export class Battle {
         if (e) {
           this.skyFall(e.x, '#b8a038');
           this.burst(e.x, e.y, e.r * 2, '#ffffff', 0.22);
-          this.hurt(e, bumpDmg(e, 0.5), '#9df0ff');
+          this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
           this.later(0.14, () => {
             if (e.dead) return;
             this.skyFall(e.x, '#b8a038');
@@ -1529,10 +1517,9 @@ export class Battle {
             this.slash(e.x, e.y, color);
             this.slash(e.x, e.y, '#ffd84d');
             this.shower(e.x, e.y, 16, '#b8a038', 300, 'ember');
-            this.bruise(e.x, e.y, 900);
             this.screenFlash('#b8a038', 0.12);
             this.addShake(12);
-            this.hurt(e, bumpDmg(e, 1.6), '#9df0ff');
+            this.hurt(e, bumpDmg(e, 2.2), '#9df0ff');
           });
         }
         break;
@@ -1543,7 +1530,7 @@ export class Battle {
         this.screenFlash('#705898', 0.18);
         for (const e of near(Infinity)) {
           this.converge(e.x, e.y, 8, '#705898', 'wisp');
-          this.hurt(e, bumpDmg(e, 0.7), '#9df0ff');
+          this.hurt(e, bumpDmg(e, 1.1), '#9df0ff');
         }
         break;
       }
@@ -1553,7 +1540,7 @@ export class Battle {
         const e = nearest(p, 240);
         if (e) {
           this.zap(p.x, p.y, e.x, e.y, color);
-          this.dashes.push({ u: p, ox: p.x, oy: p.y, e, back: false, done: false, dmg: bumpDmg(e, 1.1) });
+          this.dashes.push({ u: p, ox: p.x, oy: p.y, e, back: false, done: false, dmg: bumpDmg(e, 1.5) });
         }
       }
     }
@@ -1603,14 +1590,19 @@ export class Battle {
     this.rewardPending = true;
   }
 
-  // Swap a boxed mon onto the team — once per reward break.
+  // Swap a boxed mon onto the team — unlimited during a reward break. HP
+  // belongs to the mon, not the slot: a hurt mon stays hurt in the box and a
+  // fainted one stays fainted, so benching is never a free heal or revive.
   swapFromBox(bi: number, ti: number) {
-    if (this.swapped || this.phase !== 'reward') return;
+    if (this.phase !== 'reward') return;
     const def = this.box[bi];
+    const frac = this.boxHp[bi] ?? 1;
     const p = this.players[ti];
     if (!def || !p) return;
     this.box.splice(bi, 1);
+    this.boxHp.splice(bi, 1);
     this.box.push(p.def); // benched ally goes back to the box
+    this.boxHp.push(p.maxHp ? p.hp / p.maxHp : 0);
     const role = roleOf(def.stats, def.healer);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(def.stats) * m.hp);
@@ -1621,11 +1613,10 @@ export class Battle {
     p.launch = m.launch;
     p.cdMod = m.cdMod;
     p.maxHp = hp;
-    p.hp = hp;
-    p.dead = false;
-    p.cd = 0;
+    p.hp = frac <= 0 ? 0 : Math.max(1, Math.round(hp * frac));
+    p.dead = p.hp <= 0;
     p.cdMax = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - p.cdMod);
-    this.swapped = true;
+    p.cd = p.cdMax; // swapped in discharged — it has to earn its first super
     this.boxSel = -1;
     this.burst(p.x, p.y, p.r * 2.4, '#ffd84d', 0.35);
     this.screenFlash('#ffd84d', 0.12);
@@ -1656,7 +1647,6 @@ export class Battle {
   }
 
   private enterReward() {
-    this.swapped = false;
     this.boxSel = -1;
     // elite stages pay out uncommon-or-better relics — the risk has a price
     this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 2 : 3);
@@ -1664,6 +1654,7 @@ export class Battle {
     this.lastRecruit = this.rollRecruit();
     if (this.lastRecruit) {
       this.box.push(this.lastRecruit);
+      this.boxHp.push(1);
       sfx('caught');
     }
     for (const p of this.players) {
@@ -1734,16 +1725,25 @@ export class Battle {
     return null;
   }
 
+  // one notch of super charge — burst + sound when it flips to READY so the
+  // moment reads whether it came from a shot or a KO
+  private chargeUp(p: Unit) {
+    if (p.cd <= 0) return;
+    p.cd--;
+    if (p.cd === 0 && !p.dead) {
+      sfx('ready');
+      this.burst(p.x, p.y, p.r * 2.2, TYPE_COLOR[p.def.type], 0.3);
+      this.shower(p.x, p.y, 8, '#ffd84d', 160, 'streak');
+    }
+  }
+
   private endShot() {
     const u = this.active;
     u.vx = 0;
     u.vy = 0;
     // supers recharge per shot taken; leftovers ticks a small heal
     for (const p of this.players) {
-      if (p.cd > 0) {
-        p.cd--;
-        if (p.cd === 0 && !p.dead) sfx('ready'); // super recharged
-      }
+      this.chargeUp(p);
       if (!p.dead && this.regen > 0 && p.hp < p.maxHp) {
         p.hp = Math.min(p.hp + Math.ceil(p.maxHp * this.regen), p.maxHp);
       }
@@ -2031,31 +2031,6 @@ export class Battle {
     for (const w of this.waves) this.drawWave(ctx, w);
     for (const z of this.zaps) this.drawZap(ctx, z);
     for (const b of this.bolts) this.drawBolt(ctx, b);
-
-    // battle scars: cracked impact craters under everything — Arena-style
-    // field damage that persists the whole battle
-    for (const s of this.scorch) {
-      // raised dirt rim first — the thrown-up lip of the crater
-      ctx.strokeStyle = `rgba(115,88,48,${Math.min(s.a * 1.6, 0.55)})`;
-      ctx.lineWidth = 5;
-      ctx.beginPath();
-      ctx.ellipse(s.x, s.y, s.r * 1.18, s.r * 0.74, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.fillStyle = `rgba(20,16,8,${s.a})`;
-      ctx.beginPath();
-      ctx.ellipse(s.x, s.y, s.r, s.r * 0.62, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // radiating cracks — the "dig left a hole" look
-      ctx.strokeStyle = `rgba(20,16,8,${s.a * 0.8})`;
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 4; i++) {
-        const a = (i / 4) * Math.PI * 2 + s.x * 0.13;
-        ctx.beginPath();
-        ctx.moveTo(s.x + Math.cos(a) * s.r * 0.7, s.y + Math.sin(a) * s.r * 0.45);
-        ctx.lineTo(s.x + Math.cos(a) * s.r * 1.4, s.y + Math.sin(a) * s.r * 0.9);
-        ctx.stroke();
-      }
-    }
 
     // obstacles are real overworld land pieces — RSE ball trees and
     // smashable boulders, picked per obstacle so groves feel wooded and
@@ -2541,25 +2516,46 @@ export class Battle {
       ctx.fillStyle = u.revealed ? '#fff' : '#8890b8';
       ctx.fillText(u.revealed ? u.def.type.slice(0, 2).toUpperCase() : '?', tx, ty + 3);
     } else {
-      // charge pips under the hp bar: cyan fills one per turn banked toward
-      // the super; a pulsing gold ring means READY — pass it to fire
-      const max = Math.max(1, u.cdMax);
-      const filled = u.cd <= 0 ? max : max - Math.ceil(u.cd);
-      const px0 = u.x - ((max - 1) * 7) / 2;
-      const py = u.y + u.r + 15;
-      for (let i = 0; i < max; i++) {
+      // charge pips: one dot per shot of charge around the mon — dark dots
+      // are charge still owed, type-colored dots are earned, all-gold = READY
+      const rr = u.r + 9;
+      const dots = Math.max(1, u.cdMax);
+      const filled = u.cd <= 0 ? dots : dots - u.cd;
+      for (let i = 0; i < dots; i++) {
+        const a = -Math.PI / 2 + (i / dots) * Math.PI * 2;
+        ctx.fillStyle = i < filled ? (u.cd <= 0 ? '#ffd84d' : TYPE_COLOR[u.def.type]) : 'rgba(0,0,0,0.45)';
         ctx.beginPath();
-        ctx.arc(px0 + i * 7, py, 2.6, 0, Math.PI * 2);
-        ctx.fillStyle = i < filled ? (u.cd <= 0 ? '#ffd84d' : '#5adfff') : '#0008';
+        ctx.arc(u.x + Math.cos(a) * rr, u.y + Math.sin(a) * rr, 3, 0, Math.PI * 2);
         ctx.fill();
       }
-      if (u.cd <= 0) {
+      if (u.cd <= 0 && !u.dead) {
+        // ready: pulsing aura, orbiting sparks, and the move's name overhead
+        // — this is the thing you want to hit
+        const pulse = 0.55 + Math.sin(this.time * 6) * 0.3;
         ctx.strokeStyle = '#ffd84d';
-        ctx.lineWidth = 2;
-        ctx.globalAlpha = 0.55 + Math.sin(this.time * 6) * 0.3;
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = pulse;
         ctx.beginPath();
-        ctx.arc(u.x, u.y, u.r + 6, 0, Math.PI * 2);
+        ctx.arc(u.x, u.y, u.r + 14, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 1;
+        for (let i = 0; i < 3; i++) {
+          const a = this.time * 3 + (i * Math.PI * 2) / 3;
+          ctx.fillStyle = '#ffd84d';
+          ctx.beginPath();
+          ctx.arc(u.x + Math.cos(a) * rr, u.y + Math.sin(a) * rr, 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        const label = MOVE_NAME[u.def.type];
+        const ly = u.y + u.r + 30;
+        ctx.font = `7px ${PIXEL_FONT}`;
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = Math.min(1, pulse + 0.25);
+        ctx.strokeText(label, u.x, ly);
+        ctx.fillStyle = TYPE_COLOR[u.def.type];
+        ctx.fillText(label, u.x, ly);
         ctx.globalAlpha = 1;
       }
       // whose turn it is — bouncing marker + name tag + bright white ring,
