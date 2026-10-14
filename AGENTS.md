@@ -20,14 +20,19 @@ Vite dev server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/<id>.png` — Gen 5 (Black/White) front sprites, 96×96 (id = Pokédex number); `sprites/anim/<id>.png` — matching BW animated vertical strip
+- `public/sprites/bg/<theme>.png` — ripped DS battle grounds, arena-sized; `sprites/gracidea/` — overworld tileset atlas (16px frames, magenta key, index in `tileset.json`)
 
 ## Conventions
 
 - Content changes are data changes: add a species/stage in `data.ts`, drop its
   sprite in `public/sprites/`. No new systems for single features.
+- Each type's bump super is one case in the `bumpAlly` switch; its move name
+  lives in `MOVE_NAME`, draft-card blurb in `TYPE_MOVE`, cooldown in
+  `BUMP_CD` (all in `stats.ts`). Keep them in sync when changing a super.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Physics tunables are named consts at the top of `battle.ts`.
 - Sprite theme is Gen 5 (Black/White) pixel art — statics from `versions/generation-v/black-white/` in PokeAPI/sprites, anim strips converted from the same generation's animated GIFs. New species must match this theme; this is a non-commercial fan project.
+- All scenery is ripped game art, never procedural shapes: arena grounds are DS battle-background panels, props are overworld metatiles/tileset frames. New scenery = slice or blit real assets; don't invent blobs.
 
 ## Installed agent tooling (`.devin/`)
 

@@ -34,7 +34,7 @@ export function loadItem(name: string): Promise<HTMLImageElement> {
       res(img);
     };
     img.onerror = () => res(img); // blank fallback — items are decorative
-    img.src = `sprites/items/${name}.png`;
+    img.src = `sprites/${name.includes('/') ? name : `items/${name}`}.png`;
   });
 }
 
