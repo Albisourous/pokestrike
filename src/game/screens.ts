@@ -125,7 +125,7 @@ export function drawTitle(
   ctx.beginPath();
   ctx.ellipse(D.x + 352, D.y + 212, 42, 15, 0, 0, Math.PI * 2);
   ctx.fill();
-  drawMon(ctx, 143, D.x + 352, D.y + 178, 92, t); // Snorlax = the obstacle
+  drawMon(ctx, 143, D.x + 352, D.y + 178, 92); // Snorlax = the obstacle
   // grass patch: blades, not blobs
   ctx.strokeStyle = '#2c5a28';
   ctx.lineWidth = 3;
@@ -148,7 +148,7 @@ export function drawTitle(
     ctx.quadraticCurveTo(bx, by - 10, bx + 3, by);
     ctx.stroke();
   }
-  drawMon(ctx, 43, D.x + 91, D.y + 65, 38, t); // Oddish in the grass
+  drawMon(ctx, 43, D.x + 91, D.y + 65, 38); // Oddish in the grass
   // enemies with capture rings
   const foes: [number, number, number, number][] = [
     [94, D.x + 300, D.y + 80, 0.6],   // Gengar, 60% caught
@@ -157,7 +157,7 @@ export function drawTitle(
   ];
   for (const [id, fx, fy, pct] of foes) {
     const bob = Math.sin(t * 2.4 + fx) * 4;
-    drawMon(ctx, id, fx, fy + bob, 48, t);
+    drawMon(ctx, id, fx, fy + bob, 48);
     ctx.strokeStyle = '#9df0ff';
     ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.8;
@@ -183,7 +183,7 @@ export function drawTitle(
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-  drawMon(ctx, 25, px, py, 52, t);
+  drawMon(ctx, 25, px, py, 52);
   for (const [rr, sp] of [[34, 2], [42, -1.4]] as const) {
     ctx.strokeStyle = '#9df0ff';
     ctx.lineWidth = 2;
@@ -246,7 +246,7 @@ export function drawDraft(
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 62, 88, t);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 62, 88);
 
     ctx.font = `bold 16px ${SERIF}`;
     ctx.fillStyle = PARCH;
@@ -283,7 +283,7 @@ export function drawDraft(
     ctx.stroke();
     const def = picked[i];
     if (def) {
-      drawMon(ctx, def.id, sx + 38, 692, 48, t);
+      drawMon(ctx, def.id, sx + 38, 692, 48);
       ctx.font = `10px ${SERIF}`;
       ctx.fillStyle = PARCH;
       ctx.fillText(def.name, sx + 38, 740);
@@ -310,7 +310,6 @@ export function drawReward(
   selBox: number,
   swapped: boolean,
   catchPct: number,
-  t: number,
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -376,7 +375,7 @@ export function drawReward(
     ctx.strokeStyle = i === selBox ? '#ffd84d' : '#2a3560';
     ctx.lineWidth = i === selBox ? 2.5 : 1;
     ctx.stroke();
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 26, 40, t);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 26, 40);
     ctx.font = '9px system-ui';
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 52);
@@ -395,7 +394,7 @@ export function drawReward(
     ctx.stroke();
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, 3);
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 32, 40, t);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 32, 40);
     ctx.font = '9px system-ui';
     ctx.fillStyle = PARCH;
     ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 64);

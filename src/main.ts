@@ -1,7 +1,7 @@
 import './style.css';
 import { startLoop } from './core/loop';
 import { unlockAudio, sfx, cry } from './core/audio';
-import { loadAll, loadItem, loadAnims } from './core/assets';
+import { loadAll, loadItem } from './core/assets';
 import { vec } from './core/vec';
 import { dateSeed, mulberry32 } from './core/rng';
 import { Battle } from './game/battle';
@@ -308,7 +308,6 @@ function render() {
             battle.boxSel,
             battle.swapped,
             battle.captureChance,
-            t,
           );
       }
       break;
@@ -327,7 +326,6 @@ function render() {
 
 Promise.all([
   loadAll(ALL_SPRITE_IDS),
-  loadAnims(ALL_SPRITE_IDS),
   loadItem('poke-ball'),
   ...PERKS.map((p) => loadItem(p.item)),
 ])

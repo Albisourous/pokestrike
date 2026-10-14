@@ -1480,7 +1480,7 @@ export class Battle {
       ctx.beginPath();
       ctx.ellipse(o.x, o.y + o.r * 0.55, o.r * 0.95, o.r * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      drawMon(ctx, blocker, o.x, o.y, o.r * 2.5, this.time);
+      drawMon(ctx, blocker, o.x, o.y, o.r * 2.5);
     }
 
     // hazard pads: themed floor zones with a sprite marker on top
@@ -1525,7 +1525,7 @@ export class Battle {
           ctx.arc(hz.x + Math.cos(a) * rr, hz.y + Math.sin(a) * rr * 0.72, 2.5, 0, Math.PI * 2);
           ctx.fill();
         }
-        drawMon(ctx, 43, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Oddish
+        drawMon(ctx, 43, hz.x, hz.y - hz.r * 0.55 + 6, 40); // Oddish
         // foreground blades overlap Oddish's feet — it's hiding in there
         ctx.strokeStyle = '#2c5a28';
         ctx.lineWidth = 3;
@@ -1555,7 +1555,7 @@ export class Battle {
         ctx.ellipse(hz.x, hz.y, hz.r * 0.55 * pulse, hz.r * 0.44 * pulse, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        drawMon(ctx, 81, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Magnemite
+        drawMon(ctx, 81, hz.x, hz.y - hz.r * 0.55 + 6, 40); // Magnemite
       } else {
         // warp pad — soft psychic glow + swirl + exit arrow + Abra
         ctx.fillStyle = 'rgba(150,80,190,0.16)';
@@ -1585,7 +1585,7 @@ export class Battle {
         ctx.moveTo(ax, ay);
         ctx.lineTo(ax - Math.cos(hz.ang + 0.5) * 10, ay - Math.sin(hz.ang + 0.5) * 10);
         ctx.stroke();
-        drawMon(ctx, 63, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Abra
+        drawMon(ctx, 63, hz.x, hz.y - hz.r * 0.55 + 6, 40); // Abra
       }
       ctx.restore();
     }
@@ -1601,7 +1601,7 @@ export class Battle {
       ctx.translate(g.x, g.y - prog * 30);
       ctx.rotate(prog * 2.8);
       const s = g.r * 2.6 * (1 - prog * 0.7);
-      drawMon(ctx, g.id, 0, 0, s, this.time);
+      drawMon(ctx, g.id, 0, 0, s);
       ctx.restore();
     }
 
@@ -1748,7 +1748,7 @@ export class Battle {
     ctx.save();
     ctx.translate(u.x, u.y);
     if (sq) ctx.scale(1 + sq * 0.12, 1 - sq * 0.16);
-    drawMon(ctx, u.def.id, 0, 0, size, this.time);
+    drawMon(ctx, u.def.id, 0, 0, size);
     ctx.restore();
 
     // hit flash
