@@ -291,7 +291,7 @@ export class Battle {
   rewardOffers: Perk[] = [];
   private rewardPending = false;
   private hpScale = 1;
-  private obstacles: { x: number; y: number; r: number }[];
+  private obstacles: { x: number; y: number; r: number; prop: 'tree' | 'rock'; flip: boolean }[];
   private theme: Theme; // current wave's scene — rotates each wave
   private hazards: Hazard[] = [];
   private ledges: Ledge[] = []; // one-way jump ledges, RSE-style
@@ -373,6 +373,12 @@ export class Battle {
           x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
           y: this.arena.y + this.arena.h * (0.15 + this.rng() * 0.45),
           r: this.arena.w * (0.05 + this.rng() * 0.04),
+          // region props: groves and the tree-top sky get trees, cave and
+          // caldera get boulders; a stray of the other kind keeps it organic
+          prop: this.rng() < (this.theme === 'grove' || this.theme === 'sky' ? 0.75 : 0.25)
+            ? ('tree' as const)
+            : ('rock' as const),
+          flip: this.rng() < 0.5,
         };
         if (
           !this.inPool(o.x, o.y, o.r) &&
@@ -473,6 +479,10 @@ export class Battle {
     this.genObstacles();
     this.genHazards();
     this.genLedges();
+    // stale super timers mustn't carry hits into the fresh wave
+    this.delays = [];
+    this.waves = [];
+    this.dashes = [];
     this.enemies = this.stage.waves[i].map((s, k) => ({
       uid: nextUid++,
       def: s.def,
@@ -637,6 +647,12 @@ export class Battle {
     if (this.waveBanner > 0) this.waveBanner -= dt;
 
     this.stepOrbs(dt);
+    this.stepWaves(dt);
+    this.stepDashes(dt);
+    for (const d of this.delays) d.t -= dt;
+    const due = this.delays.filter((d) => d.t <= 0);
+    this.delays = this.delays.filter((d) => d.t > 0);
+    for (const d of due) d.fn();
     if (this.phase === 'shot' || this.phase === 'aim' || this.phase === 'enemy') {
       this.stepEnemyMovement(dt);
     }
@@ -905,8 +921,11 @@ export class Battle {
         }
       }
       const dir = norm({ x: o.target.x - o.x, y: o.target.y - o.y });
-      o.x += dir.x * 620 * dt;
-      o.y += dir.y * 620 * dt;
+      // corkscrew in — each orb wobbles off-axis so the trio reads as
+      // three separate swimmers, not a blob
+      const perp = Math.sin(this.time * 14 + o.wob) * 0.45;
+      o.x += (dir.x - dir.y * perp) * 620 * dt;
+      o.y += (dir.y + dir.x * perp) * 620 * dt;
       // bubble trail
       if (this.particles.length < MAX_PARTICLES && Math.random() < 0.5) {
         this.particles.push({
@@ -917,12 +936,76 @@ export class Battle {
       }
       if (dist(o, o.target) < o.target.r + 6) {
         this.hurt(o.target, o.dmg, '#9df0ff');
-        this.burst(o.x, o.y, 40, '#6890f0', 0.3);
-        this.shower(o.x, o.y, 8, '#9df0ff', 160, 'bubble');
+        this.burst(o.x, o.y, 44, '#6890f0', 0.3);
+        this.shower(o.x, o.y, 12, '#9df0ff', 200, 'bubble');
+        this.waves.push({
+          x: o.x, y: o.y, r: 0, maxR: 52, t: 0.3, life: 0.3,
+          color: '#9df0ff', hits: new Set(),
+        });
+        sfx('splash');
         o.t = 0;
       }
     }
     this.orbs = this.orbs.filter((o) => o.t > 0);
+  }
+
+  private later(t: number, fn: () => void) {
+    this.delays.push({ t, fn });
+  }
+
+  // Expanding super shockwaves: the ring front damages each enemy once
+  // when it reaches them — damage ripples outward from the caster.
+  private stepWaves(dt: number) {
+    for (const w of this.waves) {
+      w.t -= dt;
+      w.r = w.maxR * (1 - Math.max(w.t, 0) / w.life);
+      if (!w.onHit) continue;
+      for (const e of this.enemies) {
+        if (e.dead || w.hits.has(e.uid)) continue;
+        if (dist(w, e) > w.r + e.r * 0.5) continue;
+        w.hits.add(e.uid);
+        if (!this.losBlocked(w.x, w.y, e.x, e.y)) w.onHit(e);
+      }
+    }
+    this.waves = this.waves.filter((w) => w.t > 0);
+  }
+
+  // Quick-attack lunges: the ally streaks to its target, lands the hit,
+  // then zips back — position never actually changes hands.
+  private stepDashes(dt: number) {
+    const SP = 1100;
+    for (const d of this.dashes) {
+      const tx = d.back ? d.ox : d.e.x;
+      const ty = d.back ? d.oy : d.e.y;
+      const dir = norm({ x: tx - d.u.x, y: ty - d.u.y });
+      d.u.x += dir.x * SP * dt;
+      d.u.y += dir.y * SP * dt;
+      if (this.particles.length < MAX_PARTICLES) {
+        this.particles.push({
+          x: d.u.x, y: d.u.y, vx: 0, vy: 0,
+          t: 0.22, life: 0.22, size: d.u.r * 0.5,
+          color: '#ffffff', shape: 'streak', grav: 0,
+        });
+      }
+      if (d.back) {
+        if (dist(d.u, { x: d.ox, y: d.oy }) < 8) {
+          d.u.x = d.ox;
+          d.u.y = d.oy;
+          d.done = true;
+        }
+      } else if (!d.e.dead && dist(d.u, d.e) < d.u.r + d.e.r + 4) {
+        this.hurt(d.e, d.dmg, '#9df0ff');
+        this.slash(d.e.x, d.e.y, '#ffffff');
+        this.slash(d.e.x, d.e.y, '#e8e8a8');
+        this.addShake(5);
+        this.hitStop = Math.max(this.hitStop, 0.06);
+        sfx('hit');
+        d.back = true;
+      } else if (dist(d.u, { x: tx, y: ty }) < 8) {
+        d.back = true; // target died mid-lunge — just come home
+      }
+    }
+    this.dashes = this.dashes.filter((d) => !d.done);
   }
 
   // Pokémon Arena touch: hard impacts bruise the field — a dark scorch
@@ -1262,20 +1345,31 @@ export class Battle {
     const color = TYPE_COLOR[p.def.type];
 
     switch (p.def.type) {
-      case 'fire': // meteor storm: fireballs rain down on every nearby enemy
-        this.burst(p.x, p.y, 150, color, 0.4);
-        this.burst(p.x, p.y, 100, '#ffffff', 0.25);
+      case 'fire': {
+        // flame burst: a shockwave ring rolls out from the ally — enemies
+        // catch fire as the front passes over them
+        this.burst(p.x, p.y, 70, '#ffffff', 0.25);
         this.screenFlash('#f08030', 0.15);
         this.addShake(8);
-        for (const e of near(150)) {
-          this.skyFall(e.x, color);
-          this.burst(e.x, e.y, 46, '#ffffff', 0.25);
-          this.hurt(e, bumpDmg(e, 1.0), '#9df0ff');
-        }
+        this.shower(p.x, p.y, 18, color, 320, 'ember');
+        this.waves.push({
+          x: p.x, y: p.y, r: 0, maxR: 170 * p.rngMul, t: 0.4, life: 0.4,
+          color, hits: new Set(),
+          onHit: (e) => {
+            const dir = norm({ x: e.x - p.x, y: e.y - p.y });
+            e.vx += dir.x * 170;
+            e.vy += dir.y * 170;
+            this.burst(e.x, e.y, 34, '#f08030', 0.22);
+            this.shower(e.x, e.y, 6, '#ffb060', 220, 'ember');
+            this.hurt(e, bumpDmg(e, 1.0), '#9df0ff');
+          },
+        });
         break;
+      }
       case 'electric': {
-        // lightning storm: sky strike on each chained enemy + arc between them
+        // chain lightning: hops enemy→enemy, each arc lands a beat apart
         let from: Unit = p;
+        const chain: { a: Vec; e: Unit; mult: number }[] = [];
         const hit = new Set<number>();
         let mult = 1;
         for (let i = 0; i < 3; i++) {
@@ -1287,15 +1381,23 @@ export class Battle {
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
           if (!next) break;
           hit.add(next.uid);
-          this.bolt(next.x, this.arena.y, next.x, next.y, color);
-          if (from !== p || i === 0) this.bolt(from.x, from.y, next.x, next.y, color);
-          this.shower(next.x, next.y, 8, color, 200, 'dot');
-          this.burst(next.x, next.y, 36, '#fffbe0', 0.2);
-          this.hurt(next, bumpDmg(next, mult), '#9df0ff');
+          chain.push({ a: { x: from.x, y: from.y }, e: next, mult });
           mult *= 0.7;
           from = next;
         }
-        if (hit.size > 0) {
+        chain.forEach((c, i) => {
+          this.later(i * 0.1, () => {
+            if (c.e.dead) return;
+            this.bolt(c.a.x, c.a.y, c.e.x, c.e.y, color);
+            this.bolt(c.e.x, this.arena.y, c.e.x, c.e.y, color); // sky strike
+            this.shower(c.e.x, c.e.y, 8, color, 200, 'dot');
+            this.burst(c.e.x, c.e.y, 36, '#fffbe0', 0.2);
+            this.hurt(c.e, bumpDmg(c.e, c.mult), '#9df0ff');
+            this.addShake(4);
+            sfx('zap');
+          });
+        });
+        if (chain.length > 0) {
           this.addShake(6);
           this.screenFlash('#f8d030', 0.12);
         }
@@ -1322,63 +1424,106 @@ export class Battle {
         break;
       }
       case 'water':
-        // homing water orbs at the 3 nearest enemies
+        // hydro pump: homing orbs corkscrew into the 3 nearest enemies
         this.burst(p.x, p.y, 80, color, 0.3);
+        this.shower(p.x, p.y, 10, '#9df0ff', 180, 'bubble');
         near(Infinity)
           .sort((a, b) => dist(p, a) - dist(p, b))
           .slice(0, 3)
-          .forEach((e) => {
+          .forEach((e, i) => {
             this.orbs.push({
               x: p.x,
               y: p.y,
               target: e,
               dmg: bumpDmg(e, 0.7),
               t: 2.5,
+              wob: i * 2.1,
               color,
             });
           });
         break;
-      case 'psychic': // telekinetic shove
-      case 'flying': {
-        const radius = p.def.type === 'psychic' ? 160 : 200;
-        const knock = p.def.type === 'psychic' ? 340 : 280;
-        const pow = p.def.type === 'psychic' ? 0.8 : 0.5;
-        this.burst(p.x, p.y, radius, color, 0.45);
+      case 'psychic': {
+        // telekinetic shove: real knockback impulse — enemies get flung
+        // off the ally, off walls, off each other
+        const radius = 170;
         this.burst(p.x, p.y, radius * 0.6, '#ffffff', 0.3);
         this.shower(p.x, p.y, 14, color, 340, 'streak');
-        this.addShake(6);
+        this.waves.push({
+          x: p.x, y: p.y, r: 0, maxR: radius * p.rngMul, t: 0.32, life: 0.32,
+          color, hits: new Set(),
+        });
+        this.addShake(7);
         for (const e of near(radius)) {
           const dir = norm({ x: e.x - p.x, y: e.y - p.y });
-          e.vx += dir.x * knock;
-          e.vy += dir.y * knock;
-          this.hurt(e, bumpDmg(e, pow), '#9df0ff');
+          e.vx += dir.x * 620;
+          e.vy += dir.y * 620;
+          this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
+        }
+        break;
+      }
+      case 'flying': {
+        // hurricane vortex: drags every nearby enemy into a pile on the
+        // ally — sets up the next shot's bump chain
+        const radius = 210;
+        this.burst(p.x, p.y, radius, color, 0.5);
+        this.converge(p.x, p.y, 16, color, 'wisp');
+        this.screenFlash(color, 0.1);
+        this.addShake(5);
+        // spiral wind streaks
+        for (let i = 0; i < 14; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const r = 50 + Math.random() * radius;
+          const px = p.x + Math.cos(a) * r;
+          const py = p.y + Math.sin(a) * r;
+          this.particles.push({
+            x: px, y: py,
+            vx: Math.cos(a + Math.PI / 2) * 260 - (px - p.x) * 2.4,
+            vy: Math.sin(a + Math.PI / 2) * 260 - (py - p.y) * 2.4,
+            t: 0.5, life: 0.5, size: 4, color: '#d8f0ff', shape: 'streak', grav: 0,
+          });
+        }
+        for (const e of near(radius)) {
+          const dir = norm({ x: p.x - e.x, y: p.y - e.y });
+          e.vx += dir.x * 560;
+          e.vy += dir.y * 560;
+          this.hurt(e, bumpDmg(e, 0.4), '#9df0ff');
         }
         break;
       }
       case 'poison':
-        // toxin: gas cloud now, plus 2 ticks at the end of your shots
+        // toxic: gas cloud now, then a cut of max HP at the end of each of
+        // your shots — re-toxining stacks the timer
         this.burst(p.x, p.y, 140, color, 0.4);
         this.shower(p.x, p.y, 22, '#c060c0', 110, 'bubble');
         this.screenFlash('#a040a0', 0.12);
         for (const e of near(140)) {
-          e.dotTicks = 2;
-          e.dotDmg = specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), 0.5);
+          e.dotTicks = Math.min(e.dotTicks + 2, 6);
+          e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.07));
           this.hurt(e, bumpDmg(e, 0.7), '#9df0ff');
         }
         break;
       case 'rock':
       case 'fighting': {
-        // meteor fist: debris falls on the nearest enemy, double slash
+        // meteor fist: the nearest enemy eats a one-two of falling rock —
+        // second hit lands a beat later and leaves a crater
         const e = nearest(p, 200);
         if (e) {
           this.skyFall(e.x, '#b8a038');
-          this.burst(e.x, e.y, e.r * 2.6, color, 0.35);
-          this.slash(e.x, e.y, '#ffffff');
-          this.slash(e.x, e.y, color);
-          this.shower(e.x, e.y, 14, '#b8a038', 280, 'ember');
-          this.screenFlash('#b8a038', 0.1);
-          this.addShake(10);
-          this.hurt(e, bumpDmg(e, 1.8), '#9df0ff');
+          this.burst(e.x, e.y, e.r * 2, '#ffffff', 0.22);
+          this.hurt(e, bumpDmg(e, 0.5), '#9df0ff');
+          this.later(0.14, () => {
+            if (e.dead) return;
+            this.skyFall(e.x, '#b8a038');
+            this.burst(e.x, e.y, e.r * 3, color, 0.4);
+            this.slash(e.x, e.y, '#ffffff');
+            this.slash(e.x, e.y, color);
+            this.slash(e.x, e.y, '#ffd84d');
+            this.shower(e.x, e.y, 16, '#b8a038', 300, 'ember');
+            this.bruise(e.x, e.y, 900);
+            this.screenFlash('#b8a038', 0.12);
+            this.addShake(12);
+            this.hurt(e, bumpDmg(e, 1.6), '#9df0ff');
+          });
         }
         break;
       }
@@ -1393,14 +1538,12 @@ export class Battle {
         break;
       }
       default: {
-        // normal: dash slash on the nearest enemy
-        const e = nearest(p, 180);
+        // quick attack: the ally physically dashes to the nearest enemy,
+        // slams it, and snaps back — pure speed
+        const e = nearest(p, 240);
         if (e) {
           this.zap(p.x, p.y, e.x, e.y, color);
-          this.slash(e.x, e.y, '#ffffff');
-          this.slash(e.x, e.y, color);
-          this.shower(e.x, e.y, 8, '#ffffff', 240, 'streak');
-          this.hurt(e, bumpDmg(e, 1.05), '#9df0ff');
+          this.dashes.push({ u: p, ox: p.x, oy: p.y, e, back: false, done: false, dmg: bumpDmg(e, 1.1) });
         }
       }
     }
@@ -1839,6 +1982,7 @@ export class Battle {
     drawWall(ctx, a, this.theme, this.time);
 
     for (const b of this.bursts) this.drawBurst(ctx, b);
+    for (const w of this.waves) this.drawWave(ctx, w);
     for (const z of this.zaps) this.drawZap(ctx, z);
     for (const b of this.bolts) this.drawBolt(ctx, b);
 
@@ -1867,19 +2011,22 @@ export class Battle {
       }
     }
 
-    // obstacles are real overworld props — a ball tree in the grove, the
-    // smashable boulder elsewhere (extracted RSE metatiles)
-    const prop = itemSprite(PROP[this.theme]);
+    // obstacles are real overworld land pieces — RSE ball trees and
+    // smashable boulders, picked per obstacle so groves feel wooded and
+    // caves feel rocky
     for (const o of this.obstacles) {
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.beginPath();
       ctx.ellipse(o.x, o.y + o.r * 0.55, o.r * 0.95, o.r * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
+      const prop = itemSprite(o.prop);
       if (prop) {
         ctx.save();
         ctx.imageSmoothingEnabled = false;
         const s = o.r * 2.1;
-        ctx.drawImage(prop, o.x - s / 2, o.y - s / 2, s, s);
+        ctx.translate(o.x, o.y);
+        if (o.flip) ctx.scale(-1, 1);
+        ctx.drawImage(prop, -s / 2, -s / 2, s, s);
         ctx.restore();
       }
     }
@@ -2526,6 +2673,34 @@ export class Battle {
     ctx.arc(u.x, u.y, u.r + 10, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
     ctx.stroke();
 
+    // timing bar under the HUD — the ring is subtle; this is what you
+    // actually read to release on max
+    {
+      const bw = Math.min(320, a.w * 0.64);
+      const bh = 16;
+      const bx = a.x + (a.w - bw) / 2;
+      const by = a.y + 14;
+      const maxed = frac > 0.93;
+      ctx.fillStyle = 'rgba(10,14,32,0.8)';
+      ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
+      ctx.strokeStyle = '#0a0e20';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bx - 4, by - 4, bw + 8, bh + 8);
+      ctx.fillStyle = '#ffffff1c';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.save();
+      if (maxed) {
+        ctx.shadowColor = '#ffd84d';
+        ctx.shadowBlur = 14;
+      }
+      ctx.fillStyle = maxed ? '#ffd84d' : color;
+      ctx.fillRect(bx, by, bw * frac, bh);
+      ctx.restore();
+      // gold tick marks where the max-power window opens
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillRect(bx + bw * 0.93, by - 3, 2, bh + 6);
+    }
+
     // launch arrow: unit -> opposite direction, length + glow from charge
     const ex = u.x + dir.x * (50 + frac * 160);
     const ey = u.y + dir.y * (50 + frac * 160);
@@ -2620,6 +2795,26 @@ export class Battle {
     ctx.arc(b.x, b.y, b.r * progress * 0.7, 0, Math.PI * 2);
     ctx.stroke();
     ctx.globalAlpha = 1;
+  }
+
+  private drawWave(ctx: CanvasRenderingContext2D, w: Wave) {
+    const alpha = Math.max(w.t / w.life, 0);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = w.color;
+    ctx.shadowBlur = 10;
+    ctx.strokeStyle = w.color;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r * 0.82, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawSlash(ctx: CanvasRenderingContext2D, s: Slash) {
@@ -2721,7 +2916,4 @@ const SUPER_SFX: Record<PokeType, Sfx> = {
   fighting: 'boom', ghost: 'zap', normal: 'hit',
 };
 
-// Each theme's obstacle is a real mon that blocks the way — Snorlax asleep
-// on the route, Onix coiled in the cave, Golem rolled up in the caldera,
-// Dragonite parked on the cloud.
-const PROP: Record<Theme, string> = { grove: 'tree', cavern: 'rock', volcano: 'rock', sky: 'rock' };
+
