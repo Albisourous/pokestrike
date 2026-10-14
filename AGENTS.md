@@ -17,7 +17,7 @@ Vite dev server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/stats.ts` — stat-to-mechanic formulas (Atk/Def = physical, SpA/SpD = special, Spe = movement)
 - `src/game/types.ts` — Pokémon type chart + colors
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering
-- `src/game/screens.ts` — title / team-select / result drawing + hit rects
+- `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/<id>.png` — vendored PokeAPI sprites (id = Pokédex number)
 

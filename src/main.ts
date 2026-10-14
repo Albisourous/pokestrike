@@ -2,18 +2,17 @@ import './style.css';
 import { startLoop } from './core/loop';
 import { loadAll } from './core/assets';
 import { vec } from './core/vec';
-import { dateSeed } from './core/rng';
+import { dateSeed, mulberry32 } from './core/rng';
 import { Battle } from './game/battle';
-import { ROSTER, STAGE, makeDailyStage, ALL_SPRITE_IDS } from './game/data';
+import { ROSTER, STAGE, makeDailyStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS } from './game/data';
 import {
   W,
   H,
   drawTitle,
-  drawSelect,
+  drawDraft,
   drawResult,
   drawHud,
-  cellRect,
-  START_BTN,
+  draftCardRect,
   RETRY_BTN,
   DAILY_BTN,
   FREE_BTN,
@@ -21,7 +20,7 @@ import {
 } from './game/screens';
 import type { RunResult } from './game/screens';
 
-type Scene = 'loading' | 'title' | 'select' | 'battle' | 'result';
+type Scene = 'loading' | 'title' | 'draft' | 'battle' | 'result';
 type Mode = 'daily' | 'free';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -35,7 +34,7 @@ const DAILY_KEY = 'pokestrike_daily_last';
 let scene: Scene = 'loading';
 let mode: Mode = 'free';
 let battle: Battle | null = null;
-let picks: number[] = [];
+let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
 let best: number | null = null;
@@ -79,32 +78,30 @@ function toLogical(e: PointerEvent) {
 canvas.addEventListener('pointerdown', (e) => {
   const p = toLogical(e);
   if (scene === 'title') {
-    if (inRect(p.x, p.y, DAILY_BTN)) {
-      mode = 'daily';
-      scene = 'select';
-    } else if (inRect(p.x, p.y, FREE_BTN)) {
-      mode = 'free';
-      scene = 'select';
+    if (inRect(p.x, p.y, DAILY_BTN) || inRect(p.x, p.y, FREE_BTN)) {
+      mode = inRect(p.x, p.y, DAILY_BTN) ? 'daily' : 'free';
+      // daily drafts are seeded: everyone sees the same offers that day
+      const rng = mode === 'daily' ? mulberry32(dateSeed()) : Math.random;
+      draft = { order: draftOrder(rng), picked: [] };
+      scene = 'draft';
     }
-  } else if (scene === 'select') {
-    for (let i = 0; i < ROSTER.length; i++) {
-      if (inRect(p.x, p.y, cellRect(i))) {
-        const at = picks.indexOf(i);
-        if (at >= 0) picks.splice(at, 1);
-        else if (picks.length < 4) picks.push(i);
-        return;
+  } else if (scene === 'draft') {
+    const offers = draft.order.slice(draft.picked.length * 3, draft.picked.length * 3 + 3);
+    for (let i = 0; i < offers.length; i++) {
+      if (!inRect(p.x, p.y, draftCardRect(i))) continue;
+      draft.picked.push(offers[i]);
+      if (draft.picked.length === DRAFT_ROUNDS) {
+        const stage = mode === 'daily' ? makeDailyStage(dateSeed()) : STAGE;
+        battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage);
+        scene = 'battle';
       }
-    }
-    if (picks.length === 4 && inRect(p.x, p.y, START_BTN)) {
-      const stage = mode === 'daily' ? makeDailyStage(dateSeed()) : STAGE;
-      battle = new Battle(ARENA, picks.map((i) => ROSTER[i]), stage);
-      scene = 'battle';
+      return;
     }
   } else if (scene === 'battle') {
     battle?.pointerDown(p);
   } else if (scene === 'result') {
     if (inRect(p.x, p.y, RETRY_BTN)) {
-      picks = [];
+      draft = { order: [], picked: [] };
       battle = null;
       result = null;
       resultExtra = null;
@@ -176,9 +173,18 @@ function render() {
     case 'title':
       drawTitle(ctx, t, best, streak, dailyDone);
       break;
-    case 'select':
-      drawSelect(ctx, picks, mode === 'daily' ? 'Daily Strike' : STAGE.name);
+    case 'draft': {
+      const offers = draft.order
+        .slice(draft.picked.length * 3, draft.picked.length * 3 + 3)
+        .map((i) => ROSTER[i]);
+      drawDraft(
+        ctx,
+        offers,
+        draft.picked.map((i) => ROSTER[i]),
+        mode === 'daily' ? 'Daily Strike' : STAGE.name,
+      );
       break;
+    }
     case 'battle':
       if (battle) {
         ctx.fillStyle = '#0b0e1a';

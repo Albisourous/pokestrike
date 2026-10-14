@@ -13,7 +13,7 @@ const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe:
   hp, atk, def, spa, spd, spe,
 });
 
-// Team-select roster: pick 4.
+// Draft pool: each run offers 1-of-3 for four rounds.
 export const ROSTER: SpeciesDef[] = [
   { id: 25, name: 'Pikachu', type: 'electric', stats: st(35, 55, 40, 50, 50, 90) },
   { id: 4, name: 'Charmander', type: 'fire', stats: st(39, 52, 43, 60, 50, 65) },
@@ -23,7 +23,30 @@ export const ROSTER: SpeciesDef[] = [
   { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20) },
   { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90) },
   { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55) },
+  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110) },
+  { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30) },
+  { id: 95, name: 'Onix', type: 'rock', stats: st(35, 45, 160, 30, 45, 70) },
+  { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55) },
+  { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
+  { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
+  { id: 3, name: 'Venusaur', type: 'grass', stats: st(80, 82, 83, 100, 100, 80) },
+  { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120) },
+  { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60) },
+  { id: 76, name: 'Golem', type: 'rock', stats: st(80, 120, 130, 55, 65, 45) },
 ];
+
+export const DRAFT_ROUNDS = 4;
+export const DRAFT_OFFERS = 3;
+
+// Shuffle pool indices; each draft round offers the next DRAFT_OFFERS picks.
+export function draftOrder(rng: () => number): number[] {
+  const idx = ROSTER.map((_, i) => i);
+  for (let i = idx.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [idx[i], idx[j]] = [idx[j], idx[i]];
+  }
+  return idx;
+}
 
 const ENEMY_DB: SpeciesDef[] = [
   { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72) },

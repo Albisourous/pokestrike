@@ -15,9 +15,12 @@ npm run dev
 
 Open the printed URL. Works on desktop and touch.
 
-1. Pick **Daily Strike** (same seeded stage for everyone, streak tracked) or
-   **Free Play** (practice stage).
-2. **Pick 4 Pokémon** from the roster.
+1. Pick **Daily Strike** (same seeded stage *and* same draft offers for
+   everyone, streak tracked) or **Free Play** (practice stage).
+2. **Draft your team** — four rounds, one of three Pokémon each round, from an
+   18-species pool. Cards show the real base stats and whether the bump attack
+   is physical or special. Build for type coverage: a tank, a fast shooter,
+   a big special attacker, a healer — your call.
 3. **Drag anywhere** on the arena to pull back (like a slingshot), release to
    launch the active Pokémon.
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
@@ -88,7 +91,7 @@ worker (`public/sw.js`) registered only in production builds.
 src/
   core/    vec.ts, loop.ts, assets.ts, rng.ts   # engine plumbing
   game/    types.ts, data.ts, stats.ts,         # rules + stat formulas
-           battle.ts, screens.ts                 # battle scene + screens
+           battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
 public/  sprites/, manifest.webmanifest, sw.js, icons
 ```
