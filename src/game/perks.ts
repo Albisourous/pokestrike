@@ -3,26 +3,26 @@ import type { Battle } from './battle';
 export interface Perk {
   id: string;
   name: string;
-  icon: string;
+  item: string; // sprite name in public/sprites/items/
   desc: string;
   apply: (b: Battle) => void;
 }
 
-// Between-wave relics — pick 1 of 3. Effects live as multipliers on Battle
-// so they never touch the shared SpeciesDef table.
+// Between-wave relics — pick 1 of 3, real held-item flavor. Effects live as
+// multipliers/flags on Battle so they never touch the shared SpeciesDef table.
 export const PERKS: Perk[] = [
   {
-    id: 'mend', name: 'Full Restore', icon: '✚',
+    id: 'restore', name: 'Max Potion', item: 'max-potion',
     desc: 'heal your team to full',
     apply: (b) => b.players.forEach((p) => { if (!p.dead) p.hp = p.maxHp; }),
   },
   {
-    id: 'potion', name: 'Max Potion', icon: '⚗',
+    id: 'potion', name: 'Potion', item: 'potion',
     desc: 'heal everyone for 50%',
     apply: (b) => b.players.forEach((p) => { if (!p.dead) p.hp = Math.min(p.hp + p.maxHp / 2, p.maxHp); }),
   },
   {
-    id: 'vitality', name: 'HP Up', icon: '❤',
+    id: 'hpup', name: 'HP Up', item: 'hp-up',
     desc: '+20% max HP (and heal it)',
     apply: (b) => b.players.forEach((p) => {
       if (p.dead) return;
@@ -31,22 +31,27 @@ export const PERKS: Perk[] = [
     }),
   },
   {
-    id: 'rage', name: 'Muscle Band', icon: '⚔',
+    id: 'muscle', name: 'Muscle Band', item: 'muscle-band',
     desc: '+15% all your damage',
     apply: (b) => { b.dmgMult *= 1.15; },
   },
   {
-    id: 'overclock', name: 'Quick Claw', icon: '⏱',
-    desc: 'bump attacks recharge 20% faster',
-    apply: (b) => { b.cdMult *= 0.8; },
+    id: 'claw', name: 'Quick Claw', item: 'quick-claw',
+    desc: 'supers recharge 1 shot sooner',
+    apply: (b) => { b.cdMult *= 0.66; },
   },
   {
-    id: 'turbo', name: 'Choice Scarf', icon: '⚡',
+    id: 'scarf', name: 'Choice Scarf', item: 'choice-scarf',
     desc: '+12% launch speed',
     apply: (b) => { b.launchBoost *= 1.12; },
   },
   {
-    id: 'revive', name: 'Revive', icon: '★',
+    id: 'leftovers', name: 'Leftovers', item: 'leftovers',
+    desc: 'team heals 6% after every shot',
+    apply: (b) => { b.regen += 0.06; },
+  },
+  {
+    id: 'revive', name: 'Revive', item: 'revive',
     desc: 'revive a fallen ally at 40% HP',
     apply: (b) => {
       const dead = b.players.find((p) => p.dead);
@@ -54,10 +59,14 @@ export const PERKS: Perk[] = [
         dead.dead = false;
         dead.hp = Math.round(dead.maxHp * 0.4);
       } else {
-        // nobody to revive — fall back to a heal
         b.players.forEach((p) => { p.hp = Math.min(p.hp + p.maxHp / 2, p.maxHp); });
       }
     },
+  },
+  {
+    id: 'mball', name: 'Master Ball', item: 'master-ball',
+    desc: 'capture the strongest enemy now',
+    apply: (b) => b.captureStrongest(),
   },
 ];
 

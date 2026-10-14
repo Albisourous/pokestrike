@@ -168,6 +168,7 @@ export class Battle {
   dmgMult = 1;
   cdMult = 1;
   launchBoost = 1;
+  regen = 0; // leftovers: fraction of maxHp healed after each shot
   depth = 0; // endless acts survived past the boss wave
   rewardOffers: Perk[] = [];
   private rewardPending = false;
@@ -669,11 +670,14 @@ export class Battle {
     p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult));
     this.bumpsThisShot.add(p.uid);
     p.flashT = 0.25;
+    // rocks give cover: supers can't hit targets they can't see
     const near = (radius: number) =>
-      this.enemies.filter((e) => !e.dead && dist(p, e) <= radius + e.r);
+      this.enemies.filter(
+        (e) => !e.dead && dist(p, e) <= radius + e.r && !this.losBlocked(p.x, p.y, e.x, e.y),
+      );
     const nearest = (from: Unit, radius: number) =>
       this.enemies
-        .filter((e) => !e.dead && dist(from, e) <= radius + e.r)
+        .filter((e) => !e.dead && dist(from, e) <= radius + e.r && !this.losBlocked(from.x, from.y, e.x, e.y))
         .sort((a, b) => dist(from, a) - dist(from, b))[0];
     const phys = bumpIsPhysical(p.def.type);
     const eff = (e: Unit) => effectiveness(p.def.type, e.def.type);
@@ -703,7 +707,10 @@ export class Battle {
         let mult = 1;
         for (let i = 0; i < 3; i++) {
           const next = this.enemies
-            .filter((e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190)
+            .filter(
+              (e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190 &&
+                !this.losBlocked(from.x, from.y, e.x, e.y),
+            )
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
           if (!next) break;
           hit.add(next.uid);
@@ -877,13 +884,37 @@ export class Battle {
     this.nextTurn();
   }
 
+  // Master Ball relic: capture the strongest enemy outright.
+  captureStrongest() {
+    const e = this.enemies.filter((x) => !x.dead).sort((a, b) => b.hp - a.hp)[0];
+    if (!e) return;
+    this.converge(e.x, e.y, 12, '#f0e6ff', 'wisp');
+    this.screenFlash('#c898ff', 0.15);
+    this.hurt(e, e.hp + 999, '#9df0ff');
+  }
+
+  // true if a rock blocks the straight line a→b (cover blocks abilities)
+  private losBlocked(ax: number, ay: number, bx: number, by: number) {
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy || 1;
+    for (const o of this.obstacles) {
+      const t = Math.max(0, Math.min(1, ((o.x - ax) * dx + (o.y - ay) * dy) / lenSq));
+      const px = ax + dx * t - o.x, py = ay + dy * t - o.y;
+      if (px * px + py * py < o.r * o.r) return o;
+    }
+    return null;
+  }
+
   private endShot() {
     const u = this.active;
     u.vx = 0;
     u.vy = 0;
-    // supers recharge per shot taken
+    // supers recharge per shot taken; leftovers ticks a small heal
     for (const p of this.players) {
       if (p.cd > 0) p.cd--;
+      if (!p.dead && this.regen > 0 && p.hp < p.maxHp) {
+        p.hp = Math.min(p.hp + Math.ceil(p.maxHp * this.regen), p.maxHp);
+      }
     }
     const waveAt = this.waveIndex;
     // poison ticks first
@@ -931,7 +962,7 @@ export class Battle {
         this.screenFlash('#f85888', 0.18);
         this.addShake(12);
         for (const p of this.players) {
-          if (!p.dead && dist(e, p) <= R + p.r)
+          if (!p.dead && dist(e, p) <= R + p.r && !this.losBlocked(e.x, e.y, p.x, p.y))
             this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
         }
       } else if (e.def.melee) {
@@ -946,8 +977,16 @@ export class Battle {
       } else {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
         if (target) {
-          this.zap(e.x, e.y, target.x, target.y, '#ffe66d');
-          this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+          const rock = this.losBlocked(e.x, e.y, target.x, target.y);
+          if (rock) {
+            // shot absorbed by the obstacle — zap fizzles on the rock face
+            const dir = norm({ x: target.x - e.x, y: target.y - e.y });
+            this.zap(e.x, e.y, rock.x - dir.x * rock.r * 0.5, rock.y - dir.y * rock.r * 0.5, '#8a94c8');
+            this.burst(rock.x - dir.x * rock.r * 0.5, rock.y - dir.y * rock.r * 0.5, 18, '#8a94c8', 0.25);
+          } else {
+            this.zap(e.x, e.y, target.x, target.y, '#ffe66d');
+            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+          }
         }
       }
     }

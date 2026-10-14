@@ -1,4 +1,4 @@
-import { sprite } from '../core/assets';
+import { sprite, itemSprite } from '../core/assets';
 import { SpeciesDef } from './data';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR } from './types';
@@ -208,7 +208,7 @@ export interface ShareGrid {
 
 export function drawReward(
   ctx: CanvasRenderingContext2D,
-  offers: { name: string; icon: string; desc: string }[],
+  offers: { name: string; item: string; desc: string }[],
   depth: number,
 ) {
   ctx.fillStyle = '#0b0e1ad8';
@@ -231,8 +231,21 @@ export function drawReward(
     ctx.fillStyle = GOLD;
     ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
-    ctx.font = '44px system-ui';
-    ctx.fillText(perk.icon, r.x + r.w / 2, r.y + 78);
+    // item sprite on a gold-rimmed plinth
+    ctx.fillStyle = '#0b0e1a';
+    ctx.beginPath();
+    ctx.arc(r.x + r.w / 2, r.y + 66, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    const img = itemSprite(perk.item);
+    if (img) ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
+    else {
+      ctx.font = '24px system-ui';
+      ctx.fillStyle = PARCH;
+      ctx.fillText('?', r.x + r.w / 2, r.y + 74);
+    }
     ctx.font = `bold 15px ${SERIF}`;
     ctx.fillStyle = PARCH;
     ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);

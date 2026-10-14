@@ -1,9 +1,10 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { loadAll } from './core/assets';
+import { loadAll, loadItem } from './core/assets';
 import { vec } from './core/vec';
 import { dateSeed, mulberry32 } from './core/rng';
 import { Battle } from './game/battle';
+import { PERKS } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS } from './game/data';
 import {
   W,
@@ -286,7 +287,7 @@ function render() {
   ctx.restore();
 }
 
-loadAll(ALL_SPRITE_IDS)
+Promise.all([loadAll(ALL_SPRITE_IDS), ...PERKS.map((p) => loadItem(p.item))])
   .then(() => {
     scene = 'title';
     startLoop(update, render);
