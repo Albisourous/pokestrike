@@ -106,6 +106,14 @@ interface Slash {
   t: number;
   color: string;
 }
+interface Loop {
+  x: number;
+  y: number;
+  r: number;
+  t: number;
+  life: number;
+  color: string;
+}
 interface ScreenFlash {
   t: number;
   life: number;
@@ -152,6 +160,7 @@ export class Battle {
   private particles: Particle[] = [];
   private orbs: Orb[] = [];
   private slashes: Slash[] = [];
+  private loops: Loop[] = []; // styler capture rings
   private flashes: ScreenFlash[] = [];
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
@@ -325,6 +334,8 @@ export class Battle {
     this.bursts = this.bursts.filter((b) => b.t > 0);
     for (const s of this.slashes) s.t -= dt;
     this.slashes = this.slashes.filter((s) => s.t > 0);
+    for (const l of this.loops) l.t -= dt;
+    this.loops = this.loops.filter((l) => l.t > 0);
     for (const f of this.flashes) f.t -= dt;
     this.flashes = this.flashes.filter((f) => f.t > 0);
     for (const u of [...this.players, ...this.enemies]) {
@@ -564,11 +575,23 @@ export class Battle {
       color,
       big: suffix === '!',
     });
+    // styler loop wraps the target — every hit is another circle
+    this.loops.push({ x: e.x, y: e.y, r: e.r + 12, t: 0.5, life: 0.5, color: '#9df0ff' });
     if (e.hp <= 0) {
       e.dead = true;
+      // capture complete: stacked loops + release sparkle
+      this.loops.push({ x: e.x, y: e.y, r: e.r + 20, t: 0.7, life: 0.7, color: '#ffffff' });
+      this.loops.push({ x: e.x, y: e.y, r: e.r + 30, t: 0.9, life: 0.9, color: '#9df0ff' });
+      this.texts.push({ x: e.x, y: e.y - e.r - 22, text: 'CAPTURED!', t: 1.1, color: '#9df0ff', big: true });
+      for (let i = 0; i < 5; i++) {
+        this.particles.push({
+          x: e.x + (Math.random() - 0.5) * e.r, y: e.y,
+          vx: (Math.random() - 0.5) * 60, vy: -140 - Math.random() * 80,
+          t: 0.9, life: 0.9, size: 4, color: '#dff4ff', shape: 'wisp', grav: -60,
+        });
+      }
       this.burst(e.x, e.y, e.r * 3, '#ffffff', 0.45);
       this.burst(e.x, e.y, e.r * 1.8, TYPE_COLOR[e.def.type], 0.3);
-      this.slash(e.x, e.y, TYPE_COLOR[e.def.type]);
       this.shower(e.x, e.y, 14, TYPE_COLOR[e.def.type], 240, 'ember');
       this.addShake(e.boss ? 14 : 5);
       if (this.enemies.every((x) => x.dead)) this.waveCleared();
@@ -1104,6 +1127,21 @@ export class Battle {
     for (const p of this.players) this.drawUnit(ctx, p);
 
     for (const s of this.slashes) this.drawSlash(ctx, s);
+    for (const l of this.loops) {
+      // sweeping styler ring: draws fast, lingers, fades
+      const prog = 1 - l.t / l.life;
+      const sweep = Math.min(prog / 0.45, 1) * Math.PI * 2;
+      ctx.save();
+      ctx.globalAlpha = Math.min(l.t / 0.25, 1);
+      ctx.strokeStyle = l.color;
+      ctx.lineWidth = 3;
+      ctx.shadowColor = l.color;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(l.x, l.y, l.r, -Math.PI / 2, -Math.PI / 2 + sweep);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     for (const o of this.orbs) {
       ctx.save();
@@ -1219,6 +1257,14 @@ export class Battle {
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
 
     if (u.side === 'enemy') {
+      // capture progress: Ranger-style ring that fills as hp drops
+      ctx.strokeStyle = '#9df0ff';
+      ctx.lineWidth = 2.5;
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y, u.r + 7, -Math.PI / 2, -Math.PI / 2 + (1 - pct) * Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
       // poisoned indicator
       if (u.dotTicks > 0) {
         ctx.fillStyle = '#a040a0';
@@ -1267,6 +1313,20 @@ export class Battle {
     ctx.moveTo(u.x, u.y);
     ctx.lineTo(this.dragNow.x, this.dragNow.y);
     ctx.stroke();
+
+    // styler rings: two counter-rotating dashed circles while aiming
+    for (const [rr, sp, dash] of [[u.r + 18, 2.2, 14], [u.r + 26, -1.6, 22]] as const) {
+      ctx.save();
+      ctx.strokeStyle = '#9df0ff';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.65;
+      ctx.setLineDash([dash, dash * 0.7]);
+      ctx.lineDashOffset = this.time * 60 * sp;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y, rr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // charge meter arc around the unit — full sweep = max power
     ctx.strokeStyle = '#ffffff22';
