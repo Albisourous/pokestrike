@@ -143,6 +143,7 @@ export class Battle {
   private enemyPhaseT = 0;
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>();
+  private shotCombo = 0; // ally attacks that actually fired this shot
   private texts: FloatText[] = [];
   private zaps: Zap[] = [];
   private bursts: Burst[] = [];
@@ -151,6 +152,7 @@ export class Battle {
   private slashes: Slash[] = [];
   private flashes: ScreenFlash[] = [];
   private shake = 0;
+  private hitStop = 0; // brief slow-mo on combo hits
   private obstacles: { x: number; y: number; r: number; pts: { a: number; d: number }[] }[];
 
   constructor(
@@ -269,6 +271,7 @@ export class Battle {
     u.vy = dir.y * speed;
     u.lastHit.clear();
     this.bumpsThisShot.clear();
+    this.shotCombo = 0;
     this.stopTimer = 0;
     this.phase = 'shot';
     this.shots++;
@@ -293,7 +296,11 @@ export class Battle {
 
   // --- simulation ---
 
-  update(dt: number) {
+  update(dt0: number) {
+    // hit-stop: freeze-frame feel on big combos
+    const hit = this.hitStop > 0;
+    if (hit) this.hitStop -= dt0;
+    const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
     if (this.dragging) this.dragT += dt;
     for (const t of this.texts) t.t -= dt;
@@ -581,6 +588,7 @@ export class Battle {
     }
     p.cd = bumpCooldown(p.def.type);
     p.flashT = 0.25;
+    this.shotCombo++;
     const near = (radius: number) =>
       this.enemies.filter((e) => !e.dead && dist(p, e) <= radius + e.r);
     const nearest = (from: Unit, radius: number) =>
@@ -738,6 +746,29 @@ export class Battle {
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
     if (this.enemies.length === 0 && this.phase !== 'won') this.waveCleared();
+
+    // combo celebration: escalating spectacle per ally chained this shot
+    const n = this.shotCombo;
+    if (n >= 2) {
+      this.hitStop = Math.min(0.06 * n, 0.3);
+      this.addShake(2 * n);
+      this.screenFlash(TYPE_COLOR[p.def.type], 0.08);
+      this.burst(p.x, p.y, 60 + n * 24, '#ffffff', 0.3);
+      const teamCombo = n === this.players.filter((x) => !x.dead).length && n >= 3;
+      this.texts.push({
+        x: p.x,
+        y: p.y - p.r - 30 - n * 6,
+        text: teamCombo ? 'TEAM COMBO!' : `COMBO ×${n}`,
+        t: 1.1,
+        color: teamCombo ? '#ffd84d' : TYPE_COLOR[p.def.type],
+        big: true,
+      });
+      if (teamCombo) {
+        this.screenFlash('#ffd84d', 0.3);
+        this.shower(p.x, p.y, 24, '#ffd84d', 320, 'ember');
+        this.addShake(8);
+      }
+    }
   }
 
   private waveCleared() {
