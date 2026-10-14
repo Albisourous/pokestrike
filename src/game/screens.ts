@@ -414,9 +414,10 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number
   drawRingMons(ctx, t, cx, cy + 8, 210, 168);
 
   ctx.textAlign = 'center';
-  // the ball IS the logo: POKÉ on the red half, STRIKE on the white
-  logoWord(ctx, 'POKÉ', cx, cy - 58, 26, 170);
-  logoWord(ctx, 'STRIKE', cx, cy + 108, 30, 190, '#22336a', '#c8d0e8');
+  // the ball IS the logo: POKÉ on the red half, STRIKE on the white —
+  // same size, symmetric about the band so they read as one wordmark
+  logoWord(ctx, 'POKÉ', cx, cy - 56, 28, 165);
+  logoWord(ctx, 'STRIKE', cx, cy + 84, 28, 170, '#22336a', '#c8d0e8');
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
 
