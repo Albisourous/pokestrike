@@ -57,15 +57,21 @@ let ox = 0;
 let oy = 0;
 
 function resize() {
+  // use the visible viewport, not 100vh — mobile URL bars overlap the latter
+  const vw = window.visualViewport?.width ?? innerWidth;
+  const vh = window.visualViewport?.height ?? innerHeight;
+  canvas.style.width = `${vw}px`;
+  canvas.style.height = `${vh}px`;
   const dpr = window.devicePixelRatio || 1;
-  canvas.width = innerWidth * dpr;
-  canvas.height = innerHeight * dpr;
-  scale = Math.min(innerWidth / W, innerHeight / H);
-  ox = (innerWidth - W * scale) / 2;
-  oy = (innerHeight - H * scale) / 2;
+  canvas.width = vw * dpr;
+  canvas.height = vh * dpr;
+  scale = Math.min(vw / W, vh / H);
+  ox = (vw - W * scale) / 2;
+  oy = (vh - H * scale) / 2;
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
 }
 addEventListener('resize', resize);
+window.visualViewport?.addEventListener('resize', resize);
 resize();
 
 function toLogical(e: PointerEvent) {

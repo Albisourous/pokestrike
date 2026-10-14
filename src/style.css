@@ -16,8 +16,10 @@ body {
 
 #game {
   display: block;
-  width: 100vw;
-  height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  /* JS sizes this to innerWidth/innerHeight so browser chrome can't crop it */
   image-rendering: pixelated;
   cursor: crosshair;
 }
