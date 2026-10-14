@@ -11,6 +11,7 @@ export interface RunResult {
   won: boolean;
   shots: number;
   time: number;
+  caught: number;
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -414,7 +415,11 @@ export function drawResult(
 
   ctx.font = '20px system-ui';
   ctx.fillStyle = '#fff';
-  ctx.fillText(`${res.shots} shots · ${res.time.toFixed(1)}s`, W / 2, 355);
+  ctx.fillText(
+    `${res.shots} shots · ${res.time.toFixed(1)}s${res.caught ? ` · ${res.caught} caught` : ''}`,
+    W / 2,
+    355,
+  );
   if (extra) {
     ctx.font = 'bold 20px system-ui';
     ctx.fillStyle = '#f8d030';

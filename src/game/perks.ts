@@ -78,6 +78,66 @@ export const PERKS: Perk[] = [
     desc: 'capture the strongest enemy now',
     apply: (b) => b.captureStrongest(),
   },
+  {
+    id: 'cband', name: 'Choice Band', item: 'choice-band',
+    desc: '+25% contact damage',
+    apply: (b) => { b.physMult *= 1.25; },
+  },
+  {
+    id: 'cspecs', name: 'Choice Specs', item: 'choice-specs',
+    desc: '+25% super damage',
+    apply: (b) => { b.specMult *= 1.25; },
+  },
+  {
+    id: 'wlens', name: 'Wide Lens', item: 'wide-lens',
+    desc: '+25% super range for all',
+    apply: (b) => b.players.forEach((p) => { p.rngMul *= 1.25; }),
+  },
+  {
+    id: 'sash', name: 'Focus Sash', item: 'focus-sash',
+    desc: 'each ally survives one KO at 1 HP',
+    apply: (b) => b.players.forEach((p) => { p.sash = true; }),
+  },
+  {
+    id: 'helmet', name: 'Rocky Helmet', item: 'rocky-helmet',
+    desc: 'attackers take 10 recoil',
+    apply: (b) => { b.thorns += 10; },
+  },
+  {
+    id: 'metro', name: 'Metronome', item: 'metronome',
+    desc: 'each combo link +10% damage',
+    apply: (b) => { b.comboDmg += 0.1; },
+  },
+  {
+    id: 'scope', name: 'Scope Lens', item: 'scope-lens',
+    desc: '18% chance hits crit x2',
+    apply: (b) => { b.critCh += 0.18; },
+  },
+  {
+    id: 'krock', name: "King's Rock", item: 'kings-rock',
+    desc: 'your hits delay enemy attacks',
+    apply: (b) => { b.stagger += 1; },
+  },
+  {
+    id: 'sbell', name: 'Shell Bell', item: 'shell-bell',
+    desc: 'heal weakest ally 5% of damage',
+    apply: (b) => { b.leech += 0.05; },
+  },
+  {
+    id: 'fstone', name: 'Float Stone', item: 'float-stone',
+    desc: 'ball slides 35% further',
+    apply: (b) => { b.frictionMult *= 0.65; },
+  },
+  {
+    id: 'ebelt', name: 'Expert Belt', item: 'expert-belt',
+    desc: '+30% on super-effective hits',
+    apply: (b) => { b.belt += 0.3; },
+  },
+  {
+    id: 'pherb', name: 'Power Herb', item: 'power-herb',
+    desc: 'all supers recharge 1 sooner',
+    apply: (b) => b.players.forEach((p) => { p.cdMod += 1; }),
+  },
 ];
 
 export function rollPerks(rng: () => number): Perk[] {

@@ -1,5 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
+import { unlockAudio, sfx } from './core/audio';
 import { loadAll, loadItem } from './core/assets';
 import { vec } from './core/vec';
 import { dateSeed, mulberry32 } from './core/rng';
@@ -128,9 +129,11 @@ async function shareResult() {
 // --- input routing ---
 
 canvas.addEventListener('pointerdown', (e) => {
+  unlockAudio(); // first gesture spins up the synth
   const p = toLogical(e);
   if (scene === 'title') {
     if (inRect(p.x, p.y, DAILY_BTN) || inRect(p.x, p.y, FREE_BTN)) {
+      sfx('ui');
       mode = inRect(p.x, p.y, DAILY_BTN) ? 'daily' : 'free';
       // daily drafts are seeded: everyone sees the same offers that day
       runRng = mode === 'daily' ? mulberry32(dateSeed()) : Math.random;
@@ -146,6 +149,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const offers = draft.order.slice(draft.picked.length * 3, draft.picked.length * 3 + 3);
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
+      sfx('ui');
       draft.picked.push(offers[i]);
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, runRng, mode === 'free');
@@ -208,7 +212,12 @@ function update(dt: number) {
   if (scene === 'battle' && battle) {
     battle.update(dt);
     if (battle.phase === 'won' || battle.phase === 'lost') {
-      result = { won: battle.phase === 'won', shots: battle.shots, time: battle.time };
+      result = {
+        won: battle.phase === 'won',
+        shots: battle.shots,
+        time: battle.time,
+        caught: battle.box.length,
+      };
       share = buildShare(battle, result.won);
       if (result.won) {
         if (mode === 'daily') {
@@ -234,7 +243,7 @@ function update(dt: number) {
       shareText = [
         `Pokéstrike ${stage.name}`,
         share.waves,
-        `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${mode === 'daily' ? ` · 🔥 streak ${streak}` : ''}`,
+        `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${mode === 'daily' ? ` · 🔥 streak ${streak}` : ''}${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
         share.team,
         'https://albisourous.github.io/pokestrike/',
       ].join('\n');

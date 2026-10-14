@@ -1,10 +1,13 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
+import { sfx, buzz } from '../core/audio';
+import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, rollWave } from './data';
 import { Perk, rollPerks } from './perks';
 import { drawBackdrop, drawWall, THEMES, hash as hashSeed } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
+import type { PokeType } from './types';
 import {
   playerHp,
   enemyHp,
@@ -19,6 +22,7 @@ import {
   bumpCooldown,
   roleOf,
   ROLE_MODS,
+  MOVE_NAME,
 } from './stats';
 import type { Role } from './stats';
 
@@ -57,6 +61,7 @@ interface Unit {
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
   caught: boolean; // already boxed (master ball) — skip the catch roll
+  sash: boolean; // focus sash: survive one lethal hit at 1 HP
   pow: number; // role damage multiplier
   rngMul: number; // role super-range multiplier
   launch: number; // role launch-speed multiplier
@@ -97,7 +102,7 @@ interface Particle {
   life: number;
   size: number;
   color: string;
-  shape: 'dot' | 'ember' | 'leaf' | 'bubble' | 'streak' | 'wisp';
+  shape: 'dot' | 'ember' | 'leaf' | 'bubble' | 'streak' | 'wisp' | 'meteor';
   grav: number;
 }
 interface Orb {
@@ -127,6 +132,21 @@ interface ScreenFlash {
   t: number;
   life: number;
   color: string;
+}
+interface Bolt {
+  pts: Vec[]; // jagged main path
+  branches: Vec[][]; // short fork stubs off the middle
+  t: number;
+  life: number;
+  color: string;
+}
+interface Ghost {
+  id: number; // sprite id — KO'd mon spins out and fades
+  x: number;
+  y: number;
+  r: number;
+  t: number;
+  life: number;
 }
 interface Hazard {
   x: number;
@@ -179,6 +199,8 @@ export class Battle {
   private slashes: Slash[] = [];
   private loops: Loop[] = []; // styler capture rings
   private flashes: ScreenFlash[] = [];
+  private bolts: Bolt[] = []; // forked lightning
+  private ghosts: Ghost[] = []; // KO'd sprites spinning out
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods + endless depth
@@ -186,6 +208,15 @@ export class Battle {
   cdMult = 1;
   launchBoost = 1;
   regen = 0; // leftovers: fraction of maxHp healed after each shot
+  physMult = 1; // choice band: contact damage
+  specMult = 1; // choice specs: special bump damage
+  thorns = 0; // rocky helmet: flat recoil to attackers
+  comboDmg = 0; // metronome: per-link damage ramp
+  critCh = 0; // scope lens: crit chance (x2)
+  stagger = 0; // king's rock: hits push enemy attack timers back
+  leech = 0; // shell bell: fraction of damage heals weakest ally
+  frictionMult = 1; // float stone: lower = ball slides further
+  belt = 0; // expert belt: bonus on super-effective hits
   captureChance = 0.06; // odds a defeated enemy joins your box
   box: SpeciesDef[] = []; // captured mons — swap one in between waves
   swapped = false; // one swap per reward break
@@ -241,6 +272,7 @@ export class Battle {
         lastBump: -1,
         role,
         caught: false,
+        sash: false,
         pow: m.pow,
         rngMul: m.range,
         launch: m.launch,
@@ -342,6 +374,7 @@ export class Battle {
       lastBump: -1,
       role: 'wild',
       caught: false,
+      sash: false,
       pow: 1,
       rngMul: 1,
       launch: 1,
@@ -349,7 +382,10 @@ export class Battle {
       lastHit: new Map(),
     }));
     this.waveBanner = 1.4;
-    if (i > 0) this.screenFlash('#ffffff', 0.25);
+    if (i > 0) {
+      this.screenFlash('#ffffff', 0.25);
+      sfx('wave');
+    }
   }
 
   // --- input (logical coords) ---
@@ -389,10 +425,26 @@ export class Battle {
     this.burst(u.x, u.y, u.r * 2.2, c, 0.3);
     this.shower(u.x, u.y, 8, c, 220, 'streak');
     this.addShake(3);
+    sfx('launch');
+    buzz(15);
     if (charge > 0.93) {
       this.texts.push({ x: u.x, y: u.y - u.r - 14, text: 'PERFECT!', t: 1, color: '#ffd84d', big: true });
       this.screenFlash('#ffd84d', 0.12);
       this.burst(u.x, u.y, u.r * 3.2, '#ffd84d', 0.35);
+      // slow-mo beat + speedlines streaming off the launch
+      this.hitStop = Math.max(this.hitStop, 0.16);
+      sfx('perfect');
+      buzz(40);
+      for (let i = 0; i < 14 && this.particles.length < MAX_PARTICLES; i++) {
+        const a = Math.atan2(dir.y, dir.x) + (Math.random() - 0.5) * 2.2;
+        const sp = 700 + Math.random() * 500;
+        this.particles.push({
+          x: u.x - dir.x * 40 + (Math.random() - 0.5) * 120,
+          y: u.y - dir.y * 40 + (Math.random() - 0.5) * 120,
+          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          t: 0.3, life: 0.3, size: 3, color: '#ffffff', shape: 'streak', grav: 0,
+        });
+      }
     }
   }
 
@@ -425,6 +477,10 @@ export class Battle {
     this.loops = this.loops.filter((l) => l.t > 0);
     for (const f of this.flashes) f.t -= dt;
     this.flashes = this.flashes.filter((f) => f.t > 0);
+    for (const b of this.bolts) b.t -= dt;
+    this.bolts = this.bolts.filter((b) => b.t > 0);
+    for (const g of this.ghosts) g.t -= dt;
+    this.ghosts = this.ghosts.filter((g) => g.t > 0);
     for (const u of [...this.players, ...this.enemies]) {
       if (u.flashT > 0) u.flashT -= dt;
     }
@@ -455,7 +511,7 @@ export class Battle {
     const h = dt / sub;
     for (let i = 0; i < sub; i++) {
       const wave = this.enemies; // spawnWave swaps this array on wave clear
-      const damp = Math.exp(-FRICTION * h);
+      const damp = Math.exp(-FRICTION * this.frictionMult * h);
       u.vx *= damp;
       u.vy *= damp;
       u.x += u.vx * h;
@@ -485,6 +541,7 @@ export class Battle {
             this.burst(u.x, u.y, hz.r * 0.9, '#b86fd8', 0.3);
             this.shower(u.x, u.y, 8, '#b86fd8', 260, 'streak');
             this.addShake(3);
+            sfx('zap');
           }
         } else if (inside) {
           if (hz.kind === 'slow') {
@@ -549,6 +606,7 @@ export class Battle {
             if (d < e.r + target.r + 8) {
               this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower * 1.3));
               this.slash(target.x, target.y, TYPE_COLOR[e.def.type]);
+              if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
             }
           }
         } else {
@@ -684,20 +742,44 @@ export class Battle {
   // Central damage path so every source (contact, bump, orb, dot) behaves alike.
   private hurt(e: Unit, dmg: number, color: string, suffix = '') {
     if (e.dead) return;
-    e.hp -= Math.round(dmg * this.dmgMult);
+    let d = dmg;
+    if (suffix === '!') d *= 1 + this.belt; // expert belt loves super-effective
+    let crit = false;
+    if (this.critCh > 0 && this.rng() < this.critCh) {
+      crit = true;
+      d *= 2;
+    }
+    d = Math.round(d * this.dmgMult);
+    e.hp -= d;
     e.flashT = 0.12;
+    e.timer += this.stagger; // king's rock staggers attack timers
+    // shell bell: damage feeds the weakest ally
+    if (this.leech > 0) {
+      const weakest = this.players
+        .filter((pl) => !pl.dead && pl.hp < pl.maxHp)
+        .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+      if (weakest) {
+        weakest.hp = Math.min(weakest.hp + Math.max(1, Math.round(d * this.leech)), weakest.maxHp);
+        weakest.flashT = Math.max(weakest.flashT, 0.1);
+      }
+    }
     this.texts.push({
       x: e.x,
       y: e.y - e.r - 8,
-      text: `${dmg}${suffix}`,
+      text: crit ? `${d} CRIT!` : `${d}${suffix}`,
       t: 0.9,
-      color,
-      big: suffix === '!',
+      color: crit ? '#ffd84d' : color,
+      big: crit || suffix === '!',
     });
+    if (crit) this.addShake(4);
     // styler loop wraps the target — every hit is another circle
     this.loops.push({ x: e.x, y: e.y, r: e.r + 12, t: 0.5, life: 0.5, color: '#9df0ff' });
     if (e.hp <= 0) {
       e.dead = true;
+      // faint anim: the sprite spins out and fades while the rings land
+      this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: e.boss ? 0.8 : 0.45, life: e.boss ? 0.8 : 0.45 });
+      sfx('ko');
+      buzz(e.boss ? [50, 60, 90] : 30);
       // capture complete: stacked loops + release sparkle
       this.loops.push({ x: e.x, y: e.y, r: e.r + 20, t: 0.7, life: 0.7, color: '#ffffff' });
       this.loops.push({ x: e.x, y: e.y, r: e.r + 30, t: 0.9, life: 0.9, color: '#9df0ff' });
@@ -714,6 +796,8 @@ export class Battle {
         this.box.push(e.def);
         this.screenFlash('#ffd84d', 0.2);
         this.converge(e.x, e.y, 10, '#ffd84d', 'wisp');
+        sfx('caught');
+        buzz([30, 50, 30, 50, 60]);
       }
       for (let i = 0; i < 5; i++) {
         this.particles.push({
@@ -735,13 +819,17 @@ export class Battle {
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     const mult = effectiveness(shooter.def.type, e.def.type);
-    const dmg = Math.round(physDamage(shooter.def.stats.atk, e.def.stats.def, mult) * shooter.pow);
+    const dmg = Math.round(physDamage(shooter.def.stats.atk, e.def.stats.def, mult) * shooter.pow * this.physMult);
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     const c = TYPE_COLOR[shooter.def.type];
     this.slash(e.x, e.y, c);
     this.shower(e.x, e.y, 6, c, 200, 'ember');
     this.addShake(mult > 1 ? 4 : 2);
+    sfx('hit', 1 + this.shotCombo * 0.12);
+    buzz(8);
+    if (mult > 1)
+      this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'SUPER EFFECTIVE!', t: 0.8, color: '#ffd84d', big: false });
   }
 
   // Bump an ally mid-shot: every pass is a combo link; the signature
@@ -779,6 +867,16 @@ export class Battle {
     p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult) - p.cdMod);
     this.bumpsThisShot.add(p.uid);
     p.flashT = 0.25;
+    // move callout, freeze-frame, and a white converge flash on the caster
+    this.texts.push({
+      x: p.x, y: p.y - p.r - 46,
+      text: `${p.def.name.toUpperCase()} used ${MOVE_NAME[p.def.type]}!`,
+      t: 1.05, color: TYPE_COLOR[p.def.type], big: true,
+    });
+    this.hitStop = Math.max(this.hitStop, 0.09);
+    this.converge(p.x, p.y, 7, '#ffffff', 'streak');
+    sfx(SUPER_SFX[p.def.type]);
+    buzz(20);
     // rocks give cover: supers can't hit targets they can't see
     const near = (radius: number) =>
       this.enemies.filter(
@@ -794,8 +892,10 @@ export class Battle {
     const bumpDmg = (e: Unit, power: number) =>
       Math.round(
         (phys
-          ? physDamage(p.def.stats.atk, e.def.stats.def, eff(e), power)
-          : specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), power)) * p.pow,
+          ? physDamage(p.def.stats.atk, e.def.stats.def, eff(e), power) * this.physMult
+          : specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), power) * this.specMult) *
+          p.pow *
+          (1 + (n - 1) * this.comboDmg), // metronome ramps with combo length
       );
     const color = TYPE_COLOR[p.def.type];
 
@@ -825,8 +925,8 @@ export class Battle {
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
           if (!next) break;
           hit.add(next.uid);
-          this.zap(next.x, this.arena.y, next.x, next.y, color);
-          if (from !== p || i === 0) this.zap(from.x, from.y, next.x, next.y, color);
+          this.bolt(next.x, this.arena.y, next.x, next.y, color);
+          if (from !== p || i === 0) this.bolt(from.x, from.y, next.x, next.y, color);
           this.shower(next.x, next.y, 8, color, 200, 'dot');
           this.burst(next.x, next.y, 36, '#fffbe0', 0.2);
           this.hurt(next, bumpDmg(next, mult), '#9df0ff');
@@ -971,10 +1071,14 @@ export class Battle {
   }
 
   private waveCleared() {
+    // last-kill slow-mo — the kill shot gets a beat to land
+    this.hitStop = Math.max(this.hitStop, 0.35);
     if (this.waveIndex + 1 >= this.waveCount && !this.endless) {
       this.phase = 'won';
       this.screenFlash('#ffd84d', 0.35);
       this.addShake(10);
+      sfx('perfect');
+      buzz([60, 80, 120]);
       return;
     }
     // let the shot finish rolling out, then offer a relic
@@ -1006,6 +1110,7 @@ export class Battle {
     this.boxSel = -1;
     this.burst(p.x, p.y, p.r * 2.4, '#ffd84d', 0.35);
     this.screenFlash('#ffd84d', 0.12);
+    sfx('caught');
   }
 
   private enterReward() {
@@ -1022,6 +1127,7 @@ export class Battle {
   pickPerk(i: number) {
     const perk = this.rewardOffers[i];
     if (!perk || this.phase !== 'reward') return;
+    sfx('ui');
     perk.apply(this);
     this.rewardOffers = [];
     const next = this.waveIndex + 1;
@@ -1043,6 +1149,7 @@ export class Battle {
     this.screenFlash('#c898ff', 0.15);
     e.caught = true;
     this.box.push(e.def); // master ball never fails
+    sfx('caught');
     this.texts.push({ x: e.x, y: e.y - e.r - 40, text: `${e.def.name.toUpperCase()} CAUGHT!`, t: 1.5, color: '#ffd84d', big: true });
     this.hurt(e, e.hp + 999, '#9df0ff');
   }
@@ -1115,9 +1222,13 @@ export class Battle {
         this.shower(e.x, e.y, 22, '#f85888', 320, 'ember');
         this.screenFlash('#f85888', 0.18);
         this.addShake(12);
+        sfx('boom');
+        buzz([30, 40, 60]);
         for (const p of this.players) {
-          if (!p.dead && dist(e, p) <= R + p.r && !this.losBlocked(e.x, e.y, p.x, p.y))
+          if (!p.dead && dist(e, p) <= R + p.r && !this.losBlocked(e.x, e.y, p.x, p.y)) {
             this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
+            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
+          }
         }
       } else if (e.def.melee) {
         // melee enemies lunge instead of zapping — the dash plays out over
@@ -1127,6 +1238,7 @@ export class Battle {
           e.lunging = 1.4;
           this.burst(e.x, e.y, e.r * 1.6, '#ffffff', 0.25);
           this.shower(e.x, e.y, 6, TYPE_COLOR[e.def.type], 200, 'streak');
+          sfx('launch');
         }
       } else {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
@@ -1135,11 +1247,14 @@ export class Battle {
           if (rock) {
             // shot absorbed by the obstacle — zap fizzles on the rock face
             const dir = norm({ x: target.x - e.x, y: target.y - e.y });
-            this.zap(e.x, e.y, rock.x - dir.x * rock.r * 0.5, rock.y - dir.y * rock.r * 0.5, '#8a94c8');
+            this.bolt(e.x, e.y, rock.x - dir.x * rock.r * 0.5, rock.y - dir.y * rock.r * 0.5, '#8a94c8');
             this.burst(rock.x - dir.x * rock.r * 0.5, rock.y - dir.y * rock.r * 0.5, 18, '#8a94c8', 0.25);
+            sfx('zap');
           } else {
-            this.zap(e.x, e.y, target.x, target.y, '#ffe66d');
+            this.bolt(e.x, e.y, target.x, target.y, '#ffe66d');
+            sfx('zap');
             this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
           }
         }
       }
@@ -1148,6 +1263,7 @@ export class Battle {
     if (this.players.every((p) => p.dead)) {
       this.phase = 'lost';
       this.screenFlash('#ff6b6b', 0.3);
+      sfx('lose');
       return;
     }
     this.nextTurn();
@@ -1155,16 +1271,27 @@ export class Battle {
 
   private damagePlayer(p: Unit, dmg: number) {
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
+    if (p.sash && dmg >= p.hp) {
+      // focus sash: hang on at 1 HP
+      p.sash = false;
+      dmg = p.hp - 1;
+      this.texts.push({ x: p.x, y: p.y - p.r - 20, text: 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
+      this.burst(p.x, p.y, p.r * 2, '#ffd84d', 0.3);
+    }
     p.hp -= dmg;
     p.flashT = 0.15;
     this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
     this.shower(p.x, p.y, 5, '#ff6b6b', 160, 'ember');
     this.addShake(3);
+    sfx('hurt');
+    buzz(20);
     if (p.hp <= 0) {
       p.hp = 0;
       p.dead = true;
       this.burst(p.x, p.y, p.r * 2.4, '#ff6b6b', 0.4);
       this.addShake(6);
+      sfx('ko');
+      buzz(60);
     }
   }
 
@@ -1189,6 +1316,35 @@ export class Battle {
 
   private zap(x1: number, y1: number, x2: number, y2: number, color: string) {
     this.zaps.push({ x1, y1, x2, y2, t: 0.32, color });
+  }
+
+  // Forked lightning: midpoint displacement gives the main bolt, plus a
+  // couple of short branches snapped off the middle — reads as a real strike.
+  private bolt(x1: number, y1: number, x2: number, y2: number, color: string) {
+    const pts: Vec[] = [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+    for (let it = 0; it < 4; it++) {
+      for (let i = pts.length - 1; i > 0; i--) {
+        const a = pts[i - 1], b = pts[i];
+        const d = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+        const off = (Math.random() - 0.5) * d * 0.3;
+        pts.splice(i, 0, {
+          x: (a.x + b.x) / 2 + (-(b.y - a.y) / d) * off,
+          y: (a.y + b.y) / 2 + ((b.x - a.x) / d) * off,
+        });
+      }
+    }
+    const branches: Vec[][] = [];
+    for (let k = 0; k < 2; k++) {
+      const s = pts[Math.floor(pts.length * (0.3 + Math.random() * 0.4))];
+      const a = Math.random() * Math.PI * 2;
+      const L = 18 + Math.random() * 28;
+      branches.push([
+        s,
+        { x: s.x + Math.cos(a) * L * 0.6, y: s.y + Math.sin(a) * L * 0.6 },
+        { x: s.x + Math.cos(a + 0.7) * L, y: s.y + Math.sin(a + 0.7) * L },
+      ]);
+    }
+    this.bolts.push({ pts, branches, t: 0.3, life: 0.3, color });
   }
 
   private slash(x: number, y: number, color: string) {
@@ -1240,7 +1396,7 @@ export class Battle {
         life: 0.5,
         size: 4 + Math.random() * 5,
         color,
-        shape: 'ember',
+        shape: 'meteor',
         grav: 0,
       });
     }
@@ -1297,6 +1453,7 @@ export class Battle {
 
     for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const z of this.zaps) this.drawZap(ctx, z);
+    for (const b of this.bolts) this.drawBolt(ctx, b);
 
     // themed obstacles: mossy boulders / glowing crystals / cracked obsidian
     const rock = ROCK_STYLE[this.theme];
@@ -1419,6 +1576,18 @@ export class Battle {
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
 
+    // KO'd mons: sprite spins out, shrinks, floats up — GBA faint style
+    for (const g of this.ghosts) {
+      const prog = 1 - g.t / g.life;
+      ctx.save();
+      ctx.globalAlpha = Math.max(1 - prog, 0) * 0.9;
+      ctx.translate(g.x, g.y - prog * 30);
+      ctx.rotate(prog * 2.8);
+      const s = g.r * 2.6 * (1 - prog * 0.7);
+      ctx.drawImage(sprite(g.id), -s / 2, -s / 2, s, s);
+      ctx.restore();
+    }
+
     for (const s of this.slashes) this.drawSlash(ctx, s);
     for (const l of this.loops) {
       // sweeping styler ring: draws fast, lingers, fades
@@ -1488,6 +1657,22 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // onboarding hints for the first couple of shots
+    if (this.phase === 'aim' && this.shots < 2 && !this.dragging) {
+      ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
+      ctx.font = 'bold 15px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#e8ecff';
+      ctx.fillText(
+        this.shots === 0
+          ? 'pull back anywhere — release on a full ring'
+          : 'bounce through allies to fire their supers',
+        a.x + a.w / 2,
+        a.y + a.h - 16,
+      );
+      ctx.globalAlpha = 1;
+    }
+
     if (this.waveBanner > 0) {
       const pop = Math.min(this.waveBanner, 1);
       const scaleIn = 1 + Math.max(0, this.waveBanner - 1.1) * 2.4;
@@ -1529,7 +1714,13 @@ export class Battle {
       ctx.fill();
     }
 
-    ctx.drawImage(img, u.x - size / 2, u.y - size / 2, size, size);
+    // squash while the slingshot is charged — classic anticipation
+    const sq = u === this.active && this.dragging && this.phase === 'aim' ? this.charge() : 0;
+    ctx.save();
+    ctx.translate(u.x, u.y);
+    if (sq) ctx.scale(1 + sq * 0.12, 1 - sq * 0.16);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
 
     // hit flash
     if (u.flashT > 0) {
@@ -1598,6 +1789,66 @@ export class Battle {
     const dir = norm(pull);
     const frac = this.charge();
     const color = TYPE_COLOR[u.def.type];
+    const a = this.arena;
+
+    // predicted path: same launch physics, banking off walls + rocks,
+    // stopping where it would first touch a unit — the aiming guide
+    {
+      const speed =
+        SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * frac);
+      let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
+      const dots: Vec[] = [];
+      let hit: Unit | null = null;
+      sim: for (let i = 0; i < 60; i++) {
+        const step = 1 / 30;
+        const damp = Math.exp(-FRICTION * step);
+        svx *= damp;
+        svy *= damp;
+        sx += svx * step;
+        sy += svy * step;
+        if (len({ x: svx, y: svy }) < 90) break;
+        if (sx - u.r < a.x) { sx = a.x + u.r; svx = -svx * WALL_REST; }
+        else if (sx + u.r > a.x + a.w) { sx = a.x + a.w - u.r; svx = -svx * WALL_REST; }
+        if (sy - u.r < a.y) { sy = a.y + u.r; svy = -svy * WALL_REST; }
+        else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * WALL_REST; }
+        for (const o of this.obstacles) {
+          const d = Math.hypot(sx - o.x, sy - o.y);
+          const rr = u.r + o.r;
+          if (d >= rr || d === 0) continue;
+          const nx = (o.x - sx) / d, ny = (o.y - sy) / d;
+          sx = o.x - nx * rr;
+          sy = o.y - ny * rr;
+          const vn = svx * nx + svy * ny;
+          if (vn > 0) {
+            svx -= (1 + UNIT_REST) * vn * nx;
+            svy -= (1 + UNIT_REST) * vn * ny;
+          }
+        }
+        for (const e of this.enemies)
+          if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) { hit = e; break sim; }
+        for (const p of this.players)
+          if (!p.dead && p !== u && Math.hypot(sx - p.x, sy - p.y) < u.r + p.r) { hit = p; break sim; }
+        if (i % 2 === 0) dots.push({ x: sx, y: sy });
+      }
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = color;
+      for (const q of dots) {
+        ctx.beginPath();
+        ctx.arc(q.x, q.y, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      if (hit) {
+        // target marker: gold on enemies, cyan on allies
+        ctx.strokeStyle = hit.side === 'enemy' ? '#ffd84d' : '#9df0ff';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.arc(hit.x, hit.y, hit.r + 8 + Math.sin(this.time * 8) * 3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // rubber band: unit -> drag point
     ctx.strokeStyle = '#ffffff33';
@@ -1685,6 +1936,27 @@ export class Battle {
     ctx.globalAlpha = 1;
   }
 
+  private drawBolt(ctx: CanvasRenderingContext2D, b: Bolt) {
+    const alpha = Math.max(b.t / b.life, 0);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = b.color;
+    ctx.shadowBlur = 12;
+    const stroke = (pts: Vec[], w: number, col: string) => {
+      ctx.strokeStyle = col;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+    };
+    stroke(b.pts, 4.5, b.color);
+    for (const br of b.branches) stroke(br, 2, b.color);
+    ctx.shadowBlur = 0;
+    stroke(b.pts, 1.8, '#ffffff');
+    ctx.restore();
+  }
+
   private drawBurst(ctx: CanvasRenderingContext2D, b: Burst) {
     const progress = 1 - b.t / b.life;
     const alpha = Math.max(1 - progress, 0);
@@ -1763,6 +2035,22 @@ export class Battle {
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.stroke();
         break;
+      case 'meteor':
+        // glowing head + hot tail streaking toward the target
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = p.size * 0.55;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - p.vx * 0.14, p.y - p.vy * 0.14);
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        break;
       case 'streak':
         ctx.strokeStyle = p.color;
         ctx.lineWidth = 2;
@@ -1783,6 +2071,13 @@ export class Battle {
 
 // flashes are drawn in logical coords; arena is at most this wide
 const W_CANVAS_FALLBACK = 540;
+
+// each element's super gets its own sound flavor
+const SUPER_SFX: Record<PokeType, Sfx> = {
+  fire: 'boom', electric: 'zap', grass: 'heal', water: 'splash',
+  psychic: 'zap', flying: 'splash', poison: 'boom', rock: 'boom',
+  fighting: 'boom', ghost: 'zap', normal: 'hit',
+};
 
 // Obstacles recolored to sit on the overworld-tile floors.
 const ROCK_STYLE: Record<Theme, { fill: string; rim: string; facet: string; crack: string; glow: boolean }> = {
