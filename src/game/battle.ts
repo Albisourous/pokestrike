@@ -1,6 +1,7 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
-import { SpeciesDef, StageDef } from './data';
+import { SpeciesDef, StageDef, rollWave } from './data';
+import { Perk, rollPerks } from './perks';
 import { drawBackdrop } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
@@ -110,7 +111,7 @@ interface ScreenFlash {
   color: string;
 }
 
-export type Phase = 'aim' | 'shot' | 'enemy' | 'won' | 'lost';
+export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
 
 const STOP_SPEED = 45;
 const SHOT_MAX_DRAG = 190;
@@ -153,12 +154,22 @@ export class Battle {
   private flashes: ScreenFlash[] = [];
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
+  // relic mods + endless depth
+  dmgMult = 1;
+  cdMult = 1;
+  launchBoost = 1;
+  depth = 0; // endless acts survived past the boss wave
+  rewardOffers: Perk[] = [];
+  private rewardPending = false;
+  private hpScale = 1;
   private obstacles: { x: number; y: number; r: number; pts: { a: number; d: number }[] }[];
 
   constructor(
     public arena: Rect,
     team: SpeciesDef[],
     public stage: StageDef,
+    private rng: () => number = Math.random,
+    private endless = false,
   ) {
     this.obstacles = stage.obstacles.map((o) => ({
       x: arena.x + arena.w * o.nx,
@@ -221,8 +232,8 @@ export class Battle {
       vx: 0,
       vy: 0,
       r: s.boss ? 46 : 26,
-      hp: s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats),
-      maxHp: s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats),
+      hp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
+      maxHp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
       timer: ENEMY_BASE_TIMER,
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       wx: 0,
@@ -266,7 +277,7 @@ export class Battle {
     const u = this.active;
     // direction from the pull; power from release timing on the charge meter
     const charge = this.charge();
-    const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * (0.4 + 0.6 * charge);
+    const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.lastHit.clear();
@@ -542,7 +553,7 @@ export class Battle {
   // Central damage path so every source (contact, bump, orb, dot) behaves alike.
   private hurt(e: Unit, dmg: number, color: string, suffix = '') {
     if (e.dead) return;
-    e.hp -= dmg;
+    e.hp -= Math.round(dmg * this.dmgMult);
     e.flashT = 0.12;
     this.texts.push({
       x: e.x,
@@ -586,7 +597,7 @@ export class Battle {
       this.shower(p.x, p.y, 4, '#8890b8', 90, 'dot');
       return;
     }
-    p.cd = bumpCooldown(p.def.type);
+    p.cd = bumpCooldown(p.def.type) * this.cdMult;
     p.flashT = 0.25;
     this.shotCombo++;
     const near = (radius: number) =>
@@ -772,13 +783,39 @@ export class Battle {
   }
 
   private waveCleared() {
-    if (this.waveIndex + 1 < this.waveCount) {
-      this.spawnWave(this.waveIndex + 1);
-    } else {
+    if (this.waveIndex + 1 >= this.waveCount && !this.endless) {
       this.phase = 'won';
       this.screenFlash('#ffd84d', 0.35);
       this.addShake(10);
+      return;
     }
+    // let the shot finish rolling out, then offer a relic
+    this.rewardPending = true;
+  }
+
+  private enterReward() {
+    this.rewardOffers = rollPerks(this.rng);
+    for (const p of this.players) {
+      p.vx = 0;
+      p.vy = 0;
+    }
+    this.phase = 'reward';
+  }
+
+  pickPerk(i: number) {
+    const perk = this.rewardOffers[i];
+    if (!perk || this.phase !== 'reward') return;
+    perk.apply(this);
+    this.rewardOffers = [];
+    const next = this.waveIndex + 1;
+    if (next >= this.waveCount) {
+      // endless: descend a depth — bigger packs, scaled HP
+      this.depth++;
+      this.hpScale = 1 + this.depth * 0.25;
+      this.stage.waves.push(rollWave(this.rng, this.depth));
+    }
+    this.spawnWave(next);
+    this.nextTurn();
   }
 
   private endShot() {
@@ -797,6 +834,11 @@ export class Battle {
     this.enemies = this.enemies.filter((e) => !e.dead);
     // dots cleared the wave mid-check: fresh wave keeps full timers
     if (this.phase === 'won') return;
+    if (this.rewardPending) {
+      this.rewardPending = false;
+      this.enterReward();
+      return;
+    }
     if (this.waveIndex !== waveAt) {
       this.nextTurn();
       return;

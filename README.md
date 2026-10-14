@@ -24,8 +24,9 @@ The game is also deployed to GitHub Pages on every push to `main`
 Open the printed URL. Works on desktop and touch.
 
 1. Pick **Daily Strike** (same seeded stage *and* same draft offers for
-   everyone, streak tracked) or **Free Play** (a randomly generated stage —
-   new layout, theme, and boss every run).
+   everyone, streak tracked) or **Free Play** — an endless run: random stage,
+   and after the boss the arena **descends a depth** with bigger, tougher
+   waves (another boss every 3rd depth) until you wipe.
 2. **Draft your team** — four rounds, one of three Pokémon each round, from an
    18-species pool. Cards show the real base stats and whether the bump attack
    is physical or special. Build for type coverage: a tank, a fast shooter,
@@ -39,7 +40,10 @@ Open the printed URL. Works on desktop and touch.
    then **recharges** for a few seconds (cyan countdown bubble; bigger AoE
    attacks sit longer). Enemies creep and dart toward your team and attack
    on a **countdown** — kill them or keep moving.
-6. **Share your result** — the result screen shows a Wordle-style emoji grid
+6. **Choose a relic between waves** (Slay the Spire style): heals, +max HP,
+   +damage, faster recharges, launch speed, revive. Builds stack across the
+   run — draft for synergy, relic for the holes.
+7. **Share your result** — the result screen shows a Wordle-style emoji grid
    (🟩 cleared waves, 🟥 where you fell) plus your drafted team as type-colored
    squares. Tap **SHARE RESULT** to post or copy it — streak included.
 

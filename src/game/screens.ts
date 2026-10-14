@@ -33,6 +33,11 @@ export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
+// relic reward cards reuse the draft card spacing
+export function perkCardRect(i: number) {
+  return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
+}
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -199,6 +204,46 @@ export interface ShareGrid {
   waves: string; // emoji squares, one per wave
   team: string; // emoji squares, one per drafted mon
   copied: boolean;
+}
+
+export function drawReward(
+  ctx: CanvasRenderingContext2D,
+  offers: { name: string; icon: string; desc: string }[],
+  depth: number,
+) {
+  ctx.fillStyle = '#0b0e1ad8';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.textAlign = 'center';
+  ctx.font = `bold 36px ${SERIF}`;
+  ctx.fillStyle = '#f8d030';
+  ctx.fillText('CHOOSE A RELIC', W / 2, 300);
+  ctx.font = '16px system-ui';
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(depth > 0 ? `depth ${depth + 1} — the waves get meaner` : 'the stage is not done with you', W / 2, 335);
+
+  offers.forEach((perk, i) => {
+    const r = perkCardRect(i);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+    ctx.fillStyle = '#12162b';
+    ctx.fill();
+    trim(ctx, r, 10);
+    ctx.fillStyle = GOLD;
+    ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
+
+    ctx.font = '44px system-ui';
+    ctx.fillText(perk.icon, r.x + r.w / 2, r.y + 78);
+    ctx.font = `bold 15px ${SERIF}`;
+    ctx.fillStyle = PARCH;
+    ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#a8b0d8';
+    // two-line desc
+    const words = perk.desc.split(' ');
+    const mid = Math.ceil(words.length / 2);
+    ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 150);
+    ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 168);
+  });
 }
 
 export function drawResult(

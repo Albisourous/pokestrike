@@ -12,7 +12,9 @@ import {
   drawDraft,
   drawResult,
   drawHud,
+  drawReward,
   draftCardRect,
+  perkCardRect,
   RETRY_BTN,
   SHARE_BTN,
   DAILY_BTN,
@@ -38,6 +40,7 @@ let mode: Mode = 'free';
 let battle: Battle | null = null;
 let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
 let stage = makeStage(dateSeed());
+let runRng: () => number = Math.random; // daily runs share one seeded stream
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
@@ -127,8 +130,8 @@ canvas.addEventListener('pointerdown', (e) => {
     if (inRect(p.x, p.y, DAILY_BTN) || inRect(p.x, p.y, FREE_BTN)) {
       mode = inRect(p.x, p.y, DAILY_BTN) ? 'daily' : 'free';
       // daily drafts are seeded: everyone sees the same offers that day
-      const rng = mode === 'daily' ? mulberry32(dateSeed()) : Math.random;
-      draft = { order: draftOrder(rng), picked: [] };
+      runRng = mode === 'daily' ? mulberry32(dateSeed()) : Math.random;
+      draft = { order: draftOrder(runRng), picked: [] };
       stage = makeStage(
         mode === 'daily' ? dateSeed() : (Math.random() * 2 ** 31) | 0,
         mode === 'daily' ? 'Daily Strike' : undefined,
@@ -142,13 +145,19 @@ canvas.addEventListener('pointerdown', (e) => {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       draft.picked.push(offers[i]);
       if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage);
+        battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, runRng, mode === 'free');
         scene = 'battle';
       }
       return;
     }
   } else if (scene === 'battle') {
-    battle?.pointerDown(p);
+    if (battle?.phase === 'reward') {
+      for (let i = 0; i < battle.rewardOffers.length; i++) {
+        if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
+      }
+    } else {
+      battle?.pointerDown(p);
+    }
   } else if (scene === 'result') {
     if (inRect(p.x, p.y, SHARE_BTN)) {
       shareResult();
@@ -201,6 +210,8 @@ function update(dt: number) {
         } catch {
           // storage unavailable
         }
+      } else if (mode === 'free') {
+        resultExtra = `reached depth ${battle.depth + 1}`;
       }
       shareText = [
         `Pokéstrike ${stage.name}`,
@@ -251,8 +262,15 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        drawHud(ctx, battle.waveIndex, battle.waveCount, battle.shots, battle.stage.name);
+        drawHud(
+          ctx,
+          battle.waveIndex,
+          battle.waveCount,
+          battle.shots,
+          battle.depth > 0 ? `${battle.stage.name} · DEPTH ${battle.depth}` : battle.stage.name,
+        );
         battle.render(ctx);
+        if (battle.phase === 'reward') drawReward(ctx, battle.rewardOffers, battle.depth);
       }
       break;
     case 'result':

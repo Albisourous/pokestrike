@@ -134,3 +134,20 @@ export function makeStage(seed: number, name?: string): StageDef {
     })),
   };
 }
+
+// Endless mode: roll the next wave past the boss. Bigger packs each depth,
+// an extra boss every 3rd.
+export function rollWave(rng: () => number, depth: number): WaveSpawn[] {
+  const slots = [...SLOTS];
+  const slot = () => {
+    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
+    return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
+  };
+  const add = () => ({ def: ENEMY_POOL[Math.floor(rng() * ENEMY_POOL.length)], ...slot() });
+  const n = Math.min(3 + Math.floor(depth / 2), 6);
+  const wave: WaveSpawn[] = Array.from({ length: n }, add);
+  if (depth % 3 === 0) {
+    wave.push({ def: BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)], nx: 0.5, ny: 0.3, boss: true });
+  }
+  return wave;
+}
