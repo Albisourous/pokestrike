@@ -16,12 +16,13 @@ const CFG: Record<
     pool: string; // pond / lava / pit / cloud gap
     poolEdge: string;
     mote: string;
+    line: string; // painted pitch markings
   }
 > = {
-  grove: { tileA: '#8fd068', tileB: '#84c45c', dab: '#6aa848', pool: '#58b0e8', poolEdge: '#4090c8', mote: '#ffffff' },
-  cavern: { tileA: '#50507c', tileB: '#484870', dab: '#3c3c60', pool: '#28284a', poolEdge: '#1c1c38', mote: '#9db4ff' },
-  volcano: { tileA: '#584038', tileB: '#503a34', dab: '#443028', pool: '#ff7028', poolEdge: '#c84810', mote: '#ffb060' },
-  sky: { tileA: '#98c4ec', tileB: '#8cbce4', dab: '#7cb0dc', pool: '#5c8cd0', poolEdge: '#4a74b8', mote: '#ffffff' },
+  grove: { tileA: '#8fd068', tileB: '#84c45c', dab: '#6aa848', pool: '#58b0e8', poolEdge: '#4090c8', mote: '#ffffff', line: '#eef6e4' },
+  cavern: { tileA: '#50507c', tileB: '#484870', dab: '#3c3c60', pool: '#28284a', poolEdge: '#1c1c38', mote: '#9db4ff', line: '#b0b8d0' },
+  volcano: { tileA: '#584038', tileB: '#503a34', dab: '#443028', pool: '#ff7028', poolEdge: '#c84810', mote: '#ffb060', line: '#c89070' },
+  sky: { tileA: '#98c4ec', tileB: '#8cbce4', dab: '#7cb0dc', pool: '#5c8cd0', poolEdge: '#4a74b8', mote: '#ffffff', line: '#ffffff' },
 };
 
 // wall sprite palettes: dark outline, mid fill, highlight
@@ -159,9 +160,41 @@ export function drawBackdrop(
   ctx.closePath();
   ctx.clip();
 
-  // flat base + soft mottled patches — organic ground, no checker grid
+  // flat base — grove gets mowing stripes like the arena pitch shots
   ctx.fillStyle = c.tileA;
   ctx.fillRect(x, y, w, h);
+  if (theme === 'grove') {
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    for (let i = 0; i * 90 < w; i++) ctx.fillRect(x + i * 90, y, 45, h);
+  }
+  if (theme === 'cavern') {
+    // concrete slab court — big pavers with dark seams and a few cracks
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
+    ctx.lineWidth = 3;
+    for (let gx = x + 64; gx < x + w; gx += 96) {
+      ctx.beginPath();
+      ctx.moveTo(gx, y);
+      ctx.lineTo(gx, y + h);
+      ctx.stroke();
+    }
+    for (let gy = y + 80; gy < y + h; gy += 110) {
+      ctx.beginPath();
+      ctx.moveTo(x, gy);
+      ctx.lineTo(x + w, gy);
+      ctx.stroke();
+    }
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    for (let i = 0; i < 8; i++) {
+      const cxx = x + hash(i * 17 + 4) * w;
+      const cyy = y + hash(i * 23 + 9) * h;
+      ctx.beginPath();
+      ctx.moveTo(cxx, cyy);
+      ctx.lineTo(cxx + 10 + hash(i) * 18, cyy + 6 + hash(i * 3) * 14);
+      ctx.lineTo(cxx + 4 + hash(i * 7) * 22, cyy + 18 + hash(i * 11) * 16);
+      ctx.stroke();
+    }
+  }
   ctx.globalAlpha = 0.55;
   ctx.fillStyle = c.tileB;
   for (let i = 0; i < 12; i++) {
@@ -199,6 +232,35 @@ export function drawBackdrop(
       ctx.arc(dx, dy, 1.5 + hash(i * 7) * 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  // painted pitch markings — worn white lines, soccer-arena style:
+  // center circle + dot, halfway line, arcs off the top/bottom edges
+  {
+    const mcx = x + w / 2, mcy = y + h / 2;
+    ctx.strokeStyle = c.line;
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 4;
+    ctx.setLineDash([30, 16]); // dashed = worn paint
+    ctx.beginPath();
+    ctx.arc(mcx, mcy, Math.min(w, h) * 0.24, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, mcy);
+    ctx.lineTo(x + w, mcy);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mcx, y, Math.min(w, h) * 0.15, 0, Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mcx, y + h, Math.min(w, h) * 0.15, Math.PI, 0);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = c.line;
+    ctx.beginPath();
+    ctx.arc(mcx, mcy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
   // a pond / lava pool — real RSE pond metatiles for water themes,

@@ -1575,12 +1575,23 @@ export class Battle {
     for (const z of this.zaps) this.drawZap(ctx, z);
     for (const b of this.bolts) this.drawBolt(ctx, b);
 
-    // battle scars: scorched patches under everything, persisting the wave
+    // battle scars: cracked impact craters under everything — Arena-style
+    // field damage that persists the whole battle
     for (const s of this.scorch) {
       ctx.fillStyle = `rgba(20,16,8,${s.a})`;
       ctx.beginPath();
       ctx.ellipse(s.x, s.y, s.r, s.r * 0.62, 0, 0, Math.PI * 2);
       ctx.fill();
+      // radiating cracks — the "dig left a hole" look
+      ctx.strokeStyle = `rgba(20,16,8,${s.a * 0.8})`;
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + s.x * 0.13;
+        ctx.beginPath();
+        ctx.moveTo(s.x + Math.cos(a) * s.r * 0.7, s.y + Math.sin(a) * s.r * 0.45);
+        ctx.lineTo(s.x + Math.cos(a) * s.r * 1.4, s.y + Math.sin(a) * s.r * 0.9);
+        ctx.stroke();
+      }
     }
 
     // obstacles are real overworld props — a ball tree in the grove, the
