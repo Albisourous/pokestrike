@@ -36,10 +36,11 @@ Open the printed URL. Works on desktop and touch.
    a full-speed `PERFECT!` launch.
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune).
-5. **Bump your own teammates** to trigger their signature attack — each one
-   then **recharges** for a few seconds (cyan countdown bubble; bigger AoE
-   attacks sit longer). Enemies creep and dart toward your team and attack
-   on a **countdown** — kill them or keep moving.
+5. **Bump your own teammates** — every pass-through is a combo link (gold
+   arc + rising ×N counter, escalating hit-stop and flashes). The ally's
+   signature **super** fires only if it's recharged — cooldowns tick down
+   per shot (cyan bubble shows shots left). Enemies creep and dart toward
+   your team and attack on a **countdown** — kill them or keep moving.
 6. **Choose a relic between waves** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
    run — draft for synergy, relic for the holes.

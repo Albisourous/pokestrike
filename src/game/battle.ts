@@ -50,7 +50,8 @@ interface Unit {
   dotTicks: number; // poison ticks remaining
   dotDmg: number;
   flashT: number; // white hit flash
-  cd: number; // player bump-attack recharge; 0 = ready
+  cd: number; // player bump-super recharge in shots; 0 = ready
+  lastBump: number; // last time a pass-through triggered this ally
   lastHit: Map<number, number>; // shooter uid -> game time
 }
 
@@ -143,8 +144,8 @@ export class Battle {
   private stopTimer = 0;
   private enemyPhaseT = 0;
   private pendingAttacks: Unit[] = [];
-  private bumpsThisShot = new Set<number>();
-  private shotCombo = 0; // ally attacks that actually fired this shot
+  private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
+  private shotCombo = 0; // pass-through links chained this shot
   private texts: FloatText[] = [];
   private zaps: Zap[] = [];
   private bursts: Burst[] = [];
@@ -207,6 +208,7 @@ export class Battle {
         dotDmg: 0,
         flashT: 0,
         cd: 0,
+        lastBump: -1,
         lastHit: new Map(),
       });
     });
@@ -247,6 +249,7 @@ export class Battle {
       dotDmg: 0,
       flashT: 0,
       cd: 0,
+      lastBump: -1,
       lastHit: new Map(),
     }));
     this.waveBanner = 1.4;
@@ -327,9 +330,6 @@ export class Battle {
     for (const u of [...this.players, ...this.enemies]) {
       if (u.flashT > 0) u.flashT -= dt;
     }
-    for (const p of this.players) {
-      if (p.cd > 0) p.cd -= dt;
-    }
     this.shake *= Math.exp(-6 * dt);
     for (const p of this.particles) {
       p.t -= dt;
@@ -379,8 +379,9 @@ export class Battle {
         if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
       }
       for (const p of this.players) {
-        // pass through teammates — touching them still fires their bump attack
-        if (!p.dead && p !== u && dist(u, p) < u.r + p.r) this.bumpAlly(p);
+        // pass through teammates — each pass is a link-bump combo tick
+        if (!p.dead && p !== u && dist(u, p) < u.r + p.r && u.vx * u.vx + u.vy * u.vy > 1600)
+          this.bumpAlly(p, u);
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -588,18 +589,41 @@ export class Battle {
     this.addShake(mult > 1 ? 4 : 2);
   }
 
-  // Bump an ally mid-shot: it fires its type's signature attack.
-  private bumpAlly(p: Unit) {
-    if (this.bumpsThisShot.has(p.uid)) return;
-    this.bumpsThisShot.add(p.uid);
+  // Bump an ally mid-shot: every pass is a combo link; the signature
+  // super fires only when recharged (cd counts down per shot).
+  private bumpAlly(p: Unit, u: Unit) {
+    if (this.time - p.lastBump < 0.3) return; // once per pass, not per frame
+    p.lastBump = this.time;
+    this.shotCombo++;
+    const n = this.shotCombo;
+    const c = TYPE_COLOR[p.def.type];
+    // link arc between ball and ally + pulse — every pass reads as a hit
+    this.zap(u.x, u.y, p.x, p.y, '#ffd84d');
+    this.burst(p.x, p.y, p.r * (1.7 + n * 0.3), c, 0.25);
+    this.shower(p.x, p.y, 4 + n * 2, c, 160 + n * 30, 'streak');
+    p.flashT = 0.2;
+    const COMBO_COLORS = ['#9df0ff', '#f8d030', '#f08030', '#f85888', '#ffd84d'];
+    this.texts.push({
+      x: p.x,
+      y: p.y - p.r - 26 - Math.min(n, 6) * 5,
+      text: `×${n}`,
+      t: 0.9,
+      color: n >= 2 ? COMBO_COLORS[n % COMBO_COLORS.length] : c,
+      big: n >= 4,
+    });
+    if (n >= 2) {
+      this.hitStop = Math.min(0.05 * n, 0.3);
+      this.addShake(2 * n);
+      this.screenFlash(c, 0.07);
+    }
     if (p.cd > 0) {
-      // still recharging — a dull fizzle instead of the attack
-      this.shower(p.x, p.y, 4, '#8890b8', 90, 'dot');
+      // super still recharging — link sparks but no attack
+      this.shower(p.x, p.y, 5, '#8890b8', 90, 'dot');
       return;
     }
-    p.cd = bumpCooldown(p.def.type) * this.cdMult;
+    p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult));
+    this.bumpsThisShot.add(p.uid);
     p.flashT = 0.25;
-    this.shotCombo++;
     const near = (radius: number) =>
       this.enemies.filter((e) => !e.dead && dist(p, e) <= radius + e.r);
     const nearest = (from: Unit, radius: number) =>
@@ -758,27 +782,17 @@ export class Battle {
     this.enemies = this.enemies.filter((e) => !e.dead);
     if (this.enemies.length === 0 && this.phase !== 'won') this.waveCleared();
 
-    // combo celebration: escalating spectacle per ally chained this shot
-    const n = this.shotCombo;
-    if (n >= 2) {
-      this.hitStop = Math.min(0.06 * n, 0.3);
-      this.addShake(2 * n);
-      this.screenFlash(TYPE_COLOR[p.def.type], 0.08);
-      this.burst(p.x, p.y, 60 + n * 24, '#ffffff', 0.3);
-      const teamCombo = n === this.players.filter((x) => !x.dead).length && n >= 3;
-      this.texts.push({
-        x: p.x,
-        y: p.y - p.r - 30 - n * 6,
-        text: teamCombo ? 'TEAM COMBO!' : `COMBO ×${n}`,
-        t: 1.1,
-        color: teamCombo ? '#ffd84d' : TYPE_COLOR[p.def.type],
-        big: true,
-      });
-      if (teamCombo) {
-        this.screenFlash('#ffd84d', 0.3);
-        this.shower(p.x, p.y, 24, '#ffd84d', 320, 'ember');
-        this.addShake(8);
-      }
+    // TEAM COMBO: every living ally fired its super in this one shot
+    const firedAll =
+      this.bumpsThisShot.size === this.players.filter((x) => !x.dead).length &&
+      this.bumpsThisShot.size >= 3;
+    if (firedAll) {
+      this.hitStop = 0.3;
+      this.screenFlash('#ffd84d', 0.3);
+      this.burst(p.x, p.y, 140, '#ffffff', 0.35);
+      this.shower(p.x, p.y, 24, '#ffd84d', 320, 'ember');
+      this.addShake(8);
+      this.texts.push({ x: p.x, y: p.y - p.r - 40, text: 'TEAM COMBO!', t: 1.2, color: '#ffd84d', big: true });
     }
   }
 
@@ -822,6 +836,10 @@ export class Battle {
     const u = this.active;
     u.vx = 0;
     u.vy = 0;
+    // supers recharge per shot taken
+    for (const p of this.players) {
+      if (p.cd > 0) p.cd--;
+    }
     const waveAt = this.waveIndex;
     // poison ticks first
     for (const e of this.enemies) {

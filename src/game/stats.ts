@@ -14,10 +14,10 @@ export interface Stats {
 const PHYS_BUMP: ReadonlySet<PokeType> = new Set(['normal', 'rock', 'fighting']);
 export const bumpIsPhysical = (t: PokeType) => PHYS_BUMP.has(t);
 
-// Bump attacks recharge over seconds — bigger effects sit longer.
+// Bump supers recharge over SHOTS — bigger effects sit longer.
 const BUMP_CD: Record<PokeType, number> = {
-  normal: 3.5, fighting: 4.5, rock: 4.5, flying: 5, water: 5,
-  electric: 5.5, grass: 6, poison: 6, fire: 7, ghost: 7.5, psychic: 8,
+  normal: 1, fighting: 2, rock: 2, flying: 2, water: 2,
+  electric: 2, grass: 2, poison: 2, fire: 3, ghost: 3, psychic: 3,
 };
 export const bumpCooldown = (t: PokeType) => BUMP_CD[t];
 
