@@ -33,9 +33,11 @@ Open the printed URL. Works on desktop and touch.
    **SPEEDSTER** (fast shot, combos), **TANK** (huge HP), **SNIPER**
    (long-range super, frail), **BRUISER** (heavy hits), **HEALER** (super
    heals the team), plus what the bump super actually does.
-3. **Pull back to aim** — drag direction sets your launch angle. **Power is
-   timing**: a charge meter ping-pongs while you hold — release at the top for
-   a full-speed `PERFECT!` launch.
+3. **Pull back to aim** — drag direction sets your launch angle and a dotted
+   **guide line** previews the ball's banks off walls and rocks, ending in a
+   target ring on whatever it would hit first. **Power is timing**: a charge
+   meter ping-pongs while you hold — release at the top for a full-speed
+   `PERFECT!` launch (slow-mo + speedlines included).
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune).
 5. **Bump your own teammates** — every pass-through is a combo link (gold
@@ -69,6 +71,10 @@ So Pikachu (55 Atk / 90 Spe) is a fast skirmisher, Jigglypuff (115 HP / 20
 Spe) is a slow tank, and Geodude's 100 Defense means physical hits bounce off —
 hit it with special bump attacks instead. Damage mitigation is
 `60 / (60 + def)` — a defender at 60 takes about half damage.
+
+Supers shout their real move name (`PIKACHU used THUNDER!`), forked lightning
+strikes, meteors rain, KOs spin out, and everything is backed by synthesized
+WebAudio SFX + haptics — no audio assets.
 
 ## Bump attacks by type
 
@@ -110,7 +116,8 @@ worker (`public/sw.js`) registered only in production builds.
 
 ```
 src/
-  core/    vec.ts, loop.ts, assets.ts, rng.ts   # engine plumbing
+  core/    vec.ts, loop.ts, assets.ts, rng.ts,  # engine plumbing
+           audio.ts                             # synthesized sfx + haptics
   game/    types.ts, data.ts, stats.ts,         # rules + stat formulas
            battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
