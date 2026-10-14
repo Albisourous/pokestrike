@@ -36,6 +36,12 @@ interface Unit {
   maxHp: number;
   timer: number; // enemy countdown; attacks when it hits 0
   drift: number; // enemy approach speed (u/s); players always 0
+  // wander state — enemies jitter and occasionally dart
+  wx: number;
+  wy: number;
+  wT: number;
+  wMul: number;
+  lunging: number; // >0 while mid-lunge (melee attack in flight)
   boss: boolean;
   dead: boolean;
   dotTicks: number; // poison ticks remaining
@@ -163,6 +169,11 @@ export class Battle {
         maxHp: playerHp(def.stats),
         timer: 0,
         drift: 0,
+        wx: 0,
+        wy: 0,
+        wT: 0,
+        wMul: 0,
+        lunging: 0,
         boss: false,
         dead: false,
         dotTicks: 0,
@@ -197,6 +208,11 @@ export class Battle {
       maxHp: s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats),
       timer: ENEMY_BASE_TIMER,
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
+      wx: 0,
+      wy: 0,
+      wT: Math.random() * 0.8,
+      wMul: 1,
+      lunging: 0,
       boss: !!s.boss,
       dead: false,
       dotTicks: 0,
@@ -350,10 +366,34 @@ export class Battle {
       if (alive.length > 0) {
         const target = alive.reduce((a, b) => (dist(e, a) < dist(e, b) ? a : b));
         const d = dist(e, target);
-        if (d > e.r + target.r + 6) {
-          const dir = norm({ x: target.x - e.x, y: target.y - e.y });
-          e.x += dir.x * e.drift * dt;
-          e.y += dir.y * e.drift * dt;
+        const dir = norm({ x: target.x - e.x, y: target.y - e.y });
+        if (e.lunging > 0) {
+          // melee attack in flight: steer hard at the target, hit on contact
+          e.lunging -= dt;
+          const sp = 520 + e.def.stats.spe * 3;
+          e.x += dir.x * sp * dt;
+          e.y += dir.y * sp * dt;
+          if (d < e.r + target.r + 4 || e.lunging <= 0) {
+            e.lunging = 0;
+            if (d < e.r + target.r + 8) {
+              this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower * 1.3));
+              this.slash(target.x, target.y, TYPE_COLOR[e.def.type]);
+            }
+          }
+        } else {
+          // erratic approach: seek the player but wander with random darts
+          e.wT -= dt;
+          if (e.wT <= 0) {
+            e.wT = 0.35 + Math.random() * 0.9;
+            const a = Math.random() * Math.PI * 2;
+            e.wx = Math.cos(a);
+            e.wy = Math.sin(a);
+            e.wMul = Math.random() < 0.22 ? 2.4 : 0.5 + Math.random();
+          }
+          if (d > e.r + target.r + 6) {
+            e.x += (dir.x * 0.55 + e.wx * e.wMul) * e.drift * dt;
+            e.y += (dir.y * 0.55 + e.wy * e.wMul) * e.drift * dt;
+          }
         }
       }
       this.clampToArena(e);
@@ -728,6 +768,15 @@ export class Battle {
         for (const p of this.players) {
           if (!p.dead && dist(e, p) <= R + p.r)
             this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
+        }
+      } else if (e.def.melee) {
+        // melee enemies lunge instead of zapping — the dash plays out over
+        // the next moments while you're lining up your shot
+        const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
+        if (target) {
+          e.lunging = 1.4;
+          this.burst(e.x, e.y, e.r * 1.6, '#ffffff', 0.25);
+          this.shower(e.x, e.y, 6, TYPE_COLOR[e.def.type], 200, 'streak');
         }
       } else {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];

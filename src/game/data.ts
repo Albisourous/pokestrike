@@ -9,6 +9,7 @@ export interface SpeciesDef {
   name: string;
   type: PokeType;
   stats: Stats; // canonical base stats: hp/atk/def/spa/spd/spe
+  melee?: boolean; // enemy lunges at you when its timer hits 0 (instead of zapping)
 }
 
 const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe: number): Stats => ({
@@ -51,15 +52,15 @@ export function draftOrder(rng: () => number): number[] {
 }
 
 const ENEMY_DB: SpeciesDef[] = [
-  { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72) },
-  { id: 16, name: 'Pidgey', type: 'flying', stats: st(40, 45, 40, 35, 35, 56) },
-  { id: 41, name: 'Zubat', type: 'poison', stats: st(40, 45, 35, 30, 40, 55) },
+  { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72), melee: true },
+  { id: 16, name: 'Pidgey', type: 'flying', stats: st(40, 45, 40, 35, 35, 56), melee: true },
+  { id: 41, name: 'Zubat', type: 'poison', stats: st(40, 45, 35, 30, 40, 55), melee: true },
   { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20) },
   { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45) },
   { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90) },
   { id: 43, name: 'Oddish', type: 'grass', stats: st(45, 50, 55, 75, 65, 30) },
   { id: 92, name: 'Gastly', type: 'ghost', stats: st(30, 35, 30, 100, 35, 80) },
-  { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35) },
+  { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), melee: true },
   { id: 150, name: 'Mewtwo', type: 'psychic', stats: st(106, 110, 90, 154, 90, 130) },
   { id: 130, name: 'Gyarados', type: 'water', stats: st(95, 125, 79, 60, 100, 81) },
   { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80) },
