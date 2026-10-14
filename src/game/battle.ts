@@ -234,7 +234,7 @@ export class Battle {
   rewardOffers: Perk[] = [];
   private rewardPending = false;
   private hpScale = 1;
-  private obstacles: { x: number; y: number; r: number; pts: { a: number; d: number }[] }[];
+  private obstacles: { x: number; y: number; r: number }[];
   private theme: Theme; // current wave's scene — rotates each wave
   private hazards: Hazard[] = [];
 
@@ -310,10 +310,6 @@ export class Battle {
           x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
           y: this.arena.y + this.arena.h * (0.15 + this.rng() * 0.45),
           r: this.arena.w * (0.05 + this.rng() * 0.04),
-          pts: Array.from({ length: 7 }, (_, j) => ({
-            a: (j / 7) * Math.PI * 2,
-            d: 0.72 + this.rng() * 0.42,
-          })),
         };
         if (this.players.every((p) => p.dead || dist(o, p) > o.r + p.r + 30)) {
           this.obstacles.push(o);
@@ -1476,67 +1472,31 @@ export class Battle {
     for (const z of this.zaps) this.drawZap(ctx, z);
     for (const b of this.bolts) this.drawBolt(ctx, b);
 
-    // themed obstacles: mossy boulders / glowing crystals / cracked obsidian
-    const rock = ROCK_STYLE[this.theme];
+    // obstacles are the blockers themselves — a sleeping Snorlax, a coiled
+    // Onix — real sprites on a soft ground shadow, no polygon blobs
+    const blocker = BLOCKER[this.theme];
     for (const o of this.obstacles) {
-      ctx.save();
-      if (rock.glow) {
-        ctx.shadowColor = rock.crack;
-        ctx.shadowBlur = 10;
-      }
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.beginPath();
-      o.pts.forEach((p, i) => {
-        const px = o.x + Math.cos(p.a) * o.r * p.d;
-        const py = o.y + Math.sin(p.a) * o.r * p.d;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      });
-      ctx.closePath();
-      ctx.fillStyle = rock.fill;
+      ctx.ellipse(o.x, o.y + o.r * 0.55, o.r * 0.95, o.r * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = rock.rim;
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      // top facet
-      ctx.fillStyle = rock.facet;
-      ctx.beginPath();
-      ctx.arc(o.x - o.r * 0.22, o.y - o.r * 0.26, o.r * 0.42, 0, Math.PI * 2);
-      ctx.fill();
-      // cracks / moss veins in the theme accent
-      ctx.strokeStyle = rock.crack;
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = 0.8;
-      for (const p of [o.pts[1], o.pts[4]]) {
-        ctx.beginPath();
-        ctx.moveTo(o.x, o.y);
-        ctx.lineTo(o.x + Math.cos(p.a) * o.r * p.d * 0.85, o.y + Math.sin(p.a) * o.r * p.d * 0.85);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      ctx.restore();
-      // a Geodude perches on the boulder — it's alive, it just doesn't care
-      drawMon(ctx, 74, o.x, o.y - o.r * 0.45, o.r * 1.1, this.time);
+      drawMon(ctx, blocker, o.x, o.y, o.r * 2.5, this.time);
     }
 
     // hazard pads: themed floor zones with a sprite marker on top
     for (const hz of this.hazards) {
       ctx.save();
       if (hz.kind === 'slow') {
-        // tall grass patch — dark mound, bright inner tufts, rim blades
-        ctx.fillStyle = '#2c5a28';
+        // tall grass — a soft dark tint + dense jagged blades, no flat oval
+        ctx.fillStyle = 'rgba(30,60,26,0.4)';
         ctx.beginPath();
         ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#3f7a3a';
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y - 2, hz.r * 0.78, hz.r * 0.6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // jagged blade ring around the rim
+        // blade ring around the rim
         ctx.strokeStyle = '#2c5a28';
         ctx.lineWidth = 3;
-        for (let i = 0; i < 16; i++) {
-          const a = (i / 16) * Math.PI * 2;
+        for (let i = 0; i < 22; i++) {
+          const a = (i / 22) * Math.PI * 2;
           const bx = hz.x + Math.cos(a) * hz.r * 0.94;
           const by = hz.y + Math.sin(a) * hz.r * 0.75;
           ctx.beginPath();
@@ -1544,10 +1504,10 @@ export class Battle {
           ctx.quadraticCurveTo(bx, by - 13, bx + 4, by);
           ctx.stroke();
         }
-        // inner blades, lighter
+        // inner blades, lighter — dense enough to read as a patch
         ctx.strokeStyle = '#58a848';
         ctx.lineWidth = 2.5;
-        for (let i = 0; i < 14; i++) {
+        for (let i = 0; i < 30; i++) {
           const a = hashSeed(hz.x + i * 13) * Math.PI * 2;
           const rr = hz.r * (0.3 + hashSeed(hz.y + i * 7) * 0.6);
           const gx = hz.x + Math.cos(a) * rr, gy = hz.y + Math.sin(a) * rr * 0.8;
@@ -1578,9 +1538,9 @@ export class Battle {
           ctx.stroke();
         }
       } else if (hz.kind === 'speed') {
-        // charge pad — pulsing rings + Magnemite
+        // charge pad — soft electric glow + pulsing rings + Magnemite
         const pulse = 0.75 + Math.sin(this.time * 5) * 0.15;
-        ctx.fillStyle = '#3a3416';
+        ctx.fillStyle = 'rgba(248,208,48,0.14)';
         ctx.beginPath();
         ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -1597,8 +1557,8 @@ export class Battle {
         ctx.globalAlpha = 1;
         drawMon(ctx, 81, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Magnemite
       } else {
-        // warp pad — swirl + exit arrow + Abra
-        ctx.fillStyle = '#3a2450';
+        // warp pad — soft psychic glow + swirl + exit arrow + Abra
+        ctx.fillStyle = 'rgba(150,80,190,0.16)';
         ctx.beginPath();
         ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -2166,10 +2126,7 @@ const SUPER_SFX: Record<PokeType, Sfx> = {
   fighting: 'boom', ghost: 'zap', normal: 'hit',
 };
 
-// Obstacles recolored to sit on the overworld-tile floors.
-const ROCK_STYLE: Record<Theme, { fill: string; rim: string; facet: string; crack: string; glow: boolean }> = {
-  grove: { fill: '#3c6e44', rim: '#1d4026', facet: '#569058', crack: '#2a5a34', glow: false },
-  cavern: { fill: '#40406a', rim: '#242444', facet: '#5858a0', crack: '#9db4ff', glow: true },
-  volcano: { fill: '#382830', rim: '#1c1018', facet: '#50303c', crack: '#ff7a30', glow: true },
-  sky: { fill: '#c8d8f0', rim: '#7c9cc8', facet: '#e8f2fc', crack: '#9db4ff', glow: false },
-};
+// Each theme's obstacle is a real mon that blocks the way — Snorlax asleep
+// on the route, Onix coiled in the cave, Golem rolled up in the caldera,
+// Dragonite parked on the cloud.
+const BLOCKER: Record<Theme, number> = { grove: 143, cavern: 95, volcano: 76, sky: 149 };

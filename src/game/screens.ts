@@ -1,6 +1,6 @@
 import { itemSprite, drawMon } from '../core/assets';
 import { SpeciesDef } from './data';
-import { drawBackdrop } from './bg';
+import { drawBackdrop, hash as hashSeed } from './bg';
 import { TYPE_COLOR } from './types';
 import { bumpIsPhysical, roleOf, ROLE_BLURB, TYPE_MOVE } from './stats';
 
@@ -120,23 +120,34 @@ export function drawTitle(
   roundRect(ctx, D.x, D.y, D.w, D.h, 14);
   ctx.clip();
   drawBackdrop(ctx, D, 14, 'grove', t, null);
-  // rock + tall grass
-  ctx.fillStyle = '#3c6e44';
-  ctx.strokeStyle = '#1d4026';
+  // a sleeping Snorlax blocking the route + tall grass tufts
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(D.x + 352, D.y + 212, 42, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  drawMon(ctx, 143, D.x + 352, D.y + 178, 92, t); // Snorlax = the obstacle
+  // grass patch: blades, not blobs
+  ctx.strokeStyle = '#2c5a28';
   ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(D.x + 330, D.y + 180);
-  ctx.lineTo(D.x + 365, D.y + 165);
-  ctx.lineTo(D.x + 385, D.y + 190);
-  ctx.lineTo(D.x + 372, D.y + 215);
-  ctx.lineTo(D.x + 338, D.y + 212);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = '#3f7a3a';
-  ctx.beginPath();
-  ctx.ellipse(D.x + 90, D.y + 90, 52, 38, 0, 0, Math.PI * 2);
-  ctx.fill();
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const bx = D.x + 90 + Math.cos(a) * 46;
+    const by = D.y + 92 + Math.sin(a) * 34;
+    ctx.beginPath();
+    ctx.moveTo(bx - 4, by);
+    ctx.quadraticCurveTo(bx, by - 13, bx + 4, by);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#58a848';
+  ctx.lineWidth = 2.5;
+  for (let i = 0; i < 14; i++) {
+    const bx = D.x + 90 + (hashSeed(i * 7 + 1) - 0.5) * 70;
+    const by = D.y + 92 + (hashSeed(i * 13 + 4) - 0.5) * 46;
+    ctx.beginPath();
+    ctx.moveTo(bx - 3, by);
+    ctx.quadraticCurveTo(bx, by - 10, bx + 3, by);
+    ctx.stroke();
+  }
   drawMon(ctx, 43, D.x + 91, D.y + 65, 38, t); // Oddish in the grass
   // enemies with capture rings
   const foes: [number, number, number, number][] = [
