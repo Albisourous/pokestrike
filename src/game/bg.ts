@@ -195,23 +195,6 @@ export function drawBackdrop(
       ctx.stroke();
     }
   }
-  ctx.globalAlpha = 0.55;
-  ctx.fillStyle = c.tileB;
-  for (let i = 0; i < 12; i++) {
-    ctx.beginPath();
-    ctx.ellipse(
-      x + hash(i * 13 + 2) * w,
-      y + hash(i * 29 + 7) * h,
-      50 + hash(i * 41) * 110,
-      40 + hash(i * 53) * 80,
-      hash(i * 3) * 3,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
   // scattered dabs: grass blades / pebbles / cracks per theme
   ctx.fillStyle = c.dab;
   for (let i = 0; i < 90; i++) {

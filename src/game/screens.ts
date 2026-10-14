@@ -116,38 +116,6 @@ function drawField(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
 
-  // large mottled tone patches — organic meadow, not a mowed lawn
-  for (let i = 0; i < 14; i++) {
-    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(16,72,16,0.10)';
-    ctx.beginPath();
-    ctx.ellipse(
-      hashSeed(i * 13 + 2) * W,
-      hashSeed(i * 29 + 7) * H,
-      60 + hashSeed(i * 41) * 120,
-      40 + hashSeed(i * 53) * 90,
-      hashSeed(i * 3) * 3,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-  }
-
-  // worn dirt patches — battle-scarred spots near the edges
-  for (let i = 0; i < 4; i++) {
-    const dx = 40 + hashSeed(i * 97) * 460;
-    const dy = 60 + hashSeed(i * 83) * 840;
-    const drx = 30 + hashSeed(i * 31) * 45;
-    const dry = 18 + hashSeed(i * 17) * 25;
-    ctx.fillStyle = 'rgba(122,86,46,0.55)';
-    ctx.beginPath();
-    ctx.ellipse(dx, dy, drx, dry, hashSeed(i * 7) * 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(148,110,64,0.5)';
-    ctx.beginPath();
-    ctx.ellipse(dx - drx * 0.15, dy - dry * 0.15, drx * 0.6, dry * 0.6, hashSeed(i * 7) * 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   // grass tufts: little 3-blade clusters scattered everywhere
   ctx.strokeStyle = '#2e6420';
   ctx.lineWidth = 1.5;
@@ -160,16 +128,6 @@ function drawField(ctx: CanvasRenderingContext2D) {
       ctx.lineTo(x + b * 3.5, y - (b === 0 ? 6 : 4));
       ctx.stroke();
     }
-  }
-
-  // wildflowers + pebble speckles
-  for (let i = 0; i < 26; i++) {
-    ctx.fillStyle = ['#ffffff', '#ffe86b', '#ffb8d0'][i % 3];
-    ctx.fillRect(hashSeed(i * 61 + 19) * W, hashSeed(i * 43 + 11) * H, 2.5, 2.5);
-  }
-  ctx.fillStyle = 'rgba(0,50,0,0.12)';
-  for (let i = 0; i < 50; i++) {
-    ctx.fillRect(hashSeed(i * 67 + 5) * W, hashSeed(i * 71 + 13) * H, 2.5, 2.5);
   }
 
   // overworld props at the edges — real extracted metatiles
@@ -199,38 +157,20 @@ function drawField(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, W, H);
 }
 
-function drawSparkles(ctx: CanvasRenderingContext2D, t: number) {
-  for (let i = 0; i < 14; i++) {
-    const s = 5 + hashSeed(i * 13) * 6;
-    ctx.save();
-    ctx.translate(hashSeed(i * 97 + 11) * W, hashSeed(i * 61 + 29) * H);
-    ctx.rotate(t * 0.8 + i);
-    ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t * 1.8 + i * 2.1));
-    ctx.fillStyle = '#ffe86b';
-    ctx.beginPath();
-    for (let k = 0; k < 4; k++) {
-      ctx.moveTo(0, 0);
-      ctx.lineTo(s * 0.22, -s * 0.22);
-      ctx.lineTo(0, -s);
-      ctx.lineTo(-s * 0.22, -s * 0.22);
-      ctx.closePath();
-      ctx.rotate(Math.PI / 2);
-    }
-    ctx.fill();
-    ctx.restore();
-  }
-}
-
-function drawRingLine(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, t: number) {
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([18, 14]);
-  ctx.lineDashOffset = t * 20;
+// Tall-grass clump — the route grass wild mons pop out of, Gen-5 style.
+function grassClump(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.fillStyle = '#2e6420';
   ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
+  ctx.ellipse(x, y, r, r * 0.42, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1e4a14';
+  ctx.lineWidth = 2;
+  for (let b = -3; b <= 3; b++) {
+    ctx.beginPath();
+    ctx.moveTo(x + b * r * 0.22, y + r * 0.2);
+    ctx.lineTo(x + b * r * 0.28, y - (b % 2 === 0 ? r * 0.5 : r * 0.28));
+    ctx.stroke();
+  }
 }
 
 function drawRingMons(ctx: CanvasRenderingContext2D, t: number, cx: number, cy: number, rx: number, ry: number) {
@@ -238,6 +178,7 @@ function drawRingMons(ctx: CanvasRenderingContext2D, t: number, cx: number, cy: 
     const a = -Math.PI / 2 + (i / RING_MONS.length) * Math.PI * 2;
     const x = cx + Math.cos(a) * rx;
     const y = cy + Math.sin(a) * ry;
+    grassClump(ctx, x, y + size * 0.42, size * 0.55); // standing in route grass
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
     ctx.ellipse(x, y + size * 0.38, size * 0.42, size * 0.15, 0, 0, Math.PI * 2);
@@ -410,12 +351,10 @@ function drawWildMons(ctx: CanvasRenderingContext2D, t: number) {
 export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number | null) {
   drawField(ctx);
   drawStands(ctx, t);
-  drawSparkles(ctx, t);
   drawWildMons(ctx, t);
 
   const cx = W / 2;
   const cy = 300;
-  drawRingLine(ctx, cx, cy + 8, 210, 168, t);
   drawCrest(ctx, cx, cy, 132);
   drawRingMons(ctx, t, cx, cy + 8, 210, 168);
 
