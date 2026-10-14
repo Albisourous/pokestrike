@@ -115,3 +115,20 @@ export function sfx(name: Sfx, pitch = 1) {
 export function buzz(pattern: number | number[]) {
   navigator.vibrate?.(pattern);
 }
+
+// Real species cries (PokeAPI/cries .ogg), cached and replayable.
+const cries = new Map<number, HTMLAudioElement>();
+export function cry(id: number, vol = 0.4) {
+  try {
+    let a = cries.get(id);
+    if (!a) {
+      a = new Audio(`sprites/cries/${id}.ogg`);
+      cries.set(id, a);
+    }
+    a.volume = vol;
+    a.currentTime = 0;
+    a.play().catch(() => {});
+  } catch {
+    // audio unavailable
+  }
+}

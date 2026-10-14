@@ -1,4 +1,4 @@
-import { sprite, itemSprite } from '../core/assets';
+import { itemSprite, drawMon } from '../core/assets';
 import { SpeciesDef } from './data';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR } from './types';
@@ -137,7 +137,7 @@ export function drawTitle(
   ctx.beginPath();
   ctx.ellipse(D.x + 90, D.y + 90, 52, 38, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.drawImage(sprite(43), D.x + 72, D.y + 46, 38, 38); // Oddish in the grass
+  drawMon(ctx, 43, D.x + 91, D.y + 65, 38, t); // Oddish in the grass
   // enemies with capture rings
   const foes: [number, number, number, number][] = [
     [94, D.x + 300, D.y + 80, 0.6],   // Gengar, 60% caught
@@ -146,7 +146,7 @@ export function drawTitle(
   ];
   for (const [id, fx, fy, pct] of foes) {
     const bob = Math.sin(t * 2.4 + fx) * 4;
-    ctx.drawImage(sprite(id), fx - 24, fy - 24 + bob, 48, 48);
+    drawMon(ctx, id, fx, fy + bob, 48, t);
     ctx.strokeStyle = '#9df0ff';
     ctx.lineWidth = 2.5;
     ctx.globalAlpha = 0.8;
@@ -172,7 +172,7 @@ export function drawTitle(
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-  ctx.drawImage(sprite(25), px - 26, py - 26, 52, 52);
+  drawMon(ctx, 25, px, py, 52, t);
   for (const [rr, sp] of [[34, 2], [42, -1.4]] as const) {
     ctx.strokeStyle = '#9df0ff';
     ctx.lineWidth = 2;
@@ -235,8 +235,7 @@ export function drawDraft(
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
-    const img = sprite(def.id);
-    ctx.drawImage(img, r.x + r.w / 2 - 44, r.y + 18, 88, 88);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 62, 88, t);
 
     ctx.font = `bold 16px ${SERIF}`;
     ctx.fillStyle = PARCH;
@@ -273,7 +272,7 @@ export function drawDraft(
     ctx.stroke();
     const def = picked[i];
     if (def) {
-      ctx.drawImage(sprite(def.id), sx + 14, 668, 48, 48);
+      drawMon(ctx, def.id, sx + 38, 692, 48, t);
       ctx.font = `10px ${SERIF}`;
       ctx.fillStyle = PARCH;
       ctx.fillText(def.name, sx + 38, 740);
@@ -300,6 +299,7 @@ export function drawReward(
   selBox: number,
   swapped: boolean,
   catchPct: number,
+  t: number,
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -365,7 +365,7 @@ export function drawReward(
     ctx.strokeStyle = i === selBox ? '#ffd84d' : '#2a3560';
     ctx.lineWidth = i === selBox ? 2.5 : 1;
     ctx.stroke();
-    ctx.drawImage(sprite(def.id), r.x + 8, r.y + 6, 40, 40);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 26, 40, t);
     ctx.font = '9px system-ui';
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 52);
@@ -384,7 +384,7 @@ export function drawReward(
     ctx.stroke();
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, 3);
-    ctx.drawImage(sprite(def.id), r.x + r.w / 2 - 20, r.y + 12, 40, 40);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 32, 40, t);
     ctx.font = '9px system-ui';
     ctx.fillStyle = PARCH;
     ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 64);

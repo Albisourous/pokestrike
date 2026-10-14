@@ -1,7 +1,7 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx } from './core/audio';
-import { loadAll, loadItem } from './core/assets';
+import { unlockAudio, sfx, cry } from './core/audio';
+import { loadAll, loadItem, loadAnims } from './core/assets';
 import { vec } from './core/vec';
 import { dateSeed, mulberry32 } from './core/rng';
 import { Battle } from './game/battle';
@@ -150,6 +150,7 @@ canvas.addEventListener('pointerdown', (e) => {
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       sfx('ui');
+      cry(ROSTER[offers[i]].id, 0.5); // picked mon calls out
       draft.picked.push(offers[i]);
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, runRng, mode === 'free');
@@ -307,6 +308,7 @@ function render() {
             battle.boxSel,
             battle.swapped,
             battle.captureChance,
+            t,
           );
       }
       break;
@@ -323,7 +325,12 @@ function render() {
   ctx.restore();
 }
 
-Promise.all([loadAll(ALL_SPRITE_IDS), ...PERKS.map((p) => loadItem(p.item))])
+Promise.all([
+  loadAll(ALL_SPRITE_IDS),
+  loadAnims(ALL_SPRITE_IDS),
+  loadItem('poke-ball'),
+  ...PERKS.map((p) => loadItem(p.item)),
+])
   .then(() => {
     scene = 'title';
     startLoop(update, render);

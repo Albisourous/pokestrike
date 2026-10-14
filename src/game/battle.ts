@@ -1,6 +1,6 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
-import { sprite } from '../core/assets';
-import { sfx, buzz } from '../core/audio';
+import { drawMon, itemSprite } from '../core/assets';
+import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, rollWave } from './data';
 import { Perk, rollPerks } from './perks';
@@ -148,6 +148,13 @@ interface Ghost {
   t: number;
   life: number;
 }
+interface BallDrop {
+  x: number;
+  y: number;
+  item: string; // poke-ball / master-ball sprite
+  t: number;
+  life: number;
+}
 interface Hazard {
   x: number;
   y: number;
@@ -201,6 +208,7 @@ export class Battle {
   private flashes: ScreenFlash[] = [];
   private bolts: Bolt[] = []; // forked lightning
   private ghosts: Ghost[] = []; // KO'd sprites spinning out
+  private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods + endless depth
@@ -386,6 +394,8 @@ export class Battle {
       this.screenFlash('#ffffff', 0.25);
       sfx('wave');
     }
+    const boss = this.enemies.find((e) => e.boss);
+    if (boss) cry(boss.def.id, 0.5); // boss roars on entry
   }
 
   // --- input (logical coords) ---
@@ -481,6 +491,8 @@ export class Battle {
     this.bolts = this.bolts.filter((b) => b.t > 0);
     for (const g of this.ghosts) g.t -= dt;
     this.ghosts = this.ghosts.filter((g) => g.t > 0);
+    for (const b of this.balls) b.t -= dt;
+    this.balls = this.balls.filter((b) => b.t > 0);
     for (const u of [...this.players, ...this.enemies]) {
       if (u.flashT > 0) u.flashT -= dt;
     }
@@ -787,7 +799,7 @@ export class Battle {
       const caught = !e.caught && this.rng() < this.captureChance;
       this.texts.push({
         x: e.x, y: e.y - e.r - 22,
-        text: caught ? `${e.def.name.toUpperCase()} CAUGHT!` : 'CAPTURED!',
+        text: `${e.def.name.toUpperCase()} ${caught ? 'CAUGHT!' : 'FAINTED!'}`,
         t: caught ? 1.5 : 1.1,
         color: caught ? '#ffd84d' : '#9df0ff',
         big: true,
@@ -796,7 +808,10 @@ export class Battle {
         this.box.push(e.def);
         this.screenFlash('#ffd84d', 0.2);
         this.converge(e.x, e.y, 10, '#ffd84d', 'wisp');
+        // real poké ball drops in and does the triple-wiggle
+        this.balls.push({ x: e.x, y: e.y, item: 'poke-ball', t: 1.15, life: 1.15 });
         sfx('caught');
+        cry(e.def.id, 0.45);
         buzz([30, 50, 30, 50, 60]);
       }
       for (let i = 0; i < 5; i++) {
@@ -876,6 +891,7 @@ export class Battle {
     this.hitStop = Math.max(this.hitStop, 0.09);
     this.converge(p.x, p.y, 7, '#ffffff', 'streak');
     sfx(SUPER_SFX[p.def.type]);
+    cry(p.def.id, 0.35);
     buzz(20);
     // rocks give cover: supers can't hit targets they can't see
     const near = (radius: number) =>
@@ -1149,7 +1165,9 @@ export class Battle {
     this.screenFlash('#c898ff', 0.15);
     e.caught = true;
     this.box.push(e.def); // master ball never fails
+    this.balls.push({ x: e.x, y: e.y, item: 'master-ball', t: 1.15, life: 1.15 });
     sfx('caught');
+    cry(e.def.id, 0.5);
     this.texts.push({ x: e.x, y: e.y - e.r - 40, text: `${e.def.name.toUpperCase()} CAUGHT!`, t: 1.5, color: '#ffd84d', big: true });
     this.hurt(e, e.hp + 999, '#9df0ff');
   }
@@ -1519,7 +1537,7 @@ export class Battle {
           ctx.quadraticCurveTo(gx, gy - 9, gx + 3, gy);
           ctx.stroke();
         }
-        ctx.drawImage(sprite(43), hz.x - 20, hz.y - hz.r * 0.55 - 14, 40, 40); // Oddish
+        drawMon(ctx, 43, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Oddish
       } else if (hz.kind === 'speed') {
         // charge pad — pulsing rings + Magnemite
         const pulse = 0.75 + Math.sin(this.time * 5) * 0.15;
@@ -1538,7 +1556,7 @@ export class Battle {
         ctx.ellipse(hz.x, hz.y, hz.r * 0.55 * pulse, hz.r * 0.44 * pulse, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        ctx.drawImage(sprite(81), hz.x - 20, hz.y - hz.r * 0.55 - 14, 40, 40); // Magnemite
+        drawMon(ctx, 81, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Magnemite
       } else {
         // warp pad — swirl + exit arrow + Abra
         ctx.fillStyle = '#3a2450';
@@ -1568,7 +1586,7 @@ export class Battle {
         ctx.moveTo(ax, ay);
         ctx.lineTo(ax - Math.cos(hz.ang + 0.5) * 10, ay - Math.sin(hz.ang + 0.5) * 10);
         ctx.stroke();
-        ctx.drawImage(sprite(63), hz.x - 20, hz.y - hz.r * 0.55 - 14, 40, 40); // Abra
+        drawMon(ctx, 63, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Abra
       }
       ctx.restore();
     }
@@ -1584,7 +1602,20 @@ export class Battle {
       ctx.translate(g.x, g.y - prog * 30);
       ctx.rotate(prog * 2.8);
       const s = g.r * 2.6 * (1 - prog * 0.7);
-      ctx.drawImage(sprite(g.id), -s / 2, -s / 2, s, s);
+      drawMon(ctx, g.id, 0, 0, s, this.time);
+      ctx.restore();
+    }
+
+    // caught mons: real poké ball drops in and does the triple-wiggle
+    for (const b of this.balls) {
+      const img = itemSprite(b.item);
+      if (!img) continue;
+      const prog = 1 - b.t / b.life;
+      const drop = Math.min(prog * 3.2, 1); // fast drop-in
+      ctx.save();
+      ctx.translate(b.x, b.y - (1 - drop) * 70);
+      if (prog > 0.32) ctx.rotate(Math.sin(prog * 40) * 0.4 * Math.min((prog - 0.3) * 5, 1));
+      ctx.drawImage(img, -15, -15, 30, 30);
       ctx.restore();
     }
 
@@ -1703,7 +1734,6 @@ export class Battle {
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
-    const img = sprite(u.def.id);
     const size = u.r * 2.6;
 
     // glow under units about to act
@@ -1719,7 +1749,7 @@ export class Battle {
     ctx.save();
     ctx.translate(u.x, u.y);
     if (sq) ctx.scale(1 + sq * 0.12, 1 - sq * 0.16);
-    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    drawMon(ctx, u.def.id, 0, 0, size, this.time);
     ctx.restore();
 
     // hit flash
