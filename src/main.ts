@@ -435,7 +435,6 @@ Promise.all([
   loadAll(ALL_SPRITE_IDS),
   loadItem('poke-ball'),
   ...PERKS.map((p) => loadItem(p.item)),
-  document.fonts.load('12px "Press Start 2P"'), // force pixel-font fetch before first paint
 ])
   .then(() => {
     scene = 'title';

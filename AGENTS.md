@@ -8,7 +8,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 
 - North star: **Monster Strike physics · Pokémon pixel-art theme · StS progression**. If a change serves none of the three, it's scope creep.
 - One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd). Daily/endless modes are future work — don't build for them.
-- Single art source: the [Gracidea](https://github.com/lowlighter/gracidea) pack (RSE/Gen-3 style), vendored at `public/sprites/gracidea/` — `creatures` (mons), `tileset` (scenery), `npcs` (trainers). New art is sliced or blitted from the pack, never procedural shapes.
+- Single art source: **Pokémon FireRed/LeafGreen (Gen 3 GBA)**. Mon sprites are official FRLG battle fronts vendored from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) (`sprites/pokemon/versions/generation-iii/firered-leafgreen/<id>.png`); item icons come from the same repo (`sprites/items/`). Scenery/props get sliced or blitted from the Gracidea `tileset`/`npcs` atlases at `public/sprites/gracidea/` (RSE, same era). Never procedural shapes.
 - Anti-goals: no monetization mechanics, no non-Pokémon content.
 - Replayability, in order: run variety → seeded daily climb → ascension modifiers → unlockables. Keep it simple until the core is solid.
 
@@ -28,9 +28,9 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering
 - `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
-- `public/sprites/gracidea/` — the art canon (see Direction): `creatures`, `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
-- `public/sprites/<id>.png` — 72×72 overworld mon icons sliced from the gracidea creatures atlas
-- `public/sprites/items/<name>.png` — the existing icon set: items, perks, UI bits
+- `public/sprites/gracidea/` — scenery canon (see Direction): `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
+- `public/sprites/<id>.png` — 64×64 FRLG battle fronts by dex id, vendored from PokeAPI/sprites
+- `public/sprites/items/<name>.png` — item icons from the same PokeAPI repo (`sprites/items/<name>.png`)
 - `public/sprites/cries/<id>.ogg` — mon cries, one per roster id, played lazily by `cry()`
 
 ## Conventions
@@ -42,7 +42,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
   `BUMP_CD` (all in `stats.ts`). Keep them in sync when changing a super.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Physics tunables are named consts at the top of `battle.ts`.
-- Asset canon is the Gracidea pack (see Direction). Mon sprites are 72×72 icons sliced from the creatures atlas; new scenery/props come from `sprites/gracidea/` the same way.
+- Asset canon is FRLG/Gen-3 (see Direction). Mons and items are vendored PNGs from PokeAPI/sprites; new scenery/props get sliced or blitted from `sprites/gracidea/` atlases.
 - Scenery is flat placeholder drawing until the gracidea prop pass lands — new scenery still means slice or blit from the pack, never invented blobs.
 
 ## Installed agent tooling (`.devin/`)

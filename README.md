@@ -147,23 +147,27 @@ src/
            perks.ts, bg.ts,                     # relics + themed backdrops
            battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
-public/  sprites/ (mons, gracidea, cries), manifest.webmanifest, sw.js, icons
+public/  sprites/ (mons, items, gracidea, cries), manifest.webmanifest, sw.js, icons
 ```
 
 ## Art & credit
 
-All game art comes from **one source** — the
-[Gracidea](https://github.com/lowlighter/gracidea) pack (RSE / Gen 3-era
-ripped Pokémon textures), vendored into `public/sprites/gracidea/`:
+All game art is **Pokémon FireRed/LeafGreen (Gen 3 GBA)** era, vendored
+from two places:
 
-- `creatures` — Pokémon sprites; the target look for every mon
-- `tileset` — scenery: grounds, trees, rocks, ledges, ponds
-- `npcs` — trainer sprites, destined for gym leaders
+- Mons — official FRLG battle fronts (64×64, keyed by dex id) from
+  [PokeAPI/sprites](https://github.com/PokeAPI/sprites)
+  `sprites/pokemon/versions/generation-iii/firered-leafgreen/` →
+  `sprites/<id>.png`
+- Items — official item icons from the same repo (`sprites/items/`) →
+  `sprites/items/<name>.png`
+- Scenery — the [Gracidea](https://github.com/lowlighter/gracidea) pack
+  (RSE tileset + npcs), vendored into `public/sprites/gracidea/` for
+  slicing grounds, trees, rocks, ledges, and gym-leader trainers
 
-One source is what keeps the theme cohesive: new art gets sliced or blitted
-from the pack, never invented shapes. Mons render from 72×72 overworld
-icons (`sprites/<id>.png`) sliced from the creatures atlas; scenery is
-placeholder flats until the prop pass slices it from the tileset atlas.
+One era is what keeps the theme cohesive: new art gets vendored or sliced
+from these sources, never invented shapes. Scenery is placeholder flats
+until the prop pass slices it from the tileset atlas.
 
 Pokémon is © Nintendo / Game Freak / Creatures Inc. This is a fan-made,
 non-commercial project — not affiliated with or endorsed by them.

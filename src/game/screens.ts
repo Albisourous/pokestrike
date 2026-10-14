@@ -2,7 +2,7 @@ import { itemSprite, drawMon } from '../core/assets';
 import { SpeciesDef, TOTAL_STAGES } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Rarity } from './perks';
-import { drawBackdrop, hash as hashSeed } from './bg';
+import { drawBackdrop } from './bg';
 import { TYPE_COLOR } from './types';
 import { bumpIsPhysical, roleOf, ROLE_BLURB, TYPE_MOVE } from './stats';
 
@@ -73,7 +73,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-// Conquest-style chrome: dark indigo panel, gold double border, serif text.
+// Card chrome: dark indigo panel, single gold border.
 const GOLD = '#c8a44d';
 const PARCH = '#f0e6c8';
 
@@ -82,10 +82,6 @@ function trim(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: numbe
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 2;
   roundRect(ctx, r.x, r.y, r.w, r.h, rad);
-  ctx.stroke();
-  ctx.strokeStyle = '#c8a44d55';
-  ctx.lineWidth = 1;
-  roundRect(ctx, r.x + 4, r.y + 4, r.w - 8, r.h - 8, Math.max(rad - 4, 2));
   ctx.stroke();
 }
 
@@ -100,9 +96,9 @@ function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: num
   ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 5);
 }
 
-// --- title screen: grass field, pokeball crest, arced fan-logo wordmark ---
+// --- title screen: grass field, poke-ball sprite crest, wordmark ---
 
-export const PIXEL_FONT = '"Press Start 2P", "Courier New", monospace';
+export const PIXEL_FONT = 'monospace';
 
 // Mons standing the ring around the logo — all ids are in ALL_SPRITE_IDS.
 const RING_MONS: [number, number][] = [
@@ -121,73 +117,13 @@ const WILD_MONS: [number, number, number, number][] = [
   [41, 500, 300, 20],  // Zubat flaps by the ring
 ];
 
-function drawField(ctx: CanvasRenderingContext2D) {
-  // flat grass field until the real scenery pass lands
-  ctx.fillStyle = '#3e8e3c';
-  ctx.fillRect(0, 0, W, H);
-
-  // vignette
-  const v = ctx.createRadialGradient(W / 2, H * 0.4, 140, W / 2, H * 0.4, H * 0.75);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,30,0,0.38)');
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, W, H);
-}
-
 function drawRingMons(ctx: CanvasRenderingContext2D, t: number, cx: number, cy: number, rx: number, ry: number) {
   RING_MONS.forEach(([id, size], i) => {
     const a = -Math.PI / 2 + (i / RING_MONS.length) * Math.PI * 2;
     const x = cx + Math.cos(a) * rx;
     const y = cy + Math.sin(a) * ry;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + size * 0.38, size * 0.42, size * 0.15, 0, 0, Math.PI * 2);
-    ctx.fill();
     drawMon(ctx, id, x, y + Math.sin(t * 2 + i * 1.7) * 3 - size * 0.05, size);
   });
-}
-
-function drawCrest(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
-  ctx.fillStyle = 'rgba(0,0,0,0.22)';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + r * 0.92, r * 0.95, r * 0.26, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // lower half
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI);
-  ctx.closePath();
-  ctx.fillStyle = '#f4f4f8';
-  ctx.fill();
-  // upper half
-  const rg = ctx.createLinearGradient(0, cy - r, 0, cy);
-  rg.addColorStop(0, '#ff7070');
-  rg.addColorStop(1, '#d82020');
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, Math.PI, 0);
-  ctx.closePath();
-  ctx.fillStyle = rg;
-  ctx.fill();
-  // shine
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(cx - r * 0.45, cy - r * 0.6, r * 0.28, r * 0.14, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  // band, rim, button
-  ctx.fillStyle = '#20203a';
-  ctx.fillRect(cx - r, cy - r * 0.085, r * 2, r * 0.17);
-  ctx.lineWidth = r * 0.05;
-  ctx.strokeStyle = '#20203a';
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.2, 0, Math.PI * 2);
-  ctx.fillStyle = '#20203a';
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.12, 0, Math.PI * 2);
-  ctx.fillStyle = '#fff';
-  ctx.fill();
 }
 
 // Pixel wordmark — chunky font with a hard offset shadow, fan-game style.
@@ -237,85 +173,31 @@ function pixelText(
   ctx.restore();
 }
 
-const SKIN_TONES = ['#f0c8a0', '#e0a878', '#b87b50', '#8a5a38', '#ffd9b8'];
-const CROWD_SHIRTS = ['#e05050', '#e0a030', '#50b060', '#4090d0', '#8050c0', '#d060a0', '#50c0b0', '#e0e0e0', '#d0d040'];
-
-// A block of tiny spectators — body square + head square, some heads bob.
-// `railOnTop` flips the barrier for the bottom stands (rail faces the field).
-function drawCrowd(ctx: CanvasRenderingContext2D, y0: number, h: number, t: number, railOnTop: boolean) {
-  ctx.fillStyle = '#0e1024';
-  ctx.fillRect(0, y0, W, h);
-  for (let r = 0; r < 4; r++) {
-    const y = y0 + 5 + r * 12;
-    for (let x = 5 + (r % 2) * 7, i = 0; x < W - 8; x += 13, i++) {
-      if (hashSeed(r * 101 + i * 7) < 0.08) continue; // empty seat
-      ctx.fillStyle = CROWD_SHIRTS[Math.floor(hashSeed(r * 53 + i * 13) * CROWD_SHIRTS.length)];
-      ctx.fillRect(x, y + 4, 10, 7);
-      const bob = hashSeed(i * 29 + r) < 0.18 ? Math.round(Math.sin(t * 3 + i * 0.7) * 1.5) : 0;
-      ctx.fillStyle = SKIN_TONES[Math.floor(hashSeed(r * 71 + i * 17) * SKIN_TONES.length)];
-      ctx.fillRect(x + 2, y + bob, 6, 5);
-      if (hashSeed(i * 37 + r * 11) < 0.22) {
-        // trainer cap — brim + crown over the head
-        ctx.fillStyle = CROWD_SHIRTS[Math.floor(hashSeed(i * 43 + r * 7) * CROWD_SHIRTS.length)];
-        ctx.fillRect(x + 1, y + bob - 2, 8, 3);
-      }
-    }
-  }
-  ctx.fillStyle = '#343a70';
-  ctx.fillRect(0, railOnTop ? y0 : y0 + 56, W, 3);
-}
-
-// Stadium frame: night sky + floodlight towers on top, packed stands above
-// and below the field — the Pokémon Arena crowd look.
-function drawStands(ctx: CanvasRenderingContext2D, t: number) {
-  const s = ctx.createLinearGradient(0, 0, 0, 80);
-  s.addColorStop(0, '#070b22');
-  s.addColorStop(1, '#141a44');
-  ctx.fillStyle = s;
-  ctx.fillRect(0, 0, W, 80);
-  for (let i = 0; i < 46; i++) {
-    const a = 0.25 + 0.75 * Math.abs(Math.sin(t * 1.4 + i * 1.7));
-    ctx.fillStyle = `rgba(255,255,255,${(a * 0.9).toFixed(2)})`;
-    ctx.fillRect(hashSeed(i * 11) * W, hashSeed(i * 19) * 74, 2, 2);
-  }
-  for (const sx of [16, 476]) {
-    ctx.fillStyle = '#141736';
-    ctx.fillRect(sx, 10, 48, 44);
-    ctx.strokeStyle = '#3a3f78';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(sx, 10, 48, 44);
-    for (let r = 0; r < 3; r++)
-      for (let c = 0; c < 4; c++) {
-        ctx.fillStyle = 'rgba(255,255,230,0.85)';
-        ctx.fillRect(sx + 6 + c * 10, 16 + r * 12, 6, 6);
-      }
-  }
-  drawCrowd(ctx, 80, 59, t, false);
-  drawCrowd(ctx, 872, H - 872, t, true);
-}
-
 // Wild mons drift around their anchor in a lazy lissajous — never leaves
 // the anchor's range, deterministic, zero state.
 function drawWildMons(ctx: CanvasRenderingContext2D, t: number) {
   WILD_MONS.forEach(([id, ax, ay, range], i) => {
     const x = ax + Math.sin(t * 0.5 + i * 2.3) * range;
     const y = ay + Math.sin(t * 0.7 + i * 1.4) * range * 0.6;
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + 16, 14, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
     drawMon(ctx, id, x, y + Math.sin(t * 3 + i) * 2, 34);
   });
 }
 
 export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number | null) {
-  drawField(ctx);
-  drawStands(ctx, t);
+  // flat grass field until the real scenery pass lands
+  ctx.fillStyle = '#3e8e3c';
+  ctx.fillRect(0, 0, W, H);
   drawWildMons(ctx, t);
 
   const cx = W / 2;
   const cy = 300;
-  drawCrest(ctx, cx, cy, 132);
+  const ball = itemSprite('poke-ball');
+  if (ball) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(ball, cx - 132, cy - 132, 264, 264);
+    ctx.restore();
+  }
   drawRingMons(ctx, t, cx, cy + 8, 210, 168);
 
   ctx.textAlign = 'center';
@@ -458,14 +340,6 @@ export function drawReward(
     ctx.fillStyle = RARITY_COLOR[perk.rarity];
     ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
-    // item sprite on a gold-rimmed plinth
-    ctx.fillStyle = '#0b0e1a';
-    ctx.beginPath();
-    ctx.arc(r.x + r.w / 2, r.y + 66, 26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = GOLD;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
     const img = itemSprite(perk.item);
     if (img) ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
     else {

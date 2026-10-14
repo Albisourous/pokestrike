@@ -64,7 +64,6 @@ interface Unit {
   cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
-  revealed?: boolean; // enemies: flushed out of tall grass — until then they're hidden
   sash: boolean; // focus sash: survive one lethal hit at 1 HP
   pow: number; // role damage multiplier
   rngMul: number; // role super-range multiplier
@@ -185,22 +184,6 @@ interface BallDrop {
   t: number;
   life: number;
 }
-interface Hazard {
-  x: number;
-  y: number;
-  r: number;
-  kind: 'slow' | 'speed' | 'turn' | 'ice';
-  ang: number; // turn pads fling you along this angle
-  armed: boolean;
-}
-interface Ledge {
-  x: number;
-  y: number;
-  ang: number; // the one legal crossing direction — against it it's a wall
-  len: number;
-  armed: boolean; // re-arms once the ball is clear, so each hop sparks once
-}
-
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
 
 const STOP_SPEED = 45;
@@ -275,7 +258,7 @@ export class Battle {
   masterArmed = false; // master ball relic: next KO is a guaranteed catch
   takenMult = 1; // zinc/eviolite: incoming damage multiplier
   foeCdMult = 1; // bright powder: enemy attack-timer multiplier
-  slowImmune = false; // air balloon: tall grass doesn't slow the ball
+  slowImmune = false; // air balloon perk flag — kept for perks.ts; no pads remain to slow the ball
   koHeal = 0; // exp share: heal team this fraction on each KO
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   box: SpeciesDef[] = []; // captured mons — swap in between stages
@@ -294,12 +277,7 @@ export class Battle {
   lastRecruit: SpeciesDef | null = null; // stage's guaranteed catch, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
-  private obstacles: { x: number; y: number; r: number; prop: 'tree' | 'rock' }[];
   private theme: Theme; // current wave's scene — rotates each wave
-  private hazards: Hazard[] = [];
-  private ledges: Ledge[] = []; // one-way jump ledges, RSE-style
-  private pool: { x: number; y: number; rx: number; ry: number } | null = null; // pond/lava region
-  private wasInPool = false; // ball pool-entry edge detect for the splash
 
   constructor(
     public arena: Rect,
@@ -308,9 +286,6 @@ export class Battle {
     private rng: () => number = Math.random,
   ) {
     this.theme = stage.theme;
-    this.setPool();
-    this.obstacles = [];
-    this.genObstacles();
     const n = team.length;
     team.forEach((def, i) => {
       const role = roleOf(def.stats, def.healer);
@@ -366,122 +341,12 @@ export class Battle {
     return this.stage.waves.length;
   }
 
-  // Roll a fresh obstacle layout in the upper field, clear of players.
-  private genObstacles() {
-    this.obstacles = [];
-    const count = 1 + Math.floor(this.rng() * 3);
-    for (let k = 0; k < count; k++) {
-      for (let tries = 0; tries < 8; tries++) {
-        const o = {
-          x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
-          y: this.arena.y + this.arena.h * (0.15 + this.rng() * 0.45),
-          r: this.arena.w * (0.05 + this.rng() * 0.04),
-          // region props: groves and the tree-top sky get trees, cave and
-          // caldera get boulders; a stray of the other kind keeps it organic
-          prop: this.rng() < (this.theme === 'grove' || this.theme === 'sky' ? 0.75 : 0.25)
-            ? ('tree' as const)
-            : ('rock' as const),
-        };
-        if (
-          !this.inPool(o.x, o.y, o.r) &&
-          this.players.every((p) => p.dead || dist(o, p) > o.r + p.r + 30)
-        ) {
-          this.obstacles.push(o);
-          break;
-        }
-      }
-    }
-  }
-
-  // Themed field hazards, upper field, per wave.
-  private genHazards() {
-    const KINDS: Hazard['kind'][] = ['slow', 'speed', 'turn', 'ice'];
-    this.hazards = [];
-    const count = 1 + Math.floor(this.rng() * 2);
-    for (let k = 0; k < count; k++) {
-      for (let tries = 0; tries < 8; tries++) {
-        const hz: Hazard = {
-          x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
-          y: this.arena.y + this.arena.h * (0.15 + this.rng() * 0.55),
-          r: 55 + this.rng() * 25,
-          kind: KINDS[Math.floor(this.rng() * KINDS.length)],
-          ang: this.rng() * Math.PI * 2,
-          armed: true,
-        };
-        if (
-          !this.inPool(hz.x, hz.y, hz.r * 0.7) &&
-          this.players.every((p) => p.dead || dist(hz, p) > hz.r + p.r + 20) &&
-          this.obstacles.every((o) => dist(hz, o) > hz.r + o.r)
-        ) {
-          this.hazards.push(hz);
-          break;
-        }
-      }
-    }
-  }
-
-  // The pool the backdrop paints is fixed at nx .78, ny .2 — mirror it as a
-  // real region. Pond (most themes) only swimmers cross; lava (volcano) only
-  // fire/rock/fliers.
-  private setPool() {
-    this.pool = {
-      x: this.arena.x + this.arena.w * 0.78,
-      y: this.arena.y + this.arena.h * 0.2,
-      rx: this.theme === 'volcano' ? 40 : 42,
-      ry: this.theme === 'volcano' ? 27 : 30,
-    };
-  }
-
-  private canCrossPool(u: Unit) {
-    const t = u.def.type;
-    return this.theme === 'volcano'
-      ? t === 'fire' || t === 'rock' || t === 'flying'
-      : t === 'water' || t === 'flying';
-  }
-
-  private inPool(x: number, y: number, pad = 0) {
-    const w = this.pool;
-    if (!w) return false;
-    const dx = (x - w.x) / (w.rx + pad), dy = (y - w.y) / (w.ry + pad);
-    return dx * dx + dy * dy < 1;
-  }
-
-  // One-way ledges: a dirt bank you can only hop in `ang`'s direction.
-  private genLedges() {
-    this.ledges = [];
-    if (this.rng() < 0.4) return; // some waves get none
-    const n = this.rng() < 0.35 ? 2 : 1;
-    for (let k = 0; k < n; k++) {
-      for (let tries = 0; tries < 8; tries++) {
-        const L: Ledge = {
-          x: this.arena.x + this.arena.w * (0.2 + this.rng() * 0.6),
-          y: this.arena.y + this.arena.h * (0.28 + this.rng() * 0.4),
-          ang: Math.floor(this.rng() * 8) * (Math.PI / 4),
-          len: 95 + this.rng() * 50,
-          armed: true,
-        };
-        if (
-          !this.inPool(L.x, L.y, L.len / 2 + 20) &&
-          this.obstacles.every((o) => dist(L, o) > L.len / 2 + o.r) &&
-          this.players.every((p) => p.dead || dist(L, p) > L.len / 2 + p.r + 40)
-        ) {
-          this.ledges.push(L);
-          break;
-        }
-      }
-    }
-  }
-
   private spawnWave(i: number) {
     this.waveIndex = i;
     this.hpScale = 1 + this.depth * 0.25 + i * 0.12; // wave 3 mobs are +24% tanky
-    // each wave is a new scene — rotate theme, re-roll obstacles + hazards
+    // each wave is a new scene — rotate the flat theme
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
-    this.setPool();
-    this.genObstacles();
-    this.genHazards();
-    this.genLedges();
     // stale super timers mustn't carry hits into the fresh wave
     this.delays = [];
     this.waves = [];
@@ -521,9 +386,6 @@ export class Battle {
       cdMod: 0,
       lastHit: new Map(),
     }));
-    // mons that can't cross the pond/lava shouldn't stand in it
-    for (const e of this.enemies)
-      if (!this.canCrossPool(e) && this.inPool(e.x, e.y, e.r)) this.poolPush(e);
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -686,112 +548,8 @@ export class Battle {
         });
       }
       this.hitWalls(u);
-      for (const o of this.obstacles) {
-        if (this.collide(u, o)) {
-          this.shower(u.x, u.y, 4, '#8a94c8', 160, 'streak');
-        }
-      }
-      // one-way ledges — hop through going `ang`, wall coming back
-      for (const L of this.ledges) {
-        const nx = Math.cos(L.ang), ny = Math.sin(L.ang);
-        const s = (u.x - L.x) * nx + (u.y - L.y) * ny;
-        const t = -(u.x - L.x) * ny + (u.y - L.y) * nx;
-        if (Math.abs(s) > u.r + 14 || Math.abs(t) > L.len / 2 + u.r) {
-          L.armed = true;
-          continue;
-        }
-        const vn = u.vx * nx + u.vy * ny;
-        if (vn < 0 && s > 0 && Math.abs(t) < L.len / 2 + u.r * 0.3 && s < u.r + 5) {
-          u.x += nx * (u.r + 5 - s);
-          u.y += ny * (u.r + 5 - s);
-          u.vx -= (1 + WALL_REST) * vn * nx;
-          u.vy -= (1 + WALL_REST) * vn * ny;
-          this.wallSpark(u.x, u.y, nx, ny);
-          this.shower(u.x, u.y, 4, '#a08050', 140, 'streak');
-        } else if (vn > 0 && Math.abs(s) < u.r && Math.abs(t) < L.len / 2 && L.armed) {
-          L.armed = false; // hopped the ledge — dust puff + a little kick
-          u.vx += nx * 90;
-          u.vy += ny * 90;
-          this.shower(u.x - nx * u.r, u.y - ny * u.r, 7, '#e8d8a8', 180, 'dot');
-          sfx('hit', 1.7);
-        }
-      }
-      // pond / lava — a wall unless this mon can cross it
-      if (this.pool) {
-        const w = this.pool;
-        const rx = w.rx + u.r * 0.55, ry = w.ry + u.r * 0.55;
-        const qx = (u.x - w.x) / rx, qy = (u.y - w.y) / ry;
-        const inside = qx * qx + qy * qy < 1;
-        if (inside && !this.canCrossPool(u)) {
-          const q = Math.hypot(qx, qy) || 1;
-          u.x = w.x + (qx / q) * rx;
-          u.y = w.y + (qy / q) * ry;
-          let nx = qx / rx, ny = qy / ry;
-          const nl = Math.hypot(nx, ny) || 1;
-          nx /= nl;
-          ny /= nl;
-          const vn = u.vx * nx + u.vy * ny;
-          if (vn < 0) {
-            u.vx -= (1 + WALL_REST) * vn * nx;
-            u.vy -= (1 + WALL_REST) * vn * ny;
-          }
-          const wet = this.theme === 'volcano';
-          this.shower(u.x, u.y, 5, wet ? '#ffb060' : '#9df0ff', 170, 'dot');
-          if (!this.wasInPool) sfx('splash');
-        }
-        if (inside && !this.wasInPool && this.canCrossPool(u)) {
-          // swimmer dives in — ring splash + sparkle trail
-          this.burst(u.x, u.y, 30, '#9df0ff', 0.35);
-          sfx('splash');
-        }
-        this.wasInPool = inside;
-      }
-      for (const hz of this.hazards) {
-        const inside = dist(u, hz) < hz.r;
-        if (hz.kind === 'turn') {
-          // warp pad: on entry, fling the ball along the pad's arrow
-          if (!inside) hz.armed = true;
-          else if (hz.armed && u.vx * u.vx + u.vy * u.vy > 3600) {
-            hz.armed = false;
-            const sp = len({ x: u.vx, y: u.vy }) * 1.15;
-            u.vx = Math.cos(hz.ang) * sp;
-            u.vy = Math.sin(hz.ang) * sp;
-            this.burst(u.x, u.y, hz.r * 0.9, '#b86fd8', 0.3);
-            this.shower(u.x, u.y, 8, '#b86fd8', 260, 'streak');
-            this.addShake(3);
-            sfx('zap');
-          }
-        } else if (inside) {
-          if (hz.kind === 'slow') {
-            if (this.slowImmune) continue; // air balloon floats over grass
-            // tall grass: heavy drag + kicked-up leaves
-            const dmp = Math.exp(-4.5 * h);
-            u.vx *= dmp;
-            u.vy *= dmp;
-            if (this.particles.length < MAX_PARTICLES && Math.random() < 0.3)
-              this.particles.push({ x: u.x, y: u.y, vx: -u.vx * 0.2, vy: -u.vy * 0.2 - 40, t: 0.4, life: 0.4, size: 4, color: '#58a848', shape: 'leaf', grav: 200 });
-          } else if (hz.kind === 'ice') {
-            // ice sheet — undo most of the friction, you keep sliding
-            const und = Math.exp(FRICTION * this.frictionMult * h * 0.92);
-            u.vx *= und;
-            u.vy *= und;
-            if (this.particles.length < MAX_PARTICLES && Math.random() < 0.35)
-              this.particles.push({ x: u.x, y: u.y, vx: -u.vx * 0.05, vy: -u.vy * 0.05 - 20, t: 0.4, life: 0.4, size: 3, color: '#c8f0ff', shape: 'streak', grav: 0 });
-          } else {
-            // charge pad: accelerate along current heading
-            const dir = norm({ x: u.vx, y: u.vy });
-            u.vx += dir.x * 2400 * h;
-            u.vy += dir.y * 2400 * h;
-            if (this.particles.length < MAX_PARTICLES && Math.random() < 0.4)
-              this.particles.push({ x: u.x, y: u.y, vx: dir.x * 200, vy: dir.y * 200, t: 0.25, life: 0.25, size: 3, color: '#f8d030', shape: 'streak', grav: 0 });
-          }
-        }
-      }
       for (const e of wave) {
         if (this.enemies !== wave) break;
-        // getting close flushes hidden mons out of the tall grass — regular
-        // foes keep their '?' chip until they take a hit or attack
-        if (this.hidden(e) && dist(u, e) < u.r + e.r + 68) this.reveal(e);
         if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
       }
       for (const p of this.players) {
@@ -855,19 +613,6 @@ export class Battle {
         }
       }
       this.clampToArena(e);
-      for (const o of this.obstacles) this.separate(e, o);
-      // wild mons can't hop ledges — the bank is a wall both ways for them
-      for (const L of this.ledges) {
-        const nx = Math.cos(L.ang), ny = Math.sin(L.ang);
-        const s = (e.x - L.x) * nx + (e.y - L.y) * ny;
-        const t = -(e.x - L.x) * ny + (e.y - L.y) * nx;
-        if (Math.abs(s) < e.r + 4 && Math.abs(t) < L.len / 2 + e.r * 0.5) {
-          const side = s >= 0 ? 1 : -1;
-          e.x += nx * (side * (e.r + 4) - s);
-          e.y += ny * (side * (e.r + 4) - s);
-        }
-      }
-      if (!this.canCrossPool(e) && this.inPool(e.x, e.y, e.r * 0.5)) this.poolPush(e);
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
@@ -965,7 +710,7 @@ export class Battle {
         if (e.dead || w.hits.has(e.uid)) continue;
         if (dist(w, e) > w.r + e.r * 0.5) continue;
         w.hits.add(e.uid);
-        if (!this.losBlocked(w.x, w.y, e.x, e.y)) w.onHit(e);
+        w.onHit(e);
       }
     }
     this.waves = this.waves.filter((w) => w.t > 0);
@@ -1049,40 +794,9 @@ export class Battle {
     return true;
   }
 
-  // An enemy sitting inside a tall-grass pad is concealed until flushed out.
-  private hidden(e: Unit) {
-    return (
-      e.side === 'enemy' &&
-      !e.dead &&
-      !e.revealed &&
-      e.spawnT <= 0 &&
-      this.hazards.some((hz) => hz.kind === 'slow' && dist(e, hz) < hz.r * 0.85)
-    );
-  }
-
-  private reveal(e: Unit) {
-    if (e.revealed) return;
-    e.revealed = true;
-    this.shower(e.x, e.y, 10, '#58a848', 220, 'leaf');
-    this.texts.push({ x: e.x, y: e.y - e.r - 10, text: '!', t: 0.7, color: '#ffd84d', big: true });
-    sfx('hit', 1.6);
-    cry(e.def.id, 0.4); // flushed out of the grass, it cries as it lands
-  }
-
-  // Shove a unit radially out of the pond/lava region.
-  private poolPush(u: Unit) {
-    const w = this.pool;
-    if (!w) return;
-    const dx = u.x - w.x, dy = u.y - w.y;
-    const q = Math.hypot(dx / w.rx, dy / w.ry) || 1;
-    u.x = w.x + (dx / (w.rx * q)) * (w.rx + u.r);
-    u.y = w.y + (dy / (w.ry * q)) * (w.ry + u.r);
-  }
-
   // Central damage path so every source (contact, bump, orb, dot) behaves alike.
   private hurt(e: Unit, dmg: number, color: string, suffix = '') {
     if (e.dead) return;
-    e.revealed = true; // any damage flushes it out of the grass
     let d = dmg;
     if (suffix === '!') d *= 1 + this.belt; // expert belt loves super-effective
     let crit = false;
@@ -1292,14 +1006,11 @@ export class Battle {
       this.addShake(2 * n);
       this.screenFlash(c, 0.07);
     }
-    // rocks give cover: supers can't hit targets they can't see
     const near = (radius: number) =>
-      this.enemies.filter(
-        (e) => !e.dead && dist(p, e) <= radius * p.rngMul + e.r && !this.losBlocked(p.x, p.y, e.x, e.y),
-      );
+      this.enemies.filter((e) => !e.dead && dist(p, e) <= radius * p.rngMul + e.r);
     const nearest = (from: Unit, radius: number) =>
       this.enemies
-        .filter((e) => !e.dead && dist(from, e) <= radius * p.rngMul + e.r && !this.losBlocked(from.x, from.y, e.x, e.y))
+        .filter((e) => !e.dead && dist(from, e) <= radius * p.rngMul + e.r)
         .sort((a, b) => dist(from, a) - dist(from, b))[0];
     const phys = bumpIsPhysical(p.def.type);
     const eff = (e: Unit) => effectiveness(p.def.type, e.def.type);
@@ -1367,10 +1078,7 @@ export class Battle {
         let mult = 1.3;
         for (let i = 0; i < 3; i++) {
           const next = this.enemies
-            .filter(
-              (e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190 * p.rngMul &&
-                !this.losBlocked(from.x, from.y, e.x, e.y),
-            )
+            .filter((e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190 * p.rngMul)
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
           if (!next) break;
           hit.add(next.uid);
@@ -1705,18 +1413,6 @@ export class Battle {
   }
 
 
-  // true if a rock blocks the straight line a→b (cover blocks abilities)
-  private losBlocked(ax: number, ay: number, bx: number, by: number) {
-    const dx = bx - ax, dy = by - ay;
-    const lenSq = dx * dx + dy * dy || 1;
-    for (const o of this.obstacles) {
-      const t = Math.max(0, Math.min(1, ((o.x - ax) * dx + (o.y - ay) * dy) / lenSq));
-      const px = ax + dx * t - o.x, py = ay + dy * t - o.y;
-      if (px * px + py * py < o.r * o.r) return o;
-    }
-    return null;
-  }
-
   // one notch of super charge — burst + sound when it flips to READY so the
   // moment reads whether it came from a shot or a KO
   private chargeUp(p: Unit) {
@@ -1760,7 +1456,6 @@ export class Battle {
     for (const e of this.enemies) {
       e.timer--;
       if (e.timer <= 0) {
-        e.revealed = true; // attacking gives away your hiding spot
         this.pendingAttacks.push(e);
       }
     }
@@ -1785,7 +1480,7 @@ export class Battle {
         sfx('boom');
         buzz([30, 40, 60]);
         for (const p of this.players) {
-          if (!p.dead && dist(e, p) <= R + p.r && !this.losBlocked(e.x, e.y, p.x, p.y)) {
+          if (!p.dead && dist(e, p) <= R + p.r) {
             this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
             if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
           }
@@ -1803,19 +1498,10 @@ export class Battle {
       } else {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
         if (target) {
-          const rock = this.losBlocked(e.x, e.y, target.x, target.y);
-          if (rock) {
-            // shot absorbed by the obstacle — zap fizzles on the rock face
-            const dir = norm({ x: target.x - e.x, y: target.y - e.y });
-            this.bolt(e.x, e.y, rock.x - dir.x * rock.r * 0.5, rock.y - dir.y * rock.r * 0.5, '#8a94c8');
-            this.burst(rock.x - dir.x * rock.r * 0.5, rock.y - dir.y * rock.r * 0.5, 18, '#8a94c8', 0.25);
-            sfx('zap');
-          } else {
-            this.bolt(e.x, e.y, target.x, target.y, '#ffe66d');
-            sfx('zap');
-            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
-            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
-          }
+          this.bolt(e.x, e.y, target.x, target.y, '#ffe66d');
+          sfx('zap');
+          this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+          if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
         }
       }
     }
@@ -2019,166 +1705,6 @@ export class Battle {
     for (const z of this.zaps) this.drawZap(ctx, z);
     for (const b of this.bolts) this.drawBolt(ctx, b);
 
-    // obstacles — flat discs until the real prop pass lands
-    for (const o of this.obstacles) {
-      ctx.fillStyle = 'rgba(0,0,0,0.28)';
-      ctx.beginPath();
-      ctx.ellipse(o.x, o.y + o.r * 0.55, o.r * 0.95, o.r * 0.4, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = o.prop === 'tree' ? '#2e6b2e' : '#7a7568';
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, o.r * 0.9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    }
-
-    // one-way ledges — dirt bank with the cliff face on the blocked side and
-    // chevrons showing the direction you can hop, like the RSE jump ledges
-    for (const L of this.ledges) {
-      ctx.save();
-      ctx.translate(L.x, L.y);
-      ctx.rotate(L.ang); // local +x = allowed direction, strip runs along +y
-      const hl = L.len / 2;
-      ctx.fillStyle = 'rgba(0,0,0,0.2)';
-      ctx.fillRect(-6, -hl + 4, 18, L.len);
-      // flat dirt bank until the real prop pass lands
-      ctx.fillStyle = '#c9a877';
-      ctx.fillRect(-9, -hl, 9, L.len);
-      ctx.fillStyle = '#6b4a26';
-      ctx.fillRect(0, -hl, 8, L.len);
-      // chevrons point the legal hop direction
-      ctx.strokeStyle = '#ffe9b0';
-      ctx.lineWidth = 2.5;
-      ctx.globalAlpha = 0.85;
-      for (let y = -hl + 12; y < hl - 6; y += 26) {
-        ctx.beginPath();
-        ctx.moveTo(2, y - 5);
-        ctx.lineTo(9, y);
-        ctx.lineTo(2, y + 5);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // hazard pads: themed floor zones with a sprite marker on top
-    for (const hz of this.hazards) {
-      ctx.save();
-      if (hz.kind === 'slow') {
-        // tall grass — flat dark patch until the real tuft pass lands
-        ctx.fillStyle = 'rgba(30,60,26,0.4)';
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // something's rustling in there — darker blades shiver
-        if (this.enemies.some((e) => this.hidden(e) && dist(e, hz) < hz.r)) {
-          ctx.strokeStyle = '#1e4020';
-          ctx.lineWidth = 3.5;
-          for (let i = 0; i < 8; i++) {
-            const a = this.time * 6 + i * 0.8;
-            const gx = hz.x + Math.cos(i * 2.4) * hz.r * 0.4;
-            const gy = hz.y + Math.sin(i * 1.9) * hz.r * 0.3;
-            ctx.beginPath();
-            ctx.moveTo(gx - 4, gy + 6);
-            ctx.quadraticCurveTo(gx + Math.sin(a) * 4, gy - 10, gx + 4, gy + 4);
-            ctx.stroke();
-          }
-        }
-      } else if (hz.kind === 'ice') {
-        // ice sheet — flat pale patch under a gloss pass
-        const pulse = 0.85 + Math.sin(this.time * 3) * 0.08;
-        ctx.fillStyle = 'rgba(160,216,239,0.28)';
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.78 * pulse, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#c8f0ff';
-        ctx.lineWidth = 2.5;
-        ctx.globalAlpha = 0.9;
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r * 0.92, hz.r * 0.74, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        // glossy slide streaks
-        ctx.globalAlpha = 0.55;
-        ctx.lineWidth = 3;
-        for (let i = -1; i <= 1; i++) {
-          ctx.beginPath();
-          ctx.moveTo(hz.x - hz.r * 0.6, hz.y + i * hz.r * 0.28 + hz.r * 0.2);
-          ctx.lineTo(hz.x + hz.r * 0.55, hz.y + i * hz.r * 0.28 - hz.r * 0.18);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-        // sparkle
-        ctx.fillStyle = '#fff';
-        const tw = (this.time * 2.2) % 1;
-        ctx.globalAlpha = Math.max(0, 0.8 - tw);
-        ctx.beginPath();
-        ctx.arc(hz.x + hz.r * 0.3, hz.y - hz.r * 0.3, 3 + tw * 4, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      } else if (hz.kind === 'speed') {
-        // charge pad — soft electric glow + pulsing rings + Magnemite
-        const pulse = 0.75 + Math.sin(this.time * 5) * 0.15;
-        ctx.fillStyle = 'rgba(248,208,48,0.14)';
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#f8d030';
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.9;
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.8 * pulse, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 0.4;
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r * 0.55 * pulse, hz.r * 0.44 * pulse, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        // a little lightning bolt marks the pad
-        ctx.fillStyle = '#f8d030';
-        ctx.beginPath();
-        const bx = hz.x, by = hz.y - hz.r * 0.35;
-        ctx.moveTo(bx + 4, by - 16);
-        ctx.lineTo(bx - 8, by + 4);
-        ctx.lineTo(bx, by + 4);
-        ctx.lineTo(bx - 4, by + 18);
-        ctx.lineTo(bx + 10, by - 2);
-        ctx.lineTo(bx + 2, by - 2);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        // warp pad — soft psychic glow + swirl + exit arrow + Abra
-        ctx.fillStyle = 'rgba(150,80,190,0.16)';
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#b86fd8';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 8]);
-        ctx.lineDashOffset = -this.time * 60;
-        ctx.beginPath();
-        ctx.ellipse(hz.x, hz.y, hz.r * 0.9, hz.r * 0.72, 0, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // exit arrow showing where it flings you
-        const ax = hz.x + Math.cos(hz.ang) * hz.r * 0.55;
-        const ay = hz.y + Math.sin(hz.ang) * hz.r * 0.55;
-        ctx.strokeStyle = '#e8c8ff';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(hz.x, hz.y);
-        ctx.lineTo(ax, ay);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(ax - Math.cos(hz.ang - 0.5) * 10, ay - Math.sin(hz.ang - 0.5) * 10);
-        ctx.moveTo(ax, ay);
-        ctx.lineTo(ax - Math.cos(hz.ang + 0.5) * 10, ay - Math.sin(hz.ang + 0.5) * 10);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
 
@@ -2328,50 +1854,23 @@ export class Battle {
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
-    // concealed in tall grass — a rustling dark shape, no timer or HP until
-    // you get close enough to flush it out
-    if (this.hidden(u)) {
-      const pop = 1;
-      ctx.save();
-      ctx.translate(u.x, u.y);
-      ctx.globalAlpha = 0.3 * pop;
-      drawMon(ctx, u.def.id, 0, 0, u.r * 2.6);
-      ctx.restore();
-      ctx.globalAlpha = 1;
-      // flat grass blades thrown over it, swaying — the rustle is the tell
-      const wig = Math.sin(this.time * 9 + u.x) * 2;
-      ctx.strokeStyle = '#2c5a28';
-      ctx.lineWidth = 3;
-      for (let i = -2; i <= 2; i++) {
-        const bx = u.x + i * u.r * 0.45;
-        ctx.beginPath();
-        ctx.moveTo(bx - 4, u.y + u.r * 0.7);
-        ctx.quadraticCurveTo(bx + wig, u.y - u.r * 0.9, bx + 4 + wig, u.y + u.r * 0.5);
-        ctx.stroke();
-      }
-      if (Math.random() < 0.02 && this.particles.length < MAX_PARTICLES)
-        this.particles.push({ x: u.x + (Math.random() - 0.5) * u.r, y: u.y - u.r, vx: (Math.random() - 0.5) * 60, vy: -60, t: 0.5, life: 0.5, size: 4, color: '#58a848', shape: 'leaf', grav: 200 });
-      return;
-    }
     const size = u.r * 2.6;
     // wave entry: staggered delay, then a quick overshoot zoom — the
     // Essentials appear-anim feel
     const pop = u.spawnT <= 0 ? 1 : 1 - Math.min(u.spawnT, 0.3) / 0.3;
     const sc = 0.2 + 0.8 * (1 + 2.7 * Math.pow(pop - 1, 3) + 1.7 * Math.pow(pop - 1, 2));
 
-    // team base ring — gold allies, red enemies, gold elites, readable at a glance
+    // thin ring marks bosses and elites — the fat team pads are gone
     const elite = u.side === 'enemy' && !u.boss && ELITES.includes(u.def);
-    ctx.globalAlpha = pop;
-    ctx.fillStyle = u.side === 'player' ? 'rgba(248,208,48,0.30)' : elite ? 'rgba(255,216,77,0.22)' : 'rgba(255,80,80,0.22)';
-    ctx.beginPath();
-    ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = u.side === 'player' ? '#f8d030' : elite ? '#ffd84d' : '#ff5050';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    if (u.boss || elite) {
+      ctx.globalAlpha = pop;
+      ctx.strokeStyle = u.boss ? '#ff5050' : '#ffd84d';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     // glow under units about to act
     if (u.side === 'enemy' && u.timer <= 1) {
@@ -2433,20 +1932,19 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
       ctx.fillText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
-      // typing stays unknown until the mon is flushed out — a '?' chip that
-      // flips to its type the first time it takes a hit or attacks
+      // type chip — top-left of the sprite
       const tx = u.x - u.r - 4;
       const ty = u.y - u.r + 2;
-      ctx.fillStyle = u.revealed ? TYPE_COLOR[u.def.type] : '#101430';
-      ctx.strokeStyle = u.revealed ? '#0a0e20' : '#5a6284';
+      ctx.fillStyle = TYPE_COLOR[u.def.type];
+      ctx.strokeStyle = '#0a0e20';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(tx, ty, 10, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.font = `7px ${PIXEL_FONT}`;
-      ctx.fillStyle = u.revealed ? '#fff' : '#8890b8';
-      ctx.fillText(u.revealed ? u.def.type.slice(0, 2).toUpperCase() : '?', tx, ty + 3);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(u.def.type.slice(0, 2).toUpperCase(), tx, ty + 3);
     } else {
       // charge pips: one dot per shot of charge around the mon — dark dots
       // are charge still owed, type-colored dots are earned, all-gold = READY
@@ -2530,16 +2028,15 @@ export class Battle {
     const color = TYPE_COLOR[u.def.type];
     const a = this.arena;
 
-    // predicted path: one bounce worth — banking off walls + rocks,
-    // stopping at the first contact. Any further is noise. Cached on a
-    // quantized signature; the ping-pong frac churns it while held, but it
-    // still skips recomputing on frames where nothing moved.
+    // predicted path: one bounce worth — banking off walls, stopping at the
+    // first contact. Any further is noise. Cached on a quantized signature;
+    // the ping-pong frac churns it while held, but it still skips
+    // recomputing on frames where nothing moved.
     const sig = [
       Math.round(this.dragNow.x / 6),
       Math.round(this.dragNow.y / 6),
       Math.round(frac * 25),
       this.enemies.map((e) => `${Math.round(e.x / 10)},${Math.round(e.y / 10)},${e.dead ? 0 : 1}`).join(';'),
-      this.obstacles.length,
     ].join('|');
     if (sig !== this.aimCache.sig) {
       this.aimCache.sig = sig;
@@ -2562,42 +2059,9 @@ export class Battle {
         else if (sx + u.r > a.x + a.w) { sx = a.x + a.w - u.r; svx = -svx * WALL_REST; bounced = true; }
         if (sy - u.r < a.y) { sy = a.y + u.r; svy = -svy * WALL_REST; bounced = true; }
         else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * WALL_REST; bounced = true; }
-        for (const o of this.obstacles) {
-          const d = Math.hypot(sx - o.x, sy - o.y);
-          const rr = u.r + o.r;
-          if (d >= rr || d === 0) continue;
-          const nx = (o.x - sx) / d, ny = (o.y - sy) / d;
-          sx = o.x - nx * rr;
-          sy = o.y - ny * rr;
-          const vn = svx * nx + svy * ny;
-          if (vn > 0) {
-            svx -= (1 + UNIT_REST) * vn * nx;
-            svy -= (1 + UNIT_REST) * vn * ny;
-          }
-          bounced = true;
-        }
-        // ledges + pool play by the same rules in the preview — a wall is a wall
-        for (const L of this.ledges) {
-          const nx = Math.cos(L.ang), ny = Math.sin(L.ang);
-          const s = (sx - L.x) * nx + (sy - L.y) * ny;
-          const t = -(sx - L.x) * ny + (sy - L.y) * nx;
-          if (s > 0 && s < u.r + 5 && Math.abs(t) < L.len / 2 + u.r * 0.3 && svx * nx + svy * ny < 0) {
-            sx += nx * (u.r + 5 - s);
-            sy += ny * (u.r + 5 - s);
-            const vn = svx * nx + svy * ny;
-            svx -= (1 + WALL_REST) * vn * nx;
-            svy -= (1 + WALL_REST) * vn * ny;
-            bounced = true;
-          }
-        }
-        if (this.pool && !this.canCrossPool(u)) {
-          const w = this.pool;
-          const qx = (sx - w.x) / (w.rx + u.r * 0.55), qy = (sy - w.y) / (w.ry + u.r * 0.55);
-          if (qx * qx + qy * qy < 1) { bounced = true; break sim; }
-        }
         for (const e of this.enemies)
           if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) {
-            if (!this.hidden(e)) hit = e; // concealed mons don't give a lock-on
+            hit = e;
             break sim;
           }
         // allies aren't checked — the ball passes through them, and figuring

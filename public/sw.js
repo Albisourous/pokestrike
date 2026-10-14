@@ -1,4 +1,4 @@
-const CACHE = 'pokestrike-v8';
+const CACHE = 'pokestrike-v9';
 const CORE = ['./', 'index.html', 'manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
