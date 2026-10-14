@@ -323,7 +323,8 @@ export class Battle {
         if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
       }
       for (const p of this.players) {
-        if (!p.dead && p !== u && this.collide(u, p)) this.bumpAlly(p);
+        // pass through teammates — touching them still fires their bump attack
+        if (!p.dead && p !== u && dist(u, p) < u.r + p.r) this.bumpAlly(p);
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
