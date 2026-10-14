@@ -86,6 +86,7 @@ canvas.addEventListener('pointerdown', (e) => {
       scene = 'draft';
     }
   } else if (scene === 'draft') {
+    if (draft.picked.length >= DRAFT_ROUNDS) return;
     const offers = draft.order.slice(draft.picked.length * 3, draft.picked.length * 3 + 3);
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
