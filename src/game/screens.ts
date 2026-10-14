@@ -28,8 +28,7 @@ export function draftCardRect(i: number) {
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
-export const DAILY_BTN = { x: W / 2 - 140, y: 640, w: 280, h: 64 };
-export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
+export const FREE_BTN = { x: W / 2 - 140, y: 680, w: 280, h: 64 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -84,138 +83,232 @@ function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: num
   ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 7);
 }
 
-export function drawTitle(
+// --- title screen: grass field, pokeball crest, arced fan-logo wordmark ---
+
+const TITLE_FONT = '"Arial Black", "Helvetica Neue", Arial, sans-serif';
+
+// Mons standing the ring around the logo — all ids are in ALL_SPRITE_IDS.
+const RING_MONS: [number, number][] = [
+  [143, 78], // Snorlax anchors the top
+  [149, 56], [6, 58], [130, 62], [150, 58], [94, 50],
+  [76, 54], [3, 56], [9, 54], [68, 54], [59, 56], [131, 56],
+];
+
+// Wild mons roaming the field edges — the PokéSurvivor "alive world" feel.
+// [id, anchorX, anchorY, wander range]
+const WILD_MONS: [number, number, number, number][] = [
+  [19, 80, 120, 26],   // Rattata skitters top-left
+  [16, 470, 110, 30],  // Pidgey hops top-right
+  [43, 70, 560, 22],   // Oddish pokes up mid-left
+  [52, 480, 580, 24],  // Meowth prowls mid-right
+  [41, 500, 300, 20],  // Zubat flaps by the ring
+];
+
+function drawField(ctx: CanvasRenderingContext2D) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#57a53e');
+  g.addColorStop(0.55, '#4d9a37');
+  g.addColorStop(1, '#3c7f2b');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  // mowing stripes
+  ctx.fillStyle = 'rgba(255,255,255,0.045)';
+  for (let i = 0; i < 6; i++) ctx.fillRect(0, i * 175, W, 88);
+  // speckles and tufts
+  for (let i = 0; i < 140; i++) {
+    ctx.fillStyle = i % 3 === 0 ? 'rgba(0,50,0,0.10)' : 'rgba(255,255,255,0.06)';
+    ctx.fillRect(hashSeed(i * 31 + 7) * W, hashSeed(i * 57 + 3) * H, 2.5, 2.5);
+  }
+  // vignette
+  const v = ctx.createRadialGradient(W / 2, H * 0.4, 140, W / 2, H * 0.4, H * 0.75);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,30,0,0.38)');
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function drawSparkles(ctx: CanvasRenderingContext2D, t: number) {
+  for (let i = 0; i < 14; i++) {
+    const s = 5 + hashSeed(i * 13) * 6;
+    ctx.save();
+    ctx.translate(hashSeed(i * 97 + 11) * W, hashSeed(i * 61 + 29) * H);
+    ctx.rotate(t * 0.8 + i);
+    ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(t * 1.8 + i * 2.1));
+    ctx.fillStyle = '#ffe86b';
+    ctx.beginPath();
+    for (let k = 0; k < 4; k++) {
+      ctx.moveTo(0, 0);
+      ctx.lineTo(s * 0.22, -s * 0.22);
+      ctx.lineTo(0, -s);
+      ctx.lineTo(-s * 0.22, -s * 0.22);
+      ctx.closePath();
+      ctx.rotate(Math.PI / 2);
+    }
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawRingLine(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, t: number) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([18, 14]);
+  ctx.lineDashOffset = t * 20;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRingMons(ctx: CanvasRenderingContext2D, t: number, cx: number, cy: number, rx: number, ry: number) {
+  RING_MONS.forEach(([id, size], i) => {
+    const a = -Math.PI / 2 + (i / RING_MONS.length) * Math.PI * 2;
+    const x = cx + Math.cos(a) * rx;
+    const y = cy + Math.sin(a) * ry;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + size * 0.38, size * 0.42, size * 0.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawMon(ctx, id, x, y + Math.sin(t * 2 + i * 1.7) * 3 - size * 0.05, size);
+  });
+}
+
+function drawCrest(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.fillStyle = 'rgba(0,0,0,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + r * 0.92, r * 0.95, r * 0.26, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // lower half
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI);
+  ctx.closePath();
+  ctx.fillStyle = '#f4f4f8';
+  ctx.fill();
+  // upper half
+  const rg = ctx.createLinearGradient(0, cy - r, 0, cy);
+  rg.addColorStop(0, '#ff7070');
+  rg.addColorStop(1, '#d82020');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, Math.PI, 0);
+  ctx.closePath();
+  ctx.fillStyle = rg;
+  ctx.fill();
+  // shine
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.beginPath();
+  ctx.ellipse(cx - r * 0.45, cy - r * 0.6, r * 0.28, r * 0.14, -0.5, 0, Math.PI * 2);
+  ctx.fill();
+  // band, rim, button
+  ctx.fillStyle = '#20203a';
+  ctx.fillRect(cx - r, cy - r * 0.085, r * 2, r * 0.17);
+  ctx.lineWidth = r * 0.05;
+  ctx.strokeStyle = '#20203a';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = '#20203a';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.12, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+}
+
+// Letters fan out along a dipped baseline — the classic fan-logo look.
+function logoWord(
   ctx: CanvasRenderingContext2D,
-  t: number,
-  best: number | null,
-  streak: number,
-  dailyDone: boolean,
+  text: string,
+  cx: number,
+  baseY: number,
+  size: number,
+  dip: number,
+  tilt: number,
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'grove', t, { nx: 0.12, ny: 0.9 });
+  ctx.save();
+  ctx.font = `900 ${size}px ${TITLE_FONT}`;
+  const chars = [...text];
+  const gap = size * 0.04;
+  const widths = chars.map((c) => ctx.measureText(c).width);
+  const total = widths.reduce((a, b) => a + b, 0) + gap * (chars.length - 1);
+  const x0 = cx - total / 2;
+  let x = x0;
+  chars.forEach((ch, i) => {
+    const t01 = total ? (x + widths[i] / 2 - x0) / total : 0.5;
+    ctx.save();
+    ctx.translate(x, baseY + Math.pow(Math.abs(2 * t01 - 1), 1.4) * dip);
+    ctx.rotate((t01 - 0.5) * tilt);
+    ctx.transform(1, 0, -0.14, 1, 0, 0);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = size * 0.18;
+    ctx.strokeStyle = '#20386e';
+    ctx.strokeText(ch, 0, 0);
+    const lg = ctx.createLinearGradient(0, -size, 0, 0);
+    lg.addColorStop(0, '#fff3a0');
+    lg.addColorStop(0.45, '#ffcb05');
+    lg.addColorStop(1, '#f09c1c');
+    ctx.fillStyle = lg;
+    ctx.fillText(ch, 0, 0);
+    ctx.restore();
+    x += widths[i] + gap;
+  });
+  ctx.restore();
+}
+
+// Wild mons drift around their anchor in a lazy lissajous — never leaves
+// the anchor's range, deterministic, zero state.
+function drawWildMons(ctx: CanvasRenderingContext2D, t: number) {
+  WILD_MONS.forEach(([id, ax, ay, range], i) => {
+    const x = ax + Math.sin(t * 0.5 + i * 2.3) * range;
+    const y = ay + Math.sin(t * 0.7 + i * 1.4) * range * 0.6;
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 16, 14, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    drawMon(ctx, id, x, y + Math.sin(t * 3 + i) * 2, 34);
+  });
+}
+
+export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number | null) {
+  drawField(ctx);
+  drawSparkles(ctx, t);
+  drawWildMons(ctx, t);
+
+  const cx = W / 2;
+  const cy = 350;
+  drawRingLine(ctx, cx, cy + 12, 214, 180, t);
+  drawCrest(ctx, cx, cy, 140);
+  drawRingMons(ctx, t, cx, cy + 12, 214, 180);
 
   ctx.textAlign = 'center';
-  ctx.font = `bold 56px ${SERIF}`;
-  ctx.fillStyle = '#f8d030';
-  ctx.strokeStyle = '#2a3560';
-  ctx.lineWidth = 8;
-  ctx.strokeText('POKÉSTRIKE', W / 2, 250);
-  ctx.fillText('POKÉSTRIKE', W / 2, 250);
+  logoWord(ctx, 'POKÉ', cx, cy - 52, 42, 7, 0.4);
+  logoWord(ctx, 'STRIKE', cx, cy + 112, 88, 15, 0.5);
 
-  // gold rule lines flanking the tagline, conquest-style
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 1.5;
-  for (const y of [288, 292]) {
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - 170, y);
-    ctx.lineTo(W / 2 + 170, y);
-    ctx.stroke();
-  }
-  ctx.font = '16px system-ui';
-  ctx.fillStyle = '#4a6238';
-  ctx.fillText('pull back. launch. bounce.', W / 2, 278);
+  ctx.font = `italic 19px ${SERIF}`;
+  ctx.fillStyle = PARCH;
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 5;
+  ctx.fillText('pull back. launch. bounce.', cx, 618);
+  ctx.shadowBlur = 0;
 
-  // mini-arena diorama: the game in one frame
-  const D = { x: 55, y: 320, w: 430, h: 280 };
-  ctx.save();
-  roundRect(ctx, D.x, D.y, D.w, D.h, 14);
-  ctx.clip();
-  drawBackdrop(ctx, D, 14, 'grove', t, null);
-  // a sleeping Snorlax blocking the route + tall grass tufts
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.beginPath();
-  ctx.ellipse(D.x + 352, D.y + 212, 42, 15, 0, 0, Math.PI * 2);
-  ctx.fill();
-  drawMon(ctx, 143, D.x + 352, D.y + 178, 92); // Snorlax = the obstacle
-  // grass patch: blades, not blobs
-  ctx.strokeStyle = '#2c5a28';
-  ctx.lineWidth = 3;
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    const bx = D.x + 90 + Math.cos(a) * 46;
-    const by = D.y + 92 + Math.sin(a) * 34;
-    ctx.beginPath();
-    ctx.moveTo(bx - 4, by);
-    ctx.quadraticCurveTo(bx, by - 13, bx + 4, by);
-    ctx.stroke();
-  }
-  ctx.strokeStyle = '#58a848';
-  ctx.lineWidth = 2.5;
-  for (let i = 0; i < 14; i++) {
-    const bx = D.x + 90 + (hashSeed(i * 7 + 1) - 0.5) * 70;
-    const by = D.y + 92 + (hashSeed(i * 13 + 4) - 0.5) * 46;
-    ctx.beginPath();
-    ctx.moveTo(bx - 3, by);
-    ctx.quadraticCurveTo(bx, by - 10, bx + 3, by);
-    ctx.stroke();
-  }
-  drawMon(ctx, 43, D.x + 91, D.y + 65, 38); // Oddish in the grass
-  // enemies with capture rings
-  const foes: [number, number, number, number][] = [
-    [94, D.x + 300, D.y + 80, 0.6],   // Gengar, 60% caught
-    [66, D.x + 180, D.y + 60, 0.25],  // Machop
-    [74, D.x + 360, D.y + 130, 0.85], // Geodude nearly caught
-  ];
-  for (const [id, fx, fy, pct] of foes) {
-    const bob = Math.sin(t * 2.4 + fx) * 4;
-    drawMon(ctx, id, fx, fy + bob, 48);
-    ctx.strokeStyle = '#9df0ff';
-    ctx.lineWidth = 2.5;
-    ctx.globalAlpha = 0.8;
-    ctx.beginPath();
-    ctx.arc(fx, fy + bob, 32, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-  // floating damage + combo text
-  ctx.font = 'bold 18px system-ui';
-  ctx.fillStyle = '#ffd84d';
-  ctx.fillText('24!', D.x + 300, D.y + 38 + Math.sin(t * 3) * 4);
-  ctx.fillStyle = '#f8d030';
-  ctx.fillText(`COMBO ×${1 + Math.floor(t % 3)}`, D.x + 90, D.y + 30 + Math.sin(t * 2.2) * 4);
-  // launched Pikachu: trail dots, dashed aim arc, styler rings
-  const px = D.x + 110 + Math.sin(t * 1.4) * 30;
-  const py = D.y + 200;
-  ctx.fillStyle = '#f8d03088';
-  for (let i = 1; i <= 5; i++) {
-    ctx.globalAlpha = 0.6 - i * 0.1;
-    ctx.beginPath();
-    ctx.arc(px - i * 16, py + i * 7, 6 - i * 0.7, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-  drawMon(ctx, 25, px, py, 52);
-  for (const [rr, sp] of [[34, 2], [42, -1.4]] as const) {
-    ctx.strokeStyle = '#9df0ff';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.7;
-    ctx.setLineDash([12, 8]);
-    ctx.lineDashOffset = t * 50 * sp;
-    ctx.beginPath();
-    ctx.arc(px, py, rr, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.setLineDash([]);
-  }
-  ctx.restore();
-  // gold frame over the diorama
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
-  roundRect(ctx, D.x, D.y, D.w, D.h, 14);
-  ctx.stroke();
   // the loop, in one line
   ctx.font = 'bold 13px system-ui';
-  ctx.fillStyle = '#3c4c30';
-  ctx.fillText('DRAFT  ·  LAUNCH  ·  COMBO  ·  CAPTURE  ·  RELICS', W / 2, 630);
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 4;
+  ctx.fillText('DRAFT  ·  LAUNCH  ·  COMBO  ·  CAPTURE  ·  RELICS', cx, 650);
+  ctx.shadowBlur = 0;
 
-  button(ctx, DAILY_BTN, dailyDone ? 'DAILY · CLEARED' : 'DAILY STRIKE', true);
   button(ctx, FREE_BTN, 'FREE PLAY', true);
 
   ctx.font = '16px system-ui';
-  ctx.fillStyle = '#8890b8';
-  const stats: string[] = [];
-  if (streak > 0) stats.push(`streak ${streak}`);
-  if (best !== null) stats.push(`best clear ${best.toFixed(1)}s`);
-  ctx.fillText(stats.join('  ·  '), W / 2, 830);
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 4;
+  if (best !== null) ctx.fillText(`best clear ${best.toFixed(1)}s`, cx, 830);
+  ctx.shadowBlur = 0;
 }
 
 export function drawDraft(

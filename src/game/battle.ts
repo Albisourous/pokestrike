@@ -210,6 +210,7 @@ export class Battle {
   private bolts: Bolt[] = []; // forked lightning
   private ghosts: Ghost[] = []; // KO'd sprites spinning out
   private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
+  private scorch: { x: number; y: number; r: number; a: number }[] = []; // battle scars on the field
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods + endless depth
@@ -535,7 +536,10 @@ export class Battle {
       }
       this.hitWalls(u);
       for (const o of this.obstacles) {
-        if (this.collide(u, o)) this.shower(u.x, u.y, 4, '#8a94c8', 160, 'streak');
+        if (this.collide(u, o)) {
+          this.shower(u.x, u.y, 4, '#8a94c8', 160, 'streak');
+          this.bruise(u.x, u.y, len({ x: u.vx, y: u.vy }));
+        }
       }
       for (const hz of this.hazards) {
         const inside = dist(u, hz) < hz.r;
@@ -710,25 +714,38 @@ export class Battle {
     this.orbs = this.orbs.filter((o) => o.t > 0);
   }
 
+  // Pokémon Arena touch: hard impacts bruise the field — a dark scorch
+  // patch that stays for the whole battle.
+  private bruise(x: number, y: number, speed: number) {
+    if (speed < 320) return;
+    this.scorch.push({ x, y, r: 14 + Math.min(speed / 60, 22), a: Math.min(speed / 900, 0.4) });
+    if (this.scorch.length > 36) this.scorch.shift();
+  }
+
   private hitWalls(u: Unit) {
     const a = this.arena;
+    const speed = len({ x: u.vx, y: u.vy });
     if (u.x - u.r < a.x) {
       u.x = a.x + u.r;
       u.vx = -u.vx * WALL_REST;
       this.wallSpark(u.x - u.r, u.y, 1, 0);
+      this.bruise(u.x - u.r, u.y, speed);
     } else if (u.x + u.r > a.x + a.w) {
       u.x = a.x + a.w - u.r;
       u.vx = -u.vx * WALL_REST;
       this.wallSpark(u.x + u.r, u.y, -1, 0);
+      this.bruise(u.x + u.r, u.y, speed);
     }
     if (u.y - u.r < a.y) {
       u.y = a.y + u.r;
       u.vy = -u.vy * WALL_REST;
       this.wallSpark(u.x, u.y - u.r, 0, 1);
+      this.bruise(u.x, u.y - u.r, speed);
     } else if (u.y + u.r > a.y + a.h) {
       u.y = a.y + a.h - u.r;
       u.vy = -u.vy * WALL_REST;
       this.wallSpark(u.x, u.y + u.r, 0, -1);
+      this.bruise(u.x, u.y + u.r, speed);
     }
   }
 
@@ -787,6 +804,7 @@ export class Battle {
     this.loops.push({ x: e.x, y: e.y, r: e.r + 12, t: 0.5, life: 0.5, color: '#9df0ff' });
     if (e.hp <= 0) {
       e.dead = true;
+      this.bruise(e.x, e.y, 700); // a mon went down here — the field remembers
       // faint anim: the sprite spins out and fades while the rings land
       this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: e.boss ? 0.8 : 0.45, life: e.boss ? 0.8 : 0.45 });
       sfx('ko');
@@ -1471,6 +1489,14 @@ export class Battle {
     for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const z of this.zaps) this.drawZap(ctx, z);
     for (const b of this.bolts) this.drawBolt(ctx, b);
+
+    // battle scars: scorched patches under everything, persisting the wave
+    for (const s of this.scorch) {
+      ctx.fillStyle = `rgba(20,16,8,${s.a})`;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, s.r, s.r * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // obstacles are the blockers themselves — a sleeping Snorlax, a coiled
     // Onix — real sprites on a soft ground shadow, no polygon blobs

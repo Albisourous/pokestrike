@@ -3,7 +3,6 @@ import { startLoop } from './core/loop';
 import { unlockAudio, sfx, cry } from './core/audio';
 import { loadAll, loadItem } from './core/assets';
 import { vec } from './core/vec';
-import { dateSeed, mulberry32 } from './core/rng';
 import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS } from './game/data';
@@ -21,7 +20,6 @@ import {
   teamSlotRect,
   RETRY_BTN,
   SHARE_BTN,
-  DAILY_BTN,
   FREE_BTN,
   inRect,
 } from './game/screens';
@@ -29,36 +27,29 @@ import type { RunResult, ShareGrid } from './game/screens';
 import type { PokeType } from './game/types';
 
 type Scene = 'loading' | 'title' | 'draft' | 'battle' | 'result';
-type Mode = 'daily' | 'free';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
 
 const ARENA = { x: 24, y: 110, w: W - 48, h: H - 190 };
 const BEST_KEY = 'pokestrike_best_clear';
-const STREAK_KEY = 'pokestrike_streak';
-const DAILY_KEY = 'pokestrike_daily_last';
+
+const randSeed = () => (Math.random() * 2 ** 31) | 0;
 
 let scene: Scene = 'loading';
-let mode: Mode = 'free';
 let battle: Battle | null = null;
 let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
-let stage = makeStage(dateSeed());
-let runRng: () => number = Math.random; // daily runs share one seeded stream
+let stage = makeStage(randSeed());
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
 let shareText = '';
 let best: number | null = null;
-let streak = 0;
-let dailyDone = false;
 let t = 0;
 
 try {
   const raw = localStorage.getItem(BEST_KEY);
   best = raw === null ? null : Number(raw);
-  streak = Number(localStorage.getItem(STREAK_KEY) ?? 0) || 0;
-  dailyDone = Number(localStorage.getItem(DAILY_KEY)) === dateSeed();
 } catch {
   // storage unavailable
 }
@@ -91,7 +82,7 @@ function toLogical(e: PointerEvent) {
   return vec((e.clientX - r.left - ox) / scale, (e.clientY - r.top - oy) / scale);
 }
 
-// Wordle-style emoji grid for sharing daily results.
+// Wordle-style emoji grid for sharing results.
 const TYPE_SQ: Record<PokeType, string> = {
   fire: '🟥', water: '🟦', grass: '🟩', electric: '🟨', psychic: '🟪',
   rock: '🟫', poison: '🟪', normal: '⬜', flying: '🟦', fighting: '🟧',
@@ -104,6 +95,26 @@ function buildShare(b: Battle, won: boolean) {
     '🟩'.repeat(cleared) + (won ? '' : '🟥') + '⬛'.repeat(b.waveCount - cleared - (won ? 0 : 1));
   const team = draft.picked.map((i) => TYPE_SQ[ROSTER[i].type]).join('');
   return { waves, team, copied: false };
+}
+
+// Offers for the current round — never re-offer a species already on the
+// team; top up from unpicked species when the deal runs dry.
+function draftOffers(): number[] {
+  const offers = draft.order
+    .slice(draft.picked.length * 3)
+    .filter((i) => !draft.picked.includes(i))
+    .slice(0, 3);
+  if (offers.length < 3) {
+    const extra = ROSTER.map((_, i) => i).filter(
+      (i) => !draft.picked.includes(i) && !offers.includes(i),
+    );
+    for (let i = extra.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [extra[i], extra[j]] = [extra[j], extra[i]];
+    }
+    offers.push(...extra.slice(0, 3 - offers.length));
+  }
+  return offers;
 }
 
 async function shareResult() {
@@ -132,28 +143,22 @@ canvas.addEventListener('pointerdown', (e) => {
   unlockAudio(); // first gesture spins up the synth
   const p = toLogical(e);
   if (scene === 'title') {
-    if (inRect(p.x, p.y, DAILY_BTN) || inRect(p.x, p.y, FREE_BTN)) {
+    if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
-      mode = inRect(p.x, p.y, DAILY_BTN) ? 'daily' : 'free';
-      // daily drafts are seeded: everyone sees the same offers that day
-      runRng = mode === 'daily' ? mulberry32(dateSeed()) : Math.random;
-      draft = { order: draftOrder(runRng), picked: [] };
-      stage = makeStage(
-        mode === 'daily' ? dateSeed() : (Math.random() * 2 ** 31) | 0,
-        mode === 'daily' ? 'Daily Strike' : undefined,
-      );
+      draft = { order: draftOrder(Math.random), picked: [] };
+      stage = makeStage(randSeed());
       scene = 'draft';
     }
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
-    const offers = draft.order.slice(draft.picked.length * 3, draft.picked.length * 3 + 3);
+    const offers = draftOffers();
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       sfx('ui');
       cry(ROSTER[offers[i]].id, 0.5); // picked mon calls out
       draft.picked.push(offers[i]);
       if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, runRng, mode === 'free');
+        battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, Math.random, true);
         scene = 'battle';
       }
       return;
@@ -221,30 +226,21 @@ function update(dt: number) {
       };
       share = buildShare(battle, result.won);
       if (result.won) {
-        if (mode === 'daily') {
-          const seed = dateSeed();
-          const yesterday = dateSeed(new Date(Date.now() - 86400000));
-          const last = Number(localStorage.getItem(DAILY_KEY)) || 0;
-          if (last !== seed) streak = last === yesterday ? streak + 1 : 1;
-          dailyDone = true;
-          resultExtra = `daily streak: ${streak}`;
-        } else if (best === null || result.time < best) {
+        if (best === null || result.time < best) {
           best = result.time;
         }
         try {
           localStorage.setItem(BEST_KEY, String(best));
-          localStorage.setItem(STREAK_KEY, String(streak));
-          localStorage.setItem(DAILY_KEY, String(dailyDone ? dateSeed() : 0));
         } catch {
           // storage unavailable
         }
-      } else if (mode === 'free') {
+      } else {
         resultExtra = `reached depth ${battle.depth + 1}`;
       }
       shareText = [
         `Pokéstrike ${stage.name}`,
         share.waves,
-        `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${mode === 'daily' ? ` · 🔥 streak ${streak}` : ''}${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
+        `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
         share.team,
         'https://albisourous.github.io/pokestrike/',
       ].join('\n');
@@ -271,12 +267,10 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, best, streak, dailyDone);
+      drawTitle(ctx, t, best);
       break;
     case 'draft': {
-      const offers = draft.order
-        .slice(draft.picked.length * 3, draft.picked.length * 3 + 3)
-        .map((i) => ROSTER[i]);
+      const offers = draftOffers().map((i) => ROSTER[i]);
       drawDraft(
         ctx,
         offers,

@@ -8,9 +8,3 @@ export function mulberry32(seed: number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-
-// UTC date so every player worldwide gets the same daily at the same
-// moment; rolls over at UTC midnight.
-export function dateSeed(d = new Date()): number {
-  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
-}
