@@ -13,7 +13,8 @@ Vite dev server, 540×960 letterboxed logical space, custom circle physics.
 ## Layout
 
 - `src/core/` — engine plumbing: `vec.ts` (vector math), `loop.ts` (rAF loop), `assets.ts` (sprite cache)
-- `src/game/data.ts` — all content: roster stats, enemy stats, stage waves (normalized arena coords)
+- `src/game/data.ts` — all content: roster/enemy species with canonical base stats, stage waves (normalized arena coords), daily-stage generator
+- `src/game/stats.ts` — stat-to-mechanic formulas (Atk/Def = physical, SpA/SpD = special, Spe = movement)
 - `src/game/types.ts` — Pokémon type chart + colors
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering
 - `src/game/screens.ts` — title / team-select / result drawing + hit rects

@@ -125,7 +125,11 @@ export function drawSelect(ctx: CanvasRenderingContext2D, picks: number[], stage
     ctx.fillText(def.name, r.x + r.w / 2, r.y + 96);
     ctx.font = '11px system-ui';
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()}  ${def.atk} ATK`, r.x + r.w / 2, r.y + 114);
+    ctx.fillText(
+      `${def.type.toUpperCase()}  ATK ${def.stats.atk} · SPE ${def.stats.spe}`,
+      r.x + r.w / 2,
+      r.y + 114,
+    );
 
     if (picked) {
       ctx.fillStyle = TYPE_COLOR[def.type];

@@ -2,6 +2,18 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
 import { SpeciesDef, StageDef } from './data';
 import { effectiveness, TYPE_COLOR } from './types';
+import {
+  playerHp,
+  enemyHp,
+  bossHp,
+  enemyDrift,
+  launchMult,
+  physDamage,
+  specDamage,
+  bumpIsPhysical,
+  zapPower,
+  blastPower,
+} from './stats';
 
 export interface Rect {
   x: number;
@@ -121,8 +133,8 @@ export class Battle {
         vx: 0,
         vy: 0,
         r: 26,
-        hp: def.hp,
-        maxHp: def.hp,
+        hp: playerHp(def.stats),
+        maxHp: playerHp(def.stats),
         timer: 0,
         drift: 0,
         boss: false,
@@ -154,10 +166,10 @@ export class Battle {
       vx: 0,
       vy: 0,
       r: s.boss ? 46 : 26,
-      hp: s.def.hp,
-      maxHp: s.def.hp,
+      hp: s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats),
+      maxHp: s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats),
       timer: ENEMY_BASE_TIMER,
-      drift: s.boss ? 16 : 26 + Math.random() * 14,
+      drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       boss: !!s.boss,
       dead: false,
       dotTicks: 0,
@@ -187,8 +199,8 @@ export class Battle {
     const pullLen = len(pull);
     if (pullLen < 12) return;
     const dir = norm(pull);
-    const speed = Math.min(pullLen, SHOT_MAX_DRAG) * POWER;
     const u = this.active;
+    const speed = Math.min(pullLen, SHOT_MAX_DRAG) * POWER * launchMult(u.def.stats);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.lastHit.clear();
@@ -403,7 +415,7 @@ export class Battle {
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     const mult = effectiveness(shooter.def.type, e.def.type);
-    const dmg = Math.round(shooter.def.atk * mult);
+    const dmg = physDamage(shooter.def.stats.atk, e.def.stats.def, mult);
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     this.spark(e.x, e.y, TYPE_COLOR[shooter.def.type]);
@@ -419,14 +431,19 @@ export class Battle {
       this.enemies
         .filter((e) => !e.dead && dist(from, e) <= radius + e.r)
         .sort((a, b) => dist(from, a) - dist(from, b))[0];
-    const atk = p.def.atk;
+    const phys = bumpIsPhysical(p.def.type);
     const eff = (e: Unit) => effectiveness(p.def.type, e.def.type);
+    // Physical bump attacks roll Attack vs Defense; elemental ones SpA vs SpD.
+    const bumpDmg = (e: Unit, power: number) =>
+      phys
+        ? physDamage(p.def.stats.atk, e.def.stats.def, eff(e), power)
+        : specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), power);
     const color = TYPE_COLOR[p.def.type];
 
     switch (p.def.type) {
       case 'fire': // radial blast
         this.bursts.push({ x: p.x, y: p.y, r: 150, t: 0.35, color });
-        for (const e of near(150)) this.hurt(e, Math.round(atk * 0.9 * eff(e)), '#9df0ff');
+        for (const e of near(150)) this.hurt(e, bumpDmg(e, 0.9), '#9df0ff');
         break;
       case 'electric': {
         // chain lightning: up to 3 jumps between enemies
@@ -440,7 +457,7 @@ export class Battle {
           if (!next) break;
           hit.add(next.uid);
           this.zaps.push({ x1: from.x, y1: from.y, x2: next.x, y2: next.y, t: 0.35 });
-          this.hurt(next, Math.round(atk * mult * eff(next)), '#9df0ff');
+          this.hurt(next, bumpDmg(next, mult), '#9df0ff');
           mult *= 0.7;
           from = next;
         }
@@ -451,7 +468,7 @@ export class Battle {
         this.bursts.push({ x: p.x, y: p.y, r: 140, t: 0.35, color });
         let dealt = 0;
         for (const e of near(140)) {
-          const dmg = Math.round(atk * 0.8 * eff(e));
+          const dmg = bumpDmg(e, 0.8);
           dealt += dmg;
           this.hurt(e, dmg, '#9df0ff');
         }
@@ -473,7 +490,7 @@ export class Battle {
               x: p.x,
               y: p.y,
               target: e,
-              dmg: Math.round(atk * 0.9 * eff(e)),
+              dmg: bumpDmg(e, 0.9),
               t: 2.5,
               color,
             });
@@ -483,13 +500,13 @@ export class Battle {
       case 'flying': {
         const radius = p.def.type === 'psychic' ? 160 : 200;
         const knock = p.def.type === 'psychic' ? 340 : 280;
-        const mult = p.def.type === 'psychic' ? 0.8 : 0.5;
+        const pow = p.def.type === 'psychic' ? 0.8 : 0.5;
         this.bursts.push({ x: p.x, y: p.y, r: radius, t: 0.35, color });
         for (const e of near(radius)) {
           const dir = norm({ x: e.x - p.x, y: e.y - p.y });
           e.vx += dir.x * knock;
           e.vy += dir.y * knock;
-          this.hurt(e, Math.round(atk * mult * eff(e)), '#9df0ff');
+          this.hurt(e, bumpDmg(e, pow), '#9df0ff');
         }
         break;
       }
@@ -498,8 +515,8 @@ export class Battle {
         this.bursts.push({ x: p.x, y: p.y, r: 140, t: 0.35, color });
         for (const e of near(140)) {
           e.dotTicks = 2;
-          e.dotDmg = Math.round(atk * 0.5);
-          this.hurt(e, Math.round(atk * 0.7 * eff(e)), '#9df0ff');
+          e.dotDmg = specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), 0.5);
+          this.hurt(e, bumpDmg(e, 0.7), '#9df0ff');
         }
         break;
       case 'rock':
@@ -508,13 +525,13 @@ export class Battle {
         const e = nearest(p, 200);
         if (e) {
           this.bursts.push({ x: e.x, y: e.y, r: e.r * 2, t: 0.3, color });
-          this.hurt(e, Math.round(atk * 1.8 * eff(e)), '#9df0ff');
+          this.hurt(e, bumpDmg(e, 1.8), '#9df0ff');
         }
         break;
       }
       case 'ghost': {
         // hex: hit every enemy weakly
-        for (const e of near(Infinity)) this.hurt(e, Math.round(atk * 0.55 * eff(e)), '#9df0ff');
+        for (const e of near(Infinity)) this.hurt(e, bumpDmg(e, 0.55), '#9df0ff');
         this.bursts.push({ x: p.x, y: p.y, r: 220, t: 0.4, color });
         break;
       }
@@ -523,7 +540,7 @@ export class Battle {
         const e = nearest(p, 180);
         if (e) {
           this.zaps.push({ x1: p.x, y1: p.y, x2: e.x, y2: e.y, t: 0.25 });
-          this.hurt(e, Math.round(atk * 1.4 * eff(e)), '#9df0ff');
+          this.hurt(e, bumpDmg(e, 1.4), '#9df0ff');
         }
       }
     }
@@ -579,13 +596,14 @@ export class Battle {
         const R = 170;
         this.bursts.push({ x: e.x, y: e.y, r: R, t: 0.5, color: '#f85888' });
         for (const p of this.players) {
-          if (!p.dead && dist(e, p) <= R + p.r) this.damagePlayer(p, e.def.atk);
+          if (!p.dead && dist(e, p) <= R + p.r)
+            this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
         }
       } else {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
         if (target) {
           this.zaps.push({ x1: e.x, y1: e.y, x2: target.x, y2: target.y, t: 0.35 });
-          this.damagePlayer(target, e.def.atk);
+          this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
         }
       }
     }

@@ -26,6 +26,26 @@ Open the printed URL. Works on desktop and touch.
    creep toward your team and attack on a **countdown** — kill them or keep
    moving.
 
+## Real stats, real roles
+
+Every species carries its canonical base stats (HP / Atk / Def / SpA / SpD /
+Spe). The mapping is one rule: **physical attacks roll Attack vs Defense,
+special attacks roll Sp.Atk vs Sp.Def.**
+
+| Stat | What it does in Pokéstrike |
+| --- | --- |
+| HP | Max HP (players `60 + 1.15×`, bosses `5.8×`) |
+| Attack | Damage when your launched Pokémon physically hits an enemy |
+| Defense | Shrinks physical damage taken — contact hits and enemy zaps |
+| Sp. Atk | Damage of the bump combo when an ally is hit mid-shot |
+| Sp. Def | Shrinks special damage taken — boss blasts, poison ticks |
+| Speed | Launch velocity for your team; approach speed for enemies |
+
+So Pikachu (55 Atk / 90 Spe) is a fast skirmisher, Jigglypuff (115 HP / 20
+Spe) is a slow tank, and Geodude's 100 Defense means physical hits bounce off —
+hit it with special bump attacks instead. Damage mitigation is
+`60 / (60 + def)` — a defender at 60 takes about half damage.
+
 ## Bump attacks by type
 
 | Type | Ally bump attack |
@@ -56,7 +76,8 @@ worker (`public/sw.js`) registered only in production builds.
 
 - **No engine** — plain TypeScript + Canvas 2D. Physics is custom: slingshot
   launch, wall reflection, circle-vs-circle collisions, friction, knockback.
-- **Data-driven** — species stats in `src/game/data.ts`, the type chart in
+- **Data-driven** — species + real base stats in `src/game/data.ts`, stat-to-
+  mechanic formulas in `src/game/stats.ts`, the type chart in
   `src/game/types.ts`, stages as wave lists with normalized arena coords.
   Adding a Pokémon is a data change, not a code change.
 - **Daily mode** — `makeDailyStage(seed)` uses a seeded RNG so everyone gets
@@ -66,8 +87,8 @@ worker (`public/sw.js`) registered only in production builds.
 ```
 src/
   core/    vec.ts, loop.ts, assets.ts, rng.ts   # engine plumbing
-  game/    types.ts, data.ts, battle.ts,        # rules + battle scene
-           screens.ts                            # title / select / result
+  game/    types.ts, data.ts, stats.ts,         # rules + stat formulas
+           battle.ts, screens.ts                 # battle scene + screens
   main.ts                                       # canvas fit + scene state
 public/  sprites/, manifest.webmanifest, sw.js, icons
 ```

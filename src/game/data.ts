@@ -1,40 +1,44 @@
 import type { PokeType } from './types';
+import type { Stats } from './stats';
 import { mulberry32 } from '../core/rng';
 
 export interface SpeciesDef {
   id: number; // Pokedex number, also the sprite filename
   name: string;
   type: PokeType;
-  hp: number;
-  atk: number;
+  stats: Stats; // canonical base stats: hp/atk/def/spa/spd/spe
 }
+
+const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe: number): Stats => ({
+  hp, atk, def, spa, spd, spe,
+});
 
 // Team-select roster: pick 4.
 export const ROSTER: SpeciesDef[] = [
-  { id: 25, name: 'Pikachu', type: 'electric', hp: 120, atk: 24 },
-  { id: 4, name: 'Charmander', type: 'fire', hp: 130, atk: 22 },
-  { id: 1, name: 'Bulbasaur', type: 'grass', hp: 150, atk: 18 },
-  { id: 7, name: 'Squirtle', type: 'water', hp: 150, atk: 18 },
-  { id: 133, name: 'Eevee', type: 'normal', hp: 140, atk: 20 },
-  { id: 39, name: 'Jigglypuff', type: 'normal', hp: 200, atk: 12 },
-  { id: 52, name: 'Meowth', type: 'normal', hp: 120, atk: 22 },
-  { id: 54, name: 'Psyduck', type: 'water', hp: 140, atk: 18 },
+  { id: 25, name: 'Pikachu', type: 'electric', stats: st(35, 55, 40, 50, 50, 90) },
+  { id: 4, name: 'Charmander', type: 'fire', stats: st(39, 52, 43, 60, 50, 65) },
+  { id: 1, name: 'Bulbasaur', type: 'grass', stats: st(45, 49, 49, 65, 65, 45) },
+  { id: 7, name: 'Squirtle', type: 'water', stats: st(44, 48, 65, 50, 64, 43) },
+  { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55) },
+  { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20) },
+  { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90) },
+  { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55) },
 ];
 
 const ENEMY_DB: SpeciesDef[] = [
-  { id: 19, name: 'Rattata', type: 'normal', hp: 60, atk: 6 },
-  { id: 16, name: 'Pidgey', type: 'flying', hp: 55, atk: 6 },
-  { id: 41, name: 'Zubat', type: 'poison', hp: 70, atk: 7 },
-  { id: 74, name: 'Geodude', type: 'rock', hp: 110, atk: 8 },
-  { id: 81, name: 'Magnemite', type: 'electric', hp: 90, atk: 8 },
-  { id: 63, name: 'Abra', type: 'psychic', hp: 80, atk: 9 },
-  { id: 43, name: 'Oddish', type: 'grass', hp: 65, atk: 6 },
-  { id: 92, name: 'Gastly', type: 'ghost', hp: 70, atk: 8 },
-  { id: 66, name: 'Machop', type: 'fighting', hp: 85, atk: 8 },
-  { id: 150, name: 'Mewtwo', type: 'psychic', hp: 620, atk: 12 },
-  { id: 130, name: 'Gyarados', type: 'water', hp: 560, atk: 11 },
-  { id: 149, name: 'Dragonite', type: 'flying', hp: 580, atk: 12 },
-  { id: 6, name: 'Charizard', type: 'fire', hp: 540, atk: 11 },
+  { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72) },
+  { id: 16, name: 'Pidgey', type: 'flying', stats: st(40, 45, 40, 35, 35, 56) },
+  { id: 41, name: 'Zubat', type: 'poison', stats: st(40, 45, 35, 30, 40, 55) },
+  { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20) },
+  { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45) },
+  { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90) },
+  { id: 43, name: 'Oddish', type: 'grass', stats: st(45, 50, 55, 75, 65, 30) },
+  { id: 92, name: 'Gastly', type: 'ghost', stats: st(30, 35, 30, 100, 35, 80) },
+  { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35) },
+  { id: 150, name: 'Mewtwo', type: 'psychic', stats: st(106, 110, 90, 154, 90, 130) },
+  { id: 130, name: 'Gyarados', type: 'water', stats: st(95, 125, 79, 60, 100, 81) },
+  { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80) },
+  { id: 6, name: 'Charizard', type: 'fire', stats: st(78, 84, 78, 109, 85, 100) },
 ];
 
 const foe = (name: string) => ENEMY_DB.find((e) => e.name === name)!;
