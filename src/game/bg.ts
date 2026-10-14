@@ -297,11 +297,6 @@ export function drawBackdrop(
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
-    // the resident: wades in water/lava, hovers over pits and cloud gaps
-    const POOL_MON: Record<Theme, number> = { grove: 54, cavern: 41, volcano: 4, sky: 16 };
-    const lift =
-      theme === 'cavern' || theme === 'sky' ? -16 + Math.sin(t * 2) * 4 : -6;
-    drawMon(ctx, POOL_MON[theme], px, py + lift, 40);
   }
 
   // grove extras: little flowers

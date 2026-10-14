@@ -1653,18 +1653,6 @@ export class Battle {
           ctx.arc(hz.x + Math.cos(a) * rr, hz.y + Math.sin(a) * rr * 0.72, 2.5, 0, Math.PI * 2);
           ctx.fill();
         }
-        drawMon(ctx, 43, hz.x, hz.y - hz.r * 0.55 + 6, 40); // Oddish
-        // foreground blades overlap Oddish's feet — it's hiding in there
-        ctx.strokeStyle = '#2c5a28';
-        ctx.lineWidth = 3;
-        for (const dx of [-14, 0, 14]) {
-          const bx = hz.x + dx;
-          const by = hz.y - hz.r * 0.42 + 10;
-          ctx.beginPath();
-          ctx.moveTo(bx - 4, by);
-          ctx.quadraticCurveTo(bx, by - 12, bx + 4, by);
-          ctx.stroke();
-        }
       } else if (hz.kind === 'speed') {
         // charge pad — soft electric glow + pulsing rings + Magnemite
         const pulse = 0.75 + Math.sin(this.time * 5) * 0.15;
@@ -1683,7 +1671,18 @@ export class Battle {
         ctx.ellipse(hz.x, hz.y, hz.r * 0.55 * pulse, hz.r * 0.44 * pulse, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        drawMon(ctx, 81, hz.x, hz.y - hz.r * 0.55 + 6, 40); // Magnemite
+        // a little lightning bolt marks the pad
+        ctx.fillStyle = '#f8d030';
+        ctx.beginPath();
+        const bx = hz.x, by = hz.y - hz.r * 0.35;
+        ctx.moveTo(bx + 4, by - 16);
+        ctx.lineTo(bx - 8, by + 4);
+        ctx.lineTo(bx, by + 4);
+        ctx.lineTo(bx - 4, by + 18);
+        ctx.lineTo(bx + 10, by - 2);
+        ctx.lineTo(bx + 2, by - 2);
+        ctx.closePath();
+        ctx.fill();
       } else {
         // warp pad — soft psychic glow + swirl + exit arrow + Abra
         ctx.fillStyle = 'rgba(150,80,190,0.16)';
@@ -1713,7 +1712,6 @@ export class Battle {
         ctx.moveTo(ax, ay);
         ctx.lineTo(ax - Math.cos(hz.ang + 0.5) * 10, ay - Math.sin(hz.ang + 0.5) * 10);
         ctx.stroke();
-        drawMon(ctx, 63, hz.x, hz.y - hz.r * 0.55 + 6, 40); // Abra
       }
       ctx.restore();
     }
