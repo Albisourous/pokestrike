@@ -114,6 +114,7 @@ export const STAGE: StageDef = {
 const SLOTS: [number, number][] = [
   [0.25, 0.2], [0.75, 0.2], [0.5, 0.4], [0.25, 0.55],
   [0.75, 0.55], [0.5, 0.12], [0.15, 0.4], [0.85, 0.4],
+  [0.35, 0.72], [0.65, 0.72], [0.5, 0.6], [0.85, 0.62],
 ];
 
 export function makeDailyStage(seed: number): StageDef {

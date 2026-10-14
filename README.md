@@ -6,6 +6,10 @@ your Pokémon, and bounce it around the arena to smash wild Pokémon and the bos
 Built to be played for 5–10 minutes a day: pick a team of 4, clear 2 waves,
 beat the boss, keep your streak alive.
 
+| Title | Draft | Battle |
+| --- | --- | --- |
+| ![title screen](docs/title.png) | ![draft round](docs/draft.png) | ![battle](docs/battle.png) |
+
 ## How to play
 
 ```bash
