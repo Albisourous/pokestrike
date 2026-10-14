@@ -231,7 +231,7 @@ export class Battle {
   private dragging = false;
   private dragStart: Vec = vec();
   private dragNow: Vec = vec();
-  private dragT = 0; // hold time while dragging — drives the power meter
+
   private stopTimer = 0;
   private enemyPhaseT = 0;
   private pendingAttacks: Unit[] = [];
@@ -536,7 +536,7 @@ export class Battle {
   pointerDown(p: Vec) {
     if (this.phase !== 'aim') return;
     this.dragging = true;
-    this.dragT = 0;
+
     this.dragStart = { ...p };
     this.dragNow = { ...p };
   }
@@ -553,7 +553,7 @@ export class Battle {
     if (pullLen < 12) return;
     const dir = norm(pull);
     const u = this.active;
-    // direction from the pull; power from release timing on the charge meter
+    // direction from the pull; power from pull-back distance — 8 Ball Pool style
     const charge = this.charge();
     const speed = SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
@@ -597,12 +597,14 @@ export class Battle {
     }
   }
 
-  // Power meter: ping-pongs 0→1→0 while held (1.1s per direction).
-  // Release near the top for a full-power launch.
+  // Power: how far you pulled back, 0..1 across SHOT_MAX_DRAG — pull to
+  // the edge of the guide ring for a full-power launch.
   private charge() {
-    const P = 1.1;
-    const ph = this.dragT % (2 * P);
-    return ph < P ? ph / P : 2 - ph / P;
+    return Math.min(
+      len({ x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y }) /
+        SHOT_MAX_DRAG,
+      1,
+    );
   }
 
   // --- simulation ---
@@ -613,7 +615,7 @@ export class Battle {
     if (hit) this.hitStop -= dt0;
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
-    if (this.dragging) this.dragT += dt;
+
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
     for (const z of this.zaps) z.t -= dt;
@@ -2321,7 +2323,7 @@ export class Battle {
       ctx.fillStyle = '#e8ecff';
       ctx.fillText(
         this.shots === 0
-          ? 'pull back anywhere — release on a full ring'
+          ? 'pull back to aim — farther back = more power'
           : 'bounce through allies to fire their supers',
         a.x + a.w / 2,
         a.y + a.h - 16,
@@ -2645,6 +2647,25 @@ export class Battle {
     ctx.beginPath();
     ctx.moveTo(u.x, u.y);
     ctx.lineTo(this.dragNow.x, this.dragNow.y);
+    ctx.stroke();
+
+    // 8 Ball Pool guide ring at the drag origin — pull to the edge for max
+    // power; the knob shows where your finger sits on that scale
+    ctx.strokeStyle = '#ffffff';
+    ctx.globalAlpha = 0.18;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([10, 8]);
+    ctx.beginPath();
+    ctx.arc(this.dragStart.x, this.dragStart.y, SHOT_MAX_DRAG, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = frac > 0.93 ? '#ffd84d' : color;
+    ctx.beginPath();
+    ctx.arc(this.dragNow.x, this.dragNow.y, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#0a0e20';
+    ctx.lineWidth = 2;
     ctx.stroke();
 
     // styler rings: two counter-rotating dashed circles while aiming
