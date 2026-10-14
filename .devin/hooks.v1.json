@@ -1,0 +1,14 @@
+{
+  "SessionStart": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "cd \"${CLAUDE_PROJECT_DIR:-$PWD}\" && CLAUDE_PLUGIN_ROOT=\"$PWD/.devin\" bash .devin/hooks/run-hook.cmd session-start",
+          "timeout": 10
+        }
+      ]
+    }
+  ]
+}
