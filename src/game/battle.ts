@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
 import { SpeciesDef, StageDef, rollWave } from './data';
 import { Perk, rollPerks } from './perks';
-import { drawBackdrop, drawWall, THEMES } from './bg';
+import { drawBackdrop, drawWall, THEMES, hash as hashSeed } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
 import {
@@ -128,6 +128,14 @@ interface ScreenFlash {
   life: number;
   color: string;
 }
+interface Hazard {
+  x: number;
+  y: number;
+  r: number;
+  kind: 'slow' | 'speed' | 'turn';
+  ang: number; // turn pads fling you along this angle
+  armed: boolean;
+}
 
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
 
@@ -188,6 +196,7 @@ export class Battle {
   private hpScale = 1;
   private obstacles: { x: number; y: number; r: number; pts: { a: number; d: number }[] }[];
   private theme: Theme; // current wave's scene — rotates each wave
+  private hazards: Hazard[] = [];
 
   constructor(
     public arena: Rect,
@@ -273,12 +282,39 @@ export class Battle {
     }
   }
 
+  // Themed field hazards, upper field, per wave.
+  private genHazards() {
+    const KINDS: Hazard['kind'][] = ['slow', 'speed', 'turn'];
+    this.hazards = [];
+    const count = 1 + Math.floor(this.rng() * 2);
+    for (let k = 0; k < count; k++) {
+      for (let tries = 0; tries < 8; tries++) {
+        const hz: Hazard = {
+          x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
+          y: this.arena.y + this.arena.h * (0.15 + this.rng() * 0.55),
+          r: 55 + this.rng() * 25,
+          kind: KINDS[Math.floor(this.rng() * KINDS.length)],
+          ang: this.rng() * Math.PI * 2,
+          armed: true,
+        };
+        if (
+          this.players.every((p) => p.dead || dist(hz, p) > hz.r + p.r + 20) &&
+          this.obstacles.every((o) => dist(hz, o) > hz.r + o.r)
+        ) {
+          this.hazards.push(hz);
+          break;
+        }
+      }
+    }
+  }
+
   private spawnWave(i: number) {
     this.waveIndex = i;
-    // each wave is a new scene — rotate theme, re-roll obstacles
+    // each wave is a new scene — rotate theme, re-roll obstacles + hazards
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
     this.genObstacles();
+    this.genHazards();
     this.enemies = this.stage.waves[i].map((s) => ({
       uid: nextUid++,
       def: s.def,
@@ -435,6 +471,38 @@ export class Battle {
       this.hitWalls(u);
       for (const o of this.obstacles) {
         if (this.collide(u, o)) this.shower(u.x, u.y, 4, '#8a94c8', 160, 'streak');
+      }
+      for (const hz of this.hazards) {
+        const inside = dist(u, hz) < hz.r;
+        if (hz.kind === 'turn') {
+          // warp pad: on entry, fling the ball along the pad's arrow
+          if (!inside) hz.armed = true;
+          else if (hz.armed && u.vx * u.vx + u.vy * u.vy > 3600) {
+            hz.armed = false;
+            const sp = len({ x: u.vx, y: u.vy }) * 1.15;
+            u.vx = Math.cos(hz.ang) * sp;
+            u.vy = Math.sin(hz.ang) * sp;
+            this.burst(u.x, u.y, hz.r * 0.9, '#b86fd8', 0.3);
+            this.shower(u.x, u.y, 8, '#b86fd8', 260, 'streak');
+            this.addShake(3);
+          }
+        } else if (inside) {
+          if (hz.kind === 'slow') {
+            // tall grass: heavy drag + kicked-up leaves
+            const dmp = Math.exp(-4.5 * h);
+            u.vx *= dmp;
+            u.vy *= dmp;
+            if (this.particles.length < MAX_PARTICLES && Math.random() < 0.3)
+              this.particles.push({ x: u.x, y: u.y, vx: -u.vx * 0.2, vy: -u.vy * 0.2 - 40, t: 0.4, life: 0.4, size: 4, color: '#58a848', shape: 'leaf', grav: 200 });
+          } else {
+            // charge pad: accelerate along current heading
+            const dir = norm({ x: u.vx, y: u.vy });
+            u.vx += dir.x * 2400 * h;
+            u.vy += dir.y * 2400 * h;
+            if (this.particles.length < MAX_PARTICLES && Math.random() < 0.4)
+              this.particles.push({ x: u.x, y: u.y, vx: dir.x * 200, vy: dir.y * 200, t: 0.25, life: 0.25, size: 3, color: '#f8d030', shape: 'streak', grav: 0 });
+          }
+        }
       }
       for (const e of wave) {
         if (this.enemies !== wave) break;
@@ -1268,6 +1336,83 @@ export class Battle {
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    // hazard pads: themed floor zones with a sprite marker on top
+    for (const hz of this.hazards) {
+      ctx.save();
+      if (hz.kind === 'slow') {
+        // tall grass patch — kicked-up texture + Oddish poking out
+        ctx.fillStyle = '#3f7a3a';
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#2c5a28';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = '#58a848';
+        ctx.lineWidth = 2.5;
+        for (let i = 0; i < 14; i++) {
+          const a = hashSeed(hz.x + i * 13) * Math.PI * 2;
+          const rr = hz.r * (0.3 + hashSeed(hz.y + i * 7) * 0.6);
+          const gx = hz.x + Math.cos(a) * rr, gy = hz.y + Math.sin(a) * rr * 0.8;
+          ctx.beginPath();
+          ctx.moveTo(gx - 3, gy);
+          ctx.quadraticCurveTo(gx, gy - 9, gx + 3, gy);
+          ctx.stroke();
+        }
+        ctx.drawImage(sprite(43), hz.x - 20, hz.y - hz.r * 0.55 - 14, 40, 40); // Oddish
+      } else if (hz.kind === 'speed') {
+        // charge pad — pulsing rings + Magnemite
+        const pulse = 0.75 + Math.sin(this.time * 5) * 0.15;
+        ctx.fillStyle = '#3a3416';
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#f8d030';
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.9;
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r * pulse, hz.r * 0.8 * pulse, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r * 0.55 * pulse, hz.r * 0.44 * pulse, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.drawImage(sprite(81), hz.x - 20, hz.y - hz.r * 0.55 - 14, 40, 40); // Magnemite
+      } else {
+        // warp pad — swirl + exit arrow + Abra
+        ctx.fillStyle = '#3a2450';
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#b86fd8';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        ctx.lineDashOffset = -this.time * 60;
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y, hz.r * 0.9, hz.r * 0.72, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // exit arrow showing where it flings you
+        const ax = hz.x + Math.cos(hz.ang) * hz.r * 0.55;
+        const ay = hz.y + Math.sin(hz.ang) * hz.r * 0.55;
+        ctx.strokeStyle = '#e8c8ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(hz.x, hz.y);
+        ctx.lineTo(ax, ay);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - Math.cos(hz.ang - 0.5) * 10, ay - Math.sin(hz.ang - 0.5) * 10);
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - Math.cos(hz.ang + 0.5) * 10, ay - Math.sin(hz.ang + 0.5) * 10);
+        ctx.stroke();
+        ctx.drawImage(sprite(63), hz.x - 20, hz.y - hz.r * 0.55 - 14, 40, 40); // Abra
+      }
       ctx.restore();
     }
 

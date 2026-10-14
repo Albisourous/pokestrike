@@ -30,7 +30,7 @@ const WALL: Record<Theme, { line: string; mid: string; hi: string; extra?: strin
   sky: { line: '#7c9cc8', mid: '#f4f8ff', hi: '#ffffff' },            // cloud bank
 };
 
-const hash = (n: number) => {
+export const hash = (n: number) => {
   const s = Math.sin(n * 127.1) * 43758.5453;
   return s - Math.floor(s);
 };
