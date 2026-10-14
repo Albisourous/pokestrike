@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
 import { SpeciesDef, StageDef, rollWave } from './data';
 import { Perk, rollPerks } from './perks';
-import { drawBackdrop, drawWall } from './bg';
+import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
 import {
@@ -173,6 +173,7 @@ export class Battle {
   private rewardPending = false;
   private hpScale = 1;
   private obstacles: { x: number; y: number; r: number; pts: { a: number; d: number }[] }[];
+  private theme: Theme; // current wave's scene — rotates each wave
 
   constructor(
     public arena: Rect,
@@ -181,24 +182,18 @@ export class Battle {
     private rng: () => number = Math.random,
     private endless = false,
   ) {
-    this.obstacles = stage.obstacles.map((o) => ({
-      x: arena.x + arena.w * o.nx,
-      y: arena.y + arena.h * o.ny,
-      r: arena.w * o.nr,
-      // irregular polygon silhouette per rock
-      pts: Array.from({ length: 7 }, (_, k) => ({
-        a: (k / 7) * Math.PI * 2,
-        d: 0.72 + Math.random() * 0.42,
-      })),
-    }));
+    this.theme = stage.theme;
+    this.obstacles = [];
+    this.genObstacles();
     const n = team.length;
     team.forEach((def, i) => {
       this.players.push({
         uid: nextUid++,
         def,
         side: 'player',
-        x: arena.x + (arena.w * (i + 1)) / (n + 1),
-        y: arena.y + arena.h - 70,
+        // staggered start in the bottom third — not a rigid row
+        x: arena.x + (arena.w * (i + 1)) / (n + 1) + (rng() - 0.5) * 50,
+        y: arena.y + arena.h - 70 - (i % 2) * 60 - rng() * 40,
         vx: 0,
         vy: 0,
         r: 26,
@@ -232,8 +227,35 @@ export class Battle {
     return this.stage.waves.length;
   }
 
+  // Roll a fresh obstacle layout in the upper field, clear of players.
+  private genObstacles() {
+    this.obstacles = [];
+    const count = 1 + Math.floor(this.rng() * 3);
+    for (let k = 0; k < count; k++) {
+      for (let tries = 0; tries < 8; tries++) {
+        const o = {
+          x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
+          y: this.arena.y + this.arena.h * (0.15 + this.rng() * 0.45),
+          r: this.arena.w * (0.05 + this.rng() * 0.04),
+          pts: Array.from({ length: 7 }, (_, j) => ({
+            a: (j / 7) * Math.PI * 2,
+            d: 0.72 + this.rng() * 0.42,
+          })),
+        };
+        if (this.players.every((p) => p.dead || dist(o, p) > o.r + p.r + 30)) {
+          this.obstacles.push(o);
+          break;
+        }
+      }
+    }
+  }
+
   private spawnWave(i: number) {
     this.waveIndex = i;
+    // each wave is a new scene — rotate theme, re-roll obstacles
+    const others = THEMES.filter((t) => t !== this.theme);
+    this.theme = others[Math.floor(this.rng() * others.length)];
+    this.genObstacles();
     this.enemies = this.stage.waves[i].map((s) => ({
       uid: nextUid++,
       def: s.def,
@@ -1076,14 +1098,14 @@ export class Battle {
     }
 
     // arena: overworld-style backdrop + themed sprite wall
-    drawBackdrop(ctx, a, 18, this.stage.theme, this.time);
-    drawWall(ctx, a, this.stage.theme, this.time);
+    drawBackdrop(ctx, a, 18, this.theme, this.time);
+    drawWall(ctx, a, this.theme, this.time);
 
     for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const z of this.zaps) this.drawZap(ctx, z);
 
     // themed obstacles: mossy boulders / glowing crystals / cracked obsidian
-    const rock = ROCK_STYLE[this.stage.theme];
+    const rock = ROCK_STYLE[this.theme];
     for (const o of this.obstacles) {
       ctx.save();
       if (rock.glow) {
