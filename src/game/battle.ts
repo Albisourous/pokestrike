@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
 import { SpeciesDef, StageDef, rollWave } from './data';
 import { Perk, rollPerks } from './perks';
-import { drawBackdrop } from './bg';
+import { drawBackdrop, drawWall } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
 import {
@@ -1052,41 +1052,9 @@ export class Battle {
       );
     }
 
-    // arena
+    // arena: overworld-style backdrop + themed sprite wall
     drawBackdrop(ctx, a, 18, this.stage.theme, this.time);
-    // rail: dark track + gold trim + traveling shimmer + corner studs
-    ctx.strokeStyle = '#101530';
-    ctx.lineWidth = 10;
-    this.roundRect(ctx, a.x, a.y, a.w, a.h, 18);
-    ctx.stroke();
-    ctx.strokeStyle = '#c8a44d';
-    ctx.lineWidth = 2;
-    this.roundRect(ctx, a.x - 1, a.y - 1, a.w + 2, a.h + 2, 19);
-    ctx.stroke();
-    ctx.strokeStyle = '#c8a44d44';
-    this.roundRect(ctx, a.x + 5, a.y + 5, a.w - 10, a.h - 10, 14);
-    ctx.stroke();
-    ctx.save();
-    ctx.strokeStyle = '#f0e6c8';
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.5;
-    ctx.setLineDash([26, 110]);
-    ctx.lineDashOffset = -(this.time * 90) % 136;
-    this.roundRect(ctx, a.x + 2, a.y + 2, a.w - 4, a.h - 4, 16);
-    ctx.stroke();
-    ctx.restore();
-    for (const [cx, cy] of [
-      [a.x, a.y], [a.x + a.w, a.y], [a.x, a.y + a.h], [a.x + a.w, a.y + a.h],
-    ] as const) {
-      ctx.fillStyle = '#c8a44d';
-      ctx.beginPath();
-      ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f0e6c8';
-      ctx.beginPath();
-      ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    drawWall(ctx, a, this.stage.theme, this.time);
 
     for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const z of this.zaps) this.drawZap(ctx, z);
@@ -1458,23 +1426,15 @@ export class Battle {
     ctx.globalAlpha = 1;
   }
 
-  private roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
 }
 
 // flashes are drawn in logical coords; arena is at most this wide
 const W_CANVAS_FALLBACK = 540;
 
+// Obstacles recolored to sit on the overworld-tile floors.
 const ROCK_STYLE: Record<Theme, { fill: string; rim: string; facet: string; crack: string; glow: boolean }> = {
-  grove: { fill: '#2a3d2e', rim: '#121f15', facet: '#3f5c43', crack: '#78c850', glow: false },
-  cavern: { fill: '#26305c', rim: '#111630', facet: '#3d4d8f', crack: '#9db4ff', glow: true },
-  volcano: { fill: '#381a12', rim: '#1a0a06', facet: '#55291c', crack: '#ff7a30', glow: true },
-  sky: { fill: '#2c3f74', rim: '#131c38', facet: '#4660a8', crack: '#cfe4ff', glow: false },
+  grove: { fill: '#3c6e44', rim: '#1d4026', facet: '#569058', crack: '#2a5a34', glow: false },
+  cavern: { fill: '#40406a', rim: '#242444', facet: '#5858a0', crack: '#9db4ff', glow: true },
+  volcano: { fill: '#382830', rim: '#1c1018', facet: '#50303c', crack: '#ff7a30', glow: true },
+  sky: { fill: '#c8d8f0', rim: '#7c9cc8', facet: '#e8f2fc', crack: '#9db4ff', glow: false },
 };

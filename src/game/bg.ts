@@ -1,5 +1,6 @@
-// Procedural stage backdrops: gradient sky, themed silhouette layers,
-// drifting motes. No image assets — everything is drawn per frame.
+// Procedural stage backdrops in the GBA-overworld style: flat tiled
+// ground, scattered details, and a themed sprite wall around the arena.
+// No image assets — everything is drawn per frame.
 
 export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
 export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
@@ -7,18 +8,26 @@ export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
 const CFG: Record<
   Theme,
   {
-    top: string;
-    bottom: string;
-    ridge1: string;
-    ridge2: string;
+    tileA: string;
+    tileB: string;
+    dab: string;
+    pool: string; // pond / lava / pit / cloud gap
+    poolEdge: string;
     mote: string;
-    fall: boolean; // leaves fall, embers/sparks rise
   }
 > = {
-  grove: { top: '#16402a', bottom: '#07180f', ridge1: '#0e2a1c', ridge2: '#1a4a30', mote: '#c8f898', fall: true },
-  cavern: { top: '#1c2150', bottom: '#0a0c1e', ridge1: '#141839', ridge2: '#26306b', mote: '#9db4ff', fall: false },
-  volcano: { top: '#451512', bottom: '#170605', ridge1: '#2c0e0a', ridge2: '#5e2115', mote: '#ffb060', fall: false },
-  sky: { top: '#1b3a80', bottom: '#070d20', ridge1: '#10234d', ridge2: '#20447f', mote: '#dfefff', fall: false },
+  grove: { tileA: '#8fd068', tileB: '#84c45c', dab: '#6aa848', pool: '#58b0e8', poolEdge: '#4090c8', mote: '#ffffff' },
+  cavern: { tileA: '#50507c', tileB: '#484870', dab: '#3c3c60', pool: '#28284a', poolEdge: '#1c1c38', mote: '#9db4ff' },
+  volcano: { tileA: '#584038', tileB: '#503a34', dab: '#443028', pool: '#ff7028', poolEdge: '#c84810', mote: '#ffb060' },
+  sky: { tileA: '#98c4ec', tileB: '#8cbce4', dab: '#7cb0dc', pool: '#5c8cd0', poolEdge: '#4a74b8', mote: '#ffffff' },
+};
+
+// wall sprite palettes: dark outline, mid fill, highlight
+const WALL: Record<Theme, { line: string; mid: string; hi: string; extra?: string }> = {
+  grove: { line: '#1d5028', mid: '#3c9448', hi: '#64c068' },          // ball trees
+  cavern: { line: '#28283c', mid: '#7878a0', hi: '#9c9cc4' },         // boulders
+  volcano: { line: '#1c1018', mid: '#382830', hi: '#ff7030' },        // obsidian, lava seams
+  sky: { line: '#7c9cc8', mid: '#f4f8ff', hi: '#ffffff' },            // cloud bank
 };
 
 const hash = (n: number) => {
@@ -26,66 +35,105 @@ const hash = (n: number) => {
   return s - Math.floor(s);
 };
 
-function tri(ctx: CanvasRenderingContext2D, cx: number, baseY: number, w: number, h: number, down = false) {
+function blob(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, seed: number, lobes = 7) {
   ctx.beginPath();
-  if (down) {
-    ctx.moveTo(cx - w / 2, baseY);
-    ctx.lineTo(cx + w / 2, baseY);
-    ctx.lineTo(cx, baseY + h);
-  } else {
-    ctx.moveTo(cx - w / 2, baseY);
-    ctx.lineTo(cx + w / 2, baseY);
-    ctx.lineTo(cx, baseY - h);
+  for (let i = 0; i <= lobes; i++) {
+    const a = (i / lobes) * Math.PI * 2;
+    const r = 0.82 + hash(seed + i * 17) * 0.36;
+    const px = cx + Math.cos(a) * rx * r;
+    const py = cy + Math.sin(a) * ry * r;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.quadraticCurveTo(cx + Math.cos(a - Math.PI / lobes) * rx * r * 1.15, cy + Math.sin(a - Math.PI / lobes) * ry * r * 1.15, px, py);
   }
   ctx.closePath();
   ctx.fill();
 }
 
-// Theme-specific silhouette rows — pines, stalactites, crags, clouds.
-function silhouettes(
-  ctx: CanvasRenderingContext2D,
-  theme: Theme,
-  c: (typeof CFG)[Theme],
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  t: number,
-) {
-  for (const [color, base, amp, speed, step] of [
-    [c.ridge2, 0.86, 0.1, 10, 86],
-    [c.ridge1, 0.93, 0.07, 4, 110],
-  ] as const) {
-    const off = (t * speed) % step;
-    ctx.fillStyle = color;
-    const layer = color === c.ridge1 ? 1 : 0;
-    for (let i = -1; i <= w / step + 1; i++) {
-      const cx = x + i * step - off;
-      const hgt = h * (0.09 + hash(i * 3 + layer * 11) * amp);
-      const baseY = y + h * base;
-      switch (theme) {
-        case 'grove': // pine trees: two stacked triangles
-          tri(ctx, cx, baseY + hgt * 0.45, step * 0.9, hgt * 1.1);
-          tri(ctx, cx, baseY + hgt * 0.05, step * 0.6, hgt * 0.85);
-          break;
-        case 'cavern': // stalagmites up, stalactites down
-          tri(ctx, cx, baseY + hgt, step * 0.55, hgt * 1.7);
-          if (i % 2 === layer) tri(ctx, cx + step / 2, y, step * 0.4, h * 0.16 + hash(i) * h * 0.1, true);
-          break;
-        case 'volcano': // jagged crags + lava glow handled below
-          tri(ctx, cx, baseY + hgt * 0.3, step, hgt * 1.5);
-          break;
-        case 'sky': // cloud blobs
-          ctx.beginPath();
-          ctx.arc(cx, baseY - hgt * 0.4, step * 0.42, 0, Math.PI * 2);
-          ctx.arc(cx + step * 0.34, baseY - hgt * 0.3, step * 0.3, 0, Math.PI * 2);
-          ctx.arc(cx - step * 0.34, baseY - hgt * 0.28, step * 0.34, 0, Math.PI * 2);
-          ctx.fill();
-          break;
-      }
+// One ball-tree tile — the classic overworld wall.
+function tree(ctx: CanvasRenderingContext2D, x: number, y: number, w: typeof WALL[Theme], s: number) {
+  ctx.fillStyle = w.line;
+  ctx.beginPath();
+  ctx.arc(x, y, s * 0.62, 0, Math.PI * 2);
+  ctx.arc(x - s * 0.34, y + s * 0.18, s * 0.44, 0, Math.PI * 2);
+  ctx.arc(x + s * 0.34, y + s * 0.18, s * 0.44, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = w.mid;
+  ctx.beginPath();
+  ctx.arc(x, y - s * 0.06, s * 0.54, 0, Math.PI * 2);
+  ctx.arc(x - s * 0.3, y + s * 0.12, s * 0.38, 0, Math.PI * 2);
+  ctx.arc(x + s * 0.3, y + s * 0.12, s * 0.38, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = w.hi;
+  ctx.beginPath();
+  ctx.arc(x - s * 0.14, y - s * 0.22, s * 0.26, 0, Math.PI * 2);
+  ctx.arc(x + s * 0.18, y - s * 0.12, s * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function boulder(ctx: CanvasRenderingContext2D, x: number, y: number, w: typeof WALL[Theme], s: number, seed: number) {
+  ctx.fillStyle = w.line;
+  blob(ctx, x, y, s * 0.62, s * 0.56, seed, 6);
+  ctx.fillStyle = w.mid;
+  blob(ctx, x, y - s * 0.05, s * 0.52, s * 0.46, seed + 3, 6);
+  ctx.fillStyle = w.hi;
+  blob(ctx, x - s * 0.1, y - s * 0.2, s * 0.24, s * 0.14, seed + 7, 5);
+}
+
+function obsidian(ctx: CanvasRenderingContext2D, x: number, y: number, w: typeof WALL[Theme], s: number, seed: number) {
+  boulder(ctx, x, y, w, s, seed);
+  // glowing lava seam
+  ctx.strokeStyle = w.hi;
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(x - s * 0.3, y + s * 0.1);
+  ctx.lineTo(x - s * 0.05, y - s * 0.08);
+  ctx.lineTo(x + s * 0.22, y + s * 0.16);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function cloud(ctx: CanvasRenderingContext2D, x: number, y: number, w: typeof WALL[Theme], s: number) {
+  ctx.fillStyle = w.line;
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.arc(x, y + s * 0.14, s * 0.5, 0, Math.PI * 2);
+  ctx.arc(x - s * 0.4, y + s * 0.2, s * 0.34, 0, Math.PI * 2);
+  ctx.arc(x + s * 0.4, y + s * 0.2, s * 0.36, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = w.mid;
+  ctx.beginPath();
+  ctx.arc(x, y, s * 0.5, 0, Math.PI * 2);
+  ctx.arc(x - s * 0.38, y + s * 0.08, s * 0.34, 0, Math.PI * 2);
+  ctx.arc(x + s * 0.38, y + s * 0.08, s * 0.36, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Themed sprite wall along the arena border, like an overworld tree line.
+export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: number; w: number; h: number }, theme: Theme, t: number) {
+  const w = WALL[theme];
+  const s = 17; // sprite size
+  const step = s * 1.5;
+  const draw = (x: number, y: number, seed: number) => {
+    switch (theme) {
+      case 'grove': tree(ctx, x, y, w, s); break;
+      case 'cavern': boulder(ctx, x, y, w, s, seed); break;
+      case 'volcano': obsidian(ctx, x, y, w, s, seed); break;
+      case 'sky': cloud(ctx, x, y, w, s); break;
     }
-    // fill the strip under the shapes so the silhouette reads solid
-    ctx.fillRect(x - step, y + h * base, w + step * 2, h * (1 - base) + 2);
+  };
+  // back row (behind border) then front row for depth
+  let i = 0;
+  for (let x = a.x; x <= a.x + a.w; x += step, i++) {
+    const bob = Math.sin(t * 1.2 + i) * 1.2;
+    draw(x, a.y - 7 + (theme === 'sky' ? bob : 0), i);
+    draw(x + step / 2, a.y + a.h + 7 - (theme === 'sky' ? bob : 0), i + 100);
+  }
+  i = 0;
+  for (let y = a.y; y <= a.y + a.h; y += step, i++) {
+    draw(a.x - 7, y + step / 2, i + 200);
+    draw(a.x + a.w + 7, y, i + 300);
   }
 }
 
@@ -108,43 +156,75 @@ export function drawBackdrop(
   ctx.closePath();
   ctx.clip();
 
-  const g = ctx.createLinearGradient(0, y, 0, y + h);
-  g.addColorStop(0, c.top);
-  g.addColorStop(1, c.bottom);
-  ctx.fillStyle = g;
+  // flat tile base — two-tone checker like overworld grass tiles
+  const TS = 26;
+  ctx.fillStyle = c.tileA;
   ctx.fillRect(x, y, w, h);
-
-  if (theme === 'volcano') {
-    // lava glow pooling at the bottom
-    const lava = ctx.createLinearGradient(0, y + h * 0.8, 0, y + h);
-    lava.addColorStop(0, 'rgba(255,110,40,0)');
-    lava.addColorStop(1, 'rgba(255,120,50,0.4)');
-    ctx.fillStyle = lava;
-    ctx.fillRect(x, y + h * 0.8, w, h * 0.2);
+  ctx.fillStyle = c.tileB;
+  for (let ty = 0; ty * TS < h; ty++) {
+    for (let tx = 0; tx * TS < w; tx++) {
+      if ((tx + ty) % 2 === 0) ctx.fillRect(x + tx * TS, y + ty * TS, TS, TS);
+    }
   }
 
-  silhouettes(ctx, theme, c, x, y, w, h, t);
+  // scattered dabs: grass blades / pebbles / cracks per theme
+  ctx.fillStyle = c.dab;
+  for (let i = 0; i < 90; i++) {
+    const dx = x + hash(i * 3 + 5) * w;
+    const dy = y + hash(i * 11 + 9) * h;
+    if (theme === 'grove') {
+      // grass blade tuft
+      ctx.fillRect(dx, dy, 2, 5);
+      ctx.fillRect(dx + 3, dy + 1, 2, 4);
+    } else if (theme === 'sky') {
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(dx, dy, 4 + hash(i) * 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.beginPath();
+      ctx.arc(dx, dy, 1.5 + hash(i * 7) * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
-  // motes — leaves drift down in the grove, embers/sparks rise elsewhere
-  for (let i = 0; i < 26; i++) {
-    const mx = x + hash(i * 7 + 1) * w + Math.sin(t * 0.8 + i * 1.7) * 16;
-    const prog = (hash(i * 13) * h + t * (24 + hash(i) * 30)) % (h + 40);
-    const my = c.fall ? y - 20 + prog : y + h + 20 - prog;
-    const a = 0.25 + 0.55 * Math.abs(Math.sin(t * 1.3 + i));
-    ctx.globalAlpha = a * 0.7;
+  // a pond / lava pool / pit blob for landmark variety
+  const px = x + w * 0.78, py = y + h * 0.2;
+  ctx.fillStyle = c.poolEdge;
+  blob(ctx, px, py, 52, 36, 42, 8);
+  ctx.fillStyle = c.pool;
+  blob(ctx, px, py, 44, 29, 43, 8);
+  if (theme === 'grove' || theme === 'sky') {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    blob(ctx, px - 10, py - 8, 16, 6, 44, 5);
+  }
+
+  // grove extras: little flowers
+  if (theme === 'grove') {
+    for (let i = 0; i < 14; i++) {
+      const fx = x + hash(i * 29 + 3) * w;
+      const fy = y + hash(i * 37 + 1) * h;
+      ctx.fillStyle = i % 3 ? '#ffffff' : '#ffd84d';
+      ctx.beginPath();
+      ctx.arc(fx, fy, 2, 0, Math.PI * 2);
+      ctx.arc(fx + 3, fy + 1, 2, 0, Math.PI * 2);
+      ctx.arc(fx + 1, fy + 3, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // drifting motes — subtle shimmer
+  for (let i = 0; i < 18; i++) {
+    const mx = x + hash(i * 7 + 1) * w + Math.sin(t * 0.8 + i * 1.7) * 14;
+    const prog = (hash(i * 13) * h + t * (18 + hash(i) * 24)) % (h + 40);
+    const my = y + h + 20 - prog;
+    ctx.globalAlpha = 0.2 + 0.4 * Math.abs(Math.sin(t * 1.3 + i));
     ctx.fillStyle = c.mote;
     ctx.beginPath();
-    ctx.arc(mx, my, 1.5 + hash(i * 31) * 2.5, 0, Math.PI * 2);
+    ctx.arc(mx, my, 1.5 + hash(i * 31) * 2, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
-
-  // bottom vignette
-  const v = ctx.createLinearGradient(0, y + h * 0.55, 0, y + h);
-  v.addColorStop(0, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,0.45)');
-  ctx.fillStyle = v;
-  ctx.fillRect(x, y + h * 0.55, w, h * 0.45);
-
   ctx.restore();
 }
