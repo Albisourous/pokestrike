@@ -39,8 +39,8 @@ export const launchMult = (s: Stats) => 0.75 + s.spe / 150;
 export const enemyDrift = (s: Stats) => 12 + s.spe * 0.22;
 
 // Enemy attacks: zap is physical, boss blast is special.
-export const zapPower = 0.22;
-export const blastPower = 0.15;
+export const zapPower = 0.28;
+export const blastPower = 0.2;
 
 // --- Roles, derived from real stats ---
 // Fast mons are combo triggers, defensive mons are tanks, high-SpA frail mons

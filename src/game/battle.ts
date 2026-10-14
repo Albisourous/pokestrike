@@ -175,6 +175,7 @@ const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
+const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
 const MAX_PARTICLES = 260;
 
 let nextUid = 1;
@@ -366,7 +367,7 @@ export class Battle {
       r: s.boss ? 46 : 26,
       hp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
       maxHp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
-      timer: ENEMY_BASE_TIMER,
+      timer: s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER,
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       wx: 0,
       wy: 0,
@@ -764,7 +765,9 @@ export class Battle {
     d = Math.round(d * this.dmgMult);
     e.hp -= d;
     e.flashT = 0.12;
-    e.timer += this.stagger; // king's rock staggers attack timers
+    // king's rock staggers attack timers — capped so a long combo delays
+    // one volley instead of locking the enemy out forever
+    e.timer = Math.min(e.timer + this.stagger, ENEMY_BASE_TIMER + this.stagger + 1);
     // shell bell: damage feeds the weakest ally
     if (this.leech > 0) {
       const weakest = this.players
@@ -924,7 +927,7 @@ export class Battle {
         for (const e of near(150)) {
           this.skyFall(e.x, color);
           this.burst(e.x, e.y, 46, '#ffffff', 0.25);
-          this.hurt(e, bumpDmg(e, 0.9), '#9df0ff');
+          this.hurt(e, bumpDmg(e, 1.0), '#9df0ff');
         }
         break;
       case 'electric': {
@@ -986,7 +989,7 @@ export class Battle {
               x: p.x,
               y: p.y,
               target: e,
-              dmg: bumpDmg(e, 0.9),
+              dmg: bumpDmg(e, 0.7),
               t: 2.5,
               color,
             });
@@ -1042,7 +1045,7 @@ export class Battle {
         this.screenFlash('#705898', 0.18);
         for (const e of near(Infinity)) {
           this.converge(e.x, e.y, 8, '#705898', 'wisp');
-          this.hurt(e, bumpDmg(e, 0.55), '#9df0ff');
+          this.hurt(e, bumpDmg(e, 0.7), '#9df0ff');
         }
         break;
       }
@@ -1054,7 +1057,7 @@ export class Battle {
           this.slash(e.x, e.y, '#ffffff');
           this.slash(e.x, e.y, color);
           this.shower(e.x, e.y, 8, '#ffffff', 240, 'streak');
-          this.hurt(e, bumpDmg(e, 1.4), '#9df0ff');
+          this.hurt(e, bumpDmg(e, 1.05), '#9df0ff');
         }
       }
     }
@@ -1232,7 +1235,7 @@ export class Battle {
 
   private resolveEnemyTurn() {
     for (const e of this.pendingAttacks) {
-      e.timer = ENEMY_BASE_TIMER;
+      e.timer = e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER;
       if (e.boss) {
         const R = 170;
         this.burst(e.x, e.y, R, '#f85888', 0.55);
