@@ -418,10 +418,6 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number
   logoWord(ctx, 'POKÉ', cx, cy - 58, 26, 170);
   logoWord(ctx, 'STRIKE', cx, cy + 108, 30, 190, '#22336a', '#c8d0e8');
 
-  // the loop, in one line
-  pixelText(ctx, 'pull back. launch. bounce.', cx, 600, 11);
-  pixelText(ctx, 'DRAFT · LAUNCH · COMBO · CAPTURE · RELICS', cx, 628, 8, 'rgba(255,255,255,0.85)');
-
   button(ctx, FREE_BTN, 'FREE PLAY', true);
 
   if (best !== null) pixelText(ctx, `best clear ${best.toFixed(1)}s`, cx, 812, 9);
