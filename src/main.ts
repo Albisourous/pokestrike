@@ -182,6 +182,7 @@ function render() {
         offers,
         draft.picked.map((i) => ROSTER[i]),
         mode === 'daily' ? 'Daily Strike' : STAGE.name,
+        t,
       );
       break;
     }
@@ -220,5 +221,5 @@ loadAll(ALL_SPRITE_IDS)
   });
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }

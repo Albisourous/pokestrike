@@ -1,5 +1,7 @@
 import type { PokeType } from './types';
 import type { Stats } from './stats';
+import type { Theme } from './bg';
+import { THEMES } from './bg';
 import { mulberry32 } from '../core/rng';
 
 export interface SpeciesDef {
@@ -81,11 +83,13 @@ export interface WaveSpawn {
 }
 export interface StageDef {
   name: string;
+  theme: Theme;
   waves: WaveSpawn[][];
 }
 
 export const STAGE: StageDef = {
   name: 'Viridian Depths',
+  theme: 'grove',
   waves: [
     [
       { def: foe('Rattata'), nx: 0.3, ny: 0.25 },
@@ -123,6 +127,7 @@ export function makeDailyStage(seed: number): StageDef {
   const add = () => ({ def: ENEMY_POOL[Math.floor(rng() * ENEMY_POOL.length)], ...slot() });
   return {
     name: 'Daily Strike',
+    theme: THEMES[Math.floor(rng() * THEMES.length)],
     waves: [
       [add(), add(), add()],
       [add(), add(), add(), add()],

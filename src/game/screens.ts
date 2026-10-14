@@ -1,5 +1,6 @@
 import { sprite } from '../core/assets';
 import { SpeciesDef } from './data';
+import { drawBackdrop } from './bg';
 import { TYPE_COLOR } from './types';
 import { bumpIsPhysical } from './stats';
 
@@ -58,8 +59,7 @@ export function drawTitle(
   streak: number,
   dailyDone: boolean,
 ) {
-  ctx.fillStyle = '#0b0e1a';
-  ctx.fillRect(0, 0, W, H);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'grove', t);
 
   ctx.textAlign = 'center';
   ctx.font = 'bold 56px system-ui';
@@ -94,9 +94,9 @@ export function drawDraft(
   offers: SpeciesDef[],
   picked: SpeciesDef[],
   stageName: string,
+  t: number,
 ) {
-  ctx.fillStyle = '#0b0e1a';
-  ctx.fillRect(0, 0, W, H);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6);
 
   ctx.textAlign = 'center';
   ctx.font = 'bold 34px system-ui';

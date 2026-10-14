@@ -1,6 +1,7 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { sprite } from '../core/assets';
 import { SpeciesDef, StageDef } from './data';
+import { drawBackdrop } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
 import {
   playerHp,
@@ -806,11 +807,10 @@ export class Battle {
     }
 
     // arena
-    ctx.fillStyle = '#12162b';
-    this.roundRect(ctx, a.x, a.y, a.w, a.h, 18);
-    ctx.fill();
+    drawBackdrop(ctx, a, 18, this.stage.theme, this.time);
     ctx.strokeStyle = '#2a3560';
     ctx.lineWidth = 3;
+    this.roundRect(ctx, a.x, a.y, a.w, a.h, 18);
     ctx.stroke();
     // subtle inner glow
     ctx.strokeStyle = '#5adfff11';

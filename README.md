@@ -10,8 +10,12 @@ beat the boss, keep your streak alive.
 
 ```bash
 npm install
-npm run dev
+npm run dev    # serves on 0.0.0.0 — open the printed Network URL on your phone
 ```
+
+The game is also deployed to GitHub Pages on every push to `main`
+(`.github/workflows/deploy.yml`), so you can play from any device at
+`https://<user>.github.io/pokestrike/`.
 
 Open the printed URL. Works on desktop and touch.
 

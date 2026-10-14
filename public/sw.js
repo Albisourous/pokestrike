@@ -1,5 +1,5 @@
-const CACHE = 'pokestrike-v1';
-const CORE = ['/', '/index.html', '/manifest.webmanifest'];
+const CACHE = 'pokestrike-v2';
+const CORE = ['./', 'index.html', 'manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)));
