@@ -17,7 +17,7 @@ const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe:
   hp, atk, def, spa, spd, spe,
 });
 
-// Draft pool: each run offers 1-of-3 for four rounds.
+// Draft pool: weak starters only — the strong mons are caught mid-run.
 export const ROSTER: SpeciesDef[] = [
   { id: 25, name: 'Pikachu', type: 'electric', stats: st(35, 55, 40, 50, 50, 90) },
   { id: 4, name: 'Charmander', type: 'fire', stats: st(39, 52, 43, 60, 50, 65) },
@@ -27,16 +27,8 @@ export const ROSTER: SpeciesDef[] = [
   { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20), healer: true },
   { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90) },
   { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55) },
-  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110) },
-  { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30) },
   { id: 95, name: 'Onix', type: 'rock', stats: st(35, 45, 160, 30, 45, 70) },
-  { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55) },
-  { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
-  { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
-  { id: 3, name: 'Venusaur', type: 'grass', stats: st(80, 82, 83, 100, 100, 80), healer: true },
-  { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120) },
-  { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60), healer: true },
-  { id: 76, name: 'Golem', type: 'rock', stats: st(80, 120, 130, 55, 65, 45) },
+  { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35) },
 ];
 
 export const DRAFT_ROUNDS = 4;
@@ -79,7 +71,25 @@ const ENEMY_DB: SpeciesDef[] = [
   { id: 6, name: 'Charizard', type: 'fire', stats: st(78, 84, 78, 109, 85, 100) },
 ];
 
-export const ALL_SPRITE_IDS = [...ROSTER.map((r) => r.id), ...ENEMY_DB.map((e) => e.id)];
+// Capturable elites: evolved mons that only appear on later waves — the
+// reason to keep pushing into deeper depths.
+export const ELITES: SpeciesDef[] = [
+  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110) },
+  { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30) },
+  { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55), melee: true },
+  { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
+  { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
+  { id: 3, name: 'Venusaur', type: 'grass', stats: st(80, 82, 83, 100, 100, 80), healer: true },
+  { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120) },
+  { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60), healer: true },
+  { id: 76, name: 'Golem', type: 'rock', stats: st(80, 120, 130, 55, 65, 45) },
+];
+
+export const ALL_SPRITE_IDS = [
+  ...ROSTER.map((r) => r.id),
+  ...ENEMY_DB.map((e) => e.id),
+  ...ELITES.map((e) => e.id),
+];
 
 const ENEMY_POOL = ENEMY_DB.slice(0, 9);
 const BOSS_POOL = ENEMY_DB.slice(9);
@@ -131,12 +141,13 @@ export function makeStage(seed: number, name?: string): StageDef {
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
   const add = () => ({ def: ENEMY_POOL[Math.floor(rng() * ENEMY_POOL.length)], ...slot() });
+  const elite = () => ({ def: ELITES[Math.floor(rng() * ELITES.length)], ...slot() });
   return {
     name: name ?? THEME_NAME[theme],
     theme,
     waves: [
       [add(), add(), add()],
-      [add(), add(), add(), add()],
+      [add(), add(), add(), elite()],
       [add(), add(), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
     ],
     // 1-3 rocks drawn from the same slot pool, so they never overlap spawns
@@ -155,7 +166,13 @@ export function rollWave(rng: () => number, depth: number): WaveSpawn[] {
     const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
-  const add = () => ({ def: ENEMY_POOL[Math.floor(rng() * ENEMY_POOL.length)], ...slot() });
+  const add = () => ({
+    // deeper waves mix in capturable elites (~40%)
+    def: depth > 0 && rng() < 0.4
+      ? ELITES[Math.floor(rng() * ELITES.length)]
+      : ENEMY_POOL[Math.floor(rng() * ENEMY_POOL.length)],
+    ...slot(),
+  });
   const n = Math.min(3 + Math.floor(depth / 2), 6);
   const wave: WaveSpawn[] = Array.from({ length: n }, add);
   if (depth % 3 === 0) {
