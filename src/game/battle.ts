@@ -1512,20 +1512,36 @@ export class Battle {
       }
       ctx.globalAlpha = 1;
       ctx.restore();
+      // a Geodude perches on the boulder — it's alive, it just doesn't care
+      drawMon(ctx, 74, o.x, o.y - o.r * 0.45, o.r * 1.1, this.time);
     }
 
     // hazard pads: themed floor zones with a sprite marker on top
     for (const hz of this.hazards) {
       ctx.save();
       if (hz.kind === 'slow') {
-        // tall grass patch — kicked-up texture + Oddish poking out
-        ctx.fillStyle = '#3f7a3a';
+        // tall grass patch — dark mound, bright inner tufts, rim blades
+        ctx.fillStyle = '#2c5a28';
         ctx.beginPath();
         ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.8, 0, 0, Math.PI * 2);
         ctx.fill();
+        ctx.fillStyle = '#3f7a3a';
+        ctx.beginPath();
+        ctx.ellipse(hz.x, hz.y - 2, hz.r * 0.78, hz.r * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // jagged blade ring around the rim
         ctx.strokeStyle = '#2c5a28';
         ctx.lineWidth = 3;
-        ctx.stroke();
+        for (let i = 0; i < 16; i++) {
+          const a = (i / 16) * Math.PI * 2;
+          const bx = hz.x + Math.cos(a) * hz.r * 0.94;
+          const by = hz.y + Math.sin(a) * hz.r * 0.75;
+          ctx.beginPath();
+          ctx.moveTo(bx - 4, by);
+          ctx.quadraticCurveTo(bx, by - 13, bx + 4, by);
+          ctx.stroke();
+        }
+        // inner blades, lighter
         ctx.strokeStyle = '#58a848';
         ctx.lineWidth = 2.5;
         for (let i = 0; i < 14; i++) {
@@ -1537,7 +1553,27 @@ export class Battle {
           ctx.quadraticCurveTo(gx, gy - 9, gx + 3, gy);
           ctx.stroke();
         }
+        // tiny flowers poking through
+        ctx.fillStyle = '#ffd84d';
+        for (let i = 0; i < 3; i++) {
+          const a = hashSeed(hz.x + i * 31) * Math.PI * 2;
+          const rr = hz.r * (0.4 + hashSeed(hz.y + i * 17) * 0.4);
+          ctx.beginPath();
+          ctx.arc(hz.x + Math.cos(a) * rr, hz.y + Math.sin(a) * rr * 0.72, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
         drawMon(ctx, 43, hz.x, hz.y - hz.r * 0.55 + 6, 40, this.time); // Oddish
+        // foreground blades overlap Oddish's feet — it's hiding in there
+        ctx.strokeStyle = '#2c5a28';
+        ctx.lineWidth = 3;
+        for (const dx of [-14, 0, 14]) {
+          const bx = hz.x + dx;
+          const by = hz.y - hz.r * 0.42 + 10;
+          ctx.beginPath();
+          ctx.moveTo(bx - 4, by);
+          ctx.quadraticCurveTo(bx, by - 12, bx + 4, by);
+          ctx.stroke();
+        }
       } else if (hz.kind === 'speed') {
         // charge pad — pulsing rings + Magnemite
         const pulse = 0.75 + Math.sin(this.time * 5) * 0.15;
@@ -1821,15 +1857,17 @@ export class Battle {
     const color = TYPE_COLOR[u.def.type];
     const a = this.arena;
 
-    // predicted path: same launch physics, banking off walls + rocks,
-    // stopping where it would first touch a unit — the aiming guide
+    // predicted path: one bounce worth — banking off walls + rocks,
+    // stopping at the first contact. Any further is noise.
     {
       const speed =
         SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * frac);
       let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
       const dots: Vec[] = [];
       let hit: Unit | null = null;
+      let bounced = false;
       sim: for (let i = 0; i < 60; i++) {
+        if (bounced) break;
         const step = 1 / 30;
         const damp = Math.exp(-FRICTION * step);
         svx *= damp;
@@ -1837,10 +1875,10 @@ export class Battle {
         sx += svx * step;
         sy += svy * step;
         if (len({ x: svx, y: svy }) < 90) break;
-        if (sx - u.r < a.x) { sx = a.x + u.r; svx = -svx * WALL_REST; }
-        else if (sx + u.r > a.x + a.w) { sx = a.x + a.w - u.r; svx = -svx * WALL_REST; }
-        if (sy - u.r < a.y) { sy = a.y + u.r; svy = -svy * WALL_REST; }
-        else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * WALL_REST; }
+        if (sx - u.r < a.x) { sx = a.x + u.r; svx = -svx * WALL_REST; bounced = true; }
+        else if (sx + u.r > a.x + a.w) { sx = a.x + a.w - u.r; svx = -svx * WALL_REST; bounced = true; }
+        if (sy - u.r < a.y) { sy = a.y + u.r; svy = -svy * WALL_REST; bounced = true; }
+        else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * WALL_REST; bounced = true; }
         for (const o of this.obstacles) {
           const d = Math.hypot(sx - o.x, sy - o.y);
           const rr = u.r + o.r;
@@ -1853,6 +1891,7 @@ export class Battle {
             svx -= (1 + UNIT_REST) * vn * nx;
             svy -= (1 + UNIT_REST) * vn * ny;
           }
+          bounced = true;
         }
         for (const e of this.enemies)
           if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) { hit = e; break sim; }
@@ -1868,6 +1907,21 @@ export class Battle {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+      // small impact diamond where the path dies
+      if (bounced && !hit && dots.length) {
+        const q = dots[dots.length - 1];
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(q.x, q.y - 7);
+        ctx.lineTo(q.x + 7, q.y);
+        ctx.lineTo(q.x, q.y + 7);
+        ctx.lineTo(q.x - 7, q.y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       if (hit) {
         // target marker: gold on enemies, cyan on allies
         ctx.strokeStyle = hit.side === 'enemy' ? '#ffd84d' : '#9df0ff';

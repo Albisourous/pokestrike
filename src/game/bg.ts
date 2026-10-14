@@ -2,6 +2,8 @@
 // ground, scattered details, and a themed sprite wall around the arena.
 // No image assets — everything is drawn per frame.
 
+import { drawMon } from '../core/assets';
+
 export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
 export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
 
@@ -190,7 +192,7 @@ export function drawBackdrop(
     }
   }
 
-  // a pond / lava pool / pit blob for landmark variety
+  // a pond / lava pool / pit blob — with a real mon living in it
   if (pool) {
     const px = x + w * pool.nx, py = y + h * pool.ny;
     ctx.fillStyle = c.poolEdge;
@@ -201,6 +203,22 @@ export function drawBackdrop(
       ctx.fillStyle = 'rgba(255,255,255,0.35)';
       blob(ctx, px - 10, py - 8, 16, 6, 44, 5);
     }
+    // expanding ripples — lava pulses ember rings instead
+    ctx.strokeStyle = theme === 'volcano' ? '#ffb060' : 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 2; i++) {
+      const prog = (t * 0.5 + i * 0.5) % 1;
+      ctx.globalAlpha = (1 - prog) * 0.45;
+      ctx.beginPath();
+      ctx.ellipse(px, py, 12 + prog * 32, (12 + prog * 32) * 0.62, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // the resident: wades in water/lava, hovers over pits and cloud gaps
+    const POOL_MON: Record<Theme, number> = { grove: 54, cavern: 41, volcano: 4, sky: 16 };
+    const lift =
+      theme === 'cavern' || theme === 'sky' ? -16 + Math.sin(t * 2) * 4 : -6;
+    drawMon(ctx, POOL_MON[theme], px, py + lift, 40, t);
   }
 
   // grove extras: little flowers
