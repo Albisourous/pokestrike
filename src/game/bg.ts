@@ -2,7 +2,7 @@
 // ground, scattered details, and a themed sprite wall around the arena.
 // No image assets — everything is drawn per frame.
 
-import { drawMon, itemSprite } from '../core/assets';
+import { itemSprite } from '../core/assets';
 
 export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
 export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
