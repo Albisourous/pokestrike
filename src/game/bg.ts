@@ -263,6 +263,23 @@ export function drawBackdrop(
     ctx.globalAlpha = 1;
   }
 
+  // old battle scars — the field arrives pre-worn, like the Arena pitches:
+  // a few seeded crater remnants with dirt rims scattered about
+  for (let i = 0; i < 4; i++) {
+    const sx = x + (0.12 + hash(i * 31 + 1) * 0.76) * w;
+    const sy = y + (0.1 + hash(i * 47 + 3) * 0.8) * h;
+    const sr = 15 + hash(i * 13 + 5) * 22;
+    ctx.strokeStyle = 'rgba(115,88,48,0.28)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, sr * 1.15, sr * 0.7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(20,16,8,0.14)';
+    ctx.beginPath();
+    ctx.ellipse(sx, sy, sr, sr * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // a pond / lava pool — real RSE pond metatiles for water themes,
   // procedural lava for the volcano (water doesn't belong there)
   if (pool) {

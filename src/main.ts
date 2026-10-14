@@ -22,6 +22,7 @@ import {
   SHARE_BTN,
   FREE_BTN,
   inRect,
+  PIXEL_FONT,
 } from './game/screens';
 import type { RunResult, ShareGrid } from './game/screens';
 import type { PokeType } from './game/types';
@@ -267,7 +268,7 @@ function render() {
     case 'loading':
       ctx.fillStyle = '#0b0e1a';
       ctx.fillRect(0, 0, W, H);
-      ctx.font = '20px system-ui';
+      ctx.font = `12px ${PIXEL_FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#8890b8';
       ctx.fillText('loading…', W / 2, H / 2);
@@ -341,7 +342,7 @@ Promise.all([
     scene = 'loading';
     console.error(err);
     ctx.fillStyle = '#fff';
-    ctx.font = '16px system-ui';
+    ctx.font = `10px ${PIXEL_FONT}`;
     ctx.fillText(`failed to load: ${err.message}`, 20, H / 2);
   });
 

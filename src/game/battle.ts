@@ -25,6 +25,7 @@ import {
   MOVE_NAME,
 } from './stats';
 import type { Role } from './stats';
+import { PIXEL_FONT } from './screens';
 
 export interface Rect {
   x: number;
@@ -1582,6 +1583,12 @@ export class Battle {
     // battle scars: cracked impact craters under everything — Arena-style
     // field damage that persists the whole battle
     for (const s of this.scorch) {
+      // raised dirt rim first — the thrown-up lip of the crater
+      ctx.strokeStyle = `rgba(115,88,48,${Math.min(s.a * 1.6, 0.55)})`;
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, s.r * 1.18, s.r * 0.74, 0, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.fillStyle = `rgba(20,16,8,${s.a})`;
       ctx.beginPath();
       ctx.ellipse(s.x, s.y, s.r, s.r * 0.62, 0, 0, Math.PI * 2);
@@ -1785,7 +1792,7 @@ export class Battle {
     for (const t of this.texts) {
       const pop = 1 + Math.max(0, t.t - 0.72) * (t.big ? 3 : 1.6);
       ctx.globalAlpha = Math.min(t.t / 0.3, 1);
-      ctx.font = `bold ${Math.round(20 * pop)}px system-ui`;
+      ctx.font = `${Math.round(16 * pop)}px ${PIXEL_FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = t.color;
       ctx.strokeStyle = '#000';
@@ -1820,7 +1827,7 @@ export class Battle {
     // onboarding hints for the first couple of shots
     if (this.phase === 'aim' && this.shots < 2 && !this.dragging) {
       ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
-      ctx.font = 'bold 15px system-ui';
+      ctx.font = `9px ${PIXEL_FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#e8ecff';
       ctx.fillText(
@@ -1938,7 +1945,7 @@ export class Battle {
       ctx.beginPath();
       ctx.arc(u.x + u.r - 2, u.y - u.r + 2, 11, 0, Math.PI * 2);
       ctx.fill();
-      ctx.font = 'bold 13px system-ui';
+      ctx.font = `9px ${PIXEL_FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
       ctx.fillText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
