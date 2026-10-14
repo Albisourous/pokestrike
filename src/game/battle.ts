@@ -65,6 +65,7 @@ interface Unit {
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
   caught: boolean; // already boxed (master ball) — skip the catch roll
+  revealed?: boolean; // enemies: flushed out of tall grass — until then they're hidden
   sash: boolean; // focus sash: survive one lethal hit at 1 HP
   pow: number; // role damage multiplier
   rngMul: number; // role super-range multiplier
@@ -163,9 +164,16 @@ interface Hazard {
   x: number;
   y: number;
   r: number;
-  kind: 'slow' | 'speed' | 'turn';
+  kind: 'slow' | 'speed' | 'turn' | 'ice';
   ang: number; // turn pads fling you along this angle
   armed: boolean;
+}
+interface Ledge {
+  x: number;
+  y: number;
+  ang: number; // the one legal crossing direction — against it it's a wall
+  len: number;
+  armed: boolean; // re-arms once the ball is clear, so each hop sparks once
 }
 
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
@@ -257,6 +265,9 @@ export class Battle {
   private obstacles: { x: number; y: number; r: number }[];
   private theme: Theme; // current wave's scene — rotates each wave
   private hazards: Hazard[] = [];
+  private ledges: Ledge[] = []; // one-way jump ledges, RSE-style
+  private pool: { x: number; y: number; rx: number; ry: number } | null = null; // pond/lava region
+  private wasInPool = false; // ball pool-entry edge detect for the splash
 
   constructor(
     public arena: Rect,
@@ -266,6 +277,7 @@ export class Battle {
     private endless = false,
   ) {
     this.theme = stage.theme;
+    this.setPool();
     this.obstacles = [];
     this.genObstacles();
     const n = team.length;
@@ -333,7 +345,10 @@ export class Battle {
           y: this.arena.y + this.arena.h * (0.15 + this.rng() * 0.45),
           r: this.arena.w * (0.05 + this.rng() * 0.04),
         };
-        if (this.players.every((p) => p.dead || dist(o, p) > o.r + p.r + 30)) {
+        if (
+          !this.inPool(o.x, o.y, o.r) &&
+          this.players.every((p) => p.dead || dist(o, p) > o.r + p.r + 30)
+        ) {
           this.obstacles.push(o);
           break;
         }
@@ -343,7 +358,7 @@ export class Battle {
 
   // Themed field hazards, upper field, per wave.
   private genHazards() {
-    const KINDS: Hazard['kind'][] = ['slow', 'speed', 'turn'];
+    const KINDS: Hazard['kind'][] = ['slow', 'speed', 'turn', 'ice'];
     this.hazards = [];
     const count = 1 + Math.floor(this.rng() * 2);
     for (let k = 0; k < count; k++) {
@@ -357,10 +372,63 @@ export class Battle {
           armed: true,
         };
         if (
+          !this.inPool(hz.x, hz.y, hz.r * 0.7) &&
           this.players.every((p) => p.dead || dist(hz, p) > hz.r + p.r + 20) &&
           this.obstacles.every((o) => dist(hz, o) > hz.r + o.r)
         ) {
           this.hazards.push(hz);
+          break;
+        }
+      }
+    }
+  }
+
+  // The pool the backdrop paints is fixed at nx .78, ny .2 — mirror it as a
+  // real region. Pond (most themes) only swimmers cross; lava (volcano) only
+  // fire/rock/fliers.
+  private setPool() {
+    this.pool = {
+      x: this.arena.x + this.arena.w * 0.78,
+      y: this.arena.y + this.arena.h * 0.2,
+      rx: this.theme === 'volcano' ? 40 : 42,
+      ry: this.theme === 'volcano' ? 27 : 30,
+    };
+  }
+
+  private canCrossPool(u: Unit) {
+    const t = u.def.type;
+    return this.theme === 'volcano'
+      ? t === 'fire' || t === 'rock' || t === 'flying'
+      : t === 'water' || t === 'flying';
+  }
+
+  private inPool(x: number, y: number, pad = 0) {
+    const w = this.pool;
+    if (!w) return false;
+    const dx = (x - w.x) / (w.rx + pad), dy = (y - w.y) / (w.ry + pad);
+    return dx * dx + dy * dy < 1;
+  }
+
+  // One-way ledges: a dirt bank you can only hop in `ang`'s direction.
+  private genLedges() {
+    this.ledges = [];
+    if (this.rng() < 0.4) return; // some waves get none
+    const n = this.rng() < 0.35 ? 2 : 1;
+    for (let k = 0; k < n; k++) {
+      for (let tries = 0; tries < 8; tries++) {
+        const L: Ledge = {
+          x: this.arena.x + this.arena.w * (0.2 + this.rng() * 0.6),
+          y: this.arena.y + this.arena.h * (0.28 + this.rng() * 0.4),
+          ang: Math.floor(this.rng() * 8) * (Math.PI / 4),
+          len: 95 + this.rng() * 50,
+          armed: true,
+        };
+        if (
+          !this.inPool(L.x, L.y, L.len / 2 + 20) &&
+          this.obstacles.every((o) => dist(L, o) > L.len / 2 + o.r) &&
+          this.players.every((p) => p.dead || dist(L, p) > L.len / 2 + p.r + 40)
+        ) {
+          this.ledges.push(L);
           break;
         }
       }
@@ -372,8 +440,10 @@ export class Battle {
     // each wave is a new scene — rotate theme, re-roll obstacles + hazards
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
+    this.setPool();
     this.genObstacles();
     this.genHazards();
+    this.genLedges();
     this.enemies = this.stage.waves[i].map((s, k) => ({
       uid: nextUid++,
       def: s.def,
@@ -410,6 +480,9 @@ export class Battle {
       cdMod: 0,
       lastHit: new Map(),
     }));
+    // mons that can't swim/scorch shouldn't stand in the pond/lava
+    for (const e of this.enemies)
+      if (!this.canCrossPool(e) && this.inPool(e.x, e.y, e.r)) this.poolPush(e);
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -571,6 +644,63 @@ export class Battle {
           this.bruise(u.x, u.y, len({ x: u.vx, y: u.vy }));
         }
       }
+      // one-way ledges — hop through going `ang`, wall coming back
+      for (const L of this.ledges) {
+        const nx = Math.cos(L.ang), ny = Math.sin(L.ang);
+        const s = (u.x - L.x) * nx + (u.y - L.y) * ny;
+        const t = -(u.x - L.x) * ny + (u.y - L.y) * nx;
+        if (Math.abs(s) > u.r + 14 || Math.abs(t) > L.len / 2 + u.r) {
+          L.armed = true;
+          continue;
+        }
+        const vn = u.vx * nx + u.vy * ny;
+        if (vn < 0 && s > 0 && Math.abs(t) < L.len / 2 + u.r * 0.3 && s < u.r + 5) {
+          u.x += nx * (u.r + 5 - s);
+          u.y += ny * (u.r + 5 - s);
+          u.vx -= (1 + WALL_REST) * vn * nx;
+          u.vy -= (1 + WALL_REST) * vn * ny;
+          this.wallSpark(u.x, u.y, nx, ny);
+          this.shower(u.x, u.y, 4, '#a08050', 140, 'streak');
+          this.bruise(u.x, u.y, len({ x: u.vx, y: u.vy }));
+        } else if (vn > 0 && Math.abs(s) < u.r && Math.abs(t) < L.len / 2 && L.armed) {
+          L.armed = false; // hopped the ledge — dust puff + a little kick
+          u.vx += nx * 90;
+          u.vy += ny * 90;
+          this.shower(u.x - nx * u.r, u.y - ny * u.r, 7, '#e8d8a8', 180, 'dot');
+          sfx('hit', 1.7);
+        }
+      }
+      // pond / lava — a wall unless this mon can cross it
+      if (this.pool) {
+        const w = this.pool;
+        const rx = w.rx + u.r * 0.55, ry = w.ry + u.r * 0.55;
+        const qx = (u.x - w.x) / rx, qy = (u.y - w.y) / ry;
+        const inside = qx * qx + qy * qy < 1;
+        if (inside && !this.canCrossPool(u)) {
+          const q = Math.hypot(qx, qy) || 1;
+          u.x = w.x + (qx / q) * rx;
+          u.y = w.y + (qy / q) * ry;
+          let nx = qx / rx, ny = qy / ry;
+          const nl = Math.hypot(nx, ny) || 1;
+          nx /= nl;
+          ny /= nl;
+          const vn = u.vx * nx + u.vy * ny;
+          if (vn < 0) {
+            u.vx -= (1 + WALL_REST) * vn * nx;
+            u.vy -= (1 + WALL_REST) * vn * ny;
+          }
+          const wet = this.theme === 'volcano';
+          this.shower(u.x, u.y, 5, wet ? '#ffb060' : '#9df0ff', 170, 'dot');
+          this.bruise(u.x, u.y, len({ x: u.vx, y: u.vy }));
+          if (!this.wasInPool) sfx('splash');
+        }
+        if (inside && !this.wasInPool && this.canCrossPool(u)) {
+          // swimmer dives in — ring splash + sparkle trail
+          this.burst(u.x, u.y, 30, '#9df0ff', 0.35);
+          sfx('splash');
+        }
+        this.wasInPool = inside;
+      }
       for (const hz of this.hazards) {
         const inside = dist(u, hz) < hz.r;
         if (hz.kind === 'turn') {
@@ -595,6 +725,13 @@ export class Battle {
             u.vy *= dmp;
             if (this.particles.length < MAX_PARTICLES && Math.random() < 0.3)
               this.particles.push({ x: u.x, y: u.y, vx: -u.vx * 0.2, vy: -u.vy * 0.2 - 40, t: 0.4, life: 0.4, size: 4, color: '#58a848', shape: 'leaf', grav: 200 });
+          } else if (hz.kind === 'ice') {
+            // ice sheet — undo most of the friction, you keep sliding
+            const und = Math.exp(FRICTION * this.frictionMult * h * 0.92);
+            u.vx *= und;
+            u.vy *= und;
+            if (this.particles.length < MAX_PARTICLES && Math.random() < 0.35)
+              this.particles.push({ x: u.x, y: u.y, vx: -u.vx * 0.05, vy: -u.vy * 0.05 - 20, t: 0.4, life: 0.4, size: 3, color: '#c8f0ff', shape: 'streak', grav: 0 });
           } else {
             // charge pad: accelerate along current heading
             const dir = norm({ x: u.vx, y: u.vy });
@@ -607,6 +744,8 @@ export class Battle {
       }
       for (const e of wave) {
         if (this.enemies !== wave) break;
+        // getting close flushes hidden mons out of the tall grass
+        if (!e.revealed && dist(u, e) < u.r + e.r + 68) this.reveal(e);
         if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
       }
       for (const p of this.players) {
@@ -671,6 +810,18 @@ export class Battle {
       }
       this.clampToArena(e);
       for (const o of this.obstacles) this.separate(e, o);
+      // wild mons can't hop ledges — the bank is a wall both ways for them
+      for (const L of this.ledges) {
+        const nx = Math.cos(L.ang), ny = Math.sin(L.ang);
+        const s = (e.x - L.x) * nx + (e.y - L.y) * ny;
+        const t = -(e.x - L.x) * ny + (e.y - L.y) * nx;
+        if (Math.abs(s) < e.r + 4 && Math.abs(t) < L.len / 2 + e.r * 0.5) {
+          const side = s >= 0 ? 1 : -1;
+          e.x += nx * (side * (e.r + 4) - s);
+          e.y += ny * (side * (e.r + 4) - s);
+        }
+      }
+      if (!this.canCrossPool(e) && this.inPool(e.x, e.y, e.r * 0.5)) this.poolPush(e);
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
@@ -796,9 +947,39 @@ export class Battle {
     return true;
   }
 
+  // An enemy sitting inside a tall-grass pad is concealed until flushed out.
+  private hidden(e: Unit) {
+    return (
+      e.side === 'enemy' &&
+      !e.dead &&
+      !e.revealed &&
+      e.spawnT <= 0 &&
+      this.hazards.some((hz) => hz.kind === 'slow' && dist(e, hz) < hz.r * 0.85)
+    );
+  }
+
+  private reveal(e: Unit) {
+    if (e.revealed) return;
+    e.revealed = true;
+    this.shower(e.x, e.y, 10, '#58a848', 220, 'leaf');
+    this.texts.push({ x: e.x, y: e.y - e.r - 10, text: '!', t: 0.7, color: '#ffd84d', big: true });
+    sfx('hit', 1.6);
+  }
+
+  // Shove a unit radially out of the pond/lava region.
+  private poolPush(u: Unit) {
+    const w = this.pool;
+    if (!w) return;
+    const dx = u.x - w.x, dy = u.y - w.y;
+    const q = Math.hypot(dx / w.rx, dy / w.ry) || 1;
+    u.x = w.x + (dx / (w.rx * q)) * (w.rx + u.r);
+    u.y = w.y + (dy / (w.ry * q)) * (w.ry + u.r);
+  }
+
   // Central damage path so every source (contact, bump, orb, dot) behaves alike.
   private hurt(e: Unit, dmg: number, color: string, suffix = '') {
     if (e.dead) return;
+    e.revealed = true; // any damage flushes it out of the grass
     let d = dmg;
     if (suffix === '!') d *= 1 + this.belt; // expert belt loves super-effective
     let crit = false;
@@ -1365,7 +1546,10 @@ export class Battle {
     this.pendingAttacks = [];
     for (const e of this.enemies) {
       e.timer--;
-      if (e.timer <= 0) this.pendingAttacks.push(e);
+      if (e.timer <= 0) {
+        e.revealed = true; // attacking gives away your hiding spot
+        this.pendingAttacks.push(e);
+      }
     }
     if (this.pendingAttacks.length > 0) {
       this.phase = 'enemy';
@@ -1909,6 +2093,31 @@ export class Battle {
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
+    // concealed in tall grass — a rustling dark shape, no timer or HP until
+    // you get close enough to flush it out
+    if (this.hidden(u)) {
+      const pop = 1;
+      ctx.save();
+      ctx.translate(u.x, u.y);
+      ctx.globalAlpha = 0.3 * pop;
+      drawMon(ctx, u.def.id, 0, 0, u.r * 2.6);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      // blades swaying over it — the rustle is the tell
+      ctx.strokeStyle = '#2c5a28';
+      ctx.lineWidth = 3;
+      const wig = Math.sin(this.time * 9 + u.x) * 3;
+      for (let i = -2; i <= 2; i++) {
+        const bx = u.x + i * u.r * 0.45;
+        ctx.beginPath();
+        ctx.moveTo(bx - 4, u.y + u.r * 0.7);
+        ctx.quadraticCurveTo(bx + wig, u.y - u.r * 0.9, bx + 4 + wig, u.y + u.r * 0.5);
+        ctx.stroke();
+      }
+      if (Math.random() < 0.02 && this.particles.length < MAX_PARTICLES)
+        this.particles.push({ x: u.x + (Math.random() - 0.5) * u.r, y: u.y - u.r, vx: (Math.random() - 0.5) * 60, vy: -60, t: 0.5, life: 0.5, size: 4, color: '#58a848', shape: 'leaf', grav: 200 });
+      return;
+    }
     const size = u.r * 2.6;
     // wave entry: staggered delay, then a quick overshoot zoom — the
     // Essentials appear-anim feel

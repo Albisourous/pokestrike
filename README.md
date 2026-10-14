@@ -126,9 +126,12 @@ public/  sprites/, manifest.webmanifest, sw.js, icons
 
 ## Sprites & credit
 
-Sprites are from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) (Gen V
-front sprites, 96×96), vendored into `public/sprites/` so the game runs offline
-after install.
+All Pokémon use one consistent theme: **Generation V (Black/White) pixel
+sprites** from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) —
+`public/sprites/<id>.png` is the static 96×96 front sprite and
+`public/sprites/anim/<id>.png` is the matching animated strip (converted from
+the Gen V animated GIFs). Everything is vendored so the game runs offline after
+install — when adding a species, keep it in the same Gen V theme.
 
 Pokémon is © Nintendo / Game Freak / Creatures Inc. This is a fan-made,
 non-commercial project — not affiliated with or endorsed by them.

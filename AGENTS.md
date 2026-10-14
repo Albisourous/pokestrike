@@ -19,7 +19,7 @@ Vite dev server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering
 - `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
-- `public/sprites/<id>.png` — vendored PokeAPI sprites (id = Pokédex number)
+- `public/sprites/<id>.png` — Gen 5 (Black/White) front sprites, 96×96 (id = Pokédex number); `sprites/anim/<id>.png` — matching BW animated vertical strip
 
 ## Conventions
 
@@ -27,7 +27,7 @@ Vite dev server, 540×960 letterboxed logical space, custom circle physics.
   sprite in `public/sprites/`. No new systems for single features.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Physics tunables are named consts at the top of `battle.ts`.
-- Sprites come from PokeAPI; this is a non-commercial fan project.
+- Sprite theme is Gen 5 (Black/White) pixel art — statics from `versions/generation-v/black-white/` in PokeAPI/sprites, anim strips converted from the same generation's animated GIFs. New species must match this theme; this is a non-commercial fan project.
 
 ## Installed agent tooling (`.devin/`)
 
