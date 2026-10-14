@@ -4,7 +4,7 @@ import { loadAll } from './core/assets';
 import { vec } from './core/vec';
 import { dateSeed, mulberry32 } from './core/rng';
 import { Battle } from './game/battle';
-import { ROSTER, STAGE, makeDailyStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS } from './game/data';
 import {
   W,
   H,
@@ -35,6 +35,7 @@ let scene: Scene = 'loading';
 let mode: Mode = 'free';
 let battle: Battle | null = null;
 let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
+let stage = makeStage(dateSeed());
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
 let best: number | null = null;
@@ -89,6 +90,10 @@ canvas.addEventListener('pointerdown', (e) => {
       // daily drafts are seeded: everyone sees the same offers that day
       const rng = mode === 'daily' ? mulberry32(dateSeed()) : Math.random;
       draft = { order: draftOrder(rng), picked: [] };
+      stage = makeStage(
+        mode === 'daily' ? dateSeed() : (Math.random() * 2 ** 31) | 0,
+        mode === 'daily' ? 'Daily Strike' : undefined,
+      );
       scene = 'draft';
     }
   } else if (scene === 'draft') {
@@ -98,7 +103,6 @@ canvas.addEventListener('pointerdown', (e) => {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       draft.picked.push(offers[i]);
       if (draft.picked.length === DRAFT_ROUNDS) {
-        const stage = mode === 'daily' ? makeDailyStage(dateSeed()) : STAGE;
         battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage);
         scene = 'battle';
       }
@@ -188,7 +192,7 @@ function render() {
         ctx,
         offers,
         draft.picked.map((i) => ROSTER[i]),
-        mode === 'daily' ? 'Daily Strike' : STAGE.name,
+        stage.name,
         t,
       );
       break;

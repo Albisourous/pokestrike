@@ -509,16 +509,19 @@ export class Battle {
     const color = TYPE_COLOR[p.def.type];
 
     switch (p.def.type) {
-      case 'fire': // radial blast
+      case 'fire': // meteor storm: fireballs rain down on every nearby enemy
         this.burst(p.x, p.y, 150, color, 0.4);
         this.burst(p.x, p.y, 100, '#ffffff', 0.25);
-        this.shower(p.x, p.y, 20, color, 300, 'ember');
-        this.screenFlash('#f08030', 0.12);
-        this.addShake(7);
-        for (const e of near(150)) this.hurt(e, bumpDmg(e, 0.9), '#9df0ff');
+        this.screenFlash('#f08030', 0.15);
+        this.addShake(8);
+        for (const e of near(150)) {
+          this.skyFall(e.x, color);
+          this.burst(e.x, e.y, 46, '#ffffff', 0.25);
+          this.hurt(e, bumpDmg(e, 0.9), '#9df0ff');
+        }
         break;
       case 'electric': {
-        // chain lightning: up to 3 jumps between enemies
+        // lightning storm: sky strike on each chained enemy + arc between them
         let from: Unit = p;
         const hit = new Set<number>();
         let mult = 1;
@@ -528,23 +531,29 @@ export class Battle {
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
           if (!next) break;
           hit.add(next.uid);
-          this.zap(from.x, from.y, next.x, next.y, color);
-          this.shower(next.x, next.y, 6, color, 180, 'dot');
+          this.zap(next.x, this.arena.y, next.x, next.y, color);
+          if (from !== p || i === 0) this.zap(from.x, from.y, next.x, next.y, color);
+          this.shower(next.x, next.y, 8, color, 200, 'dot');
+          this.burst(next.x, next.y, 36, '#fffbe0', 0.2);
           this.hurt(next, bumpDmg(next, mult), '#9df0ff');
           mult *= 0.7;
           from = next;
         }
-        if (hit.size > 0) this.addShake(4);
+        if (hit.size > 0) {
+          this.addShake(6);
+          this.screenFlash('#f8d030', 0.12);
+        }
         break;
       }
       case 'grass': {
-        // drain field: damage nearby enemies, heal the team
+        // drain field: tendrils pull energy from enemies back to the ally
         this.burst(p.x, p.y, 140, color, 0.4);
-        this.shower(p.x, p.y, 16, color, 190, 'leaf');
+        this.converge(p.x, p.y, 14, color, 'leaf');
         let dealt = 0;
         for (const e of near(140)) {
           const dmg = bumpDmg(e, 0.8);
           dealt += dmg;
+          this.zap(e.x, e.y, p.x, p.y, '#78c850');
           this.hurt(e, dmg, '#9df0ff');
         }
         const heal = Math.max(Math.round(dealt * 0.25), 4);
@@ -591,9 +600,10 @@ export class Battle {
         break;
       }
       case 'poison':
-        // toxin: small hit now, plus 2 ticks at the end of your shots
+        // toxin: gas cloud now, plus 2 ticks at the end of your shots
         this.burst(p.x, p.y, 140, color, 0.4);
-        this.shower(p.x, p.y, 14, '#c060c0', 130, 'bubble');
+        this.shower(p.x, p.y, 22, '#c060c0', 110, 'bubble');
+        this.screenFlash('#a040a0', 0.12);
         for (const e of near(140)) {
           e.dotTicks = 2;
           e.dotDmg = specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), 0.5);
@@ -602,30 +612,38 @@ export class Battle {
         break;
       case 'rock':
       case 'fighting': {
-        // heavy hit on the nearest enemy
+        // meteor fist: debris falls on the nearest enemy, double slash
         const e = nearest(p, 200);
         if (e) {
+          this.skyFall(e.x, '#b8a038');
           this.burst(e.x, e.y, e.r * 2.6, color, 0.35);
+          this.slash(e.x, e.y, '#ffffff');
           this.slash(e.x, e.y, color);
-          this.shower(e.x, e.y, 12, '#b8a038', 260, 'ember');
-          this.addShake(8);
+          this.shower(e.x, e.y, 14, '#b8a038', 280, 'ember');
+          this.screenFlash('#b8a038', 0.1);
+          this.addShake(10);
           this.hurt(e, bumpDmg(e, 1.8), '#9df0ff');
         }
         break;
       }
       case 'ghost': {
-        // hex: hit every enemy weakly
+        // hex: wisps converge on every enemy from the dark
         this.burst(p.x, p.y, 230, color, 0.5);
-        this.shower(p.x, p.y, 16, '#705898', 90, 'wisp');
-        for (const e of near(Infinity)) this.hurt(e, bumpDmg(e, 0.55), '#9df0ff');
+        this.screenFlash('#705898', 0.18);
+        for (const e of near(Infinity)) {
+          this.converge(e.x, e.y, 8, '#705898', 'wisp');
+          this.hurt(e, bumpDmg(e, 0.55), '#9df0ff');
+        }
         break;
       }
       default: {
-        // normal: quick tackle on the nearest enemy
+        // normal: dash slash on the nearest enemy
         const e = nearest(p, 180);
         if (e) {
           this.zap(p.x, p.y, e.x, e.y, color);
+          this.slash(e.x, e.y, '#ffffff');
           this.slash(e.x, e.y, color);
+          this.shower(e.x, e.y, 8, '#ffffff', 240, 'streak');
           this.hurt(e, bumpDmg(e, 1.4), '#9df0ff');
         }
       }
@@ -778,6 +796,46 @@ export class Battle {
         size: 3 + Math.random() * 4,
         color, shape,
         grav: shape === 'ember' ? 220 : shape === 'leaf' ? 60 : 0,
+      });
+    }
+  }
+
+  // Debris/meteors rain down from the top of the arena onto a column.
+  private skyFall(x: number, color: string) {
+    for (let i = 0; i < 7 && this.particles.length < MAX_PARTICLES; i++) {
+      const px = x + (Math.random() - 0.5) * 60;
+      this.particles.push({
+        x: px,
+        y: this.arena.y + Math.random() * 24,
+        vx: (x - px) * 2.2,
+        vy: 420 + Math.random() * 180,
+        t: 0.5,
+        life: 0.5,
+        size: 4 + Math.random() * 5,
+        color,
+        shape: 'ember',
+        grav: 0,
+      });
+    }
+  }
+
+  // Particles spawned on a ring around a point, flying inward — dies on arrival.
+  private converge(x: number, y: number, n: number, color: string, shape: Particle['shape']) {
+    for (let i = 0; i < n && this.particles.length < MAX_PARTICLES; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 70 + Math.random() * 60;
+      const speed = 230;
+      this.particles.push({
+        x: x + Math.cos(a) * r,
+        y: y + Math.sin(a) * r,
+        vx: -Math.cos(a) * speed,
+        vy: -Math.sin(a) * speed,
+        t: r / speed,
+        life: r / speed,
+        size: 3 + Math.random() * 4,
+        color,
+        shape,
+        grav: 0,
       });
     }
   }

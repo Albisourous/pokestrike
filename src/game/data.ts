@@ -66,8 +66,6 @@ const ENEMY_DB: SpeciesDef[] = [
   { id: 6, name: 'Charizard', type: 'fire', stats: st(78, 84, 78, 109, 85, 100) },
 ];
 
-const foe = (name: string) => ENEMY_DB.find((e) => e.name === name)!;
-
 export const ALL_SPRITE_IDS = [...ROSTER.map((r) => r.id), ...ENEMY_DB.map((e) => e.id)];
 
 const ENEMY_POOL = ENEMY_DB.slice(0, 9);
@@ -87,39 +85,26 @@ export interface StageDef {
   waves: WaveSpawn[][];
 }
 
-export const STAGE: StageDef = {
-  name: 'Viridian Depths',
-  theme: 'grove',
-  waves: [
-    [
-      { def: foe('Rattata'), nx: 0.3, ny: 0.25 },
-      { def: foe('Rattata'), nx: 0.7, ny: 0.25 },
-      { def: foe('Pidgey'), nx: 0.5, ny: 0.45 },
-    ],
-    [
-      { def: foe('Zubat'), nx: 0.25, ny: 0.2 },
-      { def: foe('Zubat'), nx: 0.75, ny: 0.2 },
-      { def: foe('Geodude'), nx: 0.5, ny: 0.4 },
-      { def: foe('Magnemite'), nx: 0.5, ny: 0.6 },
-    ],
-    [
-      { def: foe('Abra'), nx: 0.2, ny: 0.3 },
-      { def: foe('Abra'), nx: 0.8, ny: 0.3 },
-      { def: foe('Mewtwo'), nx: 0.5, ny: 0.45, boss: true },
-    ],
-  ],
+const THEME_NAME: Record<Theme, string> = {
+  grove: 'Viridian Wilds',
+  cavern: 'Echo Cavern',
+  volcano: 'Cinder Crag',
+  sky: 'Gale Heights',
 };
 
-// Same stage for everyone on the same day.
+// Spawn positions drawn without replacement from this pool.
 const SLOTS: [number, number][] = [
   [0.25, 0.2], [0.75, 0.2], [0.5, 0.4], [0.25, 0.55],
   [0.75, 0.55], [0.5, 0.12], [0.15, 0.4], [0.85, 0.4],
   [0.35, 0.72], [0.65, 0.72], [0.5, 0.6], [0.85, 0.62],
 ];
 
-export function makeDailyStage(seed: number): StageDef {
+// Random stage: 3 waves + a boss. Same seed -> same stage, so the Daily
+// Strike is identical for everyone while Free Play rolls a fresh seed.
+export function makeStage(seed: number, name?: string): StageDef {
   const rng = mulberry32(seed);
   const boss = BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)];
+  const theme = THEMES[Math.floor(rng() * THEMES.length)];
   const slots = [...SLOTS];
   const slot = () => {
     const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
@@ -127,8 +112,8 @@ export function makeDailyStage(seed: number): StageDef {
   };
   const add = () => ({ def: ENEMY_POOL[Math.floor(rng() * ENEMY_POOL.length)], ...slot() });
   return {
-    name: 'Daily Strike',
-    theme: THEMES[Math.floor(rng() * THEMES.length)],
+    name: name ?? THEME_NAME[theme],
+    theme,
     waves: [
       [add(), add(), add()],
       [add(), add(), add(), add()],

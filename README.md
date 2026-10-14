@@ -24,7 +24,8 @@ The game is also deployed to GitHub Pages on every push to `main`
 Open the printed URL. Works on desktop and touch.
 
 1. Pick **Daily Strike** (same seeded stage *and* same draft offers for
-   everyone, streak tracked) or **Free Play** (practice stage).
+   everyone, streak tracked) or **Free Play** (a randomly generated stage —
+   new layout, theme, and boss every run).
 2. **Draft your team** — four rounds, one of three Pokémon each round, from an
    18-species pool. Cards show the real base stats and whether the bump attack
    is physical or special. Build for type coverage: a tank, a fast shooter,
