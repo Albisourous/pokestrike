@@ -4,6 +4,7 @@ import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, rollWave } from './data';
 import { Perk, rollPerks } from './perks';
+import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES, hash as hashSeed } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
@@ -241,6 +242,12 @@ export class Battle {
   koHeal = 0; // exp share: heal team this fraction on each KO
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   box: SpeciesDef[] = []; // captured mons — swap one in between waves
+  // run stats for end-of-run badges — RNGdle-style "what did this run earn"
+  maxCombo = 0; // best pass-chain in a single shot
+  maxKos = 0; // most enemies one shot downed
+  totalKos = 0; // enemies downed all run
+  caughtBoss = false;
+  perksTaken = 0;
   swapped = false; // one swap per reward break
   boxSel = -1; // box index picked for swapping
   depth = 0; // endless acts survived past the boss wave
@@ -831,6 +838,8 @@ export class Battle {
       this.bruise(e.x, e.y, 700); // a mon went down here — the field remembers
       // multi-KO callouts — chaining kills in one shot should feel huge
       this.kosThisShot++;
+      this.totalKos++;
+      this.maxKos = Math.max(this.maxKos, this.kosThisShot);
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
         this.texts.push({ x: e.x, y: e.y - e.r - 46, text: label, t: 1.1, color: '#ffd84d', big: true });
@@ -862,6 +871,7 @@ export class Battle {
       });
       if (caught) {
         this.box.push(e.def);
+        if (e.boss) this.caughtBoss = true;
         this.screenFlash('#ffd84d', 0.2);
         this.converge(e.x, e.y, 10, '#ffd84d', 'wisp');
         // real poké ball drops in and does the triple-wiggle
@@ -969,6 +979,7 @@ export class Battle {
     if (this.time - p.lastBump < 0.3) return; // once per pass, not per frame
     p.lastBump = this.time;
     this.shotCombo++;
+    this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
     const n = this.shotCombo;
     const c = TYPE_COLOR[p.def.type];
     // link arc between ball and ally + pulse — every pass reads as a hit
@@ -1265,6 +1276,7 @@ export class Battle {
     if (!perk || this.phase !== 'reward') return;
     sfx('ui');
     perk.apply(this);
+    this.perksTaken++;
     this.rewardOffers = [];
     const next = this.waveIndex + 1;
     if (next >= this.waveCount) {
@@ -1275,6 +1287,30 @@ export class Battle {
     }
     this.spawnWave(next);
     this.nextTurn();
+  }
+
+  // RNGdle-style run analysis: scan what the run did, award badges with
+  // rarities, rarest first. Every run earns at least TRAINER.
+  runBadges(won: boolean): { name: string; rarity: Rarity }[] {
+    const faints = this.players.filter((u) => u.dead).length;
+    const b: { name: string; rarity: Rarity }[] = [];
+    if (this.maxKos >= 4) b.push({ name: 'MEGA KO', rarity: 'legendary' });
+    else if (this.maxKos >= 3) b.push({ name: 'TRIPLE KO', rarity: 'rare' });
+    else if (this.maxKos >= 2) b.push({ name: 'DOUBLE KO', rarity: 'common' });
+    if (this.maxCombo >= 4) b.push({ name: 'COMBO CHAIN', rarity: 'rare' });
+    if (this.caughtBoss) b.push({ name: 'BOSS THIEF', rarity: 'legendary' });
+    if (this.box.length >= 3) b.push({ name: 'SAFARI ZONE', rarity: 'rare' });
+    else if (this.box.length >= 2) b.push({ name: 'COLLECTOR', rarity: 'uncommon' });
+    if (this.totalKos >= 8) b.push({ name: 'RAMPAGE', rarity: 'common' });
+    if (this.perksTaken >= 3) b.push({ name: 'RELIC HUNTER', rarity: 'uncommon' });
+    if (won && faints === 0) b.push({ name: 'FLAWLESS', rarity: 'legendary' });
+    if (won && faints === this.players.length - 1 && faints > 0) b.push({ name: 'LAST STAND', rarity: 'rare' });
+    if (won && this.shots <= 12) b.push({ name: 'SPEED CLEAR', rarity: 'rare' });
+    if (!won && this.depth >= 5) b.push({ name: 'ABYSS DIVER', rarity: 'rare' });
+    else if (!won && this.depth >= 2) b.push({ name: 'DEEP DIVER', rarity: 'uncommon' });
+    if (!b.length) b.push({ name: 'TRAINER', rarity: 'common' });
+    const ORD: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
+    return b.sort((a, z) => ORD.indexOf(a.rarity) - ORD.indexOf(z.rarity));
   }
 
 
@@ -1296,7 +1332,10 @@ export class Battle {
     u.vy = 0;
     // supers recharge per shot taken; leftovers ticks a small heal
     for (const p of this.players) {
-      if (p.cd > 0) p.cd--;
+      if (p.cd > 0) {
+        p.cd--;
+        if (p.cd === 0 && !p.dead) sfx('ready'); // super recharged
+      }
       if (!p.dead && this.regen > 0 && p.hp < p.maxHp) {
         p.hp = Math.min(p.hp + Math.ceil(p.maxHp * this.regen), p.maxHp);
       }
@@ -1970,6 +2009,33 @@ export class Battle {
         ctx.arc(u.x, u.y, u.r + 6, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
+      }
+      // whose turn it is — bouncing marker + name tag + bright white ring,
+      // up only while you're lining up the shot
+      if (u === this.active && this.phase === 'aim') {
+        const bob = Math.sin(this.time * 5) * 3;
+        const ty = u.y - u.r - 14 - bob;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2.5;
+        ctx.globalAlpha = 0.5 + Math.sin(this.time * 6) * 0.3;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.r + 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(u.x - 7, ty - 8);
+        ctx.lineTo(u.x + 7, ty - 8);
+        ctx.lineTo(u.x, ty);
+        ctx.closePath();
+        ctx.fill();
+        ctx.font = `8px ${PIXEL_FONT}`;
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(u.def.name.toUpperCase(), u.x, ty - 14);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText(u.def.name.toUpperCase(), u.x, ty - 14);
       }
     }
   }

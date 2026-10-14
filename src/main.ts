@@ -1,6 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, cry } from './core/audio';
+import { unlockAudio, sfx, cry, music } from './core/audio';
 import { loadAll, loadItem } from './core/assets';
 import { vec } from './core/vec';
 import { Battle } from './game/battle';
@@ -144,8 +144,15 @@ async function shareResult() {
 
 // --- input routing ---
 
+// title+draft share the title loop; result keeps whatever the battle queued
+function sceneMusic() {
+  if (scene === 'result') return;
+  music(scene === 'battle' ? 'battle' : 'title');
+}
+
 canvas.addEventListener('pointerdown', (e) => {
   unlockAudio(); // first gesture spins up the synth
+  sceneMusic();
   const p = toLogical(e);
   if (scene === 'title') {
     if (inRect(p.x, p.y, FREE_BTN)) {
@@ -154,6 +161,7 @@ canvas.addEventListener('pointerdown', (e) => {
       offerCache = null;
       stage = makeStage(randSeed());
       scene = 'draft';
+      sceneMusic();
     }
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
@@ -167,6 +175,7 @@ canvas.addEventListener('pointerdown', (e) => {
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(ARENA, draft.picked.map((i) => ROSTER[i]), stage, Math.random, true);
         scene = 'battle';
+        sceneMusic();
       }
       return;
     }
@@ -176,6 +185,7 @@ canvas.addEventListener('pointerdown', (e) => {
       for (let i = 0; i < battle.box.length; i++) {
         if (inRect(p.x, p.y, boxSlotRect(i, battle.box.length))) {
           battle.boxSel = battle.boxSel === i ? -1 : i;
+          sfx('ui');
           return;
         }
       }
@@ -195,14 +205,17 @@ canvas.addEventListener('pointerdown', (e) => {
     }
   } else if (scene === 'result') {
     if (inRect(p.x, p.y, SHARE_BTN)) {
+      sfx('ui');
       shareResult();
     } else if (inRect(p.x, p.y, RETRY_BTN)) {
+      sfx('ui');
       draft = { order: [], picked: [] };
       battle = null;
       result = null;
       resultExtra = null;
       share = null;
       scene = 'title';
+      sceneMusic();
     }
   }
 });
@@ -230,6 +243,7 @@ function update(dt: number) {
         shots: battle.shots,
         time: battle.time,
         caught: battle.box.length,
+        badges: battle.runBadges(battle.phase === 'won'),
       };
       share = buildShare(battle, result.won);
       if (result.won) {
@@ -248,10 +262,12 @@ function update(dt: number) {
         `Pokéstrike ${stage.name}`,
         share.waves,
         `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
+        `🏅 ${result.badges.slice(0, 4).map((b) => b.name).join(' · ')}`,
         share.team,
         'https://albisourous.github.io/pokestrike/',
       ].join('\n');
       scene = 'result';
+      music(result.won ? 'win' : null); // clear fanfare, or cut to silence on a loss
     }
   }
 }

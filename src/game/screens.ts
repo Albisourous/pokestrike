@@ -14,6 +14,7 @@ export interface RunResult {
   shots: number;
   time: number;
   caught: number;
+  badges: { name: string; rarity: Rarity }[];
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -654,11 +655,38 @@ export function drawResult(
     ctx.fillText(`best: ${best.toFixed(1)}s`, W / 2, 390);
   }
 
+  // run badges — rarity-colored chips, up to two rows
+  const badgeRows: { name: string; rarity: Rarity }[][] = [[]];
+  for (const b of res.badges) {
+    const row = badgeRows[badgeRows.length - 1];
+    if (row.length >= 4) badgeRows.push([b]);
+    else row.push(b);
+  }
+  badgeRows.forEach((row, ri) => {
+    const y = 428 + ri * 28;
+    ctx.font = `7px ${PIXEL_FONT}`;
+    const ws = row.map((b) => ctx.measureText(b.name).width + 20);
+    let bx = W / 2 - (ws.reduce((a, c) => a + c, 0) + (row.length - 1) * 8) / 2;
+    row.forEach((b, i) => {
+      roundRect(ctx, bx, y, ws[i], 20, 5);
+      ctx.fillStyle = '#12162b';
+      ctx.fill();
+      ctx.strokeStyle = RARITY_COLOR[b.rarity];
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.font = `7px ${PIXEL_FONT}`;
+      ctx.fillStyle = RARITY_COLOR[b.rarity];
+      ctx.fillText(b.name, bx + ws[i] / 2, y + 14);
+      bx += ws[i] + 8;
+    });
+  });
+
   if (share) {
+    const sy = 460 + badgeRows.length * 28;
     ctx.font = '30px system-ui';
-    ctx.fillText(share.waves, W / 2, 465);
+    ctx.fillText(share.waves, W / 2, sy);
     ctx.font = '24px system-ui';
-    ctx.fillText(share.team, W / 2, 510);
+    ctx.fillText(share.team, W / 2, sy + 42);
   }
 
   button(ctx, RETRY_BTN, 'PLAY AGAIN', true);
