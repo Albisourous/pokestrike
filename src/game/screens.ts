@@ -37,6 +37,14 @@ export const inRect = (x: number, y: number, r: { x: number; y: number; w: numbe
 export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
+export function boxSlotRect(i: number, n: number) {
+  const w = 56, gap = 10;
+  return { x: W / 2 - (n * (w + gap) - gap) / 2 + i * (w + gap), y: 640, w, h: 56 };
+}
+export function teamSlotRect(i: number) {
+  const w = 100, gap = 14;
+  return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 772, w, h: 70 };
+}
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
@@ -210,6 +218,11 @@ export function drawReward(
   ctx: CanvasRenderingContext2D,
   offers: { name: string; item: string; desc: string }[],
   depth: number,
+  box: SpeciesDef[],
+  team: SpeciesDef[],
+  selBox: number,
+  swapped: boolean,
+  catchPct: number,
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -257,6 +270,55 @@ export function drawReward(
     ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 150);
     ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 168);
   });
+
+  // captured box — tap a catch, then a teammate, to swap (once per break)
+  ctx.font = 'bold 14px system-ui';
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(`BOX — catch rate ${Math.round(catchPct * 100)}%`, W / 2, 620);
+  if (box.length === 0) {
+    ctx.font = '12px system-ui';
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('nothing caught yet — defeats sometimes capture', W / 2, 668);
+  }
+  box.forEach((def, i) => {
+    const r = boxSlotRect(i, box.length);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+    ctx.fillStyle = '#12162b';
+    ctx.fill();
+    ctx.strokeStyle = i === selBox ? '#ffd84d' : '#2a3560';
+    ctx.lineWidth = i === selBox ? 2.5 : 1;
+    ctx.stroke();
+    ctx.drawImage(sprite(def.id), r.x + 8, r.y + 6, 40, 40);
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = TYPE_COLOR[def.type];
+    ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 52);
+  });
+
+  ctx.font = 'bold 14px system-ui';
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('YOUR TEAM', W / 2, 750);
+  team.forEach((def, i) => {
+    const r = teamSlotRect(i);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+    ctx.fillStyle = '#12162b';
+    ctx.fill();
+    ctx.strokeStyle = selBox >= 0 && !swapped ? GOLD : '#2a3560';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = TYPE_COLOR[def.type];
+    ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, 3);
+    ctx.drawImage(sprite(def.id), r.x + r.w / 2 - 20, r.y + 12, 40, 40);
+    ctx.font = '9px system-ui';
+    ctx.fillStyle = PARCH;
+    ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 64);
+  });
+  ctx.font = '12px system-ui';
+  ctx.fillStyle = '#5a6284';
+  ctx.fillText(
+    swapped ? 'swap used' : selBox >= 0 ? 'tap a teammate to swap in' : 'tap a box mon, then a teammate — once per break',
+    W / 2,
+    880,
+  );
 }
 
 export function drawResult(

@@ -51,6 +51,16 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.regen += 0.06; },
   },
   {
+    id: 'greatball', name: 'Great Ball', item: 'great-ball',
+    desc: '+5% catch chance',
+    apply: (b) => { b.captureChance += 0.05; },
+  },
+  {
+    id: 'ultraball', name: 'Ultra Ball', item: 'ultra-ball',
+    desc: '+10% catch chance',
+    apply: (b) => { b.captureChance += 0.1; },
+  },
+  {
     id: 'revive', name: 'Revive', item: 'revive',
     desc: 'revive a fallen ally at 40% HP',
     apply: (b) => {

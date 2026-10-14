@@ -16,6 +16,8 @@ import {
   drawReward,
   draftCardRect,
   perkCardRect,
+  boxSlotRect,
+  teamSlotRect,
   RETRY_BTN,
   SHARE_BTN,
   DAILY_BTN,
@@ -153,6 +155,21 @@ canvas.addEventListener('pointerdown', (e) => {
     }
   } else if (scene === 'battle') {
     if (battle?.phase === 'reward') {
+      // box first: pick a catch, then a teammate slot to swap into
+      for (let i = 0; i < battle.box.length; i++) {
+        if (inRect(p.x, p.y, boxSlotRect(i, battle.box.length))) {
+          battle.boxSel = battle.boxSel === i ? -1 : i;
+          return;
+        }
+      }
+      if (battle.boxSel >= 0 && !battle.swapped) {
+        for (let i = 0; i < battle.players.length; i++) {
+          if (inRect(p.x, p.y, teamSlotRect(i))) {
+            battle.swapFromBox(battle.boxSel, i);
+            return;
+          }
+        }
+      }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
         if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
       }
@@ -271,7 +288,17 @@ function render() {
           battle.depth > 0 ? `${battle.stage.name} · DEPTH ${battle.depth}` : battle.stage.name,
         );
         battle.render(ctx);
-        if (battle.phase === 'reward') drawReward(ctx, battle.rewardOffers, battle.depth);
+        if (battle.phase === 'reward')
+          drawReward(
+            ctx,
+            battle.rewardOffers,
+            battle.depth,
+            battle.box,
+            battle.players.map((p) => p.def),
+            battle.boxSel,
+            battle.swapped,
+            battle.captureChance,
+          );
       }
       break;
     case 'result':

@@ -37,17 +37,19 @@ export const DRAFT_OFFERS = 3;
 // Each draft round offers 3 picks with distinct types — encourages a varied
 // team so no single type dominates a run.
 export function draftOrder(rng: () => number): number[] {
-  const pool = ROSTER.map((_, i) => i);
-  for (let i = pool.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [pool[i], pool[j]] = [pool[j], pool[i]];
-  }
   const order: number[] = [];
   for (let r = 0; r < DRAFT_ROUNDS; r++) {
+    // fresh pool each round — pool is smaller than rounds*offers, so
+    // species may repeat across rounds (never within a round)
+    const pool = ROSTER.map((_, i) => i);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
     const types = new Set<string>();
     for (let k = 0; k < DRAFT_OFFERS; k++) {
       let pick = pool.findIndex((i) => !types.has(ROSTER[i].type));
-      if (pick === -1) pick = 0; // pool ran dry of new types — allow a repeat
+      if (pick === -1) pick = 0;
       types.add(ROSTER[pool[pick]].type);
       order.push(pool.splice(pick, 1)[0]);
     }

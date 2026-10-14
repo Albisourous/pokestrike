@@ -56,6 +56,7 @@ interface Unit {
   cd: number; // player bump-super recharge in shots; 0 = ready
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
+  caught: boolean; // already boxed (master ball) — skip the catch roll
   pow: number; // role damage multiplier
   rngMul: number; // role super-range multiplier
   launch: number; // role launch-speed multiplier
@@ -177,6 +178,10 @@ export class Battle {
   cdMult = 1;
   launchBoost = 1;
   regen = 0; // leftovers: fraction of maxHp healed after each shot
+  captureChance = 0.06; // odds a defeated enemy joins your box
+  box: SpeciesDef[] = []; // captured mons — swap one in between waves
+  swapped = false; // one swap per reward break
+  boxSel = -1; // box index picked for swapping
   depth = 0; // endless acts survived past the boss wave
   rewardOffers: Perk[] = [];
   private rewardPending = false;
@@ -226,6 +231,7 @@ export class Battle {
         cd: 0,
         lastBump: -1,
         role,
+        caught: false,
         pow: m.pow,
         rngMul: m.range,
         launch: m.launch,
@@ -299,6 +305,7 @@ export class Battle {
       cd: 0,
       lastBump: -1,
       role: 'wild',
+      caught: false,
       pow: 1,
       rngMul: 1,
       launch: 1,
@@ -626,7 +633,20 @@ export class Battle {
       // capture complete: stacked loops + release sparkle
       this.loops.push({ x: e.x, y: e.y, r: e.r + 20, t: 0.7, life: 0.7, color: '#ffffff' });
       this.loops.push({ x: e.x, y: e.y, r: e.r + 30, t: 0.9, life: 0.9, color: '#9df0ff' });
-      this.texts.push({ x: e.x, y: e.y - e.r - 22, text: 'CAPTURED!', t: 1.1, color: '#9df0ff', big: true });
+      // small chance it actually joins your team (balls raise this)
+      const caught = !e.caught && this.rng() < this.captureChance;
+      this.texts.push({
+        x: e.x, y: e.y - e.r - 22,
+        text: caught ? `${e.def.name.toUpperCase()} CAUGHT!` : 'CAPTURED!',
+        t: caught ? 1.5 : 1.1,
+        color: caught ? '#ffd84d' : '#9df0ff',
+        big: true,
+      });
+      if (caught) {
+        this.box.push(e.def);
+        this.screenFlash('#ffd84d', 0.2);
+        this.converge(e.x, e.y, 10, '#ffd84d', 'wisp');
+      }
       for (let i = 0; i < 5; i++) {
         this.particles.push({
           x: e.x + (Math.random() - 0.5) * e.r, y: e.y,
@@ -893,7 +913,36 @@ export class Battle {
     this.rewardPending = true;
   }
 
+  // Swap a boxed mon onto the team — once per reward break.
+  swapFromBox(bi: number, ti: number) {
+    if (this.swapped || this.phase !== 'reward') return;
+    const def = this.box[bi];
+    const p = this.players[ti];
+    if (!def || !p) return;
+    this.box.splice(bi, 1);
+    this.box.push(p.def); // benched ally goes back to the box
+    const role = roleOf(def.stats, def.healer);
+    const m = ROLE_MODS[role];
+    const hp = Math.round(playerHp(def.stats) * m.hp);
+    p.def = def;
+    p.role = role;
+    p.pow = m.pow;
+    p.rngMul = m.range;
+    p.launch = m.launch;
+    p.cdMod = m.cdMod;
+    p.maxHp = hp;
+    p.hp = hp;
+    p.dead = false;
+    p.cd = 0;
+    this.swapped = true;
+    this.boxSel = -1;
+    this.burst(p.x, p.y, p.r * 2.4, '#ffd84d', 0.35);
+    this.screenFlash('#ffd84d', 0.12);
+  }
+
   private enterReward() {
+    this.swapped = false;
+    this.boxSel = -1;
     this.rewardOffers = rollPerks(this.rng);
     for (const p of this.players) {
       p.vx = 0;
@@ -924,6 +973,9 @@ export class Battle {
     if (!e) return;
     this.converge(e.x, e.y, 12, '#f0e6ff', 'wisp');
     this.screenFlash('#c898ff', 0.15);
+    e.caught = true;
+    this.box.push(e.def); // master ball never fails
+    this.texts.push({ x: e.x, y: e.y - e.r - 40, text: `${e.def.name.toUpperCase()} CAUGHT!`, t: 1.5, color: '#ffd84d', big: true });
     this.hurt(e, e.hp + 999, '#9df0ff');
   }
 
