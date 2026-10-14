@@ -1735,6 +1735,17 @@ export class Battle {
     if (u.dead) return;
     const size = u.r * 2.6;
 
+    // team base ring — gold allies, red enemies, readable at a glance
+    ctx.fillStyle = u.side === 'player' ? 'rgba(248,208,48,0.30)' : 'rgba(255,80,80,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = u.side === 'player' ? '#f8d030' : '#ff5050';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
     // glow under units about to act
     if (u.side === 'enemy' && u.timer <= 1) {
       ctx.fillStyle = '#ff6b6b22';
