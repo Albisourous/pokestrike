@@ -148,12 +148,18 @@ export class Battle {
   private slashes: Slash[] = [];
   private flashes: ScreenFlash[] = [];
   private shake = 0;
+  private obstacles: { x: number; y: number; r: number }[];
 
   constructor(
     public arena: Rect,
     team: SpeciesDef[],
     public stage: StageDef,
   ) {
+    this.obstacles = stage.obstacles.map((o) => ({
+      x: arena.x + arena.w * o.nx,
+      y: arena.y + arena.h * o.ny,
+      r: arena.w * o.nr,
+    }));
     const n = team.length;
     team.forEach((def, i) => {
       this.players.push({
@@ -334,6 +340,9 @@ export class Battle {
         });
       }
       this.hitWalls(u);
+      for (const o of this.obstacles) {
+        if (this.collide(u, o)) this.shower(u.x, u.y, 4, '#8a94c8', 160, 'streak');
+      }
       for (const e of wave) {
         if (this.enemies !== wave) break;
         if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
@@ -397,6 +406,7 @@ export class Battle {
         }
       }
       this.clampToArena(e);
+      for (const o of this.obstacles) this.separate(e, o);
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
@@ -415,8 +425,8 @@ export class Battle {
     u.y = Math.min(Math.max(u.y, a.y + u.r), a.y + a.h - u.r);
   }
 
-  // Push mover m out of static o.
-  private separate(m: Unit, o: Unit) {
+  // Push mover m out of static circle o.
+  private separate(m: Unit, o: { x: number; y: number; r: number }) {
     const rr = m.r + o.r;
     const d = dist(m, o);
     if (d >= rr || d === 0) return;
@@ -493,8 +503,8 @@ export class Battle {
     }
   }
 
-  // Push moving unit out of a static unit and reflect its velocity.
-  private collide(u: Unit, o: Unit): boolean {
+  // Push moving unit out of a static circle and reflect its velocity.
+  private collide(u: Unit, o: { x: number; y: number; r: number }): boolean {
     const rr = u.r + o.r;
     const d = dist(u, o);
     if (d >= rr || d === 0) return false;
@@ -946,6 +956,21 @@ export class Battle {
 
     for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const z of this.zaps) this.drawZap(ctx, z);
+
+    // arena rocks
+    for (const o of this.obstacles) {
+      ctx.fillStyle = '#262e52';
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#101530';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = '#3a4470';
+      ctx.beginPath();
+      ctx.arc(o.x - o.r * 0.28, o.y - o.r * 0.32, o.r * 0.45, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
