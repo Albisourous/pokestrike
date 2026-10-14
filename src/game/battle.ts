@@ -116,7 +116,32 @@ interface Orb {
   target: Unit;
   dmg: number;
   t: number;
+  wob: number; // spiral phase — each orb corkscrews on its own beat
   color: string;
+}
+// Expanding shockwave: the front sweeps outward and hits each enemy once
+// when it reaches them — fire blast, psychic ring.
+interface Wave {
+  x: number;
+  y: number;
+  r: number;
+  maxR: number;
+  t: number;
+  life: number;
+  color: string;
+  hits: Set<number>;
+  onHit?: (e: Unit) => void;
+}
+// Normal-type quick attack: the bumped ally physically lunges at the
+// target, slams it, then snaps back to its spot.
+interface Dash {
+  u: Unit;
+  ox: number;
+  oy: number;
+  e: Unit;
+  back: boolean;
+  done: boolean;
+  dmg: number;
 }
 interface Slash {
   x: number;
@@ -152,6 +177,7 @@ interface Ghost {
   r: number;
   t: number;
   life: number;
+  absorb?: boolean; // caught mon shrinks into the ball instead of spinning out
 }
 interface BallDrop {
   x: number;
@@ -218,6 +244,9 @@ export class Battle {
   private bursts: Burst[] = [];
   private particles: Particle[] = [];
   private orbs: Orb[] = [];
+  private waves: Wave[] = [];
+  private dashes: Dash[] = [];
+  private delays: { t: number; fn: () => void }[] = []; // staggered super hits
   private slashes: Slash[] = [];
   private loops: Loop[] = []; // styler capture rings
   private flashes: ScreenFlash[] = [];
@@ -412,7 +441,8 @@ export class Battle {
   // One-way ledges: a dirt bank you can only hop in `ang`'s direction.
   private genLedges() {
     this.ledges = [];
-    const n = 2; // DEBUG force ledges
+    if (this.rng() < 0.4) return; // some waves get none
+    const n = this.rng() < 0.35 ? 2 : 1;
     for (let k = 0; k < n; k++) {
       for (let tries = 0; tries < 8; tries++) {
         const L: Ledge = {
@@ -963,6 +993,7 @@ export class Battle {
     this.shower(e.x, e.y, 10, '#58a848', 220, 'leaf');
     this.texts.push({ x: e.x, y: e.y - e.r - 10, text: '!', t: 0.7, color: '#ffd84d', big: true });
     sfx('hit', 1.6);
+    cry(e.def.id, 0.4); // flushed out of the grass, it cries as it lands
   }
 
   // Shove a unit radially out of the pond/lava region.
@@ -1030,18 +1061,23 @@ export class Battle {
           if (!p.dead) p.hp = Math.min(p.hp + Math.round(p.maxHp * this.koHeal), p.maxHp);
         }
       }
-      // faint anim: the sprite spins out and fades while the rings land
-      this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: e.boss ? 0.8 : 0.45, life: e.boss ? 0.8 : 0.45 });
-      sfx('ko');
-      buzz(e.boss ? [50, 60, 90] : 30);
-      // capture complete: stacked loops + release sparkle
-      this.loops.push({ x: e.x, y: e.y, r: e.r + 20, t: 0.7, life: 0.7, color: '#ffffff' });
-      this.loops.push({ x: e.x, y: e.y, r: e.r + 30, t: 0.9, life: 0.9, color: '#9df0ff' });
       // small chance it actually joins your team (balls raise this);
       // an armed master ball never fails — first KO catches, guaranteed
       const master = !e.caught && this.masterArmed;
       const caught = master || (!e.caught && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0));
       if (master) this.masterArmed = false;
+      if (caught) {
+        // absorbed by the ball — shrinks in place, no faint spin
+        this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: 0.4, life: 0.4, absorb: true });
+      } else {
+        // faint anim: the sprite spins out and fades while the rings land
+        this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: e.boss ? 0.8 : 0.45, life: e.boss ? 0.8 : 0.45 });
+      }
+      sfx('ko');
+      buzz(e.boss ? [50, 60, 90] : 30);
+      // capture complete: stacked loops + release sparkle
+      this.loops.push({ x: e.x, y: e.y, r: e.r + 20, t: 0.7, life: 0.7, color: '#ffffff' });
+      this.loops.push({ x: e.x, y: e.y, r: e.r + 30, t: 0.9, life: 0.9, color: '#9df0ff' });
       this.texts.push({
         x: e.x, y: e.y - e.r - 22,
         text: `${e.def.name.toUpperCase()} ${caught ? 'CAUGHT!' : 'FAINTED!'}`,
@@ -1488,6 +1524,10 @@ export class Battle {
     if (won && this.shots <= 12) b.push({ name: 'SPEED CLEAR', rarity: 'rare' });
     if (!won && this.depth >= 5) b.push({ name: 'ABYSS DIVER', rarity: 'rare' });
     else if (!won && this.depth >= 2) b.push({ name: 'DEEP DIVER', rarity: 'uncommon' });
+    // a wipe still shows what you cleared — waveIndex = waves survived
+    if (!won && this.waveIndex >= 1) {
+      b.push({ name: `WAVE ${this.waveIndex} CLEAR`, rarity: this.waveIndex >= 3 ? 'rare' : 'uncommon' });
+    }
     if (!b.length) b.push({ name: 'TRAINER', rarity: 'common' });
     const ORD: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
     return b.sort((a, z) => ORD.indexOf(a.rarity) - ORD.indexOf(z.rarity));
@@ -2031,10 +2071,16 @@ export class Battle {
       const prog = 1 - g.t / g.life;
       ctx.save();
       ctx.globalAlpha = Math.max(1 - prog, 0) * 0.9;
-      ctx.translate(g.x, g.y - prog * 30);
-      ctx.rotate(prog * 2.8);
-      const s = g.r * 2.6 * (1 - prog * 0.7);
-      drawMon(ctx, g.id, 0, 0, s);
+      if (g.absorb) {
+        // caught: shrinks straight down into the spot the ball lands on
+        ctx.translate(g.x, g.y + prog * 8);
+        drawMon(ctx, g.id, 0, 0, g.r * 2.6 * Math.max(1 - prog, 0));
+      } else {
+        ctx.translate(g.x, g.y - prog * 30);
+        ctx.rotate(prog * 2.8);
+        const s = g.r * 2.6 * (1 - prog * 0.7);
+        drawMon(ctx, g.id, 0, 0, s);
+      }
       ctx.restore();
     }
 
