@@ -57,6 +57,7 @@ interface Unit {
   dotTicks: number; // poison ticks remaining
   dotDmg: number;
   flashT: number; // white hit flash
+  spawnT: number; // wave-entry pop-in countdown (includes stagger delay)
   cd: number; // player bump-super recharge in shots; 0 = ready
   cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
@@ -288,6 +289,7 @@ export class Battle {
         dotTicks: 0,
         dotDmg: 0,
         flashT: 0,
+        spawnT: 0.3 + i * 0.06,
         cd: 0,
         cdMax: 1,
         lastBump: -1,
@@ -364,7 +366,7 @@ export class Battle {
     this.theme = others[Math.floor(this.rng() * others.length)];
     this.genObstacles();
     this.genHazards();
-    this.enemies = this.stage.waves[i].map((s) => ({
+    this.enemies = this.stage.waves[i].map((s, k) => ({
       uid: nextUid++,
       def: s.def,
       side: 'enemy',
@@ -387,6 +389,7 @@ export class Battle {
       dotTicks: 0,
       dotDmg: 0,
       flashT: 0,
+      spawnT: 0.3 + k * 0.08,
       cd: 0,
       cdMax: 1,
       lastBump: -1,
@@ -511,6 +514,7 @@ export class Battle {
     this.balls = this.balls.filter((b) => b.t > 0);
     for (const u of [...this.players, ...this.enemies]) {
       if (u.flashT > 0) u.flashT -= dt;
+      if (u.spawnT > 0) u.spawnT -= dt;
     }
     this.shake *= Math.exp(-6 * dt);
     for (const p of this.particles) {
@@ -1860,8 +1864,13 @@ export class Battle {
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
     const size = u.r * 2.6;
+    // wave entry: staggered delay, then a quick overshoot zoom — the
+    // Essentials appear-anim feel
+    const pop = u.spawnT <= 0 ? 1 : 1 - Math.min(u.spawnT, 0.3) / 0.3;
+    const sc = 0.2 + 0.8 * (1 + 2.7 * Math.pow(pop - 1, 3) + 1.7 * Math.pow(pop - 1, 2));
 
     // team base ring — gold allies, red enemies, readable at a glance
+    ctx.globalAlpha = pop;
     ctx.fillStyle = u.side === 'player' ? 'rgba(248,208,48,0.30)' : 'rgba(255,80,80,0.22)';
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
@@ -1871,6 +1880,7 @@ export class Battle {
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // glow under units about to act
     if (u.side === 'enemy' && u.timer <= 1) {
@@ -1884,7 +1894,8 @@ export class Battle {
     const sq = u === this.active && this.dragging && this.phase === 'aim' ? this.charge() : 0;
     ctx.save();
     ctx.translate(u.x, u.y);
-    if (sq) ctx.scale(1 + sq * 0.12, 1 - sq * 0.16);
+    ctx.globalAlpha = pop;
+    ctx.scale(sc * (1 + sq * 0.12), sc * (1 - sq * 0.16));
     drawMon(ctx, u.def.id, 0, 0, size);
     ctx.restore();
 

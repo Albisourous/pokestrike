@@ -118,7 +118,7 @@ export function buzz(pattern: number | number[]) {
 
 // Real species cries (PokeAPI/cries .ogg), cached and replayable.
 const cries = new Map<number, HTMLAudioElement>();
-export function cry(id: number, vol = 0.4) {
+export function cry(id: number, vol = 0.2) {
   try {
     let a = cries.get(id);
     if (!a) {

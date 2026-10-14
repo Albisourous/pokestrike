@@ -160,7 +160,7 @@ canvas.addEventListener('pointerdown', (e) => {
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       sfx('ui');
-      cry(ROSTER[offers[i]].id, 0.5); // picked mon calls out
+      cry(ROSTER[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
       draft.picked.push(offers[i]);
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
