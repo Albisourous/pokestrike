@@ -2,7 +2,7 @@
 // ground, scattered details, and a themed sprite wall around the arena.
 // No image assets — everything is drawn per frame.
 
-import { drawMon } from '../core/assets';
+import { drawMon, itemSprite } from '../core/assets';
 
 export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
 export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
@@ -159,16 +159,25 @@ export function drawBackdrop(
   ctx.closePath();
   ctx.clip();
 
-  // flat tile base — two-tone checker like overworld grass tiles
-  const TS = 26;
+  // flat base + soft mottled patches — organic ground, no checker grid
   ctx.fillStyle = c.tileA;
   ctx.fillRect(x, y, w, h);
+  ctx.globalAlpha = 0.55;
   ctx.fillStyle = c.tileB;
-  for (let ty = 0; ty * TS < h; ty++) {
-    for (let tx = 0; tx * TS < w; tx++) {
-      if ((tx + ty) % 2 === 0) ctx.fillRect(x + tx * TS, y + ty * TS, TS, TS);
-    }
+  for (let i = 0; i < 12; i++) {
+    ctx.beginPath();
+    ctx.ellipse(
+      x + hash(i * 13 + 2) * w,
+      y + hash(i * 29 + 7) * h,
+      50 + hash(i * 41) * 110,
+      40 + hash(i * 53) * 80,
+      hash(i * 3) * 3,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
   }
+  ctx.globalAlpha = 1;
 
   // scattered dabs: grass blades / pebbles / cracks per theme
   ctx.fillStyle = c.dab;
@@ -192,16 +201,28 @@ export function drawBackdrop(
     }
   }
 
-  // a pond / lava pool / pit blob — with a real mon living in it
+  // a pond / lava pool — real RSE pond metatiles for water themes,
+  // procedural lava for the volcano (water doesn't belong there)
   if (pool) {
     const px = x + w * pool.nx, py = y + h * pool.ny;
-    ctx.fillStyle = c.poolEdge;
-    blob(ctx, px, py, 52, 36, 42, 8);
-    ctx.fillStyle = c.pool;
-    blob(ctx, px, py, 44, 29, 43, 8);
-    if (theme === 'grove' || theme === 'sky') {
-      ctx.fillStyle = 'rgba(255,255,255,0.35)';
-      blob(ctx, px - 10, py - 8, 16, 6, 44, 5);
+    const pond = itemSprite('pond');
+    if (pond && theme !== 'volcano') {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      const pw = 112, ph = 93;
+      ctx.drawImage(pond, px - pw / 2, py - ph / 2, pw, ph);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#6a1e04';
+      blob(ctx, px, py, 54, 38, 42, 8);
+      ctx.fillStyle = c.pool;
+      blob(ctx, px, py, 44, 29, 43, 8);
+      // cooled crust plates floating on the lava
+      ctx.fillStyle = '#8a3808';
+      blob(ctx, px - 16, py + 4, 14, 8, 45, 6);
+      blob(ctx, px + 18, py - 6, 11, 7, 46, 6);
+      ctx.fillStyle = 'rgba(255,200,110,0.5)';
+      blob(ctx, px - 8, py - 10, 15, 6, 44, 5);
     }
     // expanding ripples — lava pulses ember rings instead
     ctx.strokeStyle = theme === 'volcano' ? '#ffb060' : 'rgba(255,255,255,0.5)';

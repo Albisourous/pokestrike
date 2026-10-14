@@ -327,6 +327,9 @@ function render() {
 Promise.all([
   loadAll(ALL_SPRITE_IDS),
   loadItem('poke-ball'),
+  loadItem('pond'),
+  loadItem('tree'),
+  loadItem('rock'),
   ...PERKS.map((p) => loadItem(p.item)),
   document.fonts.load('12px "Press Start 2P"'), // force pixel-font fetch before first paint
 ])

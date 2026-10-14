@@ -200,6 +200,8 @@ export class Battle {
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private shotCombo = 0; // pass-through links chained this shot
+  private kosThisShot = 0; // enemies downed by the current shot
+  private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false };
   private texts: FloatText[] = [];
   private zaps: Zap[] = [];
   private bursts: Burst[] = [];
@@ -436,6 +438,7 @@ export class Battle {
     u.lastHit.clear();
     this.bumpsThisShot.clear();
     this.shotCombo = 0;
+    this.kosThisShot = 0;
     this.stopTimer = 0;
     this.phase = 'shot';
     this.shots++;
@@ -821,6 +824,12 @@ export class Battle {
     if (e.hp <= 0) {
       e.dead = true;
       this.bruise(e.x, e.y, 700); // a mon went down here — the field remembers
+      // multi-KO callouts — chaining kills in one shot should feel huge
+      this.kosThisShot++;
+      if (this.kosThisShot >= 2) {
+        const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
+        this.texts.push({ x: e.x, y: e.y - e.r - 46, text: label, t: 1.1, color: '#ffd84d', big: true });
+      }
       // exp share: every KO feeds the team a little
       if (this.koHeal > 0) {
         for (const p of this.players) {
@@ -876,7 +885,11 @@ export class Battle {
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     const mult = effectiveness(shooter.def.type, e.def.type);
-    const dmg = Math.round(physDamage(shooter.def.stats.atk, e.def.stats.def, mult) * shooter.pow * this.physMult);
+    // every link in the chain adds momentum: +5% contact damage per pass
+    const dmg = Math.round(
+      physDamage(shooter.def.stats.atk, e.def.stats.def, mult) *
+        shooter.pow * this.physMult * (1 + this.shotCombo * (0.05 + this.comboDmg)),
+    );
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     const c = TYPE_COLOR[shooter.def.type];
@@ -887,6 +900,62 @@ export class Battle {
     buzz(8);
     if (mult > 1)
       this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'SUPER EFFECTIVE!', t: 0.8, color: '#ffd84d', big: false });
+  }
+
+  // Passive talent — a small effect on EVERY pass-through, on or off
+  // cooldown. This is what makes each role feel different link to link.
+  private allyPassive(
+    p: Unit,
+    near: (radius: number) => Unit[],
+    bumpDmg: (e: Unit, power: number) => number,
+  ) {
+    const c = TYPE_COLOR[p.def.type];
+    switch (p.role) {
+      case 'speedster': { // lightning-fast jab at the closest enemy
+        const t = near(140).sort((a, b) => dist(p, a) - dist(p, b))[0];
+        if (t) {
+          this.zap(p.x, p.y, t.x, t.y, c);
+          this.hurt(t, bumpDmg(t, 0.3), '#9df0ff');
+        }
+        break;
+      }
+      case 'bruiser': { // point-blank shockwave
+        const ts = near(95);
+        if (ts.length) {
+          this.burst(p.x, p.y, 60, c, 0.2);
+          for (const e of ts) this.hurt(e, bumpDmg(e, 0.25), '#9df0ff');
+        }
+        break;
+      }
+      case 'sniper': { // long-range poke at the farthest target
+        const t = near(280).sort((a, b) => dist(p, b) - dist(p, a))[0];
+        if (t) {
+          this.zap(p.x, p.y, t.x, t.y, c);
+          this.hurt(t, bumpDmg(t, 0.35), '#9df0ff');
+        }
+        break;
+      }
+      case 'tank': // brace: small self-mend on every pass
+        if (p.hp < p.maxHp) {
+          p.hp = Math.min(p.hp + Math.ceil(p.maxHp * 0.03), p.maxHp);
+          this.converge(p.x, p.y, 4, '#6fdc6f', 'leaf');
+        }
+        break;
+      case 'healer': { // splash health to whoever needs it most
+        const w = this.players
+          .filter((x) => !x.dead && x.hp < x.maxHp)
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        if (w) {
+          w.hp = Math.min(w.hp + Math.ceil(w.maxHp * 0.04), w.maxHp);
+          this.zap(p.x, p.y, w.x, w.y, '#6fdc6f');
+        }
+        break;
+      }
+      default: { // wild: opportunistic nip at the closest enemy
+        const t = near(120).sort((a, b) => dist(p, a) - dist(p, b))[0];
+        if (t) this.hurt(t, bumpDmg(t, 0.25), '#9df0ff');
+      }
+    }
   }
 
   // Bump an ally mid-shot: every pass is a combo link; the signature
@@ -916,26 +985,6 @@ export class Battle {
       this.addShake(2 * n);
       this.screenFlash(c, 0.07);
     }
-    if (p.cd > 0) {
-      // super still recharging — link sparks but no attack
-      this.shower(p.x, p.y, 5, '#8890b8', 90, 'dot');
-      return;
-    }
-    p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult) - p.cdMod);
-    p.cdMax = p.cd;
-    this.bumpsThisShot.add(p.uid);
-    p.flashT = 0.25;
-    // move callout, freeze-frame, and a white converge flash on the caster
-    this.texts.push({
-      x: p.x, y: p.y - p.r - 46,
-      text: `${p.def.name.toUpperCase()} used ${MOVE_NAME[p.def.type]}!`,
-      t: 1.05, color: TYPE_COLOR[p.def.type], big: true,
-    });
-    this.hitStop = Math.max(this.hitStop, 0.09);
-    this.converge(p.x, p.y, 7, '#ffffff', 'streak');
-    sfx(SUPER_SFX[p.def.type]);
-    cry(p.def.id, 0.35);
-    buzz(20);
     // rocks give cover: supers can't hit targets they can't see
     const near = (radius: number) =>
       this.enemies.filter(
@@ -956,6 +1005,28 @@ export class Battle {
           p.pow *
           (1 + (n - 1) * this.comboDmg), // metronome ramps with combo length
       );
+    // passive talent: a small role effect on EVERY pass, on or off cooldown
+    this.allyPassive(p, near, bumpDmg);
+    if (p.cd > 0) {
+      // super still recharging — link sparks but no attack
+      this.shower(p.x, p.y, 5, '#8890b8', 90, 'dot');
+      return;
+    }
+    p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult) - p.cdMod);
+    p.cdMax = p.cd;
+    this.bumpsThisShot.add(p.uid);
+    p.flashT = 0.25;
+    // move callout, freeze-frame, and a white converge flash on the caster
+    this.texts.push({
+      x: p.x, y: p.y - p.r - 46,
+      text: `${p.def.name.toUpperCase()} used ${MOVE_NAME[p.def.type]}!`,
+      t: 1.05, color: TYPE_COLOR[p.def.type], big: true,
+    });
+    this.hitStop = Math.max(this.hitStop, 0.09);
+    this.converge(p.x, p.y, 7, '#ffffff', 'streak');
+    sfx(SUPER_SFX[p.def.type]);
+    cry(p.def.id, 0.35);
+    buzz(20);
     const color = TYPE_COLOR[p.def.type];
 
     switch (p.def.type) {
@@ -1165,6 +1236,7 @@ export class Battle {
     p.hp = hp;
     p.dead = false;
     p.cd = 0;
+    p.cdMax = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - p.cdMod);
     this.swapped = true;
     this.boxSel = -1;
     this.burst(p.x, p.y, p.r * 2.4, '#ffd84d', 0.35);
@@ -1511,15 +1583,21 @@ export class Battle {
       ctx.fill();
     }
 
-    // obstacles are the blockers themselves — a sleeping Snorlax, a coiled
-    // Onix — real sprites on a soft ground shadow, no polygon blobs
-    const blocker = BLOCKER[this.theme];
+    // obstacles are real overworld props — a ball tree in the grove, the
+    // smashable boulder elsewhere (extracted RSE metatiles)
+    const prop = itemSprite(PROP[this.theme]);
     for (const o of this.obstacles) {
       ctx.fillStyle = 'rgba(0,0,0,0.28)';
       ctx.beginPath();
       ctx.ellipse(o.x, o.y + o.r * 0.55, o.r * 0.95, o.r * 0.4, 0, 0, Math.PI * 2);
       ctx.fill();
-      drawMon(ctx, blocker, o.x, o.y, o.r * 2.5);
+      if (prop) {
+        ctx.save();
+        ctx.imageSmoothingEnabled = false;
+        const s = o.r * 2.1;
+        ctx.drawImage(prop, o.x - s / 2, o.y - s / 2, s, s);
+        ctx.restore();
+      }
     }
 
     // hazard pads: themed floor zones with a sprite marker on top
@@ -1844,19 +1922,28 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
       ctx.fillText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
-    } else if (u.cd > 0) {
-      // bump attack recharging — cyan countdown bubble
-      ctx.fillStyle = '#000a';
-      ctx.beginPath();
-      ctx.arc(u.x + u.r - 2, u.y - u.r + 2, 11, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#5adfff66';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.font = 'bold 13px system-ui';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#5adfff';
-      ctx.fillText(`${Math.ceil(u.cd)}`, u.x + u.r - 2, u.y - u.r + 7);
+    } else {
+      // charge pips under the hp bar: cyan fills one per turn banked toward
+      // the super; a pulsing gold ring means READY — pass it to fire
+      const max = Math.max(1, u.cdMax);
+      const filled = u.cd <= 0 ? max : max - Math.ceil(u.cd);
+      const px0 = u.x - ((max - 1) * 7) / 2;
+      const py = u.y + u.r + 15;
+      for (let i = 0; i < max; i++) {
+        ctx.beginPath();
+        ctx.arc(px0 + i * 7, py, 2.6, 0, Math.PI * 2);
+        ctx.fillStyle = i < filled ? (u.cd <= 0 ? '#ffd84d' : '#5adfff') : '#0008';
+        ctx.fill();
+      }
+      if (u.cd <= 0) {
+        ctx.strokeStyle = '#ffd84d';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.55 + Math.sin(this.time * 6) * 0.3;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.r + 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     }
   }
 
@@ -1871,8 +1958,17 @@ export class Battle {
     const a = this.arena;
 
     // predicted path: one bounce worth — banking off walls + rocks,
-    // stopping at the first contact. Any further is noise.
-    {
+    // stopping at the first contact. Any further is noise. Cached on a
+    // quantized signature so the sim only reruns when the aim actually moves.
+    const sig = [
+      Math.round(this.dragNow.x / 6),
+      Math.round(this.dragNow.y / 6),
+      Math.round(frac * 25),
+      this.enemies.map((e) => `${Math.round(e.x / 10)},${Math.round(e.y / 10)},${e.dead ? 0 : 1}`).join(';'),
+      this.obstacles.length,
+    ].join('|');
+    if (sig !== this.aimCache.sig) {
+      this.aimCache.sig = sig;
       const speed =
         SHOT_MAX_DRAG * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * frac);
       let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
@@ -1908,10 +2004,16 @@ export class Battle {
         }
         for (const e of this.enemies)
           if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) { hit = e; break sim; }
-        for (const p of this.players)
-          if (!p.dead && p !== u && Math.hypot(sx - p.x, sy - p.y) < u.r + p.r) { hit = p; break sim; }
+        // allies aren't checked — the ball passes through them, and figuring
+        // out which ones you'll link is the skill
         if (i % 2 === 0) dots.push({ x: sx, y: sy });
       }
+      this.aimCache.dots = dots;
+      this.aimCache.hit = hit;
+      this.aimCache.bounced = bounced;
+    }
+    {
+      const { dots, hit, bounced } = this.aimCache;
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = color;
       for (const q of dots) {
@@ -1936,8 +2038,8 @@ export class Battle {
         ctx.globalAlpha = 1;
       }
       if (hit) {
-        // target marker: gold on enemies, cyan on allies
-        ctx.strokeStyle = hit.side === 'enemy' ? '#ffd84d' : '#9df0ff';
+        // target marker: gold ring pulses on the enemy hit first
+        ctx.strokeStyle = '#ffd84d';
         ctx.lineWidth = 3;
         ctx.globalAlpha = 0.85;
         ctx.beginPath();
@@ -2179,4 +2281,4 @@ const SUPER_SFX: Record<PokeType, Sfx> = {
 // Each theme's obstacle is a real mon that blocks the way — Snorlax asleep
 // on the route, Onix coiled in the cave, Golem rolled up in the caldera,
 // Dragonite parked on the cloud.
-const BLOCKER: Record<Theme, number> = { grove: 143, cavern: 95, volcano: 76, sky: 149 };
+const PROP: Record<Theme, string> = { grove: 'tree', cavern: 'rock', volcano: 'rock', sky: 'rock' };

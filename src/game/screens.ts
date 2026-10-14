@@ -107,20 +107,89 @@ const WILD_MONS: [number, number, number, number][] = [
 ];
 
 function drawField(ctx: CanvasRenderingContext2D) {
+  // base grass — deep meadow gradient, no tiles, no grid
   const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#57a53e');
-  g.addColorStop(0.55, '#4d9a37');
-  g.addColorStop(1, '#3c7f2b');
+  g.addColorStop(0, '#4f9c38');
+  g.addColorStop(0.5, '#459233');
+  g.addColorStop(1, '#357a27');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
-  // mowing stripes
-  ctx.fillStyle = 'rgba(255,255,255,0.045)';
-  for (let i = 0; i < 6; i++) ctx.fillRect(0, i * 175, W, 88);
-  // speckles and tufts
-  for (let i = 0; i < 140; i++) {
-    ctx.fillStyle = i % 3 === 0 ? 'rgba(0,50,0,0.10)' : 'rgba(255,255,255,0.06)';
-    ctx.fillRect(hashSeed(i * 31 + 7) * W, hashSeed(i * 57 + 3) * H, 2.5, 2.5);
+
+  // large mottled tone patches — organic meadow, not a mowed lawn
+  for (let i = 0; i < 14; i++) {
+    ctx.fillStyle = i % 2 === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(16,72,16,0.10)';
+    ctx.beginPath();
+    ctx.ellipse(
+      hashSeed(i * 13 + 2) * W,
+      hashSeed(i * 29 + 7) * H,
+      60 + hashSeed(i * 41) * 120,
+      40 + hashSeed(i * 53) * 90,
+      hashSeed(i * 3) * 3,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
   }
+
+  // worn dirt patches — battle-scarred spots near the edges
+  for (let i = 0; i < 4; i++) {
+    const dx = 40 + hashSeed(i * 97) * 460;
+    const dy = 60 + hashSeed(i * 83) * 840;
+    const drx = 30 + hashSeed(i * 31) * 45;
+    const dry = 18 + hashSeed(i * 17) * 25;
+    ctx.fillStyle = 'rgba(122,86,46,0.55)';
+    ctx.beginPath();
+    ctx.ellipse(dx, dy, drx, dry, hashSeed(i * 7) * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(148,110,64,0.5)';
+    ctx.beginPath();
+    ctx.ellipse(dx - drx * 0.15, dy - dry * 0.15, drx * 0.6, dry * 0.6, hashSeed(i * 7) * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // grass tufts: little 3-blade clusters scattered everywhere
+  ctx.strokeStyle = '#2e6420';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 110; i++) {
+    const x = hashSeed(i * 31 + 7) * W;
+    const y = hashSeed(i * 57 + 3) * H;
+    for (let b = -1; b <= 1; b++) {
+      ctx.beginPath();
+      ctx.moveTo(x + b * 2.5, y);
+      ctx.lineTo(x + b * 3.5, y - (b === 0 ? 6 : 4));
+      ctx.stroke();
+    }
+  }
+
+  // wildflowers + pebble speckles
+  for (let i = 0; i < 26; i++) {
+    ctx.fillStyle = ['#ffffff', '#ffe86b', '#ffb8d0'][i % 3];
+    ctx.fillRect(hashSeed(i * 61 + 19) * W, hashSeed(i * 43 + 11) * H, 2.5, 2.5);
+  }
+  ctx.fillStyle = 'rgba(0,50,0,0.12)';
+  for (let i = 0; i < 50; i++) {
+    ctx.fillRect(hashSeed(i * 67 + 5) * W, hashSeed(i * 71 + 13) * H, 2.5, 2.5);
+  }
+
+  // overworld props at the edges — real extracted metatiles
+  const prop = (name: string, x: number, y: number, s: number) => {
+    const img = itemSprite(name);
+    if (!img) return;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + s * 0.34, s * 0.42, s * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, x - s / 2, y - s / 2, s, (s * img.height) / img.width);
+    ctx.restore();
+  };
+  prop('tree', 36, 250, 64);
+  prop('tree', 506, 250, 64);
+  prop('rock', 56, 832, 46);
+  prop('tree', 108, 846, 40);
+  prop('pond', 464, 792, 104);
+
   // vignette
   const v = ctx.createRadialGradient(W / 2, H * 0.4, 140, W / 2, H * 0.4, H * 0.75);
   v.addColorStop(0, 'rgba(0,0,0,0)');
@@ -264,6 +333,58 @@ function pixelText(
   ctx.restore();
 }
 
+const SKIN_TONES = ['#f0c8a0', '#e0a878', '#b87b50', '#8a5a38', '#ffd9b8'];
+const CROWD_SHIRTS = ['#e05050', '#e0a030', '#50b060', '#4090d0', '#8050c0', '#d060a0', '#50c0b0', '#e0e0e0', '#d0d040'];
+
+// A block of tiny spectators — body square + head square, some heads bob.
+// `railOnTop` flips the barrier for the bottom stands (rail faces the field).
+function drawCrowd(ctx: CanvasRenderingContext2D, y0: number, h: number, t: number, railOnTop: boolean) {
+  ctx.fillStyle = '#0e1024';
+  ctx.fillRect(0, y0, W, h);
+  for (let r = 0; r < 4; r++) {
+    const y = y0 + 5 + r * 12;
+    for (let x = 5 + (r % 2) * 7, i = 0; x < W - 8; x += 13, i++) {
+      if (hashSeed(r * 101 + i * 7) < 0.08) continue; // empty seat
+      ctx.fillStyle = CROWD_SHIRTS[Math.floor(hashSeed(r * 53 + i * 13) * CROWD_SHIRTS.length)];
+      ctx.fillRect(x, y + 4, 10, 7);
+      const bob = hashSeed(i * 29 + r) < 0.18 ? Math.round(Math.sin(t * 3 + i * 0.7) * 1.5) : 0;
+      ctx.fillStyle = SKIN_TONES[Math.floor(hashSeed(r * 71 + i * 17) * SKIN_TONES.length)];
+      ctx.fillRect(x + 2, y + bob, 6, 5);
+    }
+  }
+  ctx.fillStyle = '#343a70';
+  ctx.fillRect(0, railOnTop ? y0 : y0 + 56, W, 3);
+}
+
+// Stadium frame: night sky + floodlight towers on top, packed stands above
+// and below the field — the Pokémon Arena crowd look.
+function drawStands(ctx: CanvasRenderingContext2D, t: number) {
+  const s = ctx.createLinearGradient(0, 0, 0, 80);
+  s.addColorStop(0, '#070b22');
+  s.addColorStop(1, '#141a44');
+  ctx.fillStyle = s;
+  ctx.fillRect(0, 0, W, 80);
+  for (let i = 0; i < 46; i++) {
+    const a = 0.25 + 0.75 * Math.abs(Math.sin(t * 1.4 + i * 1.7));
+    ctx.fillStyle = `rgba(255,255,255,${(a * 0.9).toFixed(2)})`;
+    ctx.fillRect(hashSeed(i * 11) * W, hashSeed(i * 19) * 74, 2, 2);
+  }
+  for (const sx of [16, 476]) {
+    ctx.fillStyle = '#141736';
+    ctx.fillRect(sx, 10, 48, 44);
+    ctx.strokeStyle = '#3a3f78';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx, 10, 48, 44);
+    for (let r = 0; r < 3; r++)
+      for (let c = 0; c < 4; c++) {
+        ctx.fillStyle = 'rgba(255,255,230,0.85)';
+        ctx.fillRect(sx + 6 + c * 10, 16 + r * 12, 6, 6);
+      }
+  }
+  drawCrowd(ctx, 80, 59, t, false);
+  drawCrowd(ctx, 872, H - 872, t, true);
+}
+
 // Wild mons drift around their anchor in a lazy lissajous — never leaves
 // the anchor's range, deterministic, zero state.
 function drawWildMons(ctx: CanvasRenderingContext2D, t: number) {
@@ -280,6 +401,7 @@ function drawWildMons(ctx: CanvasRenderingContext2D, t: number) {
 
 export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number | null) {
   drawField(ctx);
+  drawStands(ctx, t);
   drawSparkles(ctx, t);
   drawWildMons(ctx, t);
 
@@ -314,7 +436,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
 
-  if (best !== null) pixelText(ctx, `best clear ${best.toFixed(1)}s`, cx, 845, 9);
+  if (best !== null) pixelText(ctx, `best clear ${best.toFixed(1)}s`, cx, 812, 9);
 }
 
 export function drawDraft(
