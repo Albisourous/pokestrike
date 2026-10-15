@@ -103,7 +103,9 @@ Open the printed URL. Works on desktop and touch.
    future draft pools; gym wins raise your **rank**, and higher ranks unlock
    gated items in the pool. Your **best score** and **daily streak** live on
    the title screen — finishing a Daily Climb each day keeps the streak
-   alive. Lose a run and that exact team comes back as a **RIVAL BATTLE**
+   alive. Tap the dex count on the title for the **Pokédex** — every
+   catchable species, lit when owned. Lose a run and that exact team comes
+   back as a **RIVAL BATTLE**
    wave in your next one — beat it to clear the echo. Every clear raises
    your **ascension** (shown on the title): enemies get +15% bulk and +8%
    damage per tier, and pay a +20%/tier score premium.
