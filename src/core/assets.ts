@@ -16,6 +16,42 @@ export function gracidea(): HTMLImageElement | undefined {
   return gracideaImg;
 }
 
+let gracideaNpcsImg: HTMLImageElement | undefined;
+
+export function loadGracideaNpcs(): Promise<HTMLImageElement> {
+  if (gracideaNpcsImg) return Promise.resolve(gracideaNpcsImg);
+  return loadImg('sprites/gracidea/npcs.webp', 'gracidea npcs').then((img) => {
+    gracideaNpcsImg = img;
+    return img;
+  });
+}
+
+export function gracideaNpcs(): HTMLImageElement | undefined {
+  return gracideaNpcsImg;
+}
+
+// TexturePacker frame index — fetched lazily, cached forever. Empty map on
+// failure so scenery can skip gracefully.
+export type AtlasFrame = { x: number; y: number; w: number; h: number; rotated: boolean };
+const atlasJsons = new Map<string, Promise<Map<string, AtlasFrame>>>();
+export function loadGracideaJson(name: string): Promise<Map<string, AtlasFrame>> {
+  const hit = atlasJsons.get(name);
+  if (hit) return hit;
+  const p = fetch(`sprites/gracidea/${name}.json`)
+    .then((r) => r.json())
+    .then((d) => {
+      const m = new Map<string, AtlasFrame>();
+      for (const k in d.frames) {
+        const f = d.frames[k];
+        m.set(k, { x: f.frame.x, y: f.frame.y, w: f.frame.w, h: f.frame.h, rotated: !!f.rotated });
+      }
+      return m;
+    })
+    .catch(() => new Map());
+  atlasJsons.set(name, p);
+  return p;
+}
+
 function loadImg(src: string, label: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -68,5 +104,64 @@ export function drawMon(ctx: CanvasRenderingContext2D, id: number, x: number, y:
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(sprite(id), x - size / 2, y - size / 2, size, size);
+  ctx.restore();
+}
+
+// --- sprite sheets (Makko-baked, or any strip/grid sheet) ---
+// Drop <name>.png + <name>.json into public/anim/. The JSON manifest is:
+//   { "frameW": 64, "frameH": 64, "fps": 12, "frames": [{"x":0,"y":0,"w":64,"h":64}, ...] }
+// `frames` is optional — without it, frames are read left-to-right,
+// top-to-bottom on a frameW × frameH grid.
+interface Sheet {
+  img: HTMLImageElement;
+  fps: number;
+  frames: { x: number; y: number; w: number; h: number }[];
+}
+const sheetCache = new Map<string, Sheet>();
+
+export async function loadSheet(name: string): Promise<Sheet> {
+  const hit = sheetCache.get(name);
+  if (hit) return hit;
+  const [img, meta] = await Promise.all([
+    loadImg(`anim/${name}.png`, `sheet ${name}`),
+    fetch(`anim/${name}.json`).then((r) => {
+      if (!r.ok) throw new Error(`failed to load sheet manifest ${name}`);
+      return r.json();
+    }),
+  ]);
+  const frames =
+    meta.frames ??
+    Array.from({ length: Math.floor(img.width / meta.frameW) * Math.floor(img.height / meta.frameH) }, (_, i) => ({
+      x: (i % Math.floor(img.width / meta.frameW)) * meta.frameW,
+      y: Math.floor(i / Math.floor(img.width / meta.frameW)) * meta.frameH,
+      w: meta.frameW,
+      h: meta.frameH,
+    }));
+  const sheet: Sheet = { img, fps: meta.fps ?? 12, frames };
+  sheetCache.set(name, sheet);
+  return sheet;
+}
+
+export function sheet(name: string): Sheet {
+  const s = sheetCache.get(name);
+  if (!s) throw new Error(`sheet ${name} not loaded`);
+  return s;
+}
+
+// Frame index wraps — call with Math.floor(t * sheet.fps) for a loop.
+export function drawSheetFrame(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  frame: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  const s = sheet(name);
+  const f = s.frames[frame % s.frames.length];
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(s.img, f.x, f.y, f.w, f.h, x - w / 2, y - h / 2, w, h);
   ctx.restore();
 }

@@ -2,6 +2,9 @@
 // pitch markings (inset boundary, halfway line, center circle, corner arcs)
 // drawn live so they scale to the arena rect. Props come from the gracidea pass.
 
+import { gracidea, loadGracidea, gracideaNpcs, loadGracideaNpcs, loadGracideaJson } from '../core/assets';
+import type { AtlasFrame } from '../core/assets';
+
 export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
 export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
 
@@ -130,8 +133,176 @@ function floor(theme: Theme) {
       g.fill();
     }
   }
+  if (propsReady) decorate(theme, g);
+  else ensureProps();
   floors.set(theme, c);
   return c;
+}
+
+// --- gracidea scenery: keyed atlas slices baked into each floor, once ---
+
+type Slice = readonly [number, number, number, number]; // source rect in tileset.webp
+const sliceCache = new Map<string, HTMLCanvasElement>();
+
+// The webp is lossy: the transparency key shows up as a family of hot pinks
+// (≈249,76,225 → 179,3,153), so key on "r&b high, g low" instead of one color.
+function slice(sx: number, sy: number, sw: number, sh: number): HTMLCanvasElement | undefined {
+  const img = gracidea();
+  if (!img) return;
+  const k = `${sx},${sy},${sw},${sh}`;
+  const hit = sliceCache.get(k);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = sw;
+  c.height = sh;
+  const g = c.getContext('2d')!;
+  g.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  const id = g.getImageData(0, 0, sw, sh);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], gg = d[i + 1], b = d[i + 2];
+    if (r > 140 && b > 110 && gg < 120 && r - gg > 50 && b - gg > 40) d[i + 3] = 0;
+  }
+  g.putImageData(id, 0, 0);
+  sliceCache.set(k, c);
+  return c;
+}
+
+function put(g: CanvasRenderingContext2D, s: Slice, x: number, y: number, sc = 1, alpha = 1) {
+  const c = slice(s[0], s[1], s[2], s[3]);
+  if (!c) return;
+  g.save();
+  g.globalAlpha = alpha;
+  g.imageSmoothingEnabled = false;
+  g.drawImage(c, x, y, s[2] * sc, s[3] * sc);
+  g.restore();
+}
+
+// Eyeballed prop rects in tileset.webp (see the .json for neighboring frames).
+const TREE: Slice[] = [
+  [1980, 90, 54, 54],
+  [1918, 90, 52, 54],
+  [1872, 126, 54, 54],
+];
+const BLOSSOM: Slice = [1800, 85, 30, 77]; // pale flowering tree
+const FLOWER: Slice[] = [
+  [1710, 92, 16, 16], // red
+  [1764, 92, 16, 16], // yellow
+  [1782, 92, 16, 16], // yellow
+  [1764, 110, 16, 16], // pink
+  [1782, 110, 16, 16], // pink
+];
+const PEN: Slice[] = [
+  // rock-walled pens with a boulder inside
+  [18, 115, 54, 65],
+  [72, 115, 54, 65],
+  [234, 115, 54, 65],
+];
+const CAVE_ARCH: Slice = [292, 140, 40, 23];
+const DOME = {
+  brown: [0, 0, 56, 60],
+  olive: [57, 0, 56, 60],
+  white: [113, 0, 56, 60],
+  red: [169, 0, 56, 60],
+  dark: [225, 0, 56, 60],
+  char: [281, 0, 56, 60],
+} as const;
+const BOWL: Slice = [1838, 488, 52, 36]; // stone basin
+const BOWL_TALL: Slice = [1838, 455, 52, 30];
+const METEOR: Slice = [1590, 22, 28, 30]; // pocked gray rock
+const PEAK: Slice = [930, 570, 80, 70]; // stone summit monument
+const PEBBLES: Slice = [180, 189, 36, 9];
+const CROWD = ['youngster_down_1', 'lass_down_1', 'schoolkid_f_down_1', 'pokefan_down_1', 'hiker_down_1'];
+
+let npcFrames: Map<string, AtlasFrame> | undefined;
+let propsReady = false;
+let propsLoading = false;
+
+// Floors are usually first baked while the atlases are still loading; decorate
+// every cached floor when the fetch lands instead of rebuilding them.
+function ensureProps() {
+  if (propsReady || propsLoading) return;
+  propsLoading = true;
+  Promise.all([loadGracidea(), loadGracideaNpcs(), loadGracideaJson('npcs')])
+    .then(([, , frames]) => {
+      npcFrames = frames;
+      propsReady = true;
+      floors.forEach((c, t) => decorate(t, c.getContext('2d')!));
+    })
+    .catch(() => {});
+}
+
+function decorate(theme: Theme, g: CanvasRenderingContext2D) {
+  if (theme === 'grove') {
+    // tree row hugging the top edge + scattered flowers
+    for (let k = 0; k < 6; k++) {
+      const s = k === 5 ? BLOSSOM : TREE[k % 3];
+      put(g, s, 8 + k * 88 + hash(k * 7.1) * 10 - 5, -4, 1.5);
+    }
+    for (let k = 0; k < 6; k++) {
+      put(g, FLOWER[k % FLOWER.length], 55 + k * 85 + hash(k * 11.3) * 16, 64 + hash(k * 5.9) * 30, 2);
+    }
+    for (let k = 0; k < 6; k++) {
+      put(g, FLOWER[(k * 2) % FLOWER.length], 30 + hash(k * 13.7) * 460, 905 + hash(k * 7.3) * 40, 2);
+    }
+  } else if (theme === 'cavern') {
+    for (let k = 0; k < 3; k++) put(g, PEN[k], 16 + k * 88, 2);
+    put(g, CAVE_ARCH, 238, 10, 2);
+    put(g, DOME.dark, 4, 420);
+    put(g, DOME.char, 482, 470);
+    put(g, DOME.olive, 10, 880);
+    put(g, DOME.white, 440, 886);
+    for (let k = 0; k < 5; k++) {
+      put(g, PEBBLES, 60 + hash(k * 9.1) * 420, 200 + hash(k * 17.7) * 500, 1, 0.75);
+    }
+  } else if (theme === 'volcano') {
+    put(g, DOME.red, 8, 4, 1.1);
+    put(g, DOME.char, 82, 2, 1.1);
+    put(g, DOME.char, 478, 30, 1.1);
+    put(g, DOME.brown, 12, 880, 1.1);
+    put(g, DOME.red, 452, 884, 1.1);
+    put(g, BOWL, 200, 14, 1.5);
+    put(g, BOWL_TALL, 330, 20, 1.5);
+    put(g, METEOR, 14, 300, 2);
+    put(g, METEOR, 486, 620, 1.7);
+  } else {
+    // floating summits poking through the cloud banks
+    put(g, PEAK, 2, -4, 1.35);
+    put(g, DOME.white, 470, 4);
+    put(g, BLOSSOM, 255, -6, 1.4);
+    put(g, PEAK, 430, 896, 0.9);
+  }
+  crowd(g);
+}
+
+// Spectator sprites along the top edge — their feet hide under the rim shadow.
+const npcCache = new Map<string, HTMLCanvasElement>();
+function crowd(g: CanvasRenderingContext2D) {
+  const img = gracideaNpcs();
+  if (!img || !npcFrames) return;
+  for (let k = 0; k < CROWD.length; k++) {
+    const name = CROWD[k];
+    let c = npcCache.get(name);
+    if (!c) {
+      const f = npcFrames.get(name);
+      if (!f) continue;
+      c = document.createElement('canvas');
+      c.width = f.rotated ? f.h : f.w;
+      c.height = f.rotated ? f.w : f.h;
+      const cg = c.getContext('2d')!;
+      cg.imageSmoothingEnabled = false;
+      if (f.rotated) {
+        cg.translate(0, c.height);
+        cg.rotate(-Math.PI / 2);
+      }
+      cg.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+      npcCache.set(name, c);
+    }
+    g.save();
+    g.imageSmoothingEnabled = false;
+    g.drawImage(c, 96 + k * 90 + hash(k * 3.7) * 14 - 7, 4, c.width * 2, c.height * 2);
+    g.restore();
+  }
 }
 
 // Thick rim with a hairline chalk line just inside, so the edge reads as

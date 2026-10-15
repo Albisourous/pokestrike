@@ -257,7 +257,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'balloon', name: 'Air Balloon', item: 'air-balloon',
-    desc: 'grass no longer slows your ball',
+    desc: 'field hazards ignore your ball',
     rarity: 'uncommon',
     apply: (b) => { b.slowImmune = true; },
   },

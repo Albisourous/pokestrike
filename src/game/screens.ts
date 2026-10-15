@@ -32,6 +32,7 @@ export function draftCardRect(i: number) {
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
+export const DAILY_BTN = { x: W / 2 - 140, y: 800, w: 280, h: 64 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -154,6 +155,8 @@ function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: num
 const PIXEL_FONT = 'rc, monospace';
 const FONT_SCALE = 1.15;
 export const font = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px ${PIXEL_FONT}`;
+
+const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 // Mons standing the ring around the logo — all ids are in ALL_SPRITE_IDS.
 const RING_MONS: [number, number][] = [
@@ -334,6 +337,16 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, W, H);
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
+  button(ctx, DAILY_BTN, 'DAILY CLIMB', true);
+  // the seed in plaintext — players can tell which day's climb they're on
+  const now = new Date();
+  ctx.font = font(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(
+    `${MONTH_ABBR[now.getMonth()]} ${now.getDate()}`,
+    W / 2,
+    DAILY_BTN.y + DAILY_BTN.h + 22,
+  );
 }
 
 export function drawDraft(
@@ -458,11 +471,20 @@ export interface ShareGrid {
   copied: boolean;
 }
 
+function hpBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, frac: number) {
+  ctx.fillStyle = '#000a';
+  ctx.fillRect(x, y, w, 4);
+  ctx.fillStyle = frac > 0.5 ? '#6fdc6f' : frac > 0.25 ? '#ffd84d' : '#ff6b6b';
+  ctx.fillRect(x, y, w * Math.max(frac, 0), 4);
+}
+
 export function drawReward(
   ctx: CanvasRenderingContext2D,
   offers: { name: string; item: string; desc: string; rarity: Rarity }[],
   box: SpeciesDef[],
+  boxHp: number[],
   team: SpeciesDef[],
+  teamHp: number[],
   selBox: number,
   boxScroll: number,
   catchPct: number,
@@ -553,10 +575,11 @@ export function drawReward(
     ctx.fill();
     rim(ctx, r, 8, i === selBox ? '#ffd84d' : '#2a3560', i === selBox ? 2 : 1);
     edge(ctx, r, 8);
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 26, 40);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 23, 38);
+    hpBar(ctx, r.x + 6, r.y + 42, r.w - 12, boxHp[i] ?? 1);
     ctx.font = font(6);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 52);
+    ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 54);
   });
   ctx.restore();
   const maxScroll = boxScrollMax(box.length);
@@ -579,10 +602,11 @@ export function drawReward(
     edge(ctx, r, 8);
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 5, r.y + 5, r.w - 10, 3);
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 32, 40);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 30, 40);
+    hpBar(ctx, r.x + 8, r.y + 54, r.w - 16, teamHp[i] ?? 1);
     ctx.font = font(7);
     ctx.fillStyle = PARCH;
-    ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 64);
+    ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 67);
   });
   ctx.font = font(7);
   ctx.fillStyle = '#5a6284';

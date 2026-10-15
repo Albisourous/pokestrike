@@ -24,10 +24,14 @@ Open the printed URL. Works on desktop and touch.
 
 1. Pick **Free Play** — a 9-stage climb (Slay the Spire style): random wild
    stages, a **gym leader** every 3rd stage, bigger and meaner packs as you
-   go, and a win only when the third gym falls. Enemy typing is hidden (`?`)
+   go, and a win only when the third gym falls. **Daily Climb** is the same
+   run for everyone today — one seed deals the same draft and stages.
+   Enemy typing is hidden (`?`)
    until a mon takes a hit or attacks — you learn the matchup by engaging.
-   Gym leaders bring same-type entourages, and every gym you beat lets you
-   **keep the leader's ace** for your own team.
+   Gym leaders bring same-type entourages and a **signature attack** (Mewtwo
+   hunts you with psychic orbs, Dragonite fires a hyper beam line,
+   Gyarados sweeps the court, Charizard scorches a ring), and every gym
+   you beat lets you **keep the leader's ace** for your own team.
 2. **Draft your team** — four rounds, one of three Pokémon each round, from a
    17-species pool of unevolved starters. Every round offers **three
    different types** so teams stay varied — the heavy hitters (Gengar,
@@ -55,15 +59,18 @@ Open the printed URL. Works on desktop and touch.
    and the pulsing move name marks the one you want to hit next. Enemies
    creep and dart toward your team and attack on a **countdown** — kill
    them or keep moving.
-6. **Read the field** — each stage plays in a themed stadium court (grass,
-   stone, basalt, clouds) and the wilds match the biome: grove draws
-   grass-and-bird packs, cavern rock-and-ghost, volcano fire packs, sky
-   flyers and electric. **Field pickups** spawn each wave — the ball
-   collects them by touch: **Oran Berry** heals the team, **Protein**
-   boosts contact damage for the rest of the shot, **Elixir** knocks a
-   notch off every super's cooldown. Heavy hits scar the court, and some
-   spawn pairs sit close enough to pinch the ball between them for
-   multi-hits.
+6. **Read the field** — each wave re-themes the court and the wilds match
+   the stage's biome: grove draws grass-and-bird packs, cavern
+   rock-and-ghost, volcano fire packs, sky flyers and electric. The court
+   fights back too: **lava pools** scorch the ball and anything standing
+   in them, **tall grass** drags your launch to a crawl, **wind bands**
+   push the ball sideways, and **spike strips** chip it on contact — an
+   **Air Balloon** relic floats over all of it. **Field pickups** spawn
+   each wave — the ball collects them by touch: **Oran Berry** heals the
+   team, **Protein** boosts contact damage for the rest of the shot,
+   **Elixir** knocks a notch off every super's cooldown. Heavy hits scar
+   the court, and some spawn pairs sit close enough to pinch the ball
+   between them for multi-hits.
 7. **Catch 'em** — a KO has a chance to send the enemy to your **box**
    (`CAUGHT!` ball wiggle and all), and every cleared stage guarantees
    **one recruit** — beat a gym leader and their ace joins you. Swap boxed
@@ -72,7 +79,9 @@ Open the printed URL. Works on desktop and touch.
    slot: it feeds the copy you own — the mon **evolves** if its line has a
    next stage, or the dupe becomes **rare candy** (a stat bump, or a team
    heal if it's benched). Evolved **elites** start appearing from stage 2
-   and get common deeper in. Bosses can be caught mid-fight too — a
+   and get common deeper in — and any normal wave can be **invaded** by a
+   legendary (the birds, the beasts, Mew, Celebi) crashing in as a
+   mini-boss worth catching. Bosses can be caught mid-fight too — a
    Master Ball relic never fails.
 8. **Choose a relic between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
@@ -172,12 +181,13 @@ from two places:
 - Items — official item icons from the same repo (`sprites/items/`) →
   `sprites/items/<name>.png`
 - Scenery — the [Gracidea](https://github.com/lowlighter/gracidea) pack
-  (RSE tileset + npcs), vendored into `public/sprites/gracidea/` for
-  slicing grounds, trees, rocks, ledges, and gym-leader trainers
+  (RSE tileset + npcs), vendored into `public/sprites/gracidea/`: court
+  edges get real tileset props (trees, boulders, flowers, scorched
+  debris) and the crowd behind the boards is sliced from the npcs atlas
 
 One era is what keeps the theme cohesive: new art gets vendored or sliced
-from these sources, never invented shapes. Scenery is placeholder flats
-until the prop pass slices it from the tileset atlas.
+from these sources, never invented shapes. Hazard zones and court paint
+are translucent gameplay markings, not scenery.
 
 Pokémon is © Nintendo / Game Freak / Creatures Inc. This is a fan-made,
 non-commercial project — not affiliated with or endorsed by them.

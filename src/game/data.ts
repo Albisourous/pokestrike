@@ -132,6 +132,19 @@ export const ELITES: SpeciesDef[] = [
   { id: 169, name: 'Crobat', type: 'poison', stats: st(85, 90, 80, 70, 80, 130), melee: true },
 ];
 
+// Rare invaders: legendaries that crash a normal wave on MS invade stages.
+// Strong captures — spawn handled elsewhere; this is just the dex data.
+export const INVADERS: SpeciesDef[] = [
+  { id: 144, name: 'Articuno', type: 'flying', stats: st(90, 85, 100, 95, 125, 85) },
+  { id: 145, name: 'Zapdos', type: 'electric', stats: st(90, 90, 85, 125, 90, 100), pierce: true },
+  { id: 146, name: 'Moltres', type: 'fire', stats: st(90, 100, 90, 125, 85, 90) },
+  { id: 243, name: 'Raikou', type: 'electric', stats: st(90, 85, 75, 115, 100, 115), pierce: true },
+  { id: 244, name: 'Entei', type: 'fire', stats: st(115, 115, 85, 90, 75, 100), melee: true },
+  { id: 245, name: 'Suicune', type: 'water', stats: st(100, 75, 115, 90, 115, 85) },
+  { id: 151, name: 'Mew', type: 'psychic', stats: st(100, 100, 100, 100, 100, 100), copy: true },
+  { id: 251, name: 'Celebi', type: 'grass', stats: st(100, 100, 100, 100, 100, 100), healer: true },
+];
+
 // Evolution-only species: targets of evolvesTo that never roll into waves or
 // the draft themselves. Mid-stages chain onward where their next form exists.
 export const EVOS: SpeciesDef[] = [
@@ -187,6 +200,7 @@ export const ALL_SPRITE_IDS = [
   ...ENEMY_DB.map((e) => e.id),
   ...ELITES.map((e) => e.id),
   ...EVOS.map((e) => e.id),
+  ...INVADERS.map((i) => i.id),
 ];
 
 const ENEMY_POOL = ENEMY_DB.slice(0, -4);
@@ -306,4 +320,62 @@ export function rollWave(rng: () => number, depth: number, elite = false, theme?
   }
   if (boss) wave.push({ def: boss, nx: 0.5, ny: 0.3, boss: true });
   return wave;
+}
+
+// Hazard zones: per-theme arena dangers laid out alongside a wave's spawns.
+// Same normalized coords as WaveSpawn; r is a fraction of arena width.
+// Zones stay out of the bottom 25% (player turf) and inside the side walls.
+export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes';
+export interface HazardSpawn {
+  kind: HazardKind;
+  nx: number;
+  ny: number;
+  r: number;
+  dir?: number; // gust only: -1/1, the way the wind pushes
+}
+
+export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
+  // r ~0.08-0.16; ny clamped so the zone's low edge clears the bottom quarter
+  const rad = () => 0.08 + rng() * 0.08;
+  const spot = (r: number, yLo: number, yHi: number) => ({
+    nx: r + rng() * (1 - 2 * r),
+    ny: yLo + rng() * (Math.min(yHi, 0.75 - r) - yLo),
+    r,
+  });
+  const n = (lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
+  switch (theme) {
+    case 'volcano':
+      return Array.from({ length: n(1, 3) }, () => {
+        const r = rad();
+        return { kind: 'lava', ...spot(r, 0.15, 0.6) };
+      });
+    case 'grove':
+      return Array.from({ length: n(2, 4) }, () => {
+        const r = rad();
+        return { kind: 'grass', ...spot(r, 0.1, 0.7) };
+      });
+    case 'sky':
+      // wide horizontal wind bands, centered-ish, pushing left or right
+      return Array.from({ length: n(1, 2) }, () => {
+        const r = 0.18 + rng() * 0.05;
+        return {
+          kind: 'gust',
+          nx: 0.5 + (rng() - 0.5) * 0.1,
+          ny: 0.2 + rng() * (0.55 - r - 0.2),
+          r,
+          dir: rng() < 0.5 ? -1 : 1,
+        };
+      });
+    case 'cavern':
+      // jagged strips shoved off-center, one side or the other
+      return Array.from({ length: n(1, 3) }, () => {
+        const r = rad();
+        const nx = rng() < 0.5
+          ? r + rng() * (0.42 - r)
+          : 0.58 + rng() * (1 - 0.58 - r);
+        return { kind: 'spikes', nx, ny: 0.15 + rng() * (Math.min(0.6, 0.75 - r) - 0.15), r };
+      });
+    default:
+      return [];
+  }
 }

@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, itemSprite } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS } from './data';
+import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, hazardsFor } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
@@ -70,6 +70,7 @@ interface Unit {
   lastHit: Map<number, number>; // shooter uid -> game time
   wallN: number; // wall bounces so far this shot (grip claw ramp)
   wpA: number; // weak-point angle on the body, -1 = none (elites/bosses)
+  hzT: number; // last hazard tick — throttles lava/spike chips and burns
 }
 
 interface FloatText {
@@ -88,6 +89,7 @@ interface Orb {
   t: number;
   wob: number; // spiral phase — each orb corkscrews on its own beat
   color: string;
+  hostile?: boolean; // boss orbs hunt players instead of enemies
 }
 // Expanding shockwave: the front sweeps outward and hits each enemy once
 // when it reaches them — fire blast, psychic ring.
@@ -101,6 +103,24 @@ interface Wave {
   color: string;
   hits: Set<number>;
   onHit?: (e: Unit) => void;
+  hostile?: boolean; // boss waves damage players
+}
+// A themed hazard zone on the court — MS damage-wall/gimmick analog.
+interface Hazard {
+  kind: 'lava' | 'grass' | 'gust' | 'spikes';
+  x: number;
+  y: number;
+  r: number; // px radius of the zone
+  dir?: number; // gust: push direction (+1/-1)
+}
+// Boss hyper beam: a bright line that fades fast after the shot lands.
+interface Beam {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  t: number;
+  life: number;
 }
 // Normal-type quick attack: the bumped ally physically lunges at the
 // target, slams it, and holds position next to it.
@@ -189,6 +209,10 @@ export class Battle {
   private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
   private pickups: Pickup[] = []; // touch to collect while the ball flies
   private scars: Scar[] = []; // impact craters scarring the court
+  private hazards: Hazard[] = []; // this wave's court gimmicks
+  private beams: Beam[] = []; // boss hyper-beam afterglow
+  private waveSpecial: string | null = null; // banner override (invade)
+  private gustSounded = false; // wind whoosh once per entry
   private shotPhys = 1; // protein pickup: contact damage this shot
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
@@ -284,6 +308,7 @@ export class Battle {
         lastHit: new Map(),
         wallN: 0,
         wpA: -1,
+        hzT: -9,
       });
     });
     this.spawnWave(0);
@@ -307,7 +332,16 @@ export class Battle {
     this.delays = [];
     this.waves = [];
     this.dashes = [];
-    this.enemies = this.stage.waves[i].map((s) => {
+    // a legendary can crash any non-boss wave past the first — MS invades
+    let spawns = this.stage.waves[i];
+    this.waveSpecial = null;
+    if (i > 0 && !spawns.some((s) => s.boss) && this.rng() < 0.09) {
+      const inv = INVADERS[Math.floor(this.rng() * INVADERS.length)];
+      spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
+      this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
+      sfx('invade');
+    }
+    this.enemies = spawns.map((s) => {
       const r = s.boss ? 46 : 26;
       return {
       uid: nextUid++,
@@ -343,6 +377,7 @@ export class Battle {
       lastHit: new Map(),
       wallN: 0,
       wpA: s.boss || ELITE_IDS.has(s.def.id) ? this.rng() * Math.PI * 2 : -1,
+      hzT: -9,
       };
     });
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -357,6 +392,15 @@ export class Battle {
         t: this.rng() * 6,
       });
     }
+    // court gimmicks for this wave's theme — lava pools, tall grass,
+    // wind bands, spike strips (normalized layout → arena px)
+    this.hazards = hazardsFor(this.theme, this.rng).map((z) => ({
+      kind: z.kind,
+      x: this.arena.x + this.arena.w * z.nx,
+      y: this.arena.y + this.arena.h * z.ny,
+      r: this.arena.w * z.r,
+      dir: z.dir,
+    }));
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -399,6 +443,7 @@ export class Battle {
     this.kosThisShot = 0;
     u.wallN = 0;
     this.shotPhys = 1;
+    this.gustSounded = false;
     this.stopTimer = 0;
     this.phase = 'shot';
     this.shots++;
@@ -447,6 +492,8 @@ export class Battle {
     for (const p of this.pickups) p.t += dt;
     for (const s of this.scars) s.t += dt;
     this.scars = this.scars.filter((s) => s.t < s.life);
+    for (const bm of this.beams) bm.t -= dt;
+    this.beams = this.beams.filter((bm) => bm.t > 0);
     this.shake *= Math.exp(-6 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
 
@@ -480,6 +527,27 @@ export class Battle {
       u.y += u.vy * h;
       // speed trail while flying fast
       this.hitWalls(u);
+      // court gimmicks — the ball feels the floor it's flying over
+      for (const hz of this.hazards) {
+        if (dist(u, hz) > u.r + hz.r) continue;
+        if (hz.kind === 'gust') {
+          if (!this.slowImmune) u.vx += (hz.dir ?? 1) * 480 * h;
+          if (!this.gustSounded) {
+            this.gustSounded = true;
+            sfx('gust');
+          }
+        } else if (hz.kind === 'grass') {
+          if (!this.slowImmune) {
+            u.vx *= Math.exp(-8 * h);
+            u.vy *= Math.exp(-8 * h);
+          }
+        } else if (!this.slowImmune && this.time - u.hzT > 0.5) {
+          // lava & spikes chip the ball on contact — MS damage walls
+          u.hzT = this.time;
+          this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.04)));
+          sfx('sizzle');
+        }
+      }
       for (const e of wave) {
         if (this.enemies !== wave) break;
         if (e.dead) continue;
@@ -558,6 +626,16 @@ export class Battle {
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
+      // lava burns whatever stands in it — enemies included
+      if (!e.dead) {
+        for (const hz of this.hazards) {
+          if (hz.kind === 'lava' && dist(e, hz) < hz.r + e.r * 0.4 && this.time - e.hzT > 0.6) {
+            e.hzT = this.time;
+            this.hurt(e, Math.max(1, Math.ceil(e.maxHp * 0.03)), '#f08030');
+            break;
+          }
+        }
+      }
     }
     // pairwise separation between enemies
     for (let i = 0; i < this.enemies.length; i++) {
@@ -596,12 +674,13 @@ export class Battle {
     b.y += n.y * push;
   }
 
-  // Homing orbs from water bump attacks.
+  // Homing orbs from water bump attacks — and boss orbs that hunt you.
   private stepOrbs(dt: number) {
     for (const o of this.orbs) {
       o.t -= dt;
       if (o.target.dead) {
-        const next = this.enemies.find((e) => !e.dead);
+        const pool = o.hostile ? this.players : this.enemies;
+        const next = pool.find((e) => !e.dead);
         if (next) o.target = next;
         else {
           o.t = 0;
@@ -616,7 +695,11 @@ export class Battle {
       o.y += (dir.y + dir.x * perp) * 620 * dt;
       // bubble trail
       if (dist(o, o.target) < o.target.r + 6) {
-        this.hurt(o.target, o.dmg, '#9df0ff');
+        if (o.hostile) {
+          this.damagePlayer(o.target, o.dmg);
+        } else {
+          this.hurt(o.target, o.dmg, '#9df0ff');
+        }
         this.waves.push({
           x: o.x, y: o.y, r: 0, maxR: 52, t: 0.3, life: 0.3,
           color: '#9df0ff', hits: new Set(),
@@ -639,7 +722,7 @@ export class Battle {
       w.t -= dt;
       w.r = w.maxR * (1 - Math.max(w.t, 0) / w.life);
       if (!w.onHit) continue;
-      for (const e of this.enemies) {
+      for (const e of w.hostile ? this.players : this.enemies) {
         if (e.dead || w.hits.has(e.uid)) continue;
         if (dist(w, e) > w.r + e.r * 0.5) continue;
         w.hits.add(e.uid);
@@ -1421,23 +1504,87 @@ export class Battle {
     }
   }
 
+  // Each boss has a signature attack on its countdown; invaders and
+  // unknowns fall back to the generic radial blast.
+  private bossAttack(e: Unit) {
+    const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
+    this.screenFlash('#f85888', 0.18);
+    this.addShake(12);
+    buzz([30, 40, 60]);
+    this.scar(e.x, e.y, 26);
+    const hit = (p: Unit, dmg: number) => {
+      this.damagePlayer(p, dmg);
+      if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
+    };
+    switch (e.def.id) {
+      case 149: { // Dragonite — hyper beam: a burning line through the team
+        if (!target) break;
+        sfx('beam');
+        this.beams.push({ x1: e.x, y1: e.y, x2: target.x, y2: target.y, t: 0.5, life: 0.5 });
+        const dx = target.x - e.x, dy = target.y - e.y;
+        const dl = Math.max(dx * dx + dy * dy, 1);
+        for (const p of this.players) {
+          if (p.dead) continue;
+          const t = Math.max(0, Math.min(1, ((p.x - e.x) * dx + (p.y - e.y) * dy) / dl));
+          const px = e.x + dx * t, py = e.y + dy * t;
+          if (Math.hypot(p.x - px, p.y - py) < p.r + 26) {
+            hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
+          }
+        }
+        break;
+      }
+      case 130: { // Gyarados — thrash: a wall of water sweeping the whole court
+        sfx('boom');
+        this.waves.push({
+          x: e.x, y: e.y, r: 0, maxR: 300, t: 0.5, life: 0.5,
+          color: '#6890f0', hits: new Set(), hostile: true,
+          onHit: (p) => hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+        });
+        break;
+      }
+      case 6: { // Charizard — flame ring that scorches the floor on the way out
+        sfx('boom');
+        this.waves.push({
+          x: e.x, y: e.y, r: 0, maxR: 200, t: 0.45, life: 0.45,
+          color: '#f08030', hits: new Set(), hostile: true,
+          onHit: (p) => hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+        });
+        this.scar(e.x, e.y, 34);
+        break;
+      }
+      case 150: { // Mewtwo — twin psychic orbs that hunt the nearest pair
+        sfx('zap');
+        this.players
+          .filter((p) => !p.dead)
+          .sort((a, b) => dist(e, a) - dist(e, b))
+          .slice(0, 2)
+          .forEach((p, i) => {
+            this.orbs.push({
+              x: e.x, y: e.y, target: p,
+              dmg: Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+              t: 2.5, wob: i * 2.1, color: '#f85888', hostile: true,
+            });
+          });
+        break;
+      }
+      default: { // generic gym blast — radial nova
+        const R = 170;
+        sfx('boom');
+        for (const p of this.players) {
+          if (!p.dead && dist(e, p) <= R + p.r) {
+            this.scar(p.x, p.y, 14);
+            hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
+          }
+        }
+      }
+    }
+  }
+
   private resolveEnemyTurn() {
     for (const e of this.pendingAttacks) {
       e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult;
       if (e.boss) {
-        const R = 170;
-        this.screenFlash('#f85888', 0.18);
-        this.addShake(12);
-        sfx('boom');
-        buzz([30, 40, 60]);
-        this.scar(e.x, e.y, 26);
-        for (const p of this.players) {
-          if (!p.dead && dist(e, p) <= R + p.r) {
-            this.scar(p.x, p.y, 14);
-            this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
-            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
-          }
-        }
+        this.bossAttack(e);
       } else if (e.def.melee) {
         // melee enemies lunge instead of zapping — the dash plays out over
         // the next moments while you're lining up your shot
@@ -1546,6 +1693,9 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // court gimmicks — the themed hazard zones under everything else
+    for (const hz of this.hazards) this.drawHazard(ctx, hz);
+
     // field pickups: a soft halo under a bobbing item icon
     for (const pk of this.pickups) {
       const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
@@ -1594,6 +1744,22 @@ export class Battle {
     }
 
 
+    // boss beam afterglow — a fading bright line over the field
+    for (const bm of this.beams) {
+      const alpha = bm.t / bm.life;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#ffd84d';
+      ctx.lineWidth = 14 * alpha + 2;
+      ctx.beginPath();
+      ctx.moveTo(bm.x1, bm.y1);
+      ctx.lineTo(bm.x2, bm.y2);
+      ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 4 * alpha + 1;
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
     for (const t of this.texts) {
       const pop = 1 + Math.max(0, t.t - 0.72) * (t.big ? 3 : 1.6);
       ctx.globalAlpha = Math.min(t.t / 0.3, 1);
@@ -1641,9 +1807,9 @@ export class Battle {
       const scaleIn = 1 + Math.max(0, this.waveBanner - 1.1) * 2.4;
       const cy = a.y + a.h / 2;
       const gym = this.enemies.find((e) => e.boss);
-      const label = gym
+      const label = this.waveSpecial ?? (gym
         ? `GYM LEADER ${gym.def.name.toUpperCase()}`
-        : `STAGE ${this.waveIndex + 1} / ${TOTAL_STAGES}`;
+        : `STAGE ${this.waveIndex + 1} / ${TOTAL_STAGES}`);
       ctx.globalAlpha = pop;
       // hanging ribbon, conquest-style
       ctx.fillStyle = '#101430ee';
@@ -1662,6 +1828,85 @@ export class Battle {
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
       ctx.globalAlpha = 1;
     }
+  }
+
+  // Hazard zones are gameplay overlays (like the court paint), not
+  // scenery — translucent pools the ball visibly reacts to.
+  private drawHazard(ctx: CanvasRenderingContext2D, hz: Hazard) {
+    const TAU = Math.PI * 2;
+    ctx.save();
+    if (hz.kind === 'lava') {
+      const pulse = 0.34 + Math.sin(this.time * 2.4) * 0.07;
+      ctx.globalAlpha = pulse + 0.2;
+      ctx.fillStyle = '#c23a0e';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.68, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = pulse + 0.45;
+      ctx.fillStyle = '#ff9a30';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r * 0.55, hz.r * 0.36, 0, 0, TAU);
+      ctx.fill();
+    } else if (hz.kind === 'grass') {
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#2f7a2a';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.6, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = '#57b04e';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * TAU;
+        const bx = hz.x + Math.cos(a) * hz.r * 0.7;
+        const by = hz.y + Math.sin(a) * hz.r * 0.42;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.lineTo(bx + Math.cos(a) * 4, by - 8);
+        ctx.stroke();
+      }
+    } else if (hz.kind === 'gust') {
+      const d = hz.dir ?? 1;
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#bfe6ff';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.5, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = '#e8f6ff';
+      ctx.lineWidth = 2.5;
+      for (let i = -2; i <= 2; i++) {
+        // chevrons stream in the push direction
+        const off = (((this.time * 90 * d + i * 45) % (hz.r * 2)) + hz.r * 2) % (hz.r * 2) - hz.r;
+        const cx = hz.x + off;
+        if (Math.abs(cx - hz.x) > hz.r * 0.85) continue;
+        ctx.beginPath();
+        ctx.moveTo(cx - 6 * d, hz.y - 8);
+        ctx.lineTo(cx + 6 * d, hz.y);
+        ctx.lineTo(cx - 6 * d, hz.y + 8);
+        ctx.stroke();
+      }
+    } else {
+      ctx.globalAlpha = 0.45;
+      ctx.fillStyle = '#241f30';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.55, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#9a9ab0';
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * TAU + 0.4;
+        const sx = hz.x + Math.cos(a) * hz.r * 0.55;
+        const sy = hz.y + Math.sin(a) * hz.r * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(sx - 4, sy);
+        ctx.lineTo(sx, sy - 9);
+        ctx.lineTo(sx + 4, sy);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    ctx.restore();
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {

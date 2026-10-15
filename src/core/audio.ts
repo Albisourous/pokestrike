@@ -64,7 +64,8 @@ function noise(dur: number, freq: number, vol: number, delay = 0, slide = 0) {
 
 export type Sfx =
   | 'launch' | 'perfect' | 'hit' | 'ko' | 'caught' | 'hurt'
-  | 'zap' | 'boom' | 'splash' | 'heal' | 'ui' | 'wave' | 'lose' | 'ready';
+  | 'zap' | 'boom' | 'splash' | 'heal' | 'ui' | 'wave' | 'lose' | 'ready'
+  | 'sizzle' | 'gust' | 'invade' | 'beam';
 
 export function sfx(name: Sfx, pitch = 1) {
   switch (name) {
@@ -117,6 +118,22 @@ export function sfx(name: Sfx, pitch = 1) {
     case 'ready': // super recharged — soft two-note ping
       tone(1046, 1046, 0.07, 'sine', 0.09);
       tone(1568, 1568, 0.1, 'sine', 0.09, 0.06);
+      break;
+    case 'sizzle': // lava/spike chip — hot static pop
+      noise(0.12, 2600, 0.14);
+      tone(320, 90, 0.1, 'sawtooth', 0.08);
+      break;
+    case 'gust': // wind band — airy sweep up
+      noise(0.35, 800, 0.12, 0, 1400);
+      break;
+    case 'invade': // legendary sting — dark rise + hit
+      tone(196, 784, 0.28, 'sawtooth', 0.12);
+      tone(98, 392, 0.28, 'triangle', 0.14);
+      noise(0.2, 500, 0.2, 0.26, -300);
+      break;
+    case 'beam': // hyper beam — rising charge then a blast tail
+      tone(180, 1400, 0.22, 'sawtooth', 0.14);
+      noise(0.3, 900, 0.24, 0.2, -500);
       break;
   }
 }

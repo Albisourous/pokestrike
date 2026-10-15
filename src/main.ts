@@ -2,6 +2,7 @@ import './style.css';
 import { startLoop } from './core/loop';
 import { unlockAudio, sfx, cry, music } from './core/audio';
 import { loadAll, loadItem, loadGracidea } from './core/assets';
+import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
@@ -24,6 +25,7 @@ import {
   RETRY_BTN,
   SHARE_BTN,
   FREE_BTN,
+  DAILY_BTN,
   inRect,
   font,
 } from './game/screens';
@@ -41,11 +43,19 @@ let viewPad = 0;
 const arenaRect = () => ({ x: 24, y: 72 - viewPad, w: W - 48, h: H - 92 + viewPad * 2 });
 
 const randSeed = () => (Math.random() * 2 ** 31) | 0;
+// Daily Climb: one seed per calendar day — everyone plays the same run
+const dailySeed = () => {
+  const n = new Date();
+  return n.getFullYear() * 10000 + (n.getMonth() + 1) * 100 + n.getDate();
+};
 
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
 let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
 let stage = makeStage(randSeed());
+// the run's roll source — Math.random for free play, seeded for the daily;
+// draft deals and the Battle both draw from it so a daily is fully seeded
+let runRng: () => number = Math.random;
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
@@ -115,7 +125,7 @@ function draftOffers(): number[] {
       (i) => !draft.picked.includes(i) && !offers.includes(i),
     );
     for (let i = extra.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(runRng() * (i + 1));
       [extra[i], extra[j]] = [extra[j], extra[i]];
     }
     offers.push(...extra.slice(0, 3 - offers.length));
@@ -176,9 +186,19 @@ canvas.addEventListener('pointerdown', (e) => {
   if (scene === 'title') {
     if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
-      draft = { order: draftOrder(Math.random), picked: [] };
+      runRng = Math.random;
+      draft = { order: draftOrder(runRng), picked: [] };
       offerCache = null;
       stage = makeStage(randSeed());
+      scene = 'draft';
+      sceneMusic();
+    } else if (inRect(p.x, p.y, DAILY_BTN)) {
+      sfx('ui');
+      const seed = dailySeed();
+      runRng = mulberry32(seed);
+      draft = { order: draftOrder(runRng), picked: [] };
+      offerCache = null;
+      stage = makeStage(seed, 'Daily Climb');
       scene = 'draft';
       sceneMusic();
     }
@@ -192,7 +212,7 @@ canvas.addEventListener('pointerdown', (e) => {
       draft.picked.push(offers[i]);
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(arenaRect(), draft.picked.map((i) => ROSTER[i]), stage, Math.random);
+        battle = new Battle(arenaRect(), draft.picked.map((i) => ROSTER[i]), stage, runRng);
         // ?dev exposes the live battle for poking around during playtests
         if (new URLSearchParams(location.search).has('dev'))
           (window as unknown as { __battle: Battle }).__battle = battle;
@@ -386,7 +406,9 @@ function render() {
             ctx,
             battle.rewardOffers,
             battle.box,
+            battle.boxHp,
             battle.players.map((p) => p.def),
+            battle.players.map((p) => (p.maxHp ? p.hp / p.maxHp : 0)),
             battle.boxSel,
             boxScroll,
             battle.captureChance,
