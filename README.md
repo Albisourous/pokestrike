@@ -44,21 +44,21 @@ Open the printed URL. Works on desktop and touch.
    them, and **COPY** (Ditto) replays the super — stats, typing and
    cooldown — of whichever ally bumps it.
 3. **Pull back to aim** — drag direction sets your launch angle and a dotted
-   **guide line** previews the ball's banks off walls and rocks, ending in a
-   target ring on whatever it would hit first. **Power is timing**: a
+   **guide line** previews the ball's banks off walls and rocks, ending on
+   whatever it would hit first. **Power is timing**: a
    meter ping-pongs while you hold — release in the gold zone for a
    full-power `PERFECT!` shot (slow-mo + speedlines included).
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune). Elites and
-   bosses carry a gold-diamond **weak point** — land the ball's contact
-   point on it for ×3 damage.
-5. **Bump your own teammates** — every pass-through is a combo link (gold
-   arc + rising ×N counter, escalating hit-stop and flashes). Each ally's
+   bosses carry a **weak point** — a gold diamond marking one face; strike
+   the ball in from that side for ×3 damage.
+5. **Bump your own teammates** — every pass-through is a combo link (rising
+   ×N counter, escalating hit-stop and flashes). Each ally's
    signature **super** starts uncharged and builds one notch per shot — the
    pip meter under its HP bar fills as it charges, all-gold means ready,
-   and the pulsing move name marks the one you want to hit next. Enemies
-   creep and dart toward your team and attack on a **countdown** — kill
-   them or keep moving.
+   and its move name appears overhead — that's the one you want to hit
+   next. Enemies creep and dart toward your team and attack on a
+   **countdown** — kill them or keep moving.
 6. **Read the field** — each wave re-themes the court and the wilds match
    the stage's biome: grove draws grass-and-bird packs, cavern
    rock-and-ghost, volcano fire packs, sky flyers and electric. The court
@@ -88,7 +88,11 @@ Open the printed URL. Works on desktop and touch.
    run — draft for synergy, relic for the holes. Then pick your **path**:
    the safe **ROUTE**, or the **ELITE** road — a bigger fight with a
    guaranteed elite spawn, and the next relic offer rolls uncommon-or-better.
-9. **Share your result** — the result screen shows a Wordle-style emoji grid
+9. **It remembers you** — caught mons join your **dex** and can show up in
+   future draft pools; gym wins raise your **rank**, and higher ranks unlock
+   gated relics in the pool. Lose a run and that exact team comes back as a
+   **RIVAL BATTLE** wave in your next one — beat it to clear the echo.
+10. **Share your result** — the result screen shows a Wordle-style emoji grid
    (🟩 cleared waves, 🟥 where you fell), your drafted team as type-colored
    squares, and rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS
    THIEF, SPEED CLEAR…). Tap **SHARE RESULT** to post or copy it.
@@ -113,9 +117,9 @@ Spe) is a slow tank, and Geodude's 100 Defense means physical hits bounce off �
 hit it with special bump attacks instead. Damage mitigation is
 `60 / (60 + def)` — a defender at 60 takes about half damage.
 
-Supers shout their real move name (`PIKACHU used THUNDER!`), forked lightning
-hops enemy to enemy, fire rings sweep the field, KOs spin out into faint
-ghosts, and everything is backed by a procedural chiptune soundtrack
+Supers shout their real move name (`PIKACHU used THUNDER!`), chain lightning
+hops enemy to enemy, shockwave rings sweep the field, and everything is
+backed by a procedural chiptune soundtrack
 (title / battle / victory) plus synthesized WebAudio SFX and haptics — no
 audio assets.
 
@@ -123,15 +127,15 @@ audio assets.
 
 | Type | Ally bump attack |
 | --- | --- |
-| Fire | Flame Burst — a fire ring sweeps outward from the ally; enemies burn as the front passes over them and get shoved back |
-| Electric | Chain lightning — hops between up to 3 enemies, each arc landing a beat apart with a sky strike |
+| Fire | Flame Burst — a shockwave ring rolls out from the ally; enemies burn as the front passes over them and get shoved back |
+| Electric | Chain lightning — hops between up to 3 enemies, each hit landing a beat apart |
 | Grass | Drain field — damages enemies, heals your whole team by a quarter of what it dealt |
 | Water | Hydro Pump — three homing orbs corkscrew into the nearest enemies and splash on impact |
 | Psychic | Telekinetic shove — damage plus a real knockback impulse that flings enemies off walls and each other |
 | Flying | Hurricane — a vortex drags every nearby enemy into a pile on the ally, setting up your next combo |
 | Poison | Toxic — immediate hit plus poison that ticks a cut of max HP after each of your shots; re-toxining stacks it |
-| Rock / Fighting | Meteor fist — the nearest enemy eats a one-two of falling rock; the second hit leaves a crater |
-| Ghost | Hex — wisps converge from the dark, weak hit on every enemy on the field |
+| Rock / Fighting | Meteor fist — the nearest enemy eats a one-two; the second hit lands a beat later and scars the court |
+| Ghost | Hex — a weak hit on every enemy on the field |
 | Normal | Quick Attack — the ally physically dashes to the nearest enemy, slams it, and stays beside it |
 
 ## Install it like an app
@@ -155,7 +159,10 @@ worker (`public/sw.js`) registered only in production builds.
   Adding a Pokémon is a data change, not a code change.
 - **Seeded stages** — `makeStage(seed)` builds the opening 3-stage stretch;
   `rollWave` generates deeper stages. Free Play rolls a fresh seed each
-  run — a daily mode can reuse the same seeding later.
+  run; **Daily Climb** seeds the whole run (draft, stages, rolls) off the
+  calendar date.
+- **Meta persistence** — `src/game/meta.ts` keeps the dex, rank, and the
+  rival echo in localStorage between runs.
 - **Fixed logical resolution** — 540×960 letterboxed to any window.
 
 ```
@@ -163,7 +170,7 @@ src/
   core/    vec.ts, loop.ts, assets.ts, rng.ts,  # engine plumbing
            audio.ts                             # chiptune music + synth sfx + haptics
   game/    types.ts, data.ts, stats.ts,         # rules + stat formulas
-           perks.ts, bg.ts,                     # relics + themed backdrops
+           perks.ts, bg.ts, meta.ts,            # relics, backdrops, persistence
            battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
 public/  sprites/ (mons, items, gracidea, cries), manifest.webmanifest, sw.js, icons
@@ -183,7 +190,7 @@ from two places:
 - Scenery — the [Gracidea](https://github.com/lowlighter/gracidea) pack
   (RSE tileset + npcs), vendored into `public/sprites/gracidea/`: court
   edges get real tileset props (trees, boulders, flowers, scorched
-  debris) and the crowd behind the boards is sliced from the npcs atlas
+  debris)
 
 One era is what keeps the theme cohesive: new art gets vendored or sliced
 from these sources, never invented shapes. Hazard zones and court paint
@@ -196,7 +203,7 @@ non-commercial project — not affiliated with or endorsed by them.
 
 The climb is the game — replayability grows in this order, simple first:
 
-- Stage gimmicks: themed hazards (lava floor, wind gusts), field objects, invade/ex stages
-- Seeded daily climb — the seed plumbing already exists
 - Ascension modifiers: beat the climb, unlock harder runs
-- Unlockables: wins put new starters, relics, and evolutions into the pool
+- More run variety: species, relics, stage gimmicks, invade/ex stages
+- Unlockables: dex catches already feed future draft pools — wins could
+  unlock new starters and relics the same way

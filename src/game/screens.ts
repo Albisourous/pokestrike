@@ -305,7 +305,9 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
     ctx.drawImage(ball, cx - 122, cy - 122, 244, 244);
     ctx.restore();
   }
-  logoArc(ctx, 'POKÉ', cx, cy + 100, 190, 86);
+  // the real wordmark — vendored logo art, already arched, rides the ball top
+  const logo = itemSprite('ui/pokemon-logo');
+  if (logo) ctx.drawImage(logo, cx - 165, cy - 155, 330, 121);
   logoBig(ctx, 'STRIKE', cx, cy + 148, 86, 440);
 
   // stadium shadow at the edges keeps the eye on the crest

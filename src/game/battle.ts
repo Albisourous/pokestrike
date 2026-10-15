@@ -8,6 +8,9 @@ import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
+import { genRegion, RegionMap, MAP_W, MAP_H, drawTile } from './map';
+import * as MT from './maptiles';
+import { gracidea } from '../core/assets';
 import type { PokeType } from './types';
 import {
   playerHp,
@@ -158,7 +161,7 @@ interface Scar {
   t: number;
   life: number;
 }
-export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
+export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'won' | 'lost';
 
 const STOP_SPEED = 45;
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
@@ -221,6 +224,8 @@ export class Battle {
   private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
   private inRival = false; // this wave is the rival echo fight
+  private region: RegionMap; // the climb's world map — drawn between stages
+  private pendingNext = 0; // wave the map interstitial leads into
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods
@@ -328,7 +333,9 @@ export class Battle {
         hzT: -9,
       });
     });
+    this.region = genRegion(Math.floor(this.rng() * 2 ** 31));
     this.spawnWave(0);
+    this.phase = 'map'; // the climb starts on the region map, not mid-wave
   }
 
   get active(): Unit {
@@ -438,6 +445,14 @@ export class Battle {
   // --- input (logical coords) ---
 
   pointerDown(p: Vec) {
+    if (this.phase === 'map') {
+      // advance the route: wave 0 was spawned at construction, the rest
+      // spawn as the marker arrives
+      sfx('ui');
+      if (this.pendingNext > this.waveIndex) this.spawnWave(this.pendingNext);
+      this.nextTurn();
+      return;
+    }
     if (this.phase !== 'aim') return;
     this.dragging = true;
     this.dragT = 0;
@@ -1506,8 +1521,8 @@ export class Battle {
       this.pathElite = false;
       this.stage.waves.push(rollWave(this.rng, this.depth, this.eliteWave, this.stage.theme));
     }
-    this.spawnWave(next);
-    this.nextTurn();
+    this.pendingNext = next;
+    this.phase = 'map'; // walk the route to the next stage first
   }
 
   // RNGdle-style run analysis: scan what the run did, award badges with
@@ -1755,6 +1770,10 @@ export class Battle {
   // --- rendering ---
 
   render(ctx: CanvasRenderingContext2D) {
+    if (this.phase === 'map') {
+      this.drawRegion(ctx);
+      return;
+    }
     const a = this.arena;
 
     ctx.save();
@@ -1914,6 +1933,87 @@ export class Battle {
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
       ctx.globalAlpha = 1;
     }
+  }
+
+  // The climb as a porygion-style region: 9 stops south→north on a seeded
+  // island, the marker pulsing on the stage you're about to walk into.
+  private drawRegion(ctx: CanvasRenderingContext2D) {
+    ctx.fillStyle = '#0a0e1c';
+    ctx.fillRect(0, 0, 540, 960);
+    ctx.textAlign = 'center';
+    ctx.font = font(18);
+    ctx.fillStyle = '#f8d030';
+    ctx.fillText(this.stage.name.toUpperCase(), 270, 78);
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 98);
+
+    const cell = 30;
+    const ox = (540 - MAP_W * cell) / 2;
+    const oy = 130;
+    const e = this.region.elev;
+    const img = gracidea();
+    const flat = (c: string, x: number, y: number) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
+    };
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const i = y * MAP_W + x;
+        const v = e[i];
+        const px = ox + x * cell, py = oy + y * cell;
+        if (this.region.route.has(i)) {
+          if (img) drawTile(ctx, MT.TILE_PATH, px, py, cell, cell);
+          else flat('#c8a868', x, y);
+        } else if (v < 0) {
+          if (img) drawTile(ctx, MT.TILE_WATER, px, py, cell, cell);
+          else flat('#3060b0', x, y);
+        } else if (v > 0.55) {
+          if (img) drawTile(ctx, MT.TILE_MOUNTAIN, px, py, cell, cell);
+          else flat('#6a5a48', x, y);
+        } else {
+          if (img) drawTile(ctx, MT.TILE_GRASS, px, py, cell, cell);
+          else flat('#4c9844', x, y);
+        }
+      }
+    }
+    // stops: cleared dim out, the next one pulses (red if the elite road
+    // was taken at the last reward)
+    this.region.nodes.forEach((n, i) => {
+      const nx = ox + n.tx * cell + cell / 2;
+      const ny = oy + n.ty * cell + cell / 2;
+      const cleared = i < this.pendingNext;
+      const current = i === this.pendingNext;
+      const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN;
+      if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
+      ctx.globalAlpha = cleared ? 0.4 : current ? 1 : 0.55;
+      ctx.strokeStyle = current ? (this.eliteWave ? '#ff6b6b' : '#ffd84d') : '#c8d0e8';
+      ctx.lineWidth = current ? 3 : 2;
+      ctx.beginPath();
+      ctx.arc(nx, ny, cell * (current ? 0.6 + Math.sin(this.time * 5) * 0.08 : 0.42), 0, Math.PI * 2);
+      ctx.stroke();
+      if (cleared) {
+        ctx.font = font(10);
+        ctx.fillStyle = '#6fdc6f';
+        ctx.fillText('✓', nx, ny + 4);
+      }
+      ctx.globalAlpha = 1;
+      if (current) {
+        ctx.font = font(8);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        const label = n.kind === 'gym' ? 'GYM' : this.eliteWave ? 'ELITE' : 'NEXT';
+        ctx.strokeText(label, nx, ny - cell * 1.1);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText(label, nx, ny - cell * 1.1);
+      }
+    });
+    ctx.strokeStyle = '#2a3560';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(ox - 8, oy - 8, MAP_W * cell + 16, MAP_H * cell + 16);
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('tap to continue', 270, oy + MAP_H * cell + 46);
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not
