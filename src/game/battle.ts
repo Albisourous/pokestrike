@@ -90,6 +90,8 @@ interface Unit {
   minion?: boolean; // summoned add — while any live, the boss is guarded
   volatile?: boolean; // VOLATILE wave mod — a KO bursts, splashing neighbors
   supp?: 'medic' | 'aegis'; // support foe — heals or shields the pack on its turn
+  link?: Unit; // zombie pair — falls while its partner lives → resurrects
+  revives: number; // soul-link charges left — capped so a weak team can't hard-stall
   shieldN: number; // aegis wards — each stack negates one incoming hit
   warpT: number; // last warp ride — cooldown stops portal ping-pong
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
@@ -444,6 +446,7 @@ export class Battle {
         atkN: 0,
         weakA: 0,
         shieldN: 0,
+        revives: 0,
         warpT: -9,
         boostT: -9,
       });
@@ -582,7 +585,7 @@ export class Battle {
     // wave mutators: a third of rolled non-boss waves get an affix —
     // same stop, different fight (StS hallway affixes)
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < 0.35) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -626,8 +629,20 @@ export class Battle {
           if (e) e.supp = mod === 'cleric' ? 'medic' : 'aegis';
           break;
         }
+        case 'zombie': { // soul-linked pair — fell one and its partner drags it back
+          const pool = this.enemies.filter((e) => !e.boss);
+          if (pool.length >= 2) {
+            const a = pool[Math.floor(this.rng() * pool.length)];
+            let z = pool[Math.floor(this.rng() * pool.length)];
+            while (z === a) z = pool[Math.floor(this.rng() * pool.length)];
+            a.link = z;
+            z.link = a;
+            a.revives = z.revives = 2;
+          }
+          break;
+        }
       }
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -728,6 +743,7 @@ export class Battle {
       atkN: 0,
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
       shieldN: 0,
+      revives: 0,
       warpT: -9,
       boostT: -9,
     };
@@ -1680,6 +1696,11 @@ export class Battle {
         this.burst(e.x, e.y, '#ffd84d', 18, 420, 1.2);
         // real poké ball drops in and does the triple-wiggle
         this.balls.push({ x: e.x, y: e.y, item: master ? 'master-ball' : 'poke-ball', t: 1.15, life: 1.15 });
+        // the ball breaks a soul-link — the partner fights on alone
+        if (e.link) {
+          e.link.link = undefined;
+          e.link = undefined;
+        }
         sfx('caught');
         cry(e.def.id, 0.45);
         buzz([30, 50, 30, 50, 60]);
@@ -2546,6 +2567,18 @@ export class Battle {
         this.hurt(e, e.dotDmg, '#a040a0');
       }
     }
+    // zombie loop: a linked foe rises unless its partner fell too — the
+    // pair only stays down if both die inside the same shot
+    for (const e of this.enemies) {
+      if (e.dead && e.link && !e.link.dead && e.revives > 0) {
+        e.dead = false;
+        e.revives--;
+        e.hp = Math.ceil(e.maxHp * 0.4);
+        this.texts.push({ x: e.x, y: e.y - e.r - 20, text: 'REVIVED!', t: 1, color: '#a0e060', big: true });
+        this.burst(e.x, e.y, '#a0e060', 10, 260, 0.8);
+        sfx('heal');
+      }
+    }
     this.enemies = this.enemies.filter((e) => !e.dead);
     // dots cleared the wave mid-check: fresh wave keeps full timers
     if (this.phase === 'won') return;
@@ -3015,6 +3048,21 @@ export class Battle {
       ctx.restore();
       ctx.globalAlpha = 1;
     }
+    // soul-link tethers — the zombie pair must read before you shoot
+    ctx.strokeStyle = '#a0e060';
+    for (const e of this.enemies) {
+      if (!e.link) continue;
+      ctx.globalAlpha = 0.35 + Math.sin(this.time * 6) * 0.15;
+      ctx.setLineDash([5, 7]);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y);
+      ctx.lineTo(e.link.x, e.link.y);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
 

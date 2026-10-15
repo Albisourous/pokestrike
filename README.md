@@ -21,9 +21,9 @@ leaders to win the run.
 | --- | --- | --- |
 | ![swarm wave](docs/mutator.png) | ![mine hazard](docs/mines.png) | ![gym weak point](docs/weakpoint.png) |
 
-| Victory loot | | |
+| Victory loot | Soul-linked pair | |
 | --- | --- | --- |
-| ![coin shower after a gym](docs/loot.png) | | |
+| ![coin shower after a gym](docs/loot.png) | ![zombie pair tether](docs/zombie.png) | |
 
 ## How to play
 
@@ -101,8 +101,10 @@ scrollable in-game manual, and it opens itself on your first visit.
    **mine pads** detonate when the ball touches them — a trap you can
    weaponize against the pack. Deep waves can roll a **mutator**: SWARM
    floods in extra fodder, HASTY starts timers low, VOLATILE makes KOs
-   burst onto neighbors, A BIG ONE supersizes a fodder, and a gold glint
-   guarantees one shiny in the pack. An
+   burst onto neighbors, A BIG ONE supersizes a fodder, a gold glint
+   guarantees one shiny in the pack, and a **soul-linked pair** shares a
+   green tether — fell one and its partner drags it back at partial HP
+   (twice each, then they're done), so drop both in the same shot. An
    **Air Balloon** item floats over all of it. **Field pickups** spawn
    each wave and the ball collects them by touch: **Oran Berry** heals the
    team, **Protein** boosts contact damage for the rest of the shot,

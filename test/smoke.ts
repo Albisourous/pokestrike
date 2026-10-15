@@ -447,7 +447,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   for (let s = 1; s <= 40; s++) {
     const bm = new Battle(arena, team(), makeStage(s), mulberry32(s * 7));
     (bm as any).spawnWave(1);
-    if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY|CLERIC|GUARDIAN/.test((bm as any).waveSpecial ?? '')) mods++;
+    if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY|CLERIC|GUARDIAN|STAY DOWN/.test((bm as any).waveSpecial ?? '')) mods++;
   }
   ok(mods > 3, `${mods}/40 seeds rolled a wave mutator`);
 
@@ -516,6 +516,23 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b10 as any).pendingAttacks = [m10];
   (b10 as any).resolveEnemyTurn();
   ok(h10.hp > h10hp, `medic heals the pack (${h10hp} → ${h10.hp})`);
+
+  // zombie loop: fell one while its partner stands → it rises at 40%;
+  // both down in the same shot → the pair stays down for good
+  const b11 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b11 as any).spawnWave(0);
+  const z1 = b11.enemies[0];
+  const z2 = b11.enemies[1];
+  z1.link = z2;
+  z2.link = z1;
+  z1.revives = z2.revives = 2;
+  (b11 as any).hurt(z1, z1.hp + 1, '#fff');
+  (b11 as any).endShot();
+  ok(!z1.dead && z1.revives === 1 && z1.hp > 0, `zombie rises at partial hp (${z1.hp})`);
+  (b11 as any).hurt(z1, z1.hp + 1, '#fff');
+  (b11 as any).hurt(z2, z2.hp + 1, '#fff');
+  (b11 as any).endShot();
+  ok(z1.dead && z2.dead, 'double-kill breaks the zombie loop');
 }
 
 // --- gym boss relic + egg hatch ---------------------------------------------
