@@ -25,7 +25,10 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/data.ts` — all content: roster/enemy species with canonical base stats, stage waves (normalized arena coords), seeded stage generator
 - `src/game/stats.ts` — stat-to-mechanic formulas (Atk/Def = physical, SpA/SpD = special, Spe = movement)
 - `src/game/types.ts` — Pokémon type chart + colors
-- `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering
+- `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering + the region-map interstitial
+- `src/game/map.ts` — seeded island generator for the climb map (value-noise terrain, routed nodes, decor); tile draws key magenta from the gracidea tileset
+- `src/game/maptiles.ts` — `TILE_*` source rects into `tileset.webp` for the map
+- `src/game/meta.ts` — localStorage persistence: dex catches, rank, rival echo
 - `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/gracidea/` — scenery canon (see Direction): `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)

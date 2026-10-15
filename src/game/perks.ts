@@ -22,7 +22,7 @@ export const RARITY_COLOR: Record<Rarity, string> = {
 const heal = (frac: number) => (b: Battle) =>
   b.players.forEach((p) => { if (!p.dead) p.hp = Math.min(p.hp + p.maxHp * frac, p.maxHp); });
 
-// Between-wave relics — pick 1 of 3, real held-item flavor. Effects live as
+// Between-wave items — pick 1 of 3, real held-item flavor. Effects live as
 // multipliers/flags on Battle so they never touch the shared SpeciesDef table.
 export const PERKS: Perk[] = [
   // --- common: vitamins, berries, balls, small bumps ---
@@ -341,7 +341,7 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.volleyBoost += 0.15; },
   },
 
-  // --- legendary: run-defining relics ---
+  // --- legendary: run-defining items ---
   {
     id: 'mball', name: 'Master Ball', item: 'master-ball',
     desc: 'next enemy you KO joins your box',

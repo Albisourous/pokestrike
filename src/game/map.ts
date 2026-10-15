@@ -48,12 +48,38 @@ export function genRegion(seed: number): RegionMap {
   const rng = mulberry32(seed);
   const tiles = new Uint8Array(MAP_W * MAP_H);
   const cx = (MAP_W - 1) / 2, cy = (MAP_H - 1) / 2;
+  // main island — two noise octaves make the coastline bite into bays
+  // and capes instead of a smooth blob
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
       const dx = (x - cx) / (MAP_W / 2), dy = (y - cy) / (MAP_H / 2);
-      const wobble = (vn(x / 3.2, y / 3.2, 0) - 0.5) * 0.5;
-      tiles[y * MAP_W + x] = dx * dx + dy * dy < 0.72 + wobble ? T_GRASS : T_WATER;
+      const wobble = (vn(x / 3.2, y / 3.2, 0) - 0.5) * 0.55 + (vn(x / 1.6, y / 1.6, 1) - 0.5) * 0.15;
+      tiles[y * MAP_W + x] = dx * dx + dy * dy < 0.76 + wobble ? T_GRASS : T_WATER;
     }
+  }
+  // inland ponds — a couple of small blobs make it read as terrain, not a
+  // disc; center must sit on grass so the pond actually shows
+  const ponds = 1 + Math.floor(rng() * 2);
+  for (let p = 0; p < ponds; p++) {
+    let px = cx, py = cy, tries = 0;
+    do {
+      px = 3 + Math.floor(rng() * (MAP_W - 6));
+      py = 4 + Math.floor(rng() * (MAP_H - 8));
+    } while (tiles[Math.round(py) * MAP_W + Math.round(px)] !== T_GRASS && ++tries < 20);
+    if (tries >= 20) continue;
+    const pr = 1.2 + rng() * 1.4;
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const i = y * MAP_W + x;
+        if (tiles[i] === T_GRASS && (x - px) ** 2 + (y - py) ** 2 < pr * pr) tiles[i] = T_WATER;
+      }
+    }
+  }
+  // sometimes a tiny islet offshore — pure charm, costs nothing
+  if (rng() < 0.5) {
+    const ix = rng() < 0.5 ? 1 + Math.floor(rng() * 3) : MAP_W - 4 + Math.floor(rng() * 3);
+    const iy = 2 + Math.floor(rng() * (MAP_H - 4));
+    if (iy >= 0 && iy < MAP_H && ix >= 0 && ix < MAP_W) tiles[iy * MAP_W + ix] = T_SAND;
   }
   // beach ring: any land touching the sea is sand
   for (let y = 0; y < MAP_H; y++) {
@@ -96,18 +122,40 @@ export function genRegion(seed: number): RegionMap {
   };
   for (let i = 1; i < nodes.length; i++) carve(nodes[i - 1], nodes[i]);
 
-  // Scenery on open grass — skip route tiles and the ring around stops.
+  // Scenery on open grass — trees clump into little woods, boulders into
+  // one rocky outcrop, flowers scatter between them. Route tiles and the
+  // ring around stops stay clear.
   const decor = new Map<number, 'tree' | 'flower' | 'rock'>();
   const nearNode = (x: number, y: number) =>
     nodes.some((n) => Math.abs(n.tx - x) + Math.abs(n.ty - y) <= 1);
+  const free = (x: number, y: number) =>
+    land(x, y) && !route.has(y * MAP_W + x) && !nearNode(x, y) && !decor.has(y * MAP_W + x);
+  // 3-5 tree clumps of 2-4 trees — reads as forest, not polka dots
+  const clumps = 3 + Math.floor(rng() * 3);
+  for (let c = 0; c < clumps; c++) {
+    const tx = 1 + Math.floor(rng() * (MAP_W - 2)), ty = 1 + Math.floor(rng() * (MAP_H - 2));
+    const n = 2 + Math.floor(rng() * 3);
+    for (let t = 0; t < n; t++) {
+      const x = tx + Math.floor(rng() * 3) - 1, y = ty + Math.floor(rng() * 3) - 1;
+      if (free(x, y)) decor.set(y * MAP_W + x, 'tree');
+    }
+  }
+  // one boulder outcrop — the craggy patch overworld maps get from cliffs;
+  // retry until at least a couple land on open grass
+  for (let attempt = 0, placed = 0; attempt < 12 && placed < 2; attempt++) {
+    const rx = 2 + Math.floor(rng() * (MAP_W - 4)), ry = 2 + Math.floor(rng() * (MAP_H - 4));
+    for (let t = 0; t < 4; t++) {
+      const x = rx + Math.floor(rng() * 3) - 1, y = ry + Math.floor(rng() * 3) - 1;
+      if (free(x, y)) { decor.set(y * MAP_W + x, 'rock'); placed++; }
+    }
+  }
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
       const i = y * MAP_W + x;
-      if (tiles[i] !== T_GRASS || route.has(i) || nearNode(x, y)) continue;
+      if (tiles[i] !== T_GRASS || route.has(i) || nearNode(x, y) || decor.has(i)) continue;
       const r = rng();
-      if (r < 0.07) decor.set(i, 'tree');
-      else if (r < 0.15) decor.set(i, 'flower');
-      else if (r < 0.17) decor.set(i, 'rock');
+      if (r < 0.04) decor.set(i, 'tree');
+      else if (r < 0.12) decor.set(i, 'flower');
     }
   }
 

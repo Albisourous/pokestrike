@@ -9,6 +9,10 @@ leaders to win the run.
 | --- | --- | --- |
 | ![title screen](docs/title.png) | ![draft round](docs/draft.png) | ![battle](docs/battle.png) |
 
+| Region map | Aiming | Reward |
+| --- | --- | --- |
+| ![region map](docs/map.png) | ![aiming](docs/aim.png) | ![relic reward](docs/reward.png) |
+
 ## How to play
 
 ```bash
@@ -65,7 +69,7 @@ Open the printed URL. Works on desktop and touch.
    fights back too: **lava pools** scorch the ball and anything standing
    in them, **tall grass** drags your launch to a crawl, **wind bands**
    push the ball sideways, and **spike strips** chip it on contact — an
-   **Air Balloon** relic floats over all of it. **Field pickups** spawn
+   **Air Balloon** item floats over all of it. **Field pickups** spawn
    each wave — the ball collects them by touch: **Oran Berry** heals the
    team, **Protein** boosts contact damage for the rest of the shot,
    **Elixir** knocks a notch off every super's cooldown. Heavy hits scar
@@ -82,15 +86,20 @@ Open the printed URL. Works on desktop and touch.
    and get common deeper in — and any normal wave can be **invaded** by a
    legendary (the birds, the beasts, Mew, Celebi) crashing in as a
    mini-boss worth catching. Bosses can be caught mid-fight too — a
-   Master Ball relic never fails.
-8. **Choose a relic between stages** (Slay the Spire style): heals, +max HP,
+   Master Ball item never fails.
+8. **Choose a item between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
-   run — draft for synergy, relic for the holes. Then pick your **path**:
+   run — draft for synergy, item for the holes. Then pick your **path**:
    the safe **ROUTE**, or the **ELITE** road — a bigger fight with a
-   guaranteed elite spawn, and the next relic offer rolls uncommon-or-better.
+   guaranteed elite spawn, and the next item offer rolls uncommon-or-better.
+   Between stages you walk the **region map** — a seeded island (porygion-style
+   value-noise: sea, beach, grass, mountain) with the 9 stops routed
+   south→north, the next wave's wilds previewed up top, and map stops that
+   do things: **gym** icons are boss stages, Poké Center **rests** heal the
+   team 30%, and **item finds** cough up a free item.
 9. **It remembers you** — caught mons join your **dex** and can show up in
    future draft pools; gym wins raise your **rank**, and higher ranks unlock
-   gated relics in the pool. Lose a run and that exact team comes back as a
+   gated items in the pool. Lose a run and that exact team comes back as a
    **RIVAL BATTLE** wave in your next one — beat it to clear the echo.
 10. **Share your result** — the result screen shows a Wordle-style emoji grid
    (🟩 cleared waves, 🟥 where you fell), your drafted team as type-colored
@@ -170,7 +179,8 @@ src/
   core/    vec.ts, loop.ts, assets.ts, rng.ts,  # engine plumbing
            audio.ts                             # chiptune music + synth sfx + haptics
   game/    types.ts, data.ts, stats.ts,         # rules + stat formulas
-           perks.ts, bg.ts, meta.ts,            # relics, backdrops, persistence
+           perks.ts, bg.ts, meta.ts,            # items, backdrops, persistence
+           map.ts, maptiles.ts,                  # seeded region map + atlas tiles
            battle.ts, screens.ts                 # battle scene + title/draft/result
   main.ts                                       # canvas fit + scene state
 public/  sprites/ (mons, items, gracidea, cries), manifest.webmanifest, sw.js, icons
@@ -204,6 +214,6 @@ non-commercial project — not affiliated with or endorsed by them.
 The climb is the game — replayability grows in this order, simple first:
 
 - Ascension modifiers: beat the climb, unlock harder runs
-- More run variety: species, relics, stage gimmicks, invade/ex stages
+- More run variety: species, items, stage gimmicks, invade/ex stages
 - Unlockables: dex catches already feed future draft pools — wins could
-  unlock new starters and relics the same way
+  unlock new starters and items the same way
