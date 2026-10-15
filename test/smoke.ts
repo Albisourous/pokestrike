@@ -96,10 +96,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 }
 
 // --- full autoplayed climbs: naive aim, real physics, win or wipe ---------
-for (const seed of [99, 2024, 777]) {
+for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const rng = mulberry32(seed);
   const b = new Battle(arena, team(), makeStage(seed), rng);
-  b.asc = 0;
+  b.asc = asc;
   let frames = 0;
   let aimTries = 0;
   const step = (n: number) => { for (let i = 0; i < n; i++) b.update(1 / 60); };
@@ -130,7 +130,7 @@ for (const seed of [99, 2024, 777]) {
       step(30);
     }
   }
-  ok(b.phase === 'won' || b.phase === 'lost', `seed ${seed}: ${b.phase} (depth ${(b as any).depth}, score ${b.score}, kos ${(b as any).totalKos})`);
+  ok(b.phase === 'won' || b.phase === 'lost', `seed ${seed}${asc ? ` asc${asc}` : ''}: ${b.phase} (depth ${(b as any).depth}, score ${b.score}, kos ${(b as any).totalKos})`);
   ok(b.score > 0, 'score accumulates');
 }
 

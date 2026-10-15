@@ -464,7 +464,7 @@ export class Battle {
     const shiny = this.enemies.find((e) => e.shiny);
     if (shiny) {
       if (!this.waveSpecial) this.waveSpecial = `A SHINY ${shiny.def.name.toUpperCase()} APPEARED!`;
-      sfx('ready');
+      sfx('perfect'); // the triple-note ping — rarer than any recharge cue
     }
   }
 
