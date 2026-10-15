@@ -1684,6 +1684,35 @@ export class Battle {
         this.mapNote = 'MART — NOT ENOUGH PTS (500)';
       }
       sfx('ui');
+    } else if (n.kind === 'mystery') {
+      // the wildcard stop — you only learn what it was on arrival
+      const roll = this.rng();
+      if (roll < 0.4) {
+        const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
+        if (p) {
+          p.apply(this);
+          this.heldItems.push(p.item);
+          this.mapNote = `? WAS A CACHE — ${p.name.toUpperCase()}`;
+        }
+        sfx('ready');
+      } else if (roll < 0.7) {
+        for (const p of this.players) {
+          if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3));
+        }
+        this.mapNote = '? WAS A HIDDEN SPRING — TEAM +30% HP';
+        sfx('heal');
+      } else {
+        for (const p of this.players) {
+          if (!p.dead) p.hp = Math.max(1, p.hp - Math.round(p.maxHp * 0.12));
+        }
+        const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
+        if (p) {
+          p.apply(this);
+          this.heldItems.push(p.item);
+          this.mapNote = `? WAS A TRAP — ${p.name.toUpperCase()}, TEAM −12% HP`;
+        }
+        sfx('invade');
+      }
     }
   }
 
@@ -2298,6 +2327,14 @@ export class Battle {
       } else if (n.kind === 'mart') {
         const ball = itemSprite('ultra-ball');
         if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
+      } else if (n.kind === 'mystery') {
+        ctx.font = font(16);
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText('?', nx, ny - 2);
+        ctx.fillStyle = '#c05df0';
+        ctx.fillText('?', nx, ny - 2);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : n.kind === 'start' ? null : MT.TILE_TOWN;
         if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
@@ -2307,7 +2344,7 @@ export class Battle {
         }
       }
       ctx.globalAlpha = cleared ? 0.35 : reachable ? 1 : 0.5;
-      ctx.strokeStyle = reachable ? (n.kind === 'elite' || n.kind === 'shrine' ? '#ff6b6b' : '#ffd84d') : current ? '#6fdc6f' : '#c8d0e8';
+      ctx.strokeStyle = reachable ? (n.kind === 'elite' || n.kind === 'shrine' ? '#ff6b6b' : n.kind === 'mystery' ? '#c05df0' : '#ffd84d') : current ? '#6fdc6f' : '#c8d0e8';
       ctx.lineWidth = reachable || current ? 3 : 2;
       ctx.beginPath();
       ctx.arc(nx, ny, cell * (reachable ? 0.6 + Math.sin(this.time * 5) * 0.08 : 0.42), 0, Math.PI * 2);
@@ -2322,7 +2359,7 @@ export class Battle {
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : n.kind === 'elite' ? 'ELITE' : n.kind === 'mart' ? 'MART' : n.kind === 'start' ? 'HERE' : 'WILD';
+        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : n.kind === 'elite' ? 'ELITE' : n.kind === 'mart' ? 'MART' : n.kind === 'mystery' ? '???' : n.kind === 'start' ? 'HERE' : 'WILD';
         ctx.strokeText(label, nx, ny - cell * 1.1);
         ctx.fillStyle = reachable ? '#ffd84d' : '#6fdc6f';
         ctx.fillText(label, nx, ny - cell * 1.1);
