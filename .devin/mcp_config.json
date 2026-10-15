@@ -3,6 +3,13 @@
     "rea": {
       "command": "npx",
       "args": ["-y", "rea-agents@6.5.0", "mcp"]
+    },
+    "pixellab": {
+      "url": "https://api.pixellab.ai/mcp",
+      "transport": "http",
+      "headers": {
+        "Authorization": "Bearer ${env:PIXELLAB_API_TOKEN}"
+      }
     }
   }
 }
