@@ -31,10 +31,9 @@ The game is also deployed to GitHub Pages on every push to `main`
 Open the printed URL. Works on desktop and touch. The `?` button opens a
 scrollable in-game manual, and it opens itself on your first visit.
 
-1. Pick **Free Play** for a 9-stage climb (Slay the Spire style): random wild
+1. Hit **Free Play** for a 9-stage climb (Slay the Spire style): random wild
    stages, a **gym leader** every 3rd stage, bigger and meaner packs as you
-   go, and a win only when the third gym falls. **Daily Climb** is the same
-   run for everyone today; one seed deals the same draft and stages.
+   go, and a win only when the third gym falls.
    (`?seed=NNN` on the URL forces any seed, handy for sharing or debugging
    a run.) Enemy typing is hidden (`?`)
    until a mon takes a hit or attacks; you learn the matchup by engaging.
@@ -128,9 +127,8 @@ scrollable in-game manual, and it opens itself on your first visit.
    screen as an icon strip.
 9. **It remembers you.** Caught mons join your **dex** and can show up in
    future draft pools; gym wins raise your **rank**, and higher ranks unlock
-   gated items in the pool. Your **best score** and **daily streak** live on
-   the title screen, and finishing a Daily Climb each day keeps the streak
-   alive. Tap the dex count on the title for the **Pokédex**, every
+   gated items in the pool. Your **best score** lives on
+   the title screen. Tap the dex count on the title for the **Pokédex**, every
    catchable species lit when owned. Lose a run and that exact team comes
    back as a **RIVAL BATTLE**
    wave in your next one, at the levels it earned, shinies included.
@@ -159,8 +157,7 @@ scrollable in-game manual, and it opens itself on your first visit.
     HUNTER...), an MVP star on your carry, a "N pts short of your best"
     hook, and a `★ NEW RECORD ★` when you top it. **SHARE RESULT**
     posts a trainer-card readout (team names, score, badges, the grid) and
-    **REMATCH** drops you straight into a fresh draft (the Daily Climb
-    re-seeds the same run).
+    **REMATCH** drops you straight into a fresh draft.
 
 ## Real stats, real roles
 
@@ -223,9 +220,8 @@ worker (`public/sw.js`) registered only in production builds.
   `src/game/types.ts`, stages as wave lists with normalized arena coords.
   Adding a Pokémon is a data change, not a code change.
 - **Seeded stages**: `makeStage(seed)` builds the opening 3-stage stretch;
-  `rollWave` generates deeper stages. Free Play rolls a fresh seed each
-  run; **Daily Climb** seeds the whole run (draft, stages, rolls) off the
-  calendar date.
+  `rollWave` generates deeper stages. A run rolls a fresh seed each time;
+  `?seed=NNN` on the URL forces one (draft, stages, rolls all reproduce).
 - **Meta persistence**: `src/game/meta.ts` keeps the dex, rank, and the
   rival echo in localStorage between runs.
 - **Fixed logical resolution**: 540×960 letterboxed to any window.

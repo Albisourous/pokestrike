@@ -48,8 +48,7 @@ export const DRAFT_REROLL = { x: W / 2 - 70, y: CARDS_Y + CARD_H + 16, w: 140, h
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 40 };
-export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
-export const DAILY_BTN = { x: W / 2 - 140, y: 800, w: 280, h: 64 };
+export const FREE_BTN = { x: W / 2 - 140, y: 740, w: 280, h: 64 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
 
@@ -171,8 +170,6 @@ export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number;
 const PIXEL_FONT = 'rc, monospace';
 const FONT_SCALE = 1.15;
 export const font = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px ${PIXEL_FONT}`;
-
-const MONTH_ABBR = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 // Mons standing the ring around the logo — all ids are in ALL_SPRITE_IDS.
 const RING_MONS: [number, number][] = [
@@ -330,7 +327,6 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, W, H);
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
-  button(ctx, DAILY_BTN, 'DAILY CLIMB', true);
 
   // ? badge, top corner — the how-to-play overlay
   ctx.beginPath();
@@ -381,25 +377,15 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
       ctx.stroke();
     }
   }
-  // the seed in plaintext — players can tell which day's climb they're on
-  const now = new Date();
-  ctx.font = font(8);
-  ctx.fillStyle = '#8890b8';
-  ctx.fillText(
-    `${MONTH_ABBR[now.getMonth()]} ${now.getDate()}`,
-    W / 2,
-    DAILY_BTN.y + DAILY_BTN.h + 22,
-  );
   // the dex is a real button — same chrome as the menu buttons above
   button(ctx, DEX_BTN, `POKÉDEX ${dexIds().length}/${CATCHABLE}`, true);
-  // the records line is the one-more-run hook — rank, best score, streaks
+  // the records line is the one-more-run hook — rank and best score
   const b = best();
   const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
   if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
-  if (b.streak > 1) bits.push(`DAILY STREAK ${b.streak}`);
   ctx.font = font(8);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(bits.join(' · '), W / 2, DAILY_BTN.y + DAILY_BTN.h + 84);
+  ctx.fillText(bits.join(' · '), W / 2, DEX_BTN.y + DEX_BTN.h + 22);
 }
 
 // --- help overlay: scrollable sections, each a mini diagram + a caption ---
@@ -709,7 +695,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
 }
 
 // --- dex overlay: every catchable mon — caught ones in color, the rest ??? ---
-export const DEX_BTN = { x: W / 2 - 140, y: DAILY_BTN.y + DAILY_BTN.h + 30, w: 280, h: 40 };
+export const DEX_BTN = { x: W / 2 - 140, y: FREE_BTN.y + FREE_BTN.h + 20, w: 280, h: 40 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;

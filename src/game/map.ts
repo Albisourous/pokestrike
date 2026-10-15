@@ -15,7 +15,7 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'trainer' | 'chest' | 'rest' | 'gym';
+export type NodeKind = 'start' | 'wild' | 'trainer' | 'chest' | 'rest' | 'event' | 'gym';
 export interface MapNode {
   tx: number;
   ty: number;
@@ -107,6 +107,12 @@ export function genRegion(seed: number): RegionMap {
     }
     return arr;
   };
+  const weighted = <T>(pairs: [T, number][]) => {
+    const total = pairs.reduce((a, p) => a + p[1], 0);
+    let r = rng() * total;
+    for (const [v, w] of pairs) { r -= w; if (r <= 0) return v; }
+    return pairs[0][0];
+  };
   const nodes: MapNode[] = [];
   for (let r = 0; r < TOTAL_STAGES; r++) {
     const band = r / (TOTAL_STAGES - 1);
@@ -117,7 +123,7 @@ export function genRegion(seed: number): RegionMap {
     else {
       // a real fork: wild is always one door, the other gets flavored —
       // ~1/3 of rows are a lone stop instead of a choice
-      const flavor = shuffle<NodeKind>(['trainer', 'chest', 'rest', 'wild'])[0];
+      const flavor = weighted<NodeKind>([['trainer', 5], ['chest', 3], ['rest', 3], ['event', 4], ['wild', 2]]);
       kinds = rng() < 0.35 ? [flavor] : shuffle(['wild', flavor]);
     }
     const xs = kinds.length === 1 ? [0.5] : [0.3, 0.7];
@@ -138,6 +144,22 @@ export function genRegion(seed: number): RegionMap {
         ...(kind === 'trainer' ? { ttype: TRAINER_TYPES[Math.floor(rng() * TRAINER_TYPES.length)] } : {}),
       });
     });
+  }
+
+  // StS-style facility guarantees (pokelike's rule): a rest is always
+  // offered in each half of the climb, and at least two ? events exist so
+  // the pool isn't theoretical. Converted from wild stops only.
+  for (const [lo, hi] of [[1, 4], [5, 7]] as const) {
+    const band = nodes.filter((n) => n.row >= lo && n.row <= hi);
+    if (!band.some((n) => n.kind === 'rest')) {
+      const wilds = band.filter((n) => n.kind === 'wild');
+      if (wilds.length) wilds[Math.floor(rng() * wilds.length)].kind = 'rest';
+    }
+  }
+  for (let need = 2 - nodes.filter((n) => n.kind === 'event').length; need > 0; need--) {
+    const wilds = nodes.filter((n) => n.kind === 'wild');
+    if (!wilds.length) break;
+    wilds[Math.floor(rng() * wilds.length)].kind = 'event';
   }
 
   // forward links: each stop reaches the 1-2 nearest stops in the next row,

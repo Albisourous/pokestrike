@@ -28,7 +28,6 @@ import {
   SHARE_BTN,
   TITLE_BTN,
   FREE_BTN,
-  DAILY_BTN,
   HELP_BTN,
   MUTE_BTN,
   DRAFT_REROLL,
@@ -57,11 +56,6 @@ let viewPad = 0;
 const arenaRect = () => ({ x: 24, y: 72 - viewPad, w: W - 48, h: H - 92 + viewPad * 2 });
 
 const randSeed = () => (Math.random() * 2 ** 31) | 0;
-// Daily Climb: one seed per calendar day — everyone plays the same run
-const dailySeed = () => {
-  const n = new Date();
-  return n.getFullYear() * 10000 + (n.getMonth() + 1) * 100 + n.getDate();
-};
 
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
@@ -81,12 +75,9 @@ let draft: {
 // the run's draft pool — roster plus captured-dex species not already in it
 let draftPool: SpeciesDef[] = [];
 let stage = makeStage(randSeed());
-// the run's roll source — Math.random for free play, seeded for the daily;
-// draft deals and the Battle both draw from it so a daily is fully seeded
+// the run's roll source — Math.random normally, seeded under ?seed=NNN;
+// draft deals and the Battle both draw from it so a forced seed reproduces
 let runRng: () => number = Math.random;
-// which mode the current run came from — REMATCH replays it (daily re-seeds
-// to the same climb; free play rolls fresh)
-let lastMode: 'free' | 'daily' = 'free';
 let helpOpen = false;
 let helpScroll = 0;
 let dexOpen = false;
@@ -306,21 +297,11 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
-      lastMode = 'free';
       // ?seed=NNN forces the run — debug sharable climbs
       const forced = Number(new URLSearchParams(location.search).get('seed'));
       runRng = Number.isFinite(forced) && forced > 0 ? mulberry32(forced) : Math.random;
       startDraft();
       stage = makeStage(Number.isFinite(forced) && forced > 0 ? forced : randSeed());
-      scene = 'draft';
-      sceneMusic();
-    } else if (inRect(p.x, p.y, DAILY_BTN)) {
-      sfx('ui');
-      lastMode = 'daily';
-      const seed = dailySeed();
-      runRng = mulberry32(seed);
-      startDraft();
-      stage = makeStage(seed, 'Daily Climb');
       scene = 'draft';
       sceneMusic();
     }
@@ -412,14 +393,8 @@ canvas.addEventListener('pointerdown', (e) => {
     } else if (inRect(p.x, p.y, RETRY_BTN)) {
       // REMATCH: one tap back into a fresh draft — the loop stays hot
       sfx('ui');
-      if (lastMode === 'daily') {
-        const seed = dailySeed();
-        runRng = mulberry32(seed);
-        stage = makeStage(seed, 'Daily Climb');
-      } else {
-        runRng = Math.random;
-        stage = makeStage(randSeed());
-      }
+      runRng = Math.random;
+      stage = makeStage(randSeed());
       battle = null;
       result = null;
       resultExtra = null;
@@ -557,7 +532,7 @@ function update(dt: number) {
       const dexBefore = dexIds().length;
       const prevBest = best().score;
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
-      const newBest = recordRun(battle.score, stageReached, won, lastMode === 'daily' ? dailySeed() : null);
+      const newBest = recordRun(battle.score, stageReached, won);
       const gap = prevBest - battle.score;
       result = {
         won,
