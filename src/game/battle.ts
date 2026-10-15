@@ -2404,6 +2404,9 @@ export class Battle {
       270,
       oy + MAP_H * cell + 40,
     );
+    ctx.font = font(7);
+    ctx.fillStyle = '#5a6488';
+    ctx.fillText('WILD fight · ELITE hard+bonus · REST heal · FIND item · SHRINE blood · MART 500pts · ??? unknown', 270, oy + MAP_H * cell + 56);
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not

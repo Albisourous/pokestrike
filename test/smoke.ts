@@ -104,6 +104,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const score0 = b.score;
   (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mart', row: 0, links: [] });
   ok(b.score === score0 - 500 && b.heldItems.length === items0 + 3, 'mart trades 500 pts for a relic');
+  const hpBefore = (b as any).players.map((p: any) => p.hp).join(',');
+  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mystery', row: 0, links: [] });
+  ok(
+    b.heldItems.length > items0 + 3 || (b as any).players.map((p: any) => p.hp).join(',') !== hpBefore,
+    'mystery stop resolves to something',
+  );
 }
 
 // --- boss enrage ------------------------------------------------------------
