@@ -6,7 +6,7 @@ import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf } from './stats';
-import { dexIds, rankName, best } from './meta';
+import { dexIds, rankName, best, shinyCharm, SHINY_CHARM_AT } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -744,7 +744,15 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   });
   ctx.restore();
 
+  // the completion milestone is the promise that keeps hunters grinding
   ctx.font = font(8);
+  if (shinyCharm()) {
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText('★ SHINY CHARM — shinies are twice as common ★', r.x + r.w / 2, r.y + r.h - 26);
+  } else {
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`${SHINY_CHARM_AT - dexIds().length} more catches for the SHINY CHARM (x2 shinies)`, r.x + r.w / 2, r.y + r.h - 26);
+  }
   ctx.fillStyle = '#8890b8';
   ctx.fillText('catch wild mons to fill the dex — they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }

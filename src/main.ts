@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm } from './game/meta';
 import {
   W,
   H,
@@ -182,9 +182,11 @@ function startDraft() {
   for (let i = ROSTER.length; i < draftPool.length; i++) {
     draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
   }
-  // ~1/50 of draft cards roll shiny — a gold card is the run's first high-roll
+  // ~1/50 of draft cards roll shiny — a gold card is the run's first
+  // high-roll; the Shiny Charm milestone doubles it
+  const shinyOdds = 0.02 * (shinyCharm() ? 2 : 1);
   draftPool.forEach((_, i) => {
-    if (runRng() < 0.02) draft.shiny.add(i);
+    if (runRng() < shinyOdds) draft.shiny.add(i);
   });
   offerCache = null;
 }
@@ -320,6 +322,7 @@ canvas.addEventListener('pointerdown', (e) => {
         battle.rank = rank();
         battle.asc = Math.min(best().wins, 9); // every clear raises the heat
         battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
+        battle.shinyRate = shinyCharm() ? 2 : 1; // dex milestone doubles the gold
         // the last losing team returns as a rival wave — battle eats it
         const echo = echoIds()?.map(speciesById).filter((d): d is SpeciesDef => !!d);
         battle.echo = echo?.length ? echo : null;

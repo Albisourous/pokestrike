@@ -230,6 +230,7 @@ export class Battle {
   private shotVolleyBoost = 0; // volleyBoost accumulated this shot
   streak = 0; // consecutive perfect launches — shown in the HUD
   private shotStreak = 1; // this shot's streak damage bonus
+  shinyRate = 1; // 2 with the Shiny Charm dex milestone
   private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
   private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
@@ -431,7 +432,7 @@ export class Battle {
       lunging: 0,
       boss: !!s.boss,
       // shinies: wild fodder only — bosses and your rival echo stay normal
-      shiny: !s.boss && !this.inRival && this.rng() < SHINY_RATE,
+      shiny: !s.boss && !this.inRival && this.rng() < SHINY_RATE * this.shinyRate,
       dead: false,
       dotTicks: 0,
       dotDmg: 0,

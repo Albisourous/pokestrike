@@ -35,6 +35,11 @@ export function recordCapture(ids: number[]) {
   store('pk_dex', [...new Set([...dexIds(), ...ids])]);
 }
 
+// Shiny Charm — the dex-completion milestone. Fill 100 entries and every
+// shiny roll (wild spawns, draft cards) doubles forever after.
+export const SHINY_CHARM_AT = 100;
+export const shinyCharm = () => dexIds().length >= SHINY_CHARM_AT;
+
 const gyms = () => load<number>('pk_gyms') ?? memGyms;
 
 export function recordGymWin() {
