@@ -1141,6 +1141,7 @@ export function drawPerkPick(
   title: string,
   sub: string,
   t = 0,
+  team: SpeciesDef[] = [],
 ) {
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null, true);
   ctx.textAlign = 'center';
@@ -1151,6 +1152,22 @@ export function drawPerkPick(
   ctx.fillStyle = '#8890b8';
   ctx.fillText(sub, W / 2, 315);
   offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i), p));
+  // the drafted squad rides under the offers — pick the item for THESE mons
+  if (team.length) {
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('YOUR TEAM', W / 2, 640);
+    team.forEach((def, i) => {
+      const mx = W / 2 + (i - (team.length - 1) / 2) * 92;
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, 696, 62);
+      ctx.font = font(8);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(def.name.toUpperCase(), mx, 736);
+      ctx.font = font(6);
+      ctx.fillStyle = TYPE_COLOR[def.type];
+      ctx.fillText(def.type.toUpperCase(), mx, 748);
+    });
+  }
 }
 
 // Win confetti — little type-colored paper squares drifting down forever.

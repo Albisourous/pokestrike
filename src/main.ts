@@ -609,7 +609,7 @@ function render() {
       if (dexOpen) drawDex(ctx, dexScroll);
       break;
     case 'charm':
-      drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM', 'one held item starts the climb', t);
+      drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM', 'one held item starts the climb', t, draft.picked.map(draftDef));
       break;
     case 'draft': {
       const offers = draftOffers().map(draftDef);

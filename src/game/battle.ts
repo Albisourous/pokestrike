@@ -2289,9 +2289,10 @@ export class Battle {
     }
     // your lead mon waits at the current stop, facing the road ahead
     const at = this.region.nodes[this.mapNode];
-    if (at && !this.players[this.activeIdx].dead) {
+    const lead = this.players.find((p) => !p.dead);
+    if (at && lead) {
       const bob = Math.sin(this.time * 4) * 2;
-      drawMon(ctx, this.players[this.activeIdx].def.id, ox + at.tx * cell + cell / 2, oy + at.ty * cell - cell * 0.1 + bob, 30);
+      drawMon(ctx, lead.def.id, ox + at.tx * cell + cell / 2, oy + at.ty * cell - cell * 0.1 + bob, 30);
     }
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
