@@ -1,4 +1,5 @@
 import type { Battle } from './battle';
+import type { PokeType } from './types';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 
@@ -280,6 +281,23 @@ export const PERKS: Perk[] = [
     rarity: 'uncommon',
     apply: (b) => { b.volleyNth = 3; },
   },
+  // type charms — +20% damage for one type; the drafting hook that makes
+  // "all-in on water" or "spread coverage" a real build call
+  ...(Object.entries({
+    normal: ['Silk Scarf', 'silk-scarf'], fire: ['Charcoal', 'charcoal'],
+    water: ['Mystic Water', 'mystic-water'], grass: ['Miracle Seed', 'miracle-seed'],
+    electric: ['Magnet', 'magnet'], psychic: ['Twisted Spoon', 'twisted-spoon'],
+    rock: ['Hard Stone', 'hard-stone'], poison: ['Poison Barb', 'poison-barb'],
+    flying: ['Sharp Beak', 'sharp-beak'], fighting: ['Black Belt', 'black-belt'],
+    ghost: ['Spell Tag', 'spell-tag'],
+  }) as [PokeType, [string, string]][]).map(([ty, [name, item]]): Perk => ({
+    id: `type-${ty}`,
+    name,
+    item,
+    desc: `+20% ${ty}-type damage, stacks`,
+    rarity: 'uncommon',
+    apply: (b) => { b.typePow[ty] = (b.typePow[ty] ?? 1) * 1.2; },
+  })),
 
   // --- rare: strong single effects ---
   {

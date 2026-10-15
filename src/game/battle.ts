@@ -247,6 +247,7 @@ export class Battle {
   regen = 0; // leftovers: fraction of maxHp healed after each shot
   physMult = 1; // choice band: contact damage
   specMult = 1; // choice specs: special bump damage
+  typePow: Partial<Record<PokeType, number>> = {}; // type-charm multipliers — the build-identity hooks
   thorns = 0; // rocky helmet: flat recoil to attackers
   comboDmg = 0; // metronome: per-link damage ramp
   critCh = 0; // scope lens: crit chance (x2)
@@ -1130,6 +1131,7 @@ export class Battle {
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
         shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
         (1 + this.wallRamp * shooter.wallN) *
+        (this.typePow[shooter.def.type] ?? 1) *
         this.shotStreak *
         (1 + this.shotVolleyBoost) *
         (pinched ? 1 + this.pinchMult : 1) *
@@ -1239,6 +1241,7 @@ export class Battle {
         (phys
           ? physDamage(src.def.stats.atk, e.def.stats.def, eff(e), power) * this.physMult
           : specDamage(src.def.stats.spa, e.def.stats.spd, eff(e), power) * this.specMult) *
+          (this.typePow[src.def.type] ?? 1) *
           p.pow *
           SUPER_POW *
           (1 + (n - 1) * this.comboDmg), // metronome ramps with combo length
@@ -1644,6 +1647,21 @@ export class Battle {
         this.mapNote = `THE SHRINE TAKES ITS TITHE — ${p.name.toUpperCase()}, TEAM −15% HP`;
       }
       sfx('invade');
+    } else if (n.kind === 'mart') {
+      // Poké Mart: power bought with the score itself — the record run and
+      // the winning run are now in tension
+      if (this.score >= 500) {
+        this.score -= 500;
+        const p = rollPerks(this.rng, 1, Math.max(1, this.rank))[0];
+        if (p) {
+          p.apply(this);
+          this.heldItems.push(p.item);
+          this.mapNote = `MART SOLD YOU ${p.name.toUpperCase()} — −500 PTS`;
+        }
+      } else {
+        this.mapNote = 'MART — NOT ENOUGH PTS (500)';
+      }
+      sfx('ui');
     }
   }
 
@@ -2239,6 +2257,9 @@ export class Battle {
       } else if (n.kind === 'elite') {
         const band = itemSprite('choice-band');
         if (band) ctx.drawImage(band, nx - 13, ny - 20, 26, 26);
+      } else if (n.kind === 'mart') {
+        const ball = itemSprite('ultra-ball');
+        if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : n.kind === 'start' ? null : MT.TILE_TOWN;
         if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
@@ -2263,7 +2284,7 @@ export class Battle {
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : n.kind === 'elite' ? 'ELITE' : n.kind === 'start' ? 'HERE' : 'WILD';
+        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : n.kind === 'elite' ? 'ELITE' : n.kind === 'mart' ? 'MART' : n.kind === 'start' ? 'HERE' : 'WILD';
         ctx.strokeText(label, nx, ny - cell * 1.1);
         ctx.fillStyle = reachable ? '#ffd84d' : '#6fdc6f';
         ctx.fillText(label, nx, ny - cell * 1.1);
@@ -2656,7 +2677,7 @@ export class Battle {
           const weak = hit.wpA >= 0 && toE.x * Math.cos(hit.wpA) + toE.y * Math.sin(hit.wpA) < -0.72;
           const est = Math.max(1, Math.round(
             physDamage(u.def.stats.atk, hit.def.stats.def, mult) *
-              u.pow * this.physMult * this.dmgMult *
+              u.pow * this.physMult * this.dmgMult * (this.typePow[u.def.type] ?? 1) *
               (weak ? 3 + this.wpBonus : 1) * (hit.boss ? 1 + this.bossSlayer : 1),
           ));
           label = est >= hit.hp ? `≈${est} KO` : `≈${est}`;

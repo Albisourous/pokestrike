@@ -14,7 +14,7 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item' | 'shrine' | 'elite';
+export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item' | 'shrine' | 'elite' | 'mart';
 export interface MapNode {
   tx: number;
   ty: number;
@@ -114,7 +114,7 @@ export function genRegion(seed: number): RegionMap {
     else if ((r + 1) % 3 === 0) kinds = ['gym'];
     else {
       // a real fork: wild is always one door, the other(s) get flavored
-      const extras = shuffle<NodeKind>(['elite', 'rest', 'item', 'shrine']);
+      const extras = shuffle<NodeKind>(['elite', 'rest', 'item', 'shrine', 'mart']);
       kinds = rng() < 0.3 ? shuffle(['wild', 'elite', extras[0]]) : shuffle(['wild', extras[0]]);
     }
     const xs = kinds.length === 1 ? [0.5] : kinds.length === 2 ? [0.3, 0.7] : [0.18, 0.5, 0.82];
