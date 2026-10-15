@@ -444,6 +444,14 @@ export class Battle {
       w: this.arena.w * b.nw,
       h: this.arena.h * b.nh,
     }));
+    // a fresh layout can land on a standing teammate — nudge them out
+    for (const p of this.players) {
+      if (!p.dead) {
+        const at = this.unstick(p.x, p.y, p.r + 2);
+        p.x = at.x;
+        p.y = at.y;
+      }
+    }
     this.enemies = spawns.map((s) => {
       const r = s.boss ? 46 : 26;
       const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
@@ -685,7 +693,9 @@ export class Battle {
 
   private stepShot(dt: number) {
     const u = this.active;
-    const sub = 2;
+    // combo momentum kicks can push the ball fast enough to skip a thin
+    // slab in one step — substep harder when it's hot
+    const sub = u.vx * u.vx + u.vy * u.vy > 1000 * 1000 ? 4 : 2;
     const h = dt / sub;
     for (let i = 0; i < sub; i++) {
       const wave = this.enemies; // spawnWave swaps this array on wave clear
@@ -1253,11 +1263,11 @@ export class Battle {
       const toE = norm({ x: e.x - shooter.x, y: e.y - shooter.y });
       weak = toE.x * Math.cos(e.wpA) + toE.y * Math.sin(e.wpA) < -0.72;
     }
-    // every link in the chain adds momentum: +5% contact damage per pass;
+    // every link in the chain adds momentum: +10% contact damage per pass;
     // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
-        shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
+        shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.1 + this.comboDmg)) *
         (1 + this.wallRamp * shooter.wallN) *
         (this.typePow[shooter.def.type] ?? 1) *
         this.shotStreak *
@@ -1337,6 +1347,10 @@ export class Battle {
     }
     this.shotCombo++;
     this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
+    // the bump feeds the launch: a momentum kick so every teammate passed
+    // through literally speeds the ball up (damage ramps in strikeEnemy)
+    u.vx *= 1.12;
+    u.vy *= 1.12;
     const n = this.shotCombo;
     const c = TYPE_COLOR[p.def.type];
     // combo counter pops over the ally — every pass reads as a hit

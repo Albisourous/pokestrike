@@ -24,12 +24,15 @@ The game is also deployed to GitHub Pages on every push to `main`
 (`.github/workflows/deploy.yml`), so you can play from any device at
 `https://<user>.github.io/pokestrike/`.
 
-Open the printed URL. Works on desktop and touch.
+Open the printed URL. Works on desktop and touch — the `?` button opens a
+scrollable in-game manual (it auto-opens on your first visit).
 
 1. Pick **Free Play** — a 9-stage climb (Slay the Spire style): random wild
    stages, a **gym leader** every 3rd stage, bigger and meaner packs as you
    go, and a win only when the third gym falls. **Daily Climb** is the same
-   run for everyone today — one seed deals the same draft and stages.
+   run for everyone today — one seed deals the same draft and stages
+   (`?seed=NNN` on the URL forces any seed — handy for sharing a run or
+   debugging one).
    Enemy typing is hidden (`?`)
    until a mon takes a hit or attacks — you learn the matchup by engaging.
    Gym leaders bring same-type entourages and a **signature attack** (Mewtwo
@@ -51,21 +54,32 @@ Open the printed URL. Works on desktop and touch.
    **guide line** previews the ball's banks off walls and rocks, ending on
    whatever it would hit first. **Power is timing**: a
    meter ping-pongs while you hold — release in the gold zone for a
-   full-power `PERFECT!` shot (slow-mo + speedlines included).
+   full-power `PERFECT!` shot (slow-mo + speedlines included). Every wall
+   **bank** on the way pays +8% contact damage on the hits that follow —
+   the Monster Strike trick-shot fantasy, and stone blocks count.
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
    numbers are super effective, grey means resisted (or immune). Elites and
    bosses carry a **weak point** — a gold diamond marking one face; strike
    the ball in from that side for ×3 damage.
 5. **Bump your own teammates** — every pass-through is a combo link (rising
-   ×N counter, escalating hit-stop and flashes). Each ally's
+   ×N counter, escalating hit-stop and flashes) and each link **powers up
+   the launch**: +10% contact damage and a momentum kick per bump, so
+   routing through the whole team turns a good shot into a rampage. Each
+   ally's
    signature **super** starts uncharged and builds one notch per shot — the
    pip meter under its HP bar fills as it charges, all-gold means ready,
    and its move name appears overhead — that's the one you want to hit
    next. Enemies creep and dart toward your team and attack on a
-   **countdown** — kill them or keep moving.
+   **countdown** — kill them or keep moving. Wild **healers** patch their
+   most-wounded ally instead of attacking (kill the cleric first or the
+   fight drags), and bosses
+   **enrage** under 30% HP — attack timers cycling a third faster.
 6. **Read the field** — each wave re-themes the court and the wilds match
    the stage's biome: grove draws grass-and-bird packs, cavern
-   rock-and-ghost, volcano fire packs, sky flyers and electric. The court
+   rock-and-ghost, volcano fire packs, sky flyers and electric — down to
+   ambient embers, petals, and wisps drifting over the floor.
+   **Stone clusters** stand mid-court as bounceable cover — bank off them
+   like walls for the same per-bounce damage bonus. The court
    fights back too: **lava pools** scorch the ball and anything standing
    in them, **tall grass** drags your launch to a crawl, **wind bands**
    push the ball sideways, and **spike strips** chip it on contact — an
@@ -88,15 +102,19 @@ Open the printed URL. Works on desktop and touch.
    mini-boss worth catching. Bosses can be caught mid-fight too — a
    Master Ball item never fails. Rare **shiny** wilds (~1 in 48 spawns)
    sparkle gold — KO one and it's a guaranteed catch plus a score bonus.
+   Fill 100 dex entries for the **Shiny Charm**, which doubles every shiny
+   roll from then on.
 8. **Choose a item between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
-   run — draft for synergy, item for the holes. **Type charms** (Charcoal,
+   run — draft for synergy, item for the holes. Cold board? **Decline** the
+   reward for +150 score instead. **Type charms** (Charcoal,
    Mystic Water, Magnet…) give +20% to one type and stack — going mono-type
-   is a real build. Then pick your **route** on the region map: non-gym rows
+   is a real build (they only roll for types you actually field). Then pick your **route** on the region map: non-gym rows
    offer 2–3 linked stops to tap — safe **wilds**, the **elite** road (bigger
    fight, uncommon-or-better items), Poké Center **rests** (+30% team HP),
-   **item finds**, **blood shrines** (team −15% HP for a relic), and the
-   **Poké Mart** (a relic for 500 score — power or the record). Gyms are
+   **item finds**, **blood shrines** (team −15% HP for a relic), the
+   **Poké Mart** (a relic for 500 score — power or the record), and **?**
+   mystery stops — a cache, a hidden spring, or a trap. Gyms are
    forced singles every third row; the island itself is a seeded
    porygion-style value-noise map. The items you've taken ride the reward
    screen as an icon strip.
@@ -107,7 +125,8 @@ Open the printed URL. Works on desktop and touch.
    alive. Tap the dex count on the title for the **Pokédex** — every
    catchable species, lit when owned. Lose a run and that exact team comes
    back as a **RIVAL BATTLE**
-   wave in your next one — beat it to clear the echo. Every clear raises
+   wave in your next one — at the levels it earned, shinies included —
+   beat it to clear the echo. Every clear raises
    your **ascension** (shown on the title): enemies get +15% bulk and +8%
    damage per tier, and pay a +20%/tier score premium.
 9b. **Level up mid-run** — every KO feeds the mon that landed it a level
@@ -118,15 +137,17 @@ Open the printed URL. Works on desktop and touch.
     and draft cards show the super you'll unlock. Draft cards can roll
     **shiny** (~1 in 50) too — a gold card stays gold for the whole run.
 9d. **Before stage 1, choose your charm** — one of three held items to
-    start the climb with, after a one-per-run draft **reroll** if the
-    board is cold.
+    start the climb with (shown against your drafted team), after a
+    one-per-run draft **reroll** if the board is cold — or **SKIP** the
+    charm entirely for +200 score.
 9e. **Perfect streaks and revenge** — back-to-back gold releases stack up
     to +28% shot damage (watch `PERFECT ×n` in the HUD); a fainted
     teammate surges the survivors +8% damage and a sip of HP.
 10. **Share your result** — the result screen shows a Wordle-style emoji grid
     (🟩 cleared waves, 🟥 where you fell), your final team as real sprites,
     rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS THIEF, SHINY
-    HUNTER…), and a `★ NEW RECORD ★` when you top your best. **SHARE RESULT**
+    HUNTER…), an MVP star on your carry, a "N pts short of your best"
+    hook, and a `★ NEW RECORD ★` when you top it. **SHARE RESULT**
     posts a trainer-card readout — team names, score, badges, the grid — and
     **REMATCH** drops you straight into a fresh draft (the Daily Climb
     re-seeds the same run).

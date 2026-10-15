@@ -394,6 +394,28 @@ export const BLOCK_LAYOUTS: BlockDef[][] = [
     { nx: 0.4, ny: 0.18, nw: 0.05, nh: 0.15 },
     { nx: 0.55, ny: 0.18, nw: 0.05, nh: 0.15 },
   ],
+  // fortress — U opening upward; enemies inside take banked approaches
+  [
+    { nx: 0.38, ny: 0.5, nw: 0.24, nh: 0.05 },
+    { nx: 0.38, ny: 0.34, nw: 0.05, nh: 0.21 },
+    { nx: 0.57, ny: 0.34, nw: 0.05, nh: 0.21 },
+  ],
+  // twin bars — two staggered lanes, forces the low line or the high bank
+  [
+    { nx: 0.18, ny: 0.32, nw: 0.22, nh: 0.05 },
+    { nx: 0.6, ny: 0.5, nw: 0.22, nh: 0.05 },
+  ],
+  // side pockets + center stone — edge banks and a mid ricochet
+  [
+    { nx: 0.08, ny: 0.34, nw: 0.06, nh: 0.16 },
+    { nx: 0.86, ny: 0.34, nw: 0.06, nh: 0.16 },
+    { nx: 0.47, ny: 0.42, nw: 0.06, nh: 0.06 },
+  ],
+  // double lanes — top and bottom bars split the room horizontally
+  [
+    { nx: 0.3, ny: 0.26, nw: 0.4, nh: 0.05 },
+    { nx: 0.3, ny: 0.56, nw: 0.4, nh: 0.05 },
+  ],
 ];
 
 // Gym flavor: the boss's entourage shares its type when the pools have
