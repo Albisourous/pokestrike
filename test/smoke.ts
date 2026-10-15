@@ -86,6 +86,38 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(b.shiniesCaught === 1, 'shiniesCaught counts');
 }
 
+// --- map stop effects -------------------------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(21, 'T'), mulberry32(9));
+  (b as any).spawnWave(0);
+  const p0 = (b as any).players[0];
+  p0.hp = Math.round(p0.maxHp * 0.5);
+  const items0 = b.heldItems.length;
+  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'rest', row: 0, links: [] });
+  ok(p0.hp > p0.maxHp * 0.55, `rest heals the team (${p0.hp})`);
+  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'item', row: 0, links: [] });
+  ok(b.heldItems.length === items0 + 1, 'item stop grants a perk');
+  const hp0 = p0.hp;
+  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'shrine', row: 0, links: [] });
+  ok(p0.hp < hp0 && b.heldItems.length === items0 + 2, 'shrine bleeds for a relic');
+  b.score = 900;
+  const score0 = b.score;
+  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mart', row: 0, links: [] });
+  ok(b.score === score0 - 500 && b.heldItems.length === items0 + 3, 'mart trades 500 pts for a relic');
+}
+
+// --- boss enrage ------------------------------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(2); // seeded gym wave — has a boss
+  const boss = (b as any).enemies.find((e: any) => e.boss);
+  ok(!!boss, 'gym wave has a boss');
+  if (boss) {
+    (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.75), '#fff');
+    ok(boss.enraged === true, `boss enrages under 30% hp (${Math.round(boss.hp / boss.maxHp * 100)}%)`);
+  }
+}
+
 // --- every rolled wave across seeds is spawnable ---------------------------
 {
   let bad = 0;

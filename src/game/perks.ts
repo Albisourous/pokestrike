@@ -421,8 +421,14 @@ export const PERKS: Perk[] = [
 // comes up blank. Legendary 4% / rare 12% / uncommon 34% / common 50%.
 // `cap` clamps the worst tier offered — elite stages pay out uncommon+.
 const TIERS: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
-export function rollPerks(rng: () => number, cap = 3, rank = 0): Perk[] {
-  const pool = PERKS.filter((p) => p.minRank == null || p.minRank <= rank);
+// `types` filters type charms to types the team actually fields — a charm
+// for a type you don't run is a dead offer
+export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>): Perk[] {
+  const pool = PERKS.filter(
+    (p) =>
+      (p.minRank == null || p.minRank <= rank) &&
+      (!p.id.startsWith('type-') || !types || types.has(p.id.slice(5))),
+  );
   const out: Perk[] = [];
   for (let i = 0; i < 3 && pool.length; i++) {
     const roll = rng();

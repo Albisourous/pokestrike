@@ -331,7 +331,7 @@ canvas.addEventListener('pointerdown', (e) => {
         if (new URLSearchParams(location.search).has('dev'))
           (window as unknown as { __battle: Battle }).__battle = battle;
         // the charm pick gates the climb — one held item before stage 1
-        startOffers = rollPerks(runRng, 3, rank());
+        startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes());
         scene = 'charm';
       }
       return;

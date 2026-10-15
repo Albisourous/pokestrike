@@ -1599,10 +1599,15 @@ export class Battle {
     return pool[Math.floor(this.rng() * pool.length)].def;
   }
 
+  // every type on the active team or in the box — charm offers follow it
+  teamTypes() {
+    return new Set<PokeType>([...this.players.map((p) => p.def.type), ...this.box.map((d) => d.type)]);
+  }
+
   private enterReward() {
     this.boxSel = -1;
     // elite stages pay out uncommon-or-better relics — the risk has a price
-    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 2 : 3, this.rank);
+    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 2 : 3, this.rank, this.teamTypes());
     this.eliteWave = false;
     this.lastRecruit = this.rollRecruit();
     if (this.lastRecruit) {
@@ -1644,7 +1649,7 @@ export class Battle {
       this.mapNote = 'RESTED AT THE POKÉ CENTER — TEAM +30% HP';
       sfx('heal');
     } else if (n.kind === 'item') {
-      const p = rollPerks(this.rng, 1, this.rank)[0];
+      const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
       if (p) {
         p.apply(this);
         this.heldItems.push(p.item);
@@ -1657,7 +1662,7 @@ export class Battle {
       for (const p of this.players) {
         if (!p.dead) p.hp = Math.max(1, p.hp - Math.round(p.maxHp * 0.15));
       }
-      const p = rollPerks(this.rng, 1, Math.max(1, this.rank))[0];
+      const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
       if (p) {
         p.apply(this);
         this.heldItems.push(p.item);
@@ -1669,7 +1674,7 @@ export class Battle {
       // the winning run are now in tension
       if (this.score >= 500) {
         this.score -= 500;
-        const p = rollPerks(this.rng, 1, Math.max(1, this.rank))[0];
+        const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
         if (p) {
           p.apply(this);
           this.heldItems.push(p.item);
