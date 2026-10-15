@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, drawShiny, itemSprite } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, hazardsFor, rivalWave } from './data';
+import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
@@ -67,6 +67,7 @@ interface Unit {
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
   sash: boolean; // focus sash: survive one lethal hit at 1 HP
+  lvl: number; // player level — KOs feed the shooter (0 = enemy)
   pow: number; // role damage multiplier
   rngMul: number; // role super-range multiplier
   launch: number; // role launch-speed multiplier
@@ -180,8 +181,9 @@ const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
 const SHINY_RATE = 1 / 48; // ~2% of wild spawns roll the gold palette
 const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
-// every species a mon can evolve into must be resolvable here
-const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS];
+// every species a mon can evolve into must be resolvable here — includes
+// enemy/invader pools so catches like Magikarp→Gyarados actually work
+const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS, ...ENEMY_DB, ...INVADERS];
 const ELITE_IDS = new Set(ELITES.map((e) => e.id));
 
 let nextUid = 1;
@@ -267,6 +269,8 @@ export class Battle {
   volleyBoost = 0; // per-volley contact bonus for the rest of the shot
   // metagame — set by main.ts from the persistent record
   rank = 0; // trainer rank: shifts invade odds + relic pool
+  asc = 0; // ascension tier (wins so far) — enemy bulk/damage scale up
+  heldItems: string[] = []; // item icons picked up this run — the build receipt
   echo: SpeciesDef[] | null = null; // last run's fallen team → rival wave
   echoCleared = false; // set when the rival wave was fought and won
   gymsBeaten = 0; // gym waves cleared this run — feeds trainer rank
@@ -333,6 +337,7 @@ export class Battle {
         lastBump: -1,
         role,
         sash: false,
+        lvl: 1,
         pow: m.pow,
         rngMul: m.range,
         launch: m.launch,
@@ -358,7 +363,7 @@ export class Battle {
 
   private spawnWave(i: number) {
     this.waveIndex = i;
-    this.hpScale = 1 + this.depth * 0.25 + i * 0.12; // wave 3 mobs are +24% tanky
+    this.hpScale = 1 + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
     // each wave is a new scene — rotate the flat theme
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
@@ -414,6 +419,7 @@ export class Battle {
       lastBump: -1,
       role: 'wild',
       sash: false,
+      lvl: 0,
       pow: 1,
       rngMul: 1,
       launch: 1,
@@ -947,7 +953,7 @@ export class Battle {
     const immune = d <= 0;
     if (immune) d = 1;
     e.hp -= d;
-    this.score += d;
+    this.score += Math.round(d * (1 + this.asc * 0.2)); // ascension pays a score premium
     // king's rock staggers attack timers — capped so a long combo delays
     // one volley instead of locking the enemy out forever
     e.timer = Math.min(e.timer + this.stagger, ENEMY_BASE_TIMER + this.stagger + 1);
@@ -984,6 +990,17 @@ export class Battle {
       this.kosThisShot++;
       this.totalKos++;
       this.maxKos = Math.max(this.maxKos, this.kosThisShot);
+      // EXP: the mon that launched this shot levels up — growth you can
+      // watch mid-run; cap keeps the multiplier sane
+      const lv = this.active;
+      if (lv && !lv.dead && lv.lvl < 20) {
+        lv.lvl++;
+        lv.pow *= 1.05;
+        const gain = Math.round(lv.maxHp * 0.03);
+        lv.maxHp += gain;
+        lv.hp = Math.min(lv.hp + gain, lv.maxHp);
+        this.texts.push({ x: lv.x, y: lv.y - lv.r - 36, text: `LV ${lv.lvl}!`, t: 0.9, color: '#9df0ff', big: false });
+      }
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
         this.texts.push({ x: e.x, y: e.y - e.r - 46, text: label, t: 1.1, color: '#ffd84d', big: true });
@@ -1529,12 +1546,13 @@ export class Battle {
     sfx('ui');
     perk.apply(this);
     this.perksTaken++;
+    this.heldItems.push(perk.item);
     this.rewardOffers = [];
     const next = this.waveIndex + 1;
     if (next >= this.waveCount) {
       // next stage is rolled, not fixed — descend, maybe via the elite road
       this.depth++;
-      this.hpScale = 1 + this.depth * 0.25;
+      this.hpScale = 1 + this.depth * 0.25 + this.asc * 0.15;
       this.eliteWave = this.pathElite;
       this.pathElite = false;
       this.stage.waves.push(rollWave(this.rng, this.depth, this.eliteWave, this.stage.theme));
@@ -1560,6 +1578,7 @@ export class Battle {
       const p = rollPerks(this.rng, 1, this.rank)[0];
       if (p) {
         p.apply(this);
+        this.heldItems.push(p.item);
         this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;
       }
       sfx('ready');
@@ -1759,7 +1778,7 @@ export class Battle {
   private damagePlayer(p: Unit, dmg: number) {
     // foes hit harder the deeper the run goes — depth 6 lands ~1.7x;
     // +15% base pressure, +8% per wave so wave 3 actually threatens
-    dmg = Math.max(1, Math.round(dmg * this.takenMult * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08)));
+    dmg = Math.max(1, Math.round(dmg * this.takenMult * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
@@ -2350,6 +2369,16 @@ export class Battle {
       for (let i = 0; i < dots; i++) {
         ctx.fillStyle = i < filled ? (u.cd <= 0 ? '#ffd84d' : TYPE_COLOR[u.def.type]) : 'rgba(0,0,0,0.45)';
         ctx.fillRect(u.x + (i - (dots - 1) / 2) * 7 - 2.5, u.y + u.r + 12, 5, 5);
+      }
+      // level tag on grown mons — KO'ing with a mon feeds it a level
+      if (u.lvl > 1) {
+        ctx.font = font(8);
+        ctx.textAlign = 'left';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2.5;
+        ctx.strokeText(`Lv${u.lvl}`, u.x - u.r - 4, u.y + u.r + 16);
+        ctx.fillStyle = '#9df0ff';
+        ctx.fillText(`Lv${u.lvl}`, u.x - u.r - 4, u.y + u.r + 16);
       }
       if (u.cd <= 0) {
         // ready: the move's name sits overhead — this is the thing to hit

@@ -37,7 +37,7 @@ Open the printed URL. Works on desktop and touch.
    Gyarados sweeps the court, Charizard scorches a ring), and every gym
    you beat lets you **keep the leader's ace** for your own team.
 2. **Draft your team** — four rounds, one of three Pokémon each round, from a
-   17-species pool of unevolved starters. Every round offers **three
+   29-species pool of unevolved starters. Every round offers **three
    different types** so teams stay varied — the heavy hitters (Gengar,
    Snorlax, Dragonite…) aren't in the draft at all; you catch them mid-run.
    Each card shows the mon's **role** at a glance — **SPEEDSTER** (fast
@@ -103,7 +103,11 @@ Open the printed URL. Works on desktop and touch.
    gated items in the pool. Your **best score** and **daily streak** live on
    the title screen — finishing a Daily Climb each day keeps the streak
    alive. Lose a run and that exact team comes back as a **RIVAL BATTLE**
-   wave in your next one — beat it to clear the echo.
+   wave in your next one — beat it to clear the echo. Every clear raises
+   your **ascension** (shown on the title): enemies get +15% bulk and +8%
+   damage per tier, and pay a +20%/tier score premium.
+9b. **Level up mid-run** — every KO feeds the mon that landed it a level
+    (+5% damage, +3% max HP, up to Lv 20). Feed your carry, not your bench.
 10. **Share your result** — the result screen shows a Wordle-style emoji grid
     (🟩 cleared waves, 🟥 where you fell), your final team as real sprites,
     rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS THIEF, SHINY

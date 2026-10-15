@@ -386,7 +386,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   // the records line is the one-more-run hook — best score + daily streak
   const b = best();
   const bits = [`BEST ${b.score.toLocaleString('en-US')}`];
-  if (b.wins) bits.push(`${b.wins} WIN${b.wins === 1 ? '' : 'S'}`);
+  if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
   if (b.streak > 1) bits.push(`DAILY STREAK ${b.streak}`);
   ctx.fillText(bits.join(' · '), W / 2, DAILY_BTN.y + DAILY_BTN.h + 50);
 }
@@ -819,6 +819,7 @@ export function drawReward(
   next: { stage: number; gym: boolean; rolled: boolean },
   pathElite: boolean,
   score: number,
+  heldItems: string[],
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -885,6 +886,20 @@ export function drawReward(
     ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 150);
     ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 168);
   });
+
+  // held items — the run's build so far, a strip of icons between the
+  // offer cards and the box so you can read your loadout at a glance
+  if (heldItems.length) {
+    const iw = 22, gap = 6, n = Math.min(heldItems.length, 14);
+    let ix = W / 2 - (n * (iw + gap) - gap) / 2;
+    heldItems.slice(0, 14).forEach((item) => {
+      const img = itemSprite(item);
+      ctx.globalAlpha = 0.9;
+      if (img) ctx.drawImage(img, ix, 592, iw, iw);
+      ix += iw + gap;
+    });
+    ctx.globalAlpha = 1;
+  }
 
   // captured box — tap a catch, then a teammate, to swap
   ctx.font = font(9);

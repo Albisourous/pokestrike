@@ -8,7 +8,7 @@ import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best } from './game/meta';
 import {
   W,
   H,
@@ -93,7 +93,9 @@ function resize() {
   const vh = window.visualViewport?.height ?? innerHeight;
   canvas.style.width = `${vw}px`;
   canvas.style.height = `${vh}px`;
-  const dpr = window.devicePixelRatio || 1;
+  // dpr 3 phone screens would rasterize a 540x960 game at 3x — 2x is the
+  // point where extra pixels stop being visible but still cost fill-rate
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = vw * dpr;
   canvas.height = vh * dpr;
   scale = Math.min(vw / W, vh / H);
@@ -265,6 +267,7 @@ canvas.addEventListener('pointerdown', (e) => {
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(arenaRect(), draft.picked.map((i) => draftPool[i]), stage, runRng);
         battle.rank = rank();
+        battle.asc = Math.min(best().wins, 9); // every clear raises the heat
         // the last losing team returns as a rival wave — battle eats it
         const echo = echoIds()?.map(speciesById).filter((d): d is SpeciesDef => !!d);
         battle.echo = echo?.length ? echo : null;
@@ -537,6 +540,7 @@ function render() {
             },
             battle.pathElite,
             battle.score,
+            battle.heldItems,
           );
       }
       break;
