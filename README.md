@@ -90,15 +90,16 @@ Open the printed URL. Works on desktop and touch.
    sparkle gold — KO one and it's a guaranteed catch plus a score bonus.
 8. **Choose a item between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
-   run — draft for synergy, item for the holes. Then pick your **path**:
-   the safe **ROUTE**, or the **ELITE** road — a bigger fight with a
-   guaranteed elite spawn, and the next item offer rolls uncommon-or-better.
-   Between stages you walk the **region map** — a seeded island (porygion-style
-   value-noise: sea, beach, grass, mountain) with the 9 stops routed
-   south→north, the next wave's wilds previewed up top, and map stops that
-   do things: **gym** icons are boss stages (with a boss nameplate + HP bar),
-   Poké Center **rests** heal the team 30%, and **item finds** cough up a
-   free item. The items you've taken ride the reward screen as an icon strip.
+   run — draft for synergy, item for the holes. **Type charms** (Charcoal,
+   Mystic Water, Magnet…) give +20% to one type and stack — going mono-type
+   is a real build. Then pick your **route** on the region map: non-gym rows
+   offer 2–3 linked stops to tap — safe **wilds**, the **elite** road (bigger
+   fight, uncommon-or-better items), Poké Center **rests** (+30% team HP),
+   **item finds**, **blood shrines** (team −15% HP for a relic), and the
+   **Poké Mart** (a relic for 500 score — power or the record). Gyms are
+   forced singles every third row; the island itself is a seeded
+   porygion-style value-noise map. The items you've taken ride the reward
+   screen as an icon strip.
 9. **It remembers you** — caught mons join your **dex** and can show up in
    future draft pools; gym wins raise your **rank**, and higher ranks unlock
    gated items in the pool. Your **best score** and **daily streak** live on
@@ -116,6 +117,12 @@ Open the printed URL. Works on desktop and touch.
     (Pikachu `THUNDERBOLT`, Gyarados `TWISTER`, Mewtwo `PSYCHO BOOST`),
     and draft cards show the super you'll unlock. Draft cards can roll
     **shiny** (~1 in 50) too — a gold card stays gold for the whole run.
+9d. **Before stage 1, choose your charm** — one of three held items to
+    start the climb with, after a one-per-run draft **reroll** if the
+    board is cold.
+9e. **Perfect streaks and revenge** — back-to-back gold releases stack up
+    to +28% shot damage (watch `PERFECT ×n` in the HUD); a fainted
+    teammate surges the survivors +8% damage and a sip of HP.
 10. **Share your result** — the result screen shows a Wordle-style emoji grid
     (🟩 cleared waves, 🟥 where you fell), your final team as real sprites,
     rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS THIEF, SHINY
