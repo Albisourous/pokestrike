@@ -8,7 +8,7 @@ import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
-import { genRegion, RegionMap, MAP_W, MAP_H, drawTile, T_WATER, T_SAND } from './map';
+import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, T_WATER, T_SAND } from './map';
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType } from './types';
@@ -291,7 +291,7 @@ export class Battle {
   boxSel = -1; // box index picked for swapping
   depth = 0; // rolled stages survived past the opening trio
   rewardOffers: Perk[] = [];
-  pathElite = false; // reward-screen choice: take the elite road next
+  mapNode = 0; // index into region.nodes — the stop the team stands on
   eliteWave = false; // the wave just cleared was an elite one (bigger payout)
   lastRecruit: SpeciesDef | null = null; // stage's guaranteed catch, for the reward screen
   private rewardPending = false;
@@ -365,8 +365,15 @@ export class Battle {
     return this.stage.waves.length;
   }
 
-  private spawnWave(i: number) {
+  private spawnWave(i: number, elite = false) {
     this.waveIndex = i;
+    // rolled rows don't exist until the stop is chosen — the node's kind
+    // flavors the fight (elite road = tighter, richer pack)
+    if (i >= this.stage.waves.length) {
+      this.depth++;
+      this.stage.waves.push(rollWave(this.rng, this.depth, elite, this.stage.theme));
+    }
+    this.eliteWave = elite;
     this.hpScale = 1 + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
     // each wave is a new scene — rotate the flat theme
     const others = THEMES.filter((t) => t !== this.theme);
@@ -391,9 +398,14 @@ export class Battle {
       spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
       this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
       sfx('invade');
-    } else if (this.eliteWave) {
+    } else if (elite) {
+      // elite stops on seeded rows still get their elite — appended here
+      if (!this.waveHadGym && !spawns.some((s) => ELITE_IDS.has(s.def.id))) {
+        spawns = [...spawns, { def: ELITES[Math.floor(this.rng() * ELITES.length)], nx: 0.25 + this.rng() * 0.5, ny: 0.15 + this.rng() * 0.15 }];
+      }
       this.waveSpecial = 'THE ELITE ROAD!';
     }
+    if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
     this.enemies = spawns.map((s) => {
       const r = s.boss ? 46 : 26;
       return {
@@ -476,10 +488,25 @@ export class Battle {
 
   pointerDown(p: Vec) {
     if (this.phase === 'map') {
-      // advance the route: wave 0 was spawned at construction, the rest
-      // spawn as the marker arrives
+      // StS routing: tap one of the linked stops to walk there — its kind
+      // flavors the battle (elite road, rest heal, item find, blood shrine)
+      const cell = 30;
+      const ox = (540 - MAP_W * cell) / 2;
+      const oy = 136;
+      const cur = this.region.nodes[this.mapNode];
+      const hit = cur.links
+        .map((li) => this.region.nodes[li])
+        .find(
+          (n) =>
+            Math.hypot(p.x - (ox + n.tx * cell + cell / 2), p.y - (oy + n.ty * cell + cell / 2)) <
+            cell * 1.2,
+        );
+      if (!hit) return; // tapping open island just admires the map
       sfx('ui');
-      if (this.pendingNext > this.waveIndex) this.spawnWave(this.pendingNext);
+      this.mapNode = this.region.nodes.indexOf(hit);
+      this.pendingNext = hit.row;
+      this.arriveAtNode(hit);
+      this.spawnWave(this.pendingNext, hit.kind === 'elite');
       this.nextTurn();
       return;
     }
@@ -1524,12 +1551,10 @@ export class Battle {
     sfx('caught');
   }
 
-  // What comes after the reward break — for the path-choice UI.
+  // What comes after the reward break — for the next-stage preview.
   get nextIsGym() {
     const n = this.waveIndex + 1;
-    return n < this.waveCount
-      ? this.stage.waves[n].some((s) => s.boss)
-      : (this.depth + 1) % 3 === 0;
+    return this.region.nodes.some((nd) => nd.row === n && nd.kind === 'gym');
   }
   get nextIsRolled() {
     return this.waveIndex + 1 >= this.waveCount;
@@ -1576,26 +1601,15 @@ export class Battle {
     this.perksTaken++;
     this.heldItems.push(perk.item);
     this.rewardOffers = [];
-    const next = this.waveIndex + 1;
-    if (next >= this.waveCount) {
-      // next stage is rolled, not fixed — descend, maybe via the elite road
-      this.depth++;
-      this.hpScale = 1 + this.depth * 0.25 + this.asc * 0.15;
-      this.eliteWave = this.pathElite;
-      this.pathElite = false;
-      this.stage.waves.push(rollWave(this.rng, this.depth, this.eliteWave, this.stage.theme));
-    }
-    this.pendingNext = next;
-    this.arriveAtNode();
-    this.phase = 'map'; // walk the route to the next stage first
+    this.pendingNext = this.waveIndex + 1;
+    this.phase = 'map'; // pick the next stop on the region map
   }
 
   // StS map-stop effects resolve on arrival: Poké Center rests heal, item
-  // stops cough up a perk — the note shows while the map is up.
-  private arriveAtNode() {
+  // stops cough up a perk, shrines bleed for power — the note becomes the
+  // wave banner since we go straight from the map into the fight.
+  private arriveAtNode(n: MapNode) {
     this.mapNote = '';
-    const n = this.region.nodes[this.pendingNext];
-    if (!n) return;
     if (n.kind === 'rest') {
       for (const p of this.players) {
         if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3));
@@ -2185,52 +2199,57 @@ export class Battle {
         }
       }
     }
-    // your lead mon waits at the last cleared stop, facing the road ahead
-    const at = this.region.nodes[Math.max(0, this.pendingNext - 1)];
+    // your lead mon waits at the current stop, facing the road ahead
+    const at = this.region.nodes[this.mapNode];
     if (at && !this.players[this.activeIdx].dead) {
       const bob = Math.sin(this.time * 4) * 2;
       drawMon(ctx, this.players[this.activeIdx].def.id, ox + at.tx * cell + cell / 2, oy + at.ty * cell - cell * 0.1 + bob, 30);
     }
-    // stops: cleared dim out, the next one pulses (red if the elite road
-    // was taken at the last reward)
+    // stops: cleared rows dim out, linked stops pulse bright — those are
+    // the actual choices; unreachable future stops sit dim on the island
+    const links = this.region.nodes[this.mapNode].links;
     this.region.nodes.forEach((n, i) => {
       const nx = ox + n.tx * cell + cell / 2;
       const ny = oy + n.ty * cell + cell / 2;
-      const cleared = i < this.pendingNext;
-      const current = i === this.pendingNext;
+      const cleared = n.row < this.pendingNext;
+      const reachable = links.includes(i);
+      const current = i === this.mapNode;
       if (n.kind === 'item') {
         const ball = itemSprite('poke-ball');
         if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
       } else if (n.kind === 'shrine') {
         const orb = itemSprite('life-orb');
         if (orb) ctx.drawImage(orb, nx - 13, ny - 20, 26, 26);
+      } else if (n.kind === 'elite') {
+        const band = itemSprite('choice-band');
+        if (band) ctx.drawImage(band, nx - 13, ny - 20, 26, 26);
       } else {
-        const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN;
+        const icon = n.kind === 'gym' ? MT.TILE_GYM : n.kind === 'start' ? null : MT.TILE_TOWN;
         if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
         if (n.kind === 'rest') {
           const potion = itemSprite('max-potion');
           if (potion) ctx.drawImage(potion, nx - 9, ny - cell * 1.9, 18, 18);
         }
       }
-      ctx.globalAlpha = cleared ? 0.4 : current ? 1 : 0.55;
-      ctx.strokeStyle = current ? (this.eliteWave ? '#ff6b6b' : '#ffd84d') : '#c8d0e8';
-      ctx.lineWidth = current ? 3 : 2;
+      ctx.globalAlpha = cleared ? 0.35 : reachable ? 1 : 0.5;
+      ctx.strokeStyle = reachable ? (n.kind === 'elite' || n.kind === 'shrine' ? '#ff6b6b' : '#ffd84d') : current ? '#6fdc6f' : '#c8d0e8';
+      ctx.lineWidth = reachable || current ? 3 : 2;
       ctx.beginPath();
-      ctx.arc(nx, ny, cell * (current ? 0.6 + Math.sin(this.time * 5) * 0.08 : 0.42), 0, Math.PI * 2);
+      ctx.arc(nx, ny, cell * (reachable ? 0.6 + Math.sin(this.time * 5) * 0.08 : 0.42), 0, Math.PI * 2);
       ctx.stroke();
+      ctx.globalAlpha = 1;
       if (cleared) {
         ctx.font = font(10);
         ctx.fillStyle = '#6fdc6f';
         ctx.fillText('✓', nx, ny + 4);
       }
-      ctx.globalAlpha = 1;
-      if (current) {
+      if (reachable || current) {
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : this.eliteWave ? 'ELITE' : 'NEXT';
+        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : n.kind === 'elite' ? 'ELITE' : n.kind === 'start' ? 'HERE' : 'WILD';
         ctx.strokeText(label, nx, ny - cell * 1.1);
-        ctx.fillStyle = '#ffd84d';
+        ctx.fillStyle = reachable ? '#ffd84d' : '#6fdc6f';
         ctx.fillText(label, nx, ny - cell * 1.1);
       }
     });
@@ -2243,17 +2262,9 @@ export class Battle {
     vg.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, 540, 960);
-    if (this.mapNote) {
-      ctx.font = font(10);
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 3;
-      ctx.strokeText(this.mapNote, 270, oy + MAP_H * cell + 30);
-      ctx.fillStyle = '#6fdc6f';
-      ctx.fillText(this.mapNote, 270, oy + MAP_H * cell + 30);
-    }
     ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('tap to continue', 270, oy + MAP_H * cell + 50);
+    ctx.fillText('choose your route — tap a linked stop', 270, oy + MAP_H * cell + 40);
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not

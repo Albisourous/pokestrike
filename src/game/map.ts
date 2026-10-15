@@ -14,11 +14,13 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item' | 'shrine';
+export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item' | 'shrine' | 'elite';
 export interface MapNode {
   tx: number;
   ty: number;
   kind: NodeKind;
+  row: number; // climb depth 0..8 — gyms forced on rows 2/5/8
+  links: number[]; // indices into nodes[] — the stops you can pick next
 }
 export interface RegionMap {
   tiles: Uint8Array; // MAP_W*MAP_H — T_*
@@ -40,10 +42,8 @@ const vn = (x: number, y: number, s: number) => {
   return (a + (b - a) * xf) * (1 - yf) + (c + (d - c) * yf) * yf;
 };
 
-// One icon per stop — fixed so the island reads like StS's map: you can
-// plan the climb ("rest before the last gym") the moment it rolls.
-// last rest before the final gym is a shrine instead — power for blood
-const KINDS: NodeKind[] = ['start', 'item', 'gym', 'wild', 'rest', 'gym', 'item', 'shrine', 'gym'];
+// Branching stops per row — gyms are forced singles every 3rd row; the
+// rest offer 2-3 linked choices (wild/elite/rest/item/shrine) StS-style.
 
 export function genRegion(seed: number): RegionMap {
   const rng = mulberry32(seed);
@@ -96,15 +96,57 @@ export function genRegion(seed: number): RegionMap {
   }
   const land = (x: number, y: number) => x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && tiles[y * MAP_W + x] === T_GRASS;
 
-  // Stops: one per row-band, alternating left/right of the island so the
-  // route snakes; nudge toward the center until it sits on grass.
+  // Stops: branching rows south→north. Row 0 is the single start, every
+  // 3rd row is a lone gym; the rest get 2-3 stops spread across the band.
+  const shuffle = <T>(arr: T[]) => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
   const nodes: MapNode[] = [];
-  for (let i = 0; i < TOTAL_STAGES; i++) {
-    const band = i / (TOTAL_STAGES - 1);
+  for (let r = 0; r < TOTAL_STAGES; r++) {
+    const band = r / (TOTAL_STAGES - 1);
     const ty = Math.round(MAP_H - 3 - band * (MAP_H - 6));
-    let tx = Math.round((i % 2 === 0 ? 0.28 : 0.72) * (MAP_W - 1) + (rng() - 0.5) * 2);
-    while (!land(tx, ty) && tx !== Math.round(cx)) tx += Math.sign(cx - tx);
-    nodes.push({ tx, ty, kind: KINDS[i] });
+    let kinds: NodeKind[];
+    if (r === 0) kinds = ['start'];
+    else if ((r + 1) % 3 === 0) kinds = ['gym'];
+    else {
+      // a real fork: wild is always one door, the other(s) get flavored
+      const extras = shuffle<NodeKind>(['elite', 'rest', 'item', 'shrine']);
+      kinds = rng() < 0.3 ? shuffle(['wild', 'elite', extras[0]]) : shuffle(['wild', extras[0]]);
+    }
+    const xs = kinds.length === 1 ? [0.5] : kinds.length === 2 ? [0.3, 0.7] : [0.18, 0.5, 0.82];
+    kinds.forEach((kind, k) => {
+      let tx = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.4);
+      let guard = 0;
+      while (
+        (!land(tx, ty) || nodes.some((o) => o.row === r && Math.abs(o.tx - tx) < 3)) &&
+        tx !== Math.round(cx) &&
+        guard++ < 10
+      ) tx += Math.sign(cx - tx) || 1;
+      nodes.push({ tx, ty, kind, row: r, links: [] });
+    });
+  }
+
+  // forward links: each stop reaches the 1-2 nearest stops in the next row,
+  // and every next-row stop is reachable from somewhere — no dead ends
+  const idxOf = (n: MapNode) => nodes.indexOf(n);
+  for (let r = 0; r < TOTAL_STAGES - 1; r++) {
+    const from = nodes.filter((n) => n.row === r);
+    const to = nodes.filter((n) => n.row === r + 1);
+    for (const a of from) {
+      const sorted = [...to].sort((x, y) => Math.abs(x.tx - a.tx) - Math.abs(y.tx - a.tx));
+      a.links.push(idxOf(sorted[0]));
+      if (sorted.length > 1 && rng() < 0.45) a.links.push(idxOf(sorted[1]));
+    }
+    for (const b of to) {
+      if (!from.some((a) => a.links.includes(idxOf(b)))) {
+        const nearest = [...from].sort((x, y) => Math.abs(x.tx - b.tx) - Math.abs(y.tx - b.tx))[0];
+        nearest.links.push(idxOf(b));
+      }
+    }
   }
 
   // Manhattan L-routes — random corner order, porygion's connectCities
@@ -121,7 +163,7 @@ export function genRegion(seed: number): RegionMap {
     if (rng() < 0.5) { seg(a.tx, a.ty, b.tx, a.ty); seg(b.tx, a.ty, b.tx, b.ty); }
     else { seg(a.tx, a.ty, a.tx, b.ty); seg(a.tx, b.ty, b.tx, b.ty); }
   };
-  for (let i = 1; i < nodes.length; i++) carve(nodes[i - 1], nodes[i]);
+  for (const a of nodes) for (const li of a.links) carve(a, nodes[li]);
 
   // Scenery on open grass — trees clump into little woods, boulders into
   // one rocky outcrop, flowers scatter between them. Route tiles and the

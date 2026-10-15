@@ -23,7 +23,6 @@ import {
   boxScrollMax,
   BOX_STRIP,
   teamSlotRect,
-  pathBtnRect,
   RETRY_BTN,
   SHARE_BTN,
   TITLE_BTN,
@@ -332,16 +331,6 @@ canvas.addEventListener('pointerdown', (e) => {
     }
   } else if (scene === 'battle') {
     if (battle?.phase === 'reward') {
-      // path choice: safe route vs the elite road — rolled stages only
-      if (battle.nextIsRolled && !battle.nextIsGym) {
-        for (let i = 0; i < 2; i++) {
-          if (inRect(p.x, p.y, pathBtnRect(i))) {
-            battle.pathElite = i === 1;
-            sfx('ui');
-            return;
-          }
-        }
-      }
       // box strip swallows the pointer — release decides tap vs scroll drag
       if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
         boxDrag = { x0: p.x, s0: boxScroll, moved: false };
@@ -613,7 +602,6 @@ function render() {
               gym: battle.nextIsGym,
               rolled: battle.nextIsRolled,
             },
-            battle.pathElite,
             battle.score,
             battle.heldItems,
           );

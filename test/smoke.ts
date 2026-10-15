@@ -4,6 +4,7 @@ import { Battle } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById } from '../src/game/data';
 import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME } from '../src/game/stats';
+import { genRegion, MAP_W } from '../src/game/map';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -107,7 +108,12 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     frames++;
     if (b.phase === 'aim' && aimTries++ > 300) break; // stall detector
     if (b.phase === 'map') {
-      b.pointerDown({ x: 270, y: 480 });
+      // pick a linked stop — same cell math drawRegion/pointerDown use
+      const cell = 30, ox = (540 - MAP_W * cell) / 2, oy = 136;
+      const region = (b as any).region;
+      const cur = region.nodes[(b as any).mapNode];
+      const n = region.nodes[cur.links[Math.floor(rng() * cur.links.length)]];
+      b.pointerDown({ x: ox + n.tx * cell + cell / 2, y: oy + n.ty * cell + cell / 2 });
     } else if (b.phase === 'reward') {
       b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
       if (b.phase === 'reward') b.pickPerk(0); // safety: force advance
@@ -132,6 +138,22 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   }
   ok(b.phase === 'won' || b.phase === 'lost', `seed ${seed}${asc ? ` asc${asc}` : ''}: ${b.phase} (depth ${(b as any).depth}, score ${b.score}, kos ${(b as any).totalKos})`);
   ok(b.score > 0, 'score accumulates');
+}
+
+// --- region map integrity ---------------------------------------------------
+{
+  for (const s of [1, 42, 99, 777, 2024, 5150, 31337]) {
+    const r = genRegion(s);
+    const rowOf = (i: number) => r.nodes[i].row;
+    const fwd = r.nodes.every((n) => n.links.every((li) => rowOf(li) === n.row + 1));
+    ok(fwd, `seed ${s}: all links go one row forward`);
+    const reachable = new Set([0]);
+    for (let i = 0; i < r.nodes.length; i++) if (reachable.has(i)) r.nodes[i].links.forEach((li) => reachable.add(li));
+    ok(reachable.size === r.nodes.length, `seed ${s}: every stop reachable (${reachable.size}/${r.nodes.length})`);
+    const gyms = [2, 5, 8].map((row) => r.nodes.filter((n) => n.row === row));
+    ok(gyms.every((g) => g.length === 1 && g[0].kind === 'gym'), `seed ${s}: forced single gyms on rows 2/5/8`);
+    ok(r.nodes.length >= 9 && r.nodes.length <= 24, `seed ${s}: ${r.nodes.length} stops`);
+  }
 }
 
 // --- roster integrity -------------------------------------------------------

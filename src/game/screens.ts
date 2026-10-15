@@ -71,11 +71,6 @@ export function boxSlotRect(i: number, n: number, scroll = 0) {
   const off = Math.max(0, (BOX_STRIP.w - content) / 2);
   return { x: BOX_STRIP.x + off + i * (BOX_SLOT + BOX_GAP) - scroll, y: BOX_STRIP.y, w: BOX_SLOT, h: BOX_SLOT };
 }
-// Path choice on the reward screen: 0 = safe route, 1 = elite road.
-export function pathBtnRect(i: number) {
-  const w = 210, gap = 16;
-  return { x: W / 2 - (w + gap / 2) + i * (w + gap), y: 898, w, h: 44 };
-}
 export function teamSlotRect(i: number) {
   const w = 100, gap = 14;
   return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 772, w, h: 70 };
@@ -928,7 +923,6 @@ export function drawReward(
   catchPct: number,
   recruit: SpeciesDef | null,
   next: { stage: number; gym: boolean; rolled: boolean },
-  pathElite: boolean,
   score: number,
   heldItems: string[],
 ) {
@@ -1093,19 +1087,15 @@ export function drawReward(
     880,
   );
 
-  // path choice — StS greed: the safe route, or the elite road (bigger
-  // fight, richer relics, a guaranteed elite to catch). Fixed stages and
-  // gyms just show what's next.
+  // next row on the map — gyms announce themselves; wild rows stay quiet
+  // since the actual choice happens on the map now
   ctx.font = font(8);
   if (next.gym) {
     ctx.fillStyle = '#f85888';
     ctx.fillText('NEXT: GYM LEADER', W / 2, 926);
-  } else if (next.rolled) {
-    button(ctx, pathBtnRect(0), 'ROUTE', !pathElite);
-    button(ctx, pathBtnRect(1), 'ELITE ★', pathElite);
   } else {
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(`NEXT: STAGE ${next.stage}`, W / 2, 926);
+    ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, 926);
   }
 }
 
