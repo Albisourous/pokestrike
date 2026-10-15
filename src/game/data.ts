@@ -56,6 +56,20 @@ export const ROSTER: SpeciesDef[] = [
   { id: 349, name: 'Feebas', type: 'water', stats: st(20, 15, 20, 10, 55, 80), evolvesTo: 350 },
   { id: 361, name: 'Snorunt', type: 'water', stats: st(50, 50, 50, 50, 50, 50), evolvesTo: 362 },
   { id: 363, name: 'Spheal', type: 'water', stats: st(70, 40, 50, 55, 50, 25), evolvesTo: 364 },
+  { id: 172, name: 'Pichu', type: 'electric', stats: st(20, 40, 15, 35, 35, 60), evolvesTo: 25 },
+  { id: 174, name: 'Igglybuff', type: 'normal', stats: st(90, 30, 15, 40, 20, 15), healer: true, evolvesTo: 39 },
+  { id: 191, name: 'Sunkern', type: 'grass', stats: st(30, 30, 30, 30, 30, 30), evolvesTo: 192 },
+  { id: 209, name: 'Snubbull', type: 'normal', stats: st(60, 80, 50, 40, 40, 30), melee: true, evolvesTo: 210 },
+  { id: 223, name: 'Remoraid', type: 'water', stats: st(35, 65, 35, 65, 35, 65), pierce: true, evolvesTo: 221 },
+  { id: 236, name: 'Tyrogue', type: 'fighting', stats: st(35, 35, 35, 35, 35, 35), melee: true, evolvesTo: 106 },
+  { id: 246, name: 'Larvitar', type: 'rock', stats: st(50, 64, 50, 45, 50, 41), melee: true, evolvesTo: 247 },
+  { id: 298, name: 'Azurill', type: 'normal', stats: st(50, 20, 40, 20, 40, 20), healer: true, evolvesTo: 183 },
+  { id: 300, name: 'Skitty', type: 'normal', stats: st(50, 45, 45, 35, 35, 50), evolvesTo: 301 },
+  { id: 307, name: 'Meditite', type: 'fighting', stats: st(30, 40, 55, 40, 55, 60), melee: true, evolvesTo: 308 },
+  { id: 325, name: 'Spoink', type: 'psychic', stats: st(60, 25, 35, 70, 80, 60), evolvesTo: 326 },
+  { id: 360, name: 'Wynaut', type: 'psychic', stats: st(95, 23, 48, 23, 48, 23), evolvesTo: 202 },
+  { id: 371, name: 'Bagon', type: 'flying', stats: st(45, 75, 60, 40, 30, 50), melee: true, evolvesTo: 372 },
+  { id: 374, name: 'Beldum', type: 'psychic', stats: st(40, 55, 80, 35, 60, 30), evolvesTo: 375 },
 ];
 
 export const DRAFT_ROUNDS = 4;
@@ -64,7 +78,7 @@ const DRAFT_OFFERS = 3;
 // Each draft round offers 3 picks with distinct types — encourages a varied
 // team so no single type dominates a run. The roster is dealt without
 // replacement across rounds: every species is offered once before a repeat
-// can appear (roster 17 >= 12 offer slots, so a full draft never repeats).
+// can appear (roster >> 12 offer slots, so a full draft never repeats).
 export function draftOrder(rng: () => number): number[] {
   const order: number[] = [];
   let pool: number[] = [];
@@ -151,6 +165,39 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 341, name: 'Corphish', type: 'water', stats: st(43, 80, 65, 50, 35, 35), melee: true, evolvesTo: 342 },
   { id: 353, name: 'Shuppet', type: 'ghost', stats: st(44, 75, 35, 63, 33, 45), pierce: true, evolvesTo: 354 },
   { id: 355, name: 'Duskull', type: 'ghost', stats: st(20, 40, 90, 30, 90, 25), evolvesTo: 356 },
+  { id: 10, name: 'Caterpie', type: 'grass', stats: st(45, 30, 35, 20, 20, 45), melee: true, evolvesTo: 11 },
+  { id: 13, name: 'Weedle', type: 'poison', stats: st(40, 35, 30, 20, 20, 50), melee: true, evolvesTo: 14 },
+  { id: 27, name: 'Sandshrew', type: 'rock', stats: st(50, 75, 85, 20, 30, 40), melee: true, evolvesTo: 28 },
+  { id: 29, name: 'Nidoran♀', type: 'poison', stats: st(55, 47, 52, 40, 40, 41), evolvesTo: 30 },
+  { id: 86, name: 'Seel', type: 'water', stats: st(65, 45, 55, 45, 70, 45), evolvesTo: 87 },
+  { id: 90, name: 'Shellder', type: 'water', stats: st(30, 65, 100, 45, 25, 40), evolvesTo: 91 },
+  { id: 116, name: 'Horsea', type: 'water', stats: st(30, 40, 70, 70, 25, 60), evolvesTo: 117 },
+  { id: 165, name: 'Ledyba', type: 'flying', stats: st(40, 20, 30, 40, 80, 55), melee: true, evolvesTo: 166 },
+  { id: 167, name: 'Spinarak', type: 'poison', stats: st(40, 60, 40, 40, 40, 30), melee: true, evolvesTo: 168 },
+  { id: 187, name: 'Hoppip', type: 'grass', stats: st(35, 35, 40, 35, 55, 50), evolvesTo: 188 },
+  { id: 193, name: 'Yanma', type: 'flying', stats: st(65, 65, 45, 75, 45, 95), pierce: true },
+  { id: 206, name: 'Dunsparce', type: 'normal', stats: st(100, 70, 70, 65, 65, 45), melee: true },
+  { id: 207, name: 'Gligar', type: 'flying', stats: st(65, 75, 105, 35, 65, 85), melee: true },
+  { id: 222, name: 'Corsola', type: 'water', stats: st(65, 55, 85, 65, 95, 35), healer: true },
+  { id: 225, name: 'Delibird', type: 'flying', stats: st(45, 55, 45, 65, 45, 75), melee: true },
+  { id: 240, name: 'Magby', type: 'fire', stats: st(45, 75, 37, 70, 55, 83), evolvesTo: 126 },
+  { id: 265, name: 'Wurmple', type: 'grass', stats: st(45, 45, 35, 20, 30, 20), evolvesTo: 266 },
+  { id: 283, name: 'Surskit', type: 'water', stats: st(40, 30, 32, 50, 52, 65), evolvesTo: 284 },
+  { id: 299, name: 'Nosepass', type: 'rock', stats: st(30, 45, 135, 45, 90, 30) },
+  { id: 302, name: 'Sableye', type: 'ghost', stats: st(50, 75, 75, 65, 65, 50), melee: true },
+  { id: 313, name: 'Volbeat', type: 'grass', stats: st(65, 73, 55, 47, 75, 85) },
+  { id: 314, name: 'Illumise', type: 'grass', stats: st(65, 47, 55, 73, 75, 85) },
+  { id: 315, name: 'Roselia', type: 'grass', stats: st(50, 60, 45, 100, 80, 65), healer: true },
+  { id: 322, name: 'Numel', type: 'fire', stats: st(60, 60, 40, 65, 45, 35), evolvesTo: 323 },
+  { id: 324, name: 'Torkoal', type: 'fire', stats: st(70, 85, 140, 85, 70, 20) },
+  { id: 337, name: 'Lunatone', type: 'psychic', stats: st(90, 55, 65, 95, 85, 70), pierce: true },
+  { id: 338, name: 'Solrock', type: 'psychic', stats: st(90, 95, 85, 55, 65, 70), melee: true },
+  { id: 343, name: 'Baltoy', type: 'rock', stats: st(40, 40, 55, 40, 70, 55), evolvesTo: 344 },
+  { id: 345, name: 'Lileep', type: 'grass', stats: st(66, 41, 77, 61, 87, 23), evolvesTo: 346 },
+  { id: 347, name: 'Anorith', type: 'rock', stats: st(45, 95, 50, 40, 50, 75), melee: true, evolvesTo: 348 },
+  { id: 357, name: 'Tropius', type: 'grass', stats: st(99, 68, 83, 72, 87, 51) },
+  { id: 366, name: 'Clamperl', type: 'water', stats: st(35, 64, 85, 74, 55, 32), evolvesTo: 367 },
+  { id: 370, name: 'Luvdisc', type: 'water', stats: st(43, 30, 55, 40, 65, 97), healer: true },
   { id: 150, name: 'Mewtwo', type: 'psychic', stats: st(106, 110, 90, 154, 90, 130) },
   { id: 130, name: 'Gyarados', type: 'water', stats: st(95, 125, 79, 60, 100, 81) },
   { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80) },
@@ -193,6 +240,22 @@ export const ELITES: SpeciesDef[] = [
   { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true },
   { id: 350, name: 'Milotic', type: 'water', stats: st(95, 60, 79, 100, 125, 81), healer: true },
   { id: 373, name: 'Salamence', type: 'flying', stats: st(95, 135, 80, 110, 80, 100), melee: true },
+  { id: 121, name: 'Starmie', type: 'water', stats: st(60, 75, 85, 100, 85, 115), pierce: true },
+  { id: 122, name: 'Mr. Mime', type: 'psychic', stats: st(40, 45, 65, 100, 120, 90), taunt: true },
+  { id: 127, name: 'Pinsir', type: 'fighting', stats: st(65, 125, 100, 55, 70, 85), melee: true },
+  { id: 186, name: 'Politoed', type: 'water', stats: st(90, 75, 75, 90, 100, 70), healer: true },
+  { id: 202, name: 'Wobbuffet', type: 'psychic', stats: st(190, 33, 58, 33, 58, 33), taunt: true },
+  { id: 210, name: 'Granbull', type: 'normal', stats: st(90, 120, 75, 60, 60, 45), melee: true },
+  { id: 214, name: 'Heracross', type: 'fighting', stats: st(80, 125, 75, 40, 95, 85), melee: true },
+  { id: 230, name: 'Kingdra', type: 'water', stats: st(75, 95, 95, 95, 95, 85), pierce: true },
+  { id: 241, name: 'Miltank', type: 'normal', stats: st(95, 80, 105, 40, 70, 100), healer: true },
+  { id: 242, name: 'Blissey', type: 'normal', stats: st(255, 10, 10, 75, 135, 55), healer: true },
+  { id: 248, name: 'Tyranitar', type: 'rock', stats: st(100, 134, 110, 95, 100, 61), melee: true },
+  { id: 295, name: 'Exploud', type: 'normal', stats: st(104, 91, 63, 91, 73, 68) },
+  { id: 336, name: 'Seviper', type: 'poison', stats: st(73, 100, 60, 100, 60, 65), melee: true },
+  { id: 359, name: 'Absol', type: 'ghost', stats: st(65, 130, 60, 75, 60, 75), melee: true },
+  { id: 365, name: 'Walrein', type: 'water', stats: st(110, 80, 90, 95, 90, 65) },
+  { id: 376, name: 'Metagross', type: 'psychic', stats: st(80, 135, 130, 95, 90, 70), melee: true },
 ];
 
 // Rare invaders: legendaries that crash a normal wave on MS invade stages.
@@ -214,6 +277,10 @@ export const INVADERS: SpeciesDef[] = [
   { id: 382, name: 'Kyogre', type: 'water', stats: st(100, 100, 90, 150, 140, 90) },
   { id: 383, name: 'Groudon', type: 'rock', stats: st(100, 150, 140, 100, 90, 90), melee: true },
   { id: 384, name: 'Rayquaza', type: 'flying', stats: st(105, 150, 90, 150, 90, 95) },
+  { id: 249, name: 'Lugia', type: 'psychic', stats: st(106, 90, 130, 90, 154, 110) },
+  { id: 250, name: 'Ho-Oh', type: 'fire', stats: st(106, 130, 90, 110, 154, 90) },
+  { id: 385, name: 'Jirachi', type: 'psychic', stats: st(100, 100, 100, 100, 100, 100), healer: true },
+  { id: 386, name: 'Deoxys', type: 'psychic', stats: st(50, 150, 50, 150, 50, 150), pierce: true },
 ];
 
 // Evolution-only species: targets of evolvesTo that never roll into waves or
@@ -294,6 +361,37 @@ export const EVOS: SpeciesDef[] = [
   { id: 356, name: 'Dusclops', type: 'ghost', stats: st(40, 70, 130, 60, 130, 25), taunt: true },
   { id: 362, name: 'Glalie', type: 'water', stats: st(80, 80, 80, 80, 80, 80) },
   { id: 364, name: 'Sealeo', type: 'water', stats: st(90, 60, 70, 75, 70, 45) },
+  { id: 11, name: 'Metapod', type: 'grass', stats: st(50, 20, 55, 25, 25, 30), evolvesTo: 12 },
+  { id: 12, name: 'Butterfree', type: 'flying', stats: st(60, 45, 50, 90, 80, 70) },
+  { id: 14, name: 'Kakuna', type: 'poison', stats: st(45, 25, 50, 25, 25, 35), evolvesTo: 15 },
+  { id: 15, name: 'Beedrill', type: 'poison', stats: st(65, 90, 40, 45, 80, 75), melee: true },
+  { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true },
+  { id: 30, name: 'Nidorina', type: 'poison', stats: st(70, 62, 67, 55, 55, 56), evolvesTo: 31 },
+  { id: 31, name: 'Nidoqueen', type: 'poison', stats: st(90, 92, 87, 75, 85, 76), melee: true },
+  { id: 87, name: 'Dewgong', type: 'water', stats: st(90, 70, 80, 70, 95, 70) },
+  { id: 91, name: 'Cloyster', type: 'water', stats: st(50, 95, 180, 85, 45, 70) },
+  { id: 106, name: 'Hitmonlee', type: 'fighting', stats: st(50, 120, 53, 35, 110, 87), melee: true },
+  { id: 117, name: 'Seadra', type: 'water', stats: st(55, 65, 95, 95, 45, 85), evolvesTo: 230 },
+  { id: 166, name: 'Ledian', type: 'flying', stats: st(55, 35, 50, 55, 110, 85), melee: true },
+  { id: 168, name: 'Ariados', type: 'poison', stats: st(70, 90, 70, 60, 60, 40), melee: true },
+  { id: 188, name: 'Skiploom', type: 'grass', stats: st(55, 45, 50, 45, 65, 80), evolvesTo: 189 },
+  { id: 189, name: 'Jumpluff', type: 'grass', stats: st(75, 55, 70, 55, 95, 110) },
+  { id: 192, name: 'Sunflora', type: 'grass', stats: st(75, 75, 55, 105, 85, 30) },
+  { id: 221, name: 'Octillery', type: 'water', stats: st(75, 105, 75, 105, 75, 45), pierce: true },
+  { id: 247, name: 'Pupitar', type: 'rock', stats: st(70, 84, 70, 65, 70, 51), evolvesTo: 248 },
+  { id: 266, name: 'Silcoon', type: 'grass', stats: st(50, 35, 55, 25, 25, 15), evolvesTo: 267 },
+  { id: 267, name: 'Beautifly', type: 'flying', stats: st(60, 70, 50, 100, 50, 65) },
+  { id: 284, name: 'Masquerain', type: 'flying', stats: st(70, 60, 62, 100, 82, 80) },
+  { id: 301, name: 'Delcatty', type: 'normal', stats: st(70, 65, 65, 55, 55, 90) },
+  { id: 308, name: 'Medicham', type: 'fighting', stats: st(60, 60, 75, 60, 75, 80), melee: true },
+  { id: 323, name: 'Camerupt', type: 'fire', stats: st(70, 100, 70, 105, 75, 40), melee: true },
+  { id: 326, name: 'Grumpig', type: 'psychic', stats: st(80, 45, 65, 90, 110, 80) },
+  { id: 344, name: 'Claydol', type: 'psychic', stats: st(60, 70, 105, 70, 120, 75) },
+  { id: 346, name: 'Cradily', type: 'grass', stats: st(86, 81, 97, 81, 107, 43) },
+  { id: 348, name: 'Armaldo', type: 'rock', stats: st(75, 125, 100, 70, 80, 45), melee: true },
+  { id: 367, name: 'Huntail', type: 'water', stats: st(55, 104, 105, 94, 75, 52) },
+  { id: 372, name: 'Shelgon', type: 'flying', stats: st(65, 95, 100, 60, 50, 50), evolvesTo: 373 },
+  { id: 375, name: 'Metang', type: 'psychic', stats: st(60, 75, 100, 55, 80, 50), evolvesTo: 376 },
 ];
 
 export const ALL_SPRITE_IDS = [
@@ -318,10 +416,10 @@ const FOES = [...ENEMY_POOL, ...ELITES];
 // cavern, fire/rock at the volcano, flying/electric/water in the sky.
 const foe = (id: number): SpeciesDef => ENEMY_DB.find((d) => d.id === id)!;
 export const ENEMY_THEME: Record<Theme, SpeciesDef[]> = {
-  grove: [19, 16, 43, 21, 163, 46, 48, 69, 102, 216, 263, 270, 273, 276, 331, 108].map(foe),
-  cavern: [41, 74, 92, 66, 50, 104, 56, 88, 109, 63, 198, 200, 261, 140, 231, 353, 355].map(foe),
-  volcano: [37, 58, 77, 126, 218, 74, 50, 104, 111, 228, 128, 231].map(foe),
-  sky: [16, 21, 81, 100, 170, 72, 84, 278, 333, 177, 309, 147, 98, 118, 318, 341].map(foe),
+  grove: [19, 16, 43, 21, 163, 46, 48, 69, 102, 216, 263, 270, 273, 276, 331, 108, 10, 13, 165, 167, 187, 193, 206, 265, 283, 313, 314, 315, 357].map(foe),
+  cavern: [41, 74, 92, 66, 50, 104, 56, 88, 109, 63, 198, 200, 261, 140, 231, 353, 355, 27, 29, 299, 302, 337, 338, 343, 345, 347].map(foe),
+  volcano: [37, 58, 77, 126, 218, 74, 50, 104, 111, 228, 128, 231, 240, 322, 324].map(foe),
+  sky: [16, 21, 81, 100, 170, 72, 84, 278, 333, 177, 309, 147, 98, 118, 318, 341, 86, 90, 116, 207, 222, 225, 366, 370].map(foe),
 };
 
 // A run is 9 stages; every third is a gym boss. Stages 1-3 are the seeded

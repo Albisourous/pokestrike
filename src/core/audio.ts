@@ -4,6 +4,9 @@
 let ac: AudioContext | null = null;
 let master: GainNode | null = null;
 let mGain: GainNode | null = null;
+let mFilter: BiquadFilterNode | null = null; // music-bus lowpass — softens square-wave edge
+let mWet: GainNode | null = null; // echo send level — per-track depth
+let gBus: WaveShaperNode | null = null; // guitar drive bus — tanh soft-clip dirt
 let muted = localStorage.getItem('pk-mute') === '1';
 
 export function isMuted() {
@@ -29,7 +32,33 @@ export function unlockAudio() {
     master.connect(ac.destination);
     mGain = ac.createGain();
     mGain.gain.value = 0.42; // music sits under the sfx
-    mGain.connect(master);
+    // a gentle lowpass on the music bus takes the rasp off square leads —
+    // the single biggest "this sounds grating" fix
+    mFilter = ac.createBiquadFilter();
+    mFilter.type = 'lowpass';
+    mFilter.frequency.value = 3200;
+    mFilter.Q.value = 0.4;
+    mGain.connect(mFilter).connect(master);
+    // the C418 trick: a slow feedback echo turns plucked notes into
+    // space. Wet level is per-track — ambient soaks in it, battles stay dry
+    const delay = ac.createDelay(1);
+    delay.delayTime.value = 0.34;
+    const fb = ac.createGain();
+    fb.gain.value = 0.32;
+    mWet = ac.createGain();
+    mWet.gain.value = 0.18;
+    mFilter.connect(delay);
+    delay.connect(fb).connect(delay);
+    delay.connect(mWet).connect(master);
+    // J-rock guitar bus: a tanh soft-clip waveshaper turns plain
+    // sawtooth leads into distortion — upstream of the lowpass so the
+    // fizz stays tamed
+    gBus = ac.createWaveShaper();
+    const curve = new Float32Array(257);
+    for (let i = 0; i < 257; i++) curve[i] = Math.tanh(6 * ((i - 128) / 128));
+    gBus.curve = curve;
+    gBus.oversample = '2x';
+    gBus.connect(mGain);
     restart();
   } catch {
     ac = null;
@@ -175,10 +204,22 @@ interface Track {
   hat: string;
   loop?: boolean;
   next?: TrackName;
+  leadWave?: OscillatorType; // lead timbre — default square
+  bassWave?: OscillatorType;
+  swing?: number; // 0..0.2 — off-beat 8ths lean late for groove
+  vib?: number; // lead vibrato depth in Hz — 0 keeps it chiptune-dry
+  leadGate?: number; // note length in steps — >1 sustains across rests (pads)
+  arpGate?: number;
+  bassGate?: number;
+  echo?: number; // wet-echo send 0..0.4 — ambient swims, battle stays tight
+  alt?: number[]; // second lead phrase — loops alternate A/A' so repeats drift
+  guitar?: boolean; // route the lead through the distortion bus — J-rock shred
+  slap?: boolean; // bass gets a pitch-snap + pick click per note — slap feel
+  stab?: number[][]; // synth-brass chord stabs — midi arrays per step, [] = rest
 }
-type TrackName = 'title' | 'battle' | 'win';
+type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win';
 
-function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0) {
+function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0, vib = 0, dest?: AudioNode) {
   if (!ac || !mGain) return;
   const o = ac.createOscillator();
   const g = ac.createGain();
@@ -188,7 +229,18 @@ function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: nu
   g.gain.setValueAtTime(vol, t0);
   g.gain.setValueAtTime(vol, t0 + dur * 0.7);
   g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  o.connect(g).connect(mGain);
+  if (vib) {
+    // slow wobble fading in mid-note — GBA leads warble, they don't sit flat
+    const l = ac.createOscillator();
+    const lg = ac.createGain();
+    l.frequency.value = 5.2;
+    lg.gain.setValueAtTime(0, t0);
+    lg.gain.linearRampToValueAtTime(vib, t0 + dur * 0.6);
+    l.connect(lg).connect(o.frequency);
+    l.start(t0);
+    l.stop(t0 + dur + 0.02);
+  }
+  o.connect(g).connect(dest ?? mGain);
   o.start(t0);
   o.stop(t0 + dur + 0.02);
 }
@@ -223,28 +275,30 @@ const thirdDown = (m: number) => {
 
 const rep = (a: number[], n: number) => Array.from({ length: n }, () => a).flat();
 
+// A section: the riff — syncopated shreds that peak on E6, then a
+// harmonic-minor pull home. Written for the distortion bus.
 const battleLead = [
-  76, 0, 79, 0, 76, 0, 74, 0, // Em: hook
-  71, 0, 74, 0, 76, 0, 0, 0, //     answer
-  72, 0, 76, 0, 79, 0, 76, 0, // C
-  74, 0, 79, 0, 83, 0, 79, 0, // G
-  76, 0, 79, 0, 81, 0, 83, 0, // Em: climb
-  83, 0, 81, 0, 79, 0, 78, 0, //     descend
-  81, 0, 78, 0, 74, 0, 78, 0, // D
-  71, 0, 75, 0, 78, 0, 83, 0, // B (D# = harmonic-minor tension back to Em)
+  76, 76, 83, 83, 82, 83, 76, 74, // Em riff — B5 bend grabs
+  76, 0, 76, 79, 81, 0, 83, 0, //  answer with air
+  84, 83, 81, 79, 81, 83, 79, 76, // descend, snap back
+  74, 76, 78, 79, 81, 83, 84, 86, // climb
+  88, 86, 84, 83, 81, 79, 78, 76, // peak shred down
+  79, 81, 83, 81, 79, 76, 74, 71, // fall to the low string
+  76, 0, 79, 0, 81, 0, 83, 0, //  restate
+  86, 84, 83, 81, 79, 78, 75, 0, // B — D# tension pulls home
 ];
 
-// B section — higher register, Am/C/G/D then a climb to E6 that falls
-// back into the A hook. Halves how often the ear hears the same phrase.
+// B section: power-chord drive — doubled roots, stab gaps, one long
+// climb back up to E6 before the drop.
 const battleLeadB = [
-  81, 0, 81, 0, 84, 0, 81, 0, // Am
-  84, 0, 83, 0, 79, 0, 76, 0, // C
-  79, 0, 81, 0, 83, 0, 86, 0, // G
-  86, 0, 83, 0, 81, 0, 78, 0, // D
-  76, 0, 79, 0, 81, 0, 84, 0, // Am
-  83, 0, 81, 0, 79, 0, 76, 0, // C
-  78, 0, 81, 0, 83, 0, 86, 0, // D
-  88, 0, 86, 0, 83, 0, 78, 0, // B: peak then fall to the hook
+  76, 76, 76, 0, 79, 79, 0, 81, // chug with gaps
+  83, 83, 0, 83, 84, 0, 86, 0,
+  88, 86, 84, 83, 81, 79, 78, 76, // cascade down
+  74, 76, 78, 0, 79, 0, 81, 0,
+  76, 76, 76, 0, 79, 79, 0, 83, // restate the chug higher
+  86, 86, 0, 84, 83, 0, 81, 0,
+  83, 81, 79, 81, 83, 84, 86, 88, // run to the peak
+  86, 84, 83, 81, 79, 0, 75, 0, // drop out on D#
 ];
 
 const battleLeadAll = [...battleLead, ...battleLeadB];
@@ -252,6 +306,8 @@ const battleLeadAll = [...battleLead, ...battleLeadB];
 const TRACKS: Record<TrackName, Track> = {
   title: {
     bpm: 96,
+    leadWave: 'triangle', // whistle-warm menu theme
+    vib: 2,
     lead: [
       76, 0, 79, 0, 76, 0, 72, 0, // C
       74, 0, 79, 0, 81, 0, 79, 0, // G
@@ -280,34 +336,237 @@ const TRACKS: Record<TrackName, Track> = {
     loop: true,
   },
   battle: {
-    bpm: 152,
+    // J-rock anime battle: distorted riff, slap bass, frantic kit,
+    // arcade brass stabs — 170 BPM, high momentum, seamless loop
+    bpm: 170,
     lead: battleLeadAll,
     harm: battleLeadAll.map((n) => (n ? thirdDown(n) : 0)),
+    leadWave: 'sawtooth',
+    guitar: true,
+    slap: true,
+    bassGate: 0.5, // tight pops, no ringing
+    vib: 4,
+    echo: 0.12,
+    stab: [
+      // Em stabs answer the riff on off-beats — 90s arcade brass
+      [], [64, 67, 71], [], [64, 67, 71], [], [], [64, 67, 71], [],
+      [], [64, 67, 71], [], [64, 67, 71], [], [], [64, 67, 71], [],
+      [], [60, 64, 67], [], [60, 64, 67], [], [], [60, 64, 67], [],
+      [], [62, 66, 69], [], [62, 66, 69], [], [], [62, 66, 69], [],
+      [], [64, 67, 71], [], [64, 67, 71], [], [], [64, 67, 71], [],
+      [], [64, 67, 71], [], [64, 67, 71], [], [], [64, 67, 71], [],
+      [], [62, 66, 69], [], [62, 66, 69], [], [], [62, 66, 69], [],
+      [], [59, 63, 66], [], [59, 63, 66], [], [], [59, 63, 66], [],
+      // B: brass on every off-beat — max density under the chug
+      [], [64, 67, 71], [], [64, 67, 71], [], [64, 67, 71], [], [64, 67, 71],
+      [], [60, 64, 67], [], [60, 64, 67], [], [60, 64, 67], [], [60, 64, 67],
+      [], [62, 66, 69], [], [62, 66, 69], [], [62, 66, 69], [], [62, 66, 69],
+      [], [59, 63, 66], [], [59, 63, 66], [], [59, 63, 66], [], [59, 63, 66],
+      [], [64, 67, 71], [], [64, 67, 71], [], [64, 67, 71], [], [64, 67, 71],
+      [], [60, 64, 67], [], [60, 64, 67], [], [60, 64, 67], [], [60, 64, 67],
+      [], [62, 66, 69], [], [62, 66, 69], [], [62, 66, 69], [], [62, 66, 69],
+      [], [59, 63, 66], [], [59, 63, 66], [], [59, 63, 66], [], [64, 67, 71],
+    ],
     arp: [
-      ...rep([64, 67, 71, 76], 2), ...rep([64, 67, 71, 76], 2), // Em Em
-      ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2), // C G
-      ...rep([64, 67, 71, 76], 2), ...rep([64, 67, 71, 76], 2), // Em Em
-      ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2), // D B
-      ...rep([57, 60, 64, 69], 2), ...rep([60, 64, 67, 72], 2), // Am C
-      ...rep([55, 59, 62, 67], 2), ...rep([62, 66, 69, 74], 2), // G D
-      ...rep([57, 60, 64, 69], 2), ...rep([60, 64, 67, 72], 2), // Am C
-      ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2), // D B
+      // Em Em C D Em Em D B — then Em C D B twice under the stabs
+      ...rep([64, 67, 71, 76], 4), ...rep([60, 64, 67, 72], 2), ...rep([62, 66, 69, 74], 2),
+      ...rep([64, 67, 71, 76], 4), ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2),
+      ...rep([64, 67, 71, 76], 2), ...rep([60, 64, 67, 72], 2), ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2),
+      ...rep([64, 67, 71, 76], 2), ...rep([60, 64, 67, 72], 2), ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2),
     ],
     bass: [
-      ...rep([40, 52], 4), 40, 52, 40, 52, 41, 43, 45, 47, // Em + walkup
-      ...rep([36, 48], 4), ...rep([43, 55], 4), // C G
-      ...rep([40, 52], 4), 40, 52, 40, 52, 45, 47, 50, 47, // Em + walk
-      ...rep([38, 50], 4), ...rep([35, 47], 3), 35, 47, // D B
-      ...rep([45, 57], 4), ...rep([36, 48], 4), // Am C
-      ...rep([43, 55], 4), ...rep([38, 50], 4), // G D
-      ...rep([45, 57], 4), ...rep([36, 48], 4), // Am C
-      ...rep([38, 50], 4), ...rep([35, 47], 3), 35, 47, // D B
+      // slap pops in octaves — Em Em C D | Em Em D B
+      ...rep([40, 52, 40, 52, 40, 52, 40, 52], 2),
+      ...rep([36, 48, 36, 48, 36, 48, 36, 48], 1),
+      ...rep([38, 50, 38, 50, 38, 50, 38, 50], 1),
+      ...rep([40, 52, 40, 52, 40, 52, 40, 52], 2),
+      ...rep([38, 50, 38, 50, 38, 50, 38, 50], 1),
+      ...rep([35, 47, 35, 47, 35, 47, 35, 47], 1),
+      // B: Em C D B, twice — last bar walks up to the loop point
+      ...rep([40, 52, 40, 52, 40, 52, 40, 52], 1),
+      ...rep([36, 48, 36, 48, 36, 48, 36, 48], 1),
+      ...rep([38, 50, 38, 50, 38, 50, 38, 50], 1),
+      ...rep([35, 47, 35, 47, 35, 47, 35, 47], 1),
+      ...rep([40, 52, 40, 52, 40, 52, 40, 52], 1),
+      ...rep([36, 48, 36, 48, 36, 48, 36, 48], 1),
+      ...rep([38, 50, 38, 50, 38, 50, 38, 50], 1),
+      35, 47, 35, 47, 38, 40, 42, 44, // chromatic walk-up, seamless loop
     ],
-    kick: 'k...k...'.repeat(2) + 'k...k.k.' + 'k...k...' + 'k...k...' + 'k...k.k.' + 'k...k...' + 'k.k.k.k.'
-      + 'k...k...'.repeat(7) + 'k.k.k.k.',
+    kick: 'k.k.k.k.'.repeat(7) + 'kkkkkkk.'
+      + 'k.k.kk.k'.repeat(7) + 'kkkkkkkk', // frantic doubles, fill ends
+    snare: '..s...s.'.repeat(7) + '..ssss..'
+      + '..s..ss.'.repeat(7) + '.ssssss.', // rapid fills close each section
+    hat: 'c...h.h.'.repeat(7) + 'h.h.h.h.'
+      + 'chhhhhhh' + 'hhhhhhhh'.repeat(7), // crash hits the B downbeat
+    loop: true,
+  },
+  map: {
+    // overworld ambient — the C418 idiom: sparse sine plucks over a
+    // sustained pad, no drums, notes ringing into the feedback echo.
+    // Most steps are rests; the melody breathes between them.
+    bpm: 66,
+    leadWave: 'sine',
+    leadGate: 5, // plucks ring ~2.3s — they blur into the pad
+    arpGate: 9, // chord tones sustain ~4s — a real pad, not an arpeggio
+    echo: 0.36,
+    vib: 1,
+    lead: [
+      72, 0, 0, 0, 0, 0, 76, 0, 0, 0, 79, 0, 0, 0, 0, 0,
+      74, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 67, 0, 0, 0,
+      72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 79, 0, 0, 0,
+      81, 0, 0, 0, 0, 0, 76, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    alt: [ // the loop's second pass wanders somewhere new
+      0, 0, 74, 0, 0, 0, 0, 0, 79, 0, 0, 0, 0, 0, 76, 0,
+      0, 0, 0, 0, 81, 0, 0, 0, 0, 0, 79, 0, 0, 0, 0, 0,
+      72, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 74, 0,
+      71, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    arp: [
+      // pad cycle C → G → Am → F, tones staggered so they stack into chords
+      60, 0, 64, 0, 67, 0, 72, 0, 55, 0, 59, 0, 62, 0, 67, 0,
+      57, 0, 60, 0, 64, 0, 69, 0, 53, 0, 57, 0, 60, 0, 65, 0,
+      60, 0, 64, 0, 67, 0, 72, 0, 55, 0, 59, 0, 62, 0, 67, 0,
+      57, 0, 60, 0, 64, 0, 69, 0, 53, 0, 57, 0, 60, 0, 65, 0,
+    ],
+    bass: [
+      36, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0,
+      45, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0,
+      36, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0,
+      45, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    kick: '',
+    snare: '',
+    hat: '',
+    loop: true,
+  },
+  trainer: {
+    // trainer battle — bright C-major march, brassy square stabs, the
+    // heroic key change real Pokémon trainer themes live in
+    bpm: 144,
+    leadWave: 'square',
+    swing: 0.04,
+    echo: 0.14,
+    lead: [
+      72, 0, 76, 0, 79, 0, 76, 0, // C E G E — call
+      77, 0, 76, 0, 74, 0, 72, 0, // fall home
+      74, 0, 77, 0, 81, 0, 77, 0, // D F A F
+      79, 0, 77, 0, 76, 0, 74, 0, // resolve down
+      72, 0, 76, 0, 79, 0, 84, 0, // leap to C6
+      83, 0, 81, 0, 79, 0, 81, 0, // B A G A
+      83, 0, 84, 0, 83, 0, 81, 0, // B C B A
+      79, 0, 0, 0, 74, 0, 76, 0, // breathe, pick back up
+      76, 76, 0, 79, 0, 81, 0, 79, // B: stabs
+      77, 77, 0, 81, 0, 83, 0, 81,
+      76, 76, 0, 79, 0, 84, 0, 83,
+      81, 0, 79, 0, 76, 0, 74, 0,
+      72, 0, 76, 0, 79, 0, 81, 0,
+      83, 0, 81, 0, 79, 0, 81, 0,
+      84, 0, 83, 0, 81, 0, 79, 0,
+      76, 0, 74, 0, 72, 0, 0, 0,
+    ],
+    harm: [ // hand-voiced thirds — C major, not the E-minor pool
+      67, 0, 72, 0, 76, 0, 72, 0,
+      74, 0, 72, 0, 69, 0, 67, 0,
+      71, 0, 74, 0, 76, 0, 74, 0,
+      76, 0, 74, 0, 72, 0, 71, 0,
+      67, 0, 72, 0, 76, 0, 79, 0,
+      79, 0, 77, 0, 76, 0, 77, 0,
+      79, 0, 81, 0, 79, 0, 77, 0,
+      76, 0, 0, 0, 71, 0, 72, 0,
+      72, 72, 0, 76, 0, 79, 0, 76,
+      74, 74, 0, 77, 0, 79, 0, 77,
+      72, 72, 0, 76, 0, 81, 0, 79,
+      77, 0, 76, 0, 72, 0, 71, 0,
+      69, 0, 72, 0, 76, 0, 77, 0,
+      79, 0, 77, 0, 76, 0, 77, 0,
+      81, 0, 79, 0, 77, 0, 76, 0,
+      72, 0, 71, 0, 67, 0, 0, 0,
+    ],
+    arp: [
+      // C C F G | C Am Dm G | then C F C G twice under the stabs
+      ...rep([60, 64, 67, 72], 4), ...rep([65, 69, 72, 77], 2), ...rep([67, 71, 74, 79], 2),
+      ...rep([60, 64, 67, 72], 2), ...rep([57, 60, 64, 69], 2), ...rep([62, 65, 69, 74], 2), ...rep([67, 71, 74, 79], 2),
+      ...rep([60, 64, 67, 72], 2), ...rep([65, 69, 72, 77], 2), ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2),
+      ...rep([60, 64, 67, 72], 2), ...rep([65, 69, 72, 77], 2), ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2),
+    ],
+    bass: [
+      ...rep([36, 48], 8), ...rep([41, 53], 4), ...rep([43, 55], 4),
+      ...rep([36, 48], 4), ...rep([33, 45], 4), ...rep([38, 50], 4), ...rep([43, 55], 4),
+      ...rep([36, 48], 4), ...rep([41, 53], 4), ...rep([36, 48], 4), ...rep([43, 55], 4),
+      ...rep([36, 48], 4), ...rep([41, 53], 4), ...rep([36, 48], 4), ...rep([43, 55], 4),
+    ],
+    kick: 'k...k.k.'.repeat(15) + 'k.k.k.k.',
+    snare: '..s...s.'.repeat(15) + '..s..ss.',
+    hat: 'hhhhhhhh'.repeat(8) + 'h.h.h.h.'.repeat(8),
+    loop: true,
+  },
+  gym: {
+    // gym leader — the fastest theme: chromatic tension, urgent pedal
+    // bass, stabs that never sit still. Minor, menacing, final.
+    bpm: 168,
+    leadWave: 'sawtooth',
+    guitar: true,
+    slap: true,
+    bassGate: 0.55,
+    swing: 0.03,
+    vib: 2,
+    echo: 0.1,
+    lead: [
+      76, 0, 83, 0, 82, 0, 83, 0, // E B Bb B — chromatic grip
+      81, 0, 79, 0, 76, 0, 74, 0, // unwind
+      76, 0, 79, 0, 81, 0, 83, 0, // climb
+      86, 0, 84, 0, 83, 0, 81, 0, // E6 fall
+      83, 0, 84, 0, 83, 0, 79, 0, // B C B G
+      81, 0, 83, 0, 84, 0, 86, 0, // A B C E6
+      87, 0, 86, 0, 84, 0, 83, 0, // Eb6 — peak chromatic
+      82, 0, 83, 0, 0, 0, 75, 0, // Bb B rest D# — pull home
+      76, 76, 0, 76, 79, 0, 81, 0, // B: stabs
+      83, 83, 0, 83, 81, 0, 79, 0,
+      76, 76, 0, 76, 79, 0, 81, 0,
+      83, 0, 84, 0, 86, 0, 84, 0,
+      88, 0, 86, 0, 84, 0, 83, 0,
+      81, 0, 79, 0, 81, 0, 83, 0,
+      84, 0, 83, 0, 81, 0, 79, 0,
+      78, 0, 75, 0, 78, 0, 0, 0,
+    ],
+    harm: [ // thirdDown would trip on the chromatics — voice it by hand
+      72, 0, 79, 0, 78, 0, 79, 0,
+      78, 0, 76, 0, 72, 0, 71, 0,
+      72, 0, 76, 0, 78, 0, 79, 0,
+      83, 0, 81, 0, 79, 0, 78, 0,
+      79, 0, 81, 0, 79, 0, 76, 0,
+      78, 0, 79, 0, 81, 0, 83, 0,
+      84, 0, 83, 0, 81, 0, 79, 0,
+      79, 0, 79, 0, 0, 0, 71, 0,
+      72, 72, 0, 72, 76, 0, 78, 0,
+      79, 79, 0, 79, 78, 0, 76, 0,
+      72, 72, 0, 72, 76, 0, 78, 0,
+      79, 0, 81, 0, 83, 0, 81, 0,
+      84, 0, 83, 0, 81, 0, 79, 0,
+      78, 0, 76, 0, 78, 0, 79, 0,
+      81, 0, 79, 0, 78, 0, 76, 0,
+      75, 0, 71, 0, 75, 0, 0, 0,
+    ],
+    arp: [
+      // Em Em Am B | Em C Am B — then doubles under the stabs
+      ...rep([64, 67, 71, 76], 4), ...rep([57, 60, 64, 69], 2), ...rep([59, 63, 66, 71], 2),
+      ...rep([64, 67, 71, 76], 2), ...rep([60, 64, 67, 72], 2), ...rep([57, 60, 64, 69], 2), ...rep([59, 63, 66, 71], 2),
+      ...rep([64, 67, 71, 76], 4), ...rep([60, 64, 67, 72], 2), ...rep([64, 67, 71, 76], 2),
+      ...rep([57, 60, 64, 69], 2), ...rep([60, 64, 67, 72], 2), ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2),
+    ],
+    bass: [
+      // pedal E — the urgency is the root refusing to move
+      ...rep([40, 52], 8), ...rep([45, 57], 4), ...rep([35, 47], 4),
+      ...rep([40, 52], 4), ...rep([36, 48], 4), ...rep([45, 57], 4), ...rep([35, 47], 4),
+      ...rep([40, 52], 8), ...rep([36, 48], 4), ...rep([40, 52], 4),
+      ...rep([45, 57], 4), ...rep([36, 48], 4), ...rep([38, 50], 4), ...rep([35, 47], 4),
+    ],
+    kick: 'k.k.k...'.repeat(7) + 'k.k.k.k.'
+      + 'k.k.k.k.'.repeat(8), // B section never lets up
     snare: '..s...s.'.repeat(7) + '..s..ss.'
-      + '..s...s.'.repeat(7) + '..s.sss.',
-    hat: 'hhhhhhhh'.repeat(8) + '..h...h.'.repeat(8), // offbeat hats on B
+      + '..s...s.'.repeat(7) + '.s.s.ss.',
+    hat: 'chhhhhhh' + 'hhhhhhhh'.repeat(15), // crash on the downbeat
     loop: true,
   },
   win: { // clear fanfare in C, then hands off to the title loop
@@ -332,6 +591,7 @@ const TRACKS: Record<TrackName, Track> = {
 let curTrack: TrackName | null = null;
 let stepIdx = 0;
 let nextT = 0;
+let leadSel = 0; // alt-phrase rotation — flips each pass through the loop
 let pumpTimer: ReturnType<typeof setInterval> | null = null;
 
 export function music(name: TrackName | null) {
@@ -346,7 +606,9 @@ function restart() {
     pumpTimer = null;
   }
   stepIdx = 0;
+  leadSel = 0;
   if (!curTrack || !ac || !mGain) return;
+  if (mWet) mWet.gain.value = TRACKS[curTrack].echo ?? 0.18; // per-track space
   nextT = ac.currentTime + 0.08;
   pumpTimer = setInterval(pump, 40);
 }
@@ -358,21 +620,37 @@ function pump() {
   while (nextT < ac.currentTime + 0.2) {
     const i = stepIdx;
     const stepDur = 30 / tr.bpm;
-    const voice = (arr: number[] | undefined, vol: number, type: OscillatorType, gate: number) => {
+    // swing: off-beat 8ths land a hair late — the groove that stops a
+    // loop from marching like a metronome
+    const t0 = nextT + (i % 2 === 1 ? stepDur * (tr.swing ?? 0) : 0);
+    const voice = (arr: number[] | undefined, vol: number, type: OscillatorType, gate: number, vib = 0, dest?: AudioNode) => {
       const m = arr?.[i];
-      if (m) mnote(M2F(m), nextT, stepDur * gate, type, vol);
+      if (m) mnote(M2F(m), t0, stepDur * gate, type, vol, 0, vib, dest);
     };
-    voice(tr.lead, 0.06, 'square', 0.92);
-    voice(tr.harm, 0.032, 'square', 0.9);
-    voice(tr.arp, 0.028, 'square', 0.4);
-    voice(tr.bass, 0.14, 'triangle', 0.85);
-    if (tr.kick[i] && tr.kick[i] !== '.') mnote(150, nextT, 0.13, 'sine', 0.55, 45);
-    if (tr.snare[i] && tr.snare[i] !== '.') mnoise(nextT, 0.14, 1900, 0.2);
-    if (tr.hat[i] && tr.hat[i] !== '.') mnoise(nextT, 0.05, 7000, 0.06);
+    const leadArr = leadSel % 2 === 1 && tr.alt ? tr.alt : tr.lead;
+    voice(leadArr, 0.055, tr.leadWave ?? 'square', tr.leadGate ?? 0.92, tr.vib, tr.guitar ? gBus ?? undefined : undefined);
+    voice(tr.harm, 0.03, tr.leadWave ?? 'square', tr.leadGate ?? 0.9);
+    voice(tr.arp, 0.026, 'square', tr.arpGate ?? 0.4);
+    const bm = tr.bass[i];
+    if (bm) {
+      // slap bass: the pitch snaps down off the attack like a popped
+      // string, and a pick click sits in front of the note
+      mnote(M2F(bm), t0, stepDur * (tr.bassGate ?? 0.85), tr.bassWave ?? 'triangle', 0.13, tr.slap ? M2F(bm) * 0.55 : 0);
+      if (tr.slap) mnoise(t0, 0.03, 3200, 0.06);
+    }
+    // arcade brass: short bright chord stabs on their own channel
+    const st = tr.stab?.[i];
+    if (st) for (const m of st) if (m) mnote(M2F(m), t0, stepDur * 0.6, 'square', 0.04);
+    if (tr.kick[i] && tr.kick[i] !== '.') mnote(150, t0, 0.13, 'sine', 0.45, 45);
+    if (tr.snare[i] && tr.snare[i] !== '.') mnoise(t0, 0.14, 1900, 0.16);
+    const hc = tr.hat[i];
+    if (hc === 'c') mnoise(t0, 0.4, 5500, 0.11); // crash — section accents
+    else if (hc && hc !== '.') mnoise(t0, 0.05, 7000, 0.045);
     stepIdx++;
     nextT += stepDur;
     if (stepIdx >= tr.lead.length) {
       stepIdx = 0;
+      leadSel++; // next pass plays the alt phrase if the track has one
       if (!tr.loop) {
         music(tr.next ?? null); // jingle over — hand off or go quiet
         return;
@@ -389,6 +667,9 @@ export function buzz(pattern: number | number[]) {
 
 // Real species cries (PokeAPI/cries .ogg), cached and replayable.
 const cries = new Map<number, HTMLAudioElement>();
+// master cry trim — the .ogg sources are mastered way hotter than the
+// synth mix, so every call-site volume scales down by this factor
+const CRY_VOL = 0.25;
 export function cry(id: number, vol = 0.2) {
   if (muted) return;
   try {
@@ -397,7 +678,7 @@ export function cry(id: number, vol = 0.2) {
       a = new Audio(`sprites/cries/${id}.ogg`);
       cries.set(id, a);
     }
-    a.volume = vol;
+    a.volume = vol * CRY_VOL;
     a.currentTime = 0;
     a.play().catch(() => {});
   } catch {

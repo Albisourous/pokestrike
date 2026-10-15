@@ -1,6 +1,6 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, drawShiny, itemSprite, drawNpc } from '../core/assets';
-import { sfx, buzz, cry } from '../core/audio';
+import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild } from './data';
 import { Perk, rollPerks } from './perks';
@@ -35,7 +35,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font } from './screens';
+import { font, roundRect } from './screens';
 
 export interface Rect {
   x: number;
@@ -182,6 +182,21 @@ interface Scar {
   t: number;
   life: number;
 }
+// One-shot anime particle: spark dots, velocity streaks and four-point
+// stars — drawn additively so stacked hits read as real glow.
+interface Fx {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  t: number;
+  life: number;
+  size: number;
+  color: string;
+  shape: 'dot' | 'streak' | 'star';
+  spin: number; // star rotation rate
+  grav: number; // debris pulls down; sparks/stars fly straight
+}
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'won' | 'lost';
 
 
@@ -191,6 +206,7 @@ export const MAP_OX = (540 - MAP_W * MAP_CELL) / 2;
 export const MAP_OY = 128;
 
 const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
+const SHOT_MAX = 14; // seconds — gimmick courts can hold the ball above settle speed forever
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
 const BASE_SHOT_SPEED = 285; // 1.5x launch — under exponential friction range scales with speed
 const POWER = 8;
@@ -247,6 +263,7 @@ export class Battle {
   private wasGold = false; // edge detector for the in-zone tick
 
   private stopTimer = 0;
+  private shotT = 0; // launch timestamp — hard-caps a shot that never settles
   private enemyPhaseT = 0;
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
@@ -356,8 +373,11 @@ export class Battle {
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
   private splashing = false; // psychic trait re-entry guard
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
+  eventBox: string | null = null; // resolved ? event — modal FRLG text box, tap to close
   private mapMsgT = 0;
   private trail: { x: number; y: number; t: number }[] = []; // speed smear — ghost positions of the flying ball
+  private fx: Fx[] = []; // sparks, streaks and stars from every impact
+  private punch = 0; // camera zoom-kick — big hits lunge the screen
 
   constructor(
     public arena: Rect,
@@ -730,6 +750,11 @@ export class Battle {
 
   pointerDown(p: Vec) {
     if (this.phase === 'map') {
+      if (this.eventBox) { // event text box is up — a tap dismisses it first
+        this.eventBox = null;
+        sfx('ui');
+        return;
+      }
       if (this.mapWalk) return; // mid-walk — let the lead mon get there
       // a wave is already staged (the start node hosts stage 1) — walk in
       if (this.pendingNext <= this.waveIndex) {
@@ -799,6 +824,7 @@ export class Battle {
     this.shotHitN.clear();
     this.gustSounded = false;
     this.stopTimer = 0;
+    this.shotT = this.time;
     // STRIKE SHOT: launch with a recharged super and it fires from the
     // sling — MS's namesake. Spends the cooldown, erupts immediately.
     if (u.cd <= 0) this.bumpAlly(u, u);
@@ -806,6 +832,7 @@ export class Battle {
     this.shots++;
     this.waveShots++; // anti-stall pressure counts shots inside the wave
     this.addShake(3);
+    this.burst(u.x, u.y, TYPE_COLOR[u.def.type], 12, 360);
     sfx('launch');
     buzz(15);
     if (this.lifeDrain > 0) {
@@ -821,6 +848,9 @@ export class Battle {
       this.beams.push({ x1: u.x, y1: u.y, x2: u.x + dir.x * 200, y2: u.y + dir.y * 200, t: 0.22, life: 0.22 });
       // slow-mo beat + speedlines streaming off the launch
       this.hitStop = Math.max(this.hitStop, 0.22);
+      this.impact(u.x, u.y, '#ffd84d', 1.5);
+      this.burst(u.x, u.y, '#ffd84d', 16, 560, 1.2);
+      this.addPunch(0.1);
       this.addShake(5);
       sfx('perfect');
       buzz([30, 40, 60]);
@@ -846,6 +876,13 @@ export class Battle {
   // --- simulation ---
 
   update(dt0: number) {
+    // scene music follows the phase: ambient on the map, the gym-leader
+    // theme under any boss (aces, alphas, invaders, rivals), the march
+    // under trainers, the wild loop everywhere else
+    if (this.phase === 'map') music('map');
+    else if (this.phase !== 'won' && this.phase !== 'lost') {
+      music(this.enemies.some((e) => e.boss) || this.inRival ? 'gym' : this.inTrainer ? 'trainer' : 'battle');
+    }
     // hit-stop: freeze-frame feel on big combos
     const hit = this.hitStop > 0;
     if (hit) this.hitStop -= dt0;
@@ -872,7 +909,18 @@ export class Battle {
     this.scars = this.scars.filter((s) => s.t < s.life);
     for (const bm of this.beams) bm.t -= dt;
     this.beams = this.beams.filter((bm) => bm.t > 0);
+    for (const f of this.fx) {
+      f.t -= dt;
+      const damp = Math.exp(-3.2 * dt);
+      f.vx *= damp;
+      f.vy *= damp;
+      f.vy += f.grav * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+    }
+    this.fx = this.fx.filter((f) => f.t > 0);
     this.shake *= Math.exp(-6 * dt);
+    this.punch *= Math.exp(-9 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
     if (this.mapMsgT > 0) this.mapMsgT -= dt;
     // squash impulses relax — sprites spring back after impacts
@@ -929,6 +977,8 @@ export class Battle {
           // weaponize against the pack (it chips the ball too — commit)
           hz.spent = true;
           this.addShake(8);
+          this.addPunch(0.09);
+          this.burst(hz.x, hz.y, '#ff9a30', 22, 560, 1.3);
           this.screenFlash('#ff9a30', 0.12);
           this.scar(hz.x, hz.y, 30);
           this.waves.push({ x: hz.x, y: hz.y, r: 0, maxR: hz.r * 3.2, t: 0.35, life: 0.35, color: '#ff9a30', hits: new Set() });
@@ -951,9 +1001,11 @@ export class Battle {
               const sp = Math.max(60, Math.hypot(u.vx, u.vy));
               const nx = u.vx / sp, ny = u.vy / sp;
               this.waves.push({ x: u.x, y: u.y, r: 0, maxR: 50, t: 0.3, life: 0.3, color: '#c890ff', hits: new Set() });
+              this.burst(u.x, u.y, '#c890ff', 10, 320);
               u.x = twin.x + nx * (twin.r + u.r + 6);
               u.y = twin.y + ny * (twin.r + u.r + 6);
               this.waves.push({ x: u.x, y: u.y, r: 0, maxR: 50, t: 0.3, life: 0.3, color: '#c890ff', hits: new Set() });
+              this.burst(u.x, u.y, '#c890ff', 10, 320);
               sfx('gust');
             }
           }
@@ -970,6 +1022,7 @@ export class Battle {
               u.vy *= 1.35;
               u.sq = 0.7;
               this.waves.push({ x: hz.x, y: hz.y, r: 0, maxR: hz.r * 1.6, t: 0.25, life: 0.25, color: '#9df09d', hits: new Set() });
+              this.burst(u.x, u.y, '#9df09d', 8, 420);
               sfx('gust');
             }
           }
@@ -1046,6 +1099,9 @@ export class Battle {
     } else {
       this.stopTimer = 0;
     }
+    // failsafe: a ball caught orbiting a well or looping boost pads never
+    // dips under settle speed — without this the run softlocks mid-shot
+    if (this.phase === 'shot' && this.time - this.shotT > SHOT_MAX) this.endShot();
   }
 
   // Enemies creep toward the nearest player; knockback velocity decays fast.
@@ -1175,6 +1231,7 @@ export class Battle {
           x: o.x, y: o.y, r: 0, maxR: 52, t: 0.3, life: 0.3,
           color: '#9df0ff', hits: new Set(),
         });
+        this.burst(o.x, o.y, o.color, 10, 320);
         sfx('splash');
         o.t = 0;
       }
@@ -1216,6 +1273,7 @@ export class Battle {
       const gap = d.u.r + d.e.r + 2;
       if (dist(d.u, d.e) <= gap + 2) {
         this.hurt(d.e, d.dmg, '#9df0ff');
+        this.impact(d.e.x, d.e.y, '#9df0ff', 1);
         this.addShake(5);
         this.hitStop = Math.max(this.hitStop, 0.06);
         sfx('hit');
@@ -1309,6 +1367,7 @@ export class Battle {
     u.sq = Math.max(u.sq, 0.7);
     const spd = Math.hypot(u.vx, u.vy);
     this.waves.push({ x: u.x, y: u.y, r: 0, maxR: u.r * 2.4, t: 0.22, life: 0.22, color: '#cfe4ff', hits: new Set() });
+    this.burst(u.x, u.y, '#cfe4ff', Math.min(7, 2 + Math.floor(spd / 600)), spd * 0.22, 0.8);
     this.addShake(Math.min(2.5, spd / 700));
     sfx('bounce', Math.min(1.7, 0.6 + spd / 1200));
   }
@@ -1349,6 +1408,7 @@ export class Battle {
 
   private onPinch(x: number, y: number) {
     this.texts.push({ x, y: y - 30, text: 'COMBO SHOT!', t: 0.8, color: '#9df0ff', big: true });
+    this.impact(x, y, '#9df0ff', 0.9);
     for (let k = 0; k < this.pinchPip; k++) this.chargeUp(this.active);
   }
 
@@ -1359,6 +1419,7 @@ export class Battle {
 
   // Field pickups — the MS heart/sword/hourglass: heal, damage, cooldown.
   private grabPickup(pk: Pickup) {
+    this.burst(pk.x, pk.y, '#fff8dc', 9, 260, 0.9);
     switch (pk.kind) {
       case 'oran-berry':
         this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * 0.15)));
@@ -1386,6 +1447,7 @@ export class Battle {
       const heal = amount(p);
       p.hp = Math.min(p.hp + heal, p.maxHp);
       this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
+      this.burst(p.x, p.y, '#6fdc6f', 6, 200, 0.8);
       healed = true;
     }
     if (healed) {
@@ -1487,6 +1549,7 @@ export class Battle {
       e.enraged = true;
       e.timer = Math.min(e.timer, 2);
       this.texts.push({ x: e.x, y: e.y - e.r - 58, text: 'ENRAGED!', t: 1.2, color: '#ff6b6b', big: true });
+      this.burst(e.x, e.y, '#ff6b6b', 16, 440, 1.2);
       this.screenFlash('#ff6b6b', 0.15);
       sfx('invade');
     }
@@ -1518,11 +1581,22 @@ export class Battle {
       color: immune ? '#8a90a8' : crit ? '#ffd84d' : color,
       big: crit || suffix === '!',
     });
-    if (crit) this.addShake(4);
+    if (crit) {
+      this.addShake(4);
+      this.burst(e.x, e.y, '#ffd84d', 10, 380);
+    }
     // styler loop wraps the target — every hit is another circle
     if (e.hp <= 0) {
       e.dead = true;
       this.scar(e.x, e.y, e.boss ? 20 : 12); // a KO scorches the court
+      // the KO pop is the game's biggest beat — flash frame, star shower,
+      // shockwave and a camera lunge all at once
+      this.impact(e.x, e.y, TYPE_COLOR[e.def.type] ?? '#ffffff', e.boss ? 2.4 : 1.3);
+      this.burst(e.x, e.y, '#ffffff', e.boss ? 26 : 14, e.boss ? 620 : 420, e.boss ? 1.6 : 1);
+      this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3.2, t: 0.35, life: 0.35, color: '#ffffff', hits: new Set() });
+      this.hitStop = Math.max(this.hitStop, e.boss ? 0.3 : 0.12);
+      this.addPunch(e.boss ? 0.14 : 0.05);
+      if (e.boss) this.screenFlash('#ffffff', 0.28);
       // every KO feeds the team's supers — kills are the fast lane to READY
       for (const p of this.players) this.chargeUp(p);
       // fatigue curse: farming a cursed KO costs every super a pip back
@@ -1582,6 +1656,7 @@ export class Battle {
           this.texts.push({ x: e.x, y: e.y - e.r - 56, text: 'SHINY BONUS +250', t: 1.4, color: '#ffd84d', big: true });
         }
         this.screenFlash('#ffd84d', 0.2);
+        this.burst(e.x, e.y, '#ffd84d', 18, 420, 1.2);
         // real poké ball drops in and does the triple-wiggle
         this.balls.push({ x: e.x, y: e.y, item: master ? 'master-ball' : 'poke-ball', t: 1.15, life: 1.15 });
         sfx('caught');
@@ -1593,6 +1668,7 @@ export class Battle {
       if (e.volatile) {
         const BR = 110;
         this.waves.push({ x: e.x, y: e.y, r: 0, maxR: BR, t: 0.3, life: 0.3, color: '#ff9a30', hits: new Set() });
+        this.burst(e.x, e.y, '#ff9a30', 18, 520, 1.2);
         this.addShake(5);
         sfx('boom');
         for (const o of this.enemies) {
@@ -1650,11 +1726,15 @@ export class Battle {
     if (weak) {
       this.texts.push({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
       this.hitStop = Math.max(this.hitStop, 0.1);
+      this.impact(e.x, e.y, '#ffd84d', 1.4);
+      this.addPunch(0.07);
       this.addShake(6);
       sfx('perfect');
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+    // contact sparks in the attacker's type color — every hit showers
+    if (!e.dead || !weak) this.impact(e.x, e.y, TYPE_COLOR[shooter.def.type] ?? '#ffffff', weak ? 1.3 : mult > 1 ? 1 : 0.7);
     this.addShake(mult > 1 ? 4 : 2);
     sfx('hit', 1 + this.shotCombo * 0.12);
     buzz(8);
@@ -1785,6 +1865,9 @@ export class Battle {
     });
     this.hitStop = Math.max(this.hitStop, 0.18);
     const color = TYPE_COLOR[src.def.type];
+    this.impact(p.x, p.y, color, 1.2);
+    this.burst(p.x, p.y, color, 16, 480);
+    this.addPunch(0.07);
     this.screenFlash(color, 0.08);
     sfx(SUPER_SFX[src.def.type]);
     cry(p.def.id, 0.35);
@@ -1955,6 +2038,9 @@ export class Battle {
     if (firedAll) {
       this.hitStop = 0.3;
       this.screenFlash('#ffd84d', 0.3);
+      this.impact(p.x, p.y, '#ffd84d', 2);
+      this.burst(p.x, p.y, '#ffd84d', 24, 560, 1.3);
+      this.addPunch(0.12);
       this.addShake(8);
       this.texts.push({ x: p.x, y: p.y - p.r - 40, text: 'TEAM COMBO!', t: 1.2, color: '#ffd84d', big: true });
     }
@@ -1965,9 +2051,20 @@ export class Battle {
     if (this.waveHadGym) this.gymsBeaten++;
     // last-kill slow-mo — the kill shot gets a beat to land
     this.hitStop = Math.max(this.hitStop, 0.35);
+    this.burst(this.arena.x + this.arena.w / 2, this.arena.y + this.arena.h / 2, '#ffd84d', 20, 480, 1.1);
     if (this.waveIndex + 1 >= this.waveCount && this.depth >= FINAL_DEPTH) {
       this.phase = 'won';
       this.screenFlash('#ffd84d', 0.35);
+      this.addPunch(0.14);
+      // victory star-shower — the whole court celebrates
+      for (let i = 0; i < 3; i++) {
+        this.burst(
+          this.arena.x + this.arena.w * (0.25 + i * 0.25),
+          this.arena.y + this.arena.h * (0.3 + (i % 2) * 0.3),
+          i === 1 ? '#ffffff' : '#ffd84d',
+          16, 520, 1.3,
+        );
+      }
       this.addShake(10);
       sfx('perfect');
       buzz([60, 80, 120]);
@@ -1988,6 +2085,7 @@ export class Battle {
     p.maxHp += gain;
     p.hp = Math.min(p.hp + gain, p.maxHp);
     this.texts.push({ x: p.x, y: p.y - p.r - 36, text: `LV ${p.lvl}!`, t: 0.9, color: '#9df0ff', big: false });
+    this.burst(p.x, p.y, '#9df0ff', 6, 240, 0.8);
     sfx('ready');
   }
 
@@ -2014,6 +2112,8 @@ export class Battle {
         text: `${def.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`,
         t: 1.4, color: '#ffd84d', big: true,
       });
+      this.impact(owned ? owned.x : this.arena.x + this.arena.w / 2, owned ? owned.y : this.arena.y + 90, '#ffd84d', 1.4);
+      this.burst(owned ? owned.x : this.arena.x + this.arena.w / 2, owned ? owned.y : this.arena.y + 90, '#ffffff', 16, 380);
       sfx('caught');
       cry(next.id, 0.5);
       return true;
@@ -2244,8 +2344,7 @@ export class Battle {
         this.mapNote = out.note;
       } else {
         this.skipWave = out.skip === true;
-        this.mapMsg = out.note;
-        this.mapMsgT = 3;
+        this.eventBox = out.note;
       }
       return;
     }
@@ -2311,6 +2410,7 @@ export class Battle {
     if (p.cd <= 0) return;
     p.cd--;
     if (p.cd === 0 && !p.dead) {
+      this.burst(p.x, p.y, '#ffd84d', 6, 220, 0.8);
       sfx('ready');
     }
   }
@@ -2385,6 +2485,7 @@ export class Battle {
       e.minion = true; // while any minion lives, the boss takes half hits
       this.enemies.push(e);
       this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.6, t: 0.3, life: 0.3, color: '#ff8a8a', hits: new Set() });
+      this.burst(e.x, e.y, '#ff8a8a', 10, 340);
     }
   }
 
@@ -2392,6 +2493,7 @@ export class Battle {
   // sting. The board keeps shifting, so no pocket stays safe to camp in.
   private bossHop(e: Unit) {
     this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.6, t: 0.25, life: 0.25, color: '#f85888', hits: new Set() });
+    this.burst(e.x, e.y, '#f85888', 12, 400);
     const at = this.unstick(
       this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
       this.arena.y + this.arena.h * (0.12 + this.rng() * 0.4),
@@ -2401,6 +2503,7 @@ export class Battle {
     e.y = at.y;
     e.weakA = this.rng() * Math.PI * 2; // new spot, new face to hunt
     this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3, t: 0.3, life: 0.3, color: '#f85888', hits: new Set() });
+    this.impact(e.x, e.y, '#f85888', 1.2);
     this.texts.push({ x: e.x, y: e.y - e.r - 14, text: 'TELEPORT!', t: 0.9, color: '#f85888', big: false });
     this.addShake(6);
     sfx('zap');
@@ -2422,6 +2525,9 @@ export class Battle {
     }
     const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
     this.screenFlash('#f85888', 0.18);
+    this.impact(e.x, e.y, '#f85888', 1.6);
+    this.burst(e.x, e.y, '#f85888', 18, 500, 1.2);
+    this.addPunch(0.1);
     this.addShake(12);
     buzz([30, 40, 60]);
     this.scar(e.x, e.y, 26);
@@ -2590,11 +2696,16 @@ export class Battle {
       this.texts.push({ x: p.x, y: p.y - p.r - 34, text: 'BARELY!', t: 0.9, color: '#ffd84d', big: false });
     }
     this.addShake(3);
+    this.burst(p.x, p.y, '#ff6b6b', 9, 360);
     sfx('hurt');
     buzz(20);
     if (p.hp <= 0) {
       p.hp = 0;
       p.dead = true;
+      this.impact(p.x, p.y, '#ff6b6b', 1.5);
+      this.burst(p.x, p.y, '#ffffff', 14, 420);
+      this.addPunch(0.08);
+      this.hitStop = Math.max(this.hitStop, 0.15);
       this.addShake(6);
       sfx('ko');
       buzz(60);
@@ -2642,7 +2753,44 @@ export class Battle {
   }
 
   private addShake(amt: number) {
-    this.shake = Math.min(this.shake + amt, 18);
+    this.shake = Math.min(this.shake + amt, 26);
+  }
+
+  private addPunch(amt: number) {
+    this.punch = Math.min(this.punch + amt, 0.14);
+  }
+
+  // Anime shrapnel: velocity streaks, glow dots and a few stars exploding
+  // off a point — the workhorse every impact routes through.
+  private burst(x: number, y: number, color: string, n = 10, speed = 340, size = 1) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = speed * (0.3 + Math.random());
+      const kind = Math.random();
+      this.fx.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        t: 0.3 + Math.random() * 0.4,
+        life: 0.7,
+        size: (1.6 + Math.random() * 2.8) * size,
+        color: kind < 0.2 ? '#ffffff' : color,
+        shape: kind < 0.55 ? 'streak' : kind < 0.88 ? 'dot' : 'star',
+        spin: (Math.random() - 0.5) * 14,
+        grav: kind < 0.5 ? 560 : 0,
+      });
+    }
+    if (this.fx.length > 260) this.fx.splice(0, this.fx.length - 260);
+  }
+
+  // The white-hot flash frame anime hits open with: a big white star plus
+  // a colored one spinning out under it, then shards on top.
+  private impact(x: number, y: number, color: string, scale = 1) {
+    this.fx.push(
+      { x, y, vx: 0, vy: 0, t: 0.16, life: 0.16, size: 30 * scale, color: '#ffffff', shape: 'star', spin: 0, grav: 0 },
+      { x, y, vx: 0, vy: 0, t: 0.32, life: 0.32, size: 17 * scale, color, shape: 'star', spin: 3, grav: 0 },
+    );
+    this.burst(x, y, color, Math.round(8 * scale) + 4, 400 * Math.sqrt(scale), scale);
   }
 
   // --- rendering ---
@@ -2660,6 +2808,13 @@ export class Battle {
         (Math.random() - 0.5) * this.shake,
         (Math.random() - 0.5) * this.shake,
       );
+    }
+    // anime zoom-kick — big hits lunge the whole frame toward the action
+    if (this.punch > 0.004) {
+      const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(1 + this.punch, 1 + this.punch);
+      ctx.translate(-cx, -cy);
     }
 
     // arena: theme-tinted backdrop + rim
@@ -2714,23 +2869,57 @@ export class Battle {
 
     for (const w of this.waves) this.drawWave(ctx, w);
 
-    // speed smear — fading ghost dots behind the flying ball, type-tinted
+    // afterimage — fading ghost sprites smear the flight path, anime-style
     if (this.trail.length) {
       const au = this.active;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < this.trail.length; i++) {
         const p = this.trail[i];
         const age = this.time - p.t;
         const f = i / this.trail.length;
-        ctx.globalAlpha = Math.max(0, 0.3 - age * 0.55) * (0.3 + 0.7 * f);
-        ctx.fillStyle = TYPE_COLOR[au.def.type];
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, au.r * (0.3 + 0.45 * f), 0, Math.PI * 2);
-        ctx.fill();
+        const al = Math.max(0, 0.4 - age * 0.65) * (0.3 + 0.7 * f);
+        if (al <= 0.015) continue;
+        ctx.globalAlpha = al;
+        if (au.shiny) drawShiny(ctx, au.def.id, p.x, p.y, au.r * 2.3);
+        else drawMon(ctx, au.def.id, p.x, p.y, au.r * 2.3);
       }
+      ctx.restore();
       ctx.globalAlpha = 1;
     }
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
+
+    // anime speedlines — a blazing shot drags the whole frame along
+    if (this.phase === 'shot' && !this.active.dead) {
+      const u = this.active;
+      const sp = Math.hypot(u.vx, u.vy);
+      if (sp > 850) {
+        const d = norm({ x: u.vx, y: u.vy });
+        const px = -d.y, py = d.x;
+        const k = Math.min(1, (sp - 850) / 1300);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 12; i++) {
+          // deterministic lanes streaming backward past the ball
+          const off = (((i * 97.3 + this.time * 60) % 320) + 320) % 320 - 160;
+          const back = ((i * 61.7 + this.time * (900 + i * 40)) % 420);
+          const lx = u.x - d.x * (u.r + back) + px * off;
+          const ly = u.y - d.y * (u.r + back) + py * off;
+          const L = 30 + (i % 3) * 22;
+          ctx.globalAlpha = 0.4 * k;
+          ctx.strokeStyle = i % 4 === 0 ? TYPE_COLOR[u.def.type] : '#ffffff';
+          ctx.lineWidth = 1.5 + (i % 3);
+          ctx.beginPath();
+          ctx.moveTo(lx - d.x * L, ly - d.y * L);
+          ctx.lineTo(lx, ly);
+          ctx.stroke();
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // caught mons: real poké ball drops in and does the triple-wiggle
     for (const b of this.balls) {
@@ -2778,15 +2967,62 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // particle fx — additive so stacked sparks bloom into real glow
+    if (this.fx.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      for (const f of this.fx) {
+        const a = Math.max(f.t / f.life, 0);
+        ctx.globalAlpha = a;
+        if (f.shape === 'streak') {
+          const s = Math.hypot(f.vx, f.vy);
+          const nx = s > 1 ? f.vx / s : 1, ny = s > 1 ? f.vy / s : 0;
+          const L = f.size * 4 * (0.4 + a);
+          ctx.strokeStyle = f.color;
+          ctx.lineWidth = Math.max(0.8, f.size * 0.55 * a);
+          ctx.beginPath();
+          ctx.moveTo(f.x - nx * L, f.y - ny * L);
+          ctx.lineTo(f.x, f.y);
+          ctx.stroke();
+        } else if (f.shape === 'star') {
+          const s = f.size * (0.5 + a * 0.9);
+          ctx.save();
+          ctx.translate(f.x, f.y);
+          ctx.rotate(f.spin * (f.life - f.t));
+          ctx.fillStyle = f.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -s);
+          ctx.lineTo(s * 0.28, -s * 0.28);
+          ctx.lineTo(s, 0);
+          ctx.lineTo(s * 0.28, s * 0.28);
+          ctx.lineTo(0, s);
+          ctx.lineTo(-s * 0.28, s * 0.28);
+          ctx.lineTo(-s, 0);
+          ctx.lineTo(-s * 0.28, -s * 0.28);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else {
+          ctx.fillStyle = f.color;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, f.size * (0.5 + a * 0.6), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
     for (const t of this.texts) {
-      const pop = 1 + Math.max(0, t.t - 0.72) * (t.big ? 3 : 1.6);
+      const pop = 1 + Math.max(0, t.t - 0.72) * (t.big ? 4.5 : 1.8);
       ctx.globalAlpha = Math.min(t.t / 0.3, 1);
       ctx.font = font(16 * pop);
       ctx.textAlign = 'center';
       ctx.fillStyle = t.color;
       ctx.strokeStyle = '#000';
-      ctx.lineWidth = 3;
-      const dy = (0.9 - t.t) * 44;
+      ctx.lineWidth = t.big ? 4 : 3;
+      const dy = (0.9 - t.t) * 52;
       ctx.strokeText(t.text, t.x, t.y - dy);
       ctx.fillText(t.text, t.x, t.y - dy);
     }
@@ -2798,7 +3034,7 @@ export class Battle {
 
     // screen flashes render unshaken, on top
     for (const f of this.flashes) {
-      ctx.globalAlpha = Math.max(f.t / f.life, 0) * 0.3;
+      ctx.globalAlpha = Math.max(f.t / f.life, 0) * 0.42;
       ctx.fillStyle = f.color;
       ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
     }
@@ -3150,6 +3386,44 @@ export class Battle {
         ctx.fillStyle = TYPE_COLOR[ty];
         ctx.fillText(name, tx + 1, oy + MAP_H * cell + 98);
         tx += ctx.measureText(name).width + 14;
+      }
+      ctx.textAlign = 'center';
+    }
+    // a resolved ? event tells its story in a proper FRLG text box —
+    // modal: dims the map, waits for a tap
+    if (this.eventBox) {
+      ctx.fillStyle = 'rgba(4,6,16,0.55)';
+      ctx.fillRect(0, 0, 540, 960);
+      const bx = 20, bw = 500;
+      ctx.font = font(13);
+      const lines: string[] = [];
+      let line = '';
+      for (const w of this.eventBox.split(' ')) {
+        const t = line ? `${line} ${w}` : w;
+        if (line && ctx.measureText(t).width > bw - 56) { lines.push(line); line = w; }
+        else line = t;
+      }
+      lines.push(line);
+      const bh = 48 + lines.length * 24;
+      const by = 960 - bh - 40;
+      roundRect(ctx, bx, by, bw, bh, 10);
+      ctx.fillStyle = '#12152bf4';
+      ctx.fill();
+      ctx.strokeStyle = '#ffd84d';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      roundRect(ctx, bx + 5, by + 5, bw - 10, bh - 10, 6);
+      ctx.strokeStyle = '#c8a44d';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#f0e6c8';
+      lines.forEach((l, i) => ctx.fillText(l, bx + 26, by + 36 + i * 24));
+      // FRLG continue arrow — blink so it reads as waiting for the tap
+      if (Math.sin(this.time * 6) > -0.3) {
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText('▼', bx + bw - 18, by + bh - 14);
       }
       ctx.textAlign = 'center';
     }
@@ -3764,19 +4038,29 @@ export class Battle {
   private drawWave(ctx: CanvasRenderingContext2D, w: Wave) {
     const alpha = Math.max(w.t / w.life, 0);
     ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // translucent body — the shockwave's mass, fading as it expands
+    ctx.globalAlpha = alpha * 0.16;
+    ctx.fillStyle = w.color;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.fill();
+    // glowing rim
     ctx.globalAlpha = alpha;
     ctx.shadowColor = w.color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 18;
     ctx.strokeStyle = w.color;
-    ctx.lineWidth = 6;
+    ctx.lineWidth = 7;
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
     ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.globalAlpha = alpha * 0.5;
-    ctx.lineWidth = 2;
+    // hot white leading edge — the anime energy front
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.arc(w.x, w.y, w.r * 0.82, 0, Math.PI * 2);
+    ctx.arc(w.x, w.y, Math.max(0, w.r - 5), 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
