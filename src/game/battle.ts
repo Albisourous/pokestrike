@@ -232,6 +232,7 @@ export class Battle {
   streak = 0; // consecutive perfect launches — shown in the HUD
   private shotStreak = 1; // this shot's streak damage bonus
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
+  scoreMult = 1; // lucky egg: score amplifies — pairs meanly with the mart
   private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
   private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
@@ -1011,7 +1012,7 @@ export class Battle {
       this.screenFlash('#ff6b6b', 0.15);
       sfx('invade');
     }
-    this.score += Math.round(d * (1 + this.asc * 0.2)); // ascension pays a score premium
+    this.score += Math.round(d * (1 + this.asc * 0.2) * this.scoreMult); // ascension pays a score premium; lucky egg stacks on
     // the run just became your best — celebrate mid-flight, not just on the card
     if (!this.bested && this.bestScore > 0 && this.score > this.bestScore) {
       this.bested = true;

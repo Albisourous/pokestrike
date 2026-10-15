@@ -276,6 +276,12 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.pinchMult += 0.4; },
   },
   {
+    id: 'luckyegg', name: 'Lucky Egg', item: 'lucky-egg',
+    desc: '+30% score from damage',
+    rarity: 'uncommon',
+    apply: (b) => { b.scoreMult += 0.3; },
+  },
+  {
     id: 'timerball', name: 'Timer Ball', item: 'poke-ball',
     desc: 'every 3rd ally bump: all cooldowns -1',
     rarity: 'uncommon',
