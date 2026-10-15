@@ -4,6 +4,17 @@
 let ac: AudioContext | null = null;
 let master: GainNode | null = null;
 let mGain: GainNode | null = null;
+let muted = localStorage.getItem('pk-mute') === '1';
+
+export function isMuted() {
+  return muted;
+}
+
+export function toggleMute() {
+  muted = !muted;
+  localStorage.setItem('pk-mute', muted ? '1' : '0');
+  if (master) master.gain.value = muted ? 0 : 0.5;
+}
 
 export function unlockAudio() {
   if (ac) {
@@ -14,7 +25,7 @@ export function unlockAudio() {
   try {
     ac = new AudioContext();
     master = ac.createGain();
-    master.gain.value = 0.5;
+    master.gain.value = muted ? 0 : 0.5;
     master.connect(ac.destination);
     mGain = ac.createGain();
     mGain.gain.value = 0.42; // music sits under the sfx
@@ -345,6 +356,7 @@ export function buzz(pattern: number | number[]) {
 // Real species cries (PokeAPI/cries .ogg), cached and replayable.
 const cries = new Map<number, HTMLAudioElement>();
 export function cry(id: number, vol = 0.2) {
+  if (muted) return;
   try {
     let a = cries.get(id);
     if (!a) {

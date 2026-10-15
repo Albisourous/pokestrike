@@ -13,6 +13,8 @@ export interface SpeciesDef {
   healer?: boolean; // bump super also heals the team
   pierce?: boolean; // ball passes through enemies instead of bouncing off
   copy?: boolean; // bump super replays the bumper's super (Ditto)
+  taunt?: boolean; // while it lives, contact hits vs other enemies are blocked
+  cursed?: boolean; // on KO, all ally supers gain +1 cooldown pip
   evolvesTo?: number; // dex id of the evolved form (data only; mechanic lives elsewhere)
 }
 
@@ -116,8 +118,8 @@ const ENEMY_DB: SpeciesDef[] = [
 // Capturable elites: evolved mons that only appear on later waves — the
 // reason to keep pushing into deeper depths.
 export const ELITES: SpeciesDef[] = [
-  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110), pierce: true },
-  { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30) },
+  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110), pierce: true, cursed: true },
+  { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30), taunt: true },
   { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55), melee: true },
   { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
   { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
@@ -202,6 +204,11 @@ export const ALL_SPRITE_IDS = [
   ...EVOS.map((e) => e.id),
   ...INVADERS.map((i) => i.id),
 ];
+
+const ALL_SPECIES = [...ROSTER, ...ENEMY_DB, ...ELITES, ...EVOS, ...INVADERS];
+// any dex id -> its def; dupes exist across pools, first match (ROSTER) wins
+export const speciesById = (id: number): SpeciesDef | undefined =>
+  ALL_SPECIES.find((d) => d.id === id);
 
 const ENEMY_POOL = ENEMY_DB.slice(0, -4);
 const BOSS_POOL = ENEMY_DB.slice(-4);
@@ -322,10 +329,21 @@ export function rollWave(rng: () => number, depth: number, elite = false, theme?
   return wave;
 }
 
+// Rival-echo wave: the player's own team turns up on the enemy side — ace
+// parked near center-top, the rest jittered through the upper/mid arena.
+export function rivalWave(defs: SpeciesDef[], rng: () => number): WaveSpawn[] {
+  return defs.slice(0, 4).map((def, i) => ({
+    def,
+    nx: 0.5 + (rng() - 0.5) * (i === 0 ? 0.1 : 0.6),
+    ny: i === 0 ? 0.15 + rng() * 0.05 : 0.35 + (rng() - 0.5) * 0.4,
+    boss: false,
+  }));
+}
+
 // Hazard zones: per-theme arena dangers laid out alongside a wave's spawns.
 // Same normalized coords as WaveSpawn; r is a fraction of arena width.
 // Zones stay out of the bottom 25% (player turf) and inside the side walls.
-export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes';
+export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static';
 export interface HazardSpawn {
   kind: HazardKind;
   nx: number;
@@ -354,9 +372,9 @@ export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
         const r = rad();
         return { kind: 'grass', ...spot(r, 0.1, 0.7) };
       });
-    case 'sky':
+    case 'sky': {
       // wide horizontal wind bands, centered-ish, pushing left or right
-      return Array.from({ length: n(1, 2) }, () => {
+      const gusts: HazardSpawn[] = Array.from({ length: n(1, 2) }, () => {
         const r = 0.18 + rng() * 0.05;
         return {
           kind: 'gust',
@@ -366,6 +384,13 @@ export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
           dir: rng() < 0.5 ? -1 : 1,
         };
       });
+      // static pools: silence fields — keywords & bump supers go dead inside
+      const pools: HazardSpawn[] = Array.from({ length: n(0, 2) }, () => {
+        const r = rad();
+        return { kind: 'static', ...spot(r, 0.2, 0.55) };
+      });
+      return gusts.concat(pools);
+    }
     case 'cavern':
       // jagged strips shoved off-center, one side or the other
       return Array.from({ length: n(1, 3) }, () => {

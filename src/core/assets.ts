@@ -16,42 +16,6 @@ export function gracidea(): HTMLImageElement | undefined {
   return gracideaImg;
 }
 
-let gracideaNpcsImg: HTMLImageElement | undefined;
-
-export function loadGracideaNpcs(): Promise<HTMLImageElement> {
-  if (gracideaNpcsImg) return Promise.resolve(gracideaNpcsImg);
-  return loadImg('sprites/gracidea/npcs.webp', 'gracidea npcs').then((img) => {
-    gracideaNpcsImg = img;
-    return img;
-  });
-}
-
-export function gracideaNpcs(): HTMLImageElement | undefined {
-  return gracideaNpcsImg;
-}
-
-// TexturePacker frame index — fetched lazily, cached forever. Empty map on
-// failure so scenery can skip gracefully.
-export type AtlasFrame = { x: number; y: number; w: number; h: number; rotated: boolean };
-const atlasJsons = new Map<string, Promise<Map<string, AtlasFrame>>>();
-export function loadGracideaJson(name: string): Promise<Map<string, AtlasFrame>> {
-  const hit = atlasJsons.get(name);
-  if (hit) return hit;
-  const p = fetch(`sprites/gracidea/${name}.json`)
-    .then((r) => r.json())
-    .then((d) => {
-      const m = new Map<string, AtlasFrame>();
-      for (const k in d.frames) {
-        const f = d.frames[k];
-        m.set(k, { x: f.frame.x, y: f.frame.y, w: f.frame.w, h: f.frame.h, rotated: !!f.rotated });
-      }
-      return m;
-    })
-    .catch(() => new Map());
-  atlasJsons.set(name, p);
-  return p;
-}
-
 function loadImg(src: string, label: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
     const img = new Image();

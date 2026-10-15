@@ -2,8 +2,7 @@
 // pitch markings (inset boundary, halfway line, center circle, corner arcs)
 // drawn live so they scale to the arena rect. Props come from the gracidea pass.
 
-import { gracidea, loadGracidea, gracideaNpcs, loadGracideaNpcs, loadGracideaJson } from '../core/assets';
-import type { AtlasFrame } from '../core/assets';
+import { gracidea, loadGracidea } from '../core/assets';
 
 export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
 export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
@@ -50,9 +49,12 @@ function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: n
 // is painted once at logical size and blitted; stretch on odd rects is invisible.
 const FW = 540, FH = 960;
 const floors = new Map<Theme, HTMLCanvasElement>();
+// menus want the texture without the edge props
+const bareFloors = new Map<Theme, HTMLCanvasElement>();
 
-function floor(theme: Theme) {
-  const hit = floors.get(theme);
+function floor(theme: Theme, bare = false) {
+  const cache = bare ? bareFloors : floors;
+  const hit = cache.get(theme);
   if (hit) return hit;
   const c = document.createElement('canvas');
   c.width = FW;
@@ -133,9 +135,11 @@ function floor(theme: Theme) {
       g.fill();
     }
   }
-  if (propsReady) decorate(theme, g);
-  else ensureProps();
-  floors.set(theme, c);
+  if (!bare) {
+    if (propsReady) decorate(theme, g);
+    else ensureProps();
+  }
+  cache.set(theme, c);
   return c;
 }
 
@@ -184,7 +188,6 @@ const TREE: Slice[] = [
   [1918, 90, 52, 54],
   [1872, 126, 54, 54],
 ];
-const BLOSSOM: Slice = [1800, 85, 30, 77]; // pale flowering tree
 const FLOWER: Slice[] = [
   [1710, 92, 16, 16], // red
   [1764, 92, 16, 16], // yellow
@@ -212,20 +215,16 @@ const BOWL_TALL: Slice = [1838, 455, 52, 30];
 const METEOR: Slice = [1590, 22, 28, 30]; // pocked gray rock
 const PEAK: Slice = [930, 570, 80, 70]; // stone summit monument
 const PEBBLES: Slice = [180, 189, 36, 9];
-const CROWD = ['youngster_down_1', 'lass_down_1', 'schoolkid_f_down_1', 'pokefan_down_1', 'hiker_down_1'];
-
-let npcFrames: Map<string, AtlasFrame> | undefined;
 let propsReady = false;
 let propsLoading = false;
 
-// Floors are usually first baked while the atlases are still loading; decorate
+// Floors are usually first baked while the atlas is still loading; decorate
 // every cached floor when the fetch lands instead of rebuilding them.
 function ensureProps() {
   if (propsReady || propsLoading) return;
   propsLoading = true;
-  Promise.all([loadGracidea(), loadGracideaNpcs(), loadGracideaJson('npcs')])
-    .then(([, , frames]) => {
-      npcFrames = frames;
+  loadGracidea()
+    .then(() => {
       propsReady = true;
       floors.forEach((c, t) => decorate(t, c.getContext('2d')!));
     })
@@ -236,8 +235,7 @@ function decorate(theme: Theme, g: CanvasRenderingContext2D) {
   if (theme === 'grove') {
     // tree row hugging the top edge + scattered flowers
     for (let k = 0; k < 6; k++) {
-      const s = k === 5 ? BLOSSOM : TREE[k % 3];
-      put(g, s, 8 + k * 88 + hash(k * 7.1) * 10 - 5, -4, 1.5);
+      put(g, TREE[k % 3], 8 + k * 88 + hash(k * 7.1) * 10 - 5, -4, 1.5);
     }
     for (let k = 0; k < 6; k++) {
       put(g, FLOWER[k % FLOWER.length], 55 + k * 85 + hash(k * 11.3) * 16, 64 + hash(k * 5.9) * 30, 2);
@@ -269,39 +267,8 @@ function decorate(theme: Theme, g: CanvasRenderingContext2D) {
     // floating summits poking through the cloud banks
     put(g, PEAK, 2, -4, 1.35);
     put(g, DOME.white, 470, 4);
-    put(g, BLOSSOM, 255, -6, 1.4);
+    put(g, DOME.olive, 255, -8);
     put(g, PEAK, 430, 896, 0.9);
-  }
-  crowd(g);
-}
-
-// Spectator sprites along the top edge — their feet hide under the rim shadow.
-const npcCache = new Map<string, HTMLCanvasElement>();
-function crowd(g: CanvasRenderingContext2D) {
-  const img = gracideaNpcs();
-  if (!img || !npcFrames) return;
-  for (let k = 0; k < CROWD.length; k++) {
-    const name = CROWD[k];
-    let c = npcCache.get(name);
-    if (!c) {
-      const f = npcFrames.get(name);
-      if (!f) continue;
-      c = document.createElement('canvas');
-      c.width = f.rotated ? f.h : f.w;
-      c.height = f.rotated ? f.w : f.h;
-      const cg = c.getContext('2d')!;
-      cg.imageSmoothingEnabled = false;
-      if (f.rotated) {
-        cg.translate(0, c.height);
-        cg.rotate(-Math.PI / 2);
-      }
-      cg.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
-      npcCache.set(name, c);
-    }
-    g.save();
-    g.imageSmoothingEnabled = false;
-    g.drawImage(c, 96 + k * 90 + hash(k * 3.7) * 14 - 7, 4, c.width * 2, c.height * 2);
-    g.restore();
   }
 }
 
@@ -325,12 +292,13 @@ export function drawBackdrop(
   theme: Theme,
   t: number,
   pool: { nx: number; ny: number } | null = { nx: 0.78, ny: 0.2 },
+  bare = false,
 ) {
   const { x, y, w, h } = rect;
   ctx.save();
   rr(ctx, x, y, w, h, r);
   ctx.clip();
-  ctx.drawImage(floor(theme), x, y, w, h);
+  ctx.drawImage(floor(theme, bare), x, y, w, h);
   // dark seat under the wall so the rim sits on the floor, not floats
   ctx.strokeStyle = 'rgba(0,0,0,0.16)';
   ctx.lineWidth = 12;

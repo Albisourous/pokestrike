@@ -1,12 +1,14 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, cry, music } from './core/audio';
+import { unlockAudio, sfx, cry, music, toggleMute } from './core/audio';
 import { loadAll, loadItem, loadGracidea } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
+import type { SpeciesDef } from './game/data';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho } from './game/meta';
 import {
   W,
   H,
@@ -26,6 +28,10 @@ import {
   SHARE_BTN,
   FREE_BTN,
   DAILY_BTN,
+  HELP_BTN,
+  MUTE_BTN,
+  drawHelp,
+  helpScrollMax,
   inRect,
   font,
 } from './game/screens';
@@ -52,15 +58,22 @@ const dailySeed = () => {
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
 let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
+// the run's draft pool — roster plus captured-dex species not already in it
+let draftPool: SpeciesDef[] = [];
 let stage = makeStage(randSeed());
 // the run's roll source — Math.random for free play, seeded for the daily;
 // draft deals and the Battle both draw from it so a daily is fully seeded
 let runRng: () => number = Math.random;
+let helpOpen = false;
+let helpScroll = 0;
+let helpDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
 let shareText = '';
 let t = 0;
+// gyms already banked this battle — the delta feeds recordGymWin
+let lastGyms = 0;
 // box strip scroll: offset in px + an in-progress drag (tap = drag that never moved)
 let boxScroll = 0;
 let boxDrag: { x0: number; s0: number; moved: boolean } | null = null;
@@ -106,7 +119,7 @@ function buildShare(b: Battle, won: boolean) {
   const cleared = won ? TOTAL_STAGES : b.waveIndex;
   const waves =
     '🟩'.repeat(cleared) + (won ? '' : '🟥') + '⬛'.repeat(TOTAL_STAGES - cleared - (won ? 0 : 1));
-  const team = draft.picked.map((i) => TYPE_SQ[ROSTER[i].type]).join('');
+  const team = draft.picked.map((i) => TYPE_SQ[draftPool[i].type]).join('');
   return { waves, team, copied: false };
 }
 
@@ -121,7 +134,7 @@ function draftOffers(): number[] {
     .filter((i) => !draft.picked.includes(i))
     .slice(0, 3);
   if (offers.length < 3) {
-    const extra = ROSTER.map((_, i) => i).filter(
+    const extra = draftPool.map((_, i) => i).filter(
       (i) => !draft.picked.includes(i) && !offers.includes(i),
     );
     for (let i = extra.length - 1; i > 0; i--) {
@@ -132,6 +145,24 @@ function draftOffers(): number[] {
   }
   offerCache = offers;
   return offers;
+}
+
+// A run's draft pool is the roster plus everything the dex has caught that
+// isn't already in it — catching mons is how new faces join future drafts.
+// draftOrder only deals roster indices, so the extras get shuffled into the
+// deal here or they'd never be offered.
+function startDraft() {
+  draftPool = [
+    ...ROSTER,
+    ...dexIds()
+      .map(speciesById)
+      .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id)),
+  ];
+  draft = { order: draftOrder(runRng), picked: [] };
+  for (let i = ROSTER.length; i < draftPool.length; i++) {
+    draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
+  }
+  offerCache = null;
 }
 
 // navigator.clipboard rejects on iOS Safari even in a gesture — the
@@ -184,11 +215,26 @@ canvas.addEventListener('pointerdown', (e) => {
   sceneMusic();
   const p = toLogical(e);
   if (scene === 'title') {
+    if (helpOpen) {
+      // press starts a potential scroll-drag; a tap closes on release
+      helpDrag = { y0: p.y, s0: helpScroll, moved: false };
+      return;
+    }
+    if (inRect(p.x, p.y, HELP_BTN)) {
+      sfx('ui');
+      helpOpen = true;
+      helpScroll = 0;
+      return;
+    }
+    if (inRect(p.x, p.y, MUTE_BTN)) {
+      toggleMute();
+      sfx('ui'); // plays only when unmuting
+      return;
+    }
     if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
       runRng = Math.random;
-      draft = { order: draftOrder(runRng), picked: [] };
-      offerCache = null;
+      startDraft();
       stage = makeStage(randSeed());
       scene = 'draft';
       sceneMusic();
@@ -196,8 +242,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       const seed = dailySeed();
       runRng = mulberry32(seed);
-      draft = { order: draftOrder(runRng), picked: [] };
-      offerCache = null;
+      startDraft();
       stage = makeStage(seed, 'Daily Climb');
       scene = 'draft';
       sceneMusic();
@@ -208,11 +253,16 @@ canvas.addEventListener('pointerdown', (e) => {
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       sfx('ui');
-      cry(ROSTER[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
+      cry(draftPool[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
       draft.picked.push(offers[i]);
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(arenaRect(), draft.picked.map((i) => ROSTER[i]), stage, runRng);
+        battle = new Battle(arenaRect(), draft.picked.map((i) => draftPool[i]), stage, runRng);
+        battle.rank = rank();
+        // the last losing team returns as a rival wave — battle eats it
+        const echo = echoIds()?.map(speciesById).filter((d): d is SpeciesDef => !!d);
+        battle.echo = echo?.length ? echo : null;
+        lastGyms = 0;
         // ?dev exposes the live battle for poking around during playtests
         if (new URLSearchParams(location.search).has('dev'))
           (window as unknown as { __battle: Battle }).__battle = battle;
@@ -271,6 +321,11 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   const p = toLogical(e);
+  if (helpDrag) {
+    if (Math.abs(p.y - helpDrag.y0) > 6) helpDrag.moved = true;
+    helpScroll = Math.min(Math.max(helpDrag.s0 + helpDrag.y0 - p.y, 0), helpScrollMax());
+    return;
+  }
   if (boxDrag) {
     if (Math.abs(p.x - boxDrag.x0) > 6) boxDrag.moved = true;
     if (battle)
@@ -284,6 +339,12 @@ canvas.addEventListener('pointermove', (e) => {
 });
 
 canvas.addEventListener('pointerup', (e) => {
+  if (helpDrag) {
+    const { moved } = helpDrag;
+    helpDrag = null;
+    if (!moved) helpOpen = false;
+    return;
+  }
   if (boxDrag) {
     const { moved } = boxDrag;
     boxDrag = null;
@@ -304,6 +365,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (scene === 'battle') battle?.pointerUp();
 });
 canvas.addEventListener('pointercancel', () => {
+  helpDrag = null;
   boxDrag = null;
   if (scene === 'battle') battle?.pointerUp();
 });
@@ -312,6 +374,11 @@ canvas.addEventListener('pointercancel', () => {
 canvas.addEventListener(
   'wheel',
   (e) => {
+    if (scene === 'title' && helpOpen) {
+      e.preventDefault();
+      helpScroll = Math.min(Math.max(helpScroll + e.deltaY, 0), helpScrollMax());
+      return;
+    }
     if (scene !== 'battle' || battle?.phase !== 'reward') return;
     const max = boxScrollMax(battle.box.length);
     if (max <= 0) return;
@@ -338,6 +405,15 @@ function update(dt: number) {
   if (scene === 'battle' && battle) {
     battle.update(dt);
     if (battle.phase !== 'reward') boxScroll = 0;
+    // metagame polls — same spot the battle→scene transitions already live
+    while (battle.gymsBeaten > lastGyms) {
+      recordGymWin();
+      lastGyms++;
+    }
+    if (battle.echoCleared) {
+      clearEcho();
+      battle.echoCleared = false; // consumed; battle only raises the flag
+    }
     if (battle.phase === 'won' || battle.phase === 'lost') {
       result = {
         won: battle.phase === 'won',
@@ -347,6 +423,10 @@ function update(dt: number) {
         badges: battle.runBadges(battle.phase === 'won'),
       };
       share = buildShare(battle, result.won);
+      // catches join the dex either way; a loss leaves the team behind as
+      // the next run's rival "echo"
+      recordCapture(battle.box.map((b) => b.id));
+      if (!result.won) saveEcho(battle.players.map((p) => p.def.id));
       if (!result.won) {
         resultExtra = `reached stage ${battle.waveIndex + 1} of ${TOTAL_STAGES}`;
       }
@@ -383,13 +463,14 @@ function render() {
       break;
     case 'title':
       drawTitle(ctx);
+      if (helpOpen) drawHelp(ctx, helpScroll);
       break;
     case 'draft': {
-      const offers = draftOffers().map((i) => ROSTER[i]);
+      const offers = draftOffers().map((i) => draftPool[i]);
       drawDraft(
         ctx,
         offers,
-        draft.picked.map((i) => ROSTER[i]),
+        draft.picked.map((i) => draftPool[i]),
         stage.name,
         t,
       );
@@ -439,6 +520,7 @@ Promise.all([
   loadAll(ALL_SPRITE_IDS),
   loadGracidea(),
   loadItem('poke-ball'),
+  loadItem('ui/pokemon-logo'),
   loadItem('oran-berry'),
   loadItem('protein'),
   loadItem('elixir'),

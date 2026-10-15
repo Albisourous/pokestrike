@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, itemSprite } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, hazardsFor } from './data';
+import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, hazardsFor, rivalWave } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
@@ -107,7 +107,7 @@ interface Wave {
 }
 // A themed hazard zone on the court — MS damage-wall/gimmick analog.
 interface Hazard {
-  kind: 'lava' | 'grass' | 'gust' | 'spikes';
+  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static';
   x: number;
   y: number;
   r: number; // px radius of the zone
@@ -199,7 +199,7 @@ export class Battle {
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private shotCombo = 0; // pass-through links chained this shot
   private kosThisShot = 0; // enemies downed by the current shot
-  private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false };
+  private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false, hx: 0, hy: 0 };
   private texts: FloatText[] = [];
   private orbs: Orb[] = [];
   private waves: Wave[] = [];
@@ -214,6 +214,13 @@ export class Battle {
   private waveSpecial: string | null = null; // banner override (invade)
   private gustSounded = false; // wind whoosh once per entry
   private shotPhys = 1; // protein pickup: contact damage this shot
+  // engine state — per-shot keyword bookkeeping
+  private volleys = 0; // ally bumps this shot (volleyNth counting)
+  private shotVolleyBoost = 0; // volleyBoost accumulated this shot
+  private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
+  private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
+  private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
+  private inRival = false; // this wave is the rival echo fight
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods
@@ -241,6 +248,16 @@ export class Battle {
   bossSlayer = 0; // power bracer: bonus damage vs bosses
   wallRamp = 0; // grip claw: contact damage per wall bounce this shot
   wpBonus = 0; // weakness policy: extra weak-point damage
+  // keyword relics — PINCH (two contacts in one window) / VOLLEY (ally bumps)
+  pinchPip = 0; // pips granted to the launcher on each pinch
+  pinchMult = 0; // extra contact damage on pinch hits
+  volleyNth = 0; // every Nth volley: all cooldowns -1
+  volleyBoost = 0; // per-volley contact bonus for the rest of the shot
+  // metagame — set by main.ts from the persistent record
+  rank = 0; // trainer rank: shifts invade odds + relic pool
+  echo: SpeciesDef[] | null = null; // last run's fallen team → rival wave
+  echoCleared = false; // set when the rival wave was fought and won
+  gymsBeaten = 0; // gym waves cleared this run — feeds trainer rank
   box: SpeciesDef[] = []; // captured mons — swap in between stages
   boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
@@ -332,10 +349,18 @@ export class Battle {
     this.delays = [];
     this.waves = [];
     this.dashes = [];
-    // a legendary can crash any non-boss wave past the first — MS invades
+    // a legendary can crash any non-boss wave past the first — MS invades;
+    // a dead run's team can return as a rival fight — fail-forward echo
     let spawns = this.stage.waves[i];
     this.waveSpecial = null;
-    if (i > 0 && !spawns.some((s) => s.boss) && this.rng() < 0.09) {
+    this.waveHadGym = spawns.some((s) => s.boss);
+    this.inRival = false;
+    if (this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
+      spawns = rivalWave(this.echo, this.rng);
+      this.waveSpecial = 'RIVAL BATTLE!';
+      this.inRival = true;
+      sfx('invade');
+    } else if (i > 0 && !this.waveHadGym && this.rng() < 0.09 + this.rank * 0.03) {
       const inv = INVADERS[Math.floor(this.rng() * INVADERS.length)];
       spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
       this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
@@ -443,6 +468,10 @@ export class Battle {
     this.kosThisShot = 0;
     u.wallN = 0;
     this.shotPhys = 1;
+    this.volleys = 0;
+    this.shotVolleyBoost = 0;
+    this.lastContact = { t: -9, id: -1 };
+    this.shotHitN.clear();
     this.gustSounded = false;
     this.stopTimer = 0;
     this.phase = 'shot';
@@ -783,7 +812,29 @@ export class Battle {
       u.vy = -u.vy * WALL_REST;
       bounced = true;
     }
-    if (bounced && fast) u.wallN++;
+    if (bounced && fast) {
+      u.wallN++;
+      if (this.pinch(-2) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
+    }
+  }
+
+  // PINCH: two distinct contacts (enemy, ally, wall) inside one 0.35s
+  // window — the wedge shot is the engine's fuel. Records every contact;
+  // callers gate the payoff on static fields so silence absorbs chains.
+  private pinch(id: number) {
+    const pinched = this.time - this.lastContact.t <= 0.35 && this.lastContact.id !== id;
+    this.lastContact = { t: this.time, id };
+    return pinched;
+  }
+
+  private onPinch(x: number, y: number) {
+    this.texts.push({ x, y: y - 30, text: 'PINCH!', t: 0.8, color: '#9df0ff', big: true });
+    for (let k = 0; k < this.pinchPip; k++) this.chargeUp(this.active);
+  }
+
+  // Static fields silence keyword triggers and bump supers inside them.
+  private inStatic(x: number, y: number) {
+    return this.hazards.some((hz) => hz.kind === 'static' && dist({ x, y }, hz) < hz.r);
   }
 
   // Field pickups — the MS heart/sword/hourglass: heal, damage, cooldown.
@@ -877,6 +928,11 @@ export class Battle {
       this.scar(e.x, e.y, e.boss ? 20 : 12); // a KO scorches the court
       // every KO feeds the team's supers — kills are the fast lane to READY
       for (const p of this.players) this.chargeUp(p);
+      // fatigue curse: farming a cursed KO costs every super a pip back
+      if (e.def.cursed) {
+        for (const p of this.players) p.cd = Math.min(p.cd + 1, p.cdMax);
+        this.texts.push({ x: e.x, y: e.y - e.r - 60, text: 'CURSED!', t: 1.1, color: '#a868c8', big: true });
+      }
       // multi-KO callouts — chaining kills in one shot should feel huge
       this.kosThisShot++;
       this.totalKos++;
@@ -929,6 +985,18 @@ export class Battle {
     const last = e.lastHit.get(shooter.uid) ?? -1;
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
+    const pinched = this.pinch(e.uid);
+    // taunt toll-booth: while a magnet mon lives, contact damage routes
+    // through it — pierce still passes, it just can't hurt anything else
+    const taunter = this.enemies.find((x) => !x.dead && x.def.taunt);
+    if (taunter && e !== taunter) {
+      this.texts.push({ x: e.x, y: e.y - e.r - 8, text: 'BLOCKED', t: 0.7, color: '#8a90a8', big: false });
+      return;
+    }
+    // engine cap: repeat hits on the same target decay — variety chains
+    const hitN = this.shotHitN.get(e.uid) ?? 0;
+    this.shotHitN.set(e.uid, hitN + 1);
+    if (pinched && !this.inStatic(shooter.x, shooter.y)) this.onPinch(e.x, e.y);
     const mult = effectiveness(shooter.def.type, e.def.type);
     // weak point: striking the marked face triples contact damage. The
     // mark sits on the side facing the incoming ball, so the approach
@@ -944,6 +1012,9 @@ export class Battle {
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult) *
         shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
         (1 + this.wallRamp * shooter.wallN) *
+        (1 + this.shotVolleyBoost) *
+        (pinched ? 1 + this.pinchMult : 1) *
+        Math.pow(0.9, hitN) *
         (weak ? 3 + this.wpBonus : 1),
     );
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
@@ -1012,6 +1083,18 @@ export class Battle {
   private bumpAlly(p: Unit, u: Unit) {
     if (this.time - p.lastBump < 0.3) return; // once per pass, not per frame
     p.lastBump = this.time;
+    const silenced = this.inStatic(u.x, u.y);
+    if (this.pinch(p.uid) && !silenced) this.onPinch(p.x, p.y);
+    // VOLLEY: the bump itself is the resource — static fields silence it
+    if (!silenced) {
+      this.volleys++;
+      this.shotVolleyBoost += this.volleyBoost;
+      if (this.volleyNth > 0 && this.volleys % this.volleyNth === 0) {
+        for (const pl of this.players) this.chargeUp(pl);
+        this.texts.push({ x: u.x, y: u.y - u.r - 30, text: 'VOLLEY!', t: 1, color: '#f8d030', big: true });
+        sfx('ready');
+      }
+    }
     this.shotCombo++;
     this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
     const n = this.shotCombo;
@@ -1053,6 +1136,7 @@ export class Battle {
       );
     // passive talent: a small role effect on EVERY pass, on or off cooldown
     this.allyPassive(p, near, bumpDmg);
+    if (silenced) return; // static field: the link sparks but the super can't fire
     if (p.cd > 0) {
       // super still recharging — link sparks but no attack
       return;
@@ -1255,6 +1339,8 @@ export class Battle {
   }
 
   private waveCleared() {
+    if (this.inRival) this.echoCleared = true; // the echo is beaten — reclaim it
+    if (this.waveHadGym) this.gymsBeaten++;
     // last-kill slow-mo — the kill shot gets a beat to land
     this.hitStop = Math.max(this.hitStop, 0.35);
     if (this.waveIndex + 1 >= this.waveCount && this.depth >= FINAL_DEPTH) {
@@ -1387,7 +1473,7 @@ export class Battle {
   private enterReward() {
     this.boxSel = -1;
     // elite stages pay out uncommon-or-better relics — the risk has a price
-    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 2 : 3);
+    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 2 : 3, this.rank);
     this.eliteWave = false;
     this.lastRecruit = this.rollRecruit();
     if (this.lastRecruit) {
@@ -1886,6 +1972,23 @@ export class Battle {
         ctx.lineTo(cx - 6 * d, hz.y + 8);
         ctx.stroke();
       }
+    } else if (hz.kind === 'static') {
+      // silence field: a crackling violet pool — keywords can't fire inside
+      const pulse = 0.3 + Math.sin(this.time * 3.2) * 0.08;
+      ctx.globalAlpha = pulse + 0.2;
+      ctx.fillStyle = '#4a2a78';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.6, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = '#c8a0ff';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        const a = this.time * 2 + i * 2.1;
+        ctx.beginPath();
+        ctx.arc(hz.x + Math.cos(a) * hz.r * 0.4, hz.y + Math.sin(a) * hz.r * 0.3, 7, 0, TAU);
+        ctx.stroke();
+      }
     } else {
       ctx.globalAlpha = 0.45;
       ctx.fillStyle = '#241f30';
@@ -1909,8 +2012,49 @@ export class Battle {
     ctx.restore();
   }
 
+  // StS intent made spatial: the turn before a boss fires, ghost its
+  // signature so the next shot can reposition out of the line.
+  private drawTelegraph(ctx: CanvasRenderingContext2D, e: Unit) {
+    ctx.save();
+    ctx.globalAlpha = 0.28 + Math.sin(this.time * 6) * 0.08;
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.setLineDash([7, 6]);
+    const targets = this.players
+      .filter((p) => !p.dead)
+      .sort((a, b) => dist(e, a) - dist(e, b));
+    switch (e.def.id) {
+      case 149: // hyper beam — the burning line to the nearest mon
+        if (targets[0]) {
+          ctx.lineWidth = 12;
+          ctx.beginPath();
+          ctx.moveTo(e.x, e.y);
+          ctx.lineTo(targets[0].x, targets[0].y);
+          ctx.stroke();
+        }
+        break;
+      case 150: // hunting orbs — marks on the two nearest mons
+        ctx.lineWidth = 3;
+        for (const p of targets.slice(0, 2)) {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r + 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        break;
+      default: { // ring/blast attacks — show the radius they'll sweep
+        ctx.lineWidth = 3;
+        const R = e.def.id === 130 ? 300 : e.def.id === 6 ? 200 : 170;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, R, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
+    // boss telegraph: one turn out, the signature's footprint ghosts in
+    if (u.side === 'enemy' && u.boss && u.timer <= 1) this.drawTelegraph(ctx, u);
     // soft shadow grounds the sprite on the court
     ctx.fillStyle = 'rgba(8,10,20,0.3)';
     ctx.beginPath();
@@ -1945,14 +2089,23 @@ export class Battle {
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
 
     if (u.side === 'enemy') {
-      // attack countdown — bare pixel digit, red when it's about to fire
+      // attack countdown — ★ marks a signature attack, red when it fires next
       ctx.font = font(10);
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      ctx.strokeText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
+      const tag = u.boss ? `★${u.timer}` : `${u.timer}`;
+      ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
-      ctx.fillText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
+      ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
+      // keyword flags — the counter-mechanics read at a glance
+      const kw = u.def.taunt ? 'MAGNET' : u.def.cursed ? 'CURSE' : '';
+      if (kw) {
+        ctx.font = font(8);
+        ctx.strokeText(kw, u.x, u.y + u.r + 14);
+        ctx.fillStyle = u.def.taunt ? '#ffd84d' : '#a868c8';
+        ctx.fillText(kw, u.x, u.y + u.r + 14);
+      }
     } else {
       // charge meter: a row of pips under the hp bar — dark pips are
       // charge still owed, type-colored are earned, all-gold = READY
@@ -1966,7 +2119,7 @@ export class Battle {
         // ready: the move's name sits overhead — this is the thing to hit
         const label = MOVE_NAME[u.def.type];
         const ly = u.y + u.r + 30;
-        ctx.font = font(7);
+        ctx.font = font(8);
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
@@ -2027,6 +2180,7 @@ export class Battle {
       const dots: Vec[] = [];
       let hit: Unit | null = null;
       let bounced = false;
+      const cache = this.aimCache;
       sim: for (let i = 0; i < 60; i++) {
         if (bounced) break;
         const step = 1 / 30;
@@ -2044,10 +2198,12 @@ export class Battle {
           if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) {
             // pierce sails through — note the first catch, keep tracing
             if (u.def.pierce) {
-              hit = hit ?? e;
+              if (!hit) { hit = e; cache.hx = sx; cache.hy = sy; }
               continue;
             }
             hit = e;
+            cache.hx = sx;
+            cache.hy = sy;
             break sim;
           }
         // allies aren't checked — the ball passes through them, and figuring
@@ -2082,6 +2238,36 @@ export class Battle {
         ctx.closePath();
         ctx.stroke();
         ctx.globalAlpha = 1;
+      }
+      // predicted contact damage over the first catch — the shot is the
+      // puzzle, so the answer is honest: type mult + weak-point window +
+      // taunt block, no crits
+      if (hit && !hit.dead) {
+        const taunted = this.enemies.some((x) => !x.dead && x.def.taunt) && !hit.def.taunt;
+        let label: string;
+        let lc = '#ffffff';
+        if (taunted) {
+          label = 'BLOCKED';
+          lc = '#8a90a8';
+        } else {
+          const mult = effectiveness(u.def.type, hit.def.type);
+          const toE = norm({ x: hit.x - this.aimCache.hx, y: hit.y - this.aimCache.hy });
+          const weak = hit.wpA >= 0 && toE.x * Math.cos(hit.wpA) + toE.y * Math.sin(hit.wpA) < -0.72;
+          const est = Math.max(1, Math.round(
+            physDamage(u.def.stats.atk, hit.def.stats.def, mult) *
+              u.pow * this.physMult * this.dmgMult *
+              (weak ? 3 + this.wpBonus : 1) * (hit.boss ? 1 + this.bossSlayer : 1),
+          ));
+          label = est >= hit.hp ? `≈${est} KO` : `≈${est}`;
+          lc = est >= hit.hp ? '#ffd84d' : weak ? '#f8d030' : '#ffffff';
+        }
+        ctx.font = font(9);
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(label, hit.x, hit.y - hit.r - 20);
+        ctx.fillStyle = lc;
+        ctx.fillText(label, hit.x, hit.y - hit.r - 20);
       }
     }
 

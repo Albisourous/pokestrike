@@ -1,10 +1,12 @@
 import { itemSprite, drawMon, gracidea } from '../core/assets';
+import { isMuted } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf } from './stats';
+import { dexIds, rankName } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -33,6 +35,8 @@ export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
 export const DAILY_BTN = { x: W / 2 - 140, y: 800, w: 280, h: 64 };
+export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
+export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -245,31 +249,6 @@ function drawRingMons(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx:
   });
 }
 
-// Yellow letters arched over the ball, navy outline — the classic
-// pocket-monster logo curve, one glyph at a time along the arc.
-function logoArc(ctx: CanvasRenderingContext2D, text: string, cx: number, cy: number, r: number, size: number) {
-  ctx.save();
-  ctx.font = font(size);
-  ctx.lineJoin = 'round';
-  const chars = [...text];
-  const ws = chars.map((c) => ctx.measureText(c).width);
-  let a = -Math.PI / 2 - ws.reduce((acc, w) => acc + w, 0) / r / 2;
-  chars.forEach((c, i) => {
-    const ca = a + ws[i] / 2 / r;
-    ctx.save();
-    ctx.translate(cx + Math.cos(ca) * r, cy + Math.sin(ca) * r);
-    ctx.rotate(ca + Math.PI / 2);
-    ctx.lineWidth = size * 0.15;
-    ctx.strokeStyle = '#16244d';
-    ctx.strokeText(c, -ws[i] / 2, size * 0.34);
-    ctx.fillStyle = '#ffcb05';
-    ctx.fillText(c, -ws[i] / 2, size * 0.34);
-    ctx.restore();
-    a += ws[i] / r;
-  });
-  ctx.restore();
-}
-
 // Big leaning wordmark: gold gradient fill, navy outline, hard drop shadow.
 function logoBig(ctx: CanvasRenderingContext2D, text: string, cx: number, baseY: number, size: number, maxW: number) {
   ctx.save();
@@ -326,7 +305,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
     ctx.drawImage(ball, cx - 122, cy - 122, 244, 244);
     ctx.restore();
   }
-  logoArc(ctx, 'POKÉ', cx, cy - 8, 132, 52);
+  logoArc(ctx, 'POKÉ', cx, cy + 100, 190, 86);
   logoBig(ctx, 'STRIKE', cx, cy + 148, 86, 440);
 
   // stadium shadow at the edges keeps the eye on the crest
@@ -338,6 +317,56 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
   button(ctx, DAILY_BTN, 'DAILY CLIMB', true);
+
+  // ? badge, top corner — the how-to-play overlay
+  ctx.beginPath();
+  ctx.arc(HELP_BTN.x + HELP_BTN.w / 2, HELP_BTN.y + HELP_BTN.h / 2, 20, 0, Math.PI * 2);
+  ctx.fillStyle = '#12152b';
+  ctx.fill();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = font(16);
+  ctx.fillStyle = PARCH;
+  ctx.fillText('?', HELP_BTN.x + HELP_BTN.w / 2, HELP_BTN.y + HELP_BTN.h / 2 + 6);
+
+  // mute badge, opposite corner — speaker glyph, slashed when off
+  const mcx = MUTE_BTN.x + MUTE_BTN.w / 2, mcy = MUTE_BTN.y + MUTE_BTN.h / 2;
+  ctx.beginPath();
+  ctx.arc(mcx, mcy, 20, 0, Math.PI * 2);
+  ctx.fillStyle = '#12152b';
+  ctx.fill();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = PARCH;
+  ctx.beginPath();
+  ctx.moveTo(mcx - 8, mcy - 3);
+  ctx.lineTo(mcx - 3, mcy - 3);
+  ctx.lineTo(mcx + 2, mcy - 8);
+  ctx.lineTo(mcx + 2, mcy + 8);
+  ctx.lineTo(mcx - 3, mcy + 3);
+  ctx.lineTo(mcx - 8, mcy + 3);
+  ctx.closePath();
+  ctx.fill();
+  if (isMuted()) {
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(mcx - 4, mcy - 7);
+    ctx.lineTo(mcx + 9, mcy + 7);
+    ctx.moveTo(mcx + 9, mcy - 7);
+    ctx.lineTo(mcx - 4, mcy + 7);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = PARCH;
+    ctx.lineWidth = 2;
+    for (const rr of [6, 10]) {
+      ctx.beginPath();
+      ctx.arc(mcx + 2, mcy, rr, -0.9, 0.9);
+      ctx.stroke();
+    }
+  }
   // the seed in plaintext — players can tell which day's climb they're on
   const now = new Date();
   ctx.font = font(8);
@@ -347,6 +376,292 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
     W / 2,
     DAILY_BTN.y + DAILY_BTN.h + 22,
   );
+  ctx.fillText(`RANK ${rankName()} · DEX ${dexIds().length}`, W / 2, DAILY_BTN.y + DAILY_BTN.h + 36);
+}
+
+// --- help overlay: scrollable sections, each a mini diagram + a caption ---
+
+function helpArrow(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, color: string, dash: number[] = []) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash(dash);
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x1 - Math.cos(a - 0.45) * 10, y1 - Math.sin(a - 0.45) * 10);
+  ctx.lineTo(x1 - Math.cos(a + 0.45) * 10, y1 - Math.sin(a + 0.45) * 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function demoAim(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const mx = x + w * 0.3, my = y + h * 0.68;
+  drawMon(ctx, 7, mx, my, 46);
+  // pull-back drag (gold) and the resulting flight (dotted)
+  helpArrow(ctx, mx - 6, my + 26, mx - w * 0.2, my + h * 0.28, GOLD);
+  helpArrow(ctx, mx + 8, my - 16, x + w * 0.78, y + h * 0.3, '#e8ecf8', [3, 7]);
+  ctx.strokeStyle = '#ffd84d';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x + w * 0.78, y + h * 0.3, 12, 0, Math.PI * 2);
+  ctx.stroke();
+}
+
+function demoBump(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const ax = x + w * 0.16, ay = y + h * 0.72;
+  const bx = x + w * 0.48, by = y + h * 0.3;
+  const ex = x + w * 0.82, ey = y + h * 0.62;
+  helpArrow(ctx, ax + 16, ay - 18, bx - 14, by + 18, '#e8ecf8', [3, 6]);
+  helpArrow(ctx, bx + 16, by + 10, ex - 18, ey - 8, '#ffd84d', [3, 6]);
+  drawMon(ctx, 25, ax, ay, 42); // you
+  drawMon(ctx, 7, bx, by, 42); // ally — the bumper
+  drawMon(ctx, 19, ex, ey, 44); // enemy
+  // super burst on the enemy
+  ctx.strokeStyle = '#ffd84d';
+  ctx.lineWidth = 2;
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * Math.PI * 2 + 0.3;
+    ctx.beginPath();
+    ctx.moveTo(ex + Math.cos(a) * 26, ey + Math.sin(a) * 26);
+    ctx.lineTo(ex + Math.cos(a) * 34, ey + Math.sin(a) * 34);
+    ctx.stroke();
+  }
+}
+
+function demoCharge(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const mx = x + w / 2, my = y + h * 0.42;
+  drawMon(ctx, 4, mx, my, 46);
+  // hp bar + pip row, same language as the battle HUD
+  ctx.fillStyle = '#000a';
+  ctx.fillRect(mx - 26, my + 26, 52, 4);
+  ctx.fillStyle = '#6fdc6f';
+  ctx.fillRect(mx - 26, my + 26, 52 * 0.7, 4);
+  for (let k = 0; k < 4; k++) {
+    ctx.fillStyle = k < 3 ? '#ffd84d' : '#2a3560';
+    ctx.fillRect(mx - 26 + k * 14, my + 36, 10, 5);
+  }
+}
+
+function demoCountdown(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const spots: [number, number, string, string][] = [
+    [0.3, 0.55, '2', '#ffffff'],
+    [0.7, 0.5, '1', '#ff6b6b'],
+  ];
+  for (const [fx, fy, n, c] of spots) {
+    const mx = x + w * fx, my = y + h * fy;
+    drawMon(ctx, n === '1' ? 41 : 43, mx, my, 44);
+    ctx.font = font(14);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0a0d18';
+    ctx.fillText(n, mx + 1, my - 30 + 1);
+    ctx.fillStyle = c;
+    ctx.fillText(n, mx, my - 30);
+  }
+}
+
+function demoWeak(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const mx = x + w * 0.42, my = y + h * 0.55;
+  drawMon(ctx, 149, mx, my, 60);
+  // the gold diamond rides the body — hit that face for x3
+  const wx = mx + 20, wy = my - 16, s = 8;
+  ctx.fillStyle = '#ffd84d';
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(wx, wy - s);
+  ctx.lineTo(wx + s, wy);
+  ctx.lineTo(wx, wy + s);
+  ctx.lineTo(wx - s, wy);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = font(10);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('×3', x + w * 0.66, my + 4);
+}
+
+function demoPickups(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const kinds: [string, string][] = [
+    ['oran-berry', 'HEAL'],
+    ['protein', 'ATK UP'],
+    ['elixir', 'CD -1'],
+  ];
+  ctx.font = font(8);
+  ctx.textAlign = 'center';
+  kinds.forEach(([item, lab], i) => {
+    const ix = x + w * (0.22 + i * 0.28), iy = y + h * 0.42;
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#fff8dc';
+    ctx.beginPath();
+    ctx.ellipse(ix, iy + 18, 13, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    const img = itemSprite(item);
+    if (img) ctx.drawImage(img, ix - 15, iy - 15, 30, 30);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(lab, ix, iy + 34);
+  });
+}
+
+function demoCatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const mx = x + w * 0.3, my = y + h * 0.52;
+  drawMon(ctx, 16, mx, my, 46);
+  ctx.fillStyle = '#000a';
+  ctx.fillRect(mx - 24, my + 26, 48, 4);
+  ctx.fillStyle = '#ff6b6b';
+  ctx.fillRect(mx - 24, my + 26, 48 * 0.2, 4);
+  const ball = itemSprite('poke-ball');
+  const bx = x + w * 0.68, by = y + h * 0.5;
+  if (ball) ctx.drawImage(ball, bx - 16, by - 16, 32, 32);
+  helpArrow(ctx, mx + 30, my, bx - 22, by, '#e8ecf8', [3, 6]);
+}
+
+function demoClimb(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const n = 9, gap = (w * 0.7) / (n - 1), x0 = x + w * 0.15, my = y + h * 0.5;
+  for (let i = 0; i < n; i++) {
+    const px = x0 + i * gap;
+    const gym = (i + 1) % 3 === 0;
+    ctx.fillStyle = i < 3 ? '#ffd84d' : '#3a4066';
+    if (gym) {
+      ctx.beginPath();
+      ctx.moveTo(px, my - 8);
+      ctx.lineTo(px + 7, my);
+      ctx.lineTo(px, my + 8);
+      ctx.lineTo(px - 7, my);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(px, my, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+interface HelpSection {
+  title: string;
+  lines: string[];
+  demo: (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void;
+}
+
+const HELP_SECTIONS: HelpSection[] = [
+  {
+    title: 'AIM & POWER',
+    lines: ['drag back from your mon — the dotted line is the flight path', 'release inside the gold zone for a full-power shot'],
+    demo: demoAim,
+  },
+  {
+    title: 'BUMP COMBOS',
+    lines: ['bounce off a teammate mid-flight to trigger their super', 'every link in the chain adds damage — route through allies'],
+    demo: demoBump,
+  },
+  {
+    title: 'CHARGE PIPS',
+    lines: ['hits and KOs fill the gold pips under each mon', 'all-gold pips means READY — the move name pulses'],
+    demo: demoCharge,
+  },
+  {
+    title: 'ENEMY COUNTDOWN',
+    lines: ['enemies strike when the number over them hits zero', 'melee mons attack sooner — thin them out first'],
+    demo: demoCountdown,
+  },
+  {
+    title: 'WEAK POINTS',
+    lines: ['elites and bosses carry a gold diamond on one face', 'hit the marked face for triple contact damage'],
+    demo: demoWeak,
+  },
+  {
+    title: 'FIELD PICKUPS',
+    lines: ['roll the ball through them — they collect on touch', 'one spawns each wave, two when something big lurks'],
+    demo: demoPickups,
+  },
+  {
+    title: 'CATCHING',
+    lines: ['beaten foes sometimes drop a ball — catches go to your box', 'a duplicate evolves or feeds the copy you already own'],
+    demo: demoCatch,
+  },
+  {
+    title: 'THE CLIMB',
+    lines: ['9 stages, a gym leader every 3rd — diamonds on the map', 'a relic after every clear; rolled stages offer a riskier elite road'],
+    demo: demoClimb,
+  },
+];
+
+const HELP_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
+const HELP_HEAD = 64; // title band inside the panel
+const HELP_FOOT = 40; // footer hint band
+const HELP_SECTION_H = 186; // heading + 104 demo box + 2 caption lines + gap
+const HELP_CONTENT_H = HELP_SECTIONS.length * HELP_SECTION_H;
+
+export function helpScrollMax() {
+  return Math.max(0, HELP_CONTENT_H - (HELP_PANEL.h - HELP_HEAD - HELP_FOOT));
+}
+
+export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
+  const r = HELP_PANEL;
+  ctx.fillStyle = 'rgba(6,10,22,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 14);
+
+  ctx.textAlign = 'center';
+  ctx.font = font(17);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('HOW TO PLAY', r.x + r.w / 2, r.y + 42);
+
+  // scrollable body
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r.x + 8, r.y + HELP_HEAD, r.w - 16, r.h - HELP_HEAD - HELP_FOOT);
+  ctx.clip();
+  HELP_SECTIONS.forEach((s, i) => {
+    const sy = r.y + HELP_HEAD + 10 + i * HELP_SECTION_H - scroll;
+    const dx = r.x + 22, dw = r.w - 44;
+    ctx.font = font(11);
+    ctx.fillStyle = GOLD;
+    ctx.fillText(s.title, r.x + r.w / 2, sy + 12);
+
+    const dy = sy + 22;
+    roundRect(ctx, dx, dy, dw, 104, 10);
+    ctx.fillStyle = '#0d1126';
+    ctx.fill();
+    ctx.save();
+    roundRect(ctx, dx, dy, dw, 104, 10);
+    ctx.clip();
+    s.demo(ctx, dx, dy, dw, 104);
+    ctx.restore();
+
+    ctx.font = font(9);
+    ctx.fillStyle = PARCH;
+    s.lines.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, dy + 128 + li * 15));
+  });
+  ctx.restore();
+
+  // scroll track — a thumb hints there's more when the list is long
+  if (helpScrollMax() > 0) {
+    const trackY = r.y + HELP_HEAD, trackH = r.h - HELP_HEAD - HELP_FOOT;
+    const th = Math.max(30, (trackH / (HELP_CONTENT_H + trackH)) * trackH);
+    const ty = trackY + (scroll / helpScrollMax()) * (trackH - th);
+    ctx.fillStyle = '#2a3560';
+    ctx.fillRect(r.x + r.w - 12, trackY, 3, trackH);
+    ctx.fillStyle = GOLD;
+    ctx.fillRect(r.x + r.w - 12, ty, 3, th);
+  }
+
+  ctx.font = font(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('scroll to read · tap to close', r.x + r.w / 2, r.y + r.h - 16);
 }
 
 export function drawDraft(
@@ -356,7 +671,7 @@ export function drawDraft(
   stageName: string,
   t: number,
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null, true);
 
   ctx.textAlign = 'center';
   ctx.font = font(18);
@@ -381,7 +696,7 @@ export function drawDraft(
     // trait tag rides the top-right corner
     if (def.pierce || def.copy) {
       ctx.textAlign = 'right';
-      ctx.font = font(7);
+      ctx.font = font(8);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 8, r.y + 19);
       ctx.fillStyle = '#ffd84d';
@@ -423,7 +738,7 @@ export function drawDraft(
       ['HP', st.hp], ['ATK', st.atk], ['DEF', st.def],
       ['SPA', st.spa], ['SPD', st.spd], ['SPE', st.spe],
     ];
-    ctx.font = font(7);
+    ctx.font = font(8);
     ctx.textAlign = 'left';
     cells.forEach(([lab, v], k) => {
       const cx = r.x + 12 + ((r.w - 24) / 6) * (2 * (k % 3) + 1);
@@ -454,7 +769,7 @@ export function drawDraft(
     const def = picked[i];
     if (def) {
       drawMon(ctx, def.id, sx + 38, 692, 48);
-      ctx.font = font(7);
+      ctx.font = font(8);
       ctx.fillStyle = PARCH;
       ctx.fillText(def.name, sx + 38, 740);
     }
@@ -540,13 +855,13 @@ export function drawReward(
       ctx.fillStyle = PARCH;
       ctx.fillText('?', r.x + r.w / 2, r.y + 74);
     }
-    ctx.font = font(9);
+    ctx.font = font(10);
     ctx.fillStyle = PARCH;
     ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);
-    ctx.font = font(7);
+    ctx.font = font(8);
     ctx.fillStyle = RARITY_COLOR[perk.rarity];
-    ctx.fillText(perk.rarity.toUpperCase(), r.x + r.w / 2, r.y + 134);
-    ctx.font = font(7);
+    ctx.fillText(perk.rarity.toUpperCase(), r.x + r.w / 2, r.y + 135);
+    ctx.font = font(8);
     ctx.fillStyle = '#a8b0d8';
     // two-line desc
     const words = perk.desc.split(' ');
@@ -560,7 +875,7 @@ export function drawReward(
   ctx.fillStyle = '#8890b8';
   ctx.fillText(`BOX — catch rate ${Math.round(catchPct * 100)}%`, W / 2, 620);
   if (box.length === 0) {
-    ctx.font = font(7);
+    ctx.font = font(8);
     ctx.fillStyle = '#5a6284';
     ctx.fillText('nothing caught yet — defeats sometimes capture', W / 2, 668);
   }
@@ -577,7 +892,7 @@ export function drawReward(
     edge(ctx, r, 8);
     drawMon(ctx, def.id, r.x + r.w / 2, r.y + 23, 38);
     hpBar(ctx, r.x + 6, r.y + 42, r.w - 12, boxHp[i] ?? 1);
-    ctx.font = font(6);
+    ctx.font = font(8);
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 54);
   });
@@ -604,11 +919,11 @@ export function drawReward(
     ctx.fillRect(r.x + 5, r.y + 5, r.w - 10, 3);
     drawMon(ctx, def.id, r.x + r.w / 2, r.y + 30, 40);
     hpBar(ctx, r.x + 8, r.y + 54, r.w - 16, teamHp[i] ?? 1);
-    ctx.font = font(7);
+    ctx.font = font(8);
     ctx.fillStyle = PARCH;
     ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 67);
   });
-  ctx.font = font(7);
+  ctx.font = font(8);
   ctx.fillStyle = '#5a6284';
   ctx.fillText(
     selBox >= 0 ? 'tap a teammate to swap in' : 'tap a box mon, then a teammate',
@@ -668,7 +983,7 @@ export function drawResult(
   }
   badgeRows.forEach((row, ri) => {
     const y = 428 + ri * 28;
-    ctx.font = font(7);
+    ctx.font = font(8);
     const ws = row.map((b) => ctx.measureText(b.name).width + 20);
     let bx = W / 2 - (ws.reduce((a, c) => a + c, 0) + (row.length - 1) * 8) / 2;
     row.forEach((b, i) => {
@@ -678,7 +993,7 @@ export function drawResult(
       ctx.fill();
       rim(ctx, br, 5, RARITY_COLOR[b.rarity]);
       edge(ctx, br, 5);
-      ctx.font = font(7);
+      ctx.font = font(8);
       ctx.fillStyle = RARITY_COLOR[b.rarity];
       ctx.fillText(b.name, bx + ws[i] / 2, y + 14);
       bx += ws[i] + 8;

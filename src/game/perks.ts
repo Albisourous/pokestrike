@@ -8,6 +8,7 @@ export interface Perk {
   item: string; // sprite name in public/sprites/items/
   desc: string;
   rarity: Rarity;
+  minRank?: number; // only offered once run rank reaches this
   apply: (b: Battle) => void;
 }
 
@@ -267,6 +268,18 @@ export const PERKS: Perk[] = [
     rarity: 'uncommon',
     apply: (b) => { b.bossSlayer += 0.3; },
   },
+  {
+    id: 'bband', name: 'Binding Band', item: 'muscle-band',
+    desc: '+40% contact on pinches',
+    rarity: 'uncommon',
+    apply: (b) => { b.pinchMult += 0.4; },
+  },
+  {
+    id: 'timerball', name: 'Timer Ball', item: 'poke-ball',
+    desc: 'every 3rd ally bump: all cooldowns -1',
+    rarity: 'uncommon',
+    apply: (b) => { b.volleyNth = 3; },
+  },
 
   // --- rare: strong single effects ---
   {
@@ -313,6 +326,19 @@ export const PERKS: Perk[] = [
     desc: 'weak-point hits deal x4',
     rarity: 'rare',
     apply: (b) => { b.wpBonus += 1; },
+  },
+  {
+    id: 'ether', name: 'Ether', item: 'elixir',
+    desc: "pinches charge the launcher's super",
+    rarity: 'rare',
+    apply: (b) => { b.pinchPip += 1; },
+  },
+  {
+    id: 'soothebell', name: 'Soothe Bell', item: 'shell-bell',
+    desc: 'ally bumps +15% contact this shot',
+    rarity: 'rare',
+    minRank: 1,
+    apply: (b) => { b.volleyBoost += 0.15; },
   },
 
   // --- legendary: run-defining relics ---
@@ -364,6 +390,7 @@ export const PERKS: Perk[] = [
     id: 'lifeorb', name: 'Life Orb', item: 'life-orb',
     desc: '+30% damage, team -4% HP per shot',
     rarity: 'legendary',
+    minRank: 2,
     apply: (b) => {
       b.dmgMult *= 1.3;
       b.lifeDrain += 0.04;
@@ -376,8 +403,8 @@ export const PERKS: Perk[] = [
 // comes up blank. Legendary 4% / rare 12% / uncommon 34% / common 50%.
 // `cap` clamps the worst tier offered — elite stages pay out uncommon+.
 const TIERS: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
-export function rollPerks(rng: () => number, cap = 3): Perk[] {
-  const pool = [...PERKS];
+export function rollPerks(rng: () => number, cap = 3, rank = 0): Perk[] {
+  const pool = PERKS.filter((p) => p.minRank == null || p.minRank <= rank);
   const out: Perk[] = [];
   for (let i = 0; i < 3 && pool.length; i++) {
     const roll = rng();
