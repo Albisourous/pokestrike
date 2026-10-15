@@ -35,6 +35,7 @@ import {
   drawHelp,
   drawPerkPick,
   CHARM_SKIP,
+  REWARD_SKIP,
   helpScrollMax,
   DEX_BTN,
   drawDex,
@@ -384,6 +385,7 @@ canvas.addEventListener('pointerdown', (e) => {
       for (let i = 0; i < battle.rewardOffers.length; i++) {
         if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
       }
+      if (inRect(p.x, p.y, REWARD_SKIP)) battle.declineReward();
     } else {
       battle?.pointerDown(p);
     }

@@ -61,6 +61,7 @@ export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 610, w: 180, h: 34 };
+export const REWARD_SKIP = { x: W - 152, y: 908, w: 134, h: 30 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 640, w: W - 48, h: 56 };
@@ -1133,6 +1134,8 @@ export function drawReward(
     ctx.fillStyle = '#8890b8';
     ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, 926);
   }
+  // StS lets you decline a reward — here it cashes out as score instead
+  button(ctx, REWARD_SKIP, 'DECLINE +150', true);
 }
 
 // Starter-charm pick before stage 1 — same card look, standalone screen.

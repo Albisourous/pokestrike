@@ -1653,6 +1653,16 @@ export class Battle {
     this.phase = 'map'; // pick the next stop on the region map
   }
 
+  // Declining pays score instead — StS reward skips keep dead offers honest.
+  declineReward() {
+    if (this.phase !== 'reward') return;
+    sfx('ui');
+    this.score += Math.round(150 * (1 + 0.2 * this.asc));
+    this.rewardOffers = [];
+    this.pendingNext = this.waveIndex + 1;
+    this.phase = 'map';
+  }
+
   // StS map-stop effects resolve on arrival: Poké Center rests heal, item
   // stops cough up a perk, shrines bleed for power — the note becomes the
   // wave banner since we go straight from the map into the fight.
@@ -1896,6 +1906,25 @@ export class Battle {
       e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * (e.enraged ? 0.66 : 1);
       if (e.boss) {
         this.bossAttack(e);
+      } else if (e.def.healer) {
+        // clerics patch their most-wounded ally; an untouched squad still
+        // gets zapped — kill the healer first or the fight drags
+        const wounded = this.enemies
+          .filter((a) => !a.dead && a.hp < a.maxHp)
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        if (wounded) {
+          const amt = Math.max(30, Math.round(wounded.maxHp * 0.18));
+          wounded.hp = Math.min(wounded.maxHp, wounded.hp + amt);
+          this.texts.push({ x: wounded.x, y: wounded.y - wounded.r - 8, text: `+${amt}`, t: 0.9, color: '#9df09d', big: false });
+          sfx('heal');
+        } else {
+          const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
+          if (target) {
+            sfx('zap');
+            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
+          }
+        }
       } else if (e.def.melee) {
         // melee enemies lunge instead of zapping — the dash plays out over
         // the next moments while you're lining up your shot
