@@ -97,8 +97,8 @@ scrollable in-game manual, and it opens itself on your first visit.
    +40% contact damage on the hit and **Ether** feeds the launcher a
    super pip.
 7. **Catch 'em.** A KO has a chance to send the enemy to your **box**
-   (`CAUGHT!` ball wiggle and all), and every cleared stage guarantees
-   **one recruit**; beat a gym leader and their ace joins you. Swap boxed
+   (`CAUGHT!` ball wiggle and all); beating a **gym leader** is the only
+   guaranteed catch — their ace joins you. Swap boxed
    mons onto the team freely between stages. HP follows the mon, so
    benching never heals or revives. A **duplicate** catch doesn't waste a
    slot: it feeds the copy you own, evolving the mon if its line has a

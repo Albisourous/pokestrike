@@ -542,7 +542,7 @@ export function rivalWave(defs: SpeciesDef[], rng: () => number): WaveSpawn[] {
 // Hazard zones: per-theme arena dangers laid out alongside a wave's spawns.
 // Same normalized coords as WaveSpawn; r is a fraction of arena width.
 // Zones stay out of the bottom 25% (player turf) and inside the side walls.
-export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static';
+export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine';
 export interface HazardSpawn {
   kind: HazardKind;
   nx: number;
@@ -561,11 +561,16 @@ export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
   });
   const n = (lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
   switch (theme) {
-    case 'volcano':
-      return Array.from({ length: n(1, 3) }, () => {
+    case 'volcano': {
+      const lavas: HazardSpawn[] = Array.from({ length: n(1, 3) }, () => {
         const r = rad();
         return { kind: 'lava', ...spot(r, 0.15, 0.6) };
       });
+      // MS mines: small pads that detonate when the ball touches them —
+      // a trap you can weaponize against the pack
+      const mines: HazardSpawn[] = Array.from({ length: n(0, 2) }, () => ({ kind: 'mine', ...spot(0.05, 0.15, 0.6) }));
+      return lavas.concat(mines);
+    }
     case 'grove':
       return Array.from({ length: n(2, 4) }, () => {
         const r = rad();
@@ -591,14 +596,18 @@ export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
       return gusts.concat(pools);
     }
     case 'cavern':
-      // jagged strips shoved off-center, one side or the other
-      return Array.from({ length: n(1, 3) }, () => {
-        const r = rad();
-        const nx = rng() < 0.5
-          ? r + rng() * (0.42 - r)
-          : 0.58 + rng() * (1 - 0.58 - r);
-        return { kind: 'spikes', nx, ny: 0.15 + rng() * (Math.min(0.6, 0.75 - r) - 0.15), r };
-      });
+      // jagged strips shoved off-center, one side or the other, plus
+      // the odd buried mine — a trap the ball can weaponize
+      return [
+        ...Array.from({ length: n(1, 3) }, () => {
+          const r = rad();
+          const nx = rng() < 0.5
+            ? r + rng() * (0.42 - r)
+            : 0.58 + rng() * (1 - 0.58 - r);
+          return { kind: 'spikes' as const, nx, ny: 0.15 + rng() * (Math.min(0.6, 0.75 - r) - 0.15), r };
+        }),
+        ...Array.from({ length: n(0, 2) }, () => ({ kind: 'mine' as const, ...spot(0.05, 0.15, 0.6) })),
+      ];
     default:
       return [];
   }

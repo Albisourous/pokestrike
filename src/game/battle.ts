@@ -86,6 +86,9 @@ interface Unit {
   sq: number; // squash impulse 0..1 — decays in update, flattens the sprite
   sumStage: number; // boss phase summons fired (0..2 — at 2/3 and 1/3 hp)
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
+  weakA: number; // boss weak point angle — rotating gold face, ×3 contact
+  minion?: boolean; // summoned add — while any live, the boss is guarded
+  volatile?: boolean; // VOLATILE wave mod — a KO bursts, splashing neighbors
 }
 
 interface FloatText {
@@ -122,11 +125,12 @@ interface Wave {
 }
 // A themed hazard zone on the court — MS damage-wall/gimmick analog.
 interface Hazard {
-  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static';
+  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine';
   x: number;
   y: number;
   r: number; // px radius of the zone
   dir?: number; // gust: push direction (+1/-1)
+  spent?: boolean; // mines fire once
 }
 // Boss hyper beam: a bright line that fades fast after the shot lands.
 interface Beam {
@@ -333,7 +337,7 @@ export class Battle {
   rewardOffers: Perk[] = [];
   mapNode = 0; // index into region.nodes — the stop the team stands on
   hardWave = false; // the wave just cleared was a hard stop — bigger payout (trainers)
-  lastRecruit: SpeciesDef | null = null; // stage's guaranteed catch, for the reward screen
+  lastRecruit: SpeciesDef | null = null; // gym ace prize, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
   private theme: Theme; // current wave's scene — rotates each wave
@@ -406,6 +410,7 @@ export class Battle {
         sq: 0,
         sumStage: 0,
         atkN: 0,
+        weakA: 0,
       });
     });
     this.region = genRegion(Math.floor(this.rng() * 2 ** 31));
@@ -539,6 +544,51 @@ export class Battle {
         if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * mend));
       }
     }
+    // wave mutators: a third of rolled non-boss waves get an affix —
+    // same stop, different fight (StS hallway affixes)
+    if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < 0.35) {
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold'];
+      const mod = MODS[Math.floor(this.rng() * MODS.length)];
+      switch (mod) {
+        case 'swarm': // two extra fodder pour in, each softened up
+          for (let k = 0; k < 2; k++) {
+            const e = this.makeEnemy(
+              { def: pickWild(this.rng, this.depth), nx: 0.15 + this.rng() * 0.7, ny: 0.1 + this.rng() * 0.4 },
+              i,
+            );
+            e.maxHp = Math.round(e.maxHp * 0.8);
+            e.hp = e.maxHp;
+            this.enemies.push(e);
+          }
+          break;
+        case 'hasty': // everyone acts a turn sooner — pressure wave
+          for (const e of this.enemies) e.timer = Math.max(1, e.timer - 1);
+          break;
+        case 'volatile': // KOs burst and splash the pack — chains are live
+          for (const e of this.enemies) e.volatile = true;
+          break;
+        case 'big': { // one fodder supersizes — a mini-boss body
+          const e = this.enemies[Math.floor(this.rng() * this.enemies.length)];
+          if (e) {
+            e.r = Math.round(e.r * 1.45);
+            e.maxHp = Math.round(e.maxHp * 1.6);
+            e.hp = e.maxHp;
+            e.pow *= 1.3;
+            const at = this.unstick(e.x, e.y, e.r + 2); // the bigger body may now touch a slab
+            e.x = at.x;
+            e.y = at.y;
+          }
+          break;
+        }
+        case 'gold': { // one guaranteed shiny in the pack — catch bait
+          const e = this.enemies[Math.floor(this.rng() * this.enemies.length)];
+          if (e) e.shiny = true;
+          break;
+        }
+      }
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…' }[mod] ?? 'MUTATED!';
+      this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
+    }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
     this.pickups = [];
     this.scars = [];
@@ -634,6 +684,7 @@ export class Battle {
       sq: 0,
       sumStage: 0,
       atkN: 0,
+      weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
     };
   }
 
@@ -730,6 +781,9 @@ export class Battle {
     this.shotHitN.clear();
     this.gustSounded = false;
     this.stopTimer = 0;
+    // STRIKE SHOT: launch with a recharged super and it fires from the
+    // sling — MS's namesake. Spends the cooldown, erupts immediately.
+    if (u.cd <= 0) this.bumpAlly(u, u);
     this.phase = 'shot';
     this.shots++;
     this.waveShots++; // anti-stall pressure counts shots inside the wave
@@ -851,7 +905,24 @@ export class Battle {
       this.hitBlocks(u);
       // court gimmicks — the ball feels the floor it's flying over
       for (const hz of this.hazards) {
-        if (dist(u, hz) > u.r + hz.r) continue;
+        if (hz.spent || dist(u, hz) > u.r + hz.r) continue;
+        if (hz.kind === 'mine') {
+          // MS mine: the ball's touch detonates it — a trap you can
+          // weaponize against the pack (it chips the ball too — commit)
+          hz.spent = true;
+          this.addShake(8);
+          this.screenFlash('#ff9a30', 0.12);
+          this.scar(hz.x, hz.y, 30);
+          this.waves.push({ x: hz.x, y: hz.y, r: 0, maxR: hz.r * 3.2, t: 0.35, life: 0.35, color: '#ff9a30', hits: new Set() });
+          for (const e of this.enemies) {
+            if (!e.dead && dist(hz, e) < hz.r * 2.2 + e.r) {
+              this.hurt(e, Math.max(1, Math.round(e.maxHp * 0.14)), '#ff9a30');
+            }
+          }
+          this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.05)));
+          sfx('boom');
+          continue;
+        }
         if (hz.kind === 'gust') {
           if (!this.slowImmune) u.vx += (hz.dir ?? 1) * 480 * h;
           if (!this.gustSounded) {
@@ -918,6 +989,7 @@ export class Battle {
   private stepEnemyMovement(dt: number) {
     const alive = this.players.filter((p) => !p.dead);
     for (const e of this.enemies) {
+      if (e.boss && !e.dead) e.weakA += dt * 0.45; // the weak face drifts — watch it before you commit
       const kn = Math.exp(-4 * dt);
       e.vx *= kn;
       e.vy *= kn;
@@ -1181,16 +1253,23 @@ export class Battle {
   // Keeps a spawn point (or pickup) out of the blocks — nudge to the
   // nearest face rather than rejecting the spot.
   private unstick(x: number, y: number, r: number) {
-    for (const b of this.blocks) {
-      const l = x - (b.x - r - 4), rr = b.x + b.w + r + 4 - x;
-      const t = y - (b.y - r - 4), bo = b.y + b.h + r + 4 - y;
-      if (l > 0 && rr > 0 && t > 0 && bo > 0) {
-        const m = Math.min(l, rr, t, bo);
-        if (m === l) x = b.x - r - 4;
-        else if (m === rr) x = b.x + b.w + r + 4;
-        else if (m === t) y = b.y - r - 4;
-        else y = b.y + b.h + r + 4;
+    // repeat until stable — a cluster can push the point out of one slab
+    // and into an already-checked neighbor
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
+      for (const b of this.blocks) {
+        const l = x - (b.x - r - 4), rr = b.x + b.w + r + 4 - x;
+        const t = y - (b.y - r - 4), bo = b.y + b.h + r + 4 - y;
+        if (l > 0 && rr > 0 && t > 0 && bo > 0) {
+          const m = Math.min(l, rr, t, bo);
+          if (m === l) x = b.x - r - 4;
+          else if (m === rr) x = b.x + b.w + r + 4;
+          else if (m === t) y = b.y - r - 4;
+          else y = b.y + b.h + r + 4;
+          moved = true;
+        }
       }
+      if (!moved) break;
     }
     return { x, y };
   }
@@ -1286,6 +1365,9 @@ export class Battle {
       d *= 2;
     }
     d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1));
+    // minion guard: while a summoned add lives, the boss hides behind the
+    // pack — crack the adds first or chip at half rate
+    if (e.boss && this.enemies.some((m) => m.minion && !m.dead)) d = Math.max(1, Math.round(d * 0.5));
     // 0x matchups (e.g. normal vs ghost) still chip — a wave must always
     // be finishable even when the whole team is immune-typed
     const immune = d <= 0;
@@ -1434,6 +1516,19 @@ export class Battle {
         cry(e.def.id, 0.45);
         buzz([30, 50, 30, 50, 60]);
       }
+      // VOLATILE mod: the KO detonates — a chunk of its max hp splashes
+      // onto every neighbor, and volatile kills can chain
+      if (e.volatile) {
+        const BR = 110;
+        this.waves.push({ x: e.x, y: e.y, r: 0, maxR: BR, t: 0.3, life: 0.3, color: '#ff9a30', hits: new Set() });
+        this.addShake(5);
+        sfx('boom');
+        for (const o of this.enemies) {
+          if (!o.dead && o !== e && dist(e, o) < o.r + BR) {
+            this.hurt(o, Math.max(1, Math.round(e.maxHp * 0.14)), '#ff9a30');
+          }
+        }
+      }
       this.addShake(e.boss ? 14 : 5);
       if (this.enemies.every((x) => x.dead)) this.waveCleared();
     }
@@ -1458,6 +1553,15 @@ export class Battle {
     this.shotHitN.set(e.uid, hitN + 1);
     if (pinched && !this.inStatic(shooter.x, shooter.y)) this.onPinch(e.x, e.y);
     const mult = effectiveness(shooter.def.type, e.def.type);
+    // weak point: the boss's rotating gold face takes triple contact
+    // damage — MS's signature precision check. Drifts, so read it first.
+    let weak = false;
+    if (e.boss) {
+      const a = Math.atan2(shooter.y - e.y, shooter.x - e.x);
+      let dd = Math.abs(a - e.weakA) % (Math.PI * 2);
+      if (dd > Math.PI) dd = Math.PI * 2 - dd;
+      weak = dd < 0.62;
+    }
     // every link in the chain adds momentum: +10% contact damage per pass;
     // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
@@ -1468,8 +1572,15 @@ export class Battle {
         this.shotStreak *
         (1 + this.shotVolleyBoost) *
         (pinched ? 1 + this.pinchMult : 1) *
+        (weak ? 3 : 1) *
         Math.pow(0.9, hitN),
     );
+    if (weak) {
+      this.texts.push({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
+      this.hitStop = Math.max(this.hitStop, 0.1);
+      this.addShake(6);
+      sfx('perfect');
+    }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     this.addShake(mult > 1 ? 4 : 2);
@@ -1926,9 +2037,8 @@ export class Battle {
     return this.waveIndex + 1 >= this.waveCount;
   }
 
-  // The stage's guaranteed catch — the card reward of the run. Beating a
-  // gym always nets the leader's ace (even a dupe — it's the gym's prize);
-  // anything else prefers a species you don't already own.
+  // The gym's prize: beating a leader always nets their ace (even a dupe) —
+  // the only guaranteed catch left in the run.
   private rollRecruit() {
     const spawns = this.curSpawns; // what was actually fielded — rival/invade/event overrides included
     const fresh = spawns.filter((s) => !this.box.some((b) => b.id === s.def.id));
@@ -1948,8 +2058,9 @@ export class Battle {
     // hard stops pay out uncommon-or-better relics — the risk has a price
     this.rewardOffers = rollPerks(this.rng, this.hardWave ? 2 : 3, this.rank, this.teamTypes());
     this.hardWave = false;
-    // trainer mons belong to their trainer — beating one earns no catch
-    this.lastRecruit = this.inTrainer ? null : this.rollRecruit();
+    // trainer mons stay with their owner; only a fallen gym pays its ace —
+    // ordinary stages earn no free catch
+    this.lastRecruit = this.inTrainer || !this.waveHadGym ? null : this.rollRecruit();
     if (this.lastRecruit) {
       if (!this.absorbDupe(this.lastRecruit)) {
         this.box.push(this.lastRecruit);
@@ -2199,6 +2310,7 @@ export class Battle {
         this.waveIndex,
       );
       e.timer = Math.min(e.timer, 2); // adds arrive hot — they act soon
+      e.minion = true; // while any minion lives, the boss takes half hits
       this.enemies.push(e);
       this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.6, t: 0.3, life: 0.3, color: '#ff8a8a', hits: new Set() });
     }
@@ -2215,6 +2327,7 @@ export class Battle {
     );
     e.x = at.x;
     e.y = at.y;
+    e.weakA = this.rng() * Math.PI * 2; // new spot, new face to hunt
     this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3, t: 0.3, life: 0.3, color: '#f85888', hits: new Set() });
     this.texts.push({ x: e.x, y: e.y - e.r - 14, text: 'TELEPORT!', t: 0.9, color: '#f85888', big: false });
     this.addShake(6);
@@ -2473,7 +2586,7 @@ export class Battle {
     ctx.globalAlpha = 1;
 
     // court gimmicks — the themed hazard zones under everything else
-    for (const hz of this.hazards) this.drawHazard(ctx, hz);
+    for (const hz of this.hazards) if (!hz.spent) this.drawHazard(ctx, hz);
 
     // stone blocks — solid cover the ball banks off
     for (const b of this.blocks) this.drawBlock(ctx, b);
@@ -3023,6 +3136,30 @@ export class Battle {
         ctx.arc(hz.x + Math.cos(a) * hz.r * 0.4, hz.y + Math.sin(a) * hz.r * 0.3, 7, 0, TAU);
         ctx.stroke();
       }
+    } else if (hz.kind === 'mine') {
+      // weaponizable trap: dark charge orb, pulsing hot core, faint blast
+      // rim so its reach is readable before you bank into it
+      const pulse = 0.6 + Math.sin(this.time * 5) * 0.4;
+      ctx.globalAlpha = 0.25;
+      ctx.strokeStyle = '#ff9a30';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 8]);
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r * 2.2, 0, TAU);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#1c1620';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r * 0.55, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = '#ff9a30';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = pulse > 0.7 ? '#ffd84d' : '#f08030';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r * 0.2 * (0.8 + pulse * 0.4), 0, TAU);
+      ctx.fill();
     } else {
       ctx.globalAlpha = 0.45;
       ctx.fillStyle = '#241f30';
@@ -3145,6 +3282,41 @@ export class Battle {
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
 
     if (u.side === 'enemy') {
+      // boss weak point: a drifting gold star on the rim — contact on that
+      // face pays triple. MS's core precision tell.
+      if (u.boss && !u.dead) {
+        const wx = u.x + Math.cos(u.weakA) * u.r * 0.92;
+        const wy = u.y + Math.sin(u.weakA) * u.r * 0.92;
+        const s = 7 + Math.sin(this.time * 6) * 2;
+        ctx.fillStyle = '#ffd84d';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(wx, wy - s);
+        ctx.lineTo(wx + s * 0.4, wy - s * 0.4);
+        ctx.lineTo(wx + s, wy);
+        ctx.lineTo(wx + s * 0.4, wy + s * 0.4);
+        ctx.lineTo(wx, wy + s);
+        ctx.lineTo(wx - s * 0.4, wy + s * 0.4);
+        ctx.lineTo(wx - s, wy);
+        ctx.lineTo(wx - s * 0.4, wy - s * 0.4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // minion guard: while summoned adds live, a shield ring orbits —
+        // the fight's order of operations at a glance
+        if (this.enemies.some((m) => m.minion && !m.dead)) {
+          ctx.globalAlpha = 0.4 + Math.sin(this.time * 4) * 0.15;
+          ctx.strokeStyle = '#9df0ff';
+          ctx.lineWidth = 4;
+          ctx.setLineDash([10, 8]);
+          ctx.beginPath();
+          ctx.arc(u.x, u.y, u.r * 1.25, this.time * 1.2, this.time * 1.2 + Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.globalAlpha = 1;
+        }
+      }
       // attack countdown — ★ marks a signature attack, red when it fires next
       ctx.font = font(10);
       ctx.textAlign = 'center';

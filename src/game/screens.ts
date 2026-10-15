@@ -596,7 +596,7 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'CATCHING',
-    lines: ['beaten foes sometimes drop a ball: catches go to your box', 'a duplicate evolves or feeds the copy you already own'],
+    lines: ['beaten foes sometimes drop a ball: catches go to your box', 'a duplicate evolves or feeds the copy you own · beat a gym, take the ace'],
     demo: demoCatch,
   },
   {
@@ -1002,7 +1002,7 @@ export function drawReward(
   ctx.fillRect(0, 0, W, H);
 
   ctx.textAlign = 'center';
-  // the stage's guaranteed catch announces itself — beat a gym, take the ace
+  // a fallen gym's prize announces itself — beat a leader, take the ace
   if (recruit) {
     drawMon(ctx, recruit.id, W / 2 - 120, 250, 44);
     ctx.font = font(10);

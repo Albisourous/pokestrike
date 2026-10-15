@@ -142,6 +142,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok((b as any).hardWave, 'trainer wave is a hard stop');
 }
 
+// --- recruits: only a fallen gym pays its ace -------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(0); // wild wave — no boss
+  const box0 = b.box.length;
+  (b as any).enterReward();
+  ok(b.box.length === box0 && !b.lastRecruit, 'wild stage grants no recruit');
+  (b as any).spawnWave(2); // gym wave — has a boss
+  (b as any).enterReward();
+  ok(!!b.lastRecruit && b.box.length > box0, `gym pays its ace (${b.lastRecruit?.name})`);
+}
+
 // --- room blocks: furnished waves, open boss rooms, clean spawns --------
 {
   let furnished = 0,
@@ -342,6 +354,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.4), '#fff'); // 100% → 60%: crosses the 2/3 gate
   ok(b.enemies.length > n0, `boss calls for help under 2/3 hp (+${b.enemies.length - n0} adds)`);
   ok(boss.sumStage === 1, 'first summon threshold consumed');
+  for (const m of b.enemies.filter((e) => e.minion)) m.dead = true; // drop the guard, then hit hard — the counterplay
   (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.3), '#fff'); // 60% → ~30%: crosses the 1/3 gate
   ok(boss.sumStage === 2, 'second summon threshold consumed');
   const n2 = b.enemies.length;
@@ -354,6 +367,89 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(boss.x === hx && boss.y === hy, 'first two attacks stay put');
   (b as any).bossAttack(boss);
   ok(boss.x !== hx || boss.y !== hy, 'every 3rd attack teleports the boss');
+}
+
+// --- MS mechanics: weak point, minion guard, strike shot, mines, volatile ---
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(2);
+  const boss = b.enemies.find((e) => e.boss)!;
+
+  // weak point: contact on the marked face pays triple
+  const u = b.players[0];
+  boss.weakA = -Math.PI / 2; // face up
+  u.x = boss.x;
+  u.y = boss.y - boss.r - u.r - 4;
+  const bhp0 = boss.hp;
+  (b as any).strikeEnemy(u, boss);
+  const weakD = bhp0 - boss.hp;
+  (b as any).time += 1; // clear the hit cooldown
+  boss.weakA = Math.PI / 2; // face away
+  boss.hp = bhp0;
+  (b as any).strikeEnemy(u, boss);
+  const flatD = bhp0 - boss.hp;
+  ok(weakD > flatD * 2, `weak point pays ~3x (${flatD} → ${weakD})`);
+
+  // minion guard: summoned adds halve boss damage until they die
+  const b2 = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b2 as any).spawnWave(2);
+  const boss2 = b2.enemies.find((e) => e.boss)!;
+  (b2 as any).summonAdds(boss2);
+  const mhp0 = boss2.hp;
+  (b2 as any).hurt(boss2, 100, '#fff');
+  const dGuarded = mhp0 - boss2.hp;
+  for (const m of b2.enemies.filter((e) => e.minion)) m.dead = true;
+  boss2.hp = mhp0;
+  (b2 as any).hurt(boss2, 100, '#fff');
+  const dOpen = mhp0 - boss2.hp;
+  ok(dGuarded === Math.max(1, Math.round(dOpen * 0.5)), `minion guard halves boss damage (${dGuarded} vs ${dOpen})`);
+
+  // strike shot: launching with a ready super spends its cooldown
+  const b3 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  const u3 = (b3 as any).active;
+  u3.cd = 0;
+  b3.phase = 'aim';
+  b3.pointerDown({ x: u3.x, y: u3.y });
+  b3.pointerMove({ x: u3.x - 120, y: u3.y });
+  b3.pointerUp();
+  ok(u3.cd > 0, `strike shot spends the super on launch (cd ${u3.cd})`);
+
+  // mines: ball contact detonates, splashing foes and chipping the ball
+  const b4 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
+  (b4 as any).spawnWave(0);
+  const e4 = b4.enemies[0];
+  const mx = e4.x + e4.r + 20;
+  (b4 as any).hazards = [{ kind: 'mine', x: mx, y: e4.y, r: 30 }];
+  const e4hp = e4.hp;
+  const u4 = (b4 as any).active;
+  u4.x = mx;
+  u4.y = e4.y;
+  u4.vx = 0;
+  u4.vy = 0;
+  (b4 as any).stepShot(1 / 60);
+  ok(b4.hazards[0].spent === true, 'mine detonates on ball contact');
+  ok(e4.hp < e4hp, `mine blasts nearby foes (${e4hp} → ${e4.hp})`);
+
+  // volatile: a KO splashes neighbors and can chain
+  const b5 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b5 as any).spawnWave(0);
+  const v1 = b5.enemies[0];
+  const v2 = b5.enemies[1];
+  v1.volatile = true;
+  v2.x = v1.x + 30;
+  v2.y = v1.y;
+  const v2hp = v2.hp;
+  (b5 as any).hurt(v1, v1.hp + 50, '#fff');
+  ok(v2.hp < v2hp, `volatile KO splashes neighbors (${v2hp} → ${v2.hp})`);
+
+  // wave mutators: enough seeds roll affixes on non-boss waves
+  let mods = 0;
+  for (let s = 1; s <= 40; s++) {
+    const bm = new Battle(arena, team(), makeStage(s), mulberry32(s * 7));
+    (bm as any).spawnWave(1);
+    if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY/.test((bm as any).waveSpecial ?? '')) mods++;
+  }
+  ok(mods > 3, `${mods}/40 seeds rolled a wave mutator`);
 }
 
 // --- gym boss relic + egg hatch ---------------------------------------------
