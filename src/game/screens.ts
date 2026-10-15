@@ -887,8 +887,25 @@ export function drawDraft(
       (def.shiny ? drawShiny : drawMon)(ctx, def.id, sx + 38, 692, 48);
       ctx.font = font(8);
       ctx.fillStyle = PARCH;
-      ctx.fillText(def.name, sx + 38, 740);
+      ctx.fillText(def.name, sx + 38, 736);
+      ctx.font = font(6);
+      ctx.fillStyle = TYPE_COLOR[def.type];
+      ctx.fillText(def.type.toUpperCase(), sx + 38, 747);
     }
+  }
+  // coverage strip: which types the team already brings — drafting for
+  // coverage is the real choice, so it's read at a glance
+  const types = [...new Set(picked.map((d) => d.type))];
+  if (types.length) {
+    ctx.font = font(7);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('COVERAGE', W / 2, 772);
+    types.forEach((ty, i) => {
+      const cx = W / 2 - (types.length * 34 - 6) / 2 + i * 34;
+      roundRect(ctx, cx, 778, 28, 12, 6);
+      ctx.fillStyle = TYPE_COLOR[ty];
+      ctx.fill();
+    });
   }
 
   ctx.font = font(8);

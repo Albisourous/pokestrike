@@ -520,9 +520,19 @@ function update(dt: number) {
       if (!won) {
         // near-miss framing: a deep wipe reads as "so close", not "failed"
         const near = stageReached >= TOTAL_STAGES - 1;
-        resultExtra = near
+        let extra = near
           ? `so close — fell at stage ${stageReached} of ${TOTAL_STAGES}`
           : `reached stage ${stageReached} of ${TOTAL_STAGES}`;
+        // the sting: how close the killing wave itself was to falling
+        const left = battle.enemies.filter((e) => !e.dead);
+        if (left.length === 1) {
+          const pct = Math.ceil((left[0].hp / left[0].maxHp) * 100);
+          if (pct <= 40) extra += ` — ${left[0].def.name.toUpperCase()} was at ${pct}%!`;
+        } else if (left.length > 1) {
+          const rem = left.reduce((s, e) => s + e.hp, 0) / left.reduce((s, e) => s + e.maxHp, 1);
+          if (rem < 0.35) extra += ` — the wave was ${Math.round((1 - rem) * 100)}% cleared`;
+        }
+        resultExtra = extra;
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
