@@ -67,6 +67,7 @@ interface Unit {
   lastBump: number; // last time a pass-through triggered this ally
   role: Role; // stat-derived archetype
   sash: boolean; // focus sash: survive one lethal hit at 1 HP
+  enraged?: boolean; // boss under 30% — attacks cycle faster
   lvl: number; // player level — KOs feed the shooter (0 = enemy)
   pow: number; // role damage multiplier
   rngMul: number; // role super-range multiplier
@@ -1001,6 +1002,15 @@ export class Battle {
     const immune = d <= 0;
     if (immune) d = 1;
     e.hp -= d;
+    // boss enrage: below 30% the leader fights dirty — attacks cycle a
+    // third faster, so the last stretch of a gym is the tense one
+    if (e.boss && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.3) {
+      e.enraged = true;
+      e.timer = Math.min(e.timer, 2);
+      this.texts.push({ x: e.x, y: e.y - e.r - 58, text: 'ENRAGED!', t: 1.2, color: '#ff6b6b', big: true });
+      this.screenFlash('#ff6b6b', 0.15);
+      sfx('invade');
+    }
     this.score += Math.round(d * (1 + this.asc * 0.2)); // ascension pays a score premium
     // the run just became your best — celebrate mid-flight, not just on the card
     if (!this.bested && this.bestScore > 0 && this.score > this.bestScore) {
@@ -1833,7 +1843,7 @@ export class Battle {
 
   private resolveEnemyTurn() {
     for (const e of this.pendingAttacks) {
-      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult;
+      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * (e.enraged ? 0.66 : 1);
       if (e.boss) {
         this.bossAttack(e);
       } else if (e.def.melee) {
@@ -2519,7 +2529,7 @@ export class Battle {
       ctx.lineWidth = 3;
       const tag = u.boss ? `★${u.timer}` : `${u.timer}`;
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
-      ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
+      ctx.fillStyle = u.timer <= 1 || u.enraged ? '#ff6b6b' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       // keyword flags — the counter-mechanics read at a glance
       const kw = u.def.taunt ? 'MAGNET' : u.def.cursed ? 'CURSE' : '';
