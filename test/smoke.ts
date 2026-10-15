@@ -86,6 +86,27 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(b.shiniesCaught === 1, 'shiniesCaught counts');
 }
 
+// --- level variance: draft 1-5, wilds scale with depth, catches keep it --
+{
+  const b = new Battle(arena, [{ ...ROSTER[0], lvl: 4 }, ...team().slice(1)], makeStage(55, 'T'), mulberry32(6));
+  const p = (b as any).players[0];
+  ok(p.lvl === 4, `draft lvl marker applies (lv${p.lvl})`);
+  ok(p.pow > ROLE_MODS[p.role].pow * 1.1, `draft level scales pow (${p.pow.toFixed(2)})`);
+  (b as any).spawnWave(0);
+  const lv0 = b.enemies.reduce((s, e) => s + e.lvl, 0) / Math.max(1, b.enemies.length);
+  for (let i = 1; i <= 6; i++) (b as any).spawnWave(i); // rolled waves materialize sequentially
+  const lv6 = b.enemies.reduce((s, e) => s + e.lvl, 0) / Math.max(1, b.enemies.length);
+  ok(lv6 > lv0 + 3, `wild levels scale with depth (w0 ${lv0.toFixed(1)} → w6 ${lv6.toFixed(1)})`);
+}
+{
+  const b = new Battle(arena, team(), makeStage(8, 'T'), () => 0); // rng=0 → catches always land
+  for (let i = 0; i <= 4; i++) (b as any).spawnWave(i);
+  const e = (b as any).enemies[0];
+  const el = e.lvl;
+  (b as any).hurt(e, e.hp + 50, '#fff');
+  ok(b.boxLvl[b.boxLvl.length - 1] === el, `caught mon keeps its level (Lv${el})`);
+}
+
 // --- map stop effects -------------------------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(21, 'T'), mulberry32(9));

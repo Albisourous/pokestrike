@@ -75,7 +75,6 @@ interface Unit {
   cdMod: number; // shots off the super cooldown
   lastHit: Map<number, number>; // shooter uid -> game time
   wallN: number; // wall bounces so far this shot (grip claw ramp)
-  wpA: number; // weak-point angle on the body, -1 = none (elites only)
   hzT: number; // last hazard tick — throttles lava/spike chips and burns
 }
 
@@ -285,7 +284,6 @@ export class Battle {
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   bossSlayer = 0; // power bracer: bonus damage vs bosses
   wallRamp = 0.08; // banking off walls pays a little contact damage per bounce — grip claw triples it
-  wpBonus = 0; // weakness policy: extra weak-point damage
   // keyword relics — PINCH (two contacts in one window) / VOLLEY (ally bumps)
   pinchPip = 0; // pips granted to the launcher on each pinch
   pinchMult = 0; // extra contact damage on pinch hits
@@ -332,7 +330,9 @@ export class Battle {
     team.forEach((def, i) => {
       const role = roleOf(def.stats, def.healer);
       const m = ROLE_MODS[role];
-      const hp = Math.round(playerHp(def.stats) * m.hp);
+      // draft picks roll lvl 1-5: same scaling curve as mid-run KOs
+      const lvl = Math.max(1, Math.min(20, def.lvl ?? 1));
+      const hp = Math.round(playerHp(def.stats) * m.hp * Math.pow(1.03, lvl - 1));
       // supers start at zero charge — each shot banks a turn toward firing
       const cd = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - m.cdMod);
       this.players.push({
@@ -364,14 +364,13 @@ export class Battle {
         lastBump: -1,
         role,
         sash: false,
-        lvl: 1,
-        pow: m.pow,
+        lvl,
+        pow: m.pow * Math.pow(1.05, lvl - 1),
         rngMul: m.range,
         launch: m.launch,
         cdMod: m.cdMod,
         lastHit: new Map(),
         wallN: 0,
-        wpA: -1,
         hzT: -9,
       });
     });
@@ -455,6 +454,12 @@ export class Battle {
     this.enemies = spawns.map((s) => {
       const r = s.boss ? 46 : 26;
       const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
+      // wild level = the climb's depth — late-run catches are real upgrades;
+      // the level is honest (bulkier wilds), not just a number
+      const el = Math.min(20, 1 + i + (this.rng() < 0.35 ? 1 : 0) + (s.boss ? 2 : 0));
+      const ehp = Math.round(
+        (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * Math.pow(1.03, el - 1),
+      );
       return {
       uid: nextUid++,
       def: s.def,
@@ -464,8 +469,8 @@ export class Battle {
       vx: 0,
       vy: 0,
       r,
-      hp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
-      maxHp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
+      hp: ehp,
+      maxHp: ehp,
       timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult,
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       wx: 0,
@@ -486,14 +491,13 @@ export class Battle {
       lastBump: -1,
       role: 'wild',
       sash: false,
-      lvl: 0,
-      pow: 1,
+      lvl: el,
+      pow: Math.pow(1.05, el - 1),
       rngMul: 1,
       launch: 1,
       cdMod: 0,
       lastHit: new Map(),
       wallN: 0,
-      wpA: ELITE_IDS.has(s.def.id) ? this.rng() * Math.PI * 2 : -1,
       hzT: -9,
       };
     });
@@ -1217,9 +1221,9 @@ export class Battle {
       if (caught) {
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
-          this.box.push(e.shiny ? { ...e.def, shiny: true } : e.def);
+          this.box.push(e.shiny ? { ...e.def, shiny: true, lvl: e.lvl } : { ...e.def, lvl: e.lvl });
           this.boxHp.push(1);
-          this.boxLvl.push(1);
+          this.boxLvl.push(Math.max(1, e.lvl)); // it keeps its level
         }
         if (e.boss) this.caughtBoss = true;
         if (e.shiny) {
@@ -1256,14 +1260,6 @@ export class Battle {
     this.shotHitN.set(e.uid, hitN + 1);
     if (pinched && !this.inStatic(shooter.x, shooter.y)) this.onPinch(e.x, e.y);
     const mult = effectiveness(shooter.def.type, e.def.type);
-    // weak point: striking the marked face triples contact damage. The
-    // mark sits on the side facing the incoming ball, so the approach
-    // direction is opposite the mark's facing — a ~44° window.
-    let weak = false;
-    if (e.wpA >= 0) {
-      const toE = norm({ x: e.x - shooter.x, y: e.y - shooter.y });
-      weak = toE.x * Math.cos(e.wpA) + toE.y * Math.sin(e.wpA) < -0.72;
-    }
     // every link in the chain adds momentum: +10% contact damage per pass;
     // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
@@ -1274,16 +1270,13 @@ export class Battle {
         this.shotStreak *
         (1 + this.shotVolleyBoost) *
         (pinched ? 1 + this.pinchMult : 1) *
-        Math.pow(0.9, hitN) *
-        (weak ? 3 + this.wpBonus : 1),
+        Math.pow(0.9, hitN),
     );
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     this.addShake(mult > 1 ? 4 : 2);
     sfx('hit', 1 + this.shotCombo * 0.12);
     buzz(8);
-    if (weak)
-      this.texts.push({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 0.9, color: '#ffd84d', big: true });
     if (shooter.wallN >= 2)
       this.texts.push({ x: e.x, y: e.y - e.r - 58, text: `BANKED ×${shooter.wallN}!`, t: 0.9, color: '#9df0ff', big: false });
     if (mult > 1)
@@ -1720,11 +1713,11 @@ export class Battle {
   // anything else prefers a species you don't already own.
   private rollRecruit() {
     const spawns = this.stage.waves[this.waveIndex];
-    const fresh = spawns.filter((s) => !this.box.includes(s.def));
-    const boss = fresh.find((s) => s.boss) ?? spawns.find((s) => s.boss);
-    if (boss) return boss.def;
+    const fresh = spawns.filter((s) => !this.box.some((b) => b.id === s.def.id));
     const pool = fresh.length ? fresh : spawns;
-    return pool[Math.floor(this.rng() * pool.length)].def;
+    const pick = fresh.find((s) => s.boss) ?? spawns.find((s) => s.boss) ?? pool[Math.floor(this.rng() * pool.length)];
+    // recruits arrive at wave-appropriate level — deep runs yield real mons
+    return { ...pick.def, lvl: Math.min(20, 1 + this.waveIndex + (pick.boss ? 2 : 0) + (this.rng() < 0.5 ? 1 : 0)) };
   }
 
   // every type on the active team or in the box — charm offers follow it
@@ -1742,7 +1735,7 @@ export class Battle {
       if (!this.absorbDupe(this.lastRecruit)) {
         this.box.push(this.lastRecruit);
         this.boxHp.push(1);
-        this.boxLvl.push(1);
+        this.boxLvl.push(this.lastRecruit.lvl ?? 1);
       }
       sfx('caught');
     }
@@ -1784,7 +1777,7 @@ export class Battle {
       for (const p of this.players) {
         if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3));
       }
-      this.mapNote = 'RESTED AT THE POKÉ CENTER — TEAM +30% HP';
+      this.mapNote = 'RESTED AT THE POKÉ CENTER: TEAM +30% HP';
       sfx('heal');
     } else if (n.kind === 'item') {
       const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
@@ -1804,7 +1797,7 @@ export class Battle {
       if (p) {
         p.apply(this);
         this.heldItems.push(p.item);
-        this.mapNote = `THE SHRINE TAKES ITS TITHE — ${p.name.toUpperCase()}, TEAM −15% HP`;
+        this.mapNote = `THE SHRINE TAKES ITS TITHE: ${p.name.toUpperCase()}, TEAM −15% HP`;
       }
       sfx('invade');
     } else if (n.kind === 'mart') {
@@ -1816,10 +1809,10 @@ export class Battle {
         if (p) {
           p.apply(this);
           this.heldItems.push(p.item);
-          this.mapNote = `MART SOLD YOU ${p.name.toUpperCase()} — −500 PTS`;
+          this.mapNote = `MART SOLD YOU ${p.name.toUpperCase()} FOR 500 PTS`;
         }
       } else {
-        this.mapNote = 'MART — NOT ENOUGH PTS (500)';
+        this.mapNote = 'MART: NOT ENOUGH PTS (500)';
       }
       sfx('ui');
     } else if (n.kind === 'mystery') {
@@ -1830,14 +1823,14 @@ export class Battle {
         if (p) {
           p.apply(this);
           this.heldItems.push(p.item);
-          this.mapNote = `? WAS A CACHE — ${p.name.toUpperCase()}`;
+          this.mapNote = `? WAS A CACHE: ${p.name.toUpperCase()}`;
         }
         sfx('ready');
       } else if (roll < 0.7) {
         for (const p of this.players) {
           if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3));
         }
-        this.mapNote = '? WAS A HIDDEN SPRING — TEAM +30% HP';
+        this.mapNote = '? WAS A HIDDEN SPRING: TEAM +30% HP';
         sfx('heal');
       } else {
         for (const p of this.players) {
@@ -1847,7 +1840,7 @@ export class Battle {
         if (p) {
           p.apply(this);
           this.heldItems.push(p.item);
-          this.mapNote = `? WAS A TRAP — ${p.name.toUpperCase()}, TEAM −12% HP`;
+          this.mapNote = `? WAS A TRAP: ${p.name.toUpperCase()}, TEAM −12% HP`;
         }
         sfx('invade');
       }
@@ -2328,7 +2321,7 @@ export class Battle {
       ctx.fillStyle = '#e8ecff';
       ctx.fillText(
         this.shots === 0
-          ? 'pull back to aim — release in the gold'
+          ? 'pull back to aim, release in the gold'
           : 'bounce through allies to fire their supers',
         a.x + a.w / 2,
         a.y + a.h - 16,
@@ -2561,7 +2554,7 @@ export class Battle {
     ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
     ctx.fillText(
-      this.pendingNext <= this.waveIndex ? 'tap to begin the climb' : 'choose your route — tap a linked stop',
+      this.pendingNext <= this.waveIndex ? 'tap to begin the climb' : 'choose your route: tap a linked stop',
       270,
       oy + MAP_H * cell + 40,
     );
@@ -2740,24 +2733,6 @@ export class Battle {
       }
     }
 
-    // weak point: a pulsing gold diamond on the marked face — aim at it
-    if (u.wpA >= 0) {
-      const s = 6.5 + Math.sin(this.time * 5) * 1.2;
-      const wx = u.x + Math.cos(u.wpA) * u.r * 0.55;
-      const wy = u.y + Math.sin(u.wpA) * u.r * 0.55;
-      ctx.fillStyle = '#ffd84d';
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(wx, wy - s);
-      ctx.lineTo(wx + s, wy);
-      ctx.lineTo(wx, wy + s);
-      ctx.lineTo(wx - s, wy);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-    }
-
     // hp bar
     const bw = u.r * 2;
     const pct = Math.max(u.hp / u.maxHp, 0);
@@ -2934,8 +2909,7 @@ export class Battle {
         ctx.globalAlpha = 1;
       }
       // predicted contact damage over the first catch — the shot is the
-      // puzzle, so the answer is honest: type mult + weak-point window +
-      // taunt block, no crits
+      // puzzle, so the answer is honest: type mult + taunt block, no crits
       if (hit && !hit.dead) {
         const taunted = this.enemies.some((x) => !x.dead && x.def.taunt) && !hit.def.taunt;
         let label: string;
@@ -2945,15 +2919,13 @@ export class Battle {
           lc = '#8a90a8';
         } else {
           const mult = effectiveness(u.def.type, hit.def.type);
-          const toE = norm({ x: hit.x - this.aimCache.hx, y: hit.y - this.aimCache.hy });
-          const weak = hit.wpA >= 0 && toE.x * Math.cos(hit.wpA) + toE.y * Math.sin(hit.wpA) < -0.72;
           const est = Math.max(1, Math.round(
             physDamage(u.def.stats.atk, hit.def.stats.def, mult) *
               u.pow * this.physMult * this.dmgMult * (this.typePow[u.def.type] ?? 1) *
-              (weak ? 3 + this.wpBonus : 1) * (hit.boss ? 1 + this.bossSlayer : 1),
+              (hit.boss ? 1 + this.bossSlayer : 1),
           ));
           label = est >= hit.hp ? `≈${est} KO` : `≈${est}`;
-          lc = est >= hit.hp ? '#ffd84d' : weak ? '#f8d030' : '#ffffff';
+          lc = est >= hit.hp ? '#ffd84d' : '#ffffff';
         }
         ctx.font = font(9);
         ctx.textAlign = 'center';

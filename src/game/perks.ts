@@ -346,12 +346,6 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.wallRamp += 0.15; },
   },
   {
-    id: 'wpolicy', name: 'Weakness Policy', item: 'weakness-policy',
-    desc: 'weak-point hits deal x4',
-    rarity: 'rare',
-    apply: (b) => { b.wpBonus += 1; },
-  },
-  {
     id: 'ether', name: 'Ether', item: 'elixir',
     desc: "pinches charge the launcher's super",
     rarity: 'rare',

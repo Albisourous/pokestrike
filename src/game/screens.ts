@@ -497,28 +497,6 @@ function demoCountdown(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   }
 }
 
-function demoWeak(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const mx = x + w * 0.42, my = y + h * 0.55;
-  drawMon(ctx, 149, mx, my, 60);
-  // the gold diamond rides the body — hit that face for x3
-  const wx = mx + 20, wy = my - 16, s = 8;
-  ctx.fillStyle = '#ffd84d';
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(wx, wy - s);
-  ctx.lineTo(wx + s, wy);
-  ctx.lineTo(wx, wy + s);
-  ctx.lineTo(wx - s, wy);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.font = font(10);
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd84d';
-  ctx.fillText('×3', x + w * 0.66, my + 4);
-}
-
 function demoPickups(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   const kinds: [string, string][] = [
     ['oran-berry', 'HEAL'],
@@ -586,47 +564,42 @@ interface HelpSection {
 const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'AIM & POWER',
-    lines: ['drag back from your mon — the dotted line is the flight path', 'release inside the gold zone for a full-power shot'],
+    lines: ['drag back from your mon: the dotted line is the flight path', 'release inside the gold zone for a full-power shot'],
     demo: demoAim,
   },
   {
     title: 'BUMP COMBOS',
-    lines: ['bounce off a teammate mid-flight to trigger their super', 'every link in the chain adds damage — route through allies'],
+    lines: ['bounce off a teammate mid-flight to trigger their super', 'each link adds damage and speed, so route through allies'],
     demo: demoBump,
   },
   {
     title: 'CHARGE PIPS',
-    lines: ['hits and KOs fill the gold pips under each mon', 'all-gold pips means READY — the move name pulses'],
+    lines: ['hits and KOs fill the gold pips under each mon', 'all-gold pips mean READY and the move name pulses'],
     demo: demoCharge,
   },
   {
     title: 'ENEMY COUNTDOWN',
-    lines: ['enemies strike when the number over them hits zero', 'melee mons attack sooner — thin them out first'],
+    lines: ['enemies strike when the number over them hits zero', 'melee mons attack sooner, so thin them out first'],
     demo: demoCountdown,
   },
   {
-    title: 'WEAK POINTS',
-    lines: ['elite foes carry a gold diamond on one face', 'hit the marked face for triple contact damage'],
-    demo: demoWeak,
-  },
-  {
     title: 'FIELD PICKUPS',
-    lines: ['roll the ball through them — they collect on touch', 'one spawns each wave, two when something big lurks'],
+    lines: ['roll the ball through them: they collect on touch', 'one spawns each wave, two when something big lurks'],
     demo: demoPickups,
   },
   {
     title: 'CATCHING',
-    lines: ['beaten foes sometimes drop a ball — catches go to your box', 'a duplicate evolves or feeds the copy you already own'],
+    lines: ['beaten foes sometimes drop a ball: catches go to your box', 'a duplicate evolves or feeds the copy you already own'],
     demo: demoCatch,
   },
   {
     title: 'LEVELING UP',
-    lines: ['every KO levels the mon that launched the shot — Lv20 cap', 'levels survive evolution; ascension (wins) makes foes tougher'],
+    lines: ['every KO levels the mon that launched the shot (Lv20 cap)', 'levels survive evolution; ascension (wins) makes foes tougher'],
     demo: demoCharge,
   },
   {
     title: 'THE CLIMB',
-    lines: ['9 stages, a gym every 3rd — pick your route on the map', 'elite stops hit harder but pay out better; rewards can be declined'],
+    lines: ['9 stages, a gym every 3rd: pick your route on the map', 'elite stops hit harder but pay out better; rewards can be declined'],
     demo: demoClimb,
   },
   {
@@ -636,12 +609,12 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'SHINIES & STREAKS',
-    lines: ['gold-tinted foes are rare — KO one and it always joins your box', 'perfect releases build a streak — every gold-zone hit pays extra'],
+    lines: ['gold-tinted foes are rare: KO one and it always joins your box', 'perfect releases build a streak: every gold-zone hit pays extra'],
     demo: demoAim,
   },
   {
     title: 'STONE WALLS',
-    lines: ['boulder clusters wall off the lane — the ball banks right off them', 'block bounces count as wall hits: banking still pays damage'],
+    lines: ['boulder clusters wall off the lane: the ball banks right off them', 'block bounces count as wall hits: banking still pays damage'],
     demo: demoBump,
   },
 ];
@@ -769,13 +742,13 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.font = font(8);
   if (shinyCharm()) {
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText('★ SHINY CHARM — shinies are twice as common ★', r.x + r.w / 2, r.y + r.h - 26);
+    ctx.fillText('★ SHINY CHARM: shinies are twice as common ★', r.x + r.w / 2, r.y + r.h - 26);
   } else {
     ctx.fillStyle = '#8890b8';
     ctx.fillText(`${SHINY_CHARM_AT - dexIds().length} more catches for the SHINY CHARM (x2 shinies)`, r.x + r.w / 2, r.y + r.h - 26);
   }
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('catch wild mons to fill the dex — they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+  ctx.fillText('catch wild mons to fill the dex: they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
 export function drawDraft(
@@ -791,11 +764,11 @@ export function drawDraft(
   ctx.textAlign = 'center';
   ctx.font = font(18);
   ctx.fillStyle = '#f8d030';
-  ctx.fillText(`DRAFT — PICK ${picked.length + 1} OF 4`, W / 2, 120);
+  ctx.fillText(`DRAFT: PICK ${picked.length + 1} OF 4`, W / 2, 120);
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(stageName, W / 2, 155);
-  ctx.fillText('one of three — choose for coverage and speed', W / 2, 180);
+  ctx.fillText('one of three: choose for coverage and speed', W / 2, 180);
 
   offers.forEach((def, i) => {
     const r = draftCardRect(i);
@@ -843,7 +816,7 @@ export function drawDraft(
     ctx.font = font(13);
     const nw = ctx.measureText(def.name).width;
     ctx.font = font(8);
-    const idTxt = `#${String(def.id).padStart(3, '0')}`;
+    const idTxt = `#${String(def.id).padStart(3, '0')} Lv${def.lvl ?? 1}`;
     const nx = r.x + r.w / 2 - (nw + 5 + ctx.measureText(idTxt).width) / 2;
     ctx.textAlign = 'left';
     ctx.font = font(13);
@@ -1027,7 +1000,11 @@ export function drawReward(
     drawMon(ctx, recruit.id, W / 2 - 120, 250, 44);
     ctx.font = font(10);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`${recruit.name.toUpperCase()} JOINS YOUR BOX!`, W / 2 + 40, 258);
+    ctx.fillText(
+      `${recruit.name.toUpperCase()}${recruit.lvl && recruit.lvl > 1 ? ` Lv${recruit.lvl}` : ''} JOINS YOUR BOX!`,
+      W / 2 + 40,
+      258,
+    );
   }
 
   ctx.font = font(20);
@@ -1040,8 +1017,8 @@ export function drawReward(
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
     next.gym
-      ? `stage ${next.stage} of ${TOTAL_STAGES} — a gym leader waits`
-      : `stage ${next.stage} of ${TOTAL_STAGES} — the waves get meaner`,
+      ? `stage ${next.stage} of ${TOTAL_STAGES}: a gym leader waits`
+      : `stage ${next.stage} of ${TOTAL_STAGES}: the waves get meaner`,
     W / 2,
     335,
   );
@@ -1065,11 +1042,11 @@ export function drawReward(
   // captured box — tap a catch, then a teammate, to swap
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(`BOX — catch rate ${Math.round(catchPct * 100)}%`, W / 2, 620);
+  ctx.fillText(`BOX: catch rate ${Math.round(catchPct * 100)}%`, W / 2, 620);
   if (box.length === 0) {
     ctx.font = font(8);
     ctx.fillStyle = '#5a6284';
-    ctx.fillText('nothing caught yet — defeats sometimes capture', W / 2, 668);
+    ctx.fillText('nothing caught yet: beaten foes sometimes join', W / 2, 668);
   }
   ctx.save();
   ctx.beginPath();

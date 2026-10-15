@@ -16,6 +16,7 @@ export interface SpeciesDef {
   taunt?: boolean; // while it lives, contact hits vs other enemies are blocked
   cursed?: boolean; // on KO, all ally supers gain +1 cooldown pip
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
+  lvl?: number; // level marker — draft picks roll 1-5, catches keep theirs
   evolvesTo?: number; // dex id of the evolved form (data only; mechanic lives elsewhere)
 }
 
@@ -388,7 +389,7 @@ export const BLOCK_LAYOUTS: BlockDef[][] = [
     { nx: 0.47, ny: 0.28, nw: 0.06, nh: 0.06 },
     { nx: 0.7, ny: 0.5, nw: 0.06, nh: 0.06 },
   ],
-  // top pocket — a weak point can hide in the alcove
+  // top pocket — foes can tuck into the alcove
   [
     { nx: 0.4, ny: 0.18, nw: 0.2, nh: 0.05 },
     { nx: 0.4, ny: 0.18, nw: 0.05, nh: 0.15 },

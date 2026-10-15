@@ -65,10 +65,17 @@ const dailySeed = () => {
 
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
-let draft: { order: number[]; picked: number[]; shiny: Set<number>; rerolls: number } = {
+let draft: {
+  order: number[];
+  picked: number[];
+  shiny: Set<number>;
+  lvls: Map<number, number>;
+  rerolls: number;
+} = {
   order: [],
   picked: [],
   shiny: new Set(),
+  lvls: new Map(),
   rerolls: 1,
 };
 // the run's draft pool — roster plus captured-dex species not already in it
@@ -180,7 +187,7 @@ function startDraft() {
       .map(speciesById)
       .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id)),
   ];
-  draft = { order: draftOrder(runRng), picked: [], shiny: new Set(), rerolls: 1 };
+  draft = { order: draftOrder(runRng), picked: [], shiny: new Set(), lvls: new Map(), rerolls: 1 };
   for (let i = ROSTER.length; i < draftPool.length; i++) {
     draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
   }
@@ -189,13 +196,22 @@ function startDraft() {
   const shinyOdds = 0.02 * (shinyCharm() ? 2 : 1);
   draftPool.forEach((_, i) => {
     if (runRng() < shinyOdds) draft.shiny.add(i);
+    // every card rolls a level 1-5, weighted low — a Lv5 opener is a
+    // mini high-roll: +20% pow, +12% bulk over a fresh Lv1
+    const lvl = 1 + Math.floor(Math.pow(runRng(), 1.8) * 5);
+    if (lvl > 1) draft.lvls.set(i, lvl);
   });
   offerCache = null;
 }
 
-// a shiny slot hands Battle a cloned def — the shared species rows stay clean
-const draftDef = (i: number): SpeciesDef =>
-  draft.shiny.has(i) ? { ...draftPool[i], shiny: true } : draftPool[i];
+// a shiny or leveled slot hands Battle a cloned def — the shared species
+// rows stay clean
+const draftDef = (i: number): SpeciesDef => {
+  const base = draftPool[i];
+  const shiny = draft.shiny.has(i);
+  const lvl = draft.lvls.get(i);
+  return shiny || lvl ? { ...base, shiny: shiny || undefined, lvl } : base;
+};
 
 // one board reshuffle per draft — a bad first board isn't a run sentence
 function rerollDraft() {
@@ -413,7 +429,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
     } else if (inRect(p.x, p.y, TITLE_BTN)) {
       sfx('ui');
-      draft = { order: [], picked: [], shiny: new Set(), rerolls: 1 };
+      draft = { order: [], picked: [], shiny: new Set(), lvls: new Map(), rerolls: 1 };
       battle = null;
       result = null;
       resultExtra = null;
@@ -566,28 +582,28 @@ function update(dt: number) {
         // near-miss framing: a deep wipe reads as "so close", not "failed"
         const near = stageReached >= TOTAL_STAGES - 1;
         let extra = near
-          ? `so close — fell at stage ${stageReached} of ${TOTAL_STAGES}`
+          ? `so close, fell at stage ${stageReached} of ${TOTAL_STAGES}`
           : `reached stage ${stageReached} of ${TOTAL_STAGES}`;
         // the sting: how close the killing wave itself was to falling
         const left = battle.enemies.filter((e) => !e.dead);
         if (left.length === 1) {
           const pct = Math.ceil((left[0].hp / left[0].maxHp) * 100);
-          if (pct <= 40) extra += ` — ${left[0].def.name.toUpperCase()} was at ${pct}%!`;
+          if (pct <= 40) extra += `. ${left[0].def.name.toUpperCase()} was at ${pct}%!`;
         } else if (left.length > 1) {
           const rem = left.reduce((s, e) => s + e.hp, 0) / left.reduce((s, e) => s + e.maxHp, 1);
-          if (rem < 0.35) extra += ` — the wave was ${Math.round((1 - rem) * 100)}% cleared`;
+          if (rem < 0.35) extra += `. The wave was ${Math.round((1 - rem) * 100)}% cleared`;
         }
         resultExtra = extra;
       } else {
         // a clear raises the heat — say so, that's the "again?" hook
         const nextAsc = Math.min(best().wins, 9);
         if (nextAsc > battle.asc && nextAsc <= 9)
-          resultExtra = `ASCENSION ${nextAsc} UNLOCKED — the climb gets meaner`;
+          resultExtra = `ASCENSION ${nextAsc} UNLOCKED. The climb gets meaner`;
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       shareText = [
-        `⚾ POKÉSTRIKE — sling & ricochet Pokémon roguelike`,
-        `🗺️ ${stage.name} — ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}${battle.asc ? ` · ASC ${battle.asc}` : ''}`,
+        `⚾ POKÉSTRIKE: sling & ricochet Pokémon roguelike`,
+        `🗺️ ${stage.name}: ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}${battle.asc ? ` · ASC ${battle.asc}` : ''}`,
         share.waves,
         `✨ ${teamNames}`,
         ...(mvp.lvl > 1 ? [`👑 MVP ${mvp.def.name.toUpperCase()} Lv${mvp.lvl}`] : []),
