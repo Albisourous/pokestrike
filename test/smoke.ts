@@ -195,7 +195,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const step = (n: number) => { for (let i = 0; i < n; i++) b.update(1 / 60); };
   while (b.phase !== 'won' && b.phase !== 'lost' && frames < 200000) {
     frames++;
-    if (b.phase === 'aim' && aimTries++ > 300) break; // stall detector
+    if (b.phase === 'aim' && aimTries++ > 600) break; // stall detector — bouncier physics makes a dumb bot's fights run longer
     if (b.phase === 'map') {
       // pick a linked stop — same cell math drawRegion/pointerDown use
       const region = (b as any).region;
@@ -331,6 +331,29 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(b.enemies.some((e) => e.boss), 'scripted boss fields');
   ok(!(b as any).waveHadGym, 'event boss is not a gym badge');
   ok(!!b.enemies.find((e) => e.boss)?.relic, 'event alpha carries a held item');
+}
+
+// --- boss escalation: phase summons + teleport rotation ----------------------
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(2); // seeded gym wave — has a boss
+  const boss = b.enemies.find((e) => e.boss)!;
+  const n0 = b.enemies.length;
+  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.4), '#fff'); // 100% → 60%: crosses the 2/3 gate
+  ok(b.enemies.length > n0, `boss calls for help under 2/3 hp (+${b.enemies.length - n0} adds)`);
+  ok(boss.sumStage === 1, 'first summon threshold consumed');
+  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.3), '#fff'); // 60% → ~30%: crosses the 1/3 gate
+  ok(boss.sumStage === 2, 'second summon threshold consumed');
+  const n2 = b.enemies.length;
+  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.05), '#fff'); // no third gate
+  ok(b.enemies.length === n2, 'summons stop after two phases');
+  // attack rotation: signature, signature, hop — position changes on the 3rd
+  const { x: hx, y: hy } = { x: boss.x, y: boss.y };
+  (b as any).bossAttack(boss);
+  (b as any).bossAttack(boss);
+  ok(boss.x === hx && boss.y === hy, 'first two attacks stay put');
+  (b as any).bossAttack(boss);
+  ok(boss.x !== hx || boss.y !== hy, 'every 3rd attack teleports the boss');
 }
 
 // --- gym boss relic + egg hatch ---------------------------------------------

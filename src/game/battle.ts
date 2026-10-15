@@ -83,6 +83,9 @@ interface Unit {
   wallN: number; // wall bounces so far this shot (grip claw ramp)
   hzT: number; // last hazard tick — throttles lava/spike chips and burns
   relic?: string; // held-item sprite name — gym bosses roll one quirk each
+  sq: number; // squash impulse 0..1 — decays in update, flattens the sprite
+  sumStage: number; // boss phase summons fired (0..2 — at 2/3 and 1/3 hp)
+  atkN: number; // boss attack count — every 3rd is a teleport, not a blast
 }
 
 interface FloatText {
@@ -178,12 +181,12 @@ export const MAP_CELL = 32;
 export const MAP_OX = (540 - MAP_W * MAP_CELL) / 2;
 export const MAP_OY = 128;
 
-const STOP_SPEED = 45;
+const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
-const BASE_SHOT_SPEED = 190; // base launch speed — pull distance only aims
+const BASE_SHOT_SPEED = 285; // 1.5x launch — under exponential friction range scales with speed
 const POWER = 8;
-const WALL_REST = 0.92;
-const UNIT_REST = 0.9;
+const WALL_REST = 0.96; // pinball court — walls hand back nearly everything
+const UNIT_REST = 0.94; // meatier ricochets off bodies
 const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
 const HEAL_CD = 5; // in-battle mends share this cooldown — one heal per few shots
@@ -345,6 +348,7 @@ export class Battle {
   private splashing = false; // psychic trait re-entry guard
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
   private mapMsgT = 0;
+  private trail: { x: number; y: number; t: number }[] = []; // speed smear — ghost positions of the flying ball
 
   constructor(
     public arena: Rect,
@@ -399,6 +403,9 @@ export class Battle {
         lastHit: new Map(),
         wallN: 0,
         hzT: -9,
+        sq: 0,
+        sumStage: 0,
+        atkN: 0,
       });
     });
     this.region = genRegion(Math.floor(this.rng() * 2 ** 31));
@@ -509,56 +516,7 @@ export class Battle {
         p.y = at.y;
       }
     }
-    this.enemies = spawns.map((s) => {
-      const r = s.boss ? 46 : 26;
-      const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
-      // wild level = the climb's depth: route-1 fodder up to champion-tier;
-      // the level is honest (bulkier wilds), not just a number
-      const el = Math.min(LV_CAP, 5 + i * 10 + (this.rng() < 0.35 ? 4 : 0) + (s.boss ? 8 : 0));
-      const ehp = Math.round(
-        (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * lvlHp(s.def.stats.hp, el),
-      );
-      return {
-      uid: nextUid++,
-      def: s.def,
-      side: 'enemy',
-      x: at.x,
-      y: at.y,
-      vx: 0,
-      vy: 0,
-      r,
-      hp: ehp,
-      maxHp: ehp,
-      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult,
-      drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
-      wx: 0,
-      wy: 0,
-      wT: Math.random() * 0.8,
-      wMul: 1,
-      lunging: 0,
-      boss: !!s.boss,
-      // shinies: wild fodder rolls gold; your rival echo keeps the palette
-      // it died with — including a shiny if you lost one. Trainer mons are
-      // owned already: never shiny, never catchable.
-      shiny: !s.boss && !this.inTrainer && (this.inRival ? !!s.def.shiny : this.rng() < SHINY_RATE * this.shinyRate),
-      dead: false,
-      dotTicks: 0,
-      dotDmg: 0,
-      cd: 0,
-      cdMax: 1,
-      lastBump: -1,
-      role: 'wild',
-      sash: false,
-      lvl: el,
-      pow: lvlPow(offStat(s.def.stats, s.def.type), el),
-      rngMul: 1,
-      launch: 1,
-      cdMod: 0,
-      lastHit: new Map(),
-      wallN: 0,
-      hzT: -9,
-      };
-    });
+    this.enemies = spawns.map((s) => this.makeEnemy(s, i));
     // rival echo fights at the levels it earned — the ghost of a stacked
     // run is a real fight, not a victory lap
     if (this.inRival) {
@@ -620,6 +578,63 @@ export class Battle {
       if (!this.waveSpecial) this.waveSpecial = `A SHINY ${shiny.def.name.toUpperCase()} APPEARED!`;
       sfx('perfect'); // the triple-note ping — rarer than any recharge cue
     }
+  }
+
+  // One enemy builder for everything the field can field: wave spawns,
+  // boss phase-summons. wi is the wave row so level curves match the wave
+  // the foe arrived on.
+  private makeEnemy(s: WaveSpawn, wi: number): Unit {
+    const r = s.boss ? 46 : 26;
+    const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
+    // wild level = the climb's depth: route-1 fodder up to champion-tier;
+    // the level is honest (bulkier wilds), not just a number
+    const el = Math.min(LV_CAP, 5 + wi * 10 + (this.rng() < 0.35 ? 4 : 0) + (s.boss ? 8 : 0));
+    const ehp = Math.round(
+      (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * lvlHp(s.def.stats.hp, el),
+    );
+    return {
+      uid: nextUid++,
+      def: s.def,
+      side: 'enemy',
+      x: at.x,
+      y: at.y,
+      vx: 0,
+      vy: 0,
+      r,
+      hp: ehp,
+      maxHp: ehp,
+      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult,
+      drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
+      wx: 0,
+      wy: 0,
+      wT: Math.random() * 0.8,
+      wMul: 1,
+      lunging: 0,
+      boss: !!s.boss,
+      // shinies: wild fodder rolls gold; your rival echo keeps the palette
+      // it died with — including a shiny if you lost one. Trainer mons are
+      // owned already: never shiny, never catchable.
+      shiny: !s.boss && !this.inTrainer && (this.inRival ? !!s.def.shiny : this.rng() < SHINY_RATE * this.shinyRate),
+      dead: false,
+      dotTicks: 0,
+      dotDmg: 0,
+      cd: 0,
+      cdMax: 1,
+      lastBump: -1,
+      role: 'wild',
+      sash: false,
+      lvl: el,
+      pow: lvlPow(offStat(s.def.stats, s.def.type), el),
+      rngMul: 1,
+      launch: 1,
+      cdMod: 0,
+      lastHit: new Map(),
+      wallN: 0,
+      hzT: -9,
+      sq: 0,
+      sumStage: 0,
+      atkN: 0,
+    };
   }
 
   // Held-item quirk on a boss — pokelike's curated aces. Rolled on the
@@ -703,6 +718,7 @@ export class Battle {
     const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
+    u.sq = 1; // launch pop — the ball stretches off the sling
     this.bumpsThisShot.clear();
     this.shotCombo = 0;
     this.kosThisShot = 0;
@@ -787,6 +803,9 @@ export class Battle {
     this.shake *= Math.exp(-6 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
     if (this.mapMsgT > 0) this.mapMsgT -= dt;
+    // squash impulses relax — sprites spring back after impacts
+    for (const p of this.players) p.sq *= Math.exp(-9 * dt);
+    for (const e of this.enemies) e.sq *= Math.exp(-9 * dt);
 
     this.stepOrbs(dt);
     this.stepWaves(dt);
@@ -810,7 +829,8 @@ export class Battle {
     const u = this.active;
     // combo momentum kicks can push the ball fast enough to skip a thin
     // slab in one step — substep harder when it's hot
-    const sub = u.vx * u.vx + u.vy * u.vy > 1000 * 1000 ? 4 : 2;
+    const v2 = u.vx * u.vx + u.vy * u.vy;
+    const sub = v2 > 1800 * 1800 ? 6 : v2 > 1000 * 1000 ? 4 : 2;
     const h = dt / sub;
     for (let i = 0; i < sub; i++) {
       const wave = this.enemies; // spawnWave swaps this array on wave clear
@@ -819,7 +839,14 @@ export class Battle {
       u.vy *= damp;
       u.x += u.vx * h;
       u.y += u.vy * h;
-      // speed trail while flying fast
+      // speed trail while flying fast — ghost positions smear the path
+      if (u.vx * u.vx + u.vy * u.vy > 500 * 500) {
+        const last = this.trail[this.trail.length - 1];
+        if (!last || Math.hypot(u.x - last.x, u.y - last.y) > 14) {
+          this.trail.push({ x: u.x, y: u.y, t: this.time });
+          if (this.trail.length > 18) this.trail.shift();
+        }
+      }
       this.hitWalls(u);
       this.hitBlocks(u);
       // court gimmicks — the ball feels the floor it's flying over
@@ -848,8 +875,20 @@ export class Battle {
         if (e.dead) continue;
         // pierce mons phase through enemies — hit once, keep the line
         if (u.def.pierce) {
-          if (dist(u, e) < u.r + e.r) this.strikeEnemy(u, e);
-        } else if (this.collide(u, e)) this.strikeEnemy(u, e);
+          if (dist(u, e) < u.r + e.r) {
+            e.sq = 1;
+            this.strikeEnemy(u, e);
+          }
+        } else if (this.collide(u, e)) {
+          u.sq = 0.8;
+          e.sq = 1;
+          // pinball knockback — the body you hit slides and shoves its
+          // neighbors, so one good line can cascade through the pack
+          const kb = Math.min(0.3, Math.hypot(u.vx, u.vy) / 4000) * (e.boss ? 0.15 : 1);
+          e.vx += u.vx * kb;
+          e.vy += u.vy * kb;
+          this.strikeEnemy(u, e);
+        }
       }
       for (const p of this.players) {
         // pass through teammates — each pass is a link-bump combo tick
@@ -1111,6 +1150,7 @@ export class Battle {
     }
     if (bounced && fast) {
       u.wallN++;
+      if (u.side === 'player') this.onBounceFx(u);
       if (this.pinch(-2) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
     }
   }
@@ -1123,8 +1163,19 @@ export class Battle {
     for (const b of this.blocks) bounced = resolveBlock(u, b) || bounced;
     if (bounced && fast && u.side === 'player') {
       u.wallN++;
+      this.onBounceFx(u);
       if (this.pinch(-3) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
     }
+  }
+
+  // Pinball feedback on a real bounce: squash pulse, expanding ring, a
+  // shake scaled to impact speed and a pitched thock — faster = sharper.
+  private onBounceFx(u: Unit) {
+    u.sq = Math.max(u.sq, 0.7);
+    const spd = Math.hypot(u.vx, u.vy);
+    this.waves.push({ x: u.x, y: u.y, r: 0, maxR: u.r * 2.4, t: 0.22, life: 0.22, color: '#cfe4ff', hits: new Set() });
+    this.addShake(Math.min(2.5, spd / 700));
+    sfx('bounce', Math.min(1.7, 0.6 + spd / 1200));
   }
 
   // Keeps a spawn point (or pickup) out of the blocks — nudge to the
@@ -1250,6 +1301,15 @@ export class Battle {
     if (!e.dead && !e.boss && e.hp > 0 && e.hp <= e.maxHp * this.t('ghost') * 0.06) {
       this.texts.push({ x: e.x, y: e.y - e.r - 34, text: 'EXECUTE!', t: 1, color: '#a868c8', big: true });
       e.hp = 0;
+    }
+    // boss phase summons: crossing 2/3 then 1/3 hp makes it cry for help —
+    // MS add-waves turn the sponge into a fight that escalates
+    if (e.boss && !e.dead && e.hp > 0 && e.sumStage < 2) {
+      const gate = e.sumStage === 0 ? 0.66 : 0.33;
+      if (e.hp / e.maxHp < gate) {
+        e.sumStage++;
+        this.summonAdds(e);
+      }
     }
     // psychic trait: a cut of every hit splashes onto another foe —
     // re-entry guarded so the splash can't splash
@@ -1383,6 +1443,8 @@ export class Battle {
     const last = e.lastHit.get(shooter.uid) ?? -1;
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
+    // impact ring in the attacker's type color — every contact pops
+    this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 1.7, t: 0.2, life: 0.2, color: TYPE_COLOR[shooter.def.type] ?? '#ffffff', hits: new Set() });
     const pinched = this.pinch(e.uid);
     // taunt toll-booth: while a magnet mon lives, contact damage routes
     // through it — pierce still passes, it just can't hurt anything else
@@ -1463,6 +1525,7 @@ export class Battle {
   private bumpAlly(p: Unit, u: Unit) {
     if (this.time - p.lastBump < 0.3) return; // once per pass, not per frame
     p.lastBump = this.time;
+    p.sq = 1; // the bumped ally pops — the pass reads as a bump, not a phase
     const silenced = this.inStatic(u.x, u.y);
     if (this.pinch(p.uid) && !silenced) this.onPinch(p.x, p.y);
     // VOLLEY: the bump itself is the resource — static fields silence it
@@ -2073,6 +2136,7 @@ export class Battle {
     const u = this.active;
     u.vx = 0;
     u.vy = 0;
+    this.trail = []; // smear dies with the shot
     // supers recharge per shot taken; leftovers ticks a small heal
     if (this.healCd > 0) this.healCd--;
     for (const p of this.players) {
@@ -2117,9 +2181,60 @@ export class Battle {
     }
   }
 
+  // Phase summon — the boss howls and fodder floods the upper court.
+  // Twice per boss, capped so a slow fight can't overflow the board.
+  private summonAdds(boss: Unit) {
+    const room = 7 - this.enemies.filter((x) => !x.dead).length;
+    const n = Math.min(2, Math.max(0, room));
+    if (n <= 0) return;
+    this.texts.push({ x: boss.x, y: boss.y - boss.r - 20, text: 'CALLED FOR HELP!', t: 1.3, color: '#ff8a8a', big: true });
+    this.screenFlash('#f85888', 0.15);
+    this.addShake(6);
+    sfx('invade');
+    cry(boss.def.id, 0.4);
+    for (let i = 0; i < n; i++) {
+      const def = pickWild(this.rng, this.depth);
+      const e = this.makeEnemy(
+        { def, nx: 0.2 + this.rng() * 0.6, ny: 0.12 + this.rng() * 0.35 },
+        this.waveIndex,
+      );
+      e.timer = Math.min(e.timer, 2); // adds arrive hot — they act soon
+      this.enemies.push(e);
+      this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.6, t: 0.3, life: 0.3, color: '#ff8a8a', hits: new Set() });
+    }
+  }
+
+  // Relocation beat — the boss blinks to a fresh spot with a landing
+  // sting. The board keeps shifting, so no pocket stays safe to camp in.
+  private bossHop(e: Unit) {
+    this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.6, t: 0.25, life: 0.25, color: '#f85888', hits: new Set() });
+    const at = this.unstick(
+      this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
+      this.arena.y + this.arena.h * (0.12 + this.rng() * 0.4),
+      e.r + 2,
+    );
+    e.x = at.x;
+    e.y = at.y;
+    this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3, t: 0.3, life: 0.3, color: '#f85888', hits: new Set() });
+    this.texts.push({ x: e.x, y: e.y - e.r - 14, text: 'TELEPORT!', t: 0.9, color: '#f85888', big: false });
+    this.addShake(6);
+    sfx('zap');
+    for (const p of this.players) {
+      if (!p.dead && dist(e, p) <= e.r + p.r + 40) {
+        this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, zapPower));
+        if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
+      }
+    }
+  }
+
   // Each boss has a signature attack on its countdown; invaders and
-  // unknowns fall back to the generic radial blast.
+  // unknowns fall back to the generic radial blast. Every 3rd attack is a
+  // hop instead — the signature stays scary but never gets stale.
   private bossAttack(e: Unit) {
+    if (++e.atkN % 3 === 0) {
+      this.bossHop(e);
+      return;
+    }
     const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
     this.screenFlash('#f85888', 0.18);
     this.addShake(12);
@@ -2395,6 +2510,21 @@ export class Battle {
 
     for (const w of this.waves) this.drawWave(ctx, w);
 
+    // speed smear — fading ghost dots behind the flying ball, type-tinted
+    if (this.trail.length) {
+      const au = this.active;
+      for (let i = 0; i < this.trail.length; i++) {
+        const p = this.trail[i];
+        const age = this.time - p.t;
+        const f = i / this.trail.length;
+        ctx.globalAlpha = Math.max(0, 0.3 - age * 0.55) * (0.3 + 0.7 * f);
+        ctx.fillStyle = TYPE_COLOR[au.def.type];
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, au.r * (0.3 + 0.45 * f), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
 
@@ -2964,8 +3094,24 @@ export class Battle {
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.82, u.r * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
-    if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y, u.r * 2.6);
-    else drawMon(ctx, u.def.id, u.x, u.y, u.r * 2.6);
+    // squash & stretch: speed smears the sprite along its flight and
+    // impacts squash it flat — the pinball pop is most of the feel
+    const spd = Math.hypot(u.vx, u.vy);
+    const st = Math.min(0.25, spd / 6000) + Math.min(u.sq, 1) * 0.22;
+    // everyone breathes a little — a standing army reads as a dead board
+    const bob = Math.sin(this.time * 2.4 + u.uid * 1.7) * 1.2;
+    if (st > 0.02) {
+      ctx.save();
+      ctx.translate(u.x, u.y + bob);
+      if (spd > 40) ctx.rotate(Math.atan2(u.vy, u.vx));
+      ctx.scale(1 + st, Math.max(0.55, 1 - st * 0.7));
+      if (u.shiny) drawShiny(ctx, u.def.id, 0, 0, u.r * 2.6);
+      else drawMon(ctx, u.def.id, 0, 0, u.r * 2.6);
+      ctx.restore();
+    } else {
+      if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6);
+      else drawMon(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6);
+    }
 
     // shinies twinkle — three gold four-point stars drift around the sprite
     if (u.shiny) {
