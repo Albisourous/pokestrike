@@ -34,6 +34,7 @@ import {
   DRAFT_REROLL,
   drawHelp,
   drawPerkPick,
+  CHARM_SKIP,
   helpScrollMax,
   DEX_BTN,
   drawDex,
@@ -341,6 +342,15 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
   } else if (scene === 'charm') {
+    if (inRect(p.x, p.y, CHARM_SKIP)) {
+      // declining the charm pays score instead — dead offers have a price
+      sfx('ui');
+      if (battle) battle.score += 200;
+      startOffers = [];
+      scene = 'battle';
+      sceneMusic();
+      return;
+    }
     for (let i = 0; i < startOffers.length; i++) {
       if (!inRect(p.x, p.y, perkCardRect(i))) continue;
       const perk = startOffers[i];

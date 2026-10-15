@@ -60,6 +60,7 @@ export const inRect = (x: number, y: number, r: { x: number; y: number; w: numbe
 export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
+export const CHARM_SKIP = { x: W / 2 - 90, y: 610, w: 180, h: 34 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 640, w: W - 48, h: 56 };
@@ -1152,6 +1153,8 @@ export function drawPerkPick(
   ctx.fillStyle = '#8890b8';
   ctx.fillText(sub, W / 2, 315);
   offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i), p));
+  // declining pays score instead — a dead offer still has a price
+  button(ctx, CHARM_SKIP, 'SKIP +200 PTS', true);
   // the drafted squad rides under the offers — pick the item for THESE mons
   if (team.length) {
     ctx.font = font(9);
