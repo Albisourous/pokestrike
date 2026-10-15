@@ -171,6 +171,9 @@ const WALL_REST = 0.92;
 const UNIT_REST = 0.9;
 const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
+const HEAL_CD = 5; // in-battle mends share this cooldown — one heal per few shots
+const SUPER_POW = 0.7; // supers hit softer so clean lines carry the damage
+const CONTACT_POW = 1.4; // direct hits are the bread and butter again
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
@@ -217,6 +220,7 @@ export class Battle {
   private waveSpecial: string | null = null; // banner override (invade)
   private gustSounded = false; // wind whoosh once per entry
   private shotPhys = 1; // protein pickup: contact damage this shot
+  private healCd = 0; // shots until another in-battle mend can land
   // engine state — per-shot keyword bookkeeping
   private volleys = 0; // ally bumps this shot (volleyNth counting)
   private shotVolleyBoost = 0; // volleyBoost accumulated this shot
@@ -455,7 +459,7 @@ export class Battle {
       this.nextTurn();
       return;
     }
-    if (this.phase !== 'aim') return;
+    if (this.phase !== 'aim' || this.active.dead) return;
     this.dragging = true;
     this.dragT = 0;
 
@@ -859,13 +863,7 @@ export class Battle {
   private grabPickup(pk: Pickup) {
     switch (pk.kind) {
       case 'oran-berry':
-        sfx('heal');
-        for (const p of this.players) {
-          if (p.dead) continue;
-          const heal = Math.max(1, Math.round(p.maxHp * 0.15));
-          p.hp = Math.min(p.hp + heal, p.maxHp);
-          this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
-        }
+        this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * 0.15)));
         break;
       case 'protein':
         sfx('ui');
@@ -877,6 +875,24 @@ export class Battle {
         for (const p of this.players) this.chargeUp(p);
         this.texts.push({ x: pk.x, y: pk.y - 12, text: 'CD -1!', t: 0.9, color: '#9ecbff', big: true });
         break;
+    }
+  }
+
+  // One shared heal window: a mend that lands starts HEAL_CD shots of
+  // downtime, so sustain is a drip, not a reset — items still bypass it.
+  private tryHeal(ps: Unit[], amount: (p: Unit) => number) {
+    if (this.healCd > 0) return;
+    let healed = false;
+    for (const p of ps) {
+      if (p.dead || p.hp >= p.maxHp) continue;
+      const heal = amount(p);
+      p.hp = Math.min(p.hp + heal, p.maxHp);
+      this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
+      healed = true;
+    }
+    if (healed) {
+      this.healCd = HEAL_CD;
+      sfx('heal');
     }
   }
 
@@ -1028,7 +1044,7 @@ export class Battle {
     // every link in the chain adds momentum: +5% contact damage per pass;
     // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
-      physDamage(shooter.def.stats.atk, e.def.stats.def, mult) *
+      physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
         shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
         (1 + this.wallRamp * shooter.wallN) *
         (1 + this.shotVolleyBoost) *
@@ -1077,19 +1093,8 @@ export class Battle {
         break;
       }
       case 'tank': // brace: small self-mend on every pass
-        if (p.hp < p.maxHp) {
-          p.hp = Math.min(p.hp + Math.ceil(p.maxHp * 0.03), p.maxHp);
-        }
+        this.tryHeal([p], (x) => Math.ceil(x.maxHp * 0.03));
         break;
-      case 'healer': { // splash health to whoever needs it most
-        const w = this.players
-          .filter((x) => !x.dead && x.hp < x.maxHp)
-          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
-        if (w) {
-          w.hp = Math.min(w.hp + Math.ceil(w.maxHp * 0.04), w.maxHp);
-        }
-        break;
-      }
       default: { // wild: opportunistic nip at the closest enemy
         const t = near(120).sort((a, b) => dist(p, a) - dist(p, b))[0];
         if (t) this.hurt(t, bumpDmg(t, 0.25), '#9df0ff');
@@ -1151,6 +1156,7 @@ export class Battle {
           ? physDamage(src.def.stats.atk, e.def.stats.def, eff(e), power) * this.physMult
           : specDamage(src.def.stats.spa, e.def.stats.spd, eff(e), power) * this.specMult) *
           p.pow *
+          SUPER_POW *
           (1 + (n - 1) * this.comboDmg), // metronome ramps with combo length
       );
     // passive talent: a small role effect on EVERY pass, on or off cooldown
@@ -1233,12 +1239,7 @@ export class Battle {
           dealt += dmg;
           this.hurt(e, dmg, '#9df0ff');
         }
-        const heal = Math.max(Math.round(dealt * 0.35), 4);
-        for (const pl of this.players) {
-          if (pl.dead) continue;
-          pl.hp = Math.min(pl.hp + heal, pl.maxHp);
-          this.texts.push({ x: pl.x, y: pl.y - pl.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
-        }
+        if (dealt > 0) this.tryHeal(this.players, () => Math.max(Math.round(dealt * 0.35), 4));
         break;
       }
       case 'water':
@@ -1335,12 +1336,7 @@ export class Battle {
     }
     // healer role: every super also mends the team
     if (p.role === 'healer') {
-      for (const pl of this.players) {
-        if (pl.dead) continue;
-        const heal = Math.max(1, Math.round(pl.maxHp * 0.15));
-        pl.hp = Math.min(pl.hp + heal, pl.maxHp);
-        this.texts.push({ x: pl.x, y: pl.y - pl.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
-      }
+      this.tryHeal(this.players, (pl) => Math.max(1, Math.round(pl.maxHp * 0.15)));
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
     if (this.enemies.length === 0 && this.phase !== 'won') this.waveCleared();
@@ -1596,6 +1592,7 @@ export class Battle {
     u.vx = 0;
     u.vy = 0;
     // supers recharge per shot taken; leftovers ticks a small heal
+    if (this.healCd > 0) this.healCd--;
     for (const p of this.players) {
       this.chargeUp(p);
       if (!p.dead && this.regen > 0 && p.hp < p.maxHp) {
@@ -1762,6 +1759,12 @@ export class Battle {
       this.addShake(6);
       sfx('ko');
       buzz(60);
+      // a KO mid-aim (lunge/orb/wave) strands the turn on a corpse —
+      // drop the drag and hand off, or end the run if it was the last
+      if (p === this.active && this.phase === 'aim') {
+        this.dragging = false;
+        this.nextTurn();
+      }
     }
   }
 
