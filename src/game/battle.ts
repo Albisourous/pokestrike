@@ -937,6 +937,7 @@ export class Battle {
       const step = Math.min(SP * dt, dist(d.u, d.e) - gap);
       d.u.x += dir.x * step;
       d.u.y += dir.y * step;
+      for (const b of this.blocks) resolveBlock(d.u, b); // dashes respect the stones too
     }
     this.dashes = this.dashes.filter((d) => !d.done);
   }
