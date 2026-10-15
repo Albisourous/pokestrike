@@ -292,6 +292,7 @@ canvas.addEventListener('pointerdown', (e) => {
         battle = new Battle(arenaRect(), draft.picked.map(draftDef), stage, runRng);
         battle.rank = rank();
         battle.asc = Math.min(best().wins, 9); // every clear raises the heat
+        battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
         // the last losing team returns as a rival wave — battle eats it
         const echo = echoIds()?.map(speciesById).filter((d): d is SpeciesDef => !!d);
         battle.echo = echo?.length ? echo : null;

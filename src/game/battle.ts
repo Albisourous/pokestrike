@@ -271,6 +271,8 @@ export class Battle {
   // metagame — set by main.ts from the persistent record
   rank = 0; // trainer rank: shifts invade odds + relic pool
   asc = 0; // ascension tier (wins so far) — enemy bulk/damage scale up
+  bestScore = 0; // saved best — crossing it mid-run pops NEW BEST!
+  private bested = false;
   heldItems: string[] = []; // item icons picked up this run — the build receipt
   echo: SpeciesDef[] | null = null; // last run's fallen team → rival wave
   echoCleared = false; // set when the rival wave was fought and won
@@ -957,6 +959,12 @@ export class Battle {
     if (immune) d = 1;
     e.hp -= d;
     this.score += Math.round(d * (1 + this.asc * 0.2)); // ascension pays a score premium
+    // the run just became your best — celebrate mid-flight, not just on the card
+    if (!this.bested && this.bestScore > 0 && this.score > this.bestScore) {
+      this.bested = true;
+      this.texts.push({ x: e.x, y: e.y - e.r - 46, text: '★ NEW BEST ★', t: 1.4, color: '#ffd84d', big: true });
+      sfx('perfect');
+    }
     // king's rock staggers attack timers — capped so a long combo delays
     // one volley instead of locking the enemy out forever
     e.timer = Math.min(e.timer + this.stagger, ENEMY_BASE_TIMER + this.stagger + 1);
