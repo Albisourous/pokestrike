@@ -36,13 +36,26 @@ await tap(105, 480); // first charm card
 await sleep(800);
 await shot('map'); // region map, pre-walk
 
-// autoplay: map taps pick the leftmost linked stop (trainers preferred),
-// aim drags from the active mon toward the nearest foe
+// autoplay: state-driven walk — map taps prefer a trainer stop, waves are
+// force-cleared via hurt()+endShot(). Screenshot harvest, not a fairness test.
+const waitPhase = async (wants, ms = 15000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) {
+    const ph = await phase();
+    if (wants.includes(ph)) return ph;
+    await sleep(200);
+  }
+  return phase();
+};
+
 let aimShot = false;
 let battleShot = false;
+let trainerShot = false;
 let rewardShot = false;
 let resultShot = false;
-for (let iter = 0; iter < 4000; iter++) {
+let aimDone = false;
+
+for (let iter = 0; iter < 400; iter++) {
   const ph = await phase();
   if (ph === 'won' || ph === 'lost') break;
   if (ph === 'map') {
@@ -51,47 +64,65 @@ for (let iter = 0; iter < 4000; iter++) {
       if (b.mapWalk) return null;
       const cur = b.region.nodes[b.mapNode];
       const nodes = cur.links.map((li) => b.region.nodes[li]);
-      const n = nodes.find((x) => x.kind === 'trainer') ?? nodes[0];
+      const n = nodes.find((x) => x.kind === 'trainer') ?? nodes.find((x) => x.kind !== 'gym') ?? nodes[0];
       return { tx: n.tx, ty: n.ty, kind: n.kind };
     });
     if (!hit) { await sleep(300); continue; }
-    if (hit.kind === 'trainer') await shot('map'); // re-shoot with trainer in view
-    const cell = 30, ox = (540 - 16 * cell) / 2, oy = 136;
+    const cell = 32, ox = (540 - 16 * cell) / 2, oy = 128;
     await tap(ox + hit.tx * cell + cell / 2, oy + hit.ty * cell + cell / 2);
-    await sleep(2600); // the walk + spawn
-  } else if (ph === 'aim') {
-    const u = await page.evaluate(() => {
+    await page.waitForFunction(() => !window.__battle.mapWalk, null, { timeout: 15000 }).catch(() => {});
+    if (hit.kind === 'trainer' && !trainerShot) {
+      await waitPhase(['aim']);
+      await sleep(400);
+      await shot('trainer');
+      trainerShot = true;
+    }
+  } else if (ph === 'aim' || ph === 'shot' || ph === 'enemy') {
+    // first wave: a real drag for the aim/battle shots before force-clearing
+    if (!aimDone && ph === 'aim') {
+      const u = await page.evaluate(() => {
+        const b = window.__battle;
+        const p = b.players.find((x) => !x.dead && x.uid === b.active?.uid) ?? b.players.find((x) => !x.dead);
+        const foes = b.enemies.filter((e) => !e.dead);
+        if (!p || !foes.length) return null;
+        let f = foes[0], best = Infinity;
+        for (const e of foes) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < best) { best = d; f = e; } }
+        const dx = f.x - p.x, dy = f.y - p.y, d = Math.hypot(dx, dy) || 1;
+        return { x: p.x, y: p.y, dx: (dx / d) * 200, dy: (dy / d) * 200 };
+      });
+      if (u) {
+        await page.mouse.move(u.x, u.y);
+        await page.mouse.down();
+        await page.mouse.move(u.x - u.dx, u.y - u.dy, { steps: 6 });
+        await shot('aim');
+        aimShot = true;
+        await page.mouse.up();
+        await sleep(900);
+        await shot('battle');
+        battleShot = true;
+        aimDone = true;
+        continue;
+      }
+    }
+    await page.evaluate(() => {
       const b = window.__battle;
-      const p = b.players.find((x) => !x.dead && x.uid === b.active?.uid) ?? b.players.find((x) => !x.dead);
-      const foes = b.enemies.filter((e) => !e.dead);
-      if (!p || !foes.length) return null;
-      let f = foes[0], best = Infinity;
-      for (const e of foes) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < best) { best = d; f = e; } }
-      const dx = f.x - p.x, dy = f.y - p.y, d = Math.hypot(dx, dy) || 1;
-      return { x: p.x, y: p.y, dx: (dx / d) * 200, dy: (dy / d) * 200 };
+      for (const e of b.enemies) if (!e.dead) b.hurt(e, e.hp + 1, '#fff');
+      if (b.phase === 'aim') b.endShot(); // only settle from aim — calling endShot during reward deadlocks
     });
-    if (!u) { await sleep(400); continue; }
-    await page.mouse.move(u.x, u.y);
-    await page.mouse.down();
-    await page.mouse.move(u.x - u.dx, u.y - u.dy, { steps: 6 });
-    if (!aimShot) { await shot('aim'); aimShot = true; }
-    await page.mouse.up();
-    await sleep(900);
-    if (!battleShot) { await shot('battle'); battleShot = true; }
-    await sleep(600);
+    await sleep(800);
   } else if (ph === 'reward') {
     if (!rewardShot) { await shot('reward'); rewardShot = true; }
     await tap(105, 480); // take the first relic
     await sleep(400);
-    const still = await phase();
-    if (still === 'reward') await tap(473, 923); // REWARD_SKIP
+    if ((await phase()) === 'reward') await tap(473, 923); // REWARD_SKIP
     await sleep(400);
   } else {
     await sleep(500);
   }
-  if (aimShot && battleShot && rewardShot) break; // got the shots — done
+  if (aimShot && battleShot && trainerShot && rewardShot) break;
 }
+
 const end = await phase();
 if (end === 'won' || end === 'lost') { await shot('result'); resultShot = true; }
-console.log(`done: phase=${end} aim=${aimShot} battle=${battleShot} reward=${rewardShot} result=${resultShot}`);
+console.log(`done: phase=${end} aim=${aimShot} battle=${battleShot} trainer=${trainerShot} reward=${rewardShot} result=${resultShot}`);
 await browser.close();

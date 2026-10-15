@@ -13,6 +13,10 @@ leaders to win the run.
 | --- | --- | --- |
 | ![region map](docs/map.png) | ![aiming](docs/aim.png) | ![relic reward](docs/reward.png) |
 
+| Charm pick | Trainer battle |
+| --- | --- |
+| ![starting charm](docs/charm.png) | ![trainer battle](docs/trainer.png) |
+
 ## How to play
 
 ```bash
@@ -115,11 +119,10 @@ scrollable in-game manual, and it opens itself on your first visit.
    Mystic Water, Magnet...) give +20% to one type and stack; going mono-type
    is a real build (they only roll for types you actually field). Then pick
    your **route** on the region map: non-gym rows
-   offer 2-3 linked stops to tap: safe **wilds**, the **elite** road (bigger
-   fight, uncommon-or-better items), Poké Center **rests** (+30% team HP),
-   **item finds**, **blood shrines** (team −15% HP for a relic), the
-   **Poké Mart** (a relic for 500 score, power or the record), and **?**
-   mystery stops (a cache, a hidden spring, or a trap). Gyms are
+   offer 1-2 linked stops to tap: safe **wilds** (catchable fights),
+   **trainers** (a real NPC class fields a mono-type squad — no catches,
+   no shinies, but elite-tier loot), **chests** (a free relic), and
+   **Poké Center rests** (full heal and fainted mons revived). Gyms are
    forced singles every third row; the island itself is a seeded
    porygion-style value-noise map. The items you've taken ride the reward
    screen as an icon strip.

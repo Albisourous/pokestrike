@@ -2356,7 +2356,10 @@ export class Battle {
       ctx.moveTo(0, cy + 34);
       ctx.lineTo(W_CANVAS_FALLBACK, cy + 34);
       ctx.stroke();
-      ctx.font = `bold ${Math.round(34 * scaleIn)}px Georgia, serif`;
+      // shrink-to-fit: long specials (trainer banners) would overflow the strip
+      ctx.font = `bold 34px Georgia, serif`;
+      const fit = Math.min(1, (W_CANVAS_FALLBACK - 48) / ctx.measureText(label).width);
+      ctx.font = `bold ${Math.round(34 * scaleIn * fit)}px Georgia, serif`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#f0e6c8';
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
@@ -2537,22 +2540,28 @@ export class Battle {
         ctx.fillStyle = '#6fdc6f';
         ctx.fillText('✓', nx, ny + 4);
       }
-      if (!cleared) {
-        // town-map style: every stop is named, choices glow brightest
-        ctx.font = font(10);
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        const label =
-          n.kind === 'gym' ? 'GYM'
-          : n.kind === 'rest' ? 'REST'
-          : n.kind === 'chest' ? 'CHEST'
-          : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title
-          : n.kind === 'start' ? 'HOME'
-          : 'WILD';
-        ctx.strokeText(label, nx, ny - cell * 1.55);
-        ctx.fillStyle = reachable ? (n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d') : current ? '#6fdc6f' : '#8a94b8';
-        ctx.fillText(label, nx, ny - cell * 1.55);
-      }
+    });
+    // labels in a second pass so buildings can't paint over a neighbor's name
+    this.region.nodes.forEach((n, i) => {
+      if (n.row < this.pendingNext) return;
+      const nx = ox + n.tx * cell + cell / 2;
+      const ny = oy + n.ty * cell + cell / 2;
+      const reachable = links.includes(i);
+      const current = i === this.mapNode;
+      // town-map style: every stop is named, choices glow brightest
+      ctx.font = font(10);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      const label =
+        n.kind === 'gym' ? 'GYM'
+        : n.kind === 'rest' ? 'REST'
+        : n.kind === 'chest' ? 'CHEST'
+        : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title
+        : n.kind === 'start' ? 'HOME'
+        : 'WILD';
+      ctx.strokeText(label, nx, ny - cell * 1.55);
+      ctx.fillStyle = reachable ? (n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d') : current ? '#6fdc6f' : '#8a94b8';
+      ctx.fillText(label, nx, ny - cell * 1.55);
     });
     ctx.strokeStyle = '#2a3560';
     ctx.lineWidth = 3;
@@ -2760,7 +2769,7 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      const tag = u.boss ? `★${u.timer}` : `${u.timer}`;
+      const tag = u.boss ? `★${Math.ceil(u.timer)}` : `${Math.ceil(u.timer)}`;
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = u.timer <= 1 || u.enraged ? '#ff6b6b' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);

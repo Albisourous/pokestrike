@@ -28,7 +28,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/stats.ts` — stat-to-mechanic formulas (Atk/Def = physical, SpA/SpD = special, Spe = movement)
 - `src/game/types.ts` — Pokémon type chart + colors
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering + the region-map interstitial
-- `src/game/map.ts` — seeded island generator for the climb map (value-noise terrain, decor); rows of 1–3 linked stops (wild/elite/rest/item/shrine/mart, gyms forced every 3rd row) — branching route, not a linear path; tile draws key magenta from the gracidea tileset
+- `src/game/map.ts` — seeded island generator for the climb map (value-noise terrain, decor); rows of 1–2 linked stops (wild/trainer/chest/rest, gyms forced every 3rd row) — branching route, not a linear path; tile draws key magenta from the gracidea tileset
 - `src/game/maptiles.ts` — `TILE_*` source rects into `tileset.webp` for the map
 - `src/game/meta.ts` — localStorage persistence: dex catches, rank, rival echo
 - `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
