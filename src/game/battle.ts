@@ -267,7 +267,7 @@ export class Battle {
   koHeal = 0; // exp share: heal team this fraction on each KO
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   bossSlayer = 0; // power bracer: bonus damage vs bosses
-  wallRamp = 0; // grip claw: contact damage per wall bounce this shot
+  wallRamp = 0.08; // banking off walls pays a little contact damage per bounce — grip claw triples it
   wpBonus = 0; // weakness policy: extra weak-point damage
   // keyword relics — PINCH (two contacts in one window) / VOLLEY (ally bumps)
   pinchPip = 0; // pips granted to the launcher on each pinch
@@ -1163,6 +1163,8 @@ export class Battle {
     buzz(8);
     if (weak)
       this.texts.push({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 0.9, color: '#ffd84d', big: true });
+    if (shooter.wallN >= 2)
+      this.texts.push({ x: e.x, y: e.y - e.r - 58, text: `BANKED ×${shooter.wallN}!`, t: 0.9, color: '#9df0ff', big: false });
     if (mult > 1)
       this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'SUPER EFFECTIVE!', t: 0.8, color: '#ffd84d', big: false });
   }
