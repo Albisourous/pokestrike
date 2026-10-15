@@ -96,8 +96,9 @@ Open the printed URL. Works on desktop and touch.
    Between stages you walk the **region map** — a seeded island (porygion-style
    value-noise: sea, beach, grass, mountain) with the 9 stops routed
    south→north, the next wave's wilds previewed up top, and map stops that
-   do things: **gym** icons are boss stages, Poké Center **rests** heal the
-   team 30%, and **item finds** cough up a free item.
+   do things: **gym** icons are boss stages (with a boss nameplate + HP bar),
+   Poké Center **rests** heal the team 30%, and **item finds** cough up a
+   free item. The items you've taken ride the reward screen as an icon strip.
 9. **It remembers you** — caught mons join your **dex** and can show up in
    future draft pools; gym wins raise your **rank**, and higher ranks unlock
    gated items in the pool. Your **best score** and **daily streak** live on
@@ -107,7 +108,12 @@ Open the printed URL. Works on desktop and touch.
    your **ascension** (shown on the title): enemies get +15% bulk and +8%
    damage per tier, and pay a +20%/tier score premium.
 9b. **Level up mid-run** — every KO feeds the mon that landed it a level
-    (+5% damage, +3% max HP, up to Lv 20). Feed your carry, not your bench.
+    (+5% damage, +3% max HP, up to Lv 20). Levels survive evolution and
+    benching — they follow the mon. Feed your carry, not your bench.
+9c. **Signature moves** — drafted/caught mons shout their *own* move
+    (Pikachu `THUNDERBOLT`, Gyarados `TWISTER`, Mewtwo `PSYCHO BOOST`),
+    and draft cards show the super you'll unlock. Draft cards can roll
+    **shiny** (~1 in 50) too — a gold card stays gold for the whole run.
 10. **Share your result** — the result screen shows a Wordle-style emoji grid
     (🟩 cleared waves, 🟥 where you fell), your final team as real sprites,
     rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS THIEF, SHINY

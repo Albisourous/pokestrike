@@ -1987,9 +1987,10 @@ export class Battle {
     }
 
     // boss nameplate — the gym fight reads as a real boss encounter
+    // (sits below the timing-bar zone so it never overlaps the aim meter)
     const boss = this.enemies.find((e) => e.boss && !e.dead);
     if (boss) {
-      const bw = 240, bx = 270 - bw / 2, by = a.y + 6;
+      const bw = 240, bx = 270 - bw / 2, by = a.y + 40;
       const pct = Math.max(boss.hp / boss.maxHp, 0);
       ctx.textAlign = 'center';
       ctx.font = font(9);

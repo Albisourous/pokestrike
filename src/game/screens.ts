@@ -777,6 +777,7 @@ export function drawDraft(
     ctx.fill();
     cardFace(ctx, r, def.type);
     cardFrame(ctx, r, 10);
+    if (def.shiny) rim(ctx, r, 10, '#ffd84d', 2);
 
     // a shiny draft card glows gold — the rarest pick on the board
     if (def.shiny) {
