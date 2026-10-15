@@ -586,7 +586,11 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'COMBO SHOTS',
-    lines: ['two contacts inside a blink — foe, wall, stone, ally — = COMBO SHOT!', 'combo shots pay bonus damage and feed Binding Band + Ether'],
+    lines: [
+      'the ball touching two different things — foe, ally, wall, stone — within 0.35s',
+      'flashes COMBO SHOT! (hitting the same thing twice doesn\'t count)',
+      'relics cash it in: Binding Band pays +40% contact, Ether feeds a super pip',
+    ],
     demo: demoBump,
   },
   {

@@ -351,7 +351,7 @@ const THEME_NAME: Record<Theme, string> = {
 
 // Spawn positions drawn without replacement from this pool. The tight
 // pairs (0.09 apart) overlap enemy radii, so they resolve to touching —
-// a wedge you can pinch the ball between for multi-hits.
+// a pocket you can squeeze the ball through for multi-hits.
 const SLOTS: [number, number][] = [
   [0.25, 0.2], [0.75, 0.2], [0.5, 0.4], [0.25, 0.55],
   [0.75, 0.55], [0.5, 0.12], [0.15, 0.4], [0.85, 0.4],

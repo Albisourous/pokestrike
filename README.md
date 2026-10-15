@@ -86,8 +86,13 @@ scrollable in-game manual, and it opens itself on your first visit.
    each wave and the ball collects them by touch: **Oran Berry** heals the
    team, **Protein** boosts contact damage for the rest of the shot,
    **Elixir** knocks a notch off every super's cooldown. Heavy hits scar
-   the court, and some spawn pairs sit close enough to pinch the ball
-   between them for multi-hits.
+   the court, and some spawn pairs sit close enough to squeeze the ball
+   between them for multi-hits. **Combo shots**: when the ball touches two
+   different things — foe, ally, wall, stone — inside a 0.35s window, the
+   second contact flashes `COMBO SHOT!` (banks only count while the ball
+   still has speed). Relics are what make them pay: **Binding Band** gives
+   +40% contact damage on the hit and **Ether** feeds the launcher a
+   super pip.
 7. **Catch 'em.** A KO has a chance to send the enemy to your **box**
    (`CAUGHT!` ball wiggle and all), and every cleared stage guarantees
    **one recruit**; beat a gym leader and their ace joins you. Swap boxed
