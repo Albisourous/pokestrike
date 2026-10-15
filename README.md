@@ -13,9 +13,9 @@ leaders to win the run.
 | --- | --- | --- |
 | ![region map](docs/map.png) | ![aiming](docs/aim.png) | ![relic reward](docs/reward.png) |
 
-| Charm pick | Trainer battle |
-| --- | --- |
-| ![starting charm](docs/charm.png) | ![trainer battle](docs/trainer.png) |
+| Charm pick | Trainer battle | ? Event |
+| --- | --- | --- |
+| ![starting charm](docs/charm.png) | ![trainer battle](docs/trainer.png) | ![event stop](docs/event.png) |
 
 ## How to play
 
@@ -120,8 +120,16 @@ scrollable in-game manual, and it opens itself on your first visit.
    your **route** on the region map: non-gym rows
    offer 1-2 linked stops to tap: safe **wilds** (catchable fights),
    **trainers** (a real NPC class fields a mono-type squad — no catches,
-   no shinies, but elite-tier loot), **chests** (a free relic), and
-   **Poké Center rests** (full heal and fainted mons revived). Gyms are
+   no shinies, but elite-tier loot), **chests** (a free relic),
+   **Poké Center rests** (full heal and fainted mons revived), and **?**
+   event stops — a roll from the event pool: a heal, a free catch, a
+   rare candy stash, a wonder trade, an egg that hatches a few stops
+   later, or an ambush (an alpha guarding treasure, a wild pack) that
+   fields a scripted wave. Field two or more mons of one type and its
+   **type trait** kicks in (shinies count double, fainted mons don't):
+   fire burns brighter, ghosts execute low foes, psychic hits splash —
+   tiers show as chips under the map. Waves that outlast 10 shots ramp
+   enemy damage, so stalls get punished. Gyms are
    forced singles every third row; the island itself is a seeded
    porygion-style value-noise map. The items you've taken ride the reward
    screen as an icon strip.
