@@ -33,6 +33,9 @@ import {
   MUTE_BTN,
   drawHelp,
   helpScrollMax,
+  DEX_BTN,
+  drawDex,
+  dexScrollMax,
   inRect,
   font,
 } from './game/screens';
@@ -70,6 +73,9 @@ let runRng: () => number = Math.random;
 let lastMode: 'free' | 'daily' = 'free';
 let helpOpen = false;
 let helpScroll = 0;
+let dexOpen = false;
+let dexScroll = 0;
+let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
 let resultExtra: string | null = null;
@@ -226,6 +232,16 @@ canvas.addEventListener('pointerdown', (e) => {
       helpDrag = { y0: p.y, s0: helpScroll, moved: false };
       return;
     }
+    if (dexOpen) {
+      dexDrag = { y0: p.y, s0: dexScroll, moved: false };
+      return;
+    }
+    if (inRect(p.x, p.y, DEX_BTN)) {
+      sfx('ui');
+      dexOpen = true;
+      dexScroll = 0;
+      return;
+    }
     if (inRect(p.x, p.y, HELP_BTN)) {
       sfx('ui');
       helpOpen = true;
@@ -353,6 +369,11 @@ canvas.addEventListener('pointermove', (e) => {
     helpScroll = Math.min(Math.max(helpDrag.s0 + helpDrag.y0 - p.y, 0), helpScrollMax());
     return;
   }
+  if (dexDrag) {
+    if (Math.abs(p.y - dexDrag.y0) > 6) dexDrag.moved = true;
+    dexScroll = Math.min(Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0), dexScrollMax());
+    return;
+  }
   if (boxDrag) {
     if (Math.abs(p.x - boxDrag.x0) > 6) boxDrag.moved = true;
     if (battle)
@@ -370,6 +391,12 @@ canvas.addEventListener('pointerup', (e) => {
     const { moved } = helpDrag;
     helpDrag = null;
     if (!moved) helpOpen = false;
+    return;
+  }
+  if (dexDrag) {
+    const { moved } = dexDrag;
+    dexDrag = null;
+    if (!moved) dexOpen = false;
     return;
   }
   if (boxDrag) {
@@ -404,6 +431,11 @@ canvas.addEventListener(
     if (scene === 'title' && helpOpen) {
       e.preventDefault();
       helpScroll = Math.min(Math.max(helpScroll + e.deltaY, 0), helpScrollMax());
+      return;
+    }
+    if (scene === 'title' && dexOpen) {
+      e.preventDefault();
+      dexScroll = Math.min(Math.max(dexScroll + e.deltaY, 0), dexScrollMax());
       return;
     }
     if (scene !== 'battle' || battle?.phase !== 'reward') return;
@@ -444,6 +476,7 @@ function update(dt: number) {
     if (battle.phase === 'won' || battle.phase === 'lost') {
       const won = battle.phase === 'won';
       const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
+      const dexBefore = dexIds().length;
       result = {
         won,
         shots: battle.shots,
@@ -453,11 +486,13 @@ function update(dt: number) {
         badges: battle.runBadges(won),
         team: battle.players.map((p) => p.def),
         newBest: recordRun(battle.score, stageReached, won, lastMode === 'daily' ? dailySeed() : null),
+        newDex: 0,
       };
       share = buildShare(battle, won);
       // catches join the dex either way; a loss leaves the team behind as
       // the next run's rival "echo"
       recordCapture(battle.box.map((b) => b.id));
+      result.newDex = dexIds().length - dexBefore;
       if (!won) saveEcho(battle.players.map((p) => p.def.id));
       if (!won) {
         // near-miss framing: a deep wipe reads as "so close", not "failed"
@@ -505,6 +540,7 @@ function render() {
     case 'title':
       drawTitle(ctx);
       if (helpOpen) drawHelp(ctx, helpScroll);
+      if (dexOpen) drawDex(ctx, dexScroll);
       break;
     case 'draft': {
       const offers = draftOffers().map((i) => draftPool[i]);

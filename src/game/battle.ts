@@ -1964,6 +1964,15 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // foes remaining, top-right — the wave's progress bar
+    const left = this.enemies.filter((e) => !e.dead).length;
+    if ((this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') && left > 0) {
+      ctx.font = font(9);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText(`${left} LEFT`, a.x + a.w - 8, a.y + 16);
+    }
+
     // ascension tag — why the mobs feel bulkier today
     if (this.asc > 0) {
       ctx.font = font(9);

@@ -1,6 +1,6 @@
 import { itemSprite, drawMon, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS } from './data';
+import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop } from './bg';
@@ -12,7 +12,11 @@ export const W = 540;
 export const H = 960;
 
 // species that can ever drop a ball — the dex completion denominator
-const CATCHABLE = new Set([...ENEMY_DB, ...ELITES, ...INVADERS].map((d) => d.id)).size;
+// (roster mons count too: a rival echo can field them and they can be caught)
+const DEX_LIST = [...new Map([...ROSTER, ...ENEMY_DB, ...ELITES, ...INVADERS].map((s) => [s.id, s])).values()].sort(
+  (a, b) => a.id - b.id,
+);
+const CATCHABLE = DEX_LIST.length;
 
 export interface RunResult {
   won: boolean;
@@ -23,6 +27,7 @@ export interface RunResult {
   badges: { name: string; rarity: Rarity }[];
   team: SpeciesDef[]; // final lineup — survives mid-run box swaps
   newBest: boolean; // the run just beat the saved best score
+  newDex: number; // fresh dex entries this run added
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -385,7 +390,13 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
     W / 2,
     DAILY_BTN.y + DAILY_BTN.h + 22,
   );
-  ctx.fillText(`RANK ${rankName()} · DEX ${dexIds().length}/${CATCHABLE}`, W / 2, DAILY_BTN.y + DAILY_BTN.h + 36);
+  // dex line doubles as the dex button — chip frame hints it's tappable
+  const dexLine = `RANK ${rankName()} · DEX ${dexIds().length}/${CATCHABLE}`;
+  ctx.strokeStyle = '#2a3560';
+  ctx.lineWidth = 1;
+  roundRect(ctx, DEX_BTN.x, DEX_BTN.y, DEX_BTN.w, DEX_BTN.h, 8);
+  ctx.stroke();
+  ctx.fillText(dexLine, W / 2, DAILY_BTN.y + DAILY_BTN.h + 38);
   // the records line is the one-more-run hook — best score + daily streak
   const b = best();
   const bits = [`BEST ${b.score.toLocaleString('en-US')}`];
@@ -684,6 +695,62 @@ export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText('scroll to read · tap to close', r.x + r.w / 2, r.y + r.h - 16);
 }
 
+// --- dex overlay: every catchable mon — caught ones in color, the rest ??? ---
+export const DEX_BTN = { x: W / 2 - 110, y: DAILY_BTN.y + DAILY_BTN.h + 24, w: 220, h: 22 };
+const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
+const DEX_COLS = 6;
+const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
+const DEX_HEAD = 60;
+
+export function dexScrollMax() {
+  const rows = Math.ceil(DEX_LIST.length / DEX_COLS);
+  return Math.max(0, rows * DEX_CELL - (DEX_PANEL.h - DEX_HEAD - 36));
+}
+
+export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
+  const r = DEX_PANEL;
+  ctx.fillStyle = 'rgba(6,10,22,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 14);
+
+  ctx.textAlign = 'center';
+  ctx.font = font(17);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText(`POKÉDEX ${dexIds().length}/${CATCHABLE}`, r.x + r.w / 2, r.y + 40);
+
+  const seen = new Set(dexIds());
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, r.h - DEX_HEAD - 36);
+  ctx.clip();
+  ctx.font = font(7);
+  DEX_LIST.forEach((def, i) => {
+    const cx = r.x + 20 + (i % DEX_COLS) * DEX_CELL + DEX_CELL / 2;
+    const cy = r.y + DEX_HEAD + 8 + Math.floor(i / DEX_COLS) * DEX_CELL - scroll + DEX_CELL / 2;
+    const got = seen.has(def.id);
+    if (got) {
+      drawMon(ctx, def.id, cx, cy, DEX_CELL - 20);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(def.name.toUpperCase(), cx, cy + DEX_CELL / 2 - 8);
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      roundRect(ctx, cx - 12, cy - 12, 24, 24, 5);
+      ctx.fill();
+      ctx.fillStyle = '#3a4370';
+      ctx.fillText('???', cx, cy + 4);
+      ctx.fillText(`#${String(def.id).padStart(3, '0')}`, cx, cy + DEX_CELL / 2 - 8);
+    }
+  });
+  ctx.restore();
+
+  ctx.font = font(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('catch wild mons to fill the dex — they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+}
+
 export function drawDraft(
   ctx: CanvasRenderingContext2D,
   offers: SpeciesDef[],
@@ -712,6 +779,17 @@ export function drawDraft(
     cardFrame(ctx, r, 10);
 
     drawMon(ctx, def.id, r.x + r.w / 2, r.y + 94, 84);
+
+    // evolution hint rides the top-left — Magikarp is secretly Gyarados
+    if (def.evolvesTo != null) {
+      const nx = speciesById(def.evolvesTo)?.name.toUpperCase();
+      if (nx) {
+        ctx.textAlign = 'left';
+        ctx.font = font(7);
+        ctx.fillStyle = '#8890b8';
+        ctx.fillText(`→ ${nx}`, r.x + 8, r.y + 14);
+      }
+    }
 
     // trait tag rides the top-right corner
     if (def.pierce || def.copy) {
@@ -1035,10 +1113,15 @@ export function drawResult(
     W / 2,
     res.newBest ? 368 : 355,
   );
+  if (res.newDex > 0) {
+    ctx.font = font(9);
+    ctx.fillStyle = '#9df0ff';
+    ctx.fillText(`+${res.newDex} NEW DEX ENTR${res.newDex === 1 ? 'Y' : 'IES'}`, W / 2, res.newBest ? 384 : 371);
+  }
   if (extra) {
     ctx.font = font(11);
     ctx.fillStyle = '#f8d030';
-    ctx.fillText(extra, W / 2, 395);
+    ctx.fillText(extra, W / 2, res.newDex > 0 ? 400 : 395);
   }
 
   // run badges — rarity-colored chips, up to two rows
