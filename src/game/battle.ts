@@ -1610,6 +1610,19 @@ export class Battle {
         this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;
       }
       sfx('ready');
+    } else if (n.kind === 'shrine') {
+      // a deal with the dark: the shrine bleeds the team for a relic —
+      // taken right before the last gym, when the offer is sharpest
+      for (const p of this.players) {
+        if (!p.dead) p.hp = Math.max(1, p.hp - Math.round(p.maxHp * 0.15));
+      }
+      const p = rollPerks(this.rng, 1, Math.max(1, this.rank))[0];
+      if (p) {
+        p.apply(this);
+        this.heldItems.push(p.item);
+        this.mapNote = `THE SHRINE TAKES ITS TITHE — ${p.name.toUpperCase()}, TEAM −15% HP`;
+      }
+      sfx('invade');
     }
   }
 
@@ -2188,6 +2201,9 @@ export class Battle {
       if (n.kind === 'item') {
         const ball = itemSprite('poke-ball');
         if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
+      } else if (n.kind === 'shrine') {
+        const orb = itemSprite('life-orb');
+        if (orb) ctx.drawImage(orb, nx - 13, ny - 20, 26, 26);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN;
         if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
@@ -2212,7 +2228,7 @@ export class Battle {
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : this.eliteWave ? 'ELITE' : 'NEXT';
+        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : this.eliteWave ? 'ELITE' : 'NEXT';
         ctx.strokeText(label, nx, ny - cell * 1.1);
         ctx.fillStyle = '#ffd84d';
         ctx.fillText(label, nx, ny - cell * 1.1);

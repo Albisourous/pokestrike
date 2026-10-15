@@ -14,7 +14,7 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item';
+export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item' | 'shrine';
 export interface MapNode {
   tx: number;
   ty: number;
@@ -42,7 +42,8 @@ const vn = (x: number, y: number, s: number) => {
 
 // One icon per stop — fixed so the island reads like StS's map: you can
 // plan the climb ("rest before the last gym") the moment it rolls.
-const KINDS: NodeKind[] = ['start', 'item', 'gym', 'wild', 'rest', 'gym', 'item', 'rest', 'gym'];
+// last rest before the final gym is a shrine instead — power for blood
+const KINDS: NodeKind[] = ['start', 'item', 'gym', 'wild', 'rest', 'gym', 'item', 'shrine', 'gym'];
 
 export function genRegion(seed: number): RegionMap {
   const rng = mulberry32(seed);

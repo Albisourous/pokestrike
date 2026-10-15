@@ -31,6 +31,7 @@ import {
   DAILY_BTN,
   HELP_BTN,
   MUTE_BTN,
+  DRAFT_REROLL,
   drawHelp,
   helpScrollMax,
   DEX_BTN,
@@ -61,7 +62,12 @@ const dailySeed = () => {
 
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
-let draft: { order: number[]; picked: number[]; shiny: Set<number> } = { order: [], picked: [], shiny: new Set() };
+let draft: { order: number[]; picked: number[]; shiny: Set<number>; rerolls: number } = {
+  order: [],
+  picked: [],
+  shiny: new Set(),
+  rerolls: 1,
+};
 // the run's draft pool — roster plus captured-dex species not already in it
 let draftPool: SpeciesDef[] = [];
 let stage = makeStage(randSeed());
@@ -170,7 +176,7 @@ function startDraft() {
       .map(speciesById)
       .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id)),
   ];
-  draft = { order: draftOrder(runRng), picked: [], shiny: new Set() };
+  draft = { order: draftOrder(runRng), picked: [], shiny: new Set(), rerolls: 1 };
   for (let i = ROSTER.length; i < draftPool.length; i++) {
     draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
   }
@@ -184,6 +190,21 @@ function startDraft() {
 // a shiny slot hands Battle a cloned def — the shared species rows stay clean
 const draftDef = (i: number): SpeciesDef =>
   draft.shiny.has(i) ? { ...draftPool[i], shiny: true } : draftPool[i];
+
+// one board reshuffle per draft — a bad first board isn't a run sentence
+function rerollDraft() {
+  if (draft.rerolls <= 0) return;
+  draft.rerolls--;
+  const head = draft.order.slice(0, draft.picked.length * 3);
+  const tail = draft.order.slice(draft.picked.length * 3);
+  for (let i = tail.length - 1; i > 0; i--) {
+    const j = Math.floor(runRng() * (i + 1));
+    [tail[i], tail[j]] = [tail[j], tail[i]];
+  }
+  draft.order = [...head, ...tail];
+  offerCache = null;
+  sfx('ui');
+}
 
 // navigator.clipboard rejects on iOS Safari even in a gesture — the
 // textarea + execCommand trick still works there, so it's the fallback
@@ -281,6 +302,10 @@ canvas.addEventListener('pointerdown', (e) => {
     }
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
+    if (draft.rerolls > 0 && inRect(p.x, p.y, DRAFT_REROLL)) {
+      rerollDraft();
+      return;
+    }
     const offers = draftOffers();
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
@@ -360,7 +385,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
     } else if (inRect(p.x, p.y, TITLE_BTN)) {
       sfx('ui');
-      draft = { order: [], picked: [], shiny: new Set() };
+      draft = { order: [], picked: [], shiny: new Set(), rerolls: 1 };
       battle = null;
       result = null;
       resultExtra = null;
@@ -559,6 +584,7 @@ function render() {
         draft.picked.map(draftDef),
         stage.name,
         t,
+        draft.rerolls,
       );
       break;
     }

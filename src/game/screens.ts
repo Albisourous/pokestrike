@@ -41,6 +41,7 @@ const CARDS_Y = 300;
 export function draftCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: CARDS_Y, w: CARD_W, h: CARD_H };
 }
+export const DRAFT_REROLL = { x: W / 2 - 70, y: CARDS_Y + CARD_H + 16, w: 140, h: 30 };
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
@@ -757,6 +758,7 @@ export function drawDraft(
   picked: SpeciesDef[],
   stageName: string,
   t: number,
+  rerolls: number,
 ) {
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null, true);
 
@@ -859,6 +861,19 @@ export function drawDraft(
     });
     ctx.textAlign = 'center';
   });
+
+  // one board reshuffle per draft — dimmed once spent
+  {
+    const rr = DRAFT_REROLL;
+    const live = rerolls > 0;
+    roundRect(ctx, rr.x, rr.y, rr.w, rr.h, 10);
+    ctx.fillStyle = live ? '#12162b' : 'rgba(18,22,43,0.45)';
+    ctx.fill();
+    rim(ctx, rr, 10, live ? GOLD : '#2a3560', 1.5);
+    ctx.font = font(9);
+    ctx.fillStyle = live ? PARCH : '#5a6284';
+    ctx.fillText(live ? 'REROLL (1)' : 'REROLL USED', rr.x + rr.w / 2, rr.y + 19);
+  }
 
   // picked team strip
   ctx.font = font(9);
