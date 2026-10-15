@@ -170,6 +170,11 @@ interface Scar {
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'won' | 'lost';
 
 
+// region-map layout — shared by drawRegion, the tap hit-test, and smoke
+export const MAP_CELL = 32;
+export const MAP_OX = (540 - MAP_W * MAP_CELL) / 2;
+export const MAP_OY = 128;
+
 const STOP_SPEED = 45;
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
 const BASE_SHOT_SPEED = 190; // base launch speed — pull distance only aims
@@ -573,9 +578,7 @@ export class Battle {
       }
       // StS routing: tap one of the linked stops to walk there — its kind
       // flavors the battle (trainer squad, rest heal, chest find)
-      const cell = 30;
-      const ox = (540 - MAP_W * cell) / 2;
-      const oy = 136;
+      const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
       const cur = this.region.nodes[this.mapNode];
       const hit = cur.links
         .map((li) => this.region.nodes[li])
@@ -2361,20 +2364,20 @@ export class Battle {
     }
   }
 
-  // The climb as a porygion-style region: a seeded island of grass ringed
-  // by beach and sea, 9 stops south→north on a carved route — gyms every
-  // 3rd, Poké Center rests, item finds — with the next wave's wilds
-  // previewed up top like a Monster Strike quest banner.
+  // The climb as a town-map region: a seeded island of grass ringed by
+  // beach and sea, 9 stops south→north on a carved route — gyms every
+  // 3rd, trainer squads, chests, Poké Center rests — with the next wave's
+  // wilds previewed up top like a Monster Strike quest banner.
   private drawRegion(ctx: CanvasRenderingContext2D) {
     ctx.fillStyle = '#0a0e1c';
     ctx.fillRect(0, 0, 540, 960);
     ctx.textAlign = 'center';
-    ctx.font = font(18);
+    ctx.font = font(22);
     ctx.fillStyle = '#f8d030';
-    ctx.fillText(this.stage.name.toUpperCase(), 270, 66);
-    ctx.font = font(9);
+    ctx.fillText(this.stage.name.toUpperCase(), 270, 64);
+    ctx.font = font(12);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 84);
+    ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 88);
 
     // who's waiting at the next stop — gyms show their boss
     const seen = new Set<number>();
@@ -2382,9 +2385,9 @@ export class Battle {
       .filter((s) => !seen.has(s.def.id) && seen.add(s.def.id))
       .slice(0, 4);
     preview.forEach((s, i) => {
-      const x = 270 - preview.length * 15 + i * 30 + 15;
+      const x = 270 - preview.length * 17 + i * 34 + 17;
       try {
-        drawMon(ctx, s.def.id, x, 108, 26); // unspawned waves may not be loaded yet
+        drawMon(ctx, s.def.id, x, 112, 30); // unspawned waves may not be loaded yet
       } catch {
         return;
       }
@@ -2392,20 +2395,18 @@ export class Battle {
         ctx.strokeStyle = '#f0b02f';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x, 108, 16, 0, Math.PI * 2);
+        ctx.arc(x, 112, 18, 0, Math.PI * 2);
         ctx.stroke();
       }
     });
     if (!preview.length && this.pendingNext > this.waveIndex) {
       // rolled rows deal their wave when the stop is picked — unknowns for now
-      ctx.font = font(14);
+      ctx.font = font(16);
       ctx.fillStyle = '#3a4370';
-      ctx.fillText('?  ?  ?', 270, 114);
+      ctx.fillText('?  ?  ?', 270, 118);
     }
 
-    const cell = 30;
-    const ox = (540 - MAP_W * cell) / 2;
-    const oy = 136;
+    const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
     const img = gracidea();
     // bake the island once — the region is fixed per run, so 350 tile
     // blits + save/restores per frame collapse into a single drawImage
@@ -2508,17 +2509,20 @@ export class Battle {
       const current = i === this.mapNode;
       if (n.kind === 'chest') {
         const ball = itemSprite('poke-ball');
-        if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
+        if (ball) ctx.drawImage(ball, nx - 15, ny - 24, 30, 30);
       } else if (n.kind === 'trainer') {
         // the class's overworld sprite stands on the stop — colored ring is
         // the squad's type
         if (n.ttype) drawNpc(ctx, TRAINER_CLASS[n.ttype].frame, nx, ny + cell * 0.5, cell * 1.7);
+      } else if (n.kind === 'wild') {
+        // a flower patch = tall grass — something wild is rustling there
+        drawTile(ctx, MT.TILE_FLOWER, nx - cell * 0.6, ny - cell * 0.6, cell * 1.2, cell * 1.2);
       } else {
-        const icon = n.kind === 'gym' ? MT.TILE_GYM : n.kind === 'start' || n.kind === 'rest' ? MT.TILE_TOWN : null;
-        if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
+        const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN; // start + rest are towns
+        drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
         if (n.kind === 'rest') {
           const potion = itemSprite('max-potion');
-          if (potion) ctx.drawImage(potion, nx - 9, ny - cell * 1.9, 18, 18);
+          if (potion) ctx.drawImage(potion, nx - 10, ny - cell * 2, 20, 20);
         }
       }
       ctx.globalAlpha = cleared ? 0.35 : reachable ? 1 : 0.5;
@@ -2529,18 +2533,25 @@ export class Battle {
       ctx.stroke();
       ctx.globalAlpha = 1;
       if (cleared) {
-        ctx.font = font(10);
+        ctx.font = font(12);
         ctx.fillStyle = '#6fdc6f';
         ctx.fillText('✓', nx, ny + 4);
       }
-      if (reachable || current) {
-        ctx.font = font(8);
+      if (!cleared) {
+        // town-map style: every stop is named, choices glow brightest
+        ctx.font = font(10);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'chest' ? 'CHEST' : n.kind === 'trainer' ? (n.ttype ? `${n.ttype.toUpperCase()} TRAINER` : 'TRAINER') : n.kind === 'start' ? 'HERE' : 'WILD';
-        ctx.strokeText(label, nx, ny - cell * 1.1);
-        ctx.fillStyle = reachable ? '#ffd84d' : '#6fdc6f';
-        ctx.fillText(label, nx, ny - cell * 1.1);
+        const label =
+          n.kind === 'gym' ? 'GYM'
+          : n.kind === 'rest' ? 'REST'
+          : n.kind === 'chest' ? 'CHEST'
+          : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title
+          : n.kind === 'start' ? 'HOME'
+          : 'WILD';
+        ctx.strokeText(label, nx, ny - cell * 1.55);
+        ctx.fillStyle = reachable ? (n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d') : current ? '#6fdc6f' : '#8a94b8';
+        ctx.fillText(label, nx, ny - cell * 1.55);
       }
     });
     ctx.strokeStyle = '#2a3560';
@@ -2552,16 +2563,17 @@ export class Battle {
     vg.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, 540, 960);
-    ctx.font = font(9);
-    ctx.fillStyle = '#8890b8';
+    ctx.font = font(12);
+    ctx.fillStyle = '#aab4d8';
     ctx.fillText(
       this.pendingNext <= this.waveIndex ? 'tap to begin the climb' : 'choose your route: tap a linked stop',
       270,
-      oy + MAP_H * cell + 40,
+      oy + MAP_H * cell + 44,
     );
-    ctx.font = font(7);
-    ctx.fillStyle = '#5a6488';
-    ctx.fillText('WILD fight · TRAINER mono-type squad, no catches, better loot · CHEST relic · REST heal+revive', 270, oy + MAP_H * cell + 56);
+    ctx.font = font(9);
+    ctx.fillStyle = '#6a7498';
+    ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + MAP_H * cell + 62);
+    ctx.fillText('CHEST free relic · REST heal+revive · GYM boss battle', 270, oy + MAP_H * cell + 78);
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not

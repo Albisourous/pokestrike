@@ -1,10 +1,10 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle } from '../src/game/battle';
+import { Battle, MAP_CELL, MAP_OX, MAP_OY } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById } from '../src/game/data';
 import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
-import { genRegion, routePath, MAP_W } from '../src/game/map';
+import { genRegion, routePath } from '../src/game/map';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -196,11 +196,10 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     if (b.phase === 'aim' && aimTries++ > 300) break; // stall detector
     if (b.phase === 'map') {
       // pick a linked stop — same cell math drawRegion/pointerDown use
-      const cell = 30, ox = (540 - MAP_W * cell) / 2, oy = 136;
       const region = (b as any).region;
       const cur = region.nodes[(b as any).mapNode];
       const n = region.nodes[cur.links[Math.floor(rng() * cur.links.length)]];
-      b.pointerDown({ x: ox + n.tx * cell + cell / 2, y: oy + n.ty * cell + cell / 2 });
+      b.pointerDown({ x: MAP_OX + n.tx * MAP_CELL + MAP_CELL / 2, y: MAP_OY + n.ty * MAP_CELL + MAP_CELL / 2 });
       step(240); // the lead mon walks the route over ~6 tiles/sec
     } else if (b.phase === 'reward') {
       b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);

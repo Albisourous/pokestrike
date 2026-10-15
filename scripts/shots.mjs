@@ -19,6 +19,9 @@ const tap = (x, y) => page.mouse.click(x, y);
 const phase = () => page.evaluate(() => window.__battle?.phase ?? 'none');
 const sleep = (ms) => page.waitForTimeout(ms);
 
+// first run auto-opens the help overlay — a tap anywhere closes it
+await tap(400, 800);
+await sleep(400);
 await shot('title');
 await tap(270, 752); // FREE PLAY
 await sleep(600);
