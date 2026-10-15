@@ -228,6 +228,8 @@ export class Battle {
   // engine state — per-shot keyword bookkeeping
   private volleys = 0; // ally bumps this shot (volleyNth counting)
   private shotVolleyBoost = 0; // volleyBoost accumulated this shot
+  streak = 0; // consecutive perfect launches — shown in the HUD
+  private shotStreak = 1; // this shot's streak damage bonus
   private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
   private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
@@ -532,6 +534,10 @@ export class Battle {
     const u = this.active;
     // direction from the pull; power from release timing on the meter
     const charge = this.charge();
+    // hot streak: back-to-back perfects make each shot hit a bit harder —
+    // resets the moment a release misses the gold
+    this.streak = charge > 0.93 ? this.streak + 1 : 0;
+    this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
     const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
@@ -557,7 +563,7 @@ export class Battle {
       }
     }
     if (charge > 0.93) {
-      this.texts.push({ x: u.x, y: u.y - u.r - 14, text: 'PERFECT!', t: 1, color: '#ffd84d', big: true });
+      this.texts.push({ x: u.x, y: u.y - u.r - 14, text: this.streak > 1 ? `PERFECT ×${this.streak}!` : 'PERFECT!', t: 1, color: '#ffd84d', big: true });
       this.screenFlash('#ffd84d', 0.12);
       // slow-mo beat + speedlines streaming off the launch
       this.hitStop = Math.max(this.hitStop, 0.16);
@@ -1124,6 +1130,7 @@ export class Battle {
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
         shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
         (1 + this.wallRamp * shooter.wallN) *
+        this.shotStreak *
         (1 + this.shotVolleyBoost) *
         (pinched ? 1 + this.pinchMult : 1) *
         Math.pow(0.9, hitN) *
@@ -1857,6 +1864,15 @@ export class Battle {
       this.addShake(6);
       sfx('ko');
       buzz(60);
+      // REVENGE: a fallen teammate fuels the rest — small pow/hp surge so
+      // a death stings less and a comeback is always live
+      for (const q of this.players) {
+        if (!q.dead) {
+          q.pow *= 1.08;
+          q.hp = Math.min(q.maxHp, q.hp + Math.round(q.maxHp * 0.05));
+        }
+      }
+      this.texts.push({ x: p.x, y: p.y - p.r - 30, text: 'REVENGE!', t: 1.1, color: '#f85888', big: true });
       // a KO mid-aim (lunge/orb/wave) strands the turn on a corpse —
       // drop the drag and hand off, or end the run if it was the last
       if (p === this.active && this.phase === 'aim') {

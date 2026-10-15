@@ -1203,7 +1203,7 @@ export function drawResult(
   button(ctx, TITLE_BTN, 'TITLE', true);
 }
 
-export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number) {
+export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0) {
   ctx.fillStyle = '#8890b8';
   ctx.font = font(9);
   ctx.textAlign = 'left';
@@ -1237,4 +1237,8 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   ctx.font = font(8);
   ctx.fillStyle = '#ffd84d';
   ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W - 30, 60);
+  if (streak > 1) {
+    ctx.fillStyle = '#f08030';
+    ctx.fillText(`PERFECT ×${streak}`, W - 30, 76);
+  }
 }
