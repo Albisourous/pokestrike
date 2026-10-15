@@ -2887,9 +2887,10 @@ export class Battle {
       ctx.moveTo(0, cy + 34);
       ctx.lineTo(W_CANVAS_FALLBACK, cy + 34);
       ctx.stroke();
-      // shrink-to-fit: long specials (trainer banners) would overflow the strip
+      // shrink-to-fit: long specials would overflow the strip — size the
+      // fit against the popped scale too, or the pop clips at spawn
       ctx.font = `bold 34px Georgia, serif`;
-      const fit = Math.min(1, (W_CANVAS_FALLBACK - 48) / ctx.measureText(label).width);
+      const fit = Math.min(1, (W_CANVAS_FALLBACK - 48) / (ctx.measureText(label).width * scaleIn));
       ctx.font = `bold ${Math.round(34 * scaleIn * fit)}px Georgia, serif`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#f0e6c8';
