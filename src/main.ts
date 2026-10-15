@@ -559,6 +559,11 @@ function update(dt: number) {
           if (rem < 0.35) extra += ` — the wave was ${Math.round((1 - rem) * 100)}% cleared`;
         }
         resultExtra = extra;
+      } else {
+        // a clear raises the heat — say so, that's the "again?" hook
+        const nextAsc = Math.min(best().wins, 9);
+        if (nextAsc > battle.asc && nextAsc <= 9)
+          resultExtra = `ASCENSION ${nextAsc} UNLOCKED — the climb gets meaner`;
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       shareText = [
@@ -671,6 +676,8 @@ Promise.all([
 ])
   .then(() => {
     scene = 'title';
+    // first visit opens the rules once — after that it's the HELP chip's job
+    if (best().runs === 0) helpOpen = true;
     startLoop(update, render);
   })
   .catch((err) => {
