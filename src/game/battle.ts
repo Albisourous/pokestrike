@@ -233,6 +233,7 @@ export class Battle {
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
   private inRival = false; // this wave is the rival echo fight
   private region: RegionMap; // the climb's world map — drawn between stages
+  private regionBase: HTMLCanvasElement | null = null; // baked terrain — region never changes
   private pendingNext = 0; // wave the map interstitial leads into
   private mapNote = ''; // stop-flavor line shown on the region map
   private shake = 0;
@@ -553,6 +554,7 @@ export class Battle {
     if (this.dragging) this.dragT += dt;
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
+    if (this.texts.length > 40) this.texts.splice(0, this.texts.length - 40); // a huge burst shouldn't stack 100 labels
     for (const f of this.flashes) f.t -= dt;
     this.flashes = this.flashes.filter((f) => f.t > 0);
     for (const b of this.balls) b.t -= dt;
@@ -1000,6 +1002,7 @@ export class Battle {
         lv.maxHp += gain;
         lv.hp = Math.min(lv.hp + gain, lv.maxHp);
         this.texts.push({ x: lv.x, y: lv.y - lv.r - 36, text: `LV ${lv.lvl}!`, t: 0.9, color: '#9df0ff', big: false });
+        sfx('ready');
       }
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
@@ -1452,14 +1455,15 @@ export class Battle {
     const role = roleOf(nd.stats, nd.healer);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(nd.stats) * m.hp);
+    const lvBoost = Math.max(0, p.lvl - 1); // earned levels survive evolution
     p.def = nd;
     p.role = role;
-    p.pow = m.pow;
+    p.pow = m.pow * Math.pow(1.05, lvBoost);
     p.rngMul = m.range;
     p.launch = m.launch;
     p.cdMod = m.cdMod;
-    p.maxHp = hp;
-    p.hp = Math.max(1, Math.round(hp * frac));
+    p.maxHp = Math.round(hp * (1 + lvBoost * 0.03));
+    p.hp = Math.max(1, Math.round(p.maxHp * frac));
     if (p.dead) p.hp = 0;
     p.cdMax = Math.max(1, Math.round(bumpCooldown(nd.type) * this.cdMult) - p.cdMod);
     p.cd = Math.min(p.cd, p.cdMax);
@@ -1590,6 +1594,7 @@ export class Battle {
   runBadges(won: boolean): { name: string; rarity: Rarity }[] {
     const faints = this.players.filter((u) => u.dead).length;
     const b: { name: string; rarity: Rarity }[] = [];
+    if (won && this.asc > 0) b.push({ name: `ASCENSION ${this.asc}`, rarity: 'legendary' });
     if (this.maxKos >= 4) b.push({ name: 'MEGA KO', rarity: 'legendary' });
     else if (this.maxKos >= 3) b.push({ name: 'TRIPLE KO', rarity: 'rare' });
     else if (this.maxKos >= 2) b.push({ name: 'DOUBLE KO', rarity: 'common' });
@@ -1959,6 +1964,14 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // ascension tag — why the mobs feel bulkier today
+    if (this.asc > 0) {
+      ctx.font = font(9);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#f0b02f';
+      ctx.fillText(`ASC ${this.asc}`, a.x + 8, a.y + 16);
+    }
+
     // onboarding hints for the first couple of shots
     if (this.phase === 'aim' && this.shots < 2 && !this.dragging) {
       ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
@@ -2043,41 +2056,62 @@ export class Battle {
     const ox = (540 - MAP_W * cell) / 2;
     const oy = 136;
     const img = gracidea();
-    const flat = (c: string, x: number, y: number) => {
-      ctx.fillStyle = c;
-      ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
-    };
+    // bake the island once — the region is fixed per run, so 350 tile
+    // blits + save/restores per frame collapse into a single drawImage
+    if (!this.regionBase && img) {
+      const c = document.createElement('canvas');
+      c.width = MAP_W * cell;
+      c.height = MAP_H * cell;
+      const g = c.getContext('2d')!;
+      g.imageSmoothingEnabled = false;
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const i = y * MAP_W + x;
+          const t = this.region.tiles[i];
+          const tile = this.region.route.has(i) ? MT.TILE_PATH : t === T_WATER ? MT.TILE_WATER : t === T_SAND ? MT.TILE_SAND : MT.TILE_GRASS;
+          drawTile(g, tile, x * cell, y * cell, cell, cell);
+        }
+      }
+      for (const [i, kind] of this.region.decor) {
+        const s = kind === 'tree' ? MT.TILE_TREE : kind === 'rock' ? MT.TILE_ROCK : MT.TILE_FLOWER;
+        drawTile(g, s, (i % MAP_W) * cell - cell * 0.2, Math.floor(i / MAP_W) * cell - cell * 0.5, cell * 1.4, cell * 1.4);
+      }
+      this.regionBase = c;
+    }
     const sparkle = Math.floor(this.time * 4);
-    for (let y = 0; y < MAP_H; y++) {
-      for (let x = 0; x < MAP_W; x++) {
-        const i = y * MAP_W + x;
-        const t = this.region.tiles[i];
-        const px = ox + x * cell, py = oy + y * cell;
-        if (this.region.route.has(i)) {
-          if (img) drawTile(ctx, MT.TILE_PATH, px, py, cell, cell);
-          else flat('#c8a868', x, y);
-        } else if (t === T_WATER) {
-          if (img) drawTile(ctx, MT.TILE_WATER, px, py, cell, cell);
-          else flat('#3060b0', x, y);
-          // glinting sea — a few cells catch the light each beat
+    if (this.regionBase) {
+      ctx.drawImage(this.regionBase, ox, oy);
+      // only the water glints stay live
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          if (this.region.tiles[y * MAP_W + x] !== T_WATER || this.region.route.has(y * MAP_W + x)) continue;
           if ((x * 7 + y * 11 + sparkle) % 23 === 0) {
             ctx.fillStyle = 'rgba(255,255,255,0.25)';
-            ctx.fillRect(px + cell * 0.3, py + cell * 0.35, cell * 0.4, 2);
+            ctx.fillRect(ox + x * cell + cell * 0.3, oy + y * cell + cell * 0.35, cell * 0.4, 2);
           }
-        } else if (t === T_SAND) {
-          if (img) drawTile(ctx, MT.TILE_SAND, px, py, cell, cell);
-          else flat('#d8c080', x, y);
-        } else {
-          if (img) drawTile(ctx, MT.TILE_GRASS, px, py, cell, cell);
+        }
+      }
+    } else {
+      const flat = (c: string, x: number, y: number) => {
+        ctx.fillStyle = c;
+        ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
+      };
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const i = y * MAP_W + x;
+          const t = this.region.tiles[i];
+          const px = ox + x * cell, py = oy + y * cell;
+          if (this.region.route.has(i)) flat('#c8a868', x, y);
+          else if (t === T_WATER) {
+            flat('#3060b0', x, y);
+            if ((x * 7 + y * 11 + sparkle) % 23 === 0) {
+              ctx.fillStyle = 'rgba(255,255,255,0.25)';
+              ctx.fillRect(px + cell * 0.3, py + cell * 0.35, cell * 0.4, 2);
+            }
+          } else if (t === T_SAND) flat('#d8c080', x, y);
           else flat('#4c9844', x, y);
         }
       }
-    }
-    // forests and meadows fill the open land
-    for (const [i, kind] of this.region.decor) {
-      const px = ox + (i % MAP_W) * cell, py = oy + Math.floor(i / MAP_W) * cell;
-      const s = kind === 'tree' ? MT.TILE_TREE : kind === 'rock' ? MT.TILE_ROCK : MT.TILE_FLOWER;
-      if (img) drawTile(ctx, s, px - cell * 0.2, py - cell * 0.5, cell * 1.4, cell * 1.4);
     }
     // your lead mon waits at the last cleared stop, facing the road ahead
     const at = this.region.nodes[Math.max(0, this.pendingNext - 1)];

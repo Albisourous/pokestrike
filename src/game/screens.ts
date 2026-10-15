@@ -1,6 +1,6 @@
 import { itemSprite, drawMon, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES } from './data';
+import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop } from './bg';
@@ -10,6 +10,9 @@ import { dexIds, rankName, best } from './meta';
 
 export const W = 540;
 export const H = 960;
+
+// species that can ever drop a ball — the dex completion denominator
+const CATCHABLE = new Set([...ENEMY_DB, ...ELITES, ...INVADERS].map((d) => d.id)).size;
 
 export interface RunResult {
   won: boolean;
@@ -382,7 +385,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
     W / 2,
     DAILY_BTN.y + DAILY_BTN.h + 22,
   );
-  ctx.fillText(`RANK ${rankName()} · DEX ${dexIds().length}`, W / 2, DAILY_BTN.y + DAILY_BTN.h + 36);
+  ctx.fillText(`RANK ${rankName()} · DEX ${dexIds().length}/${CATCHABLE}`, W / 2, DAILY_BTN.y + DAILY_BTN.h + 36);
   // the records line is the one-more-run hook — best score + daily streak
   const b = best();
   const bits = [`BEST ${b.score.toLocaleString('en-US')}`];
@@ -600,6 +603,11 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'CATCHING',
     lines: ['beaten foes sometimes drop a ball — catches go to your box', 'a duplicate evolves or feeds the copy you already own'],
     demo: demoCatch,
+  },
+  {
+    title: 'LEVELING UP',
+    lines: ['every KO levels the mon that launched the shot — Lv20 cap', 'levels survive evolution; ascension (wins) makes foes tougher'],
+    demo: demoCharge,
   },
   {
     title: 'THE CLIMB',

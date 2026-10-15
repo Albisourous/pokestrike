@@ -17,7 +17,9 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `npm run dev` — dev server (default port 5173)
 - `npm run build` — typecheck (`tsc --noEmit`) + production build
 - `npm run typecheck` — types only
-- No test suite yet; verify by running `npm run build` and playing a run
+- `npm run smoke` — headless playthrough test (`test/smoke.ts`, bundled by
+  rolldown): spawns waves, autoplayed climb, ascension/level/evo/shiny asserts
+- Verify by `npm run build` + `npm run smoke`; a real run still beats both
 
 ## Layout
 
