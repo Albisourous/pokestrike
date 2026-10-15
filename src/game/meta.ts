@@ -5,7 +5,7 @@
 
 const memDex = new Set<number>();
 let memGyms = 0;
-let memEcho: number[] | null = null;
+let memEcho: { id: number; lvl: number }[] | null = null;
 let memBest: Best | null = null;
 
 const load = <T>(key: string): T | null => {
@@ -56,13 +56,16 @@ export function rankName(r = rank()): string {
   return ['ROOKIE', 'ACE', 'CHAMPION'][r] ?? 'ROOKIE';
 }
 
-export function echoIds(): number[] | null {
-  return load<number[]>('pk_echo') ?? memEcho;
+// The echo stores species + earned level — a fallen team comes back at
+// the strength it died with. Old saves held bare ids; read those as Lv1.
+export function echoIds(): { id: number; lvl: number }[] | null {
+  const raw = load<(number | { id: number; lvl: number })[]>('pk_echo') ?? memEcho;
+  return raw?.map((e) => (typeof e === 'number' ? { id: e, lvl: 1 } : e)) ?? null;
 }
 
-export function saveEcho(ids: number[]) {
-  memEcho = ids;
-  store('pk_echo', ids);
+export function saveEcho(mons: { id: number; lvl: number }[]) {
+  memEcho = mons;
+  store('pk_echo', mons);
 }
 
 export function clearEcho() {

@@ -326,7 +326,9 @@ canvas.addEventListener('pointerdown', (e) => {
         battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
         battle.shinyRate = shinyCharm() ? 2 : 1; // dex milestone doubles the gold
         // the last losing team returns as a rival wave — battle eats it
-        const echo = echoIds()?.map(speciesById).filter((d): d is SpeciesDef => !!d);
+        const echo = echoIds()
+          ?.map((e) => ({ def: speciesById(e.id), lvl: e.lvl }))
+          .filter((e): e is { def: SpeciesDef; lvl: number } => !!e.def);
         battle.echo = echo?.length ? echo : null;
         lastGyms = 0;
         // ?dev exposes the live battle for poking around during playtests
@@ -547,7 +549,7 @@ function update(dt: number) {
       // the next run's rival "echo"
       recordCapture(battle.box.map((b) => b.id));
       result.newDex = dexIds().length - dexBefore;
-      if (!won) saveEcho(battle.players.map((p) => p.def.id));
+      if (!won) saveEcho(battle.players.map((p) => ({ id: p.def.id, lvl: p.lvl })));
       if (!won) {
         // near-miss framing: a deep wipe reads as "so close", not "failed"
         const near = stageReached >= TOTAL_STAGES - 1;

@@ -280,7 +280,7 @@ export class Battle {
   bestScore = 0; // saved best — crossing it mid-run pops NEW BEST!
   private bested = false;
   heldItems: string[] = []; // item icons picked up this run — the build receipt
-  echo: SpeciesDef[] | null = null; // last run's fallen team → rival wave
+  echo: { def: SpeciesDef; lvl: number }[] | null = null; // last run's fallen team → rival wave
   echoCleared = false; // set when the rival wave was fought and won
   gymsBeaten = 0; // gym waves cleared this run — feeds trainer rank
   box: SpeciesDef[] = []; // captured mons — swap in between stages
@@ -395,7 +395,7 @@ export class Battle {
     this.waveHadGym = spawns.some((s) => s.boss);
     this.inRival = false;
     if (this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
-      spawns = rivalWave(this.echo, this.rng);
+      spawns = rivalWave(this.echo.map((e) => e.def), this.rng);
       this.waveSpecial = 'RIVAL BATTLE!';
       this.inRival = true;
       sfx('invade');
@@ -434,7 +434,9 @@ export class Battle {
       lunging: 0,
       boss: !!s.boss,
       // shinies: wild fodder only — bosses and your rival echo stay normal
-      shiny: !s.boss && !this.inRival && this.rng() < SHINY_RATE * this.shinyRate,
+      // shinies: wild fodder rolls gold; your rival echo keeps the palette
+      // it died with — including a shiny if you lost one
+      shiny: !s.boss && (this.inRival ? !!s.def.shiny : this.rng() < SHINY_RATE * this.shinyRate),
       dead: false,
       dotTicks: 0,
       dotDmg: 0,
@@ -454,6 +456,17 @@ export class Battle {
       hzT: -9,
       };
     });
+    // rival echo fights at the levels it earned — the ghost of a stacked
+    // run is a real fight, not a victory lap
+    if (this.inRival) {
+      this.enemies.forEach((e, i) => {
+        const lv = this.echo?.[i]?.lvl ?? 1;
+        e.lvl = lv;
+        e.pow = Math.pow(1.05, lv - 1);
+        e.maxHp = Math.round(e.maxHp * Math.pow(1.03, lv - 1));
+        e.hp = e.maxHp;
+      });
+    }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
     this.pickups = [];
     this.scars = [];
@@ -2225,6 +2238,12 @@ export class Battle {
         ctx.stroke();
       }
     });
+    if (!preview.length && this.pendingNext > this.waveIndex) {
+      // rolled rows deal their wave when the stop is picked — unknowns for now
+      ctx.font = font(14);
+      ctx.fillStyle = '#3a4370';
+      ctx.fillText('?  ?  ?', 270, 114);
+    }
 
     const cell = 30;
     const ox = (540 - MAP_W * cell) / 2;
