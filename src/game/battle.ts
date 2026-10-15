@@ -277,6 +277,7 @@ export class Battle {
   gymsBeaten = 0; // gym waves cleared this run — feeds trainer rank
   box: SpeciesDef[] = []; // captured mons — swap in between stages
   boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
+  boxLvl: number[] = []; // each boxed mon's level — benching keeps earned levels
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
   score = 0; // run score — total damage dealt to enemies
   maxCombo = 0; // best pass-chain in a single shot
@@ -329,7 +330,7 @@ export class Battle {
         wMul: 0,
         lunging: 0,
         boss: false,
-        shiny: false,
+        shiny: !!def.shiny, // a shiny draft pick stays gold
         dead: false,
         dotTicks: 0,
         dotDmg: 0,
@@ -1033,8 +1034,9 @@ export class Battle {
       if (caught) {
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def)) {
-          this.box.push(e.def);
+          this.box.push(e.shiny ? { ...e.def, shiny: true } : e.def);
           this.boxHp.push(1);
+          this.boxLvl.push(1);
         }
         if (e.boss) this.caughtBoss = true;
         if (e.shiny) {
@@ -1419,7 +1421,7 @@ export class Battle {
     const next = evoId != null ? SPECIES_DB.find((s) => s.id === evoId) : undefined;
     if (next) {
       if (owned) this.evolveUnit(owned, next);
-      else this.box[bi] = next;
+      else this.box[bi] = this.box[bi].shiny ? { ...next, shiny: true } : next; // shininess survives a boxed evolution
       this.texts.push({
         x: owned ? owned.x : this.arena.x + this.arena.w / 2,
         y: owned ? owned.y - owned.r - 40 : this.arena.y + 70,
@@ -1476,18 +1478,24 @@ export class Battle {
     if (this.phase !== 'reward') return;
     const def = this.box[bi];
     const frac = this.boxHp[bi] ?? 1;
+    const lvl = this.boxLvl[bi] ?? 1;
     const p = this.players[ti];
     if (!def || !p) return;
     this.box.splice(bi, 1);
     this.boxHp.splice(bi, 1);
+    this.boxLvl.splice(bi, 1);
     this.box.push(p.def); // benched ally goes back to the box
     this.boxHp.push(p.maxHp ? p.hp / p.maxHp : 0);
+    this.boxLvl.push(Math.max(1, p.lvl)); // earned levels ride back to the bench
     const role = roleOf(def.stats, def.healer);
     const m = ROLE_MODS[role];
-    const hp = Math.round(playerHp(def.stats) * m.hp);
+    const lvBoost = lvl - 1;
+    const hp = Math.round(playerHp(def.stats) * m.hp * (1 + lvBoost * 0.03));
     p.def = def;
     p.role = role;
-    p.pow = m.pow;
+    p.lvl = lvl;
+    p.shiny = !!def.shiny;
+    p.pow = m.pow * Math.pow(1.05, lvBoost);
     p.rngMul = m.range;
     p.launch = m.launch;
     p.cdMod = m.cdMod;
@@ -1534,6 +1542,7 @@ export class Battle {
       if (!this.absorbDupe(this.lastRecruit)) {
         this.box.push(this.lastRecruit);
         this.boxHp.push(1);
+        this.boxLvl.push(1);
       }
       sfx('caught');
     }
@@ -1971,6 +1980,27 @@ export class Battle {
       ctx.textAlign = 'right';
       ctx.fillStyle = '#8890b8';
       ctx.fillText(`${left} LEFT`, a.x + a.w - 8, a.y + 16);
+    }
+
+    // boss nameplate — the gym fight reads as a real boss encounter
+    const boss = this.enemies.find((e) => e.boss && !e.dead);
+    if (boss) {
+      const bw = 240, bx = 270 - bw / 2, by = a.y + 6;
+      const pct = Math.max(boss.hp / boss.maxHp, 0);
+      ctx.textAlign = 'center';
+      ctx.font = font(9);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(boss.def.name.toUpperCase(), 270, by - 1);
+      ctx.fillStyle = '#f0b02f';
+      ctx.fillText(boss.def.name.toUpperCase(), 270, by - 1);
+      ctx.fillStyle = '#000a';
+      ctx.fillRect(bx, by + 5, bw, 7);
+      ctx.fillStyle = pct > 0.5 ? '#f0b02f' : pct > 0.25 ? '#f08030' : '#ff6b6b';
+      ctx.fillRect(bx, by + 5, bw * pct, 7);
+      ctx.strokeStyle = '#f0b02f';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, by + 5, bw, 7);
     }
 
     // ascension tag — why the mobs feel bulkier today

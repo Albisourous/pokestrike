@@ -15,6 +15,7 @@ export interface SpeciesDef {
   copy?: boolean; // bump super replays the bumper's super (Ditto)
   taunt?: boolean; // while it lives, contact hits vs other enemies are blocked
   cursed?: boolean; // on KO, all ally supers gain +1 cooldown pip
+  shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   evolvesTo?: number; // dex id of the evolved form (data only; mechanic lives elsewhere)
 }
 

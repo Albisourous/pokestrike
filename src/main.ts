@@ -61,7 +61,7 @@ const dailySeed = () => {
 
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
-let draft: { order: number[]; picked: number[] } = { order: [], picked: [] };
+let draft: { order: number[]; picked: number[]; shiny: Set<number> } = { order: [], picked: [], shiny: new Set() };
 // the run's draft pool — roster plus captured-dex species not already in it
 let draftPool: SpeciesDef[] = [];
 let stage = makeStage(randSeed());
@@ -170,12 +170,20 @@ function startDraft() {
       .map(speciesById)
       .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id)),
   ];
-  draft = { order: draftOrder(runRng), picked: [] };
+  draft = { order: draftOrder(runRng), picked: [], shiny: new Set() };
   for (let i = ROSTER.length; i < draftPool.length; i++) {
     draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
   }
+  // ~1/50 of draft cards roll shiny — a gold card is the run's first high-roll
+  draftPool.forEach((_, i) => {
+    if (runRng() < 0.02) draft.shiny.add(i);
+  });
   offerCache = null;
 }
+
+// a shiny slot hands Battle a cloned def — the shared species rows stay clean
+const draftDef = (i: number): SpeciesDef =>
+  draft.shiny.has(i) ? { ...draftPool[i], shiny: true } : draftPool[i];
 
 // navigator.clipboard rejects on iOS Safari even in a gesture — the
 // textarea + execCommand trick still works there, so it's the fallback
@@ -281,7 +289,7 @@ canvas.addEventListener('pointerdown', (e) => {
       draft.picked.push(offers[i]);
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(arenaRect(), draft.picked.map((i) => draftPool[i]), stage, runRng);
+        battle = new Battle(arenaRect(), draft.picked.map(draftDef), stage, runRng);
         battle.rank = rank();
         battle.asc = Math.min(best().wins, 9); // every clear raises the heat
         // the last losing team returns as a rival wave — battle eats it
@@ -351,7 +359,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
     } else if (inRect(p.x, p.y, TITLE_BTN)) {
       sfx('ui');
-      draft = { order: [], picked: [] };
+      draft = { order: [], picked: [], shiny: new Set() };
       battle = null;
       result = null;
       resultExtra = null;
@@ -543,11 +551,11 @@ function render() {
       if (dexOpen) drawDex(ctx, dexScroll);
       break;
     case 'draft': {
-      const offers = draftOffers().map((i) => draftPool[i]);
+      const offers = draftOffers().map(draftDef);
       drawDraft(
         ctx,
         offers,
-        draft.picked.map((i) => draftPool[i]),
+        draft.picked.map(draftDef),
         stage.name,
         t,
       );
@@ -565,8 +573,10 @@ function render() {
             battle.rewardOffers,
             battle.box,
             battle.boxHp,
+            battle.boxLvl,
             battle.players.map((p) => p.def),
             battle.players.map((p) => (p.maxHp ? p.hp / p.maxHp : 0)),
+            battle.players.map((p) => p.lvl),
             battle.boxSel,
             boxScroll,
             battle.captureChance,

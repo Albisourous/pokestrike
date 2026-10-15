@@ -1,4 +1,4 @@
-import { itemSprite, drawMon, gracidea } from '../core/assets';
+import { itemSprite, drawMon, drawShiny, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById } from './data';
 import { RARITY_COLOR } from './perks';
@@ -778,7 +778,16 @@ export function drawDraft(
     cardFace(ctx, r, def.type);
     cardFrame(ctx, r, 10);
 
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 94, 84);
+    // a shiny draft card glows gold — the rarest pick on the board
+    if (def.shiny) {
+      drawShiny(ctx, def.id, r.x + r.w / 2, r.y + 94, 84);
+      ctx.textAlign = 'center';
+      ctx.font = font(8);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText('✦ SHINY ✦', r.x + r.w / 2, r.y + 30);
+    } else {
+      drawMon(ctx, def.id, r.x + r.w / 2, r.y + 94, 84);
+    }
 
     // evolution hint rides the top-left — Magikarp is secretly Gyarados
     if (def.evolvesTo != null) {
@@ -864,7 +873,7 @@ export function drawDraft(
     edge(ctx, sr, 10);
     const def = picked[i];
     if (def) {
-      drawMon(ctx, def.id, sx + 38, 692, 48);
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, sx + 38, 692, 48);
       ctx.font = font(8);
       ctx.fillStyle = PARCH;
       ctx.fillText(def.name, sx + 38, 740);
@@ -894,8 +903,10 @@ export function drawReward(
   offers: { name: string; item: string; desc: string; rarity: Rarity }[],
   box: SpeciesDef[],
   boxHp: number[],
+  boxLvl: number[],
   team: SpeciesDef[],
   teamHp: number[],
+  teamLvl: number[],
   selBox: number,
   boxScroll: number,
   catchPct: number,
@@ -1005,11 +1016,21 @@ export function drawReward(
     ctx.fill();
     rim(ctx, r, 8, i === selBox ? '#ffd84d' : '#2a3560', i === selBox ? 2 : 1);
     edge(ctx, r, 8);
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 23, 38);
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 23, 38);
+    if (def.shiny) {
+      ctx.font = font(7);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText('✦', r.x + r.w - 8, r.y + 11);
+    }
     hpBar(ctx, r.x + 6, r.y + 42, r.w - 12, boxHp[i] ?? 1);
     ctx.font = font(8);
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 54);
+    const lvl = boxLvl[i] ?? 1;
+    if (lvl > 1) {
+      ctx.fillStyle = '#9df0ff';
+      ctx.fillText(`Lv${lvl}`, r.x + 6, r.y + 12);
+    }
   });
   ctx.restore();
   const maxScroll = boxScrollMax(box.length);
@@ -1032,11 +1053,21 @@ export function drawReward(
     edge(ctx, r, 8);
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 5, r.y + 5, r.w - 10, 3);
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 30, 40);
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 30, 40);
+    if (def.shiny) {
+      ctx.font = font(7);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText('✦', r.x + r.w - 9, r.y + 13);
+    }
     hpBar(ctx, r.x + 8, r.y + 54, r.w - 16, teamHp[i] ?? 1);
     ctx.font = font(8);
     ctx.fillStyle = PARCH;
     ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 67);
+    const lvl = teamLvl[i] ?? 1;
+    if (lvl > 1) {
+      ctx.fillStyle = '#9df0ff';
+      ctx.fillText(`Lv${lvl}`, r.x + 8, r.y + 13);
+    }
   });
   ctx.font = font(8);
   ctx.fillStyle = '#5a6284';
@@ -1157,7 +1188,7 @@ export function drawResult(
     // the squad as real sprites — reads as Pokémon at a glance
     const n = res.team.length;
     res.team.forEach((def, i) => {
-      drawMon(ctx, def.id, W / 2 + (i - (n - 1) / 2) * 52, sy + 34, 42);
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, W / 2 + (i - (n - 1) / 2) * 52, sy + 34, 42);
     });
   }
 
