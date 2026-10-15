@@ -28,26 +28,31 @@ Open the printed URL. Works on desktop and touch.
    until a mon takes a hit or attacks — you learn the matchup by engaging.
    Gym leaders bring same-type entourages, and every gym you beat lets you
    **keep the leader's ace** for your own team.
-2. **Draft your team** — four rounds, one of three Pokémon each round, from a
-   10-species pool of unevolved starters. Every round offers **three
+2. **Draft your team** — four rounds, one of three Pokémon each round, from an
+   11-species pool of unevolved starters. Every round offers **three
    different types** so teams stay varied — the heavy hitters (Gengar,
    Snorlax, Dragonite…) aren't in the draft at all; you catch them mid-run.
-   Cards show each mon's **role** — read its stats at a glance:
-   **SPEEDSTER** (fast shot, combos), **TANK** (huge HP), **SNIPER**
-   (long-range super, frail), **BRUISER** (heavy hits), **HEALER** (super
-   heals the team), plus what the bump super actually does.
+   Each card shows the mon's **role** at a glance: **SPEEDSTER** (fast
+   shot, combos), **TANK** (huge HP), **SNIPER** (long-range super,
+   frail), **BRUISER** (heavy hits), **HEALER** (super heals the team),
+   **WILD** (all-rounder). Some mons also carry a trait tag: **PIERCE**
+   sails straight through enemies instead of bouncing off them, and
+   **COPY** (Ditto) replays the super — stats, typing and cooldown —
+   of whichever ally bumps it.
 3. **Pull back to aim** — drag direction sets your launch angle and a dotted
    **guide line** previews the ball's banks off walls and rocks, ending in a
    target ring on whatever it would hit first. **Power is timing**: a
    meter ping-pongs while you hold — release in the gold zone for a
    full-power `PERFECT!` shot (slow-mo + speedlines included).
 4. Every enemy you bump takes damage with **type effectiveness** — gold `!`
-   numbers are super effective, grey means resisted (or immune).
+   numbers are super effective, grey means resisted (or immune). Elites and
+   bosses carry a gold-diamond **weak point** — land the ball's contact
+   point on it for ×3 damage.
 5. **Bump your own teammates** — every pass-through is a combo link (gold
    arc + rising ×N counter, escalating hit-stop and flashes). Each ally's
    signature **super** starts uncharged and builds one notch per shot — the
-   type-colored ring around a mon fills as it charges, and when it goes
-   gold the move name lights up and the next bump fires the super. Enemies
+   pip meter under its HP bar fills as it charges, all-gold means ready,
+   and the pulsing move name marks the one you want to hit next. Enemies
    creep and dart toward your team and attack on a **countdown** — kill
    them or keep moving.
 6. **Read the field** — every wave re-themes the arena (grove, cavern,
@@ -113,7 +118,7 @@ audio assets.
 | Poison | Toxic — immediate hit plus poison that ticks a cut of max HP after each of your shots; re-toxining stacks it |
 | Rock / Fighting | Meteor fist — the nearest enemy eats a one-two of falling rock; the second hit leaves a crater |
 | Ghost | Hex — wisps converge from the dark, weak hit on every enemy on the field |
-| Normal | Quick Attack — the ally physically dashes to the nearest enemy, slams it, and snaps back |
+| Normal | Quick Attack — the ally physically dashes to the nearest enemy, slams it, and stays beside it |
 
 ## Install it like an app
 
@@ -177,7 +182,6 @@ non-commercial project — not affiliated with or endorsed by them.
 The climb is the game — replayability grows in this order, simple first:
 
 - More run variety: species, relics, stage themes
-- Daily Strike returns as a seeded climb (the seed plumbing already exists)
-- Ascension-style modifiers: beat the climb, unlock harder runs
-- Unlockables: wins put new starters and relics into the pool
-- Evolution rewards and roster growth
+- Seeded daily climb — the seed plumbing already exists
+- Ascension modifiers: beat the climb, unlock harder runs
+- Unlockables: wins put new starters, relics, and evolutions into the pool

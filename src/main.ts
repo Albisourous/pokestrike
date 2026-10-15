@@ -1,7 +1,7 @@
 import './style.css';
 import { startLoop } from './core/loop';
 import { unlockAudio, sfx, cry, music } from './core/audio';
-import { loadAll, loadItem } from './core/assets';
+import { loadAll, loadItem, loadGracidea } from './core/assets';
 import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
@@ -25,7 +25,7 @@ import {
   SHARE_BTN,
   FREE_BTN,
   inRect,
-  PIXEL_FONT,
+  font,
 } from './game/screens';
 import type { RunResult, ShareGrid } from './game/screens';
 import type { PokeType } from './game/types';
@@ -39,7 +39,6 @@ const ctx = canvas.getContext('2d')!;
 // tall phone screens — the arena grows into it instead of black bars
 let viewPad = 0;
 const arenaRect = () => ({ x: 24, y: 72 - viewPad, w: W - 48, h: H - 92 + viewPad * 2 });
-const BEST_KEY = 'pokestrike_best_clear';
 
 const randSeed = () => (Math.random() * 2 ** 31) | 0;
 
@@ -51,18 +50,10 @@ let result: RunResult | null = null;
 let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
 let shareText = '';
-let best: number | null = null;
 let t = 0;
 // box strip scroll: offset in px + an in-progress drag (tap = drag that never moved)
 let boxScroll = 0;
 let boxDrag: { x0: number; s0: number; moved: boolean } | null = null;
-
-try {
-  const raw = localStorage.getItem(BEST_KEY);
-  best = raw === null ? null : Number(raw);
-} catch {
-  // storage unavailable
-}
 
 // --- canvas sizing: letterboxed 540x960 logical space ---
 let scale = 1;
@@ -336,16 +327,7 @@ function update(dt: number) {
         badges: battle.runBadges(battle.phase === 'won'),
       };
       share = buildShare(battle, result.won);
-      if (result.won) {
-        if (best === null || result.time < best) {
-          best = result.time;
-        }
-        try {
-          localStorage.setItem(BEST_KEY, String(best));
-        } catch {
-          // storage unavailable
-        }
-      } else {
+      if (!result.won) {
         resultExtra = `reached stage ${battle.waveIndex + 1} of ${TOTAL_STAGES}`;
       }
       shareText = [
@@ -374,13 +356,13 @@ function render() {
     case 'loading':
       ctx.fillStyle = '#0b0e1a';
       ctx.fillRect(0, 0, W, H);
-      ctx.font = `12px ${PIXEL_FONT}`;
+      ctx.font = font(12);
       ctx.textAlign = 'center';
       ctx.fillStyle = '#8890b8';
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, best);
+      drawTitle(ctx);
       break;
     case 'draft': {
       const offers = draftOffers().map((i) => ROSTER[i]);
@@ -425,7 +407,7 @@ function render() {
         hud(battle.stage.name);
         battle.render(ctx);
       }
-      if (result) drawResult(ctx, result, best, resultExtra, share);
+      if (result) drawResult(ctx, result, resultExtra, share);
       break;
   }
   ctx.restore();
@@ -433,8 +415,10 @@ function render() {
 
 Promise.all([
   loadAll(ALL_SPRITE_IDS),
+  loadGracidea(),
   loadItem('poke-ball'),
   ...PERKS.map((p) => loadItem(p.item)),
+  document.fonts.load('700 10px rc').catch(() => console.warn('rc font failed, using monospace')),
 ])
   .then(() => {
     scene = 'title';
@@ -444,7 +428,7 @@ Promise.all([
     scene = 'loading';
     console.error(err);
     ctx.fillStyle = '#fff';
-    ctx.font = `10px ${PIXEL_FONT}`;
+    ctx.font = font(10);
     ctx.fillText(`failed to load: ${err.message}`, 20, H / 2);
   });
 

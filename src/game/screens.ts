@@ -1,10 +1,10 @@
-import { itemSprite, drawMon } from '../core/assets';
+import { itemSprite, drawMon, gracidea } from '../core/assets';
 import { SpeciesDef, TOTAL_STAGES } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop } from './bg';
-import { TYPE_COLOR } from './types';
-import { bumpIsPhysical, roleOf, ROLE_BLURB, TYPE_MOVE } from './stats';
+import { TYPE_COLOR, type PokeType } from './types';
+import { roleOf } from './stats';
 
 export const W = 540;
 export const H = 960;
@@ -85,130 +85,217 @@ function trim(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: numbe
   ctx.stroke();
 }
 
+// Balatro-ish card face: dark panel with a type-colored glow behind the
+// art and an edge vignette. Reusable for any card that wants to show a type.
+function cardFace(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  type: PokeType,
+) {
+  ctx.save();
+  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+  ctx.clip();
+  ctx.fillStyle = '#12162b';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+
+  const gx = r.x + r.w / 2;
+  const gy = r.y + r.h * 0.42;
+  const c = TYPE_COLOR[type];
+  const glow = ctx.createRadialGradient(gx, gy, 8, gx, gy, r.w * 0.95);
+  glow.addColorStop(0, `${c}66`);
+  glow.addColorStop(1, `${c}00`);
+  ctx.fillStyle = glow;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+
+  const vig = ctx.createRadialGradient(gx, r.y + r.h / 2, r.w * 0.35, gx, r.y + r.h / 2, r.w * 1.05);
+  vig.addColorStop(0, '#00000000');
+  vig.addColorStop(1, '#00000055');
+  ctx.fillStyle = vig;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.restore();
+}
+
 function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string, on: boolean) {
   roundRect(ctx, r.x, r.y, r.w, r.h, 10);
   ctx.fillStyle = on ? '#1b2140' : '#12152b';
   ctx.fill();
   trim(ctx, r, 10);
-  ctx.font = `13px ${PIXEL_FONT}`;
+  ctx.font = font(13);
   ctx.textAlign = 'center';
   ctx.fillStyle = on ? PARCH : '#6a7090';
   ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 5);
 }
 
-// --- title screen: grass field, poke-ball sprite crest, wordmark ---
+// --- title screen: mottled grass pitch, stadium ring of mons, arched wordmark ---
 
-export const PIXEL_FONT = 'monospace';
+// UI font: Roboto Condensed bold — the broadcast-graphics look — vendored
+// as a variable TTF in public/fonts; monospace is the boot/failure fallback.
+const PIXEL_FONT = 'rc, monospace';
+const FONT_SCALE = 1.15;
+export const font = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px ${PIXEL_FONT}`;
 
 // Mons standing the ring around the logo — all ids are in ALL_SPRITE_IDS.
 const RING_MONS: [number, number][] = [
-  [143, 78], // Snorlax anchors the top
-  [149, 56], [6, 58], [130, 62], [150, 58], [94, 50],
-  [76, 54], [3, 56], [9, 54], [68, 54], [59, 56], [131, 56],
+  [143, 82], // Snorlax anchors the top
+  [149, 58], [6, 62], [130, 66], [150, 60], [94, 52],
+  [76, 56], [3, 58], [9, 56], [68, 58], [59, 58], [131, 60],
 ];
 
-// Wild mons roaming the field edges — an "alive world" title backdrop.
-// [id, anchorX, anchorY, wander range]
-const WILD_MONS: [number, number, number, number][] = [
-  [19, 80, 120, 26],   // Rattata skitters top-left
-  [16, 470, 110, 30],  // Pidgey hops top-right
-  [43, 70, 560, 22],   // Oddish pokes up mid-left
-  [52, 480, 580, 24],  // Meowth prowls mid-right
-  [41, 500, 300, 20],  // Zubat flaps by the ring
+// Wild mons at the field edges, clear of the ring — [id, x, y]
+const WILD_MONS: [number, number, number][] = [
+  [16, 484, 118],
+  [43, 52, 636],
+  [52, 488, 640],
+  [19, 72, 852],
+  [41, 476, 856],
 ];
 
-function drawRingMons(ctx: CanvasRenderingContext2D, t: number, cx: number, cy: number, rx: number, ry: number) {
+// A clean flat-grass tile of the gracidea tileset, blurred up and
+// mirror-tiled into a seamless patch — the soft mottled pitch.
+const GRASS_SRC = { x: 20, y: 308, w: 14, h: 14 };
+let fieldPattern: CanvasPattern | null = null;
+
+function drawField(ctx: CanvasRenderingContext2D) {
+  const img = gracidea();
+  if (img && !fieldPattern) {
+    const c = document.createElement('canvas');
+    c.width = 480;
+    c.height = 480;
+    const t = c.getContext('2d')!;
+    for (const mx of [0, 1])
+      for (const my of [0, 1]) {
+        t.save();
+        t.translate(mx ? 480 : 0, my ? 480 : 0);
+        t.scale(mx ? -1 : 1, my ? -1 : 1);
+        t.drawImage(img, GRASS_SRC.x, GRASS_SRC.y, GRASS_SRC.w, GRASS_SRC.h, 0, 0, 240, 240);
+        t.restore();
+      }
+    fieldPattern = ctx.createPattern(c, 'repeat');
+  }
+  if (fieldPattern) {
+    ctx.fillStyle = fieldPattern;
+    ctx.fillRect(0, 0, W, H);
+    // push the cool green toward the arena's warmer pitch
+    ctx.fillStyle = 'rgba(74,96,18,0.16)';
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    ctx.fillStyle = '#3e8e3c';
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function monShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  ctx.fillStyle = 'rgba(8,24,8,0.32)';
+  ctx.beginPath();
+  ctx.ellipse(x, y + size * 0.42, size * 0.42, size * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// Ring mons stand on the pitch ellipse; nearer ones (lower) are a touch
+// larger so the field reads with some depth.
+function drawRingMons(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number) {
   RING_MONS.forEach(([id, size], i) => {
     const a = -Math.PI / 2 + (i / RING_MONS.length) * Math.PI * 2;
+    const s = size * (1 + Math.sin(a) * 0.22);
     const x = cx + Math.cos(a) * rx;
     const y = cy + Math.sin(a) * ry;
-    drawMon(ctx, id, x, y + Math.sin(t * 2 + i * 1.7) * 3 - size * 0.05, size);
+    monShadow(ctx, x, y, s);
+    drawMon(ctx, id, x, y - s * 0.05, s);
   });
 }
 
-// Pixel wordmark — chunky font with a hard offset shadow, fan-game style.
-// Shrinks to fit maxW so it never runs off the field.
-function logoWord(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  cx: number,
-  baseY: number,
-  size: number,
-  maxW: number,
-  fill = '#ffcb05',
-  shade = '#1e3260',
-) {
+// Yellow letters arched over the ball, navy outline — the classic
+// pocket-monster logo curve, one glyph at a time along the arc.
+function logoArc(ctx: CanvasRenderingContext2D, text: string, cx: number, cy: number, r: number, size: number) {
   ctx.save();
-  ctx.font = `${size}px ${PIXEL_FONT}`;
-  ctx.textAlign = 'center';
+  ctx.font = font(size);
+  ctx.lineJoin = 'round';
+  const chars = [...text];
+  const ws = chars.map((c) => ctx.measureText(c).width);
+  let a = -Math.PI / 2 - ws.reduce((acc, w) => acc + w, 0) / r / 2;
+  chars.forEach((c, i) => {
+    const ca = a + ws[i] / 2 / r;
+    ctx.save();
+    ctx.translate(cx + Math.cos(ca) * r, cy + Math.sin(ca) * r);
+    ctx.rotate(ca + Math.PI / 2);
+    ctx.lineWidth = size * 0.15;
+    ctx.strokeStyle = '#16244d';
+    ctx.strokeText(c, -ws[i] / 2, size * 0.34);
+    ctx.fillStyle = '#ffcb05';
+    ctx.fillText(c, -ws[i] / 2, size * 0.34);
+    ctx.restore();
+    a += ws[i] / r;
+  });
+  ctx.restore();
+}
+
+// Big leaning wordmark: gold gradient fill, navy outline, hard drop shadow.
+function logoBig(ctx: CanvasRenderingContext2D, text: string, cx: number, baseY: number, size: number, maxW: number) {
+  ctx.save();
+  ctx.font = font(size);
   const w = ctx.measureText(text).width;
   if (w > maxW) {
     size = Math.max(8, Math.floor(size * (maxW / w)));
-    ctx.font = `${size}px ${PIXEL_FONT}`;
+    ctx.font = font(size);
   }
-  const off = Math.max(3, Math.round(size * 0.14));
-  ctx.fillStyle = shade;
-  ctx.fillText(text, cx + off, baseY + off);
-  ctx.fillStyle = fill;
-  ctx.fillText(text, cx, baseY);
-  ctx.restore();
-}
-
-// Small pixel UI text — tagline, captions, stats.
-function pixelText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  cx: number,
-  baseY: number,
-  size: number,
-  color = '#f0e6c8',
-) {
-  ctx.save();
-  ctx.font = `${size}px ${PIXEL_FONT}`;
+  ctx.translate(cx, baseY);
+  ctx.transform(1, 0, -0.07, 1, 0, 0);
   ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
-  ctx.fillText(text, cx + 2, baseY + 2);
-  ctx.fillStyle = color;
-  ctx.fillText(text, cx, baseY);
+  ctx.lineJoin = 'round';
+  const grad = ctx.createLinearGradient(0, -size, 0, 0);
+  grad.addColorStop(0, '#ffe76a');
+  grad.addColorStop(1, '#f5a614');
+  ctx.lineWidth = Math.max(4, size * 0.16);
+  ctx.strokeStyle = '#16244d';
+  ctx.fillStyle = 'rgba(8,16,40,0.5)';
+  ctx.fillText(text, 5, 7);
+  ctx.strokeText(text, 0, 0);
+  ctx.fillStyle = grad;
+  ctx.fillText(text, 0, 0);
   ctx.restore();
 }
 
-// Wild mons drift around their anchor in a lazy lissajous — never leaves
-// the anchor's range, deterministic, zero state.
-function drawWildMons(ctx: CanvasRenderingContext2D, t: number) {
-  WILD_MONS.forEach(([id, ax, ay, range], i) => {
-    const x = ax + Math.sin(t * 0.5 + i * 2.3) * range;
-    const y = ay + Math.sin(t * 0.7 + i * 1.4) * range * 0.6;
-    drawMon(ctx, id, x, y + Math.sin(t * 3 + i) * 2, 34);
+function drawWildMons(ctx: CanvasRenderingContext2D) {
+  WILD_MONS.forEach(([id, x, y]) => {
+    monShadow(ctx, x, y, 34);
+    drawMon(ctx, id, x, y, 34);
   });
 }
 
-export function drawTitle(ctx: CanvasRenderingContext2D, t: number, best: number | null) {
-  // flat grass field until the real scenery pass lands
-  ctx.fillStyle = '#3e8e3c';
-  ctx.fillRect(0, 0, W, H);
-  drawWildMons(ctx, t);
+export function drawTitle(ctx: CanvasRenderingContext2D) {
+  drawField(ctx);
+  drawWildMons(ctx);
 
   const cx = W / 2;
-  const cy = 300;
+  const cy = 396;
+
+  // stadium pitch marking — the mons stand on the circle line
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, 240, 266, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  drawRingMons(ctx, cx, cy, 240, 266);
+
   const ball = itemSprite('poke-ball');
   if (ball) {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(ball, cx - 132, cy - 132, 264, 264);
+    ctx.drawImage(ball, cx - 122, cy - 122, 244, 244);
     ctx.restore();
   }
-  drawRingMons(ctx, t, cx, cy + 8, 210, 168);
+  logoArc(ctx, 'POKÉ', cx, cy - 8, 132, 52);
+  logoBig(ctx, 'STRIKE', cx, cy + 148, 86, 440);
 
-  ctx.textAlign = 'center';
-  // the ball IS the logo: POKÉ on the red half, STRIKE on the white —
-  // same size, symmetric about the band so they read as one wordmark
-  logoWord(ctx, 'POKÉ', cx, cy - 56, 28, 165);
-  logoWord(ctx, 'STRIKE', cx, cy + 84, 28, 170, '#22336a', '#c8d0e8');
+  // stadium shadow at the edges keeps the eye on the crest
+  const vig = ctx.createRadialGradient(cx, cy, 280, cx, cy, 640);
+  vig.addColorStop(0, '#00000000');
+  vig.addColorStop(1, 'rgba(6,14,6,0.2)');
+  ctx.fillStyle = vig;
+  ctx.fillRect(0, 0, W, H);
 
   button(ctx, FREE_BTN, 'FREE PLAY', true);
-
-  if (best !== null) pixelText(ctx, `best clear ${best.toFixed(1)}s`, cx, 812, 9);
 }
 
 export function drawDraft(
@@ -221,49 +308,51 @@ export function drawDraft(
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
 
   ctx.textAlign = 'center';
-  ctx.font = `18px ${PIXEL_FONT}`;
+  ctx.font = font(18);
   ctx.fillStyle = '#f8d030';
   ctx.fillText(`DRAFT — PICK ${picked.length + 1} OF 4`, W / 2, 120);
-  ctx.font = `9px ${PIXEL_FONT}`;
+  ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(stageName, W / 2, 155);
   ctx.fillText('one of three — choose for coverage and speed', W / 2, 180);
 
   offers.forEach((def, i) => {
     const r = draftCardRect(i);
-    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-    ctx.fillStyle = '#12162b';
+    // lifted-card shadow, then the face
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
     ctx.fill();
-    trim(ctx, r, 10);
-    // type ribbon across the top of the card
-    ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
+    cardFace(ctx, r, def.type);
+    // joker frame: pale rim inside a thin dark edge
+    ctx.strokeStyle = '#e8ecf8';
+    ctx.lineWidth = 3;
+    roundRect(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 8);
+    ctx.stroke();
+    ctx.strokeStyle = '#0a0d18';
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+    ctx.stroke();
 
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 62, 88);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 112, 96);
 
-    ctx.font = `11px ${PIXEL_FONT}`;
+    ctx.font = font(13);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 203);
     ctx.fillStyle = PARCH;
-    ctx.fillText(def.name, r.x + r.w / 2, r.y + 128);
+    ctx.fillText(def.name, r.x + r.w / 2, r.y + 202);
     const role = roleOf(def.stats, def.healer);
-    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.font = font(10);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${role.toUpperCase()}`, r.x + r.w / 2, r.y + 146);
-
-    // role tagline + what the super does — no raw stats
-    ctx.font = `7px ${PIXEL_FONT}`;
-    ctx.fillStyle = '#a8b0d8';
-    ctx.fillText(ROLE_BLURB[role], r.x + r.w / 2, r.y + 178);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(TYPE_MOVE[def.type], r.x + r.w / 2, r.y + 198);
-    ctx.fillText(
-      bumpIsPhysical(def.type) ? 'rolls Attack' : 'rolls Sp. Atk',
-      r.x + r.w / 2,
-      r.y + 218,
-    );
+    ctx.fillText(`${def.type.toUpperCase()} · ${role.toUpperCase()}`, r.x + r.w / 2, r.y + 224);
+    if (def.pierce || def.copy) {
+      ctx.font = font(9);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w / 2, r.y + 240);
+    }
   });
 
   // picked team strip
-  ctx.font = `9px ${PIXEL_FONT}`;
+  ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('YOUR TEAM', W / 2, 640);
   for (let i = 0; i < 4; i++) {
@@ -277,13 +366,13 @@ export function drawDraft(
     const def = picked[i];
     if (def) {
       drawMon(ctx, def.id, sx + 38, 692, 48);
-      ctx.font = `7px ${PIXEL_FONT}`;
+      ctx.font = font(7);
       ctx.fillStyle = PARCH;
       ctx.fillText(def.name, sx + 38, 740);
     }
   }
 
-  ctx.font = `8px ${PIXEL_FONT}`;
+  ctx.font = font(8);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('tip: bounce off allies to trigger their attack', W / 2, 810);
 }
@@ -313,15 +402,15 @@ export function drawReward(
   // the stage's guaranteed catch announces itself — beat a gym, take the ace
   if (recruit) {
     drawMon(ctx, recruit.id, W / 2 - 120, 250, 44);
-    ctx.font = `10px ${PIXEL_FONT}`;
+    ctx.font = font(10);
     ctx.fillStyle = '#ffd84d';
     ctx.fillText(`${recruit.name.toUpperCase()} JOINS YOUR BOX!`, W / 2 + 40, 258);
   }
 
-  ctx.font = `20px ${PIXEL_FONT}`;
+  ctx.font = font(20);
   ctx.fillStyle = '#f8d030';
   ctx.fillText('CHOOSE A RELIC', W / 2, 300);
-  ctx.font = `9px ${PIXEL_FONT}`;
+  ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
     next.gym
@@ -343,17 +432,17 @@ export function drawReward(
     const img = itemSprite(perk.item);
     if (img) ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
     else {
-      ctx.font = `16px ${PIXEL_FONT}`;
+      ctx.font = font(16);
       ctx.fillStyle = PARCH;
       ctx.fillText('?', r.x + r.w / 2, r.y + 74);
     }
-    ctx.font = `9px ${PIXEL_FONT}`;
+    ctx.font = font(9);
     ctx.fillStyle = PARCH;
     ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);
-    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.font = font(7);
     ctx.fillStyle = RARITY_COLOR[perk.rarity];
     ctx.fillText(perk.rarity.toUpperCase(), r.x + r.w / 2, r.y + 134);
-    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.font = font(7);
     ctx.fillStyle = '#a8b0d8';
     // two-line desc
     const words = perk.desc.split(' ');
@@ -363,11 +452,11 @@ export function drawReward(
   });
 
   // captured box — tap a catch, then a teammate, to swap
-  ctx.font = `9px ${PIXEL_FONT}`;
+  ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(`BOX — catch rate ${Math.round(catchPct * 100)}%`, W / 2, 620);
   if (box.length === 0) {
-    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.font = font(7);
     ctx.fillStyle = '#5a6284';
     ctx.fillText('nothing caught yet — defeats sometimes capture', W / 2, 668);
   }
@@ -384,20 +473,20 @@ export function drawReward(
     ctx.lineWidth = i === selBox ? 2.5 : 1;
     ctx.stroke();
     drawMon(ctx, def.id, r.x + r.w / 2, r.y + 26, 40);
-    ctx.font = `6px ${PIXEL_FONT}`;
+    ctx.font = font(6);
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 52);
   });
   ctx.restore();
   const maxScroll = boxScrollMax(box.length);
   if (maxScroll > 0) {
-    ctx.font = `9px ${PIXEL_FONT}`;
+    ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
     if (boxScroll > 0) ctx.fillText('◀', BOX_STRIP.x - 14, BOX_STRIP.y + 34);
     if (boxScroll < maxScroll) ctx.fillText('▶', BOX_STRIP.x + BOX_STRIP.w + 14, BOX_STRIP.y + 34);
   }
 
-  ctx.font = `9px ${PIXEL_FONT}`;
+  ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('YOUR TEAM', W / 2, 750);
   team.forEach((def, i) => {
@@ -411,11 +500,11 @@ export function drawReward(
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, 3);
     drawMon(ctx, def.id, r.x + r.w / 2, r.y + 32, 40);
-    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.font = font(7);
     ctx.fillStyle = PARCH;
     ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 64);
   });
-  ctx.font = `7px ${PIXEL_FONT}`;
+  ctx.font = font(7);
   ctx.fillStyle = '#5a6284';
   ctx.fillText(
     selBox >= 0 ? 'tap a teammate to swap in' : 'tap a box mon, then a teammate',
@@ -426,7 +515,7 @@ export function drawReward(
   // path choice — StS greed: the safe route, or the elite road (bigger
   // fight, richer relics, a guaranteed elite to catch). Fixed stages and
   // gyms just show what's next.
-  ctx.font = `8px ${PIXEL_FONT}`;
+  ctx.font = font(8);
   if (next.gym) {
     ctx.fillStyle = '#f85888';
     ctx.fillText('NEXT: GYM LEADER', W / 2, 926);
@@ -442,7 +531,6 @@ export function drawReward(
 export function drawResult(
   ctx: CanvasRenderingContext2D,
   res: RunResult,
-  best: number | null,
   extra: string | null,
   share: ShareGrid | null,
 ) {
@@ -450,11 +538,11 @@ export function drawResult(
   ctx.fillRect(0, 0, W, H);
 
   ctx.textAlign = 'center';
-  ctx.font = `26px ${PIXEL_FONT}`;
+  ctx.font = font(26);
   ctx.fillStyle = res.won ? '#6fdc6f' : '#ff6b6b';
   ctx.fillText(res.won ? 'STAGE CLEAR!' : 'WIPED OUT', W / 2, 300);
 
-  ctx.font = `10px ${PIXEL_FONT}`;
+  ctx.font = font(10);
   ctx.fillStyle = '#fff';
   ctx.fillText(
     `${res.shots} shots · ${res.time.toFixed(1)}s${res.caught ? ` · ${res.caught} caught` : ''}`,
@@ -462,13 +550,9 @@ export function drawResult(
     355,
   );
   if (extra) {
-    ctx.font = `11px ${PIXEL_FONT}`;
+    ctx.font = font(11);
     ctx.fillStyle = '#f8d030';
     ctx.fillText(extra, W / 2, 395);
-  } else if (res.won && best !== null) {
-    ctx.font = `9px ${PIXEL_FONT}`;
-    ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`best: ${best.toFixed(1)}s`, W / 2, 390);
   }
 
   // run badges — rarity-colored chips, up to two rows
@@ -480,7 +564,7 @@ export function drawResult(
   }
   badgeRows.forEach((row, ri) => {
     const y = 428 + ri * 28;
-    ctx.font = `7px ${PIXEL_FONT}`;
+    ctx.font = font(7);
     const ws = row.map((b) => ctx.measureText(b.name).width + 20);
     let bx = W / 2 - (ws.reduce((a, c) => a + c, 0) + (row.length - 1) * 8) / 2;
     row.forEach((b, i) => {
@@ -490,7 +574,7 @@ export function drawResult(
       ctx.strokeStyle = RARITY_COLOR[b.rarity];
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.font = `7px ${PIXEL_FONT}`;
+      ctx.font = font(7);
       ctx.fillStyle = RARITY_COLOR[b.rarity];
       ctx.fillText(b.name, bx + ws[i] / 2, y + 14);
       bx += ws[i] + 8;
@@ -511,7 +595,7 @@ export function drawResult(
 
 export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string) {
   ctx.fillStyle = '#8890b8';
-  ctx.font = `9px ${PIXEL_FONT}`;
+  ctx.font = font(9);
   ctx.textAlign = 'left';
   ctx.fillText(stageName, 30, 44);
   // run map in miniature: a pip per stage, gyms as diamonds — the whole

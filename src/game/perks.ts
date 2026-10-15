@@ -261,6 +261,12 @@ export const PERKS: Perk[] = [
     rarity: 'uncommon',
     apply: (b) => { b.slowImmune = true; },
   },
+  {
+    id: 'pbracer', name: 'Power Bracer', item: 'power-bracer',
+    desc: '+30% damage vs bosses',
+    rarity: 'uncommon',
+    apply: (b) => { b.bossSlayer += 0.3; },
+  },
 
   // --- rare: strong single effects ---
   {
@@ -295,6 +301,12 @@ export const PERKS: Perk[] = [
       b.dmgMult *= 1.3;
       b.launchBoost *= 0.88;
     },
+  },
+  {
+    id: 'gclaw', name: 'Grip Claw', item: 'grip-claw',
+    desc: 'each wall bounce this shot: +15% contact damage',
+    rarity: 'rare',
+    apply: (b) => { b.wallRamp += 0.15; },
   },
 
   // --- legendary: run-defining relics ---

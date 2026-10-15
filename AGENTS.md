@@ -38,8 +38,8 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - Content changes are data changes: add a species/stage in `data.ts`, drop its
   sprite in `public/sprites/`. No new systems for single features.
 - Each type's bump super is one case in the `bumpAlly` switch; its move name
-  lives in `MOVE_NAME`, draft-card blurb in `TYPE_MOVE`, cooldown in
-  `BUMP_CD` (all in `stats.ts`). Keep them in sync when changing a super.
+  lives in `MOVE_NAME`, cooldown in `BUMP_CD` (all in `stats.ts`). Keep them
+  in sync when changing a super.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Physics tunables are named consts at the top of `battle.ts`.
 - Asset canon is FRLG/Gen-3 (see Direction). Mons and items are vendored PNGs from PokeAPI/sprites; new scenery/props get sliced or blitted from `sprites/gracidea/` atlases.

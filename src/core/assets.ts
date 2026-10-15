@@ -1,5 +1,20 @@
 const cache = new Map<number, HTMLImageElement>();
 const itemCache = new Map<string, HTMLImageElement>();
+let gracideaImg: HTMLImageElement | undefined;
+
+// Scenery canon: the RSE-era Gracidea atlases in public/sprites/gracidea.
+// Slice by pixel rect — frame indexes live in the matching .json files.
+export function loadGracidea(): Promise<HTMLImageElement> {
+  if (gracideaImg) return Promise.resolve(gracideaImg);
+  return loadImg('sprites/gracidea/tileset.webp', 'gracidea tileset').then((img) => {
+    gracideaImg = img;
+    return img;
+  });
+}
+
+export function gracidea(): HTMLImageElement | undefined {
+  return gracideaImg;
+}
 
 function loadImg(src: string, label: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {

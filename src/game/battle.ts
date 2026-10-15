@@ -26,7 +26,7 @@ import {
   MOVE_NAME,
 } from './stats';
 import type { Role } from './stats';
-import { PIXEL_FONT } from './screens';
+import { font } from './screens';
 
 export interface Rect {
   x: number;
@@ -58,8 +58,6 @@ interface Unit {
   dead: boolean;
   dotTicks: number; // poison ticks remaining
   dotDmg: number;
-  flashT: number; // white hit flash
-  spawnT: number; // wave-entry pop-in countdown (includes stagger delay)
   cd: number; // player bump-super recharge in shots; 0 = ready
   cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
@@ -70,6 +68,8 @@ interface Unit {
   launch: number; // role launch-speed multiplier
   cdMod: number; // shots off the super cooldown
   lastHit: Map<number, number>; // shooter uid -> game time
+  wallN: number; // wall bounces so far this shot (grip claw ramp)
+  wp: Vec | null; // weak point offset from center; null = none
 }
 
 interface FloatText {
@@ -79,34 +79,6 @@ interface FloatText {
   t: number;
   color: string;
   big: boolean;
-}
-interface Zap {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  t: number;
-  color: string;
-}
-interface Burst {
-  x: number;
-  y: number;
-  r: number;
-  t: number;
-  life: number;
-  color: string;
-}
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  t: number;
-  life: number;
-  size: number;
-  color: string;
-  shape: 'dot' | 'ember' | 'leaf' | 'bubble' | 'streak' | 'wisp' | 'meteor';
-  grav: number;
 }
 interface Orb {
   x: number;
@@ -131,51 +103,17 @@ interface Wave {
   onHit?: (e: Unit) => void;
 }
 // Normal-type quick attack: the bumped ally physically lunges at the
-// target, slams it, then snaps back to its spot.
+// target, slams it, and holds position next to it.
 interface Dash {
   u: Unit;
-  ox: number;
-  oy: number;
   e: Unit;
-  back: boolean;
   done: boolean;
   dmg: number;
-}
-interface Slash {
-  x: number;
-  y: number;
-  ang: number;
-  t: number;
-  color: string;
-}
-interface Loop {
-  x: number;
-  y: number;
-  r: number;
-  t: number;
-  life: number;
-  color: string;
 }
 interface ScreenFlash {
   t: number;
   life: number;
   color: string;
-}
-interface Bolt {
-  pts: Vec[]; // jagged main path
-  branches: Vec[][]; // short fork stubs off the middle
-  t: number;
-  life: number;
-  color: string;
-}
-interface Ghost {
-  id: number; // sprite id — KO'd mon spins out and fades
-  x: number;
-  y: number;
-  r: number;
-  t: number;
-  life: number;
-  absorb?: boolean; // caught mon shrinks into the ball instead of spinning out
 }
 interface BallDrop {
   x: number;
@@ -194,10 +132,10 @@ const WALL_REST = 0.92;
 const UNIT_REST = 0.9;
 const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
+const WP_MULT = 3; // weak-point contact damage multiplier
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
-const MAX_PARTICLES = 260;
 
 let nextUid = 1;
 
@@ -224,18 +162,11 @@ export class Battle {
   private kosThisShot = 0; // enemies downed by the current shot
   private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false };
   private texts: FloatText[] = [];
-  private zaps: Zap[] = [];
-  private bursts: Burst[] = [];
-  private particles: Particle[] = [];
   private orbs: Orb[] = [];
   private waves: Wave[] = [];
   private dashes: Dash[] = [];
   private delays: { t: number; fn: () => void }[] = []; // staggered super hits
-  private slashes: Slash[] = [];
-  private loops: Loop[] = []; // styler capture rings
   private flashes: ScreenFlash[] = [];
-  private bolts: Bolt[] = []; // forked lightning
-  private ghosts: Ghost[] = []; // KO'd sprites spinning out
   private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
@@ -261,6 +192,8 @@ export class Battle {
   slowImmune = false; // air balloon perk flag — kept for perks.ts; no pads remain to slow the ball
   koHeal = 0; // exp share: heal team this fraction on each KO
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
+  bossSlayer = 0; // power bracer: bonus damage vs bosses
+  wallRamp = 0; // grip claw: contact damage per wall bounce this shot
   box: SpeciesDef[] = []; // captured mons — swap in between stages
   boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
@@ -316,8 +249,6 @@ export class Battle {
         dead: false,
         dotTicks: 0,
         dotDmg: 0,
-        flashT: 0,
-        spawnT: 0.3 + i * 0.06,
         cd,
         cdMax: cd,
         lastBump: -1,
@@ -328,6 +259,8 @@ export class Battle {
         launch: m.launch,
         cdMod: m.cdMod,
         lastHit: new Map(),
+        wallN: 0,
+        wp: null,
       });
     });
     this.spawnWave(0);
@@ -351,7 +284,13 @@ export class Battle {
     this.delays = [];
     this.waves = [];
     this.dashes = [];
-    this.enemies = this.stage.waves[i].map((s, k) => ({
+    this.enemies = this.stage.waves[i].map((s) => {
+      // elites and bosses carry a weak point — a spot that takes bonus
+      // contact damage, set at a random angle so each spawn aims different
+      const r = s.boss ? 46 : 26;
+      const wpA = this.rng() * Math.PI * 2;
+      const wpD = r * 0.45;
+      return {
       uid: nextUid++,
       def: s.def,
       side: 'enemy',
@@ -359,7 +298,7 @@ export class Battle {
       y: this.arena.y + this.arena.h * s.ny,
       vx: 0,
       vy: 0,
-      r: s.boss ? 46 : 26,
+      r,
       hp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
       maxHp: Math.round((s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale),
       timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult,
@@ -373,8 +312,6 @@ export class Battle {
       dead: false,
       dotTicks: 0,
       dotDmg: 0,
-      flashT: 0,
-      spawnT: 0.3 + k * 0.08,
       cd: 0,
       cdMax: 1,
       lastBump: -1,
@@ -385,7 +322,12 @@ export class Battle {
       launch: 1,
       cdMod: 0,
       lastHit: new Map(),
-    }));
+      wallN: 0,
+      wp: s.boss || ELITES.includes(s.def)
+        ? { x: Math.cos(wpA) * wpD, y: Math.sin(wpA) * wpD }
+        : null,
+      };
+    });
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -426,12 +368,10 @@ export class Battle {
     this.bumpsThisShot.clear();
     this.shotCombo = 0;
     this.kosThisShot = 0;
+    u.wallN = 0;
     this.stopTimer = 0;
     this.phase = 'shot';
     this.shots++;
-    const c = TYPE_COLOR[u.def.type];
-    this.burst(u.x, u.y, u.r * 2.2, c, 0.3);
-    this.shower(u.x, u.y, 8, c, 220, 'streak');
     this.addShake(3);
     sfx('launch');
     buzz(15);
@@ -443,21 +383,10 @@ export class Battle {
     if (charge > 0.93) {
       this.texts.push({ x: u.x, y: u.y - u.r - 14, text: 'PERFECT!', t: 1, color: '#ffd84d', big: true });
       this.screenFlash('#ffd84d', 0.12);
-      this.burst(u.x, u.y, u.r * 3.2, '#ffd84d', 0.35);
       // slow-mo beat + speedlines streaming off the launch
       this.hitStop = Math.max(this.hitStop, 0.16);
       sfx('perfect');
       buzz(40);
-      for (let i = 0; i < 14 && this.particles.length < MAX_PARTICLES; i++) {
-        const a = Math.atan2(dir.y, dir.x) + (Math.random() - 0.5) * 2.2;
-        const sp = 700 + Math.random() * 500;
-        this.particles.push({
-          x: u.x - dir.x * 40 + (Math.random() - 0.5) * 120,
-          y: u.y - dir.y * 40 + (Math.random() - 0.5) * 120,
-          vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
-          t: 0.3, life: 0.3, size: 3, color: '#ffffff', shape: 'streak', grav: 0,
-        });
-      }
     }
   }
 
@@ -481,34 +410,11 @@ export class Battle {
     if (this.dragging) this.dragT += dt;
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
-    for (const z of this.zaps) z.t -= dt;
-    this.zaps = this.zaps.filter((z) => z.t > 0);
-    for (const b of this.bursts) b.t -= dt;
-    this.bursts = this.bursts.filter((b) => b.t > 0);
-    for (const s of this.slashes) s.t -= dt;
-    this.slashes = this.slashes.filter((s) => s.t > 0);
-    for (const l of this.loops) l.t -= dt;
-    this.loops = this.loops.filter((l) => l.t > 0);
     for (const f of this.flashes) f.t -= dt;
     this.flashes = this.flashes.filter((f) => f.t > 0);
-    for (const b of this.bolts) b.t -= dt;
-    this.bolts = this.bolts.filter((b) => b.t > 0);
-    for (const g of this.ghosts) g.t -= dt;
-    this.ghosts = this.ghosts.filter((g) => g.t > 0);
     for (const b of this.balls) b.t -= dt;
     this.balls = this.balls.filter((b) => b.t > 0);
-    for (const u of [...this.players, ...this.enemies]) {
-      if (u.flashT > 0) u.flashT -= dt;
-      if (u.spawnT > 0) u.spawnT -= dt;
-    }
     this.shake *= Math.exp(-6 * dt);
-    for (const p of this.particles) {
-      p.t -= dt;
-      p.vy += p.grav * dt;
-      p.x += p.vx * dt;
-      p.y += p.vy * dt;
-    }
-    this.particles = this.particles.filter((p) => p.t > 0);
     if (this.waveBanner > 0) this.waveBanner -= dt;
 
     this.stepOrbs(dt);
@@ -540,17 +446,14 @@ export class Battle {
       u.x += u.vx * h;
       u.y += u.vy * h;
       // speed trail while flying fast
-      if (len({ x: u.vx, y: u.vy }) > 260 && this.particles.length < MAX_PARTICLES) {
-        this.particles.push({
-          x: u.x, y: u.y, vx: 0, vy: 0,
-          t: 0.28, life: 0.28, size: u.r * 0.55,
-          color: TYPE_COLOR[u.def.type], shape: 'dot', grav: 0,
-        });
-      }
       this.hitWalls(u);
       for (const e of wave) {
         if (this.enemies !== wave) break;
-        if (!e.dead && this.collide(u, e)) this.strikeEnemy(u, e);
+        if (e.dead) continue;
+        // pierce mons phase through enemies — hit once, keep the line
+        if (u.def.pierce) {
+          if (dist(u, e) < u.r + e.r) this.strikeEnemy(u, e);
+        } else if (this.collide(u, e)) this.strikeEnemy(u, e);
       }
       for (const p of this.players) {
         // pass through teammates — each pass is a link-bump combo tick
@@ -592,7 +495,6 @@ export class Battle {
             e.lunging = 0;
             if (d < e.r + target.r + 8) {
               this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower * 1.3));
-              this.slash(target.x, target.y, TYPE_COLOR[e.def.type]);
               if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
             }
           }
@@ -673,17 +575,8 @@ export class Battle {
       o.x += (dir.x - dir.y * perp) * 620 * dt;
       o.y += (dir.y + dir.x * perp) * 620 * dt;
       // bubble trail
-      if (this.particles.length < MAX_PARTICLES && Math.random() < 0.5) {
-        this.particles.push({
-          x: o.x, y: o.y, vx: 0, vy: -30,
-          t: 0.4, life: 0.4, size: 4,
-          color: '#9df0ff', shape: 'bubble', grav: 0,
-        });
-      }
       if (dist(o, o.target) < o.target.r + 6) {
         this.hurt(o.target, o.dmg, '#9df0ff');
-        this.burst(o.x, o.y, 44, '#6890f0', 0.3);
-        this.shower(o.x, o.y, 12, '#9df0ff', 200, 'bubble');
         this.waves.push({
           x: o.x, y: o.y, r: 0, maxR: 52, t: 0.3, life: 0.3,
           color: '#9df0ff', hits: new Set(),
@@ -717,65 +610,57 @@ export class Battle {
   }
 
   // Quick-attack lunges: the ally streaks to its target, lands the hit,
-  // then zips back — position never actually changes hands.
+  // and stays parked beside it.
   private stepDashes(dt: number) {
     const SP = 1100;
     for (const d of this.dashes) {
-      const tx = d.back ? d.ox : d.e.x;
-      const ty = d.back ? d.oy : d.e.y;
-      const dir = norm({ x: tx - d.u.x, y: ty - d.u.y });
-      const left = dist(d.u, { x: tx, y: ty });
-      if (left <= SP * dt) {
-        d.u.x = tx;
-        d.u.y = ty;
-      } else {
-        d.u.x += dir.x * SP * dt;
-        d.u.y += dir.y * SP * dt;
+      if (d.e.dead) {
+        d.done = true; // target died mid-lunge — park where it is
+        continue;
       }
-      if (this.particles.length < MAX_PARTICLES) {
-        this.particles.push({
-          x: d.u.x, y: d.u.y, vx: 0, vy: 0,
-          t: 0.22, life: 0.22, size: d.u.r * 0.5,
-          color: '#ffffff', shape: 'streak', grav: 0,
-        });
-      }
-      if (d.back) {
-        if (d.u.x === d.ox && d.u.y === d.oy) d.done = true;
-      } else if (!d.e.dead && dist(d.u, d.e) < d.u.r + d.e.r + 4) {
+      // hold just outside the target's radius — never overlap it
+      const gap = d.u.r + d.e.r + 2;
+      if (dist(d.u, d.e) <= gap + 2) {
         this.hurt(d.e, d.dmg, '#9df0ff');
-        this.slash(d.e.x, d.e.y, '#ffffff');
-        this.slash(d.e.x, d.e.y, '#e8e8a8');
         this.addShake(5);
         this.hitStop = Math.max(this.hitStop, 0.06);
         sfx('hit');
-        d.back = true;
-      } else if (dist(d.u, { x: tx, y: ty }) < 8) {
-        d.back = true; // target died mid-lunge — just come home
+        d.done = true;
+        continue;
       }
+      const dir = norm({ x: d.e.x - d.u.x, y: d.e.y - d.u.y });
+      const step = Math.min(SP * dt, dist(d.u, d.e) - gap);
+      d.u.x += dir.x * step;
+      d.u.y += dir.y * step;
     }
     this.dashes = this.dashes.filter((d) => !d.done);
   }
 
   private hitWalls(u: Unit) {
     const a = this.arena;
+    // a bounce only counts when it actually reverses a moving ball —
+    // resting contact against the wall isn't a wall hit
+    const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
+    let bounced = false;
     if (u.x - u.r < a.x) {
       u.x = a.x + u.r;
       u.vx = -u.vx * WALL_REST;
-      this.wallSpark(u.x - u.r, u.y, 1, 0);
+      bounced = true;
     } else if (u.x + u.r > a.x + a.w) {
       u.x = a.x + a.w - u.r;
       u.vx = -u.vx * WALL_REST;
-      this.wallSpark(u.x + u.r, u.y, -1, 0);
+      bounced = true;
     }
     if (u.y - u.r < a.y) {
       u.y = a.y + u.r;
       u.vy = -u.vy * WALL_REST;
-      this.wallSpark(u.x, u.y - u.r, 0, 1);
+      bounced = true;
     } else if (u.y + u.r > a.y + a.h) {
       u.y = a.y + a.h - u.r;
       u.vy = -u.vy * WALL_REST;
-      this.wallSpark(u.x, u.y + u.r, 0, -1);
+      bounced = true;
     }
+    if (bounced && fast) u.wallN++;
   }
 
   // Push moving unit out of a static circle and reflect its velocity.
@@ -799,14 +684,18 @@ export class Battle {
     if (e.dead) return;
     let d = dmg;
     if (suffix === '!') d *= 1 + this.belt; // expert belt loves super-effective
+    if (e.boss) d *= 1 + this.bossSlayer;
     let crit = false;
     if (this.critCh > 0 && this.rng() < this.critCh) {
       crit = true;
       d *= 2;
     }
     d = Math.round(d * this.dmgMult);
+    // 0x matchups (e.g. normal vs ghost) still chip — a wave must always
+    // be finishable even when the whole team is immune-typed
+    const immune = d <= 0;
+    if (immune) d = 1;
     e.hp -= d;
-    e.flashT = 0.12;
     // king's rock staggers attack timers — capped so a long combo delays
     // one volley instead of locking the enemy out forever
     e.timer = Math.min(e.timer + this.stagger, ENEMY_BASE_TIMER + this.stagger + 1);
@@ -817,20 +706,18 @@ export class Battle {
         .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
       if (weakest) {
         weakest.hp = Math.min(weakest.hp + Math.max(1, Math.round(d * this.leech)), weakest.maxHp);
-        weakest.flashT = Math.max(weakest.flashT, 0.1);
       }
     }
     this.texts.push({
       x: e.x,
       y: e.y - e.r - 8,
-      text: crit ? `${d} CRIT!` : `${d}${suffix}`,
+      text: immune ? 'IMMUNE' : crit ? `${d} CRIT!` : `${d}${suffix}`,
       t: 0.9,
-      color: crit ? '#ffd84d' : color,
+      color: immune ? '#8a90a8' : crit ? '#ffd84d' : color,
       big: crit || suffix === '!',
     });
     if (crit) this.addShake(4);
     // styler loop wraps the target — every hit is another circle
-    this.loops.push({ x: e.x, y: e.y, r: e.r + 12, t: 0.5, life: 0.5, color: '#9df0ff' });
     if (e.hp <= 0) {
       e.dead = true;
       // every KO feeds the team's supers — kills are the fast lane to READY
@@ -854,18 +741,9 @@ export class Battle {
       const master = this.masterArmed;
       const caught = master || this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0);
       if (master) this.masterArmed = false;
-      if (caught) {
-        // absorbed by the ball — shrinks in place, no faint spin
-        this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: 0.4, life: 0.4, absorb: true });
-      } else {
-        // faint anim: the sprite spins out and fades while the rings land
-        this.ghosts.push({ id: e.def.id, x: e.x, y: e.y, r: e.r, t: e.boss ? 0.8 : 0.45, life: e.boss ? 0.8 : 0.45 });
-      }
       sfx('ko');
       buzz(e.boss ? [50, 60, 90] : 30);
       // capture complete: stacked loops + release sparkle
-      this.loops.push({ x: e.x, y: e.y, r: e.r + 20, t: 0.7, life: 0.7, color: '#ffffff' });
-      this.loops.push({ x: e.x, y: e.y, r: e.r + 30, t: 0.9, life: 0.9, color: '#9df0ff' });
       this.texts.push({
         x: e.x, y: e.y - e.r - 22,
         text: `${e.def.name.toUpperCase()} ${caught ? 'CAUGHT!' : 'FAINTED!'}`,
@@ -878,23 +756,12 @@ export class Battle {
         this.boxHp.push(1);
         if (e.boss) this.caughtBoss = true;
         this.screenFlash('#ffd84d', 0.2);
-        this.converge(e.x, e.y, 10, '#ffd84d', 'wisp');
         // real poké ball drops in and does the triple-wiggle
         this.balls.push({ x: e.x, y: e.y, item: master ? 'master-ball' : 'poke-ball', t: 1.15, life: 1.15 });
         sfx('caught');
         cry(e.def.id, 0.45);
         buzz([30, 50, 30, 50, 60]);
       }
-      for (let i = 0; i < 5; i++) {
-        this.particles.push({
-          x: e.x + (Math.random() - 0.5) * e.r, y: e.y,
-          vx: (Math.random() - 0.5) * 60, vy: -140 - Math.random() * 80,
-          t: 0.9, life: 0.9, size: 4, color: '#dff4ff', shape: 'wisp', grav: -60,
-        });
-      }
-      this.burst(e.x, e.y, e.r * 3, '#ffffff', 0.45);
-      this.burst(e.x, e.y, e.r * 1.8, TYPE_COLOR[e.def.type], 0.3);
-      this.shower(e.x, e.y, 14, TYPE_COLOR[e.def.type], 240, 'ember');
       this.addShake(e.boss ? 14 : 5);
       if (this.enemies.every((x) => x.dead)) this.waveCleared();
     }
@@ -905,21 +772,26 @@ export class Battle {
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     const mult = effectiveness(shooter.def.type, e.def.type);
-    // every link in the chain adds momentum: +5% contact damage per pass
+    // weak point: the ball's contact point lands inside the marked spot
+    const wpHit =
+      e.wp !== null &&
+      dist(shooter, { x: e.x + e.wp.x, y: e.y + e.wp.y }) < shooter.r + 14;
+    // every link in the chain adds momentum: +5% contact damage per pass;
+    // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult) *
-        shooter.pow * this.physMult * (1 + this.shotCombo * (0.05 + this.comboDmg)),
+        shooter.pow * this.physMult * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
+        (wpHit ? WP_MULT : 1) * (1 + this.wallRamp * shooter.wallN),
     );
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
-    const c = TYPE_COLOR[shooter.def.type];
-    this.slash(e.x, e.y, c);
-    this.shower(e.x, e.y, 6, c, 200, 'ember');
     this.addShake(mult > 1 ? 4 : 2);
     sfx('hit', 1 + this.shotCombo * 0.12);
     buzz(8);
     if (mult > 1)
       this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'SUPER EFFECTIVE!', t: 0.8, color: '#ffd84d', big: false });
+    if (wpHit)
+      this.texts.push({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 0.8, color: '#ffd84d', big: false });
   }
 
   // Passive talent — a small effect on EVERY pass-through, on or off
@@ -929,12 +801,10 @@ export class Battle {
     near: (radius: number) => Unit[],
     bumpDmg: (e: Unit, power: number) => number,
   ) {
-    const c = TYPE_COLOR[p.def.type];
     switch (p.role) {
       case 'speedster': { // lightning-fast jab at the closest enemy
         const t = near(140).sort((a, b) => dist(p, a) - dist(p, b))[0];
         if (t) {
-          this.zap(p.x, p.y, t.x, t.y, c);
           this.hurt(t, bumpDmg(t, 0.3), '#9df0ff');
         }
         break;
@@ -942,7 +812,6 @@ export class Battle {
       case 'bruiser': { // point-blank shockwave
         const ts = near(95);
         if (ts.length) {
-          this.burst(p.x, p.y, 60, c, 0.2);
           for (const e of ts) this.hurt(e, bumpDmg(e, 0.25), '#9df0ff');
         }
         break;
@@ -950,7 +819,6 @@ export class Battle {
       case 'sniper': { // long-range poke at the farthest target
         const t = near(280).sort((a, b) => dist(p, b) - dist(p, a))[0];
         if (t) {
-          this.zap(p.x, p.y, t.x, t.y, c);
           this.hurt(t, bumpDmg(t, 0.35), '#9df0ff');
         }
         break;
@@ -958,7 +826,6 @@ export class Battle {
       case 'tank': // brace: small self-mend on every pass
         if (p.hp < p.maxHp) {
           p.hp = Math.min(p.hp + Math.ceil(p.maxHp * 0.03), p.maxHp);
-          this.converge(p.x, p.y, 4, '#6fdc6f', 'leaf');
         }
         break;
       case 'healer': { // splash health to whoever needs it most
@@ -967,7 +834,6 @@ export class Battle {
           .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
         if (w) {
           w.hp = Math.min(w.hp + Math.ceil(w.maxHp * 0.04), w.maxHp);
-          this.zap(p.x, p.y, w.x, w.y, '#6fdc6f');
         }
         break;
       }
@@ -987,11 +853,7 @@ export class Battle {
     this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
     const n = this.shotCombo;
     const c = TYPE_COLOR[p.def.type];
-    // link arc between ball and ally + pulse — every pass reads as a hit
-    this.zap(u.x, u.y, p.x, p.y, '#ffd84d');
-    this.burst(p.x, p.y, p.r * (1.7 + n * 0.3), c, 0.25);
-    this.shower(p.x, p.y, 4 + n * 2, c, 160 + n * 30, 'streak');
-    p.flashT = 0.2;
+    // combo counter pops over the ally — every pass reads as a hit
     const COMBO_COLORS = ['#9df0ff', '#f8d030', '#f08030', '#f85888', '#ffd84d'];
     this.texts.push({
       x: p.x,
@@ -1012,14 +874,17 @@ export class Battle {
       this.enemies
         .filter((e) => !e.dead && dist(from, e) <= radius * p.rngMul + e.r)
         .sort((a, b) => dist(from, a) - dist(from, b))[0];
-    const phys = bumpIsPhysical(p.def.type);
-    const eff = (e: Unit) => effectiveness(p.def.type, e.def.type);
+    // copy (Ditto): the bumped ally replays the shooter's super — the
+    // shooter's stats and typing, fired from the copier's position
+    const src = p.def.copy ? u : p;
+    const phys = bumpIsPhysical(src.def.type);
+    const eff = (e: Unit) => effectiveness(src.def.type, e.def.type);
     // Physical bump attacks roll Attack vs Defense; elemental ones SpA vs SpD.
     const bumpDmg = (e: Unit, power: number) =>
       Math.round(
         (phys
-          ? physDamage(p.def.stats.atk, e.def.stats.def, eff(e), power) * this.physMult
-          : specDamage(p.def.stats.spa, e.def.stats.spd, eff(e), power) * this.specMult) *
+          ? physDamage(src.def.stats.atk, e.def.stats.def, eff(e), power) * this.physMult
+          : specDamage(src.def.stats.spa, e.def.stats.spd, eff(e), power) * this.specMult) *
           p.pow *
           (1 + (n - 1) * this.comboDmg), // metronome ramps with combo length
       );
@@ -1027,35 +892,31 @@ export class Battle {
     this.allyPassive(p, near, bumpDmg);
     if (p.cd > 0) {
       // super still recharging — link sparks but no attack
-      this.shower(p.x, p.y, 5, '#8890b8', 90, 'dot');
       return;
     }
-    p.cd = Math.max(1, Math.round(bumpCooldown(p.def.type) * this.cdMult) - p.cdMod);
+    // a copy pays the copied move's cooldown, not its own
+    p.cd = Math.max(1, Math.round(bumpCooldown(src.def.type) * this.cdMult) - p.cdMod);
     p.cdMax = p.cd;
     this.bumpsThisShot.add(p.uid);
-    p.flashT = 0.25;
-    // move callout, freeze-frame, and a white converge flash on the caster
+    // move callout and freeze-frame on the cast
     this.texts.push({
       x: p.x, y: p.y - p.r - 46,
-      text: `${p.def.name.toUpperCase()} used ${MOVE_NAME[p.def.type]}!`,
-      t: 1.05, color: TYPE_COLOR[p.def.type], big: true,
+      text: `${p.def.name.toUpperCase()} used ${MOVE_NAME[src.def.type]}!`,
+      t: 1.05, color: TYPE_COLOR[src.def.type], big: true,
     });
     this.hitStop = Math.max(this.hitStop, 0.18);
-    this.converge(p.x, p.y, 10, '#ffffff', 'streak');
-    const color = TYPE_COLOR[p.def.type];
+    const color = TYPE_COLOR[src.def.type];
     this.screenFlash(color, 0.08);
-    sfx(SUPER_SFX[p.def.type]);
+    sfx(SUPER_SFX[src.def.type]);
     cry(p.def.id, 0.35);
     buzz(20);
 
-    switch (p.def.type) {
+    switch (src.def.type) {
       case 'fire': {
         // flame burst: a shockwave ring rolls out from the ally — enemies
         // catch fire as the front passes over them
-        this.burst(p.x, p.y, 70, '#ffffff', 0.25);
         this.screenFlash('#f08030', 0.15);
         this.addShake(8);
-        this.shower(p.x, p.y, 18, color, 320, 'ember');
         this.waves.push({
           x: p.x, y: p.y, r: 0, maxR: 170 * p.rngMul, t: 0.4, life: 0.4,
           color, hits: new Set(),
@@ -1063,8 +924,6 @@ export class Battle {
             const dir = norm({ x: e.x - p.x, y: e.y - p.y });
             e.vx += dir.x * 170;
             e.vy += dir.y * 170;
-            this.burst(e.x, e.y, 34, '#f08030', 0.22);
-            this.shower(e.x, e.y, 6, '#ffb060', 220, 'ember');
             this.hurt(e, bumpDmg(e, 1.6), '#9df0ff');
           },
         });
@@ -1089,10 +948,6 @@ export class Battle {
         chain.forEach((c, i) => {
           this.later(i * 0.1, () => {
             if (c.e.dead) return;
-            this.bolt(c.a.x, c.a.y, c.e.x, c.e.y, color);
-            this.bolt(c.e.x, this.arena.y, c.e.x, c.e.y, color); // sky strike
-            this.shower(c.e.x, c.e.y, 8, color, 200, 'dot');
-            this.burst(c.e.x, c.e.y, 36, '#fffbe0', 0.2);
             this.hurt(c.e, bumpDmg(c.e, c.mult), '#9df0ff');
             this.addShake(4);
             sfx('zap');
@@ -1106,28 +961,22 @@ export class Battle {
       }
       case 'grass': {
         // drain field: tendrils pull energy from enemies back to the ally
-        this.burst(p.x, p.y, 140, color, 0.4);
-        this.converge(p.x, p.y, 14, color, 'leaf');
         let dealt = 0;
         for (const e of near(140)) {
           const dmg = bumpDmg(e, 1.1);
           dealt += dmg;
-          this.zap(e.x, e.y, p.x, p.y, '#78c850');
           this.hurt(e, dmg, '#9df0ff');
         }
         const heal = Math.max(Math.round(dealt * 0.35), 4);
         for (const pl of this.players) {
           if (pl.dead) continue;
           pl.hp = Math.min(pl.hp + heal, pl.maxHp);
-          pl.flashT = 0.15;
           this.texts.push({ x: pl.x, y: pl.y - pl.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
         }
         break;
       }
       case 'water':
         // hydro pump: homing orbs corkscrew into the 3 nearest enemies
-        this.burst(p.x, p.y, 80, color, 0.3);
-        this.shower(p.x, p.y, 10, '#9df0ff', 180, 'bubble');
         near(Infinity)
           .sort((a, b) => dist(p, a) - dist(p, b))
           .slice(0, 3)
@@ -1147,8 +996,6 @@ export class Battle {
         // telekinetic shove: real knockback impulse — enemies get flung
         // off the ally, off walls, off each other
         const radius = 170;
-        this.burst(p.x, p.y, radius * 0.6, '#ffffff', 0.3);
-        this.shower(p.x, p.y, 14, color, 340, 'streak');
         this.waves.push({
           x: p.x, y: p.y, r: 0, maxR: radius * p.rngMul, t: 0.32, life: 0.32,
           color, hits: new Set(),
@@ -1166,23 +1013,8 @@ export class Battle {
         // hurricane vortex: drags every nearby enemy into a pile on the
         // ally — sets up the next shot's bump chain
         const radius = 210;
-        this.burst(p.x, p.y, radius, color, 0.5);
-        this.converge(p.x, p.y, 16, color, 'wisp');
         this.screenFlash(color, 0.1);
         this.addShake(5);
-        // spiral wind streaks
-        for (let i = 0; i < 14; i++) {
-          const a = Math.random() * Math.PI * 2;
-          const r = 50 + Math.random() * radius;
-          const px = p.x + Math.cos(a) * r;
-          const py = p.y + Math.sin(a) * r;
-          this.particles.push({
-            x: px, y: py,
-            vx: Math.cos(a + Math.PI / 2) * 260 - (px - p.x) * 2.4,
-            vy: Math.sin(a + Math.PI / 2) * 260 - (py - p.y) * 2.4,
-            t: 0.5, life: 0.5, size: 4, color: '#d8f0ff', shape: 'streak', grav: 0,
-          });
-        }
         for (const e of near(radius)) {
           const dir = norm({ x: p.x - e.x, y: p.y - e.y });
           e.vx += dir.x * 640;
@@ -1194,8 +1026,6 @@ export class Battle {
       case 'poison':
         // toxic: gas cloud now, then a cut of max HP at the end of each of
         // your shots — re-toxining stacks the timer
-        this.burst(p.x, p.y, 140, color, 0.4);
-        this.shower(p.x, p.y, 22, '#c060c0', 110, 'bubble');
         this.screenFlash('#a040a0', 0.12);
         for (const e of near(140)) {
           e.dotTicks = Math.min(e.dotTicks + 2, 6);
@@ -1209,17 +1039,9 @@ export class Battle {
         // second hit lands a beat later and leaves a crater
         const e = nearest(p, 200);
         if (e) {
-          this.skyFall(e.x, '#b8a038');
-          this.burst(e.x, e.y, e.r * 2, '#ffffff', 0.22);
           this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
           this.later(0.14, () => {
             if (e.dead) return;
-            this.skyFall(e.x, '#b8a038');
-            this.burst(e.x, e.y, e.r * 3, color, 0.4);
-            this.slash(e.x, e.y, '#ffffff');
-            this.slash(e.x, e.y, color);
-            this.slash(e.x, e.y, '#ffd84d');
-            this.shower(e.x, e.y, 16, '#b8a038', 300, 'ember');
             this.screenFlash('#b8a038', 0.12);
             this.addShake(12);
             this.hurt(e, bumpDmg(e, 2.2), '#9df0ff');
@@ -1229,21 +1051,18 @@ export class Battle {
       }
       case 'ghost': {
         // hex: wisps converge on every enemy from the dark
-        this.burst(p.x, p.y, 230, color, 0.5);
         this.screenFlash('#705898', 0.18);
         for (const e of near(Infinity)) {
-          this.converge(e.x, e.y, 8, '#705898', 'wisp');
           this.hurt(e, bumpDmg(e, 1.1), '#9df0ff');
         }
         break;
       }
       default: {
         // quick attack: the ally physically dashes to the nearest enemy,
-        // slams it, and snaps back — pure speed
+        // slams it, and stays put beside it — pure speed
         const e = nearest(p, 240);
         if (e) {
-          this.zap(p.x, p.y, e.x, e.y, color);
-          this.dashes.push({ u: p, ox: p.x, oy: p.y, e, back: false, done: false, dmg: bumpDmg(e, 1.5) });
+          this.dashes.push({ u: p, e, done: false, dmg: bumpDmg(e, 1.5) });
         }
       }
     }
@@ -1253,9 +1072,7 @@ export class Battle {
         if (pl.dead) continue;
         const heal = Math.max(1, Math.round(pl.maxHp * 0.15));
         pl.hp = Math.min(pl.hp + heal, pl.maxHp);
-        pl.flashT = 0.15;
         this.texts.push({ x: pl.x, y: pl.y - pl.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
-        this.converge(pl.x, pl.y, 5, '#6fdc6f', 'leaf');
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -1268,8 +1085,6 @@ export class Battle {
     if (firedAll) {
       this.hitStop = 0.3;
       this.screenFlash('#ffd84d', 0.3);
-      this.burst(p.x, p.y, 140, '#ffffff', 0.35);
-      this.shower(p.x, p.y, 24, '#ffd84d', 320, 'ember');
       this.addShake(8);
       this.texts.push({ x: p.x, y: p.y - p.r - 40, text: 'TEAM COMBO!', t: 1.2, color: '#ffd84d', big: true });
     }
@@ -1318,7 +1133,6 @@ export class Battle {
     p.cdMax = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - p.cdMod);
     p.cd = p.cdMax; // swapped in discharged — it has to earn its first super
     this.boxSel = -1;
-    this.burst(p.x, p.y, p.r * 2.4, '#ffd84d', 0.35);
     this.screenFlash('#ffd84d', 0.12);
     sfx('caught');
   }
@@ -1420,8 +1234,6 @@ export class Battle {
     p.cd--;
     if (p.cd === 0 && !p.dead) {
       sfx('ready');
-      this.burst(p.x, p.y, p.r * 2.2, TYPE_COLOR[p.def.type], 0.3);
-      this.shower(p.x, p.y, 8, '#ffd84d', 160, 'streak');
     }
   }
 
@@ -1441,7 +1253,6 @@ export class Battle {
       if (e.dotTicks > 0) {
         e.dotTicks--;
         this.hurt(e, e.dotDmg, '#a040a0');
-        this.burst(e.x, e.y, 30, '#a040a0', 0.25);
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -1472,9 +1283,6 @@ export class Battle {
       e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult;
       if (e.boss) {
         const R = 170;
-        this.burst(e.x, e.y, R, '#f85888', 0.55);
-        this.burst(e.x, e.y, R * 0.5, '#ffffff', 0.3);
-        this.shower(e.x, e.y, 22, '#f85888', 320, 'ember');
         this.screenFlash('#f85888', 0.18);
         this.addShake(12);
         sfx('boom');
@@ -1491,14 +1299,11 @@ export class Battle {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
         if (target) {
           e.lunging = 1.4;
-          this.burst(e.x, e.y, e.r * 1.6, '#ffffff', 0.25);
-          this.shower(e.x, e.y, 6, TYPE_COLOR[e.def.type], 200, 'streak');
           sfx('launch');
         }
       } else {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
         if (target) {
-          this.bolt(e.x, e.y, target.x, target.y, '#ffe66d');
           sfx('zap');
           this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
           if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
@@ -1525,19 +1330,15 @@ export class Battle {
       p.sash = false;
       dmg = p.hp - 1;
       this.texts.push({ x: p.x, y: p.y - p.r - 20, text: 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
-      this.burst(p.x, p.y, p.r * 2, '#ffd84d', 0.3);
     }
     p.hp -= dmg;
-    p.flashT = 0.15;
     this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
-    this.shower(p.x, p.y, 5, '#ff6b6b', 160, 'ember');
     this.addShake(3);
     sfx('hurt');
     buzz(20);
     if (p.hp <= 0) {
       p.hp = 0;
       p.dead = true;
-      this.burst(p.x, p.y, p.r * 2.4, '#ff6b6b', 0.4);
       this.addShake(6);
       sfx('ko');
       buzz(60);
@@ -1551,6 +1352,12 @@ export class Battle {
       if (!this.players[idx].dead) {
         this.activeIdx = idx;
         this.phase = 'aim';
+        const a = this.players[idx];
+        this.texts.push({
+          x: a.x, y: a.y - a.r - 8,
+          text: `GO! ${a.def.name.toUpperCase()}`,
+          t: 1, color: TYPE_COLOR[a.def.type], big: true,
+        });
         return;
       }
     }
@@ -1559,128 +1366,12 @@ export class Battle {
 
   // --- vfx helpers ---
 
-  private burst(x: number, y: number, r: number, color: string, life: number) {
-    this.bursts.push({ x, y, r, t: life, life, color });
-  }
-
-  private zap(x1: number, y1: number, x2: number, y2: number, color: string) {
-    this.zaps.push({ x1, y1, x2, y2, t: 0.32, color });
-  }
-
-  // Forked lightning: midpoint displacement gives the main bolt, plus a
-  // couple of short branches snapped off the middle — reads as a real strike.
-  private bolt(x1: number, y1: number, x2: number, y2: number, color: string) {
-    const pts: Vec[] = [{ x: x1, y: y1 }, { x: x2, y: y2 }];
-    for (let it = 0; it < 4; it++) {
-      for (let i = pts.length - 1; i > 0; i--) {
-        const a = pts[i - 1], b = pts[i];
-        const d = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-        const off = (Math.random() - 0.5) * d * 0.3;
-        pts.splice(i, 0, {
-          x: (a.x + b.x) / 2 + (-(b.y - a.y) / d) * off,
-          y: (a.y + b.y) / 2 + ((b.x - a.x) / d) * off,
-        });
-      }
-    }
-    const branches: Vec[][] = [];
-    for (let k = 0; k < 2; k++) {
-      const s = pts[Math.floor(pts.length * (0.3 + Math.random() * 0.4))];
-      const a = Math.random() * Math.PI * 2;
-      const L = 18 + Math.random() * 28;
-      branches.push([
-        s,
-        { x: s.x + Math.cos(a) * L * 0.6, y: s.y + Math.sin(a) * L * 0.6 },
-        { x: s.x + Math.cos(a + 0.7) * L, y: s.y + Math.sin(a + 0.7) * L },
-      ]);
-    }
-    this.bolts.push({ pts, branches, t: 0.3, life: 0.3, color });
-  }
-
-  private slash(x: number, y: number, color: string) {
-    this.slashes.push({ x, y, ang: Math.random() * Math.PI, t: 0.22, color });
-  }
-
   private screenFlash(color: string, t: number) {
     this.flashes.push({ t, life: t, color });
   }
 
   private addShake(amt: number) {
     this.shake = Math.min(this.shake + amt, 18);
-  }
-
-  private shower(
-    x: number,
-    y: number,
-    n: number,
-    color: string,
-    speed: number,
-    shape: Particle['shape'],
-  ) {
-    for (let i = 0; i < n && this.particles.length < MAX_PARTICLES; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const s = speed * (0.4 + Math.random() * 0.8);
-      const life = 0.3 + Math.random() * 0.35;
-      this.particles.push({
-        x, y,
-        vx: Math.cos(a) * s,
-        vy: Math.sin(a) * s - (shape === 'wisp' || shape === 'bubble' ? 60 : 0),
-        t: life, life,
-        size: 3 + Math.random() * 4,
-        color, shape,
-        grav: shape === 'ember' ? 220 : shape === 'leaf' ? 60 : 0,
-      });
-    }
-  }
-
-  // Debris/meteors rain down from the top of the arena onto a column.
-  private skyFall(x: number, color: string) {
-    for (let i = 0; i < 7 && this.particles.length < MAX_PARTICLES; i++) {
-      const px = x + (Math.random() - 0.5) * 60;
-      this.particles.push({
-        x: px,
-        y: this.arena.y + Math.random() * 24,
-        vx: (x - px) * 2.2,
-        vy: 420 + Math.random() * 180,
-        t: 0.5,
-        life: 0.5,
-        size: 4 + Math.random() * 5,
-        color,
-        shape: 'meteor',
-        grav: 0,
-      });
-    }
-  }
-
-  // Particles spawned on a ring around a point, flying inward — dies on arrival.
-  private converge(x: number, y: number, n: number, color: string, shape: Particle['shape']) {
-    for (let i = 0; i < n && this.particles.length < MAX_PARTICLES; i++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = 70 + Math.random() * 60;
-      const speed = 230;
-      this.particles.push({
-        x: x + Math.cos(a) * r,
-        y: y + Math.sin(a) * r,
-        vx: -Math.cos(a) * speed,
-        vy: -Math.sin(a) * speed,
-        t: r / speed,
-        life: r / speed,
-        size: 3 + Math.random() * 4,
-        color,
-        shape,
-        grav: 0,
-      });
-    }
-  }
-
-  private wallSpark(x: number, y: number, nx: number, ny: number) {
-    for (let i = 0; i < 4 && this.particles.length < MAX_PARTICLES; i++) {
-      const spread = (Math.random() - 0.5) * 1.4;
-      const vx = (nx + spread * (ny !== 0 ? 1 : 0)) * 180;
-      const vy = (ny + spread * (nx !== 0 ? 1 : 0)) * 180;
-      this.particles.push({
-        x, y, vx, vy, t: 0.25, life: 0.25, size: 3, color: '#5adfff', shape: 'streak', grav: 0,
-      });
-    }
   }
 
   // --- rendering ---
@@ -1700,31 +1391,10 @@ export class Battle {
     drawBackdrop(ctx, a, 18, this.theme, this.time);
     drawWall(ctx, a, this.theme);
 
-    for (const b of this.bursts) this.drawBurst(ctx, b);
     for (const w of this.waves) this.drawWave(ctx, w);
-    for (const z of this.zaps) this.drawZap(ctx, z);
-    for (const b of this.bolts) this.drawBolt(ctx, b);
 
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
-
-    // KO'd mons: sprite spins out, shrinks, floats up — GBA faint style
-    for (const g of this.ghosts) {
-      const prog = 1 - g.t / g.life;
-      ctx.save();
-      ctx.globalAlpha = Math.max(1 - prog, 0) * 0.9;
-      if (g.absorb) {
-        // caught: shrinks straight down into the spot the ball lands on
-        ctx.translate(g.x, g.y + prog * 8);
-        drawMon(ctx, g.id, 0, 0, g.r * 2.6 * Math.max(1 - prog, 0));
-      } else {
-        ctx.translate(g.x, g.y - prog * 30);
-        ctx.rotate(prog * 2.8);
-        const s = g.r * 2.6 * (1 - prog * 0.7);
-        drawMon(ctx, g.id, 0, 0, s);
-      }
-      ctx.restore();
-    }
 
     // caught mons: real poké ball drops in and does the triple-wiggle
     for (const b of this.balls) {
@@ -1739,22 +1409,6 @@ export class Battle {
       ctx.restore();
     }
 
-    for (const s of this.slashes) this.drawSlash(ctx, s);
-    for (const l of this.loops) {
-      // sweeping styler ring: draws fast, lingers, fades
-      const prog = 1 - l.t / l.life;
-      const sweep = Math.min(prog / 0.45, 1) * Math.PI * 2;
-      ctx.save();
-      ctx.globalAlpha = Math.min(l.t / 0.25, 1);
-      ctx.strokeStyle = l.color;
-      ctx.lineWidth = 3;
-      ctx.shadowColor = l.color;
-      ctx.shadowBlur = 8;
-      ctx.beginPath();
-      ctx.arc(l.x, l.y, l.r, -Math.PI / 2, -Math.PI / 2 + sweep);
-      ctx.stroke();
-      ctx.restore();
-    }
 
     for (const o of this.orbs) {
       ctx.save();
@@ -1771,12 +1425,11 @@ export class Battle {
       ctx.restore();
     }
 
-    for (const p of this.particles) this.drawParticle(ctx, p);
 
     for (const t of this.texts) {
       const pop = 1 + Math.max(0, t.t - 0.72) * (t.big ? 3 : 1.6);
       ctx.globalAlpha = Math.min(t.t / 0.3, 1);
-      ctx.font = `${Math.round(16 * pop)}px ${PIXEL_FONT}`;
+      ctx.font = font(16 * pop);
       ctx.textAlign = 'center';
       ctx.fillStyle = t.color;
       ctx.strokeStyle = '#000';
@@ -1786,15 +1439,6 @@ export class Battle {
       ctx.fillText(t.text, t.x, t.y - dy);
     }
     ctx.globalAlpha = 1;
-
-    if (this.phase === 'aim' && !this.active.dead) {
-      const u = this.active;
-      ctx.strokeStyle = TYPE_COLOR[u.def.type];
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(u.x, u.y, u.r + 6 + Math.sin(this.time * 5) * 2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
 
     if (this.dragging) this.drawAim(ctx);
 
@@ -1811,7 +1455,7 @@ export class Battle {
     // onboarding hints for the first couple of shots
     if (this.phase === 'aim' && this.shots < 2 && !this.dragging) {
       ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
-      ctx.font = `9px ${PIXEL_FONT}`;
+      ctx.font = font(9);
       ctx.textAlign = 'center';
       ctx.fillStyle = '#e8ecff';
       ctx.fillText(
@@ -1854,49 +1498,24 @@ export class Battle {
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
-    const size = u.r * 2.6;
-    // wave entry: staggered delay, then a quick overshoot zoom — the
-    // Essentials appear-anim feel
-    const pop = u.spawnT <= 0 ? 1 : 1 - Math.min(u.spawnT, 0.3) / 0.3;
-    const sc = 0.2 + 0.8 * (1 + 2.7 * Math.pow(pop - 1, 3) + 1.7 * Math.pow(pop - 1, 2));
+    drawMon(ctx, u.def.id, u.x, u.y, u.r * 2.6);
 
-    // thin ring marks bosses and elites — the fat team pads are gone
-    const elite = u.side === 'enemy' && !u.boss && ELITES.includes(u.def);
-    if (u.boss || elite) {
-      ctx.globalAlpha = pop;
-      ctx.strokeStyle = u.boss ? '#ff5050' : '#ffd84d';
+    // weak point: a gold diamond on the body — contact there pays x3
+    if (u.wp) {
+      const wx = u.x + u.wp.x;
+      const wy = u.y + u.wp.y;
+      const s = 7;
+      ctx.fillStyle = '#ffd84d';
+      ctx.strokeStyle = '#000';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(u.x, u.y + u.r * 0.62, u.r * 1.05, u.r * 0.42, 0, 0, Math.PI * 2);
+      ctx.moveTo(wx, wy - s);
+      ctx.lineTo(wx + s, wy);
+      ctx.lineTo(wx, wy + s);
+      ctx.lineTo(wx - s, wy);
+      ctx.closePath();
+      ctx.fill();
       ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    // glow under units about to act
-    if (u.side === 'enemy' && u.timer <= 1) {
-      ctx.fillStyle = '#ff6b6b22';
-      ctx.beginPath();
-      ctx.arc(u.x, u.y, u.r + 10 + Math.sin(this.time * 10) * 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // squash while the slingshot is charged — classic anticipation
-    const sq = u === this.active && this.dragging && this.phase === 'aim' ? this.charge() : 0;
-    ctx.save();
-    ctx.translate(u.x, u.y);
-    ctx.globalAlpha = pop;
-    ctx.scale(sc * (1 + sq * 0.12), sc * (1 - sq * 0.16));
-    drawMon(ctx, u.def.id, 0, 0, size);
-    ctx.restore();
-
-    // hit flash
-    if (u.flashT > 0) {
-      ctx.globalAlpha = Math.min(u.flashT / 0.12, 1) * 0.75;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(u.x, u.y, u.r * 0.95, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
     }
 
     // hp bar
@@ -1908,112 +1527,56 @@ export class Battle {
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
 
     if (u.side === 'enemy') {
-      // capture progress: Ranger-style ring that fills as hp drops
-      ctx.strokeStyle = '#9df0ff';
-      ctx.lineWidth = 2.5;
-      ctx.globalAlpha = 0.75;
-      ctx.beginPath();
-      ctx.arc(u.x, u.y, u.r + 7, -Math.PI / 2, -Math.PI / 2 + (1 - pct) * Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      // poisoned indicator
-      if (u.dotTicks > 0) {
-        ctx.fillStyle = '#a040a0';
-        ctx.beginPath();
-        ctx.arc(u.x - u.r + 4, u.y - u.r + 2, 6, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      // attack countdown
-      ctx.fillStyle = '#000a';
-      ctx.beginPath();
-      ctx.arc(u.x + u.r - 2, u.y - u.r + 2, 11, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.font = `9px ${PIXEL_FONT}`;
+      // attack countdown — bare pixel digit, red when it's about to fire
+      ctx.font = font(10);
       ctx.textAlign = 'center';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = u.timer <= 1 ? '#ff6b6b' : '#fff';
       ctx.fillText(`${u.timer}`, u.x + u.r - 2, u.y - u.r + 7);
-      // type chip — top-left of the sprite
-      const tx = u.x - u.r - 4;
-      const ty = u.y - u.r + 2;
-      ctx.fillStyle = TYPE_COLOR[u.def.type];
-      ctx.strokeStyle = '#0a0e20';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(tx, ty, 10, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.font = `7px ${PIXEL_FONT}`;
-      ctx.fillStyle = '#fff';
-      ctx.fillText(u.def.type.slice(0, 2).toUpperCase(), tx, ty + 3);
     } else {
-      // charge pips: one dot per shot of charge around the mon — dark dots
-      // are charge still owed, type-colored dots are earned, all-gold = READY
-      const rr = u.r + 9;
+      // charge meter: a row of pips under the hp bar — dark pips are
+      // charge still owed, type-colored are earned, all-gold = READY
       const dots = Math.max(1, u.cdMax);
       const filled = u.cd <= 0 ? dots : dots - u.cd;
       for (let i = 0; i < dots; i++) {
-        const a = -Math.PI / 2 + (i / dots) * Math.PI * 2;
         ctx.fillStyle = i < filled ? (u.cd <= 0 ? '#ffd84d' : TYPE_COLOR[u.def.type]) : 'rgba(0,0,0,0.45)';
-        ctx.beginPath();
-        ctx.arc(u.x + Math.cos(a) * rr, u.y + Math.sin(a) * rr, 3, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.fillRect(u.x + (i - (dots - 1) / 2) * 7 - 2.5, u.y + u.r + 12, 5, 5);
       }
-      if (u.cd <= 0 && !u.dead) {
-        // ready: pulsing aura, orbiting sparks, and the move's name overhead
-        // — this is the thing you want to hit
-        const pulse = 0.55 + Math.sin(this.time * 6) * 0.3;
-        ctx.strokeStyle = '#ffd84d';
-        ctx.lineWidth = 2.5;
-        ctx.globalAlpha = pulse;
-        ctx.beginPath();
-        ctx.arc(u.x, u.y, u.r + 14, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        for (let i = 0; i < 3; i++) {
-          const a = this.time * 3 + (i * Math.PI * 2) / 3;
-          ctx.fillStyle = '#ffd84d';
-          ctx.beginPath();
-          ctx.arc(u.x + Math.cos(a) * rr, u.y + Math.sin(a) * rr, 1.8, 0, Math.PI * 2);
-          ctx.fill();
-        }
+      if (u.cd <= 0) {
+        // ready: the move's name sits overhead — this is the thing to hit
         const label = MOVE_NAME[u.def.type];
         const ly = u.y + u.r + 30;
-        ctx.font = `7px ${PIXEL_FONT}`;
+        ctx.font = font(7);
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.globalAlpha = Math.min(1, pulse + 0.25);
         ctx.strokeText(label, u.x, ly);
         ctx.fillStyle = TYPE_COLOR[u.def.type];
         ctx.fillText(label, u.x, ly);
-        ctx.globalAlpha = 1;
       }
-      // whose turn it is — bouncing marker + name tag + bright white ring,
-      // up only while you're lining up the shot
+      // whose turn it is — arrow + name tag over the active mon, up only
+      // while lining up the shot
       if (u === this.active && this.phase === 'aim') {
-        const bob = Math.sin(this.time * 5) * 3;
-        const ty = u.y - u.r - 14 - bob;
-        ctx.strokeStyle = '#fff';
+        const ty = u.y - u.r - 14;
+        ctx.fillStyle = '#ffd84d';
+        ctx.strokeStyle = '#000';
         ctx.lineWidth = 2.5;
-        ctx.globalAlpha = 0.5 + Math.sin(this.time * 6) * 0.3;
+        ctx.lineJoin = 'round';
         ctx.beginPath();
-        ctx.arc(u.x, u.y, u.r + 10, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.moveTo(u.x - 7, ty - 8);
-        ctx.lineTo(u.x + 7, ty - 8);
+        ctx.moveTo(u.x - 11, ty - 11);
+        ctx.lineTo(u.x + 11, ty - 11);
         ctx.lineTo(u.x, ty);
         ctx.closePath();
         ctx.fill();
-        ctx.font = `8px ${PIXEL_FONT}`;
+        ctx.stroke();
+        ctx.font = font(10);
         ctx.textAlign = 'center';
-        ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText(u.def.name.toUpperCase(), u.x, ty - 14);
+        ctx.strokeText(u.def.name.toUpperCase(), u.x, ty - 17);
         ctx.fillStyle = '#ffd84d';
-        ctx.fillText(u.def.name.toUpperCase(), u.x, ty - 14);
+        ctx.fillText(u.def.name.toUpperCase(), u.x, ty - 17);
       }
     }
   }
@@ -2061,6 +1624,11 @@ export class Battle {
         else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * WALL_REST; bounced = true; }
         for (const e of this.enemies)
           if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) {
+            // pierce sails through — note the first catch, keep tracing
+            if (u.def.pierce) {
+              hit = hit ?? e;
+              continue;
+            }
             hit = e;
             break sim;
           }
@@ -2097,46 +1665,9 @@ export class Battle {
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
-      if (hit) {
-        // target marker: gold ring pulses on the enemy hit first
-        ctx.strokeStyle = '#ffd84d';
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.85;
-        ctx.beginPath();
-        ctx.arc(hit.x, hit.y, hit.r + 8 + Math.sin(this.time * 8) * 3, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
     }
 
-    // styler rings: two counter-rotating dashed circles while aiming
-    for (const [rr, sp, dash] of [[u.r + 18, 2.2, 14], [u.r + 26, -1.6, 22]] as const) {
-      ctx.save();
-      ctx.strokeStyle = '#9df0ff';
-      ctx.lineWidth = 2;
-      ctx.globalAlpha = 0.65;
-      ctx.setLineDash([dash, dash * 0.7]);
-      ctx.lineDashOffset = this.time * 60 * sp;
-      ctx.beginPath();
-      ctx.arc(u.x, u.y, rr, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-
-    // charge meter arc around the unit — full sweep = max power
-    ctx.strokeStyle = '#ffffff22';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.r + 10, -Math.PI / 2, Math.PI * 1.5);
-    ctx.stroke();
-    ctx.strokeStyle = frac > 0.93 ? '#ffd84d' : color;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(u.x, u.y, u.r + 10, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
-    ctx.stroke();
-
-    // timing bar under the HUD — the ring is subtle; this is what you
-    // actually read to release on max
+    // timing bar under the HUD — this is what you read to release on max
     {
       const bw = Math.min(320, a.w * 0.64);
       const bh = 16;
@@ -2194,74 +1725,6 @@ export class Battle {
     ctx.restore();
   }
 
-  private drawZap(ctx: CanvasRenderingContext2D, z: Zap) {
-    const alpha = Math.max(z.t / 0.32, 0);
-    const d = Math.hypot(z.x2 - z.x1, z.y2 - z.y1);
-    const segs = Math.max(3, Math.round(d / 60));
-    ctx.globalAlpha = alpha;
-    // colored outer bolt + white core
-    for (const [w, col] of [[5, z.color], [2, '#ffffff']] as const) {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = w;
-      ctx.beginPath();
-      ctx.moveTo(z.x1, z.y1);
-      for (let i = 1; i < segs; i++) {
-        const t = i / segs;
-        const jitter = (Math.sin(t * 91 + z.x1) * 18) | 0;
-        const px = z.x1 + (z.x2 - z.x1) * t - ((z.y2 - z.y1) / d) * jitter;
-        const py = z.y1 + (z.y2 - z.y1) * t + ((z.x2 - z.x1) / d) * jitter;
-        ctx.lineTo(px, py);
-      }
-      ctx.lineTo(z.x2, z.y2);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  private drawBolt(ctx: CanvasRenderingContext2D, b: Bolt) {
-    const alpha = Math.max(b.t / b.life, 0);
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.shadowColor = b.color;
-    ctx.shadowBlur = 12;
-    const stroke = (pts: Vec[], w: number, col: string) => {
-      ctx.strokeStyle = col;
-      ctx.lineWidth = w;
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x, pts[0].y);
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-      ctx.stroke();
-    };
-    stroke(b.pts, 4.5, b.color);
-    for (const br of b.branches) stroke(br, 2, b.color);
-    ctx.shadowBlur = 0;
-    stroke(b.pts, 1.8, '#ffffff');
-    ctx.restore();
-  }
-
-  private drawBurst(ctx: CanvasRenderingContext2D, b: Burst) {
-    const progress = 1 - b.t / b.life;
-    const alpha = Math.max(1 - progress, 0);
-    // filled glow disc + two expanding rings
-    ctx.globalAlpha = alpha * 0.25;
-    ctx.fillStyle = b.color;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r * progress, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = b.color;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r * progress, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = alpha * 0.6;
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r * progress * 0.7, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
   private drawWave(ctx: CanvasRenderingContext2D, w: Wave) {
     const alpha = Math.max(w.t / w.life, 0);
     ctx.save();
@@ -2280,93 +1743,6 @@ export class Battle {
     ctx.arc(w.x, w.y, w.r * 0.82, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
-  }
-
-  private drawSlash(ctx: CanvasRenderingContext2D, s: Slash) {
-    const progress = 1 - s.t / 0.22;
-    const alpha = Math.max(1 - progress, 0);
-    const L = 30 + progress * 40;
-    ctx.globalAlpha = alpha;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 4;
-    for (const off of [0, Math.PI / 2]) {
-      const a = s.ang + off;
-      const dx = Math.cos(a) * L;
-      const dy = Math.sin(a) * L;
-      ctx.beginPath();
-      ctx.moveTo(s.x - dx, s.y - dy);
-      ctx.lineTo(s.x + dx, s.y + dy);
-      ctx.stroke();
-    }
-    ctx.strokeStyle = s.color;
-    ctx.lineWidth = 2;
-    const a = s.ang;
-    const dx = Math.cos(a) * L * 1.2;
-    const dy = Math.sin(a) * L * 1.2;
-    ctx.beginPath();
-    ctx.moveTo(s.x - dx, s.y - dy);
-    ctx.lineTo(s.x + dx, s.y + dy);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  private drawParticle(ctx: CanvasRenderingContext2D, p: Particle) {
-    const alpha = Math.max(p.t / p.life, 0);
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = p.color;
-    switch (p.shape) {
-      case 'ember':
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 6;
-        ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
-        ctx.shadowBlur = 0;
-        break;
-      case 'leaf':
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y - p.size);
-        ctx.lineTo(p.x + p.size, p.y);
-        ctx.lineTo(p.x, p.y + p.size);
-        ctx.lineTo(p.x - p.size, p.y);
-        ctx.fill();
-        break;
-      case 'bubble':
-      case 'wisp':
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.stroke();
-        break;
-      case 'meteor':
-        // glowing head + hot tail streaking toward the target
-        ctx.shadowColor = p.color;
-        ctx.shadowBlur = 12;
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = p.size * 0.55;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - p.vx * 0.14, p.y - p.vy * 0.14);
-        ctx.stroke();
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * 0.45, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        break;
-      case 'streak':
-        ctx.strokeStyle = p.color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y);
-        ctx.lineTo(p.x - p.vx * 0.05, p.y - p.vy * 0.05);
-        ctx.stroke();
-        break;
-      default:
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size / 2, 0, Math.PI * 2);
-        ctx.fill();
-    }
-    ctx.globalAlpha = 1;
   }
 
 }

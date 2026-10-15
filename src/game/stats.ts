@@ -72,14 +72,6 @@ export const ROLE_MODS: Record<Role, RoleMods> = {
   healer: { launch: 1, hp: 1, pow: 0.8, range: 1, cdMod: 0 },
   wild: { launch: 1, hp: 1.05, pow: 1.05, range: 1, cdMod: 0 },
 };
-export const ROLE_BLURB: Record<Role, string> = {
-  speedster: 'fast — triggers combos',
-  tank: 'huge HP, soaks hits',
-  sniper: 'long-range, but frail',
-  bruiser: 'heavy hitter',
-  healer: 'super heals the team',
-  wild: 'a bit of everything',
-};
 
 // Real move names, shouted when the super fires.
 export const MOVE_NAME: Record<PokeType, string> = {
@@ -96,17 +88,3 @@ export const MOVE_NAME: Record<PokeType, string> = {
   normal: 'QUICK ATTACK',
 };
 
-// What each type's bump super does — shown on draft cards.
-export const TYPE_MOVE: Record<PokeType, string> = {
-  fire: 'flame ring shockwave',
-  electric: 'chain lightning x3',
-  grass: 'drain foes, heal team',
-  water: 'homing orbs x3',
-  psychic: 'telekinetic shove',
-  flying: 'vortex pulls foes in',
-  poison: 'toxic dot — stacks',
-  rock: 'meteor fist one-two',
-  fighting: 'meteor fist one-two',
-  ghost: 'wisp barrage, all foes',
-  normal: 'quick-attack lunge',
-};

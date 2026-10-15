@@ -11,6 +11,8 @@ export interface SpeciesDef {
   stats: Stats; // canonical base stats: hp/atk/def/spa/spd/spe
   melee?: boolean; // enemy lunges at you when its timer hits 0 (instead of zapping)
   healer?: boolean; // bump super also heals the team
+  pierce?: boolean; // ball passes through enemies instead of bouncing off
+  copy?: boolean; // bump super replays the bumper's super (Ditto)
 }
 
 const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe: number): Stats => ({
@@ -19,16 +21,17 @@ const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe:
 
 // Draft pool: weak starters only — the strong mons are caught mid-run.
 export const ROSTER: SpeciesDef[] = [
-  { id: 25, name: 'Pikachu', type: 'electric', stats: st(35, 55, 40, 50, 50, 90) },
+  { id: 25, name: 'Pikachu', type: 'electric', stats: st(35, 55, 40, 50, 50, 90), pierce: true },
   { id: 4, name: 'Charmander', type: 'fire', stats: st(39, 52, 43, 60, 50, 65) },
   { id: 1, name: 'Bulbasaur', type: 'grass', stats: st(45, 49, 49, 65, 65, 45), healer: true },
   { id: 7, name: 'Squirtle', type: 'water', stats: st(44, 48, 65, 50, 64, 43) },
   { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55) },
   { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20), healer: true },
-  { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90) },
+  { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90), pierce: true },
   { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55) },
   { id: 95, name: 'Onix', type: 'rock', stats: st(35, 45, 160, 30, 45, 70) },
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35) },
+  { id: 132, name: 'Ditto', type: 'normal', stats: st(48, 48, 48, 48, 48, 48), copy: true },
 ];
 
 export const DRAFT_ROUNDS = 4;
@@ -80,13 +83,13 @@ const ENEMY_DB: SpeciesDef[] = [
 // Capturable elites: evolved mons that only appear on later waves — the
 // reason to keep pushing into deeper depths.
 export const ELITES: SpeciesDef[] = [
-  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110) },
+  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110), pierce: true },
   { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30) },
   { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55), melee: true },
   { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
   { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
   { id: 3, name: 'Venusaur', type: 'grass', stats: st(80, 82, 83, 100, 100, 80), healer: true },
-  { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120) },
+  { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120), pierce: true },
   { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60), healer: true },
   { id: 76, name: 'Golem', type: 'rock', stats: st(80, 120, 130, 55, 65, 45) },
 ];
@@ -126,11 +129,14 @@ const THEME_NAME: Record<Theme, string> = {
   sky: 'Gale Heights',
 };
 
-// Spawn positions drawn without replacement from this pool.
+// Spawn positions drawn without replacement from this pool. The tight
+// pairs (0.09 apart) overlap enemy radii, so they resolve to touching —
+// a wedge you can pinch the ball between for multi-hits.
 const SLOTS: [number, number][] = [
   [0.25, 0.2], [0.75, 0.2], [0.5, 0.4], [0.25, 0.55],
   [0.75, 0.55], [0.5, 0.12], [0.15, 0.4], [0.85, 0.4],
   [0.35, 0.72], [0.65, 0.72], [0.5, 0.6], [0.85, 0.62],
+  [0.44, 0.3], [0.53, 0.3], [0.44, 0.66], [0.53, 0.66],
 ];
 
 // Gym flavor: the boss's entourage shares its type when the pools have
