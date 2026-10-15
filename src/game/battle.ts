@@ -491,6 +491,12 @@ export class Battle {
 
   pointerDown(p: Vec) {
     if (this.phase === 'map') {
+      // a wave is already staged (the start node hosts stage 1) — walk in
+      if (this.pendingNext <= this.waveIndex) {
+        sfx('ui');
+        this.nextTurn();
+        return;
+      }
       // StS routing: tap one of the linked stops to walk there — its kind
       // flavors the battle (elite road, rest heal, item find, blood shrine)
       const cell = 30;
@@ -2301,7 +2307,11 @@ export class Battle {
     ctx.fillRect(0, 0, 540, 960);
     ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('choose your route — tap a linked stop', 270, oy + MAP_H * cell + 40);
+    ctx.fillText(
+      this.pendingNext <= this.waveIndex ? 'tap to begin the climb' : 'choose your route — tap a linked stop',
+      270,
+      oy + MAP_H * cell + 40,
+    );
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not
