@@ -1,7 +1,8 @@
-// Region map generator — a port of porygion's algorithm (MIT,
-// github.com/huderlem/porygion) to the climb: 3-octave value noise for
-// elevation (water < 0, land, mountain > 0.55), one node per row-band on
-// land south→north, Manhattan L-routes between consecutive nodes.
+// Region map generator — porygion's idea (seeded island, banded stops,
+// Manhattan routes) kept simple: one wobbling island of grass ringed by
+// sand and sea, nine stops zigzagging south→north, scenery sprinkled on
+// the open land. StS-style stop kinds ride along: gyms every 3rd, Poké
+// Center rests, field items to find.
 import { mulberry32 } from '../core/rng';
 import { gracidea } from '../core/assets';
 import { TOTAL_STAGES } from './data';
@@ -9,20 +10,24 @@ import { TOTAL_STAGES } from './data';
 export const MAP_W = 16;
 export const MAP_H = 22;
 
-export type NodeKind = 'start' | 'wild' | 'gym';
+export const T_WATER = 0;
+export const T_SAND = 1;
+export const T_GRASS = 2;
+
+export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item';
 export interface MapNode {
   tx: number;
   ty: number;
   kind: NodeKind;
 }
 export interface RegionMap {
-  elev: Float32Array; // MAP_W*MAP_H — <0 water, >0.55 mountain
+  tiles: Uint8Array; // MAP_W*MAP_H — T_*
   nodes: MapNode[]; // TOTAL_STAGES stops, nodes[0] is the southern start
   route: Set<number>; // tile indices carved between nodes
+  decor: Map<number, 'tree' | 'flower' | 'rock'>; // scenery on open land
 }
 
-// Seeded value noise (0..1) — smooth-interpolated lattice hashes; stands in
-// for porygion's opensimplex octaves.
+// Seeded value noise (0..1) — one smooth octave is enough for a coastline.
 const h2 = (x: number, y: number, s: number) => {
   const n = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453;
   return n - Math.floor(n);
@@ -35,63 +40,78 @@ const vn = (x: number, y: number, s: number) => {
   return (a + (b - a) * xf) * (1 - yf) + (c + (d - c) * yf) * yf;
 };
 
+// One icon per stop — fixed so the island reads like StS's map: you can
+// plan the climb ("rest before the last gym") the moment it rolls.
+const KINDS: NodeKind[] = ['start', 'item', 'gym', 'wild', 'rest', 'gym', 'item', 'rest', 'gym'];
+
 export function genRegion(seed: number): RegionMap {
   const rng = mulberry32(seed);
-  const elev = new Float32Array(MAP_W * MAP_H);
-  // porygion's octave recipe: broad base (+0.2 keeps it mostly land),
-  // medium detail, jitter modulated by a slow coefficient field
+  const tiles = new Uint8Array(MAP_W * MAP_H);
+  const cx = (MAP_W - 1) / 2, cy = (MAP_H - 1) / 2;
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
-      const base = vn(x / 6.5, y / 6.5, 0) * 2 - 1 + 0.2;
-      const detail = (vn(x / 2.5, y / 2.5, 1) * 2 - 1) * 0.15;
-      const jitter = (vn(x / 1.4, y / 1.4, 2) * 2 - 1) * ((vn(x / 4.5, y / 4.5, 3) * 2 - 1) * 0.6);
-      // pull the far edges underwater so the region reads as an island
-      const edge = Math.min(x, MAP_W - 1 - x, y, MAP_H - 1 - y);
-      elev[y * MAP_W + x] = base + detail + jitter - Math.max(0, 1.6 - edge) * 0.5;
+      const dx = (x - cx) / (MAP_W / 2), dy = (y - cy) / (MAP_H / 2);
+      const wobble = (vn(x / 3.2, y / 3.2, 0) - 0.5) * 0.5;
+      tiles[y * MAP_W + x] = dx * dx + dy * dy < 0.72 + wobble ? T_GRASS : T_WATER;
     }
   }
-  const land = (x: number, y: number) =>
-    x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && elev[y * MAP_W + x] >= 0 && elev[y * MAP_W + x] <= 0.55;
+  // beach ring: any land touching the sea is sand
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const i = y * MAP_W + x;
+      if (tiles[i] !== T_GRASS) continue;
+      const sea = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ox, oy]) => {
+        const nx = x + ox, ny = y + oy;
+        return nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H || tiles[ny * MAP_W + nx] === T_WATER;
+      });
+      if (sea) tiles[i] = T_SAND;
+    }
+  }
+  const land = (x: number, y: number) => x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && tiles[y * MAP_W + x] === T_GRASS;
 
-  // One node per row-band, alternating left/right halves so the path
-  // zigzags south→north; each lands on the nearest valid grass tile.
+  // Stops: one per row-band, alternating left/right of the island so the
+  // route snakes; nudge toward the center until it sits on grass.
   const nodes: MapNode[] = [];
   for (let i = 0; i < TOTAL_STAGES; i++) {
     const band = i / (TOTAL_STAGES - 1);
-    const cy = Math.round(MAP_H - 2 - band * (MAP_H - 4));
-    const mid = i % 2 === 0 ? MAP_W * 0.3 : MAP_W * 0.7;
-    let best: MapNode | null = null, bd = 1e9;
-    for (let dy = -2; dy <= 2; dy++) {
-      for (let x = 1; x < MAP_W - 1; x++) {
-        if (!land(x, cy + dy)) continue;
-        const d = Math.abs(x - mid) + Math.abs(dy) * 1.5 + rng() * 2;
-        if (d < bd) { bd = d; best = { tx: x, ty: cy + dy, kind: 'wild' }; }
-      }
-    }
-    nodes.push(best ?? { tx: Math.round(mid), ty: Math.max(1, Math.min(MAP_H - 2, cy)), kind: 'wild' });
+    const ty = Math.round(MAP_H - 3 - band * (MAP_H - 6));
+    let tx = Math.round((i % 2 === 0 ? 0.28 : 0.72) * (MAP_W - 1) + (rng() - 0.5) * 2);
+    while (!land(tx, ty) && tx !== Math.round(cx)) tx += Math.sign(cx - tx);
+    nodes.push({ tx, ty, kind: KINDS[i] });
   }
-  nodes[0].kind = 'start';
-  for (const i of [2, 5, 8]) if (nodes[i]) nodes[i].kind = 'gym';
 
   // Manhattan L-routes — random corner order, porygion's connectCities
   const route = new Set<number>();
   const carve = (a: MapNode, b: MapNode) => {
-    const hFirst = rng() < 0.5;
     const seg = (x1: number, y1: number, x2: number, y2: number) => {
-      const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
       while (x1 !== x2 || y1 !== y2) {
         route.add(y1 * MAP_W + x1);
-        x1 += dx * (x1 !== x2 ? 1 : 0);
-        y1 += dy * (x1 === x2 ? 1 : 0);
+        if (x1 !== x2) x1 += Math.sign(x2 - x1);
+        else y1 += Math.sign(y2 - y1);
       }
       route.add(y2 * MAP_W + x2);
     };
-    if (hFirst) { seg(a.tx, a.ty, b.tx, a.ty); seg(b.tx, a.ty, b.tx, b.ty); }
+    if (rng() < 0.5) { seg(a.tx, a.ty, b.tx, a.ty); seg(b.tx, a.ty, b.tx, b.ty); }
     else { seg(a.tx, a.ty, a.tx, b.ty); seg(a.tx, b.ty, b.tx, b.ty); }
   };
   for (let i = 1; i < nodes.length; i++) carve(nodes[i - 1], nodes[i]);
 
-  return { elev, nodes, route };
+  // Scenery on open grass — skip route tiles and the ring around stops.
+  const decor = new Map<number, 'tree' | 'flower' | 'rock'>();
+  const nearNode = (x: number, y: number) =>
+    nodes.some((n) => Math.abs(n.tx - x) + Math.abs(n.ty - y) <= 1);
+  for (let y = 0; y < MAP_H; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      const i = y * MAP_W + x;
+      if (tiles[i] !== T_GRASS || route.has(i) || nearNode(x, y)) continue;
+      const r = rng();
+      if (r < 0.07) decor.set(i, 'tree');
+      else if (r < 0.15) decor.set(i, 'flower');
+      else if (r < 0.17) decor.set(i, 'rock');
+    }
+  }
+
+  return { tiles, nodes, route, decor };
 }
 
 // --- tile drawing: keyed gracidea slices, cached per rect (same magenta-

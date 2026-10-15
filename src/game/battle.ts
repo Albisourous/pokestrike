@@ -8,7 +8,7 @@ import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
-import { genRegion, RegionMap, MAP_W, MAP_H, drawTile } from './map';
+import { genRegion, RegionMap, MAP_W, MAP_H, drawTile, T_WATER, T_SAND } from './map';
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType } from './types';
@@ -72,7 +72,7 @@ interface Unit {
   cdMod: number; // shots off the super cooldown
   lastHit: Map<number, number>; // shooter uid -> game time
   wallN: number; // wall bounces so far this shot (grip claw ramp)
-  wpA: number; // weak-point angle on the body, -1 = none (elites/bosses)
+  wpA: number; // weak-point angle on the body, -1 = none (elites only)
   hzT: number; // last hazard tick — throttles lava/spike chips and burns
 }
 
@@ -226,6 +226,7 @@ export class Battle {
   private inRival = false; // this wave is the rival echo fight
   private region: RegionMap; // the climb's world map — drawn between stages
   private pendingNext = 0; // wave the map interstitial leads into
+  private mapNote = ''; // stop-flavor line shown on the region map
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods
@@ -266,6 +267,7 @@ export class Battle {
   box: SpeciesDef[] = []; // captured mons — swap in between stages
   boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
+  score = 0; // run score — total damage dealt to enemies
   maxCombo = 0; // best pass-chain in a single shot
   maxKos = 0; // most enemies one shot downed
   totalKos = 0; // enemies downed all run
@@ -408,7 +410,7 @@ export class Battle {
       cdMod: 0,
       lastHit: new Map(),
       wallN: 0,
-      wpA: s.boss || ELITE_IDS.has(s.def.id) ? this.rng() * Math.PI * 2 : -1,
+      wpA: ELITE_IDS.has(s.def.id) ? this.rng() * Math.PI * 2 : -1,
       hzT: -9,
       };
     });
@@ -670,8 +672,9 @@ export class Battle {
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
-      // lava burns whatever stands in it — enemies included
-      if (!e.dead) {
+      // lava burns whatever stands in it — enemies included, but bosses
+      // shrug it off (a spawn inside a pool shouldn't cook them to death)
+      if (!e.dead && !e.boss) {
         for (const hz of this.hazards) {
           if (hz.kind === 'lava' && dist(e, hz) < hz.r + e.r * 0.4 && this.time - e.hzT > 0.6) {
             e.hzT = this.time;
@@ -916,6 +919,7 @@ export class Battle {
     const immune = d <= 0;
     if (immune) d = 1;
     e.hp -= d;
+    this.score += d;
     // king's rock staggers attack timers — capped so a long combo delays
     // one volley instead of locking the enemy out forever
     e.timer = Math.min(e.timer + this.stagger, ENEMY_BASE_TIMER + this.stagger + 1);
@@ -1522,7 +1526,30 @@ export class Battle {
       this.stage.waves.push(rollWave(this.rng, this.depth, this.eliteWave, this.stage.theme));
     }
     this.pendingNext = next;
+    this.arriveAtNode();
     this.phase = 'map'; // walk the route to the next stage first
+  }
+
+  // StS map-stop effects resolve on arrival: Poké Center rests heal, item
+  // stops cough up a perk — the note shows while the map is up.
+  private arriveAtNode() {
+    this.mapNote = '';
+    const n = this.region.nodes[this.pendingNext];
+    if (!n) return;
+    if (n.kind === 'rest') {
+      for (const p of this.players) {
+        if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3));
+      }
+      this.mapNote = 'RESTED AT THE POKÉ CENTER — TEAM +30% HP';
+      sfx('heal');
+    } else if (n.kind === 'item') {
+      const p = rollPerks(this.rng, 1, this.rank)[0];
+      if (p) {
+        p.apply(this);
+        this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;
+      }
+      sfx('ready');
+    }
   }
 
   // RNGdle-style run analysis: scan what the run did, award badges with
@@ -1538,7 +1565,7 @@ export class Battle {
     if (this.box.length >= 3) b.push({ name: 'SAFARI ZONE', rarity: 'rare' });
     else if (this.box.length >= 2) b.push({ name: 'COLLECTOR', rarity: 'uncommon' });
     if (this.totalKos >= 8) b.push({ name: 'RAMPAGE', rarity: 'common' });
-    if (this.perksTaken >= 3) b.push({ name: 'RELIC HUNTER', rarity: 'uncommon' });
+    if (this.perksTaken >= 3) b.push({ name: 'ITEM HUNTER', rarity: 'uncommon' });
     if (won && faints === 0) b.push({ name: 'FLAWLESS', rarity: 'legendary' });
     if (won && faints === this.players.length - 1 && faints > 0) b.push({ name: 'LAST STAND', rarity: 'rare' });
     if (won && this.shots <= 12) b.push({ name: 'SPEED CLEAR', rarity: 'rare' });
@@ -1935,47 +1962,87 @@ export class Battle {
     }
   }
 
-  // The climb as a porygion-style region: 9 stops south→north on a seeded
-  // island, the marker pulsing on the stage you're about to walk into.
+  // The climb as a porygion-style region: a seeded island of grass ringed
+  // by beach and sea, 9 stops south→north on a carved route — gyms every
+  // 3rd, Poké Center rests, item finds — with the next wave's wilds
+  // previewed up top like a Monster Strike quest banner.
   private drawRegion(ctx: CanvasRenderingContext2D) {
     ctx.fillStyle = '#0a0e1c';
     ctx.fillRect(0, 0, 540, 960);
     ctx.textAlign = 'center';
     ctx.font = font(18);
     ctx.fillStyle = '#f8d030';
-    ctx.fillText(this.stage.name.toUpperCase(), 270, 78);
+    ctx.fillText(this.stage.name.toUpperCase(), 270, 66);
     ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 98);
+    ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 84);
+
+    // who's waiting at the next stop — gyms show their boss
+    const seen = new Set<number>();
+    const preview = (this.stage.waves[this.pendingNext] ?? [])
+      .filter((s) => !seen.has(s.def.id) && seen.add(s.def.id))
+      .slice(0, 4);
+    preview.forEach((s, i) => {
+      const x = 270 - preview.length * 15 + i * 30 + 15;
+      try {
+        drawMon(ctx, s.def.id, x, 108, 26); // unspawned waves may not be loaded yet
+      } catch {
+        return;
+      }
+      if (s.boss) {
+        ctx.strokeStyle = '#f0b02f';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, 108, 16, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
 
     const cell = 30;
     const ox = (540 - MAP_W * cell) / 2;
-    const oy = 130;
-    const e = this.region.elev;
+    const oy = 136;
     const img = gracidea();
     const flat = (c: string, x: number, y: number) => {
       ctx.fillStyle = c;
       ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
     };
+    const sparkle = Math.floor(this.time * 4);
     for (let y = 0; y < MAP_H; y++) {
       for (let x = 0; x < MAP_W; x++) {
         const i = y * MAP_W + x;
-        const v = e[i];
+        const t = this.region.tiles[i];
         const px = ox + x * cell, py = oy + y * cell;
         if (this.region.route.has(i)) {
           if (img) drawTile(ctx, MT.TILE_PATH, px, py, cell, cell);
           else flat('#c8a868', x, y);
-        } else if (v < 0) {
+        } else if (t === T_WATER) {
           if (img) drawTile(ctx, MT.TILE_WATER, px, py, cell, cell);
           else flat('#3060b0', x, y);
-        } else if (v > 0.55) {
-          if (img) drawTile(ctx, MT.TILE_MOUNTAIN, px, py, cell, cell);
-          else flat('#6a5a48', x, y);
+          // glinting sea — a few cells catch the light each beat
+          if ((x * 7 + y * 11 + sparkle) % 23 === 0) {
+            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+            ctx.fillRect(px + cell * 0.3, py + cell * 0.35, cell * 0.4, 2);
+          }
+        } else if (t === T_SAND) {
+          if (img) drawTile(ctx, MT.TILE_SAND, px, py, cell, cell);
+          else flat('#d8c080', x, y);
         } else {
           if (img) drawTile(ctx, MT.TILE_GRASS, px, py, cell, cell);
           else flat('#4c9844', x, y);
         }
       }
+    }
+    // forests and meadows fill the open land
+    for (const [i, kind] of this.region.decor) {
+      const px = ox + (i % MAP_W) * cell, py = oy + Math.floor(i / MAP_W) * cell;
+      const s = kind === 'tree' ? MT.TILE_TREE : kind === 'rock' ? MT.TILE_ROCK : MT.TILE_FLOWER;
+      if (img) drawTile(ctx, s, px - cell * 0.2, py - cell * 0.5, cell * 1.4, cell * 1.4);
+    }
+    // your lead mon waits at the last cleared stop, facing the road ahead
+    const at = this.region.nodes[Math.max(0, this.pendingNext - 1)];
+    if (at && !this.players[this.activeIdx].dead) {
+      const bob = Math.sin(this.time * 4) * 2;
+      drawMon(ctx, this.players[this.activeIdx].def.id, ox + at.tx * cell + cell / 2, oy + at.ty * cell - cell * 0.1 + bob, 30);
     }
     // stops: cleared dim out, the next one pulses (red if the elite road
     // was taken at the last reward)
@@ -1984,8 +2051,17 @@ export class Battle {
       const ny = oy + n.ty * cell + cell / 2;
       const cleared = i < this.pendingNext;
       const current = i === this.pendingNext;
-      const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN;
-      if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
+      if (n.kind === 'item') {
+        const ball = itemSprite('poke-ball');
+        if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
+      } else {
+        const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN;
+        if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
+        if (n.kind === 'rest') {
+          const potion = itemSprite('max-potion');
+          if (potion) ctx.drawImage(potion, nx - 9, ny - cell * 1.9, 18, 18);
+        }
+      }
       ctx.globalAlpha = cleared ? 0.4 : current ? 1 : 0.55;
       ctx.strokeStyle = current ? (this.eliteWave ? '#ff6b6b' : '#ffd84d') : '#c8d0e8';
       ctx.lineWidth = current ? 3 : 2;
@@ -2002,7 +2078,7 @@ export class Battle {
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        const label = n.kind === 'gym' ? 'GYM' : this.eliteWave ? 'ELITE' : 'NEXT';
+        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : this.eliteWave ? 'ELITE' : 'NEXT';
         ctx.strokeText(label, nx, ny - cell * 1.1);
         ctx.fillStyle = '#ffd84d';
         ctx.fillText(label, nx, ny - cell * 1.1);
@@ -2011,9 +2087,23 @@ export class Battle {
     ctx.strokeStyle = '#2a3560';
     ctx.lineWidth = 3;
     ctx.strokeRect(ox - 8, oy - 8, MAP_W * cell + 16, MAP_H * cell + 16);
+    // soft vignette keeps the eye on the island
+    const vg = ctx.createRadialGradient(270, oy + MAP_H * cell / 2, 200, 270, oy + MAP_H * cell / 2, 520);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.45)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, 540, 960);
+    if (this.mapNote) {
+      ctx.font = font(10);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(this.mapNote, 270, oy + MAP_H * cell + 30);
+      ctx.fillStyle = '#6fdc6f';
+      ctx.fillText(this.mapNote, 270, oy + MAP_H * cell + 30);
+    }
     ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('tap to continue', 270, oy + MAP_H * cell + 46);
+    ctx.fillText('tap to continue', 270, oy + MAP_H * cell + 50);
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not

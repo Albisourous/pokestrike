@@ -16,6 +16,7 @@ export interface RunResult {
   shots: number;
   time: number;
   caught: number;
+  score: number;
   badges: { name: string; rarity: Rarity }[];
 }
 
@@ -41,7 +42,7 @@ export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
-// relic reward cards reuse the draft card spacing
+// item reward cards reuse the draft card spacing
 export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
@@ -578,7 +579,7 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'WEAK POINTS',
-    lines: ['elites and bosses carry a gold diamond on one face', 'hit the marked face for triple contact damage'],
+    lines: ['elite foes carry a gold diamond on one face', 'hit the marked face for triple contact damage'],
     demo: demoWeak,
   },
   {
@@ -593,7 +594,7 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'THE CLIMB',
-    lines: ['9 stages, a gym leader every 3rd — diamonds on the map', 'a relic after every clear; rolled stages offer a riskier elite road'],
+    lines: ['9 stages, a gym leader every 3rd — diamonds on the map', 'an item after every clear; rolled stages offer a riskier elite road'],
     demo: demoClimb,
   },
 ];
@@ -808,6 +809,7 @@ export function drawReward(
   recruit: SpeciesDef | null,
   next: { stage: number; gym: boolean; rolled: boolean },
   pathElite: boolean,
+  score: number,
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -823,7 +825,10 @@ export function drawReward(
 
   ctx.font = font(20);
   ctx.fillStyle = '#f8d030';
-  ctx.fillText('CHOOSE A RELIC', W / 2, 300);
+  ctx.fillText('CHOOSE AN ITEM', W / 2, 300);
+  ctx.font = font(10);
+  ctx.fillStyle = '#e8ecf8';
+  ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 356);
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
@@ -963,6 +968,10 @@ export function drawResult(
   ctx.fillStyle = res.won ? '#6fdc6f' : '#ff6b6b';
   ctx.fillText(res.won ? 'STAGE CLEAR!' : 'WIPED OUT', W / 2, 300);
 
+  ctx.font = font(16);
+  ctx.fillStyle = '#f8d030';
+  ctx.fillText(`SCORE ${res.score.toLocaleString('en-US')}`, W / 2, 334);
+
   ctx.font = font(10);
   ctx.fillStyle = '#fff';
   ctx.fillText(
@@ -1014,7 +1023,7 @@ export function drawResult(
   button(ctx, SHARE_BTN, share?.copied ? 'COPIED!' : 'SHARE RESULT', true);
 }
 
-export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string) {
+export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number) {
   ctx.fillStyle = '#8890b8';
   ctx.font = font(9);
   ctx.textAlign = 'left';
@@ -1045,4 +1054,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   ctx.textAlign = 'right';
   ctx.fillStyle = '#fff';
   ctx.fillText(`SHOTS ${shots}`, W - 30, 44);
+  ctx.font = font(8);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W - 30, 60);
 }

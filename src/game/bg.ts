@@ -213,7 +213,6 @@ const DOME = {
 const BOWL: Slice = [1838, 488, 52, 36]; // stone basin
 const BOWL_TALL: Slice = [1838, 455, 52, 30];
 const METEOR: Slice = [1590, 22, 28, 30]; // pocked gray rock
-const PEAK: Slice = [930, 570, 80, 70]; // stone summit monument
 const PEBBLES: Slice = [180, 189, 36, 9];
 let propsReady = false;
 let propsLoading = false;
@@ -263,13 +262,9 @@ function decorate(theme: Theme, g: CanvasRenderingContext2D) {
     put(g, BOWL_TALL, 330, 20, 1.5);
     put(g, METEOR, 14, 300, 2);
     put(g, METEOR, 486, 620, 1.7);
-  } else {
-    // floating summits poking through the cloud banks
-    put(g, PEAK, 2, -4, 1.35);
-    put(g, DOME.white, 470, 4);
-    put(g, DOME.olive, 255, -8);
-    put(g, PEAK, 430, 896, 0.9);
   }
+  // sky gets no edge props — stone props pasted on clouds read as floating
+  // buildings; the cloud-bank floor carries the theme alone.
 }
 
 // Thick rim with a hairline chalk line just inside, so the edge reads as

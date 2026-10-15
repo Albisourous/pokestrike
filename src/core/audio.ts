@@ -225,6 +225,21 @@ const battleLead = [
   71, 0, 75, 0, 78, 0, 83, 0, // B (D# = harmonic-minor tension back to Em)
 ];
 
+// B section — higher register, Am/C/G/D then a climb to E6 that falls
+// back into the A hook. Halves how often the ear hears the same phrase.
+const battleLeadB = [
+  81, 0, 81, 0, 84, 0, 81, 0, // Am
+  84, 0, 83, 0, 79, 0, 76, 0, // C
+  79, 0, 81, 0, 83, 0, 86, 0, // G
+  86, 0, 83, 0, 81, 0, 78, 0, // D
+  76, 0, 79, 0, 81, 0, 84, 0, // Am
+  83, 0, 81, 0, 79, 0, 76, 0, // C
+  78, 0, 81, 0, 83, 0, 86, 0, // D
+  88, 0, 86, 0, 83, 0, 78, 0, // B: peak then fall to the hook
+];
+
+const battleLeadAll = [...battleLead, ...battleLeadB];
+
 const TRACKS: Record<TrackName, Track> = {
   title: {
     bpm: 96,
@@ -257,12 +272,16 @@ const TRACKS: Record<TrackName, Track> = {
   },
   battle: {
     bpm: 152,
-    lead: battleLead,
-    harm: battleLead.map((n) => (n ? thirdDown(n) : 0)),
+    lead: battleLeadAll,
+    harm: battleLeadAll.map((n) => (n ? thirdDown(n) : 0)),
     arp: [
       ...rep([64, 67, 71, 76], 2), ...rep([64, 67, 71, 76], 2), // Em Em
       ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2), // C G
       ...rep([64, 67, 71, 76], 2), ...rep([64, 67, 71, 76], 2), // Em Em
+      ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2), // D B
+      ...rep([57, 60, 64, 69], 2), ...rep([60, 64, 67, 72], 2), // Am C
+      ...rep([55, 59, 62, 67], 2), ...rep([62, 66, 69, 74], 2), // G D
+      ...rep([57, 60, 64, 69], 2), ...rep([60, 64, 67, 72], 2), // Am C
       ...rep([62, 66, 69, 74], 2), ...rep([59, 63, 66, 71], 2), // D B
     ],
     bass: [
@@ -270,10 +289,16 @@ const TRACKS: Record<TrackName, Track> = {
       ...rep([36, 48], 4), ...rep([43, 55], 4), // C G
       ...rep([40, 52], 4), 40, 52, 40, 52, 45, 47, 50, 47, // Em + walk
       ...rep([38, 50], 4), ...rep([35, 47], 3), 35, 47, // D B
+      ...rep([45, 57], 4), ...rep([36, 48], 4), // Am C
+      ...rep([43, 55], 4), ...rep([38, 50], 4), // G D
+      ...rep([45, 57], 4), ...rep([36, 48], 4), // Am C
+      ...rep([38, 50], 4), ...rep([35, 47], 3), 35, 47, // D B
     ],
-    kick: 'k...k...'.repeat(2) + 'k...k.k.' + 'k...k...' + 'k...k...' + 'k...k.k.' + 'k...k...' + 'k.k.k.k.',
-    snare: '..s...s.'.repeat(7) + '..s..ss.',
-    hat: 'hhhhhhhh'.repeat(8),
+    kick: 'k...k...'.repeat(2) + 'k...k.k.' + 'k...k...' + 'k...k...' + 'k...k.k.' + 'k...k...' + 'k.k.k.k.'
+      + 'k...k...'.repeat(7) + 'k.k.k.k.',
+    snare: '..s...s.'.repeat(7) + '..s..ss.'
+      + '..s...s.'.repeat(7) + '..s.sss.',
+    hat: 'hhhhhhhh'.repeat(8) + '..h...h.'.repeat(8), // offbeat hats on B
     loop: true,
   },
   win: { // clear fanfare in C, then hands off to the title loop

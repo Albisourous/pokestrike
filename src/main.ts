@@ -396,7 +396,7 @@ function hud(name: string) {
   if (!battle) return;
   ctx.save();
   ctx.translate(0, -viewPad);
-  drawHud(ctx, battle.waveIndex, battle.shots, name);
+  drawHud(ctx, battle.waveIndex, battle.shots, name, battle.score);
   ctx.restore();
 }
 
@@ -420,6 +420,7 @@ function update(dt: number) {
         shots: battle.shots,
         time: battle.time,
         caught: battle.box.length,
+        score: battle.score,
         badges: battle.runBadges(battle.phase === 'won'),
       };
       share = buildShare(battle, result.won);
@@ -433,6 +434,7 @@ function update(dt: number) {
       shareText = [
         `Pokéstrike ${stage.name}`,
         share.waves,
+        `⭐ ${result.score.toLocaleString('en-US')} pts`,
         `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
         `🏅 ${result.badges.slice(0, 4).map((b) => b.name).join(' · ')}`,
         share.team,
@@ -500,6 +502,7 @@ function render() {
               rolled: battle.nextIsRolled,
             },
             battle.pathElite,
+            battle.score,
           );
       }
       break;

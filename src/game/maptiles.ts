@@ -1,10 +1,20 @@
-// Terrain + landmark slices in tileset.webp (eyeballed — see tileset.json for grid).
-// Frames are 16x16 on an 18px pitch: frame (col,row) sits at x=1+col*18, y=1+row*18.
-export type Slice = readonly [number, number, number, number];
-export const TILE_WATER: Slice = [145, 361, 16, 16]; // flat sea water, faint wave streaks
-export const TILE_GRASS: Slice = [55, 325, 16, 16]; // mid-green blade grass
-export const TILE_PATH: Slice = [289, 109, 16, 16]; // flat brown dirt
-export const TILE_MOUNTAIN: Slice = [302, 123, 50, 56]; // chunky tan boulder pile
-export const TILE_TOWN: Slice = [402, 452, 72, 76]; // timber-frame house: shingle roof, door, window
-export const TILE_GYM: Slice = [545, 0, 104, 92]; // big gym building, "GYM" sign + blue doors
-export const TILE_SAND: Slice | null = [91, 667, 16, 16]; // pale beach sand with wave marks
+// Tile rects into sprites/gracidea/tileset.webp for the region map
+// (map.ts). Eyeballed against the atlas — same convention as bg.ts's Slice.
+
+export type TileRect = readonly [number, number, number, number];
+
+// Terrain fills — the ~52px blocks at the atlas's bottom-left.
+export const TILE_WATER: TileRect = [145, 361, 16, 16]; // dark sea, faint wave streaks
+export const TILE_PATH: TileRect = [74, 648, 52, 52];
+export const TILE_MOUNTAIN: TileRect = [129, 648, 50, 52];
+export const TILE_GRASS: TileRect = [183, 648, 52, 52];
+
+// Stop icons — drawn ~2 cells, so bigger landmark slices.
+export const TILE_TOWN: TileRect = [1172, 353, 87, 80]; // green-roofed house
+export const TILE_GYM: TileRect = [392, 2, 74, 57]; // red-roofed center
+
+// Scenery + shore.
+export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand
+export const TILE_TREE: TileRect = [1980, 90, 54, 54]; // round-canopy tree
+export const TILE_FLOWER: TileRect = [1710, 92, 16, 16]; // red flower patch
+export const TILE_ROCK: TileRect = [1590, 22, 28, 30]; // pocked boulder
