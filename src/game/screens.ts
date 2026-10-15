@@ -573,6 +573,11 @@ const HELP_SECTIONS: HelpSection[] = [
     demo: demoBump,
   },
   {
+    title: 'WEDGE SHOTS',
+    lines: ['two contacts inside a blink — foe, wall, stone, ally — = WEDGE!', 'wedges pay bonus damage and feed relics like Binding Band + Ether'],
+    demo: demoBump,
+  },
+  {
     title: 'CHARGE PIPS',
     lines: ['hits and KOs fill the gold pips under each mon', 'all-gold pips mean READY and the move name pulses'],
     demo: demoCharge,

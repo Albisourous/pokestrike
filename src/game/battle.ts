@@ -284,7 +284,7 @@ export class Battle {
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   bossSlayer = 0; // power bracer: bonus damage vs bosses
   wallRamp = 0.08; // banking off walls pays a little contact damage per bounce — grip claw triples it
-  // keyword relics — PINCH (two contacts in one window) / VOLLEY (ally bumps)
+  // keyword relics — WEDGE (two contacts in one window) / VOLLEY (ally bumps)
   pinchPip = 0; // pips granted to the launcher on each pinch
   pinchMult = 0; // extra contact damage on pinch hits
   volleyNth = 0; // every Nth volley: all cooldowns -1
@@ -1033,9 +1033,10 @@ export class Battle {
     return { x, y };
   }
 
-  // PINCH: two distinct contacts (enemy, ally, wall) inside one 0.35s
-  // window — the wedge shot is the engine's fuel. Records every contact;
-  // callers gate the payoff on static fields so silence absorbs chains.
+  // WEDGE: two distinct contacts (enemy, ally, wall, stone) inside one
+  // 0.35s window — the squeeze shot is the engine's fuel. Records every
+  // contact; callers gate the payoff on static fields so silence absorbs
+  // chains.
   private pinch(id: number) {
     const pinched = this.time - this.lastContact.t <= 0.35 && this.lastContact.id !== id;
     this.lastContact = { t: this.time, id };
@@ -1043,7 +1044,7 @@ export class Battle {
   }
 
   private onPinch(x: number, y: number) {
-    this.texts.push({ x, y: y - 30, text: 'PINCH!', t: 0.8, color: '#9df0ff', big: true });
+    this.texts.push({ x, y: y - 30, text: 'WEDGE!', t: 0.8, color: '#9df0ff', big: true });
     for (let k = 0; k < this.pinchPip; k++) this.chargeUp(this.active);
   }
 

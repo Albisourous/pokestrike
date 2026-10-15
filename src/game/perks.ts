@@ -271,7 +271,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'bband', name: 'Binding Band', item: 'muscle-band',
-    desc: '+40% contact on pinches',
+    desc: '+40% contact on wedge hits',
     rarity: 'uncommon',
     apply: (b) => { b.pinchMult += 0.4; },
   },
@@ -347,7 +347,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'ether', name: 'Ether', item: 'elixir',
-    desc: "pinches charge the launcher's super",
+    desc: "wedge hits charge the launcher's super",
     rarity: 'rare',
     apply: (b) => { b.pinchPip += 1; },
   },
