@@ -289,9 +289,11 @@ canvas.addEventListener('pointerdown', (e) => {
     if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
       lastMode = 'free';
-      runRng = Math.random;
+      // ?seed=NNN forces the run — debug sharable climbs
+      const forced = Number(new URLSearchParams(location.search).get('seed'));
+      runRng = Number.isFinite(forced) && forced > 0 ? mulberry32(forced) : Math.random;
       startDraft();
-      stage = makeStage(randSeed());
+      stage = makeStage(Number.isFinite(forced) && forced > 0 ? forced : randSeed());
       scene = 'draft';
       sceneMusic();
     } else if (inRect(p.x, p.y, DAILY_BTN)) {
