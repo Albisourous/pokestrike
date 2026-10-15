@@ -28,6 +28,8 @@ export interface RunResult {
   team: SpeciesDef[]; // final lineup — survives mid-run box swaps
   newBest: boolean; // the run just beat the saved best score
   newDex: number; // fresh dex entries this run added
+  mvpIdx: number; // highest-level mon — crowned on the team row
+  shortOfBest: number; // pts shy of the record, when it was close
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -1185,6 +1187,11 @@ export function drawResult(
     ctx.font = font(10);
     ctx.fillStyle = '#ffe76a';
     ctx.fillText('★ NEW RECORD ★', W / 2, 352);
+  } else if (res.shortOfBest > 0) {
+    // so-close framing — the near-record loss is the strongest rematch pull
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`${res.shortOfBest.toLocaleString('en-US')} PTS SHORT OF YOUR BEST`, W / 2, 352);
   }
 
   ctx.font = font(10);
@@ -1238,7 +1245,13 @@ export function drawResult(
     // the squad as real sprites — reads as Pokémon at a glance
     const n = res.team.length;
     res.team.forEach((def, i) => {
-      (def.shiny ? drawShiny : drawMon)(ctx, def.id, W / 2 + (i - (n - 1) / 2) * 52, sy + 34, 42);
+      const mx = W / 2 + (i - (n - 1) / 2) * 52;
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, sy + 34, 42);
+      if (i === res.mvpIdx) {
+        ctx.font = font(10);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText('★', mx, sy + 4);
+      }
     });
   }
 

@@ -520,6 +520,10 @@ function update(dt: number) {
       const won = battle.phase === 'won';
       const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
       const dexBefore = dexIds().length;
+      const prevBest = best().score;
+      const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
+      const newBest = recordRun(battle.score, stageReached, won, lastMode === 'daily' ? dailySeed() : null);
+      const gap = prevBest - battle.score;
       result = {
         won,
         shots: battle.shots,
@@ -528,8 +532,10 @@ function update(dt: number) {
         score: battle.score,
         badges: battle.runBadges(won),
         team: battle.players.map((p) => p.def),
-        newBest: recordRun(battle.score, stageReached, won, lastMode === 'daily' ? dailySeed() : null),
+        newBest,
         newDex: 0,
+        mvpIdx: battle.players.indexOf(mvp),
+        shortOfBest: !newBest && gap > 0 && gap <= 500 ? gap : 0,
       };
       share = buildShare(battle, won);
       // catches join the dex either way; a loss leaves the team behind as
@@ -555,7 +561,6 @@ function update(dt: number) {
         resultExtra = extra;
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
-      const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
       shareText = [
         `⚾ POKÉSTRIKE — sling & ricochet Pokémon roguelike`,
         `🗺️ ${stage.name} — ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}${battle.asc ? ` · ASC ${battle.asc}` : ''}`,
