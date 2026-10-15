@@ -2,7 +2,7 @@ import { itemSprite, drawMon, drawShiny, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById } from './data';
 import { RARITY_COLOR } from './perks';
-import type { Rarity } from './perks';
+import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf } from './stats';
@@ -926,6 +926,50 @@ function hpBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, f
   ctx.fillRect(x, y, w * Math.max(frac, 0), 4);
 }
 
+// One held-item offer card — shared by the post-stage reward and the
+// pre-run charm pick.
+function drawPerkCard(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  perk: { name: string; item: string; desc: string; rarity: Rarity },
+) {
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
+  ctx.fill();
+  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 10);
+  ctx.fillStyle = RARITY_COLOR[perk.rarity];
+  ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
+
+  const img = itemSprite(perk.item);
+  if (img) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
+    ctx.restore();
+  } else {
+    ctx.font = font(16);
+    ctx.fillStyle = PARCH;
+    ctx.fillText('?', r.x + r.w / 2, r.y + 74);
+  }
+  ctx.textAlign = 'center';
+  ctx.font = font(10);
+  ctx.fillStyle = PARCH;
+  ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);
+  ctx.font = font(8);
+  ctx.fillStyle = RARITY_COLOR[perk.rarity];
+  ctx.fillText(perk.rarity.toUpperCase(), r.x + r.w / 2, r.y + 135);
+  ctx.font = font(8);
+  ctx.fillStyle = '#a8b0d8';
+  // two-line desc
+  const words = perk.desc.split(' ');
+  const mid = Math.ceil(words.length / 2);
+  ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 150);
+  ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 168);
+}
+
 export function drawReward(
   ctx: CanvasRenderingContext2D,
   offers: { name: string; item: string; desc: string; rarity: Rarity }[],
@@ -971,43 +1015,7 @@ export function drawReward(
     335,
   );
 
-  offers.forEach((perk, i) => {
-    const r = perkCardRect(i);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
-    ctx.fill();
-    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-    ctx.fillStyle = '#12162b';
-    ctx.fill();
-    cardFrame(ctx, r, 10);
-    ctx.fillStyle = RARITY_COLOR[perk.rarity];
-    ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
-
-    const img = itemSprite(perk.item);
-    if (img) {
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
-      ctx.restore();
-    } else {
-      ctx.font = font(16);
-      ctx.fillStyle = PARCH;
-      ctx.fillText('?', r.x + r.w / 2, r.y + 74);
-    }
-    ctx.font = font(10);
-    ctx.fillStyle = PARCH;
-    ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);
-    ctx.font = font(8);
-    ctx.fillStyle = RARITY_COLOR[perk.rarity];
-    ctx.fillText(perk.rarity.toUpperCase(), r.x + r.w / 2, r.y + 135);
-    ctx.font = font(8);
-    ctx.fillStyle = '#a8b0d8';
-    // two-line desc
-    const words = perk.desc.split(' ');
-    const mid = Math.ceil(words.length / 2);
-    ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 150);
-    ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 168);
-  });
+  offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk));
 
   // held items — the run's build so far, a strip of icons between the
   // offer cards and the box so you can read your loadout at a glance
@@ -1114,6 +1122,25 @@ export function drawReward(
     ctx.fillStyle = '#8890b8';
     ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, 926);
   }
+}
+
+// Starter-charm pick before stage 1 — same card look, standalone screen.
+export function drawPerkPick(
+  ctx: CanvasRenderingContext2D,
+  offers: Perk[],
+  title: string,
+  sub: string,
+  t = 0,
+) {
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null, true);
+  ctx.textAlign = 'center';
+  ctx.font = font(20);
+  ctx.fillStyle = '#f8d030';
+  ctx.fillText(title, W / 2, 280);
+  ctx.font = font(9);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(sub, W / 2, 315);
+  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i), p));
 }
 
 // Win confetti — little type-colored paper squares drifting down forever.

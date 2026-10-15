@@ -5,7 +5,8 @@ import { loadAll, loadItem, loadGracidea } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
 import { Battle } from './game/battle';
-import { PERKS } from './game/perks';
+import { PERKS, rollPerks } from './game/perks';
+import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
 import type { SpeciesDef } from './game/data';
 import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best } from './game/meta';
@@ -32,6 +33,7 @@ import {
   MUTE_BTN,
   DRAFT_REROLL,
   drawHelp,
+  drawPerkPick,
   helpScrollMax,
   DEX_BTN,
   drawDex,
@@ -42,7 +44,7 @@ import {
 import type { RunResult, ShareGrid } from './game/screens';
 import type { PokeType } from './game/types';
 
-type Scene = 'loading' | 'title' | 'draft' | 'battle' | 'result';
+type Scene = 'loading' | 'title' | 'draft' | 'charm' | 'battle' | 'result';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -83,6 +85,7 @@ let dexScroll = 0;
 let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
+let startOffers: Perk[] = []; // starter charm pick between draft and battle
 let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
 let shareText = '';
@@ -324,11 +327,28 @@ canvas.addEventListener('pointerdown', (e) => {
         // ?dev exposes the live battle for poking around during playtests
         if (new URLSearchParams(location.search).has('dev'))
           (window as unknown as { __battle: Battle }).__battle = battle;
-        scene = 'battle';
-        sceneMusic();
+        // the charm pick gates the climb — one held item before stage 1
+        startOffers = rollPerks(runRng, 3, rank());
+        scene = 'charm';
       }
       return;
     }
+  } else if (scene === 'charm') {
+    for (let i = 0; i < startOffers.length; i++) {
+      if (!inRect(p.x, p.y, perkCardRect(i))) continue;
+      const perk = startOffers[i];
+      sfx('ui');
+      if (battle) {
+        perk.apply(battle);
+        battle.heldItems.push(perk.item);
+        battle.perksTaken++;
+      }
+      startOffers = [];
+      scene = 'battle';
+      sceneMusic();
+      return;
+    }
+    return;
   } else if (scene === 'battle') {
     if (battle?.phase === 'reward') {
       // box strip swallows the pointer — release decides tap vs scroll drag
@@ -574,6 +594,9 @@ function render() {
       drawTitle(ctx);
       if (helpOpen) drawHelp(ctx, helpScroll);
       if (dexOpen) drawDex(ctx, dexScroll);
+      break;
+    case 'charm':
+      drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM', 'one held item starts the climb', t);
       break;
     case 'draft': {
       const offers = draftOffers().map(draftDef);
