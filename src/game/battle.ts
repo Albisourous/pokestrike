@@ -2264,6 +2264,22 @@ export class Battle {
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
     const links = this.region.nodes[this.mapNode].links;
+    // waypoint dots march along each open link — the affordance that
+    // says "these are the stops you can pick"
+    const cur0 = this.region.nodes[this.mapNode];
+    if (this.pendingNext > this.waveIndex) {
+      for (const li of links) {
+        const t = this.region.nodes[li];
+        const mx = ox + ((cur0.tx + t.tx) / 2) * cell + cell / 2;
+        const my = oy + ((cur0.ty + t.ty) / 2) * cell + cell / 2;
+        ctx.globalAlpha = 0.45 + Math.sin(this.time * 4) * 0.3;
+        ctx.fillStyle = '#ffd84d';
+        ctx.beginPath();
+        ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
     this.region.nodes.forEach((n, i) => {
       const nx = ox + n.tx * cell + cell / 2;
       const ny = oy + n.ty * cell + cell / 2;
