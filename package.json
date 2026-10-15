@@ -11,6 +11,7 @@
     "smoke": "mkdir -p node_modules/.cache && rolldown test/smoke.ts -f esm -p node -o node_modules/.cache/smoke.mjs && node node_modules/.cache/smoke.mjs"
   },
   "devDependencies": {
+    "playwright": "^1.63.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
   }

@@ -1,11 +1,12 @@
 // Region map generator — porygion's idea (seeded island, banded stops,
 // Manhattan routes) kept simple: one wobbling island of grass ringed by
 // sand and sea, nine stops zigzagging south→north, scenery sprinkled on
-// the open land. StS-style stop kinds ride along: gyms every 3rd, Poké
-// Center rests, field items to find.
+// the open land. Town-map stop kinds: gyms every 3rd, trainer battles,
+// chests, Poké Center rests.
 import { mulberry32 } from '../core/rng';
 import { gracidea } from '../core/assets';
-import { TOTAL_STAGES } from './data';
+import { TOTAL_STAGES, TRAINER_TYPES } from './data';
+import type { PokeType } from './types';
 
 export const MAP_W = 16;
 export const MAP_H = 22;
@@ -14,13 +15,14 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'gym' | 'rest' | 'item' | 'shrine' | 'elite' | 'mart' | 'mystery';
+export type NodeKind = 'start' | 'wild' | 'trainer' | 'chest' | 'rest' | 'gym';
 export interface MapNode {
   tx: number;
   ty: number;
   kind: NodeKind;
   row: number; // climb depth 0..8 — gyms forced on rows 2/5/8
   links: number[]; // indices into nodes[] — the stops you can pick next
+  ttype?: PokeType; // trainer stops: the mono-type squad waiting there
 }
 export interface RegionMap {
   tiles: Uint8Array; // MAP_W*MAP_H — T_*
@@ -43,7 +45,7 @@ const vn = (x: number, y: number, s: number) => {
 };
 
 // Branching stops per row — gyms are forced singles every 3rd row; the
-// rest offer 2-3 linked choices (wild/elite/rest/item/shrine) StS-style.
+// rest offer 1-2 linked choices (wild/trainer/chest/rest) StS-style.
 
 export function genRegion(seed: number): RegionMap {
   const rng = mulberry32(seed);
@@ -113,11 +115,12 @@ export function genRegion(seed: number): RegionMap {
     if (r === 0) kinds = ['start'];
     else if ((r + 1) % 3 === 0) kinds = ['gym'];
     else {
-      // a real fork: wild is always one door, the other(s) get flavored
-      const extras = shuffle<NodeKind>(['elite', 'rest', 'item', 'shrine', 'mart', 'mystery']);
-      kinds = rng() < 0.3 ? shuffle(['wild', 'elite', extras[0]]) : shuffle(['wild', extras[0]]);
+      // a real fork: wild is always one door, the other gets flavored —
+      // ~1/3 of rows are a lone stop instead of a choice
+      const flavor = shuffle<NodeKind>(['trainer', 'chest', 'rest', 'wild'])[0];
+      kinds = rng() < 0.35 ? [flavor] : shuffle(['wild', flavor]);
     }
-    const xs = kinds.length === 1 ? [0.5] : kinds.length === 2 ? [0.3, 0.7] : [0.18, 0.5, 0.82];
+    const xs = kinds.length === 1 ? [0.5] : [0.3, 0.7];
     kinds.forEach((kind, k) => {
       let tx = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.4);
       let guard = 0;
@@ -126,7 +129,14 @@ export function genRegion(seed: number): RegionMap {
         tx !== Math.round(cx) &&
         guard++ < 10
       ) tx += Math.sign(cx - tx) || 1;
-      nodes.push({ tx, ty, kind, row: r, links: [] });
+      nodes.push({
+        tx,
+        ty,
+        kind,
+        row: r,
+        links: [],
+        ...(kind === 'trainer' ? { ttype: TRAINER_TYPES[Math.floor(rng() * TRAINER_TYPES.length)] } : {}),
+      });
     });
   }
 

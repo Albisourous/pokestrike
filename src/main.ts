@@ -1,7 +1,7 @@
 import './style.css';
 import { startLoop } from './core/loop';
 import { unlockAudio, sfx, cry, music, toggleMute } from './core/audio';
-import { loadAll, loadItem, loadGracidea } from './core/assets';
+import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
 import { Battle } from './game/battle';
@@ -197,10 +197,9 @@ function startDraft() {
   draftPool.forEach((_, i) => {
     if (runRng() < shinyOdds) draft.shiny.add(i);
     // every card rolls a level 5-14, weighted low — a Lv14 opener is a
-    // mini high-roll: +26% pow, +16% bulk over a fresh Lv5
+    // real high-roll: roughly double the stats of a fresh Lv5
     const lvl = 5 + Math.floor(Math.pow(runRng(), 1.8) * 10);
     draft.lvls.set(i, lvl);
-    if (lvl > 1) draft.lvls.set(i, lvl);
   });
   offerCache = null;
 }
@@ -660,7 +659,7 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        hud(battle.eliteWave ? `${battle.stage.name} · ELITE` : battle.stage.name);
+        hud(battle.hardWave ? `${battle.stage.name} · TRAINER` : battle.stage.name);
         battle.render(ctx);
         if (battle.phase === 'reward')
           drawReward(
@@ -702,6 +701,7 @@ function render() {
 Promise.all([
   loadAll(ALL_SPRITE_IDS),
   loadGracidea(),
+  loadNpcs(),
   loadItem('poke-ball'),
   loadItem('ui/pokemon-logo'),
   loadItem('oran-berry'),

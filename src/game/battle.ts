@@ -1,8 +1,8 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
-import { drawMon, drawShiny, itemSprite } from '../core/assets';
+import { drawMon, drawShiny, itemSprite, drawNpc } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS } from './data';
+import { SpeciesDef, StageDef, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
@@ -33,7 +33,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, button, drawPerkCard, MART_CARD, MART_BUY, MART_LEAVE } from './screens';
+import { font } from './screens';
 
 export interface Rect {
   x: number;
@@ -167,11 +167,8 @@ interface Scar {
   t: number;
   life: number;
 }
-export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'mart' | 'won' | 'lost';
+export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'won' | 'lost';
 
-const MART_PRICE = 500; // relic on the mart counter costs score, not cash
-
-const inRect = (p: Vec, r: Rect) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
 const STOP_SPEED = 45;
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
@@ -257,17 +254,17 @@ export class Battle {
   streak = 0; // consecutive perfect launches — shown in the HUD
   private shotStreak = 1; // this shot's streak damage bonus
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
-  scoreMult = 1; // lucky egg: score amplifies — pairs meanly with the mart
+  scoreMult = 1; // lucky egg: score amplifies
   private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
   private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
   private inRival = false; // this wave is the rival echo fight
+  private inTrainer = false; // this wave is a trainer squad — their mons can't be caught
   private region: RegionMap; // the climb's world map — drawn between stages
   private regionBase: HTMLCanvasElement | null = null; // baked terrain — region never changes
   private pendingNext = 0; // wave the map interstitial leads into
   private mapNote = ''; // stop-flavor line shown on the region map
   private mapWalk: { path: { x: number; y: number }[]; t: number; node: MapNode } | null = null; // overworld walk to a tapped stop
-  martOffer: Perk | null = null; // relic on the mart counter while phase='mart'
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods
@@ -324,7 +321,7 @@ export class Battle {
   depth = 0; // rolled stages survived past the opening trio
   rewardOffers: Perk[] = [];
   mapNode = 0; // index into region.nodes — the stop the team stands on
-  eliteWave = false; // the wave just cleared was an elite one (bigger payout)
+  hardWave = false; // the wave just cleared was a hard stop — bigger payout (trainers)
   lastRecruit: SpeciesDef | null = null; // stage's guaranteed catch, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
@@ -398,15 +395,17 @@ export class Battle {
     return this.stage.waves.length;
   }
 
-  private spawnWave(i: number, elite = false) {
+  private spawnWave(i: number, node?: MapNode) {
     this.waveIndex = i;
-    // rolled rows don't exist until the stop is chosen — the node's kind
-    // flavors the fight (elite road = tighter, richer pack)
+    // trainer stops field a mono-type squad — the node's ttype picks it;
+    // rolled rows still don't exist until the stop is chosen
+    const ttype = node?.kind === 'trainer' ? node.ttype ?? 'normal' : null;
+    this.inTrainer = ttype != null;
+    this.hardWave = this.inTrainer;
     if (i >= this.stage.waves.length) {
       this.depth++;
-      this.stage.waves.push(rollWave(this.rng, this.depth, elite, this.stage.theme));
+      this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
     }
-    this.eliteWave = elite;
     this.hpScale = 1 + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
     // each wave is a new scene — rotate the flat theme
     const others = THEMES.filter((t) => t !== this.theme);
@@ -417,11 +416,14 @@ export class Battle {
     this.dashes = [];
     // a legendary can crash any non-boss wave past the first — MS invades;
     // a dead run's team can return as a rival fight — fail-forward echo
-    let spawns = this.stage.waves[i];
+    let spawns = ttype ? trainerWave(this.rng, this.depth, ttype) : this.stage.waves[i];
     this.waveSpecial = null;
     this.waveHadGym = spawns.some((s) => s.boss);
     this.inRival = false;
-    if (this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
+    if (ttype) {
+      this.waveSpecial = `${TRAINER_CLASS[ttype]?.title ?? 'TRAINER'} WANTS TO BATTLE!`;
+      sfx('invade');
+    } else if (this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
       spawns = rivalWave(this.echo.map((e) => e.def), this.rng);
       this.waveSpecial = 'RIVAL BATTLE!';
       this.inRival = true;
@@ -431,22 +433,16 @@ export class Battle {
       spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
       this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
       sfx('invade');
-    } else if (elite) {
-      // elite stops on seeded rows still get their elite — appended here
-      if (!this.waveHadGym && !spawns.some((s) => ELITE_IDS.has(s.def.id))) {
-        spawns = [...spawns, { def: ELITES[Math.floor(this.rng() * ELITES.length)], nx: 0.25 + this.rng() * 0.5, ny: 0.15 + this.rng() * 0.15 }];
-      }
-      this.waveSpecial = 'THE ELITE ROAD!';
     }
     if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
     // Archero-style room furniture: seeded stone clusters the ball banks
     // off. Boss rooms stay open — the leader fight is the spectacle;
-    // elite roads are always furnished.
+    // trainer battles are always furnished.
     const bossWave = spawns.some((s) => s.boss);
     let li = 0;
     if (!bossWave) {
       if (i === 0) li = Math.floor(this.rng() * 3); // gentle openers
-      else if (elite || this.rng() < 0.8) li = 1 + Math.floor(this.rng() * (BLOCK_LAYOUTS.length - 1));
+      else if (this.inTrainer || this.rng() < 0.8) li = 1 + Math.floor(this.rng() * (BLOCK_LAYOUTS.length - 1));
     }
     this.blocks = BLOCK_LAYOUTS[li].map((b) => ({
       x: this.arena.x + this.arena.w * b.nx,
@@ -490,10 +486,10 @@ export class Battle {
       wMul: 1,
       lunging: 0,
       boss: !!s.boss,
-      // shinies: wild fodder only — bosses and your rival echo stay normal
       // shinies: wild fodder rolls gold; your rival echo keeps the palette
-      // it died with — including a shiny if you lost one
-      shiny: !s.boss && (this.inRival ? !!s.def.shiny : this.rng() < SHINY_RATE * this.shinyRate),
+      // it died with — including a shiny if you lost one. Trainer mons are
+      // owned already: never shiny, never catchable.
+      shiny: !s.boss && !this.inTrainer && (this.inRival ? !!s.def.shiny : this.rng() < SHINY_RATE * this.shinyRate),
       dead: false,
       dotTicks: 0,
       dotDmg: 0,
@@ -567,12 +563,6 @@ export class Battle {
   // --- input (logical coords) ---
 
   pointerDown(p: Vec) {
-    if (this.phase === 'mart') {
-      // the counter offer is live: buy for the price or walk on
-      if (inRect(p, MART_BUY)) this.resolveMart(true);
-      else if (inRect(p, MART_LEAVE)) this.resolveMart(false);
-      return;
-    }
     if (this.phase === 'map') {
       if (this.mapWalk) return; // mid-walk — let the lead mon get there
       // a wave is already staged (the start node hosts stage 1) — walk in
@@ -582,7 +572,7 @@ export class Battle {
         return;
       }
       // StS routing: tap one of the linked stops to walk there — its kind
-      // flavors the battle (elite road, rest heal, item find, blood shrine)
+      // flavors the battle (trainer squad, rest heal, chest find)
       const cell = 30;
       const ox = (540 - MAP_W * cell) / 2;
       const oy = 136;
@@ -1246,10 +1236,11 @@ export class Battle {
         }
       }
       // small chance it actually joins your team (balls raise this);
-      // an armed master ball never fails — first KO catches, guaranteed
-      const master = this.masterArmed;
+      // an armed master ball never fails — first KO catches, guaranteed.
+      // Trainer mons stay with their owner — the ball never comes out.
+      const master = this.masterArmed && !this.inTrainer;
       // shinies never break out — KO'ing one always lands it in the box
-      const caught = master || e.shiny || this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0);
+      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0));
       if (master) this.masterArmed = false;
       sfx('ko');
       buzz(e.boss ? [50, 60, 90] : 30);
@@ -1768,10 +1759,11 @@ export class Battle {
 
   private enterReward() {
     this.boxSel = -1;
-    // elite stages pay out uncommon-or-better relics — the risk has a price
-    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 2 : 3, this.rank, this.teamTypes());
-    this.eliteWave = false;
-    this.lastRecruit = this.rollRecruit();
+    // hard stops pay out uncommon-or-better relics — the risk has a price
+    this.rewardOffers = rollPerks(this.rng, this.hardWave ? 2 : 3, this.rank, this.teamTypes());
+    this.hardWave = false;
+    // trainer mons belong to their trainer — beating one earns no catch
+    this.lastRecruit = this.inTrainer ? null : this.rollRecruit();
     if (this.lastRecruit) {
       if (!this.absorbDupe(this.lastRecruit)) {
         this.box.push(this.lastRecruit);
@@ -1825,39 +1817,30 @@ export class Battle {
     this.mapNode = this.region.nodes.indexOf(n);
     this.pendingNext = n.row;
     this.arriveAtNode(n);
-    if (this.phase === 'mart') return; // the shop pauses the route; resolveMart resumes it
-    this.spawnWave(this.pendingNext, n.kind === 'elite');
+    this.spawnWave(this.pendingNext, n);
     this.nextTurn();
   }
 
-  resolveMart(buy: boolean) {
-    if (this.phase !== 'mart') return;
-    sfx('ui');
-    const p = this.martOffer;
-    this.martOffer = null;
-    if (buy && p && this.score >= MART_PRICE) {
-      this.score -= MART_PRICE;
-      p.apply(this);
-      this.heldItems.push(p.item);
-      this.mapNote = `MART SOLD YOU ${p.name.toUpperCase()} FOR ${MART_PRICE} PTS`;
-    }
-    this.phase = 'map';
-    this.spawnWave(this.pendingNext, false);
-    this.nextTurn();
-  }
-
-  // StS map-stop effects resolve on arrival: Poké Center rests heal, item
-  // stops cough up a perk, shrines bleed for power — the note becomes the
-  // wave banner since we go straight from the map into the fight.
+  // StS map-stop effects resolve on arrival: Poké Center rests heal, chests
+  // cough up a relic — the note becomes the wave banner since we go straight
+  // from the map into the fight.
   private arriveAtNode(n: MapNode) {
     this.mapNote = '';
     if (n.kind === 'rest') {
+      // a real Poké Center: living mons to full, fainted ones revived
+      let revived = 0;
       for (const p of this.players) {
-        if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3));
+        if (p.dead) {
+          p.dead = false;
+          revived++;
+        }
+        p.hp = p.maxHp;
       }
-      this.mapNote = 'RESTED AT THE POKÉ CENTER: TEAM +30% HP';
+      this.mapNote = revived
+        ? `POKÉ CENTER: TEAM FULLY HEALED, ${revived} REVIVED`
+        : 'POKÉ CENTER: TEAM FULLY HEALED';
       sfx('heal');
-    } else if (n.kind === 'item') {
+    } else if (n.kind === 'chest') {
       const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
       if (p) {
         p.apply(this);
@@ -1865,59 +1848,6 @@ export class Battle {
         this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;
       }
       sfx('ready');
-    } else if (n.kind === 'shrine') {
-      // a deal with the dark: the shrine bleeds the team for a relic —
-      // taken right before the last gym, when the offer is sharpest
-      for (const p of this.players) {
-        if (!p.dead) p.hp = Math.max(1, p.hp - Math.round(p.maxHp * 0.15));
-      }
-      const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
-      if (p) {
-        p.apply(this);
-        this.heldItems.push(p.item);
-        this.mapNote = `THE SHRINE TAKES ITS TITHE: ${p.name.toUpperCase()}, TEAM −15% HP`;
-      }
-      sfx('invade');
-    } else if (n.kind === 'mart') {
-      // Poké Mart: browse before you buy — the relic sits on the counter
-      // until you take it or walk on; score is the spend, charged on buy
-      const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
-      if (p) {
-        this.martOffer = p;
-        this.phase = 'mart';
-        sfx('ui');
-      } else {
-        this.mapNote = 'MART WAS SOLD OUT';
-      }
-    } else if (n.kind === 'mystery') {
-      // the wildcard stop — you only learn what it was on arrival
-      const roll = this.rng();
-      if (roll < 0.4) {
-        const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
-        if (p) {
-          p.apply(this);
-          this.heldItems.push(p.item);
-          this.mapNote = `? WAS A CACHE: ${p.name.toUpperCase()}`;
-        }
-        sfx('ready');
-      } else if (roll < 0.7) {
-        for (const p of this.players) {
-          if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * 0.3));
-        }
-        this.mapNote = '? WAS A HIDDEN SPRING: TEAM +30% HP';
-        sfx('heal');
-      } else {
-        for (const p of this.players) {
-          if (!p.dead) p.hp = Math.max(1, p.hp - Math.round(p.maxHp * 0.12));
-        }
-        const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
-        if (p) {
-          p.apply(this);
-          this.heldItems.push(p.item);
-          this.mapNote = `? WAS A TRAP: ${p.name.toUpperCase()}, TEAM −12% HP`;
-        }
-        sfx('invade');
-      }
     }
   }
 
@@ -2207,9 +2137,8 @@ export class Battle {
   // --- rendering ---
 
   render(ctx: CanvasRenderingContext2D) {
-    if (this.phase === 'map' || this.phase === 'mart') {
+    if (this.phase === 'map') {
       this.drawRegion(ctx);
-      if (this.phase === 'mart') this.drawMart(ctx);
       return;
     }
     const a = this.arena;
@@ -2577,28 +2506,15 @@ export class Battle {
       const cleared = n.row < this.pendingNext;
       const reachable = links.includes(i);
       const current = i === this.mapNode;
-      if (n.kind === 'item') {
+      if (n.kind === 'chest') {
         const ball = itemSprite('poke-ball');
         if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
-      } else if (n.kind === 'shrine') {
-        const orb = itemSprite('life-orb');
-        if (orb) ctx.drawImage(orb, nx - 13, ny - 20, 26, 26);
-      } else if (n.kind === 'elite') {
-        const band = itemSprite('choice-band');
-        if (band) ctx.drawImage(band, nx - 13, ny - 20, 26, 26);
-      } else if (n.kind === 'mart') {
-        const ball = itemSprite('ultra-ball');
-        if (ball) ctx.drawImage(ball, nx - 13, ny - 20, 26, 26);
-      } else if (n.kind === 'mystery') {
-        ctx.font = font(16);
-        ctx.textAlign = 'center';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        ctx.strokeText('?', nx, ny - 2);
-        ctx.fillStyle = '#c05df0';
-        ctx.fillText('?', nx, ny - 2);
+      } else if (n.kind === 'trainer') {
+        // the class's overworld sprite stands on the stop — colored ring is
+        // the squad's type
+        if (n.ttype) drawNpc(ctx, TRAINER_CLASS[n.ttype].frame, nx, ny + cell * 0.5, cell * 1.7);
       } else {
-        const icon = n.kind === 'gym' ? MT.TILE_GYM : n.kind === 'start' ? null : MT.TILE_TOWN;
+        const icon = n.kind === 'gym' ? MT.TILE_GYM : n.kind === 'start' || n.kind === 'rest' ? MT.TILE_TOWN : null;
         if (icon) drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
         if (n.kind === 'rest') {
           const potion = itemSprite('max-potion');
@@ -2606,7 +2522,7 @@ export class Battle {
         }
       }
       ctx.globalAlpha = cleared ? 0.35 : reachable ? 1 : 0.5;
-      ctx.strokeStyle = reachable ? (n.kind === 'elite' || n.kind === 'shrine' ? '#ff6b6b' : n.kind === 'mystery' ? '#c05df0' : '#ffd84d') : current ? '#6fdc6f' : '#c8d0e8';
+      ctx.strokeStyle = reachable ? (n.kind === 'trainer' ? '#ff6b6b' : '#ffd84d') : current ? '#6fdc6f' : '#c8d0e8';
       ctx.lineWidth = reachable || current ? 3 : 2;
       ctx.beginPath();
       ctx.arc(nx, ny, cell * (reachable ? 0.6 + Math.sin(this.time * 5) * 0.08 : 0.42), 0, Math.PI * 2);
@@ -2621,7 +2537,7 @@ export class Battle {
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'item' ? 'FIND' : n.kind === 'shrine' ? 'SHRINE' : n.kind === 'elite' ? 'ELITE' : n.kind === 'mart' ? 'MART' : n.kind === 'mystery' ? '???' : n.kind === 'start' ? 'HERE' : 'WILD';
+        const label = n.kind === 'gym' ? 'GYM' : n.kind === 'rest' ? 'REST' : n.kind === 'chest' ? 'CHEST' : n.kind === 'trainer' ? (n.ttype ? `${n.ttype.toUpperCase()} TRAINER` : 'TRAINER') : n.kind === 'start' ? 'HERE' : 'WILD';
         ctx.strokeText(label, nx, ny - cell * 1.1);
         ctx.fillStyle = reachable ? '#ffd84d' : '#6fdc6f';
         ctx.fillText(label, nx, ny - cell * 1.1);
@@ -2645,27 +2561,7 @@ export class Battle {
     );
     ctx.font = font(7);
     ctx.fillStyle = '#5a6488';
-    ctx.fillText('WILD fight · ELITE hard+bonus · REST heal · FIND item · SHRINE blood · MART 500pts · ??? unknown', 270, oy + MAP_H * cell + 56);
-  }
-
-  // The mart stop: one relic on the counter over the dimmed island —
-  // take it for 500 pts or walk on. Buying costs score, not progress.
-  private drawMart(ctx: CanvasRenderingContext2D) {
-    const p = this.martOffer;
-    if (!p) return;
-    ctx.fillStyle = 'rgba(6,10,22,0.72)';
-    ctx.fillRect(0, 0, 540, 960);
-    ctx.textAlign = 'center';
-    ctx.font = font(17);
-    ctx.fillStyle = '#ffd84d';
-    ctx.fillText('POKÉ MART', 270, 296);
-    ctx.font = font(9);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(`one relic on the counter · your score: ${this.score}`, 270, 316);
-    drawPerkCard(ctx, MART_CARD, p);
-    const can = this.score >= MART_PRICE;
-    button(ctx, MART_BUY, can ? `BUY · ${MART_PRICE} PTS` : `NOT ENOUGH PTS (${MART_PRICE})`, can);
-    button(ctx, MART_LEAVE, 'LEAVE', true);
+    ctx.fillText('WILD fight · TRAINER mono-type squad, no catches, better loot · CHEST relic · REST heal+revive', 270, oy + MAP_H * cell + 56);
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not

@@ -114,27 +114,30 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const b = new Battle(arena, team(), makeStage(21, 'T'), mulberry32(9));
   (b as any).spawnWave(0);
   const p0 = (b as any).players[0];
+  const p1 = (b as any).players[1];
   p0.hp = Math.round(p0.maxHp * 0.5);
+  p1.dead = true;
+  p1.hp = 0;
   const items0 = b.heldItems.length;
   (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'rest', row: 0, links: [] });
-  ok(p0.hp > p0.maxHp * 0.55, `rest heals the team (${p0.hp})`);
-  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'item', row: 0, links: [] });
-  ok(b.heldItems.length === items0 + 1, 'item stop grants a perk');
-  const hp0 = p0.hp;
-  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'shrine', row: 0, links: [] });
-  ok(p0.hp < hp0 && b.heldItems.length === items0 + 2, 'shrine bleeds for a relic');
-  b.score = 900;
-  const score0 = b.score;
-  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mart', row: 0, links: [] });
-  ok(b.martOffer != null && b.score === score0, 'mart shows the ware before charging');
-  (b as any).resolveMart(true);
-  ok(b.score === score0 - 500 && b.heldItems.length === items0 + 3, 'mart trade: 500 pts for a relic');
-  const hpBefore = (b as any).players.map((p: any) => p.hp).join(',');
-  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mystery', row: 0, links: [] });
-  ok(
-    b.heldItems.length > items0 + 3 || (b as any).players.map((p: any) => p.hp).join(',') !== hpBefore,
-    'mystery stop resolves to something',
-  );
+  ok(p0.hp === p0.maxHp, `rest heals to full (${p0.hp}/${p0.maxHp})`);
+  ok(!p1.dead && p1.hp === p1.maxHp, 'rest revives a fainted mon');
+  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'chest', row: 0, links: [] });
+  ok(b.heldItems.length === items0 + 1, 'chest stop grants a relic');
+}
+
+// --- trainer stops: mono-type squads, no catches --------------------------
+{
+  const b = new Battle(arena, team(), makeStage(21, 'T'), mulberry32(9));
+  const node = { tx: 0, ty: 0, kind: 'trainer' as const, row: 1, links: [], ttype: 'fire' as const };
+  (b as any).spawnWave(1, node);
+  ok(b.enemies.length >= 4, `trainer fields a squad (${b.enemies.length})`);
+  ok(b.enemies.every((e) => e.def.type === 'fire'), 'trainer squad is mono-type');
+  ok(!b.enemies.some((e) => e.shiny), 'trainer mons are never shiny');
+  const boxN = b.box.length;
+  (b as any).hurt(b.enemies[0], b.enemies[0].hp + 50, '#fff');
+  ok(b.box.length === boxN, 'trainer mons cannot be caught');
+  ok((b as any).hardWave, 'trainer wave is a hard stop');
 }
 
 // --- room blocks: furnished waves, open boss rooms, clean spawns --------
@@ -199,8 +202,6 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       const n = region.nodes[cur.links[Math.floor(rng() * cur.links.length)]];
       b.pointerDown({ x: ox + n.tx * cell + cell / 2, y: oy + n.ty * cell + cell / 2 });
       step(240); // the lead mon walks the route over ~6 tiles/sec
-    } else if (b.phase === 'mart') {
-      b.resolveMart(b.score >= 500);
     } else if (b.phase === 'reward') {
       b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
       if (b.phase === 'reward') b.pickPerk(0); // safety: force advance
@@ -239,6 +240,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     ok(reachable.size === r.nodes.length, `seed ${s}: every stop reachable (${reachable.size}/${r.nodes.length})`);
     const gyms = [2, 5, 8].map((row) => r.nodes.filter((n) => n.row === row));
     ok(gyms.every((g) => g.length === 1 && g[0].kind === 'gym'), `seed ${s}: forced single gyms on rows 2/5/8`);
+    ok(r.nodes.every((n) => n.kind !== 'trainer' || !!n.ttype), `seed ${s}: trainer stops carry a type`);
     ok(r.nodes.length >= 9 && r.nodes.length <= 24, `seed ${s}: ${r.nodes.length} stops`);
     // every linked pair must have a walkable carved route between them
     let walkable = true;

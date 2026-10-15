@@ -62,10 +62,6 @@ export function perkCardRect(i: number) {
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 610, w: 180, h: 34 };
 export const REWARD_SKIP = { x: W - 152, y: 908, w: 134, h: 30 };
-// the mart keeps its ware on the counter: one card, buy or walk on
-export const MART_CARD = { x: W / 2 - 75, y: 330, w: 150, h: 200 };
-export const MART_BUY = { x: W / 2 - 105, y: 556, w: 210, h: 36 };
-export const MART_LEAVE = { x: W / 2 - 105, y: 602, w: 210, h: 36 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 640, w: W - 48, h: 56 };
@@ -620,12 +616,12 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'THE CLIMB',
-    lines: ['9 stages, a gym every 3rd: pick your route on the map', 'elite stops hit harder but pay out better; rewards can be declined'],
+    lines: ['9 stages, a gym every 3rd: pick your route on the map', 'trainer stops field a mono-type squad — their mons can\'t be caught'],
     demo: demoClimb,
   },
   {
     title: 'MAP STOPS',
-    lines: ['rest heals · find gives an item · mart trades 500 pts for a relic', 'shrine trades HP for power · ? is anyone\'s guess'],
+    lines: ['rest heals · chest gives a relic · wilds and gyms can be caught', 'beat a trainer for better loot — their mons stay theirs'],
     demo: demoPickups,
   },
   {

@@ -157,3 +157,40 @@ export function drawSheetFrame(
   ctx.drawImage(s.img, f.x, f.y, f.w, f.h, x - w / 2, y - h / 2, w, h);
   ctx.restore();
 }
+
+// --- gracidea NPC atlas: overworld trainer sprites for the region map ---
+// TexturePacker hash JSON; packed-rotated frames are skipped — every class
+// the map uses has an upright down/left frame.
+let npcsImg: HTMLImageElement | undefined;
+let npcFrames: Record<string, { x: number; y: number; w: number; h: number }> = {};
+
+export function loadNpcs(): Promise<void> {
+  if (npcsImg) return Promise.resolve();
+  return Promise.all([
+    loadImg('sprites/gracidea/npcs.webp', 'gracidea npcs'),
+    fetch('sprites/gracidea/npcs.json').then((r) => {
+      if (!r.ok) throw new Error('failed to load npcs manifest');
+      return r.json();
+    }),
+  ]).then(([img, meta]) => {
+    npcsImg = img;
+    npcFrames = {};
+    for (const [k, v] of Object.entries(meta.frames)) {
+      const f = (v as { frame: { x: number; y: number; w: number; h: number }; rotated?: boolean });
+      if (f.rotated) continue;
+      npcFrames[k] = { x: f.frame.x, y: f.frame.y, w: f.frame.w, h: f.frame.h };
+    }
+  });
+}
+
+// Draw an NPC sprite feet-anchored at x,y scaled to `h` px tall. The atlas
+// is already transparent — no keying pass needed.
+export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number, y: number, h: number) {
+  const f = npcFrames[frame];
+  if (!npcsImg || !f) return;
+  const w = (h / f.h) * f.w;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, x - w / 2, y - h, w, h); // feet stand on y
+  ctx.restore();
+}

@@ -130,10 +130,10 @@ scrollable in-game manual, and it opens itself on your first visit.
    your **ascension** (shown on the title): enemies get +15% bulk and +8%
    damage per tier, and pay a +20%/tier score premium.
 9b. **Level up mid-run**: every KO feeds the mon that landed it levels.
-    Bigger foes teach more, and punching above your weight pays double
-    (+2% damage, +1.2% max HP per level, up to Lv 100). Levels survive
-    evolution and benching since they follow the mon. Feed your carry,
-    not your bench.
+    Bigger foes teach more, and punching above your weight pays double.
+    Stats grow on the real Gen-3 formula (up to Lv 100), so a high-level
+    carry is a different monster entirely. Levels survive evolution and
+    benching since they follow the mon. Feed your carry, not your bench.
 9c. **Signature moves**: drafted and caught mons shout their *own* move
     (Pikachu `THUNDERBOLT`, Gyarados `TWISTER`, Mewtwo `PSYCHO BOOST`),
     and draft cards show the super you'll unlock. Draft cards can roll

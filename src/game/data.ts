@@ -461,10 +461,9 @@ export function makeStage(seed: number, name?: string): StageDef {
 }
 
 // Roll the next stage (depth 1..6 = stages 4..9). Bigger packs each depth,
-// a gym boss every 3rd. `elite` (picked on the reward screen) packs the
-// wave tighter and guarantees a capturable elite.
+// a gym boss every 3rd.
 // `theme` picks the biome pool for fodder; omit it to fall back to the flat pool.
-export function rollWave(rng: () => number, depth: number, elite = false, theme?: Theme): WaveSpawn[] {
+export function rollWave(rng: () => number, depth: number, theme?: Theme): WaveSpawn[] {
   const fodder = theme ? ENEMY_THEME[theme] : ENEMY_POOL;
   const slots = [...SLOTS];
   const slot = () => {
@@ -479,12 +478,45 @@ export function rollWave(rng: () => number, depth: number, elite = false, theme?
     ...slot(),
   });
   const boss = depth % 3 === 0 ? BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)] : null;
-  const n = Math.min(3 + Math.floor(depth / 2), 6) + (elite ? 1 : 0);
+  const n = Math.min(3 + Math.floor(depth / 2), 6);
   const wave: WaveSpawn[] = boss ? gymPack(boss, n, rng, slot, fodder) : Array.from({ length: n }, add);
-  if (elite && !boss) {
-    wave.push({ def: ELITES[Math.floor(rng() * ELITES.length)], ...slot() });
-  }
   if (boss) wave.push({ def: boss, nx: 0.5, ny: 0.3, boss: true });
+  return wave;
+}
+
+// Trainer battles: map stops where an overworld trainer fields a mono-type
+// squad. Their mons are already trained — uncatchable — but the fight pays
+// elite-tier loot. Class sprite + title come from the gracidea npc atlas.
+export const TRAINER_CLASS: Record<PokeType, { frame: string; title: string }> = {
+  normal: { frame: 'youngster_down_0', title: 'YOUNGSTER' },
+  fire: { frame: 'pokemaniac_down_0', title: 'POKÉMANIAC' },
+  water: { frame: 'fisher_down_0', title: 'FISHERMAN' },
+  grass: { frame: 'aroma_down_0', title: 'AROMA LADY' },
+  electric: { frame: 'guitarist_down_0', title: 'GUITARIST' },
+  psychic: { frame: 'psychic_left_0', title: 'PSYCHIC' },
+  rock: { frame: 'hiker_down_0', title: 'HIKER' },
+  poison: { frame: 'scientist_down_0', title: 'SCIENTIST' },
+  flying: { frame: 'ranger_m_down_0', title: 'RANGER' },
+  fighting: { frame: 'black_belt_down_1', title: 'BLACK BELT' },
+  ghost: { frame: 'elder_f_down_0', title: 'CHANNELER' },
+};
+export const TRAINER_TYPES = Object.keys(TRAINER_CLASS) as PokeType[];
+
+// A trainer fields a whole squad of one type — evo-lines welcome, the way
+// real NPC teams mix stages. The ace (highest BST) anchors center-top.
+export function trainerWave(rng: () => number, depth: number, type: PokeType): WaveSpawn[] {
+  const pool = [...ENEMY_POOL, ...ELITES, ...EVOS].filter((d) => d.type === type);
+  const fodder = pool.length ? pool : ENEMY_POOL;
+  const slots = [...SLOTS];
+  const slot = () => {
+    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
+    return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
+  };
+  const bst = (d: SpeciesDef) => d.stats.hp + d.stats.atk + d.stats.def + d.stats.spa + d.stats.spd + d.stats.spe;
+  const ace = [...fodder].sort((a, b) => bst(b) - bst(a))[0];
+  const n = Math.min(3 + Math.floor(depth / 2), 6) + 1; // a full squad, like an elite road
+  const wave: WaveSpawn[] = Array.from({ length: n }, () => ({ def: fodder[Math.floor(rng() * fodder.length)], ...slot() }));
+  wave.push({ def: ace, nx: 0.5, ny: 0.28 });
   return wave;
 }
 
