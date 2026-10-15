@@ -73,16 +73,36 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-// Card chrome: dark indigo panel, single gold border.
+// Card chrome: dark indigo panel. Shared border language — a hairline
+// dark edge with a light inner rim — on cards, chips and panels.
 const GOLD = '#c8a44d';
 const PARCH = '#f0e6c8';
 
 
-function trim(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
+function edge(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
+  ctx.strokeStyle = '#0a0d18';
+  ctx.lineWidth = 1.5;
   roundRect(ctx, r.x, r.y, r.w, r.h, rad);
   ctx.stroke();
+}
+
+function rim(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  rad: number,
+  color: string,
+  lw = 1.5,
+) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  roundRect(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, Math.max(1, rad - 2));
+  ctx.stroke();
+}
+
+// joker frame: pale rim inside a thin dark edge
+function cardFrame(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
+  rim(ctx, r, rad, '#e8ecf8', 3);
+  edge(ctx, r, rad);
 }
 
 // Balatro-ish card face: dark panel with a type-colored glow behind the
@@ -119,7 +139,8 @@ function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: num
   roundRect(ctx, r.x, r.y, r.w, r.h, 10);
   ctx.fillStyle = on ? '#1b2140' : '#12152b';
   ctx.fill();
-  trim(ctx, r, 10);
+  rim(ctx, r, 10, GOLD);
+  edge(ctx, r, 10);
   ctx.font = font(13);
   ctx.textAlign = 'center';
   ctx.fillStyle = on ? PARCH : '#6a7090';
@@ -158,6 +179,10 @@ let fieldPattern: CanvasPattern | null = null;
 function drawField(ctx: CanvasRenderingContext2D) {
   const img = gracidea();
   if (img && !fieldPattern) {
+    // two upscale passes — the tile's speckle melts into soft mottle
+    const soft = document.createElement('canvas');
+    soft.width = soft.height = 96;
+    soft.getContext('2d')!.drawImage(img, GRASS_SRC.x, GRASS_SRC.y, GRASS_SRC.w, GRASS_SRC.h, 0, 0, 96, 96);
     const c = document.createElement('canvas');
     c.width = 480;
     c.height = 480;
@@ -167,7 +192,7 @@ function drawField(ctx: CanvasRenderingContext2D) {
         t.save();
         t.translate(mx ? 480 : 0, my ? 480 : 0);
         t.scale(mx ? -1 : 1, my ? -1 : 1);
-        t.drawImage(img, GRASS_SRC.x, GRASS_SRC.y, GRASS_SRC.w, GRASS_SRC.h, 0, 0, 240, 240);
+        t.drawImage(soft, 0, 0, 240, 240);
         t.restore();
       }
     fieldPattern = ctx.createPattern(c, 'repeat');
@@ -175,12 +200,25 @@ function drawField(ctx: CanvasRenderingContext2D) {
   if (fieldPattern) {
     ctx.fillStyle = fieldPattern;
     ctx.fillRect(0, 0, W, H);
-    // push the cool green toward the arena's warmer pitch
-    ctx.fillStyle = 'rgba(74,96,18,0.16)';
+    // wash of pitch green — subdues the tile speckle to a faint texture
+    ctx.fillStyle = 'rgba(62,124,54,0.65)';
     ctx.fillRect(0, 0, W, H);
   } else {
     ctx.fillStyle = '#3e8e3c';
     ctx.fillRect(0, 0, W, H);
+  }
+  // broad mowing patches — the soft tonal drift of a real field
+  for (const [x, y, r, c] of [
+    [140, 200, 200, 'rgba(255,255,200,0.07)'],
+    [430, 540, 230, 'rgba(255,255,200,0.06)'],
+    [130, 780, 180, 'rgba(16,52,16,0.10)'],
+    [420, 90, 170, 'rgba(16,52,16,0.08)'],
+  ] as const) {
+    const rg = ctx.createRadialGradient(x, y, 10, x, y, r);
+    rg.addColorStop(0, c);
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = rg;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
   }
 }
 
@@ -270,7 +308,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   const cy = 396;
 
   // stadium pitch marking — the mons stand on the circle line
-  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.ellipse(cx, cy, 240, 266, 0, 0, Math.PI * 2);
@@ -323,32 +361,69 @@ export function drawDraft(
     roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
     ctx.fill();
     cardFace(ctx, r, def.type);
-    // joker frame: pale rim inside a thin dark edge
-    ctx.strokeStyle = '#e8ecf8';
-    ctx.lineWidth = 3;
-    roundRect(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 8);
-    ctx.stroke();
-    ctx.strokeStyle = '#0a0d18';
-    ctx.lineWidth = 1.5;
-    roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-    ctx.stroke();
+    cardFrame(ctx, r, 10);
 
-    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 112, 96);
+    drawMon(ctx, def.id, r.x + r.w / 2, r.y + 94, 84);
 
+    // trait tag rides the top-right corner
+    if (def.pierce || def.copy) {
+      ctx.textAlign = 'right';
+      ctx.font = font(7);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 8, r.y + 19);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 18);
+    }
+
+    // name + dex number, kept centered as one unit
+    ctx.font = font(13);
+    const nw = ctx.measureText(def.name).width;
+    ctx.font = font(8);
+    const idTxt = `#${String(def.id).padStart(3, '0')}`;
+    const nx = r.x + r.w / 2 - (nw + 5 + ctx.measureText(idTxt).width) / 2;
+    ctx.textAlign = 'left';
     ctx.font = font(13);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 203);
+    ctx.fillText(def.name, nx + 1, r.y + 181);
     ctx.fillStyle = PARCH;
-    ctx.fillText(def.name, r.x + r.w / 2, r.y + 202);
+    ctx.fillText(def.name, nx, r.y + 180);
+    ctx.font = font(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(idTxt, nx + nw + 5, r.y + 180);
+    ctx.textAlign = 'center';
+
     const role = roleOf(def.stats, def.healer);
-    ctx.font = font(10);
+    ctx.font = font(9);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${role.toUpperCase()}`, r.x + r.w / 2, r.y + 224);
-    if (def.pierce || def.copy) {
-      ctx.font = font(9);
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w / 2, r.y + 240);
-    }
+    ctx.fillText(`${def.type.toUpperCase()} · ${role.toUpperCase()}`, r.x + r.w / 2, r.y + 198);
+
+    ctx.strokeStyle = '#2a3560';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(r.x + 14, r.y + 208);
+    ctx.lineTo(r.x + r.w - 14, r.y + 208);
+    ctx.stroke();
+
+    // broadcast stat readout — 3x2 label+number pairs
+    const st = def.stats;
+    const cells: [string, number][] = [
+      ['HP', st.hp], ['ATK', st.atk], ['DEF', st.def],
+      ['SPA', st.spa], ['SPD', st.spd], ['SPE', st.spe],
+    ];
+    ctx.font = font(7);
+    ctx.textAlign = 'left';
+    cells.forEach(([lab, v], k) => {
+      const cx = r.x + 12 + ((r.w - 24) / 6) * (2 * (k % 3) + 1);
+      const cy = r.y + 224 + ((k / 3) | 0) * 16;
+      const lw = ctx.measureText(lab).width;
+      const vw = ctx.measureText(`${v}`).width;
+      const tx = cx - (lw + 3 + vw) / 2;
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText(lab, tx, cy);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(`${v}`, tx + lw + 3, cy);
+    });
+    ctx.textAlign = 'center';
   });
 
   // picked team strip
@@ -357,12 +432,12 @@ export function drawDraft(
   ctx.fillText('YOUR TEAM', W / 2, 640);
   for (let i = 0; i < 4; i++) {
     const sx = W / 2 - 4 * 44 + i * 88;
-    roundRect(ctx, sx, 660, 76, 90, 10);
+    const sr = { x: sx, y: 660, w: 76, h: 90 };
+    roundRect(ctx, sr.x, sr.y, sr.w, sr.h, 10);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    ctx.strokeStyle = '#2a3560';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    rim(ctx, sr, 10, '#2a3560', 1);
+    edge(ctx, sr, 10);
     const def = picked[i];
     if (def) {
       drawMon(ctx, def.id, sx + 38, 692, 48);
@@ -422,16 +497,23 @@ export function drawReward(
 
   offers.forEach((perk, i) => {
     const r = perkCardRect(i);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
+    ctx.fill();
     roundRect(ctx, r.x, r.y, r.w, r.h, 10);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    trim(ctx, r, 10);
+    cardFrame(ctx, r, 10);
     ctx.fillStyle = RARITY_COLOR[perk.rarity];
     ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
     const img = itemSprite(perk.item);
-    if (img) ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
-    else {
+    if (img) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
+      ctx.restore();
+    } else {
       ctx.font = font(16);
       ctx.fillStyle = PARCH;
       ctx.fillText('?', r.x + r.w / 2, r.y + 74);
@@ -469,9 +551,8 @@ export function drawReward(
     roundRect(ctx, r.x, r.y, r.w, r.h, 8);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    ctx.strokeStyle = i === selBox ? '#ffd84d' : '#2a3560';
-    ctx.lineWidth = i === selBox ? 2.5 : 1;
-    ctx.stroke();
+    rim(ctx, r, 8, i === selBox ? '#ffd84d' : '#2a3560', i === selBox ? 2 : 1);
+    edge(ctx, r, 8);
     drawMon(ctx, def.id, r.x + r.w / 2, r.y + 26, 40);
     ctx.font = font(6);
     ctx.fillStyle = TYPE_COLOR[def.type];
@@ -494,11 +575,10 @@ export function drawReward(
     roundRect(ctx, r.x, r.y, r.w, r.h, 8);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    ctx.strokeStyle = selBox >= 0 ? GOLD : '#2a3560';
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    rim(ctx, r, 8, selBox >= 0 ? GOLD : '#2a3560', 1);
+    edge(ctx, r, 8);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillRect(r.x + 4, r.y + 4, r.w - 8, 3);
+    ctx.fillRect(r.x + 5, r.y + 5, r.w - 10, 3);
     drawMon(ctx, def.id, r.x + r.w / 2, r.y + 32, 40);
     ctx.font = font(7);
     ctx.fillStyle = PARCH;
@@ -568,12 +648,12 @@ export function drawResult(
     const ws = row.map((b) => ctx.measureText(b.name).width + 20);
     let bx = W / 2 - (ws.reduce((a, c) => a + c, 0) + (row.length - 1) * 8) / 2;
     row.forEach((b, i) => {
-      roundRect(ctx, bx, y, ws[i], 20, 5);
+      const br = { x: bx, y, w: ws[i], h: 20 };
+      roundRect(ctx, br.x, br.y, br.w, br.h, 5);
       ctx.fillStyle = '#12162b';
       ctx.fill();
-      ctx.strokeStyle = RARITY_COLOR[b.rarity];
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      rim(ctx, br, 5, RARITY_COLOR[b.rarity]);
+      edge(ctx, br, 5);
       ctx.font = font(7);
       ctx.fillStyle = RARITY_COLOR[b.rarity];
       ctx.fillText(b.name, bx + ws[i] / 2, y + 14);

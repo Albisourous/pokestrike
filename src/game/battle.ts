@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, itemSprite } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ELITES } from './data';
+import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
@@ -69,7 +69,7 @@ interface Unit {
   cdMod: number; // shots off the super cooldown
   lastHit: Map<number, number>; // shooter uid -> game time
   wallN: number; // wall bounces so far this shot (grip claw ramp)
-  wp: Vec | null; // weak point offset from center; null = none
+  wpA: number; // weak-point angle on the body, -1 = none (elites/bosses)
 }
 
 interface FloatText {
@@ -122,6 +122,22 @@ interface BallDrop {
   t: number;
   life: number;
 }
+// Field pickups — the MS heart/sword/hourglass channel. The ball collects
+// one by touching it mid-shot.
+type PickupKind = 'oran-berry' | 'protein' | 'elixir';
+interface Pickup {
+  x: number;
+  y: number;
+  kind: PickupKind;
+  t: number; // bob phase
+}
+interface Scar {
+  x: number;
+  y: number;
+  r: number;
+  t: number;
+  life: number;
+}
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'won' | 'lost';
 
 const STOP_SPEED = 45;
@@ -132,10 +148,13 @@ const WALL_REST = 0.92;
 const UNIT_REST = 0.9;
 const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
-const WP_MULT = 3; // weak-point contact damage multiplier
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
+const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
+// every species a mon can evolve into must be resolvable here
+const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS];
+const ELITE_IDS = new Set(ELITES.map((e) => e.id));
 
 let nextUid = 1;
 
@@ -168,6 +187,9 @@ export class Battle {
   private delays: { t: number; fn: () => void }[] = []; // staggered super hits
   private flashes: ScreenFlash[] = [];
   private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
+  private pickups: Pickup[] = []; // touch to collect while the ball flies
+  private scars: Scar[] = []; // impact craters scarring the court
+  private shotPhys = 1; // protein pickup: contact damage this shot
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods
@@ -194,6 +216,7 @@ export class Battle {
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   bossSlayer = 0; // power bracer: bonus damage vs bosses
   wallRamp = 0; // grip claw: contact damage per wall bounce this shot
+  wpBonus = 0; // weakness policy: extra weak-point damage
   box: SpeciesDef[] = []; // captured mons — swap in between stages
   boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
@@ -260,7 +283,7 @@ export class Battle {
         cdMod: m.cdMod,
         lastHit: new Map(),
         wallN: 0,
-        wp: null,
+        wpA: -1,
       });
     });
     this.spawnWave(0);
@@ -285,11 +308,7 @@ export class Battle {
     this.waves = [];
     this.dashes = [];
     this.enemies = this.stage.waves[i].map((s) => {
-      // elites and bosses carry a weak point — a spot that takes bonus
-      // contact damage, set at a random angle so each spawn aims different
       const r = s.boss ? 46 : 26;
-      const wpA = this.rng() * Math.PI * 2;
-      const wpD = r * 0.45;
       return {
       uid: nextUid++,
       def: s.def,
@@ -323,11 +342,21 @@ export class Battle {
       cdMod: 0,
       lastHit: new Map(),
       wallN: 0,
-      wp: s.boss || ELITES.includes(s.def)
-        ? { x: Math.cos(wpA) * wpD, y: Math.sin(wpA) * wpD }
-        : null,
+      wpA: s.boss || ELITE_IDS.has(s.def.id) ? this.rng() * Math.PI * 2 : -1,
       };
     });
+    // MS-style field pickups: one per wave, two where a boss or elite lurks
+    this.pickups = [];
+    this.scars = [];
+    const npk = this.enemies.some((e) => e.boss || ELITE_IDS.has(e.def.id)) ? 2 : 1;
+    for (let k = 0; k < npk; k++) {
+      this.pickups.push({
+        x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
+        y: this.arena.y + this.arena.h * (0.2 + this.rng() * 0.45),
+        kind: PICKUP_KINDS[Math.floor(this.rng() * PICKUP_KINDS.length)],
+        t: this.rng() * 6,
+      });
+    }
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -369,6 +398,7 @@ export class Battle {
     this.shotCombo = 0;
     this.kosThisShot = 0;
     u.wallN = 0;
+    this.shotPhys = 1;
     this.stopTimer = 0;
     this.phase = 'shot';
     this.shots++;
@@ -414,6 +444,9 @@ export class Battle {
     this.flashes = this.flashes.filter((f) => f.t > 0);
     for (const b of this.balls) b.t -= dt;
     this.balls = this.balls.filter((b) => b.t > 0);
+    for (const p of this.pickups) p.t += dt;
+    for (const s of this.scars) s.t += dt;
+    this.scars = this.scars.filter((s) => s.t < s.life);
     this.shake *= Math.exp(-6 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
 
@@ -459,6 +492,13 @@ export class Battle {
         // pass through teammates — each pass is a link-bump combo tick
         if (!p.dead && p !== u && dist(u, p) < u.r + p.r && u.vx * u.vx + u.vy * u.vy > 1600)
           this.bumpAlly(p, u);
+      }
+      for (let j = this.pickups.length - 1; j >= 0; j--) {
+        const pk = this.pickups[j];
+        if (dist(u, pk) < u.r + 16) {
+          this.pickups.splice(j, 1);
+          this.grabPickup(pk);
+        }
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -663,6 +703,37 @@ export class Battle {
     if (bounced && fast) u.wallN++;
   }
 
+  // Field pickups — the MS heart/sword/hourglass: heal, damage, cooldown.
+  private grabPickup(pk: Pickup) {
+    switch (pk.kind) {
+      case 'oran-berry':
+        sfx('heal');
+        for (const p of this.players) {
+          if (p.dead) continue;
+          const heal = Math.max(1, Math.round(p.maxHp * 0.15));
+          p.hp = Math.min(p.hp + heal, p.maxHp);
+          this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `+${heal}`, t: 0.9, color: '#6fdc6f', big: false });
+        }
+        break;
+      case 'protein':
+        sfx('ui');
+        this.shotPhys *= 1.5;
+        this.texts.push({ x: pk.x, y: pk.y - 12, text: 'ATK UP!', t: 0.9, color: '#f08030', big: true });
+        break;
+      case 'elixir':
+        sfx('ready');
+        for (const p of this.players) this.chargeUp(p);
+        this.texts.push({ x: pk.x, y: pk.y - 12, text: 'CD -1!', t: 0.9, color: '#9ecbff', big: true });
+        break;
+    }
+  }
+
+  // A scorch mark on the court — heavy hits leave the floor scarred.
+  private scar(x: number, y: number, r: number) {
+    this.scars.push({ x, y, r, t: 0, life: 7 });
+    if (this.scars.length > 24) this.scars.shift();
+  }
+
   // Push moving unit out of a static circle and reflect its velocity.
   private collide(u: Unit, o: { x: number; y: number; r: number }): boolean {
     const rr = u.r + o.r;
@@ -720,6 +791,7 @@ export class Battle {
     // styler loop wraps the target — every hit is another circle
     if (e.hp <= 0) {
       e.dead = true;
+      this.scar(e.x, e.y, e.boss ? 20 : 12); // a KO scorches the court
       // every KO feeds the team's supers — kills are the fast lane to READY
       for (const p of this.players) this.chargeUp(p);
       // multi-KO callouts — chaining kills in one shot should feel huge
@@ -752,8 +824,11 @@ export class Battle {
         big: true,
       });
       if (caught) {
-        this.box.push(e.def);
-        this.boxHp.push(1);
+        // a dupe feeds the copy you own instead of filling a box slot
+        if (!this.absorbDupe(e.def)) {
+          this.box.push(e.def);
+          this.boxHp.push(1);
+        }
         if (e.boss) this.caughtBoss = true;
         this.screenFlash('#ffd84d', 0.2);
         // real poké ball drops in and does the triple-wiggle
@@ -772,26 +847,31 @@ export class Battle {
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     const mult = effectiveness(shooter.def.type, e.def.type);
-    // weak point: the ball's contact point lands inside the marked spot
-    const wpHit =
-      e.wp !== null &&
-      dist(shooter, { x: e.x + e.wp.x, y: e.y + e.wp.y }) < shooter.r + 14;
+    // weak point: striking the marked face triples contact damage. The
+    // mark sits on the side facing the incoming ball, so the approach
+    // direction is opposite the mark's facing — a ~44° window.
+    let weak = false;
+    if (e.wpA >= 0) {
+      const toE = norm({ x: e.x - shooter.x, y: e.y - shooter.y });
+      weak = toE.x * Math.cos(e.wpA) + toE.y * Math.sin(e.wpA) < -0.72;
+    }
     // every link in the chain adds momentum: +5% contact damage per pass;
     // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult) *
-        shooter.pow * this.physMult * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
-        (wpHit ? WP_MULT : 1) * (1 + this.wallRamp * shooter.wallN),
+        shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.05 + this.comboDmg)) *
+        (1 + this.wallRamp * shooter.wallN) *
+        (weak ? 3 + this.wpBonus : 1),
     );
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     this.addShake(mult > 1 ? 4 : 2);
     sfx('hit', 1 + this.shotCombo * 0.12);
     buzz(8);
+    if (weak)
+      this.texts.push({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 0.9, color: '#ffd84d', big: true });
     if (mult > 1)
       this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'SUPER EFFECTIVE!', t: 0.8, color: '#ffd84d', big: false });
-    if (wpHit)
-      this.texts.push({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 0.8, color: '#ffd84d', big: false });
   }
 
   // Passive talent — a small effect on EVERY pass-through, on or off
@@ -1041,6 +1121,7 @@ export class Battle {
         if (e) {
           this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
           this.later(0.14, () => {
+            this.scar(e.x, e.y, 14); // the meteor lands whether or not it kills
             if (e.dead) return;
             this.screenFlash('#b8a038', 0.12);
             this.addShake(12);
@@ -1105,6 +1186,66 @@ export class Battle {
     this.rewardPending = true;
   }
 
+  // A dupe capture doesn't fill a box slot — it feeds the copy you own:
+  // evolves it when the line has a next stage, else it's rare candy.
+  // Returns false when the species is genuinely new to the run.
+  private absorbDupe(def: SpeciesDef): boolean {
+    const owned = this.players.find((p) => p.def.id === def.id);
+    const bi = this.box.findIndex((b) => b.id === def.id);
+    if (!owned && bi < 0) return false;
+    const evoId = def.evolvesTo;
+    const next = evoId != null ? SPECIES_DB.find((s) => s.id === evoId) : undefined;
+    if (next) {
+      if (owned) this.evolveUnit(owned, next);
+      else this.box[bi] = next;
+      this.texts.push({
+        x: owned ? owned.x : this.arena.x + this.arena.w / 2,
+        y: owned ? owned.y - owned.r - 40 : this.arena.y + 70,
+        text: `${def.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`,
+        t: 1.4, color: '#ffd84d', big: true,
+      });
+      sfx('caught');
+      cry(next.id, 0.5);
+      return true;
+    }
+    if (owned) {
+      // rare candy: a fully-evolved dupe bulks the original
+      const gain = Math.max(1, Math.round(owned.maxHp * 0.08));
+      owned.maxHp += gain;
+      if (!owned.dead) owned.hp = Math.min(owned.maxHp, owned.hp + gain);
+      owned.pow *= 1.05;
+      this.texts.push({ x: owned.x, y: owned.y - owned.r - 40, text: 'RARE CANDY!', t: 1.1, color: '#f85888', big: true });
+    } else {
+      // a boxed dupe can't bulk — the team splits the candy as a heal
+      for (const p of this.players) {
+        if (!p.dead) p.hp = Math.min(p.hp + Math.round(p.maxHp * 0.1), p.maxHp);
+      }
+      this.texts.push({ x: this.arena.x + this.arena.w / 2, y: this.arena.y + 70, text: 'RARE CANDY!', t: 1.1, color: '#f85888', big: true });
+    }
+    sfx('heal');
+    return true;
+  }
+
+  // Mid-run evolution: same slot, new species — hp fraction carries over
+  // and a fainted mon stays fainted (evolving isn't a revive).
+  private evolveUnit(p: Unit, nd: SpeciesDef) {
+    const frac = p.maxHp > 0 ? p.hp / p.maxHp : 1;
+    const role = roleOf(nd.stats, nd.healer);
+    const m = ROLE_MODS[role];
+    const hp = Math.round(playerHp(nd.stats) * m.hp);
+    p.def = nd;
+    p.role = role;
+    p.pow = m.pow;
+    p.rngMul = m.range;
+    p.launch = m.launch;
+    p.cdMod = m.cdMod;
+    p.maxHp = hp;
+    p.hp = Math.max(1, Math.round(hp * frac));
+    if (p.dead) p.hp = 0;
+    p.cdMax = Math.max(1, Math.round(bumpCooldown(nd.type) * this.cdMult) - p.cdMod);
+    p.cd = Math.min(p.cd, p.cdMax);
+  }
+
   // Swap a boxed mon onto the team — unlimited during a reward break. HP
   // belongs to the mon, not the slot: a hurt mon stays hurt in the box and a
   // fainted one stays fainted, so benching is never a free heal or revive.
@@ -1167,8 +1308,10 @@ export class Battle {
     this.eliteWave = false;
     this.lastRecruit = this.rollRecruit();
     if (this.lastRecruit) {
-      this.box.push(this.lastRecruit);
-      this.boxHp.push(1);
+      if (!this.absorbDupe(this.lastRecruit)) {
+        this.box.push(this.lastRecruit);
+        this.boxHp.push(1);
+      }
       sfx('caught');
     }
     for (const p of this.players) {
@@ -1192,7 +1335,7 @@ export class Battle {
       this.hpScale = 1 + this.depth * 0.25;
       this.eliteWave = this.pathElite;
       this.pathElite = false;
-      this.stage.waves.push(rollWave(this.rng, this.depth, this.eliteWave));
+      this.stage.waves.push(rollWave(this.rng, this.depth, this.eliteWave, this.stage.theme));
     }
     this.spawnWave(next);
     this.nextTurn();
@@ -1287,8 +1430,10 @@ export class Battle {
         this.addShake(12);
         sfx('boom');
         buzz([30, 40, 60]);
+        this.scar(e.x, e.y, 26);
         for (const p of this.players) {
           if (!p.dead && dist(e, p) <= R + p.r) {
+            this.scar(p.x, p.y, 14);
             this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
             if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
           }
@@ -1390,6 +1535,29 @@ export class Battle {
     // arena: theme-tinted backdrop + rim
     drawBackdrop(ctx, a, 18, this.theme, this.time);
     drawWall(ctx, a, this.theme);
+
+    // scars left by heavy hits — dark scorches fading on the floor
+    for (const s of this.scars) {
+      ctx.globalAlpha = 0.3 * (1 - s.t / s.life);
+      ctx.fillStyle = '#0a0810';
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y, s.r, s.r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // field pickups: a soft halo under a bobbing item icon
+    for (const pk of this.pickups) {
+      const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
+      ctx.globalAlpha = 0.22 + Math.sin(this.time * 3 + pk.t) * 0.06;
+      ctx.fillStyle = '#fff8dc';
+      ctx.beginPath();
+      ctx.ellipse(pk.x, pk.y + 9, 12, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      const img = itemSprite(pk.kind);
+      if (img) ctx.drawImage(img, pk.x - 13, pk.y - 13 + bob, 26, 26);
+    }
 
     for (const w of this.waves) this.drawWave(ctx, w);
 
@@ -1498,13 +1666,18 @@ export class Battle {
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
+    // soft shadow grounds the sprite on the court
+    ctx.fillStyle = 'rgba(8,10,20,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.82, u.r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
     drawMon(ctx, u.def.id, u.x, u.y, u.r * 2.6);
 
-    // weak point: a gold diamond on the body — contact there pays x3
-    if (u.wp) {
-      const wx = u.x + u.wp.x;
-      const wy = u.y + u.wp.y;
-      const s = 7;
+    // weak point: a pulsing gold diamond on the marked face — aim at it
+    if (u.wpA >= 0) {
+      const s = 6.5 + Math.sin(this.time * 5) * 1.2;
+      const wx = u.x + Math.cos(u.wpA) * u.r * 0.55;
+      const wy = u.y + Math.sin(u.wpA) * u.r * 0.55;
       ctx.fillStyle = '#ffd84d';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 2;

@@ -417,6 +417,9 @@ Promise.all([
   loadAll(ALL_SPRITE_IDS),
   loadGracidea(),
   loadItem('poke-ball'),
+  loadItem('oran-berry'),
+  loadItem('protein'),
+  loadItem('elixir'),
   ...PERKS.map((p) => loadItem(p.item)),
   document.fonts.load('700 10px rc').catch(() => console.warn('rc font failed, using monospace')),
 ])

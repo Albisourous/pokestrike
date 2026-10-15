@@ -308,6 +308,12 @@ export const PERKS: Perk[] = [
     rarity: 'rare',
     apply: (b) => { b.wallRamp += 0.15; },
   },
+  {
+    id: 'wpolicy', name: 'Weakness Policy', item: 'weakness-policy',
+    desc: 'weak-point hits deal x4',
+    rarity: 'rare',
+    apply: (b) => { b.wpBonus += 1; },
+  },
 
   // --- legendary: run-defining relics ---
   {

@@ -28,17 +28,17 @@ Open the printed URL. Works on desktop and touch.
    until a mon takes a hit or attacks — you learn the matchup by engaging.
    Gym leaders bring same-type entourages, and every gym you beat lets you
    **keep the leader's ace** for your own team.
-2. **Draft your team** — four rounds, one of three Pokémon each round, from an
-   11-species pool of unevolved starters. Every round offers **three
+2. **Draft your team** — four rounds, one of three Pokémon each round, from a
+   17-species pool of unevolved starters. Every round offers **three
    different types** so teams stay varied — the heavy hitters (Gengar,
    Snorlax, Dragonite…) aren't in the draft at all; you catch them mid-run.
-   Each card shows the mon's **role** at a glance: **SPEEDSTER** (fast
+   Each card shows the mon's **role** at a glance — **SPEEDSTER** (fast
    shot, combos), **TANK** (huge HP), **SNIPER** (long-range super,
    frail), **BRUISER** (heavy hits), **HEALER** (super heals the team),
-   **WILD** (all-rounder). Some mons also carry a trait tag: **PIERCE**
-   sails straight through enemies instead of bouncing off them, and
-   **COPY** (Ditto) replays the super — stats, typing and cooldown —
-   of whichever ally bumps it.
+   **WILD** (all-rounder) — plus its full base-stat block and any trait
+   tag: **PIERCE** sails straight through enemies instead of bouncing off
+   them, and **COPY** (Ditto) replays the super — stats, typing and
+   cooldown — of whichever ally bumps it.
 3. **Pull back to aim** — drag direction sets your launch angle and a dotted
    **guide line** previews the ball's banks off walls and rocks, ending in a
    target ring on whatever it would hit first. **Power is timing**: a
@@ -55,20 +55,25 @@ Open the printed URL. Works on desktop and touch.
    and the pulsing move name marks the one you want to hit next. Enemies
    creep and dart toward your team and attack on a **countdown** — kill
    them or keep moving.
-6. **Read the field** — every wave re-themes the arena (grove, cavern,
-   caldera, sky). Ponds wall off everything but Water/Flying, lava
-   everything but Fire/Rock/Flying; dirt **ledges** hop one way like RSE;
-   hazard pads slow you in tall grass, keep you sliding on ice, or fling
-   you along an arrow — and wild mons hide in the grass until you get
-   close. Rocks and trees give cover: supers can't hit what they can't see.
-7. **Catch 'em** — a Ranger-style ring on each enemy fills as its HP drops;
-   a KO has a chance to send it to your **box** (`CAUGHT!` ball wiggle and
-   all), and every cleared stage guarantees **one recruit** — beat a gym
-   leader and their ace joins you. Swap boxed mons onto the team freely
-   between stages — HP follows the mon, so benching never heals or
-   revives. Evolved **elites** (gold ring) start
-   appearing from stage 2 and get common deeper in. Bosses can be caught
-   mid-fight too — a Master Ball relic never fails.
+6. **Read the field** — each stage plays in a themed stadium court (grass,
+   stone, basalt, clouds) and the wilds match the biome: grove draws
+   grass-and-bird packs, cavern rock-and-ghost, volcano fire packs, sky
+   flyers and electric. **Field pickups** spawn each wave — the ball
+   collects them by touch: **Oran Berry** heals the team, **Protein**
+   boosts contact damage for the rest of the shot, **Elixir** knocks a
+   notch off every super's cooldown. Heavy hits scar the court, and some
+   spawn pairs sit close enough to pinch the ball between them for
+   multi-hits.
+7. **Catch 'em** — a KO has a chance to send the enemy to your **box**
+   (`CAUGHT!` ball wiggle and all), and every cleared stage guarantees
+   **one recruit** — beat a gym leader and their ace joins you. Swap boxed
+   mons onto the team freely between stages — HP follows the mon, so
+   benching never heals or revives. A **duplicate** catch doesn't waste a
+   slot: it feeds the copy you own — the mon **evolves** if its line has a
+   next stage, or the dupe becomes **rare candy** (a stat bump, or a team
+   heal if it's benched). Evolved **elites** start appearing from stage 2
+   and get common deeper in. Bosses can be caught mid-fight too — a
+   Master Ball relic never fails.
 8. **Choose a relic between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
    run — draft for synergy, relic for the holes. Then pick your **path**:
@@ -181,7 +186,7 @@ non-commercial project — not affiliated with or endorsed by them.
 
 The climb is the game — replayability grows in this order, simple first:
 
-- More run variety: species, relics, stage themes
+- Stage gimmicks: themed hazards (lava floor, wind gusts), field objects, invade/ex stages
 - Seeded daily climb — the seed plumbing already exists
 - Ascension modifiers: beat the climb, unlock harder runs
 - Unlockables: wins put new starters, relics, and evolutions into the pool
