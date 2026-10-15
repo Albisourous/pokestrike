@@ -391,6 +391,8 @@ export class Battle {
       spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
       this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
       sfx('invade');
+    } else if (this.eliteWave) {
+      this.waveSpecial = 'THE ELITE ROAD!';
     }
     this.enemies = spawns.map((s) => {
       const r = s.boss ? 46 : 26;
@@ -1041,7 +1043,7 @@ export class Battle {
       });
       if (caught) {
         // a dupe feeds the copy you own instead of filling a box slot
-        if (!this.absorbDupe(e.def)) {
+        if (!this.absorbDupe(e.def, e.shiny)) {
           this.box.push(e.shiny ? { ...e.def, shiny: true } : e.def);
           this.boxHp.push(1);
           this.boxLvl.push(1);
@@ -1421,15 +1423,20 @@ export class Battle {
   // A dupe capture doesn't fill a box slot — it feeds the copy you own:
   // evolves it when the line has a next stage, else it's rare candy.
   // Returns false when the species is genuinely new to the run.
-  private absorbDupe(def: SpeciesDef): boolean {
+  private absorbDupe(def: SpeciesDef, shiny = false): boolean {
     const owned = this.players.find((p) => p.def.id === def.id);
     const bi = this.box.findIndex((b) => b.id === def.id);
     if (!owned && bi < 0) return false;
+    // a shiny dupe gilds the copy you already own
+    if (shiny && owned && !owned.shiny) {
+      owned.shiny = true;
+      owned.def = { ...owned.def, shiny: true }; // marker rides the def into the box
+    }
     const evoId = def.evolvesTo;
     const next = evoId != null ? SPECIES_DB.find((s) => s.id === evoId) : undefined;
     if (next) {
       if (owned) this.evolveUnit(owned, next);
-      else this.box[bi] = this.box[bi].shiny ? { ...next, shiny: true } : next; // shininess survives a boxed evolution
+      else this.box[bi] = this.box[bi].shiny || shiny ? { ...next, shiny: true } : next; // shininess survives a boxed evolution
       this.texts.push({
         x: owned ? owned.x : this.arena.x + this.arena.w / 2,
         y: owned ? owned.y - owned.r - 40 : this.arena.y + 70,
