@@ -3,8 +3,8 @@ import './shims';
 import { Battle } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById } from '../src/game/data';
 import { mulberry32 } from '../src/core/rng';
-import { roleOf, ROLE_MODS, moveOf, MOVE_NAME } from '../src/game/stats';
-import { genRegion, MAP_W } from '../src/game/map';
+import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
+import { genRegion, routePath, MAP_W } from '../src/game/map';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -38,9 +38,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const shooter = (b as any).active;
   const e = (b as any).enemies[0];
   const pow0 = shooter.pow;
+  const lvl0 = shooter.lvl;
   (b as any).hurt(e, e.hp + 50, '#fff');
   ok(e.dead, 'lethal hit kills');
-  ok(shooter.lvl === 2 && shooter.pow > pow0, `KO levels shooter (lv${shooter.lvl} pow ${shooter.pow.toFixed(2)})`);
+  ok(shooter.lvl > lvl0 && shooter.pow > pow0, `KO levels shooter (lv${lvl0}->${shooter.lvl} pow ${shooter.pow.toFixed(2)})`);
 }
 
 // --- evolution preserves earned levels ------------------------------------
@@ -48,11 +49,11 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const karp = ROSTER.find((r) => r.id === 129)!;
   const b = new Battle(arena, [karp, ...team()], makeStage(3, 'T'), mulberry32(3));
   const p = (b as any).players[0];
-  p.lvl = 10; // earned levels mid-run
+  p.lvl = 50; // earned levels mid-run
   (b as any).absorbDupe(karp); // dup catch → evolve
   ok(p.def.id === 130, `Magikarp evolved into ${p.def.name}`);
   const m = ROLE_MODS[roleOf(p.def.stats, p.def.healer)];
-  ok(p.pow > m.pow * 1.5, `levels survive evolution (pow ${p.pow.toFixed(2)} vs base ${m.pow})`);
+  ok(Math.abs(p.pow - m.pow * lvlPow(offStat(p.def.stats, p.def.type), 50)) < 0.001, `levels survive evolution (pow ${p.pow.toFixed(2)} vs base ${m.pow})`);
 }
 
 // --- benching keeps earned levels ------------------------------------------
@@ -61,7 +62,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).spawnWave(0);
   const p = (b as any).players[1];
   p.lvl = 7;
-  p.pow *= Math.pow(1.05, 6); // simulate its earned growth
+  p.pow *= lvlPow(offStat(p.def.stats, p.def.type), 7); // simulate its earned growth
   const swappedPow = p.pow;
   b.box.push(ROSTER[5]);
   b.boxHp.push(1);
@@ -70,7 +71,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.swapFromBox(0, 1); // bench the Lv7, bring in the box Lv3
   ok(p.lvl === 3, `swapped-in mon carries its own level (lv${p.lvl})`);
   ok(b.boxLvl[0] === 7, `benched mon keeps earned levels (boxLvl ${b.boxLvl})`);
-  ok(Math.abs(p.pow - ROLE_MODS[p.role].pow * Math.pow(1.05, 2)) < 0.001, 'swap recomputes pow from its own level');
+  ok(Math.abs(p.pow - ROLE_MODS[p.role].pow * lvlPow(offStat(p.def.stats, p.def.type), 3)) < 0.001, 'swap recomputes pow from its own level');
   void swappedPow;
 }
 
@@ -86,17 +87,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(b.shiniesCaught === 1, 'shiniesCaught counts');
 }
 
-// --- level variance: draft 1-5, wilds scale with depth, catches keep it --
+// --- level variance: draft 5-14, wilds scale with depth, catches keep it --
 {
-  const b = new Battle(arena, [{ ...ROSTER[0], lvl: 4 }, ...team().slice(1)], makeStage(55, 'T'), mulberry32(6));
+  const b = new Battle(arena, [{ ...ROSTER[0], lvl: 20 }, ...team().slice(1)], makeStage(55, 'T'), mulberry32(6));
   const p = (b as any).players[0];
-  ok(p.lvl === 4, `draft lvl marker applies (lv${p.lvl})`);
+  ok(p.lvl === 20, `draft lvl marker applies (lv${p.lvl})`);
   ok(p.pow > ROLE_MODS[p.role].pow * 1.1, `draft level scales pow (${p.pow.toFixed(2)})`);
   (b as any).spawnWave(0);
   const lv0 = b.enemies.reduce((s, e) => s + e.lvl, 0) / Math.max(1, b.enemies.length);
   for (let i = 1; i <= 6; i++) (b as any).spawnWave(i); // rolled waves materialize sequentially
   const lv6 = b.enemies.reduce((s, e) => s + e.lvl, 0) / Math.max(1, b.enemies.length);
-  ok(lv6 > lv0 + 3, `wild levels scale with depth (w0 ${lv0.toFixed(1)} → w6 ${lv6.toFixed(1)})`);
+  ok(lv6 > lv0 + 30, `wild levels scale with depth (w0 ${lv0.toFixed(1)} → w6 ${lv6.toFixed(1)})`);
+  ok(lv0 >= 5 && lv0 <= LV_CAP, `wild levels inside 1-${LV_CAP}`);
 }
 {
   const b = new Battle(arena, team(), makeStage(8, 'T'), () => 0); // rng=0 → catches always land
@@ -124,7 +126,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.score = 900;
   const score0 = b.score;
   (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mart', row: 0, links: [] });
-  ok(b.score === score0 - 500 && b.heldItems.length === items0 + 3, 'mart trades 500 pts for a relic');
+  ok(b.martOffer != null && b.score === score0, 'mart shows the ware before charging');
+  (b as any).resolveMart(true);
+  ok(b.score === score0 - 500 && b.heldItems.length === items0 + 3, 'mart trade: 500 pts for a relic');
   const hpBefore = (b as any).players.map((p: any) => p.hp).join(',');
   (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mystery', row: 0, links: [] });
   ok(
@@ -194,6 +198,9 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       const cur = region.nodes[(b as any).mapNode];
       const n = region.nodes[cur.links[Math.floor(rng() * cur.links.length)]];
       b.pointerDown({ x: ox + n.tx * cell + cell / 2, y: oy + n.ty * cell + cell / 2 });
+      step(240); // the lead mon walks the route over ~6 tiles/sec
+    } else if (b.phase === 'mart') {
+      b.resolveMart(b.score >= 500);
     } else if (b.phase === 'reward') {
       b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
       if (b.phase === 'reward') b.pickPerk(0); // safety: force advance
@@ -233,6 +240,15 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     const gyms = [2, 5, 8].map((row) => r.nodes.filter((n) => n.row === row));
     ok(gyms.every((g) => g.length === 1 && g[0].kind === 'gym'), `seed ${s}: forced single gyms on rows 2/5/8`);
     ok(r.nodes.length >= 9 && r.nodes.length <= 24, `seed ${s}: ${r.nodes.length} stops`);
+    // every linked pair must have a walkable carved route between them
+    let walkable = true;
+    for (const n of r.nodes)
+      for (const li of n.links) {
+        const p = routePath(r, n, r.nodes[li]);
+        const t = r.nodes[li];
+        if (p.length < 2 || p[p.length - 1].x !== t.tx || p[p.length - 1].y !== t.ty) walkable = false;
+      }
+    ok(walkable, `seed ${s}: every link has a walkable route`);
   }
 }
 

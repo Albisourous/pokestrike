@@ -76,7 +76,7 @@ function noise(dur: number, freq: number, vol: number, delay = 0, slide = 0) {
 export type Sfx =
   | 'launch' | 'perfect' | 'hit' | 'ko' | 'caught' | 'hurt'
   | 'zap' | 'boom' | 'splash' | 'heal' | 'ui' | 'wave' | 'lose' | 'ready'
-  | 'sizzle' | 'gust' | 'invade' | 'beam';
+  | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick';
 
 export function sfx(name: Sfx, pitch = 1) {
   switch (name) {
@@ -84,8 +84,13 @@ export function sfx(name: Sfx, pitch = 1) {
       noise(0.18, 900, 0.25, 0, -600);
       tone(500, 180, 0.15, 'sawtooth', 0.12);
       break;
-    case 'perfect':
-      [660, 880, 1320].forEach((f, i) => tone(f, f, 0.12, 'square', 0.09, i * 0.05));
+    case 'perfect': // jackpot: rising sparkle run over a thump + shimmer tail
+      tone(190, 95, 0.16, 'sine', 0.18);
+      [660, 880, 1108, 1760].forEach((f, i) => tone(f, f, 0.14, 'square', 0.09, i * 0.045));
+      noise(0.3, 2600, 0.08, 0.06, 2400);
+      break;
+    case 'tick': // timing cue — the fill just crossed into the gold zone
+      tone(1760, 1760, 0.035, 'square', 0.045);
       break;
     case 'hit': // pitch climbs with combo count
       tone(280 * pitch, 140 * pitch, 0.08, 'square', 0.16);

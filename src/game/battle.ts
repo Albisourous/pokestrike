@@ -8,7 +8,7 @@ import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
-import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, T_WATER, T_SAND } from './map';
+import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND } from './map';
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType } from './types';
@@ -27,9 +27,13 @@ import {
   roleOf,
   ROLE_MODS,
   moveOf,
+  LV_CAP,
+  offStat,
+  lvlPow,
+  lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font } from './screens';
+import { font, button, drawPerkCard, MART_CARD, MART_BUY, MART_LEAVE } from './screens';
 
 export interface Rect {
   x: number;
@@ -163,7 +167,11 @@ interface Scar {
   t: number;
   life: number;
 }
-export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'won' | 'lost';
+export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'mart' | 'won' | 'lost';
+
+const MART_PRICE = 500; // relic on the mart counter costs score, not cash
+
+const inRect = (p: Vec, r: Rect) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
 
 const STOP_SPEED = 45;
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
@@ -219,6 +227,7 @@ export class Battle {
   private dragStart: Vec = vec();
   private dragNow: Vec = vec();
   private dragT = 0; // hold time while dragging — drives the timing meter
+  private wasGold = false; // edge detector for the in-zone tick
 
   private stopTimer = 0;
   private enemyPhaseT = 0;
@@ -257,6 +266,8 @@ export class Battle {
   private regionBase: HTMLCanvasElement | null = null; // baked terrain — region never changes
   private pendingNext = 0; // wave the map interstitial leads into
   private mapNote = ''; // stop-flavor line shown on the region map
+  private mapWalk: { path: { x: number; y: number }[]; t: number; node: MapNode } | null = null; // overworld walk to a tapped stop
+  martOffer: Perk | null = null; // relic on the mart counter while phase='mart'
   private shake = 0;
   private hitStop = 0; // brief slow-mo on combo hits
   // relic mods
@@ -284,7 +295,7 @@ export class Battle {
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   bossSlayer = 0; // power bracer: bonus damage vs bosses
   wallRamp = 0.08; // banking off walls pays a little contact damage per bounce — grip claw triples it
-  // keyword relics — WEDGE (two contacts in one window) / VOLLEY (ally bumps)
+  // keyword relics — COMBO SHOT (two contacts in one window) / VOLLEY (ally bumps)
   pinchPip = 0; // pips granted to the launcher on each pinch
   pinchMult = 0; // extra contact damage on pinch hits
   volleyNth = 0; // every Nth volley: all cooldowns -1
@@ -330,9 +341,9 @@ export class Battle {
     team.forEach((def, i) => {
       const role = roleOf(def.stats, def.healer);
       const m = ROLE_MODS[role];
-      // draft picks roll lvl 1-5: same scaling curve as mid-run KOs
-      const lvl = Math.max(1, Math.min(20, def.lvl ?? 1));
-      const hp = Math.round(playerHp(def.stats) * m.hp * Math.pow(1.03, lvl - 1));
+      // draft picks roll lvl 5-14: same scaling curve as mid-run KOs
+      const lvl = Math.max(1, Math.min(LV_CAP, def.lvl ?? 1));
+      const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl));
       // supers start at zero charge — each shot banks a turn toward firing
       const cd = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - m.cdMod);
       this.players.push({
@@ -365,7 +376,7 @@ export class Battle {
         role,
         sash: false,
         lvl,
-        pow: m.pow * Math.pow(1.05, lvl - 1),
+        pow: m.pow * lvlPow(offStat(def.stats, def.type), lvl),
         rngMul: m.range,
         launch: m.launch,
         cdMod: m.cdMod,
@@ -454,11 +465,11 @@ export class Battle {
     this.enemies = spawns.map((s) => {
       const r = s.boss ? 46 : 26;
       const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
-      // wild level = the climb's depth — late-run catches are real upgrades;
+      // wild level = the climb's depth: route-1 fodder up to champion-tier;
       // the level is honest (bulkier wilds), not just a number
-      const el = Math.min(20, 1 + i + (this.rng() < 0.35 ? 1 : 0) + (s.boss ? 2 : 0));
+      const el = Math.min(LV_CAP, 5 + i * 10 + (this.rng() < 0.35 ? 4 : 0) + (s.boss ? 8 : 0));
       const ehp = Math.round(
-        (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * Math.pow(1.03, el - 1),
+        (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * lvlHp(s.def.stats.hp, el),
       );
       return {
       uid: nextUid++,
@@ -492,7 +503,7 @@ export class Battle {
       role: 'wild',
       sash: false,
       lvl: el,
-      pow: Math.pow(1.05, el - 1),
+      pow: lvlPow(offStat(s.def.stats, s.def.type), el),
       rngMul: 1,
       launch: 1,
       cdMod: 0,
@@ -507,8 +518,8 @@ export class Battle {
       this.enemies.forEach((e, i) => {
         const lv = this.echo?.[i]?.lvl ?? 1;
         e.lvl = lv;
-        e.pow = Math.pow(1.05, lv - 1);
-        e.maxHp = Math.round(e.maxHp * Math.pow(1.03, lv - 1));
+        e.pow = lvlPow(offStat(e.def.stats, e.def.type), lv);
+        e.maxHp = Math.round(e.maxHp * lvlHp(e.def.stats.hp, lv));
         e.hp = e.maxHp;
       });
     }
@@ -556,7 +567,14 @@ export class Battle {
   // --- input (logical coords) ---
 
   pointerDown(p: Vec) {
+    if (this.phase === 'mart') {
+      // the counter offer is live: buy for the price or walk on
+      if (inRect(p, MART_BUY)) this.resolveMart(true);
+      else if (inRect(p, MART_LEAVE)) this.resolveMart(false);
+      return;
+    }
     if (this.phase === 'map') {
+      if (this.mapWalk) return; // mid-walk — let the lead mon get there
       // a wave is already staged (the start node hosts stage 1) — walk in
       if (this.pendingNext <= this.waveIndex) {
         sfx('ui');
@@ -578,16 +596,15 @@ export class Battle {
         );
       if (!hit) return; // tapping open island just admires the map
       sfx('ui');
-      this.mapNode = this.region.nodes.indexOf(hit);
-      this.pendingNext = hit.row;
-      this.arriveAtNode(hit);
-      this.spawnWave(this.pendingNext, hit.kind === 'elite');
-      this.nextTurn();
+      const path = routePath(this.region, cur, hit);
+      if (path.length > 1) this.mapWalk = { path, t: 0, node: hit };
+      else this.finishMapWalk(hit);
       return;
     }
     if (this.phase !== 'aim' || this.active.dead) return;
     this.dragging = true;
     this.dragT = 0;
+    this.wasGold = false;
 
     this.dragStart = { ...p };
     this.dragNow = { ...p };
@@ -607,11 +624,13 @@ export class Battle {
     const u = this.active;
     // direction from the pull; power from release timing on the meter
     const charge = this.charge();
+    const zone = this.sweetSpot();
+    const gold = Math.abs(charge - zone.c) <= zone.hw;
     // hot streak: back-to-back perfects make each shot hit a bit harder —
     // resets the moment a release misses the gold
-    this.streak = charge > 0.93 ? this.streak + 1 : 0;
+    this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
-    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * charge);
+    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     this.bumpsThisShot.clear();
@@ -635,13 +654,17 @@ export class Battle {
         if (!p.dead) p.hp = Math.max(1, p.hp - Math.round(p.maxHp * this.lifeDrain));
       }
     }
-    if (charge > 0.93) {
+    if (gold) {
       this.texts.push({ x: u.x, y: u.y - u.r - 14, text: this.streak > 1 ? `PERFECT ×${this.streak}!` : 'PERFECT!', t: 1, color: '#ffd84d', big: true });
-      this.screenFlash('#ffd84d', 0.12);
+      this.screenFlash('#ffd84d', 0.2);
+      // gold shockwave + launch streak sell the full-power release
+      this.waves.push({ x: u.x, y: u.y, r: 0, maxR: 130, t: 0.4, life: 0.4, color: '#ffd84d', hits: new Set() });
+      this.beams.push({ x1: u.x, y1: u.y, x2: u.x + dir.x * 200, y2: u.y + dir.y * 200, t: 0.22, life: 0.22 });
       // slow-mo beat + speedlines streaming off the launch
-      this.hitStop = Math.max(this.hitStop, 0.16);
+      this.hitStop = Math.max(this.hitStop, 0.22);
+      this.addShake(5);
       sfx('perfect');
-      buzz(40);
+      buzz([30, 40, 60]);
     }
   }
 
@@ -654,6 +677,13 @@ export class Battle {
     return ph < P ? ph / P : 2 - ph / P;
   }
 
+  // The gold zone sits where base Speed puts it: fast mons release high
+  // and tight, slow mons get a lower, wider target. Center/half-width.
+  private sweetSpot() {
+    const n = Math.min(this.active.def.stats.spe / 120, 1);
+    return { c: 0.68 + 0.27 * n, hw: 0.09 - 0.05 * n };
+  }
+
   // --- simulation ---
 
   update(dt0: number) {
@@ -662,7 +692,15 @@ export class Battle {
     if (hit) this.hitStop -= dt0;
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
-    if (this.dragging) this.dragT += dt;
+    if (this.dragging) {
+      this.dragT += dt;
+      // a soft tick each time the fill crosses into the gold — the
+      // rhythm cue that makes the release a timing game, not a guess
+      const z = this.sweetSpot();
+      const inGold = Math.abs(this.charge() - z.c) <= z.hw;
+      if (inGold && !this.wasGold) sfx('tick');
+      this.wasGold = inGold;
+    }
     for (const t of this.texts) t.t -= dt;
     this.texts = this.texts.filter((t) => t.t > 0);
     if (this.texts.length > 40) this.texts.splice(0, this.texts.length - 40); // a huge burst shouldn't stack 100 labels
@@ -681,6 +719,7 @@ export class Battle {
     this.stepOrbs(dt);
     this.stepWaves(dt);
     this.stepDashes(dt);
+    if (this.phase === 'map' && this.mapWalk) this.stepMapWalk(dt);
     for (const d of this.delays) d.t -= dt;
     const due = this.delays.filter((d) => d.t <= 0);
     this.delays = this.delays.filter((d) => d.t > 0);
@@ -1005,7 +1044,7 @@ export class Battle {
   }
 
   // Stone blocks bank the ball like walls — same restitution, same wall-
-  // bounce credit, own pinch id so a wall→block wedge still combos.
+  // bounce credit, own contact id so a wall→block squeeze still combos.
   private hitBlocks(u: Unit) {
     const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
     let bounced = false;
@@ -1033,8 +1072,8 @@ export class Battle {
     return { x, y };
   }
 
-  // WEDGE: two distinct contacts (enemy, ally, wall, stone) inside one
-  // 0.35s window — the squeeze shot is the engine's fuel. Records every
+  // COMBO SHOT: two distinct contacts (enemy, ally, wall, stone) inside
+  // one 0.35s window — the squeeze shot is the engine's fuel. Records every
   // contact; callers gate the payoff on static fields so silence absorbs
   // chains.
   private pinch(id: number) {
@@ -1044,7 +1083,7 @@ export class Battle {
   }
 
   private onPinch(x: number, y: number) {
-    this.texts.push({ x, y: y - 30, text: 'WEDGE!', t: 0.8, color: '#9df0ff', big: true });
+    this.texts.push({ x, y: y - 30, text: 'COMBO SHOT!', t: 0.8, color: '#9df0ff', big: true });
     for (let k = 0; k < this.pinchPip; k++) this.chargeUp(this.active);
   }
 
@@ -1182,12 +1221,15 @@ export class Battle {
       this.totalKos++;
       this.maxKos = Math.max(this.maxKos, this.kosThisShot);
       // EXP: the mon that launched this shot levels up — growth you can
-      // watch mid-run; cap keeps the multiplier sane
+      // watch mid-run. Bigger foes teach more, and punching up doubles it,
+      // like real XP. Cap keeps the multiplier sane.
       const lv = this.active;
-      if (lv && !lv.dead && lv.lvl < 20) {
-        lv.lvl++;
-        lv.pow *= 1.05;
-        const gain = Math.round(lv.maxHp * 0.03);
+      if (lv && !lv.dead && lv.lvl < LV_CAP) {
+        const lvls = Math.max(1, Math.round(e.lvl * 0.12)) * (e.lvl > lv.lvl ? 2 : 1);
+        const l0 = lv.lvl;
+        lv.lvl = Math.min(LV_CAP, lv.lvl + lvls);
+        lv.pow *= lvlPow(offStat(lv.def.stats, lv.def.type), lv.lvl) / lvlPow(offStat(lv.def.stats, lv.def.type), l0);
+        const gain = Math.round(lv.maxHp * (lvlHp(lv.def.stats.hp, lv.lvl) / lvlHp(lv.def.stats.hp, l0) - 1));
         lv.maxHp += gain;
         lv.hp = Math.min(lv.hp + gain, lv.maxHp);
         this.texts.push({ x: lv.x, y: lv.y - lv.r - 36, text: `LV ${lv.lvl}!`, t: 0.9, color: '#9df0ff', big: false });
@@ -1648,14 +1690,13 @@ export class Battle {
     const role = roleOf(nd.stats, nd.healer);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(nd.stats) * m.hp);
-    const lvBoost = Math.max(0, p.lvl - 1); // earned levels survive evolution
     p.def = p.shiny ? { ...nd, shiny: true } : nd; // the marker rides the def into the box
     p.role = role;
-    p.pow = m.pow * Math.pow(1.05, lvBoost);
+    p.pow = m.pow * lvlPow(offStat(nd.stats, nd.type), p.lvl); // earned levels survive evolution
     p.rngMul = m.range;
     p.launch = m.launch;
     p.cdMod = m.cdMod;
-    p.maxHp = Math.round(hp * (1 + lvBoost * 0.03));
+    p.maxHp = Math.round(hp * lvlHp(nd.stats.hp, p.lvl));
     p.hp = Math.max(1, Math.round(p.maxHp * frac));
     if (p.dead) p.hp = 0;
     p.cdMax = Math.max(1, Math.round(bumpCooldown(nd.type) * this.cdMult) - p.cdMod);
@@ -1680,13 +1721,12 @@ export class Battle {
     this.boxLvl.push(Math.max(1, p.lvl)); // earned levels ride back to the bench
     const role = roleOf(def.stats, def.healer);
     const m = ROLE_MODS[role];
-    const lvBoost = lvl - 1;
-    const hp = Math.round(playerHp(def.stats) * m.hp * (1 + lvBoost * 0.03));
+    const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl));
     p.def = def;
     p.role = role;
     p.lvl = lvl;
     p.shiny = !!def.shiny;
-    p.pow = m.pow * Math.pow(1.05, lvBoost);
+    p.pow = m.pow * lvlPow(offStat(def.stats, def.type), lvl);
     p.rngMul = m.range;
     p.launch = m.launch;
     p.cdMod = m.cdMod;
@@ -1718,7 +1758,7 @@ export class Battle {
     const pool = fresh.length ? fresh : spawns;
     const pick = fresh.find((s) => s.boss) ?? spawns.find((s) => s.boss) ?? pool[Math.floor(this.rng() * pool.length)];
     // recruits arrive at wave-appropriate level — deep runs yield real mons
-    return { ...pick.def, lvl: Math.min(20, 1 + this.waveIndex + (pick.boss ? 2 : 0) + (this.rng() < 0.5 ? 1 : 0)) };
+    return { ...pick.def, lvl: Math.min(LV_CAP, 5 + this.waveIndex * 10 + (pick.boss ? 8 : 0) + (this.rng() < 0.5 ? 4 : 0)) };
   }
 
   // every type on the active team or in the box — charm offers follow it
@@ -1769,6 +1809,43 @@ export class Battle {
     this.phase = 'map';
   }
 
+  // Overworld walk: the lead mon travels the carved route to the stop you
+  // tapped, then the stop's effect and its battle fire on arrival.
+  private stepMapWalk(dt: number) {
+    const mw = this.mapWalk;
+    if (!mw) return;
+    mw.t += dt * 6; // ~6 tiles a second — brisk but readable
+    if (mw.t < mw.path.length - 1) return;
+    const n = mw.node;
+    this.mapWalk = null;
+    this.finishMapWalk(n);
+  }
+
+  private finishMapWalk(n: MapNode) {
+    this.mapNode = this.region.nodes.indexOf(n);
+    this.pendingNext = n.row;
+    this.arriveAtNode(n);
+    if (this.phase === 'mart') return; // the shop pauses the route; resolveMart resumes it
+    this.spawnWave(this.pendingNext, n.kind === 'elite');
+    this.nextTurn();
+  }
+
+  resolveMart(buy: boolean) {
+    if (this.phase !== 'mart') return;
+    sfx('ui');
+    const p = this.martOffer;
+    this.martOffer = null;
+    if (buy && p && this.score >= MART_PRICE) {
+      this.score -= MART_PRICE;
+      p.apply(this);
+      this.heldItems.push(p.item);
+      this.mapNote = `MART SOLD YOU ${p.name.toUpperCase()} FOR ${MART_PRICE} PTS`;
+    }
+    this.phase = 'map';
+    this.spawnWave(this.pendingNext, false);
+    this.nextTurn();
+  }
+
   // StS map-stop effects resolve on arrival: Poké Center rests heal, item
   // stops cough up a perk, shrines bleed for power — the note becomes the
   // wave banner since we go straight from the map into the fight.
@@ -1802,20 +1879,16 @@ export class Battle {
       }
       sfx('invade');
     } else if (n.kind === 'mart') {
-      // Poké Mart: power bought with the score itself — the record run and
-      // the winning run are now in tension
-      if (this.score >= 500) {
-        this.score -= 500;
-        const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
-        if (p) {
-          p.apply(this);
-          this.heldItems.push(p.item);
-          this.mapNote = `MART SOLD YOU ${p.name.toUpperCase()} FOR 500 PTS`;
-        }
+      // Poké Mart: browse before you buy — the relic sits on the counter
+      // until you take it or walk on; score is the spend, charged on buy
+      const p = rollPerks(this.rng, 1, Math.max(1, this.rank), this.teamTypes())[0];
+      if (p) {
+        this.martOffer = p;
+        this.phase = 'mart';
+        sfx('ui');
       } else {
-        this.mapNote = 'MART: NOT ENOUGH PTS (500)';
+        this.mapNote = 'MART WAS SOLD OUT';
       }
-      sfx('ui');
     } else if (n.kind === 'mystery') {
       // the wildcard stop — you only learn what it was on arrival
       const roll = this.rng();
@@ -2134,8 +2207,9 @@ export class Battle {
   // --- rendering ---
 
   render(ctx: CanvasRenderingContext2D) {
-    if (this.phase === 'map') {
+    if (this.phase === 'map' || this.phase === 'mart') {
       this.drawRegion(ctx);
+      if (this.phase === 'mart') this.drawMart(ctx);
       return;
     }
     const a = this.arena;
@@ -2461,12 +2535,22 @@ export class Battle {
         }
       }
     }
-    // your lead mon waits at the current stop, facing the road ahead
+    // your lead mon waits at the current stop, or walks the carved route
+    // to the one you tapped — overworld style
     const at = this.region.nodes[this.mapNode];
     const lead = this.players.find((p) => !p.dead);
+    let lx = at ? at.tx : 0;
+    let ly = at ? at.ty : 0;
+    if (this.mapWalk) {
+      const { path, t } = this.mapWalk;
+      const i = Math.min(Math.floor(t), path.length - 2);
+      const f = t - i;
+      lx = path[i].x + (path[i + 1].x - path[i].x) * f;
+      ly = path[i].y + (path[i + 1].y - path[i].y) * f;
+    }
     if (at && lead) {
       const bob = Math.sin(this.time * 4) * 2;
-      drawMon(ctx, lead.def.id, ox + at.tx * cell + cell / 2, oy + at.ty * cell - cell * 0.1 + bob, 30);
+      drawMon(ctx, lead.def.id, ox + lx * cell + cell / 2, oy + ly * cell - cell * 0.1 + bob, 30);
     }
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
@@ -2474,7 +2558,7 @@ export class Battle {
     // waypoint dots march along each open link — the affordance that
     // says "these are the stops you can pick"
     const cur0 = this.region.nodes[this.mapNode];
-    if (this.pendingNext > this.waveIndex) {
+    if (this.pendingNext > this.waveIndex && !this.mapWalk) {
       for (const li of links) {
         const t = this.region.nodes[li];
         const mx = ox + ((cur0.tx + t.tx) / 2) * cell + cell / 2;
@@ -2562,6 +2646,26 @@ export class Battle {
     ctx.font = font(7);
     ctx.fillStyle = '#5a6488';
     ctx.fillText('WILD fight · ELITE hard+bonus · REST heal · FIND item · SHRINE blood · MART 500pts · ??? unknown', 270, oy + MAP_H * cell + 56);
+  }
+
+  // The mart stop: one relic on the counter over the dimmed island —
+  // take it for 500 pts or walk on. Buying costs score, not progress.
+  private drawMart(ctx: CanvasRenderingContext2D) {
+    const p = this.martOffer;
+    if (!p) return;
+    ctx.fillStyle = 'rgba(6,10,22,0.72)';
+    ctx.fillRect(0, 0, 540, 960);
+    ctx.textAlign = 'center';
+    ctx.font = font(17);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText('POKÉ MART', 270, 296);
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`one relic on the counter · your score: ${this.score}`, 270, 316);
+    drawPerkCard(ctx, MART_CARD, p);
+    const can = this.score >= MART_PRICE;
+    button(ctx, MART_BUY, can ? `BUY · ${MART_PRICE} PTS` : `NOT ENOUGH PTS (${MART_PRICE})`, can);
+    button(ctx, MART_LEAVE, 'LEAVE', true);
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not
@@ -2823,6 +2927,8 @@ export class Battle {
     if (pullLen < 12) return;
     const dir = norm(pull);
     const frac = this.charge();
+    const zone = this.sweetSpot();
+    const maxed = Math.abs(frac - zone.c) <= zone.hw;
     const color = TYPE_COLOR[u.def.type];
     const a = this.arena;
 
@@ -2839,7 +2945,7 @@ export class Battle {
     if (sig !== this.aimCache.sig) {
       this.aimCache.sig = sig;
       const speed =
-        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * frac);
+        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * (maxed ? 1 : frac));
       let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
       const dots: Vec[] = [];
       let hit: Unit | null = null;
@@ -2944,7 +3050,6 @@ export class Battle {
       const bh = 16;
       const bx = a.x + (a.w - bw) / 2;
       const by = a.y + 14;
-      const maxed = frac > 0.93;
       ctx.fillStyle = 'rgba(10,14,32,0.8)';
       ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
       ctx.strokeStyle = '#0a0e20';
@@ -2952,9 +3057,10 @@ export class Battle {
       ctx.strokeRect(bx - 4, by - 4, bw + 8, bh + 8);
       ctx.fillStyle = '#ffffff1c';
       ctx.fillRect(bx, by, bw, bh);
-      // gold zone = the perfect-release window the fill ping-pongs into
-      ctx.fillStyle = '#ffd84d33';
-      ctx.fillRect(bx + bw * 0.93, by, bw * 0.07, bh);
+      // gold zone = the perfect-release window the fill ping-pongs into;
+      // its spot on the bar is the mon's own (speed-keyed), lit when hit
+      ctx.fillStyle = maxed ? '#ffd84d55' : '#ffd84d33';
+      ctx.fillRect(bx + bw * (zone.c - zone.hw), by, bw * 2 * zone.hw, bh);
       ctx.save();
       if (maxed) {
         ctx.shadowColor = '#ffd84d';
@@ -2963,16 +3069,17 @@ export class Battle {
       ctx.fillStyle = maxed ? '#ffd84d' : color;
       ctx.fillRect(bx, by, bw * frac, bh);
       ctx.restore();
-      // gold tick marks where the max-power window opens
+      // gold ticks mark both edges of the max-power window
       ctx.fillStyle = '#ffd84d';
-      ctx.fillRect(bx + bw * 0.93, by - 3, 2, bh + 6);
+      ctx.fillRect(bx + bw * (zone.c - zone.hw), by - 3, 2, bh + 6);
+      ctx.fillRect(bx + bw * (zone.c + zone.hw) - 2, by - 3, 2, bh + 6);
     }
 
     // launch arrow: unit -> opposite direction, length + glow from charge
     const ex = u.x + dir.x * (50 + frac * 160);
     const ey = u.y + dir.y * (50 + frac * 160);
     ctx.save();
-    if (frac > 0.93) {
+    if (maxed) {
       ctx.shadowColor = '#ffd84d';
       ctx.shadowBlur = 16;
     }

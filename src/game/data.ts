@@ -16,7 +16,7 @@ export interface SpeciesDef {
   taunt?: boolean; // while it lives, contact hits vs other enemies are blocked
   cursed?: boolean; // on KO, all ally supers gain +1 cooldown pip
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
-  lvl?: number; // level marker — draft picks roll 1-5, catches keep theirs
+  lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   evolvesTo?: number; // dex id of the evolved form (data only; mechanic lives elsewhere)
 }
 

@@ -196,9 +196,10 @@ function startDraft() {
   const shinyOdds = 0.02 * (shinyCharm() ? 2 : 1);
   draftPool.forEach((_, i) => {
     if (runRng() < shinyOdds) draft.shiny.add(i);
-    // every card rolls a level 1-5, weighted low — a Lv5 opener is a
-    // mini high-roll: +20% pow, +12% bulk over a fresh Lv1
-    const lvl = 1 + Math.floor(Math.pow(runRng(), 1.8) * 5);
+    // every card rolls a level 5-14, weighted low — a Lv14 opener is a
+    // mini high-roll: +26% pow, +16% bulk over a fresh Lv5
+    const lvl = 5 + Math.floor(Math.pow(runRng(), 1.8) * 10);
+    draft.lvls.set(i, lvl);
     if (lvl > 1) draft.lvls.set(i, lvl);
   });
   offerCache = null;

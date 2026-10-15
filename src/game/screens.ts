@@ -62,6 +62,10 @@ export function perkCardRect(i: number) {
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 610, w: 180, h: 34 };
 export const REWARD_SKIP = { x: W - 152, y: 908, w: 134, h: 30 };
+// the mart keeps its ware on the counter: one card, buy or walk on
+export const MART_CARD = { x: W / 2 - 75, y: 330, w: 150, h: 200 };
+export const MART_BUY = { x: W / 2 - 105, y: 556, w: 210, h: 36 };
+export const MART_LEAVE = { x: W / 2 - 105, y: 602, w: 210, h: 36 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 640, w: W - 48, h: 56 };
@@ -152,7 +156,7 @@ function cardFace(
   ctx.restore();
 }
 
-function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string, on: boolean) {
+export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string, on: boolean) {
   roundRect(ctx, r.x, r.y, r.w, r.h, 10);
   ctx.fillStyle = on ? '#1b2140' : '#12152b';
   ctx.fill();
@@ -390,19 +394,16 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
     W / 2,
     DAILY_BTN.y + DAILY_BTN.h + 22,
   );
-  // dex line doubles as the dex button — chip frame hints it's tappable
-  const dexLine = `RANK ${rankName()} · DEX ${dexIds().length}/${CATCHABLE}`;
-  ctx.strokeStyle = '#2a3560';
-  ctx.lineWidth = 1;
-  roundRect(ctx, DEX_BTN.x, DEX_BTN.y, DEX_BTN.w, DEX_BTN.h, 8);
-  ctx.stroke();
-  ctx.fillText(dexLine, W / 2, DAILY_BTN.y + DAILY_BTN.h + 38);
-  // the records line is the one-more-run hook — best score + daily streak
+  // the dex is a real button — same chrome as the menu buttons above
+  button(ctx, DEX_BTN, `POKÉDEX ${dexIds().length}/${CATCHABLE}`, true);
+  // the records line is the one-more-run hook — rank, best score, streaks
   const b = best();
-  const bits = [`BEST ${b.score.toLocaleString('en-US')}`];
+  const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
   if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
   if (b.streak > 1) bits.push(`DAILY STREAK ${b.streak}`);
-  ctx.fillText(bits.join(' · '), W / 2, DAILY_BTN.y + DAILY_BTN.h + 50);
+  ctx.font = font(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(bits.join(' · '), W / 2, DAILY_BTN.y + DAILY_BTN.h + 84);
 }
 
 // --- help overlay: scrollable sections, each a mini diagram + a caption ---
@@ -443,6 +444,17 @@ function demoAim(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
   ctx.beginPath();
   ctx.arc(fx, fy, 12, 0, Math.PI * 2);
   ctx.stroke();
+  // mini meter: the gold band isn't pinned to the top — it follows the mon
+  const bw = w * 0.56, bx = x + w * 0.22, by = y + h * 0.88;
+  ctx.fillStyle = '#ffffff1c';
+  ctx.fillRect(bx, by, bw, 6);
+  ctx.fillStyle = '#ffd84d55';
+  ctx.fillRect(bx + bw * 0.68, by, bw * 0.16, 6);
+  ctx.fillStyle = '#58a8f8';
+  ctx.fillRect(bx, by, bw * 0.74, 6);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillRect(bx + bw * 0.68, by - 2, 2, 10);
+  ctx.fillRect(bx + bw * 0.84 - 2, by - 2, 2, 10);
 }
 
 function demoBump(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
@@ -564,7 +576,11 @@ interface HelpSection {
 const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'AIM & POWER',
-    lines: ['drag back from your mon: the dotted line is the flight path', 'release inside the gold zone for a full-power shot'],
+    lines: [
+      'drag back from your mon: the dotted line is the flight path',
+      'release inside the gold band for a PERFECT full-power shot',
+      "the band sits at your mon's own spot: fast ones are high and tight",
+    ],
     demo: demoAim,
   },
   {
@@ -573,8 +589,8 @@ const HELP_SECTIONS: HelpSection[] = [
     demo: demoBump,
   },
   {
-    title: 'WEDGE SHOTS',
-    lines: ['two contacts inside a blink — foe, wall, stone, ally — = WEDGE!', 'wedges pay bonus damage and feed relics like Binding Band + Ether'],
+    title: 'COMBO SHOTS',
+    lines: ['two contacts inside a blink — foe, wall, stone, ally — = COMBO SHOT!', 'combo shots pay bonus damage and feed Binding Band + Ether'],
     demo: demoBump,
   },
   {
@@ -599,7 +615,7 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'LEVELING UP',
-    lines: ['every KO levels the mon that launched the shot (Lv20 cap)', 'levels survive evolution; ascension (wins) makes foes tougher'],
+    lines: ['every KO levels the mon that launched the shot, tougher foes teach more (Lv100 cap)', 'levels survive evolution; ascension (wins) makes foes tougher'],
     demo: demoCharge,
   },
   {
@@ -693,7 +709,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
 }
 
 // --- dex overlay: every catchable mon — caught ones in color, the rest ??? ---
-export const DEX_BTN = { x: W / 2 - 110, y: DAILY_BTN.y + DAILY_BTN.h + 24, w: 220, h: 22 };
+export const DEX_BTN = { x: W / 2 - 140, y: DAILY_BTN.y + DAILY_BTN.h + 30, w: 280, h: 40 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
@@ -937,7 +953,7 @@ function hpBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, f
 
 // One held-item offer card — shared by the post-stage reward and the
 // pre-run charm pick.
-function drawPerkCard(
+export function drawPerkCard(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
   perk: { name: string; item: string; desc: string; rarity: Rarity },

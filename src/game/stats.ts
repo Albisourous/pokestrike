@@ -73,6 +73,20 @@ export const ROLE_MODS: Record<Role, RoleMods> = {
   wild: { launch: 1, hp: 1.05, pow: 1.05, range: 1, cdMod: 0 },
 };
 
+// Gen 3 stat growth: floor((2*Base + IV + EV/4) * Level/100) + 5, and
+// HP adds +Level +10. Wild mons roll IV 31, no EVs, neutral nature.
+export const statAt = (base: number, lvl: number) => Math.floor(((2 * base + 31) * lvl) / 100) + 5;
+export const hpAt = (base: number, lvl: number) => Math.floor(((2 * base + 31) * lvl) / 100) + lvl + 10;
+
+// Levels run 1-100. Multipliers normalize at Lv5, the lowest a fresh mon
+// spawns, so baseline units are unchanged and growth follows the real
+// curve. Pow rides the mon's offensive stat (Atk vs SpA by bump type).
+export const LV_CAP = 100;
+const LV_BASE = 5;
+export const offStat = (s: Stats, t: PokeType) => (bumpIsPhysical(t) ? s.atk : s.spa);
+export const lvlPow = (base: number, lvl: number) => statAt(base, lvl) / statAt(base, LV_BASE);
+export const lvlHp = (base: number, lvl: number) => hpAt(base, lvl) / hpAt(base, LV_BASE);
+
 // Real move names, shouted when the super fires.
 export const MOVE_NAME: Record<PokeType, string> = {
   fire: 'FIRE BLAST',

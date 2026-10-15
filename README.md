@@ -52,8 +52,10 @@ scrollable in-game manual, and it opens itself on your first visit.
 3. **Pull back to aim.** Drag direction sets your launch angle and a dotted
    **guide line** previews the ball's banks off walls and rocks, ending on
    whatever it would hit first. **Power is timing**: a
-   meter ping-pongs while you hold, so release in the gold zone for a
-   full-power `PERFECT!` shot (slow-mo and speedlines included). Every wall
+   meter ping-pongs while you hold, so release inside the gold band for a
+   full-power `PERFECT!` shot (shockwave, slow-mo and all). The band's
+   spot is the mon's own, set by base Speed: fast mons sit high and tight,
+   slow mons get a lower, wider target. Every wall
    **bank** on the way pays +8% contact damage on the hits that follow, the
    Monster Strike trick-shot fantasy, and stone blocks count.
 4. Every enemy you bump takes damage with **type effectiveness**. Gold `!`
@@ -127,9 +129,11 @@ scrollable in-game manual, and it opens itself on your first visit.
    Beat it to clear the echo. Every clear raises
    your **ascension** (shown on the title): enemies get +15% bulk and +8%
    damage per tier, and pay a +20%/tier score premium.
-9b. **Level up mid-run**: every KO feeds the mon that landed it a level
-    (+5% damage, +3% max HP, up to Lv 20). Levels survive evolution and
-    benching since they follow the mon. Feed your carry, not your bench.
+9b. **Level up mid-run**: every KO feeds the mon that landed it levels.
+    Bigger foes teach more, and punching above your weight pays double
+    (+2% damage, +1.2% max HP per level, up to Lv 100). Levels survive
+    evolution and benching since they follow the mon. Feed your carry,
+    not your bench.
 9c. **Signature moves**: drafted and caught mons shout their *own* move
     (Pikachu `THUNDERBOLT`, Gyarados `TWISTER`, Mewtwo `PSYCHO BOOST`),
     and draft cards show the super you'll unlock. Draft cards can roll

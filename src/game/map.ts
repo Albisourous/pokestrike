@@ -205,6 +205,33 @@ export function genRegion(seed: number): RegionMap {
   return { tiles, nodes, route, decor };
 }
 
+// Walkable tiles between two linked stops — BFS over the carved route so
+// the overworld walk follows the drawn path, not a straight line.
+export function routePath(region: RegionMap, a: MapNode, b: MapNode): { x: number; y: number }[] {
+  const start = a.ty * MAP_W + a.tx;
+  const goal = b.ty * MAP_W + b.tx;
+  const prev = new Int16Array(MAP_W * MAP_H).fill(-1);
+  prev[start] = start;
+  const q = [start];
+  for (let h = 0; h < q.length && prev[goal] === -1; h++) {
+    const i = q[h];
+    const x = i % MAP_W, y = (i / MAP_W) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H) continue;
+      const ni = ny * MAP_W + nx;
+      if (prev[ni] !== -1 || (!region.route.has(ni) && ni !== goal)) continue;
+      prev[ni] = i;
+      q.push(ni);
+    }
+  }
+  if (prev[goal] === -1) return [{ x: a.tx, y: a.ty }, { x: b.tx, y: b.ty }];
+  const out = [];
+  for (let i = goal; i !== start; i = prev[i]) out.push({ x: i % MAP_W, y: (i / MAP_W) | 0 });
+  out.push({ x: a.tx, y: a.ty });
+  return out.reverse();
+}
+
 // --- tile drawing: keyed gracidea slices, cached per rect (same magenta-
 // family test as bg.ts — terrain tiles are opaque but buildings aren't)
 const tileCache = new Map<string, HTMLCanvasElement>();
