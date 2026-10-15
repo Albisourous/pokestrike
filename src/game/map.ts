@@ -146,20 +146,26 @@ export function genRegion(seed: number): RegionMap {
     });
   }
 
-  // StS-style facility guarantees (pokelike's rule): a rest is always
-  // offered in each half of the climb, and at least two ? events exist so
-  // the pool isn't theoretical. Converted from wild stops only.
-  for (const [lo, hi] of [[1, 4], [5, 7]] as const) {
+  // StS-style facility guarantees (pokelike's rule): each half of the
+  // climb always offers a rest and a ? stop. Conversions prefer wild
+  // stops, falling back to chests/trainers — never gyms or the start.
+  const convert = (lo: number, hi: number, kind: NodeKind) => {
     const band = nodes.filter((n) => n.row >= lo && n.row <= hi);
-    if (!band.some((n) => n.kind === 'rest')) {
-      const wilds = band.filter((n) => n.kind === 'wild');
-      if (wilds.length) wilds[Math.floor(rng() * wilds.length)].kind = 'rest';
-    }
-  }
-  for (let need = 2 - nodes.filter((n) => n.kind === 'event').length; need > 0; need--) {
-    const wilds = nodes.filter((n) => n.kind === 'wild');
-    if (!wilds.length) break;
-    wilds[Math.floor(rng() * wilds.length)].kind = 'event';
+    if (band.some((n) => n.kind === kind)) return;
+    // never eat a half's last rest or ? — that's a guarantee, not a donor
+    const donor = (n: MapNode) =>
+      n.kind !== 'rest' && n.kind !== 'event' ||
+      band.filter((m) => m.kind === n.kind).length > 1;
+    // prefer converting wilds, then chests/trainers, events, rests last
+    const pool =
+      [['wild'], ['chest', 'trainer'], ['event'], ['rest']]
+        .map((ks) => band.filter((n) => ks.includes(n.kind) && donor(n)))
+        .find((p) => p.length) ?? [];
+    if (pool.length) pool[Math.floor(rng() * pool.length)].kind = kind;
+  };
+  for (const [lo, hi] of [[1, 4], [5, 7]] as const) {
+    convert(lo, hi, 'rest');
+    convert(lo, hi, 'event');
   }
 
   // forward links: each stop reaches the 1-2 nearest stops in the next row,

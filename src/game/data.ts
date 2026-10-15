@@ -520,6 +520,14 @@ export function trainerWave(rng: () => number, depth: number, type: PokeType): W
   return wave;
 }
 
+// Random catchable species for events (wounded mon, egg, wonder trade).
+// Depth tilts fodder→elite the same way rolled waves do; `elite` forces
+// the deep pool (alpha bosses deserve a monster).
+export function pickWild(rng: () => number, depth: number, elite = false): SpeciesDef {
+  const pool = elite || (depth > 0 && rng() < 0.4) ? ELITES : ENEMY_POOL;
+  return pool[Math.floor(rng() * pool.length)];
+}
+
 // Rival-echo wave: the player's own team turns up on the enemy side — ace
 // parked near center-top, the rest jittered through the upper/mid arena.
 export function rivalWave(defs: SpeciesDef[], rng: () => number): WaveSpawn[] {

@@ -3,7 +3,7 @@
 // ambushes (alpha, thief) swap the row's wave for a scripted one that
 // still pays normal battle rewards.
 import type { Battle } from './battle';
-import { pickWild, ENEMY_DB } from './data';
+import { pickWild } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
 
@@ -66,7 +66,7 @@ const EVENTS: GameEvent[] = [
   {
     w: 4,
     run: (b) => {
-      const def = pickWild(b.roll(), b.depth);
+      const def = pickWild(b.roll, b.depth);
       const lvl = Math.min(100, 5 + b.waveIndex * 10 + Math.floor(b.roll() * 5));
       boxCatch(b, def, lvl, 0.35);
       return { note: `A WOUNDED ${def.name.toUpperCase()} TRUSTS YOU — IT JOINED YOUR BOX!`, skip: true };
@@ -89,7 +89,7 @@ const EVENTS: GameEvent[] = [
       const alive = b.players.filter((p) => !p.dead);
       if (!alive.length) return { note: 'THE MACHINE STAYED SILENT.', skip: true };
       const p = alive[Math.floor(b.roll() * alive.length)];
-      const def = pickWild(b.roll(), b.depth + 1);
+      const def = pickWild(b.roll, b.depth + 1);
       const shiny = b.roll() < (1 / 48) * 3;
       const name = p.def.name.toUpperCase();
       b.applyDef(p, { ...def, shiny: shiny || undefined }, p.lvl, p.hp / p.maxHp);
@@ -104,10 +104,10 @@ const EVENTS: GameEvent[] = [
     run: (b) => {
       // alpha mini-boss: one elite guards a treasure — a real fight, so it
       // pays the wave's rewards like any hard stop
-      const boss = pickWild(b.roll(), b.depth + 2, true);
+      const boss = pickWild(b.roll, b.depth + 2, true);
       const escorts: WaveSpawn[] = [
-        { def: ENEMY_DB[Math.floor(b.roll() * 20)], nx: 0.3, ny: 0.5 },
-        { def: ENEMY_DB[Math.floor(b.roll() * 20)], nx: 0.7, ny: 0.5 },
+        { def: pickWild(b.roll, b.depth), nx: 0.3, ny: 0.5 },
+        { def: pickWild(b.roll, b.depth), nx: 0.7, ny: 0.5 },
       ];
       return {
         note: `AN ALPHA ${boss.name.toUpperCase()} GUARDS A TREASURE!`,

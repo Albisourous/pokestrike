@@ -5,6 +5,8 @@ import { makeStage, ROSTER, TOTAL_STAGES, speciesById } from '../src/game/data';
 import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
 import { genRegion, routePath } from '../src/game/map';
+import { teamTraits, TRAIT_DESC } from '../src/game/traits';
+import { rollEvent } from '../src/game/events';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -251,6 +253,97 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       }
     ok(walkable, `seed ${s}: every link has a walkable route`);
   }
+}
+
+// --- map guarantees: a rest each half + real ? variety (pokelike's rule) ---
+{
+  for (const s of [1, 7, 13, 42, 99, 777, 2024, 5150, 31337, 555]) {
+    const r = genRegion(s);
+    const rests1 = r.nodes.filter((n) => n.kind === 'rest' && n.row >= 1 && n.row <= 4).length;
+    const rests2 = r.nodes.filter((n) => n.kind === 'rest' && n.row >= 5 && n.row <= 7).length;
+    ok(rests1 >= 1 && rests2 >= 1, `seed ${s}: a rest is offered in each half (${rests1}+${rests2})`);
+    const ev1 = r.nodes.some((n) => n.kind === 'event' && n.row >= 1 && n.row <= 4);
+    const ev2 = r.nodes.some((n) => n.kind === 'event' && n.row >= 5 && n.row <= 7);
+    ok(ev1 && ev2, `seed ${s}: a ? stop is offered in each half`);
+  }
+}
+
+// --- type traits: tiers, shiny double-count, dead mons excluded -------------
+{
+  const mk = (type: 'fire' | 'water' | 'ghost' | 'normal', shiny = false, dead = false) => ({ dead, shiny, def: { type } });
+  ok(teamTraits([mk('fire'), mk('fire'), mk('water')]).get('fire') === 1, 'two same-type = tier 1');
+  ok(teamTraits([mk('ghost', true), mk('ghost'), mk('ghost')]).get('ghost') === 2, 'shiny counts double (2+1+1=4 → tier 2)');
+  ok(teamTraits([mk('normal', true), mk('normal', true), mk('normal'), mk('water')]).get('normal') === 3, 'two shinies + one = tier 3');
+  ok(teamTraits([mk('fire'), mk('fire'), mk('fire', false, true)]).get('fire') === 1, 'fainted mons do not feed traits');
+  ok(!teamTraits([mk('water'), mk('fire'), mk('ghost'), mk('normal')]).size, 'spread team earns no traits');
+  ok(Object.values(TRAIT_DESC).every((d) => d.length === 3), 'every type documents 3 trait tiers');
+}
+
+// --- trait hooks land in battle ---------------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(4));
+  (b as any).spawnWave(0);
+  b.traits.clear();
+  const e = b.enemies[0];
+  const hp0 = e.hp;
+  (b as any).hurt(e, 50, '#fff');
+  const d1 = hp0 - e.hp;
+  e.hp = hp0;
+  b.traits.set('fire', 3);
+  (b as any).hurt(e, 50, '#fff');
+  const d2 = hp0 - e.hp;
+  ok(d2 > d1, `fire trait boosts damage (${d1} → ${d2})`);
+  // anti-stall: the same hit hurts more once a wave has outlasted 10 shots
+  const p = b.players[0];
+  b.traits.clear();
+  const php0 = p.hp;
+  (b as any).waveShots = 0;
+  (b as any).damagePlayer(p, 50);
+  const h1 = php0 - p.hp;
+  p.hp = php0;
+  (b as any).waveShots = 20;
+  (b as any).damagePlayer(p, 50);
+  const h2 = php0 - p.hp;
+  ok(h2 > h1, `anti-stall pressure ramp after 10 shots (${h1} → ${h2})`);
+}
+
+// --- ? event pool: variety, ambushes stage scripted waves -------------------
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(77));
+  (b as any).spawnWave(0);
+  const seen = new Set<string>();
+  let waves = 0;
+  for (let i = 0; i < 60; i++) {
+    const out = rollEvent(b);
+    seen.add(out.note.slice(0, 12));
+    if (out.wave) waves++;
+  }
+  ok(seen.size >= 4, `event pool rolls variety (${seen.size} distinct outcomes)`);
+  ok(waves > 0, `ambushes stage scripted waves (${waves}/60)`);
+}
+
+// --- event arrival: scripted wave replaces the row, no gym credit -----------
+{
+  const b = new Battle(arena, team(), makeStage(41, 'T'), mulberry32(5));
+  (b as any).pendingEventWave = [{ def: speciesById(262)!, nx: 0.5, ny: 0.3, boss: true }];
+  (b as any).spawnWave(1);
+  ok((b as any).inEvent, 'event wave flagged');
+  ok(b.enemies.some((e) => e.boss), 'scripted boss fields');
+  ok(!(b as any).waveHadGym, 'event boss is not a gym badge');
+  ok(!!b.enemies.find((e) => e.boss)?.relic, 'event alpha carries a held item');
+}
+
+// --- gym boss relic + egg hatch ---------------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(2); // seeded gym wave
+  const boss = b.enemies.find((e) => e.boss);
+  ok(!!boss?.relic, `gym boss carries a held item (${boss?.relic})`);
+  const c = new Battle(arena, team(), makeStage(50, 'T'), mulberry32(8));
+  c.eggIn = 1;
+  const box0 = c.box.length;
+  (c as any).tickEgg();
+  ok(c.eggIn === 0 && c.box.length === box0 + 1, `egg hatches into the box (${c.box[c.box.length - 1]?.name})`);
 }
 
 // --- roster integrity -------------------------------------------------------

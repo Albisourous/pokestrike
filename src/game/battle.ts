@@ -2,9 +2,11 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, drawShiny, itemSprite, drawNpc } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
+import { rollEvent } from './events';
+import { teamTraits } from './traits';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
@@ -80,6 +82,7 @@ interface Unit {
   lastHit: Map<number, number>; // shooter uid -> game time
   wallN: number; // wall bounces so far this shot (grip claw ramp)
   hzT: number; // last hazard tick — throttles lava/spike chips and burns
+  relic?: string; // held-item sprite name — gym bosses roll one quirk each
 }
 
 interface FloatText {
@@ -331,6 +334,17 @@ export class Battle {
   private rewardPending = false;
   private hpScale = 1;
   private theme: Theme; // current wave's scene — rotates each wave
+  traits = new Map<PokeType, number>(); // type-trait tiers — teamTraits, refreshed on composition shifts
+  private pendingEventWave: WaveSpawn[] | null = null; // ?-stop ambush replaces the row's wave
+  private inEvent = false; // this wave is a scripted event fight (no gym credit)
+  private skipWave = false; // a ? event resolved the stop — row clears with no fight
+  private curSpawns: WaveSpawn[] = []; // the wave actually fielded (for the recruit roll)
+  eggIn = 0; // stops until the egg hatches — the ? pool's slow payoff
+  eggJustLaid = false; // the laying arrival doesn't consume a tick
+  private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
+  private splashing = false; // psychic trait re-entry guard
+  private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
+  private mapMsgT = 0;
 
   constructor(
     public arena: Rect,
@@ -400,17 +414,49 @@ export class Battle {
     return this.stage.waves.length;
   }
 
+  // the ?-event pool shares the run's seeded roll source — a property, so
+  // callers can hand `b.roll` to pickWild without losing `this`
+  roll = () => this.rng();
+
+  // tier of a team trait — 0 when the type isn't fielded enough
+  private t(ty: PokeType) {
+    return this.traits.get(ty) ?? 0;
+  }
+
+  private refreshTraits() {
+    this.traits = teamTraits(this.players);
+  }
+
   private spawnWave(i: number, node?: MapNode) {
     this.waveIndex = i;
     // trainer stops field a mono-type squad — the node's ttype picks it;
     // rolled rows still don't exist until the stop is chosen
     const ttype = node?.kind === 'trainer' ? node.ttype ?? 'normal' : null;
     this.inTrainer = ttype != null;
-    this.hardWave = this.inTrainer;
-    if (i >= this.stage.waves.length) {
-      this.depth++;
-      this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+    this.inEvent = false;
+    this.waveShots = 0;
+    this.refreshTraits();
+    let spawns: WaveSpawn[];
+    if (this.pendingEventWave) {
+      // a ?-stop ambush: scripted wave — a hard stop, but never a gym badge
+      spawns = this.pendingEventWave;
+      this.pendingEventWave = null;
+      this.inEvent = true;
+      if (i >= this.stage.waves.length) {
+        this.depth++;
+        // keep waves[i] indexed by row even though the event replaced it —
+        // the next row reads stage.waves[i+1] off this slot
+        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+      }
+    } else {
+      if (i >= this.stage.waves.length) {
+        this.depth++;
+        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+      }
+      spawns = ttype ? trainerWave(this.rng, this.depth, ttype) : this.stage.waves[i];
     }
+    this.hardWave = this.inTrainer || this.inEvent;
+    this.curSpawns = spawns;
     this.hpScale = 1 + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
     // each wave is a new scene — rotate the flat theme
     const others = THEMES.filter((t) => t !== this.theme);
@@ -421,24 +467,24 @@ export class Battle {
     this.dashes = [];
     // a legendary can crash any non-boss wave past the first — MS invades;
     // a dead run's team can return as a rival fight — fail-forward echo
-    let spawns = ttype ? trainerWave(this.rng, this.depth, ttype) : this.stage.waves[i];
     this.waveSpecial = null;
-    this.waveHadGym = spawns.some((s) => s.boss);
+    this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent;
     this.inRival = false;
     if (ttype) {
       this.waveSpecial = `${TRAINER_CLASS[ttype]?.title ?? 'TRAINER'} WANTS TO BATTLE!`;
       sfx('invade');
-    } else if (this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
-      spawns = rivalWave(this.echo.map((e) => e.def), this.rng);
+    } else if (!this.inEvent && this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
+      spawns = this.curSpawns = rivalWave(this.echo.map((e) => e.def), this.rng);
       this.waveSpecial = 'RIVAL BATTLE!';
       this.inRival = true;
       sfx('invade');
-    } else if (i > 0 && !this.waveHadGym && this.rng() < 0.09 + this.rank * 0.03) {
+    } else if (!this.inEvent && i > 0 && !this.waveHadGym && this.rng() < 0.09 + this.rank * 0.03) {
       const inv = INVADERS[Math.floor(this.rng() * INVADERS.length)];
       spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
       this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
       sfx('invade');
     }
+    this.curSpawns = spawns; // rival/invade overrides still feed the recruit roll
     if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
     // Archero-style room furniture: seeded stone clusters the ball banks
     // off. Boss rooms stay open — the leader fight is the spectacle;
@@ -524,6 +570,17 @@ export class Battle {
         e.hp = e.maxHp;
       });
     }
+    // gym aces and event alphas carry a held item — pokelike's curated
+    // boss kit, one rolled quirk per fight
+    const armed = this.enemies.find((e) => e.boss);
+    if (armed && (this.waveHadGym || this.inEvent)) this.armBoss(armed);
+    // normal trait: the squad mends as the wave forms
+    const mend = this.t('normal') * 0.05;
+    if (mend > 0) {
+      for (const p of this.players) {
+        if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * mend));
+      }
+    }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
     this.pickups = [];
     this.scars = [];
@@ -562,6 +619,26 @@ export class Battle {
     if (shiny) {
       if (!this.waveSpecial) this.waveSpecial = `A SHINY ${shiny.def.name.toUpperCase()} APPEARED!`;
       sfx('perfect'); // the triple-note ping — rarer than any recharge cue
+    }
+  }
+
+  // Held-item quirk on a boss — pokelike's curated aces. Rolled on the
+  // wave's seed so a daily climb always faces the same kit.
+  private armBoss(e: Unit) {
+    const GYM_RELICS = ['focus-sash', 'leftovers', 'choice-band', 'eviolite'];
+    e.relic = GYM_RELICS[Math.floor(this.rng() * GYM_RELICS.length)];
+    const st = e.def.stats;
+    switch (e.relic) {
+      case 'focus-sash':
+        e.sash = true; // one hit at full hp can't KO — enforced in hurt()
+        break;
+      case 'choice-band':
+        e.def = { ...e.def, stats: { ...st, atk: Math.round(st.atk * 1.25), spa: Math.round(st.spa * 1.25) } };
+        break;
+      case 'eviolite':
+        e.def = { ...e.def, stats: { ...st, def: Math.round(st.def * 1.35), spd: Math.round(st.spd * 1.35) } };
+        break;
+      // 'leftovers' regenerates in endShot
     }
   }
 
@@ -639,6 +716,7 @@ export class Battle {
     this.stopTimer = 0;
     this.phase = 'shot';
     this.shots++;
+    this.waveShots++; // anti-stall pressure counts shots inside the wave
     this.addShake(3);
     sfx('launch');
     buzz(15);
@@ -708,6 +786,7 @@ export class Battle {
     this.beams = this.beams.filter((bm) => bm.t > 0);
     this.shake *= Math.exp(-6 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
+    if (this.mapMsgT > 0) this.mapMsgT -= dt;
 
     this.stepOrbs(dt);
     this.stepWaves(dt);
@@ -1155,12 +1234,39 @@ export class Battle {
       crit = true;
       d *= 2;
     }
-    d = Math.round(d * this.dmgMult);
+    d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1));
     // 0x matchups (e.g. normal vs ghost) still chip — a wave must always
     // be finishable even when the whole team is immune-typed
     const immune = d <= 0;
     if (immune) d = 1;
     e.hp -= d;
+    // enemy focus sash: the gym ace's held item hangs on at 1 HP once
+    if (e.sash && e.hp <= 0) {
+      e.sash = false;
+      e.hp = 1;
+      this.texts.push({ x: e.x, y: e.y - e.r - 34, text: 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
+    }
+    // ghost trait: execute non-boss foes already on fumes
+    if (!e.dead && !e.boss && e.hp > 0 && e.hp <= e.maxHp * this.t('ghost') * 0.06) {
+      this.texts.push({ x: e.x, y: e.y - e.r - 34, text: 'EXECUTE!', t: 1, color: '#a868c8', big: true });
+      e.hp = 0;
+    }
+    // psychic trait: a cut of every hit splashes onto another foe —
+    // re-entry guarded so the splash can't splash
+    if (!this.splashing && this.t('psychic') > 0) {
+      const other = this.enemies.find((x) => !x.dead && x !== e);
+      if (other) {
+        this.splashing = true;
+        this.hurt(other, Math.max(1, Math.round(d * this.t('psychic') * 0.1)), '#f85888');
+        this.splashing = false;
+      }
+    }
+    // poison trait: player hits can envenom — stacks the same doT the
+    // toxic super applies
+    if (!e.dead && this.t('poison') > 0 && this.rng() < this.t('poison') * 0.25) {
+      e.dotTicks = Math.min(e.dotTicks + 1, 6);
+      e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
+    }
     // boss enrage: below 30% the leader fights dirty — attacks cycle a
     // third faster, so the last stretch of a gym is the tense one
     if (e.boss && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.3) {
@@ -1180,13 +1286,14 @@ export class Battle {
     // king's rock staggers attack timers — capped so a long combo delays
     // one volley instead of locking the enemy out forever
     e.timer = Math.min(e.timer + this.stagger, ENEMY_BASE_TIMER + this.stagger + 1);
-    // shell bell: damage feeds the weakest ally
-    if (this.leech > 0) {
+    // shell bell + grass trait: damage feeds the weakest ally
+    const leech = this.leech + this.t('grass') * 0.04;
+    if (leech > 0) {
       const weakest = this.players
         .filter((pl) => !pl.dead && pl.hp < pl.maxHp)
         .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
       if (weakest) {
-        weakest.hp = Math.min(weakest.hp + Math.max(1, Math.round(d * this.leech)), weakest.maxHp);
+        weakest.hp = Math.min(weakest.hp + Math.max(1, Math.round(d * leech)), weakest.maxHp);
       }
     }
     this.texts.push({
@@ -1218,15 +1325,7 @@ export class Battle {
       // like real XP. Cap keeps the multiplier sane.
       const lv = this.active;
       if (lv && !lv.dead && lv.lvl < LV_CAP) {
-        const lvls = Math.max(1, Math.round(e.lvl * 0.12)) * (e.lvl > lv.lvl ? 2 : 1);
-        const l0 = lv.lvl;
-        lv.lvl = Math.min(LV_CAP, lv.lvl + lvls);
-        lv.pow *= lvlPow(offStat(lv.def.stats, lv.def.type), lv.lvl) / lvlPow(offStat(lv.def.stats, lv.def.type), l0);
-        const gain = Math.round(lv.maxHp * (lvlHp(lv.def.stats.hp, lv.lvl) / lvlHp(lv.def.stats.hp, l0) - 1));
-        lv.maxHp += gain;
-        lv.hp = Math.min(lv.hp + gain, lv.maxHp);
-        this.texts.push({ x: lv.x, y: lv.y - lv.r - 36, text: `LV ${lv.lvl}!`, t: 0.9, color: '#9df0ff', big: false });
-        sfx('ready');
+        this.gainLevels(lv, Math.max(1, Math.round(e.lvl * 0.12)) * (e.lvl > lv.lvl ? 2 : 1));
       }
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
@@ -1301,7 +1400,7 @@ export class Battle {
     // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
-        shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.1 + this.comboDmg)) *
+        shooter.pow * this.physMult * this.shotPhys * (1 + this.shotCombo * (0.1 + this.comboDmg + this.t('electric') * 0.04)) *
         (1 + this.wallRamp * shooter.wallN) *
         (this.typePow[shooter.def.type] ?? 1) *
         this.shotStreak *
@@ -1632,6 +1731,20 @@ export class Battle {
     this.rewardPending = true;
   }
 
+  // Earned level growth: pow rides the offensive stat, maxHp rides hp —
+  // KOs, rare candy events and tutor drills all grow through this one path.
+  gainLevels(p: Unit, n: number) {
+    if (p.dead || p.lvl >= LV_CAP) return;
+    const l0 = p.lvl;
+    p.lvl = Math.min(LV_CAP, p.lvl + n);
+    p.pow *= lvlPow(offStat(p.def.stats, p.def.type), p.lvl) / lvlPow(offStat(p.def.stats, p.def.type), l0);
+    const gain = Math.round(p.maxHp * (lvlHp(p.def.stats.hp, p.lvl) / lvlHp(p.def.stats.hp, l0) - 1));
+    p.maxHp += gain;
+    p.hp = Math.min(p.hp + gain, p.maxHp);
+    this.texts.push({ x: p.x, y: p.y - p.r - 36, text: `LV ${p.lvl}!`, t: 0.9, color: '#9df0ff', big: false });
+    sfx('ready');
+  }
+
   // A dupe capture doesn't fill a box slot — it feeds the copy you own:
   // evolves it when the line has a next stage, else it's rare candy.
   // Returns false when the species is genuinely new to the run.
@@ -1697,6 +1810,28 @@ export class Battle {
     p.cd = Math.min(p.cd, p.cdMax);
   }
 
+  // Reseat a unit on a new species: role/stats recomputed, hp carried as a
+  // fraction. Box swaps and wonder-trade both ride this one path.
+  applyDef(p: Unit, def: SpeciesDef, lvl: number, frac = 1) {
+    const role = roleOf(def.stats, def.healer);
+    const m = ROLE_MODS[role];
+    const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl));
+    p.def = def;
+    p.role = role;
+    p.lvl = lvl;
+    p.shiny = !!def.shiny;
+    p.pow = m.pow * lvlPow(offStat(def.stats, def.type), lvl);
+    p.rngMul = m.range;
+    p.launch = m.launch;
+    p.cdMod = m.cdMod;
+    p.maxHp = hp;
+    p.hp = frac <= 0 ? 0 : Math.max(1, Math.round(hp * frac));
+    p.dead = p.hp <= 0;
+    p.cdMax = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - p.cdMod);
+    p.cd = p.cdMax; // swapped/retrained — it has to earn its first super
+    this.refreshTraits(); // a new face can break or make a type pair
+  }
+
   // Swap a boxed mon onto the team — unlimited during a reward break. HP
   // belongs to the mon, not the slot: a hurt mon stays hurt in the box and a
   // fainted one stays fainted, so benching is never a free heal or revive.
@@ -1713,22 +1848,7 @@ export class Battle {
     this.box.push(p.def); // benched ally goes back to the box
     this.boxHp.push(p.maxHp ? p.hp / p.maxHp : 0);
     this.boxLvl.push(Math.max(1, p.lvl)); // earned levels ride back to the bench
-    const role = roleOf(def.stats, def.healer);
-    const m = ROLE_MODS[role];
-    const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl));
-    p.def = def;
-    p.role = role;
-    p.lvl = lvl;
-    p.shiny = !!def.shiny;
-    p.pow = m.pow * lvlPow(offStat(def.stats, def.type), lvl);
-    p.rngMul = m.range;
-    p.launch = m.launch;
-    p.cdMod = m.cdMod;
-    p.maxHp = hp;
-    p.hp = frac <= 0 ? 0 : Math.max(1, Math.round(hp * frac));
-    p.dead = p.hp <= 0;
-    p.cdMax = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - p.cdMod);
-    p.cd = p.cdMax; // swapped in discharged — it has to earn its first super
+    this.applyDef(p, def, lvl, frac);
     this.boxSel = -1;
     this.screenFlash('#ffd84d', 0.12);
     sfx('caught');
@@ -1747,7 +1867,7 @@ export class Battle {
   // gym always nets the leader's ace (even a dupe — it's the gym's prize);
   // anything else prefers a species you don't already own.
   private rollRecruit() {
-    const spawns = this.stage.waves[this.waveIndex];
+    const spawns = this.curSpawns; // what was actually fielded — rival/invade/event overrides included
     const fresh = spawns.filter((s) => !this.box.some((b) => b.id === s.def.id));
     const pool = fresh.length ? fresh : spawns;
     const pick = fresh.find((s) => s.boss) ?? spawns.find((s) => s.boss) ?? pool[Math.floor(this.rng() * pool.length)];
@@ -1820,8 +1940,48 @@ export class Battle {
     this.mapNode = this.region.nodes.indexOf(n);
     this.pendingNext = n.row;
     this.arriveAtNode(n);
+    this.tickEgg();
+    if (this.skipWave) {
+      // the event resolved the stop — row clears with no fight, at the
+      // cost of the wave's recruits and perk draft (StS ?-node trade).
+      // The row's wave is still generated (and discarded) so waves[i]
+      // stays indexed by row for the next spawnWave call.
+      this.skipWave = false;
+      this.waveIndex = n.row;
+      if (n.row >= this.stage.waves.length) {
+        this.depth++;
+        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+      }
+      this.pendingNext = n.row + 1;
+      return;
+    }
     this.spawnWave(this.pendingNext, n);
     this.nextTurn();
+  }
+
+  // Egg from the ? pool: rustles on every stop advance, then hatches a
+  // depth-appropriate catch straight into the box.
+  private tickEgg() {
+    if (!this.eggIn) return;
+    if (this.eggJustLaid) {
+      this.eggJustLaid = false;
+      return;
+    }
+    this.eggIn--;
+    if (this.eggIn > 0) {
+      this.mapMsg = `THE EGG RUSTLES… (${this.eggIn} TO GO)`;
+      this.mapMsgT = 2.5;
+      return;
+    }
+    const def = pickWild(this.rng, this.depth);
+    const lvl = Math.min(LV_CAP, 5 + this.waveIndex * 10 + Math.floor(this.rng() * 5));
+    this.box.push({ ...def, lvl });
+    this.boxHp.push(1);
+    this.boxLvl.push(lvl);
+    this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
+    this.mapMsgT = 3;
+    sfx('caught');
+    cry(def.id, 0.4);
   }
 
   // StS map-stop effects resolve on arrival: Poké Center rests heal, chests
@@ -1829,6 +1989,20 @@ export class Battle {
   // from the map into the fight.
   private arriveAtNode(n: MapNode) {
     this.mapNote = '';
+    if (n.kind === 'event') {
+      // the ? pool: heals and finds resolve on the spot; ambushes stage a
+      // scripted wave that replaces whatever the row would have rolled
+      const out = rollEvent(this);
+      if (out.wave) {
+        this.pendingEventWave = out.wave;
+        this.mapNote = out.note;
+      } else {
+        this.skipWave = out.skip === true;
+        this.mapMsg = out.note;
+        this.mapMsgT = 3;
+      }
+      return;
+    }
     if (n.kind === 'rest') {
       // a real Poké Center: living mons to full, fainted ones revived
       let revived = 0;
@@ -1903,12 +2077,18 @@ export class Battle {
     if (this.healCd > 0) this.healCd--;
     for (const p of this.players) {
       this.chargeUp(p);
-      if (!p.dead && this.regen > 0 && p.hp < p.maxHp) {
-        p.hp = Math.min(p.hp + Math.ceil(p.maxHp * this.regen), p.maxHp);
+      // leftover perk + water trait both regen each shot taken
+      const regen = this.regen + this.t('water') * 0.03;
+      if (!p.dead && regen > 0 && p.hp < p.maxHp) {
+        p.hp = Math.min(p.hp + Math.ceil(p.maxHp * regen), p.maxHp);
       }
     }
-    // poison ticks first
+    // held leftovers tick before poison — a healing boss keeps the
+    // anti-stall pressure honest
     for (const e of this.enemies) {
+      if (e.boss && e.relic === 'leftovers' && !e.dead) {
+        e.hp = Math.min(e.maxHp, e.hp + Math.ceil(e.maxHp * 0.04));
+      }
       if (e.dotTicks > 0) {
         e.dotTicks--;
         this.hurt(e, e.dotDmg, '#a040a0');
@@ -2065,9 +2245,18 @@ export class Battle {
   }
 
   private damagePlayer(p: Unit, dmg: number) {
+    // flying trait: incoming attacks whiff outright — surfaced so a zero
+    // never reads as a bug
+    if (this.t('flying') > 0 && this.rng() < Math.min(0.25, this.t('flying') * 0.07)) {
+      this.texts.push({ x: p.x, y: p.y - p.r - 8, text: 'MISS!', t: 0.8, color: '#a890f0', big: false });
+      return;
+    }
     // foes hit harder the deeper the run goes — depth 6 lands ~1.7x;
-    // +15% base pressure, +8% per wave so wave 3 actually threatens
-    dmg = Math.max(1, Math.round(dmg * this.takenMult * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
+    // +15% base pressure, +8% per wave so wave 3 actually threatens.
+    // rock trait shaves every hit; the waveShots ramp is the anti-stall —
+    // after 10 unanswered shots a wave fights back harder each turn
+    const pressure = 1 + Math.max(0, this.waveShots - 10) * 0.12;
+    dmg = Math.max(1, Math.round(dmg * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
@@ -2094,7 +2283,7 @@ export class Battle {
       // a death stings less and a comeback is always live
       for (const q of this.players) {
         if (!q.dead) {
-          q.pow *= 1.08;
+          q.pow *= 1.08 + this.t('fighting') * 0.05; // fighting trait: the squad digs deeper
           q.hp = Math.min(q.maxHp, q.hp + Math.round(q.maxHp * 0.05));
         }
       }
@@ -2303,6 +2492,14 @@ export class Battle {
       ctx.strokeText(boss.def.name.toUpperCase(), 270, by - 1);
       ctx.fillStyle = '#f0b02f';
       ctx.fillText(boss.def.name.toUpperCase(), 270, by - 1);
+      // held item on the nameplate — the quirk you're about to fight around
+      if (boss.relic) {
+        const ri = itemSprite(boss.relic);
+        if (ri) {
+          const w = ctx.measureText(boss.def.name.toUpperCase()).width;
+          ctx.drawImage(ri, 270 + w / 2 + 5, by - 10, 14, 14);
+        }
+      }
       ctx.fillStyle = '#000a';
       ctx.fillRect(bx, by + 5, bw, 7);
       ctx.fillStyle = pct > 0.5 ? '#f0b02f' : pct > 0.25 ? '#f08030' : '#ff6b6b';
@@ -2520,6 +2717,17 @@ export class Battle {
       } else if (n.kind === 'wild') {
         // a flower patch = tall grass — something wild is rustling there
         drawTile(ctx, MT.TILE_FLOWER, nx - cell * 0.6, ny - cell * 0.6, cell * 1.2, cell * 1.2);
+      } else if (n.kind === 'event') {
+        // the ? stop — a glinting diamond since the tileset has no sign tile
+        ctx.save();
+        ctx.translate(nx, ny - 6);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillRect(-9, -9, 18, 18);
+        ctx.restore();
+        ctx.font = font(16);
+        ctx.fillStyle = '#2a3560';
+        ctx.fillText('?', nx, ny - 1);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN; // start + rest are towns
         drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
@@ -2554,6 +2762,7 @@ export class Battle {
       ctx.lineWidth = 3;
       const label =
         n.kind === 'gym' ? 'GYM'
+        : n.kind === 'event' ? '???'
         : n.kind === 'rest' ? 'REST'
         : n.kind === 'chest' ? 'CHEST'
         : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title
@@ -2582,7 +2791,33 @@ export class Battle {
     ctx.font = font(9);
     ctx.fillStyle = '#6a7498';
     ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + MAP_H * cell + 62);
-    ctx.fillText('CHEST free relic · REST heal+revive · GYM boss battle', 270, oy + MAP_H * cell + 78);
+    ctx.fillText('CHEST free relic · ??? event — heal, catch or fight · REST heal+revive · GYM boss', 270, oy + MAP_H * cell + 78);
+    // resolved events and egg ticks surface as a toast over the island
+    if (this.mapMsgT > 0 && this.mapMsg) {
+      ctx.globalAlpha = Math.min(1, this.mapMsgT);
+      ctx.font = font(13);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 4;
+      ctx.strokeText(this.mapMsg, 270, oy - 20);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(this.mapMsg, 270, oy - 20);
+      ctx.globalAlpha = 1;
+    }
+    // active type traits sit above the map — the build the team is running
+    if (this.traits.size) {
+      let tx = ox;
+      ctx.font = font(10);
+      ctx.textAlign = 'left';
+      for (const [ty, tier] of this.traits) {
+        const name = `${ty.toUpperCase()} T${tier}`;
+        ctx.fillStyle = 'rgba(20,26,48,0.85)';
+        ctx.fillRect(tx - 3, oy + MAP_H * cell + 88, ctx.measureText(name).width + 8, 14);
+        ctx.fillStyle = TYPE_COLOR[ty];
+        ctx.fillText(name, tx + 1, oy + MAP_H * cell + 98);
+        tx += ctx.measureText(name).width + 14;
+      }
+      ctx.textAlign = 'center';
+    }
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not
