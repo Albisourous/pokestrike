@@ -2159,6 +2159,23 @@ export class Battle {
     // stone blocks — solid cover the ball banks off
     for (const b of this.blocks) this.drawBlock(ctx, b);
 
+    // ambient motes — embers in the volcano, petals in the grove; the
+    // little drift that keeps a still room from reading dead
+    {
+      const MO: Record<string, string> = { grove: '#cfe898', cavern: '#8a94c0', volcano: '#ff9d4d', sky: '#e8f6ff' };
+      ctx.fillStyle = MO[this.theme] ?? '#cfe898';
+      for (let k = 0; k < 14; k++) {
+        const sp = 10 + (k % 4) * 6;
+        const mx = a.x + ((k * 97.31 + Math.sin(this.time * 0.4 + k) * 20 + a.w) % a.w);
+        const my = a.y + (((k * 61.7 - this.time * sp) % a.h) + a.h) % a.h;
+        ctx.globalAlpha = 0.12 + 0.1 * Math.sin(this.time * 2 + k * 1.7);
+        ctx.beginPath();
+        ctx.arc(mx, my, 1.6 + (k % 3) * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // field pickups: a soft halo under a bobbing item icon
     for (const pk of this.pickups) {
       const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
