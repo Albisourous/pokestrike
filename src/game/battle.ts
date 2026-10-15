@@ -1458,7 +1458,7 @@ export class Battle {
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(nd.stats) * m.hp);
     const lvBoost = Math.max(0, p.lvl - 1); // earned levels survive evolution
-    p.def = nd;
+    p.def = p.shiny ? { ...nd, shiny: true } : nd; // the marker rides the def into the box
     p.role = role;
     p.pow = m.pow * Math.pow(1.05, lvBoost);
     p.rngMul = m.range;
@@ -1802,6 +1802,10 @@ export class Battle {
     }
     p.hp -= dmg;
     this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
+    // survived on fumes — the clutch beat deserves a callout
+    if (p.hp > 0 && p.hp <= p.maxHp * 0.15) {
+      this.texts.push({ x: p.x, y: p.y - p.r - 34, text: 'BARELY!', t: 0.9, color: '#ffd84d', big: false });
+    }
     this.addShake(3);
     sfx('hurt');
     buzz(20);

@@ -54,6 +54,25 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(p.pow > m.pow * 1.5, `levels survive evolution (pow ${p.pow.toFixed(2)} vs base ${m.pow})`);
 }
 
+// --- benching keeps earned levels ------------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(13, 'T'), mulberry32(4));
+  (b as any).spawnWave(0);
+  const p = (b as any).players[1];
+  p.lvl = 7;
+  p.pow *= Math.pow(1.05, 6); // simulate its earned growth
+  const swappedPow = p.pow;
+  b.box.push(ROSTER[5]);
+  b.boxHp.push(1);
+  b.boxLvl.push(3);
+  b.phase = 'reward';
+  b.swapFromBox(0, 1); // bench the Lv7, bring in the box Lv3
+  ok(p.lvl === 3, `swapped-in mon carries its own level (lv${p.lvl})`);
+  ok(b.boxLvl[0] === 7, `benched mon keeps earned levels (boxLvl ${b.boxLvl})`);
+  ok(Math.abs(p.pow - ROLE_MODS[p.role].pow * Math.pow(1.05, 2)) < 0.001, 'swap recomputes pow from its own level');
+  void swappedPow;
+}
+
 // --- shiny roll + guaranteed catch ----------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(5, 'T'), () => 0); // rng=0 → everything shiny/caught
