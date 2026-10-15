@@ -1,5 +1,5 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
-import { drawMon, itemSprite } from '../core/assets';
+import { drawMon, drawShiny, itemSprite } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, hazardsFor, rivalWave } from './data';
@@ -58,6 +58,7 @@ interface Unit {
   wMul: number;
   lunging: number; // >0 while mid-lunge (melee attack in flight)
   boss: boolean;
+  shiny: boolean; // rare alt-palette spawn — always caught when KO'd
   dead: boolean;
   dotTicks: number; // poison ticks remaining
   dotDmg: number;
@@ -177,6 +178,7 @@ const CONTACT_POW = 1.4; // direct hits are the bread and butter again
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
+const SHINY_RATE = 1 / 48; // ~2% of wild spawns roll the gold palette
 const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
 // every species a mon can evolve into must be resolvable here
 const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS];
@@ -276,6 +278,7 @@ export class Battle {
   maxKos = 0; // most enemies one shot downed
   totalKos = 0; // enemies downed all run
   caughtBoss = false;
+  shiniesCaught = 0; // gold KOs this run — shiny KOs always land in the box
   perksTaken = 0;
   boxSel = -1; // box index picked for swapping
   depth = 0; // rolled stages survived past the opening trio
@@ -321,6 +324,7 @@ export class Battle {
         wMul: 0,
         lunging: 0,
         boss: false,
+        shiny: false,
         dead: false,
         dotTicks: 0,
         dotDmg: 0,
@@ -400,6 +404,8 @@ export class Battle {
       wMul: 1,
       lunging: 0,
       boss: !!s.boss,
+      // shinies: wild fodder only — bosses and your rival echo stay normal
+      shiny: !s.boss && !this.inRival && this.rng() < SHINY_RATE,
       dead: false,
       dotTicks: 0,
       dotDmg: 0,
@@ -446,6 +452,12 @@ export class Battle {
     }
     const boss = this.enemies.find((e) => e.boss);
     if (boss) cry(boss.def.id, 0.5); // boss roars on entry
+    // a shiny announces itself in the banner — the rarest sight on the climb
+    const shiny = this.enemies.find((e) => e.shiny);
+    if (shiny) {
+      if (!this.waveSpecial) this.waveSpecial = `A SHINY ${shiny.def.name.toUpperCase()} APPEARED!`;
+      sfx('ready');
+    }
   }
 
   // --- input (logical coords) ---
@@ -985,14 +997,15 @@ export class Battle {
       // small chance it actually joins your team (balls raise this);
       // an armed master ball never fails — first KO catches, guaranteed
       const master = this.masterArmed;
-      const caught = master || this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0);
+      // shinies never break out — KO'ing one always lands it in the box
+      const caught = master || e.shiny || this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0);
       if (master) this.masterArmed = false;
       sfx('ko');
       buzz(e.boss ? [50, 60, 90] : 30);
       // capture complete: stacked loops + release sparkle
       this.texts.push({
         x: e.x, y: e.y - e.r - 22,
-        text: `${e.def.name.toUpperCase()} ${caught ? 'CAUGHT!' : 'FAINTED!'}`,
+        text: `${e.shiny ? 'SHINY ' : ''}${e.def.name.toUpperCase()} ${caught ? 'CAUGHT!' : 'FAINTED!'}`,
         t: caught ? 1.5 : 1.1,
         color: caught ? '#ffd84d' : '#9df0ff',
         big: true,
@@ -1004,6 +1017,11 @@ export class Battle {
           this.boxHp.push(1);
         }
         if (e.boss) this.caughtBoss = true;
+        if (e.shiny) {
+          this.shiniesCaught++;
+          this.score += 250;
+          this.texts.push({ x: e.x, y: e.y - e.r - 56, text: 'SHINY BONUS +250', t: 1.4, color: '#ffd84d', big: true });
+        }
         this.screenFlash('#ffd84d', 0.2);
         // real poké ball drops in and does the triple-wiggle
         this.balls.push({ x: e.x, y: e.y, item: master ? 'master-ball' : 'poke-ball', t: 1.15, life: 1.15 });
@@ -1558,6 +1576,7 @@ export class Battle {
     else if (this.maxKos >= 2) b.push({ name: 'DOUBLE KO', rarity: 'common' });
     if (this.maxCombo >= 4) b.push({ name: 'COMBO CHAIN', rarity: 'rare' });
     if (this.caughtBoss) b.push({ name: 'BOSS THIEF', rarity: 'legendary' });
+    if (this.shiniesCaught > 0) b.push({ name: 'SHINY HUNTER', rarity: 'legendary' });
     if (this.box.length >= 3) b.push({ name: 'SAFARI ZONE', rarity: 'rare' });
     else if (this.box.length >= 2) b.push({ name: 'COLLECTOR', rarity: 'uncommon' });
     if (this.totalKos >= 8) b.push({ name: 'RAMPAGE', rarity: 'common' });
@@ -2253,7 +2272,31 @@ export class Battle {
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.82, u.r * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
-    drawMon(ctx, u.def.id, u.x, u.y, u.r * 2.6);
+    if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y, u.r * 2.6);
+    else drawMon(ctx, u.def.id, u.x, u.y, u.r * 2.6);
+
+    // shinies twinkle — three gold four-point stars drift around the sprite
+    if (u.shiny) {
+      ctx.fillStyle = '#ffe76a';
+      for (let k = 0; k < 3; k++) {
+        const a = this.time * 1.6 + k * 2.1;
+        const sx = u.x + Math.cos(a) * u.r * 0.9;
+        const sy = u.y + Math.sin(a) * u.r * 0.7 - u.r * 0.2;
+        const s = 4 + Math.sin(this.time * 5 + k * 1.7) * 1.6;
+        if (s <= 0.5) continue;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - s);
+        ctx.lineTo(sx + s * 0.4, sy - s * 0.4);
+        ctx.lineTo(sx + s, sy);
+        ctx.lineTo(sx + s * 0.4, sy + s * 0.4);
+        ctx.lineTo(sx, sy + s);
+        ctx.lineTo(sx - s * 0.4, sy + s * 0.4);
+        ctx.lineTo(sx - s, sy);
+        ctx.lineTo(sx - s * 0.4, sy - s * 0.4);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
 
     // weak point: a pulsing gold diamond on the marked face — aim at it
     if (u.wpA >= 0) {

@@ -86,7 +86,8 @@ Open the printed URL. Works on desktop and touch.
    and get common deeper in — and any normal wave can be **invaded** by a
    legendary (the birds, the beasts, Mew, Celebi) crashing in as a
    mini-boss worth catching. Bosses can be caught mid-fight too — a
-   Master Ball item never fails.
+   Master Ball item never fails. Rare **shiny** wilds (~1 in 48 spawns)
+   sparkle gold — KO one and it's a guaranteed catch plus a score bonus.
 8. **Choose a item between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
    run — draft for synergy, item for the holes. Then pick your **path**:
@@ -99,12 +100,17 @@ Open the printed URL. Works on desktop and touch.
    team 30%, and **item finds** cough up a free item.
 9. **It remembers you** — caught mons join your **dex** and can show up in
    future draft pools; gym wins raise your **rank**, and higher ranks unlock
-   gated items in the pool. Lose a run and that exact team comes back as a
-   **RIVAL BATTLE** wave in your next one — beat it to clear the echo.
+   gated items in the pool. Your **best score** and **daily streak** live on
+   the title screen — finishing a Daily Climb each day keeps the streak
+   alive. Lose a run and that exact team comes back as a **RIVAL BATTLE**
+   wave in your next one — beat it to clear the echo.
 10. **Share your result** — the result screen shows a Wordle-style emoji grid
-   (🟩 cleared waves, 🟥 where you fell), your drafted team as type-colored
-   squares, and rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS
-   THIEF, SPEED CLEAR…). Tap **SHARE RESULT** to post or copy it.
+    (🟩 cleared waves, 🟥 where you fell), your final team as real sprites,
+    rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS THIEF, SHINY
+    HUNTER…), and a `★ NEW RECORD ★` when you top your best. **SHARE RESULT**
+    posts a trainer-card readout — team names, score, badges, the grid — and
+    **REMATCH** drops you straight into a fresh draft (the Daily Climb
+    re-seeds the same run).
 
 ## Real stats, real roles
 

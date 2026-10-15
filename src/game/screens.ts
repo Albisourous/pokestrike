@@ -6,7 +6,7 @@ import type { Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf } from './stats';
-import { dexIds, rankName } from './meta';
+import { dexIds, rankName, best } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -18,6 +18,8 @@ export interface RunResult {
   caught: number;
   score: number;
   badges: { name: string; rarity: Rarity }[];
+  team: SpeciesDef[]; // final lineup — survives mid-run box swaps
+  newBest: boolean; // the run just beat the saved best score
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -34,6 +36,7 @@ export function draftCardRect(i: number) {
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
+export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 40 };
 export const FREE_BTN = { x: W / 2 - 140, y: 720, w: 280, h: 64 };
 export const DAILY_BTN = { x: W / 2 - 140, y: 800, w: 280, h: 64 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
@@ -380,6 +383,12 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
     DAILY_BTN.y + DAILY_BTN.h + 22,
   );
   ctx.fillText(`RANK ${rankName()} · DEX ${dexIds().length}`, W / 2, DAILY_BTN.y + DAILY_BTN.h + 36);
+  // the records line is the one-more-run hook — best score + daily streak
+  const b = best();
+  const bits = [`BEST ${b.score.toLocaleString('en-US')}`];
+  if (b.wins) bits.push(`${b.wins} WIN${b.wins === 1 ? '' : 'S'}`);
+  if (b.streak > 1) bits.push(`DAILY STREAK ${b.streak}`);
+  ctx.fillText(bits.join(' · '), W / 2, DAILY_BTN.y + DAILY_BTN.h + 50);
 }
 
 // --- help overlay: scrollable sections, each a mini diagram + a caption ---
@@ -954,14 +963,35 @@ export function drawReward(
   }
 }
 
+// Win confetti — little type-colored paper squares drifting down forever.
+// Positions/velocities are derived from the index, so it needs no state.
+const CONFETTI = ['#ffd84d', '#f08030', '#6890f0', '#78c850', '#f85888'];
+function confetti(ctx: CanvasRenderingContext2D, t: number) {
+  for (let i = 0; i < 42; i++) {
+    const speed = 60 + (i % 5) * 22;
+    const x = (i * 73 + Math.sin(t * 1.4 + i) * 14 + 40) % W;
+    const y = (i * 149 + t * speed) % (H + 40) - 20;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(t * (2 + (i % 3)) + i);
+    ctx.fillStyle = CONFETTI[i % CONFETTI.length];
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(-3, -2, 6, 4);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
 export function drawResult(
   ctx: CanvasRenderingContext2D,
   res: RunResult,
   extra: string | null,
   share: ShareGrid | null,
+  t = 0,
 ) {
   ctx.fillStyle = '#0b0e1add';
   ctx.fillRect(0, 0, W, H);
+  if (res.won) confetti(ctx, t);
 
   ctx.textAlign = 'center';
   ctx.font = font(26);
@@ -971,13 +1001,18 @@ export function drawResult(
   ctx.font = font(16);
   ctx.fillStyle = '#f8d030';
   ctx.fillText(`SCORE ${res.score.toLocaleString('en-US')}`, W / 2, 334);
+  if (res.newBest) {
+    ctx.font = font(10);
+    ctx.fillStyle = '#ffe76a';
+    ctx.fillText('★ NEW RECORD ★', W / 2, 352);
+  }
 
   ctx.font = font(10);
   ctx.fillStyle = '#fff';
   ctx.fillText(
     `${res.shots} shots · ${res.time.toFixed(1)}s${res.caught ? ` · ${res.caught} caught` : ''}`,
     W / 2,
-    355,
+    res.newBest ? 368 : 355,
   );
   if (extra) {
     ctx.font = font(11);
@@ -1015,12 +1050,16 @@ export function drawResult(
     const sy = 460 + badgeRows.length * 28;
     ctx.font = '30px system-ui';
     ctx.fillText(share.waves, W / 2, sy);
-    ctx.font = '24px system-ui';
-    ctx.fillText(share.team, W / 2, sy + 42);
+    // the squad as real sprites — reads as Pokémon at a glance
+    const n = res.team.length;
+    res.team.forEach((def, i) => {
+      drawMon(ctx, def.id, W / 2 + (i - (n - 1) / 2) * 52, sy + 34, 42);
+    });
   }
 
-  button(ctx, RETRY_BTN, 'PLAY AGAIN', true);
+  button(ctx, RETRY_BTN, 'REMATCH', true);
   button(ctx, SHARE_BTN, share?.copied ? 'COPIED!' : 'SHARE RESULT', true);
+  button(ctx, TITLE_BTN, 'TITLE', true);
 }
 
 export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number) {

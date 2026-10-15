@@ -8,7 +8,7 @@ import { Battle } from './game/battle';
 import { PERKS } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun } from './game/meta';
 import {
   W,
   H,
@@ -26,6 +26,7 @@ import {
   pathBtnRect,
   RETRY_BTN,
   SHARE_BTN,
+  TITLE_BTN,
   FREE_BTN,
   DAILY_BTN,
   HELP_BTN,
@@ -64,6 +65,9 @@ let stage = makeStage(randSeed());
 // the run's roll source — Math.random for free play, seeded for the daily;
 // draft deals and the Battle both draw from it so a daily is fully seeded
 let runRng: () => number = Math.random;
+// which mode the current run came from — REMATCH replays it (daily re-seeds
+// to the same climb; free play rolls fresh)
+let lastMode: 'free' | 'daily' = 'free';
 let helpOpen = false;
 let helpScroll = 0;
 let helpDrag: { y0: number; s0: number; moved: boolean } | null = null;
@@ -233,6 +237,7 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
+      lastMode = 'free';
       runRng = Math.random;
       startDraft();
       stage = makeStage(randSeed());
@@ -240,6 +245,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
     } else if (inRect(p.x, p.y, DAILY_BTN)) {
       sfx('ui');
+      lastMode = 'daily';
       const seed = dailySeed();
       runRng = mulberry32(seed);
       startDraft();
@@ -307,6 +313,24 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       shareResult();
     } else if (inRect(p.x, p.y, RETRY_BTN)) {
+      // REMATCH: one tap back into a fresh draft — the loop stays hot
+      sfx('ui');
+      if (lastMode === 'daily') {
+        const seed = dailySeed();
+        runRng = mulberry32(seed);
+        stage = makeStage(seed, 'Daily Climb');
+      } else {
+        runRng = Math.random;
+        stage = makeStage(randSeed());
+      }
+      battle = null;
+      result = null;
+      resultExtra = null;
+      share = null;
+      startDraft();
+      scene = 'draft';
+      sceneMusic();
+    } else if (inRect(p.x, p.y, TITLE_BTN)) {
       sfx('ui');
       draft = { order: [], picked: [] };
       battle = null;
@@ -415,33 +439,43 @@ function update(dt: number) {
       battle.echoCleared = false; // consumed; battle only raises the flag
     }
     if (battle.phase === 'won' || battle.phase === 'lost') {
+      const won = battle.phase === 'won';
+      const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
       result = {
-        won: battle.phase === 'won',
+        won,
         shots: battle.shots,
         time: battle.time,
         caught: battle.box.length,
         score: battle.score,
-        badges: battle.runBadges(battle.phase === 'won'),
+        badges: battle.runBadges(won),
+        team: battle.players.map((p) => p.def),
+        newBest: recordRun(battle.score, stageReached, won, lastMode === 'daily' ? dailySeed() : null),
       };
-      share = buildShare(battle, result.won);
+      share = buildShare(battle, won);
       // catches join the dex either way; a loss leaves the team behind as
       // the next run's rival "echo"
       recordCapture(battle.box.map((b) => b.id));
-      if (!result.won) saveEcho(battle.players.map((p) => p.def.id));
-      if (!result.won) {
-        resultExtra = `reached stage ${battle.waveIndex + 1} of ${TOTAL_STAGES}`;
+      if (!won) saveEcho(battle.players.map((p) => p.def.id));
+      if (!won) {
+        // near-miss framing: a deep wipe reads as "so close", not "failed"
+        const near = stageReached >= TOTAL_STAGES - 1;
+        resultExtra = near
+          ? `so close — fell at stage ${stageReached} of ${TOTAL_STAGES}`
+          : `reached stage ${stageReached} of ${TOTAL_STAGES}`;
       }
+      const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       shareText = [
-        `Pokéstrike ${stage.name}`,
+        `⚾ POKÉSTRIKE — sling & ricochet Pokémon roguelike`,
+        `🗺️ ${stage.name} — ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}`,
         share.waves,
-        `⭐ ${result.score.toLocaleString('en-US')} pts`,
-        `⚡ ${result.shots} shots · ${result.time.toFixed(1)}s${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
+        `✨ ${teamNames}`,
+        `⭐ ${result.score.toLocaleString('en-US')} pts · ⚡ ${result.shots} shots${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
         `🏅 ${result.badges.slice(0, 4).map((b) => b.name).join(' · ')}`,
         share.team,
         'https://albisourous.github.io/pokestrike/',
       ].join('\n');
       scene = 'result';
-      music(result.won ? 'win' : null); // clear fanfare, or cut to silence on a loss
+      music(won ? 'win' : null); // clear fanfare, or cut to silence on a loss
     }
   }
 }
@@ -513,7 +547,7 @@ function render() {
         hud(battle.stage.name);
         battle.render(ctx);
       }
-      if (result) drawResult(ctx, result, resultExtra, share);
+      if (result) drawResult(ctx, result, resultExtra, share, t);
       break;
   }
   ctx.restore();

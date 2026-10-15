@@ -71,6 +71,34 @@ export function drawMon(ctx: CanvasRenderingContext2D, id: number, x: number, y:
   ctx.restore();
 }
 
+// Shiny variant: a lazy gold-tinted copy of the front sprite — the classic
+// alt-palette read without vendoring a second set of art.
+const shinyCache = new Map<number, HTMLCanvasElement>();
+export function shinySprite(id: number): HTMLCanvasElement {
+  let c = shinyCache.get(id);
+  if (!c) {
+    const img = sprite(id);
+    c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const t = c.getContext('2d')!;
+    t.imageSmoothingEnabled = false;
+    t.drawImage(img, 0, 0);
+    t.globalCompositeOperation = 'source-atop';
+    t.fillStyle = 'rgba(255, 205, 66, 0.5)';
+    t.fillRect(0, 0, c.width, c.height);
+    shinyCache.set(id, c);
+  }
+  return c;
+}
+
+export function drawShiny(ctx: CanvasRenderingContext2D, id: number, x: number, y: number, size: number) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(shinySprite(id), x - size / 2, y - size / 2, size, size);
+  ctx.restore();
+}
+
 // --- sprite sheets (Makko-baked, or any strip/grid sheet) ---
 // Drop <name>.png + <name>.json into public/anim/. The JSON manifest is:
 //   { "frameW": 64, "frameH": 64, "fps": 12, "frames": [{"x":0,"y":0,"w":64,"h":64}, ...] }

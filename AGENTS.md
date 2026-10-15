@@ -7,7 +7,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 ## Direction
 
 - North star: **Monster Strike physics · Pokémon pixel-art theme · StS progression**. If a change serves none of the three, it's scope creep.
-- One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd). Daily/endless modes are future work — don't build for them.
+- One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd), in Free Play or seeded Daily Climb flavor. Endless is future work — don't build for it.
 - Single art source: **Pokémon FireRed/LeafGreen (Gen 3 GBA)**. Mon sprites are official FRLG battle fronts vendored from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) (`sprites/pokemon/versions/generation-iii/firered-leafgreen/<id>.png`); item icons come from the same repo (`sprites/items/`). Scenery/props get sliced or blitted from the Gracidea `tileset`/`npcs` atlases at `public/sprites/gracidea/` (RSE, same era). Never procedural shapes.
 - Anti-goals: no monetization mechanics, no non-Pokémon content.
 - Replayability, in order: run variety → seeded daily climb → ascension modifiers → unlockables. Keep it simple until the core is solid.
