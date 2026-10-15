@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, drawShiny, itemSprite } from '../core/assets';
 import { sfx, buzz, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave } from './data';
+import { SpeciesDef, StageDef, rollWave, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop, drawWall, THEMES } from './bg';
@@ -187,11 +187,28 @@ const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
 const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS, ...ENEMY_DB, ...INVADERS];
 const ELITE_IDS = new Set(ELITES.map((e) => e.id));
 
+// Circle-vs-rect resolution shared by the live physics and the aim
+// preview — pushes a ball out along the least-penetrating face and
+// reflects that axis. Returns true when it touched anything.
+interface Ball { x: number; y: number; r: number; vx: number; vy: number }
+function resolveBlock(u: Ball, b: Rect): boolean {
+  const l = u.x - (b.x - u.r), rr = b.x + b.w + u.r - u.x;
+  const t = u.y - (b.y - u.r), bo = b.y + b.h + u.r - u.y;
+  if (l <= 0 || rr <= 0 || t <= 0 || bo <= 0) return false;
+  const m = Math.min(l, rr, t, bo);
+  if (m === l) { u.x = b.x - u.r; u.vx = -Math.abs(u.vx) * WALL_REST; }
+  else if (m === rr) { u.x = b.x + b.w + u.r; u.vx = Math.abs(u.vx) * WALL_REST; }
+  else if (m === t) { u.y = b.y - u.r; u.vy = -Math.abs(u.vy) * WALL_REST; }
+  else { u.y = b.y + b.h + u.r; u.vy = Math.abs(u.vy) * WALL_REST; }
+  return true;
+}
+
 let nextUid = 1;
 
 export class Battle {
   players: Unit[] = [];
   enemies: Unit[] = [];
+  blocks: Rect[] = []; // Archero-style stone clusters — bounceable cover
   phase: Phase = 'aim';
   waveIndex = 0;
   activeIdx = 0;
@@ -412,14 +429,30 @@ export class Battle {
       this.waveSpecial = 'THE ELITE ROAD!';
     }
     if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
+    // Archero-style room furniture: seeded stone clusters the ball banks
+    // off. Boss rooms stay open — the leader fight is the spectacle;
+    // elite roads are always furnished.
+    const bossWave = spawns.some((s) => s.boss);
+    let li = 0;
+    if (!bossWave) {
+      if (i === 0) li = Math.floor(this.rng() * 3); // gentle openers
+      else if (elite || this.rng() < 0.8) li = 1 + Math.floor(this.rng() * (BLOCK_LAYOUTS.length - 1));
+    }
+    this.blocks = BLOCK_LAYOUTS[li].map((b) => ({
+      x: this.arena.x + this.arena.w * b.nx,
+      y: this.arena.y + this.arena.h * b.ny,
+      w: this.arena.w * b.nw,
+      h: this.arena.h * b.nh,
+    }));
     this.enemies = spawns.map((s) => {
       const r = s.boss ? 46 : 26;
+      const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
       return {
       uid: nextUid++,
       def: s.def,
       side: 'enemy',
-      x: this.arena.x + this.arena.w * s.nx,
-      y: this.arena.y + this.arena.h * s.ny,
+      x: at.x,
+      y: at.y,
       vx: 0,
       vy: 0,
       r,
@@ -472,9 +505,14 @@ export class Battle {
     this.scars = [];
     const npk = this.enemies.some((e) => e.boss || ELITE_IDS.has(e.def.id)) ? 2 : 1;
     for (let k = 0; k < npk; k++) {
+      const at = this.unstick(
+        this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
+        this.arena.y + this.arena.h * (0.2 + this.rng() * 0.45),
+        16,
+      );
       this.pickups.push({
-        x: this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
-        y: this.arena.y + this.arena.h * (0.2 + this.rng() * 0.45),
+        x: at.x,
+        y: at.y,
         kind: PICKUP_KINDS[Math.floor(this.rng() * PICKUP_KINDS.length)],
         t: this.rng() * 6,
       });
@@ -658,6 +696,7 @@ export class Battle {
       u.y += u.vy * h;
       // speed trail while flying fast
       this.hitWalls(u);
+      this.hitBlocks(u);
       // court gimmicks — the ball feels the floor it's flying over
       for (const hz of this.hazards) {
         if (dist(u, hz) > u.r + hz.r) continue;
@@ -753,6 +792,7 @@ export class Battle {
           }
         }
       }
+      for (const b of this.blocks) resolveBlock(e, b); // creeps slide off the stones
       this.clampToArena(e);
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
@@ -891,6 +931,34 @@ export class Battle {
     this.dashes = this.dashes.filter((d) => !d.done);
   }
 
+  // A stone slab: slate body under a boulder skin tiled from the gracidea
+  // pack (Strength-rock clusters — pure Gen-3 canon), rim + top bevel.
+  private drawBlock(ctx: CanvasRenderingContext2D, b: Rect) {
+    ctx.fillStyle = 'rgba(6,8,16,0.4)';
+    ctx.fillRect(b.x + 3, b.y + 5, b.w, b.h);
+    ctx.fillStyle = '#3d4358';
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    const cell = 26;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(b.x, b.y, b.w, b.h);
+    ctx.clip();
+    for (let ty = b.y - cell / 2; ty < b.y + b.h; ty += cell)
+      for (let tx = b.x - cell / 2; tx < b.x + b.w; tx += cell)
+        drawTile(ctx, MT.TILE_ROCK, tx, ty, cell, cell);
+    ctx.restore();
+    ctx.strokeStyle = '#1d2338';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(b.x + 2, b.y + b.h - 2);
+    ctx.lineTo(b.x + 2, b.y + 2);
+    ctx.lineTo(b.x + b.w - 2, b.y + 2);
+    ctx.stroke();
+  }
+
   private hitWalls(u: Unit) {
     const a = this.arena;
     // a bounce only counts when it actually reverses a moving ball —
@@ -919,6 +987,35 @@ export class Battle {
       u.wallN++;
       if (this.pinch(-2) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
     }
+  }
+
+  // Stone blocks bank the ball like walls — same restitution, same wall-
+  // bounce credit, own pinch id so a wall→block wedge still combos.
+  private hitBlocks(u: Unit) {
+    const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
+    let bounced = false;
+    for (const b of this.blocks) bounced = resolveBlock(u, b) || bounced;
+    if (bounced && fast && u.side === 'player') {
+      u.wallN++;
+      if (this.pinch(-3) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
+    }
+  }
+
+  // Keeps a spawn point (or pickup) out of the blocks — nudge to the
+  // nearest face rather than rejecting the spot.
+  private unstick(x: number, y: number, r: number) {
+    for (const b of this.blocks) {
+      const l = x - (b.x - r - 4), rr = b.x + b.w + r + 4 - x;
+      const t = y - (b.y - r - 4), bo = b.y + b.h + r + 4 - y;
+      if (l > 0 && rr > 0 && t > 0 && bo > 0) {
+        const m = Math.min(l, rr, t, bo);
+        if (m === l) x = b.x - r - 4;
+        else if (m === rr) x = b.x + b.w + r + 4;
+        else if (m === t) y = b.y - r - 4;
+        else y = b.y + b.h + r + 4;
+      }
+    }
+    return { x, y };
   }
 
   // PINCH: two distinct contacts (enemy, ally, wall) inside one 0.35s
@@ -2059,6 +2156,9 @@ export class Battle {
     // court gimmicks — the themed hazard zones under everything else
     for (const hz of this.hazards) this.drawHazard(ctx, hz);
 
+    // stone blocks — solid cover the ball banks off
+    for (const b of this.blocks) this.drawBlock(ctx, b);
+
     // field pickups: a soft halo under a bobbing item icon
     for (const pk of this.pickups) {
       const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
@@ -2737,6 +2837,7 @@ export class Battle {
       let hit: Unit | null = null;
       let bounced = false;
       const cache = this.aimCache;
+      const sb: Ball = { x: 0, y: 0, r: u.r, vx: 0, vy: 0 };
       sim: for (let i = 0; i < 60; i++) {
         if (bounced) break;
         const step = 1 / 30;
@@ -2750,6 +2851,11 @@ export class Battle {
         else if (sx + u.r > a.x + a.w) { sx = a.x + a.w - u.r; svx = -svx * WALL_REST; bounced = true; }
         if (sy - u.r < a.y) { sy = a.y + u.r; svy = -svy * WALL_REST; bounced = true; }
         else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * WALL_REST; bounced = true; }
+        // the stones bank the ball too — same shared resolver as live play
+        for (const b of this.blocks) {
+          sb.x = sx; sb.y = sy; sb.vx = svx; sb.vy = svy;
+          if (resolveBlock(sb, b)) { sx = sb.x; sy = sb.y; svx = sb.vx; svy = sb.vy; bounced = true; }
+        }
         for (const e of this.enemies)
           if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) {
             // pierce sails through — note the first catch, keep tracing

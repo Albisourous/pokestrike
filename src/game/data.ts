@@ -358,6 +358,44 @@ const SLOTS: [number, number][] = [
   [0.44, 0.3], [0.53, 0.3], [0.44, 0.66], [0.53, 0.66],
 ];
 
+// Archero-style room blocks: sparse stone clusters the ball banks off.
+// Normalized arena coords; stays out of the bottom spawn band (y < 0.7)
+// and open layouts stay common — a gym leader's room is always clear.
+export interface BlockDef {
+  nx: number;
+  ny: number;
+  nw: number;
+  nh: number;
+}
+export const BLOCK_LAYOUTS: BlockDef[][] = [
+  [],
+  // twin slabs — the classic Archero room divider
+  [{ nx: 0.16, ny: 0.3, nw: 0.09, nh: 0.2 }, { nx: 0.75, ny: 0.3, nw: 0.09, nh: 0.2 }],
+  [{ nx: 0.44, ny: 0.4, nw: 0.12, nh: 0.12 }], // center pillar
+  // corner quads — four banks, wide lanes between
+  [
+    { nx: 0.13, ny: 0.24, nw: 0.08, nh: 0.09 },
+    { nx: 0.79, ny: 0.24, nw: 0.08, nh: 0.09 },
+    { nx: 0.13, ny: 0.5, nw: 0.08, nh: 0.09 },
+    { nx: 0.79, ny: 0.5, nw: 0.08, nh: 0.09 },
+  ],
+  // staggered gates — forces the ball through a chicane
+  [{ nx: 0.28, ny: 0.24, nw: 0.08, nh: 0.18 }, { nx: 0.64, ny: 0.46, nw: 0.08, nh: 0.18 }],
+  [{ nx: 0.28, ny: 0.42, nw: 0.44, nh: 0.05 }], // mid bar, gaps at the edges
+  // scatter stones — ricochet pinballs
+  [
+    { nx: 0.24, ny: 0.5, nw: 0.06, nh: 0.06 },
+    { nx: 0.47, ny: 0.28, nw: 0.06, nh: 0.06 },
+    { nx: 0.7, ny: 0.5, nw: 0.06, nh: 0.06 },
+  ],
+  // top pocket — a weak point can hide in the alcove
+  [
+    { nx: 0.4, ny: 0.18, nw: 0.2, nh: 0.05 },
+    { nx: 0.4, ny: 0.18, nw: 0.05, nh: 0.15 },
+    { nx: 0.55, ny: 0.18, nw: 0.05, nh: 0.15 },
+  ],
+];
+
 // Gym flavor: the boss's entourage shares its type when the pools have
 // candidates — every gym leader runs a little mono-type gym.
 function gymPack(

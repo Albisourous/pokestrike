@@ -431,13 +431,17 @@ function helpArrow(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: nu
 function demoAim(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   const mx = x + w * 0.3, my = y + h * 0.68;
   drawMon(ctx, 7, mx, my, 46);
-  // pull-back drag (gold) and the resulting flight (dotted)
-  helpArrow(ctx, mx - 6, my + 26, mx - w * 0.2, my + h * 0.28, GOLD);
-  helpArrow(ctx, mx + 8, my - 16, x + w * 0.78, y + h * 0.3, '#e8ecf8', [3, 7]);
+  // pull-back drag (gold) mirrors the flight path (dotted) through the mon —
+  // both arrows start at its edge so the slingshot reads at a glance
+  const fx = x + w * 0.78, fy = y + h * 0.3;
+  const dl = Math.hypot(fx - mx, fy - my);
+  const ux = (fx - mx) / dl, uy = (fy - my) / dl;
+  helpArrow(ctx, mx - ux * 24, my - uy * 24, mx - ux * 96, my - uy * 96, GOLD);
+  helpArrow(ctx, mx + ux * 24, my + uy * 24, fx - ux * 16, fy - uy * 16, '#e8ecf8', [3, 7]);
   ctx.strokeStyle = '#ffd84d';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(x + w * 0.78, y + h * 0.3, 12, 0, Math.PI * 2);
+  ctx.arc(fx, fy, 12, 0, Math.PI * 2);
   ctx.stroke();
 }
 
@@ -634,6 +638,11 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'SHINIES & STREAKS',
     lines: ['gold-tinted foes are rare — KO one and it always joins your box', 'perfect releases build a streak — every gold-zone hit pays extra'],
     demo: demoAim,
+  },
+  {
+    title: 'STONE WALLS',
+    lines: ['boulder clusters wall off the lane — the ball banks right off them', 'block bounces count as wall hits: banking still pays damage'],
+    demo: demoBump,
   },
 ];
 
