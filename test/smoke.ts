@@ -447,9 +447,75 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   for (let s = 1; s <= 40; s++) {
     const bm = new Battle(arena, team(), makeStage(s), mulberry32(s * 7));
     (bm as any).spawnWave(1);
-    if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY/.test((bm as any).waveSpecial ?? '')) mods++;
+    if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY|CLERIC|GUARDIAN/.test((bm as any).waveSpecial ?? '')) mods++;
   }
   ok(mods > 3, `${mods}/40 seeds rolled a wave mutator`);
+
+  // warp: riding one pad spits the ball out its twin, velocity kept
+  const b6 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
+  (b6 as any).spawnWave(0);
+  (b6 as any).hazards = [
+    { kind: 'warp', x: 200, y: 300, r: 30, pair: 1 },
+    { kind: 'warp', x: 400, y: 200, r: 30, pair: 1 },
+  ];
+  const u6 = (b6 as any).active;
+  u6.x = 200;
+  u6.y = 300;
+  u6.vx = 300;
+  u6.vy = 0;
+  (b6 as any).stepShot(1 / 60);
+  ok(Math.abs(u6.x - 400) < 80 && Math.abs(u6.y - 200) < 80, `warp ports the ball to its twin (${Math.round(u6.x)},${Math.round(u6.y)})`);
+  ok(Math.hypot(u6.vx, u6.vy) > 100, 'warp keeps the ball moving');
+
+  // boost: crossing a pad speeds the ball up
+  const b7 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
+  (b7 as any).spawnWave(0);
+  (b7 as any).hazards = [{ kind: 'boost', x: 250, y: 300, r: 30 }];
+  const u7 = (b7 as any).active;
+  u7.x = 250;
+  u7.y = 300;
+  u7.vx = 500;
+  u7.vy = 0;
+  (b7 as any).stepShot(1 / 60);
+  ok(u7.vx > 550, `boost pad re-launches the ball (${Math.round(u7.vx)})`);
+
+  // well: the ball gains velocity toward the core while inside
+  const b8 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
+  (b8 as any).spawnWave(0);
+  (b8 as any).hazards = [{ kind: 'well', x: 400, y: 300, r: 80 }];
+  const u8 = (b8 as any).active;
+  u8.x = 320;
+  u8.y = 300;
+  u8.vx = 0;
+  u8.vy = 0;
+  for (let i = 0; i < 10; i++) (b8 as any).stepShot(1 / 60);
+  ok(u8.vx > 5, `gravity well drags the ball inward (vx ${Math.round(u8.vx)})`);
+
+  // aegis: the guardian wards an ally, and the ward eats one whole hit
+  const b9 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b9 as any).spawnWave(0);
+  const g9 = b9.enemies[0];
+  const w9 = b9.enemies[1];
+  g9.supp = 'aegis';
+  w9.hp = Math.floor(w9.maxHp * 0.4); // weakest → the ward target
+  (b9 as any).pendingAttacks = [g9];
+  (b9 as any).resolveEnemyTurn();
+  ok(w9.shieldN === 1, 'aegis wards the weakest ally');
+  const w9hp = w9.hp;
+  (b9 as any).hurt(w9, 100, '#fff');
+  ok(w9.hp === w9hp && w9.shieldN === 0, `ward eats a whole hit (hp ${w9hp} → ${w9.hp})`);
+
+  // cleric: the medic patches its most-wounded ally instead of attacking
+  const b10 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b10 as any).spawnWave(0);
+  const m10 = b10.enemies[0];
+  const h10 = b10.enemies[1];
+  m10.supp = 'medic';
+  h10.hp = Math.floor(h10.maxHp * 0.5);
+  const h10hp = h10.hp;
+  (b10 as any).pendingAttacks = [m10];
+  (b10 as any).resolveEnemyTurn();
+  ok(h10.hp > h10hp, `medic heals the pack (${h10hp} → ${h10.hp})`);
 }
 
 // --- gym boss relic + egg hatch ---------------------------------------------

@@ -17,6 +17,10 @@ leaders to win the run.
 | --- | --- | --- |
 | ![starting charm](docs/charm.png) | ![trainer battle](docs/trainer.png) | ![event stop](docs/event.png) |
 
+| Wave mutator | Mines | Boss weak point |
+| --- | --- | --- |
+| ![swarm wave](docs/mutator.png) | ![mine hazard](docs/mines.png) | ![gym weak point](docs/weakpoint.png) |
+
 ## How to play
 
 ```bash
@@ -75,7 +79,12 @@ scrollable in-game manual, and it opens itself on your first visit.
    **countdown**, so kill them or keep moving. Wild **healers** patch their
    most-wounded ally instead of attacking (kill the cleric first or the
    fight drags), and bosses
-   **enrage** under 30% HP, attack timers cycling a third faster.
+   **enrage** under 30% HP, attack timers cycling a third faster. Bosses
+   also carry a drifting gold **weak point** on their rim — contact on
+   that face pays triple — and **cry for help** at 2/3 and 1/3 HP,
+   flooding the court with adds that halve the damage they take until
+   you clear them. Every third boss attack is a teleport hop, so no
+   pocket stays safe.
 6. **Read the field.** Each wave re-themes the court and the wilds match
    the stage's biome: grove draws grass-and-bird packs, cavern
    rock-and-ghost, volcano fire packs, sky flyers and electric, right down
@@ -84,7 +93,12 @@ scrollable in-game manual, and it opens itself on your first visit.
    like walls for the same per-bounce damage bonus. The court
    fights back too: **lava pools** scorch the ball and anything standing
    in them, **tall grass** drags your launch to a crawl, **wind bands**
-   push the ball sideways, and **spike strips** chip it on contact. An
+   push the ball sideways, **spike strips** chip it on contact, and
+   **mine pads** detonate when the ball touches them — a trap you can
+   weaponize against the pack. Deep waves can roll a **mutator**: SWARM
+   floods in extra fodder, HASTY starts timers low, VOLATILE makes KOs
+   burst onto neighbors, A BIG ONE supersizes a fodder, and a gold glint
+   guarantees one shiny in the pack. An
    **Air Balloon** item floats over all of it. **Field pickups** spawn
    each wave and the ball collects them by touch: **Oran Berry** heals the
    team, **Protein** boosts contact damage for the rest of the shot,

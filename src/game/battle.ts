@@ -89,6 +89,10 @@ interface Unit {
   weakA: number; // boss weak point angle — rotating gold face, ×3 contact
   minion?: boolean; // summoned add — while any live, the boss is guarded
   volatile?: boolean; // VOLATILE wave mod — a KO bursts, splashing neighbors
+  supp?: 'medic' | 'aegis'; // support foe — heals or shields the pack on its turn
+  shieldN: number; // aegis wards — each stack negates one incoming hit
+  warpT: number; // last warp ride — cooldown stops portal ping-pong
+  boostT: number; // last boost-pad kick — throttle so pads can't stack hits
 }
 
 interface FloatText {
@@ -125,12 +129,13 @@ interface Wave {
 }
 // A themed hazard zone on the court — MS damage-wall/gimmick analog.
 interface Hazard {
-  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine';
+  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well';
   x: number;
   y: number;
   r: number; // px radius of the zone
   dir?: number; // gust: push direction (+1/-1)
   spent?: boolean; // mines fire once
+  pair?: number; // warps: pads sharing an id teleport between each other
 }
 // Boss hyper beam: a bright line that fades fast after the shot lands.
 interface Beam {
@@ -411,6 +416,9 @@ export class Battle {
         sumStage: 0,
         atkN: 0,
         weakA: 0,
+        shieldN: 0,
+        warpT: -9,
+        boostT: -9,
       });
     });
     this.region = genRegion(Math.floor(this.rng() * 2 ** 31));
@@ -547,7 +555,7 @@ export class Battle {
     // wave mutators: a third of rolled non-boss waves get an affix —
     // same stop, different fight (StS hallway affixes)
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < 0.35) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -585,8 +593,14 @@ export class Battle {
           if (e) e.shiny = true;
           break;
         }
+        case 'cleric': // a medic hides in the pack — kill it or the fight drags
+        case 'aegis': { // a guardian wards allies — crack it or hits fizzle
+          const e = this.enemies[Math.floor(this.rng() * this.enemies.length)];
+          if (e) e.supp = mod === 'cleric' ? 'medic' : 'aegis';
+          break;
+        }
       }
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -614,6 +628,7 @@ export class Battle {
       y: this.arena.y + this.arena.h * z.ny,
       r: this.arena.w * z.r,
       dir: z.dir,
+      pair: z.pair,
     }));
     this.waveBanner = 1.4;
     if (i > 0) {
@@ -685,6 +700,9 @@ export class Battle {
       sumStage: 0,
       atkN: 0,
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
+      shieldN: 0,
+      warpT: -9,
+      boostT: -9,
     };
   }
 
@@ -921,6 +939,51 @@ export class Battle {
           }
           this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.05)));
           sfx('boom');
+          continue;
+        }
+        if (hz.kind === 'warp') {
+          // MS warp: ride one pad, exit its twin still carrying your
+          // velocity — the trick-shot lane. Cooldown stops ping-pong.
+          if (this.time - u.warpT > 0.45) {
+            const twin = this.hazards.find((w) => w !== hz && w.kind === 'warp' && w.pair === hz.pair);
+            if (twin) {
+              u.warpT = this.time;
+              const sp = Math.max(60, Math.hypot(u.vx, u.vy));
+              const nx = u.vx / sp, ny = u.vy / sp;
+              this.waves.push({ x: u.x, y: u.y, r: 0, maxR: 50, t: 0.3, life: 0.3, color: '#c890ff', hits: new Set() });
+              u.x = twin.x + nx * (twin.r + u.r + 6);
+              u.y = twin.y + ny * (twin.r + u.r + 6);
+              this.waves.push({ x: u.x, y: u.y, r: 0, maxR: 50, t: 0.3, life: 0.3, color: '#c890ff', hits: new Set() });
+              sfx('gust');
+            }
+          }
+          continue;
+        }
+        if (hz.kind === 'boost') {
+          // speed-up panel: crossing it re-launches — capped so pads can't
+          // compound every substep into escape velocity
+          if (this.time - u.boostT > 0.4) {
+            u.boostT = this.time;
+            const sp = Math.hypot(u.vx, u.vy);
+            if (sp > 60 && sp < 2400) {
+              u.vx *= 1.35;
+              u.vy *= 1.35;
+              u.sq = 0.7;
+              this.waves.push({ x: hz.x, y: hz.y, r: 0, maxR: hz.r * 1.6, t: 0.25, life: 0.25, color: '#9df09d', hits: new Set() });
+              sfx('gust');
+            }
+          }
+          continue;
+        }
+        if (hz.kind === 'well') {
+          // gravity barrier: the ball curves toward the core while inside —
+          // slings get slingshot paths through the pocket
+          if (!this.slowImmune) {
+            const d = Math.max(50, dist(u, hz));
+            const pull = 1400 * h;
+            u.vx += ((hz.x - u.x) / d) * pull;
+            u.vy += ((hz.y - u.y) / d) * pull;
+          }
           continue;
         }
         if (hz.kind === 'gust') {
@@ -1365,6 +1428,15 @@ export class Battle {
       d *= 2;
     }
     d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1));
+    // aegis ward: a shielded foe eats the whole hit — crack the guardian
+    // first, or the pack soaks your best lines for free
+    if (e.shieldN > 0) {
+      e.shieldN--;
+      this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'WARD BREAK!', t: 0.9, color: '#9df0ff', big: false });
+      this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2, t: 0.3, life: 0.3, color: '#9df0ff', hits: new Set() });
+      sfx('bounce');
+      return;
+    }
     // minion guard: while a summoned add lives, the boss hides behind the
     // pack — crack the adds first or chip at half rate
     if (e.boss && this.enemies.some((m) => m.minion && !m.dead)) d = Math.max(1, Math.round(d * 0.5));
@@ -2426,7 +2498,26 @@ export class Battle {
       e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * (e.enraged ? 0.66 : 1);
       if (e.boss) {
         this.bossAttack(e);
-      } else if (e.def.healer) {
+      } else if (e.supp === 'aegis') {
+        // guardians ward their weakest ally — the bubble eats one whole
+        // hit, so the pack keeps its bodies until the ward is broken
+        const ward = this.enemies
+          .filter((a) => !a.dead && a !== e && a.shieldN <= 0)
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        if (ward) {
+          ward.shieldN = 1;
+          this.texts.push({ x: ward.x, y: ward.y - ward.r - 8, text: 'WARDED!', t: 0.9, color: '#9df0ff', big: false });
+          sfx('heal');
+        } else {
+          // nobody left to protect — the guardian fights like fodder
+          const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
+          if (target) {
+            sfx('zap');
+            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
+          }
+        }
+      } else if (e.def.healer || e.supp === 'medic') {
         // clerics patch their most-wounded ally; an untouched squad still
         // gets zapped — kill the healer first or the fight drags
         const wounded = this.enemies
@@ -3136,6 +3227,69 @@ export class Battle {
         ctx.arc(hz.x + Math.cos(a) * hz.r * 0.4, hz.y + Math.sin(a) * hz.r * 0.3, 7, 0, TAU);
         ctx.stroke();
       }
+    } else if (hz.kind === 'warp') {
+      // linked portal: violet ring with a rotating inner swirl
+      const pulse = 0.7 + Math.sin(this.time * 4) * 0.3;
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = '#c890ff';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r * (1 + pulse * 0.15), 0, TAU);
+      ctx.stroke();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#2a1840';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r * 0.7, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = '#e0b0ff';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        const a = this.time * 3 + i * (TAU / 3);
+        ctx.beginPath();
+        ctx.arc(hz.x, hz.y, hz.r * (0.25 + i * 0.14), a, a + 1.6);
+        ctx.stroke();
+      }
+    } else if (hz.kind === 'boost') {
+      // speed-up panel: green pad, chevrons chasing around the rim
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#2a5a30';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.55, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = '#9df09d';
+      ctx.lineWidth = 2.5;
+      for (let i = 0; i < 3; i++) {
+        const a = this.time * 2.5 + i * (TAU / 3);
+        const cx = hz.x + Math.cos(a) * hz.r * 0.55;
+        const cy = hz.y + Math.sin(a) * hz.r * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, cy + 4);
+        ctx.lineTo(cx, cy - 4);
+        ctx.lineTo(cx + 5, cy + 4);
+        ctx.stroke();
+      }
+    } else if (hz.kind === 'well') {
+      // gravity barrier: a dark disc with arcs spiraling inward
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = '#101826';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = '#7ab8ff';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        const a = this.time * 2 + i * (TAU / 3);
+        const rr = hz.r * (0.35 + ((this.time * 0.5 + i / 3) % 1) * 0.65);
+        ctx.beginPath();
+        ctx.arc(hz.x, hz.y, rr, a, a + 2.2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = '#7ab8ff';
+      ctx.beginPath();
+      ctx.arc(hz.x, hz.y, hz.r * 0.1, 0, TAU);
+      ctx.fill();
     } else if (hz.kind === 'mine') {
       // weaponizable trap: dark charge orb, pulsing hot core, faint blast
       // rim so its reach is readable before you bank into it
@@ -3282,6 +3436,39 @@ export class Battle {
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
 
     if (u.side === 'enemy') {
+      // aegis ward: a cyan bubble eats the next hit entirely
+      if (u.shieldN > 0) {
+        ctx.globalAlpha = 0.35 + Math.sin(this.time * 5) * 0.1;
+        ctx.strokeStyle = '#9df0ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.r * 1.3, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      // support marks: clerics carry a green cross, guardians a cyan
+      // diamond — target priority readable at a glance
+      if (u.supp) {
+        ctx.fillStyle = u.supp === 'medic' ? '#7de87d' : '#9df0ff';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1.5;
+        const iy = u.y - u.r - 16;
+        if (u.supp === 'medic') {
+          ctx.fillRect(u.x - 2, iy - 6, 4, 12);
+          ctx.fillRect(u.x - 6, iy - 2, 12, 4);
+          ctx.strokeRect(u.x - 2, iy - 6, 4, 12);
+          ctx.strokeRect(u.x - 6, iy - 2, 12, 4);
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(u.x, iy - 6);
+          ctx.lineTo(u.x + 6, iy);
+          ctx.lineTo(u.x, iy + 6);
+          ctx.lineTo(u.x - 6, iy);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        }
+      }
       // boss weak point: a drifting gold star on the rim — contact on that
       // face pays triple. MS's core precision tell.
       if (u.boss && !u.dead) {

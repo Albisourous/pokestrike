@@ -542,13 +542,14 @@ export function rivalWave(defs: SpeciesDef[], rng: () => number): WaveSpawn[] {
 // Hazard zones: per-theme arena dangers laid out alongside a wave's spawns.
 // Same normalized coords as WaveSpawn; r is a fraction of arena width.
 // Zones stay out of the bottom 25% (player turf) and inside the side walls.
-export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine';
+export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well';
 export interface HazardSpawn {
   kind: HazardKind;
   nx: number;
   ny: number;
   r: number;
   dir?: number; // gust only: -1/1, the way the wind pushes
+  pair?: number; // warp only: pads sharing an id are linked
 }
 
 export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
@@ -560,6 +561,37 @@ export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
     r,
   });
   const n = (lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
+  const out = themeHazards(theme, rng, rad, spot, n);
+  // roamer gimmick: ~1/3 of any court gets one extra MS-style fixture —
+  // a linked warp pair, a boost pad, or a gravity well
+  if (rng() < 0.35) {
+    const g = rng();
+    if (g < 0.4) {
+      // MS warp panels: two linked pads — the ball exits the twin keeping
+      // its velocity, so a bad lane can become a trick shot
+      const a = spot(0.05, 0.15, 0.5);
+      const b = spot(0.05, 0.15, 0.5);
+      if (Math.hypot(a.nx - b.nx, a.ny - b.ny) > 0.2) {
+        out.push({ kind: 'warp', ...a, pair: 1 }, { kind: 'warp', ...b, pair: 1 });
+      }
+    } else if (g < 0.7) {
+      // speed-up panel: crossing it re-launches the ball faster
+      out.push({ kind: 'boost', ...spot(0.06, 0.15, 0.55) });
+    } else {
+      // gravity barrier: the ball curves toward the well while inside
+      out.push({ kind: 'well', nx: 0.3 + rng() * 0.4, ny: 0.2 + rng() * 0.35, r: 0.16 + rng() * 0.06 });
+    }
+  }
+  return out;
+}
+
+function themeHazards(
+  theme: Theme,
+  rng: () => number,
+  rad: () => number,
+  spot: (r: number, yLo: number, yHi: number) => { nx: number; ny: number; r: number },
+  n: (lo: number, hi: number) => number,
+): HazardSpawn[] {
   switch (theme) {
     case 'volcano': {
       const lavas: HazardSpawn[] = Array.from({ length: n(1, 3) }, () => {
@@ -568,7 +600,7 @@ export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
       });
       // MS mines: small pads that detonate when the ball touches them —
       // a trap you can weaponize against the pack
-      const mines: HazardSpawn[] = Array.from({ length: n(0, 2) }, () => ({ kind: 'mine', ...spot(0.05, 0.15, 0.6) }));
+      const mines: HazardSpawn[] = Array.from({ length: n(0, 2) }, () => ({ kind: 'mine' as const, ...spot(0.05, 0.15, 0.6) }));
       return lavas.concat(mines);
     }
     case 'grove':
