@@ -21,6 +21,10 @@ leaders to win the run.
 | --- | --- | --- |
 | ![swarm wave](docs/mutator.png) | ![mine hazard](docs/mines.png) | ![gym weak point](docs/weakpoint.png) |
 
+| Victory loot | | |
+| --- | --- | --- |
+| ![coin shower after a gym](docs/loot.png) | | |
+
 ## How to play
 
 ```bash
@@ -112,7 +116,9 @@ scrollable in-game manual, and it opens itself on your first visit.
    super pip.
 7. **Catch 'em.** A KO has a chance to send the enemy to your **box**
    (`CAUGHT!` ball wiggle and all); beating a **gym leader** is the only
-   guaranteed catch — their ace joins you. Swap boxed
+   guaranteed catch — their ace joins you, and the boss bursts into a
+   **coin shower**: a few seconds to drag your mon through the spinning
+   PokéCoins before they fade, +25 score each. Swap boxed
    mons onto the team freely between stages. HP follows the mon, so
    benching never heals or revives. A **duplicate** catch doesn't waste a
    slot: it feeds the copy you own, evolving the mon if its line has a

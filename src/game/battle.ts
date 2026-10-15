@@ -197,7 +197,7 @@ interface Fx {
   spin: number; // star rotation rate
   grav: number; // debris pulls down; sparks/stars fly straight
 }
-export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'won' | 'lost';
+export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'loot' | 'won' | 'lost';
 
 
 // region-map layout — shared by drawRegion, the tap hit-test, and smoke
@@ -375,6 +375,13 @@ export class Battle {
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
   eventBox: string | null = null; // resolved ? event — modal FRLG text box, tap to close
   private mapMsgT = 0;
+  // victory loot — a gym boss bursts into PokéCoins; drag the lead mon to
+  // scoop them before the lap ends
+  private lootCoins: { x: number; y: number; vx: number; vy: number; r: number; spin: number }[] = [];
+  private lootT = 0;
+  private lootDrag = false;
+  private lootPos: Vec | null = null;
+  private bossKilledAt: { x: number; y: number } | null = null; // coin fountain origin
   private trail: { x: number; y: number; t: number }[] = []; // speed smear — ghost positions of the flying ball
   private fx: Fx[] = []; // sparks, streaks and stars from every impact
   private punch = 0; // camera zoom-kick — big hits lunge the screen
@@ -749,6 +756,11 @@ export class Battle {
   // --- input (logical coords) ---
 
   pointerDown(p: Vec) {
+    if (this.phase === 'loot') { // grab the leash — drag your mon through the coins
+      this.lootDrag = true;
+      this.lootPos = { ...p };
+      return;
+    }
     if (this.phase === 'map') {
       if (this.eventBox) { // event text box is up — a tap dismisses it first
         this.eventBox = null;
@@ -790,10 +802,15 @@ export class Battle {
   }
 
   pointerMove(p: Vec) {
+    if (this.lootDrag && this.phase === 'loot') this.lootPos = { ...p };
     if (this.dragging) this.dragNow = { ...p };
   }
 
   pointerUp() {
+    if (this.lootDrag) {
+      this.lootDrag = false;
+      this.lootPos = null;
+    }
     if (!this.dragging) return;
     this.dragging = false;
     const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
@@ -939,6 +956,7 @@ export class Battle {
       this.stepEnemyMovement(dt);
     }
     if (this.phase === 'shot') this.stepShot(dt);
+    else if (this.phase === 'loot') this.stepLoot(dt);
     else if (this.phase === 'enemy') {
       this.enemyPhaseT -= dt;
       if (this.enemyPhaseT <= 0) this.resolveEnemyTurn();
@@ -1596,7 +1614,10 @@ export class Battle {
       this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3.2, t: 0.35, life: 0.35, color: '#ffffff', hits: new Set() });
       this.hitStop = Math.max(this.hitStop, e.boss ? 0.3 : 0.12);
       this.addPunch(e.boss ? 0.14 : 0.05);
-      if (e.boss) this.screenFlash('#ffffff', 0.28);
+      if (e.boss) {
+        this.screenFlash('#ffffff', 0.28);
+        this.bossKilledAt = { x: e.x, y: e.y }; // the coin fountain erupts here
+      }
       // every KO feeds the team's supers — kills are the fast lane to READY
       for (const p of this.players) this.chargeUp(p);
       // fatigue curse: farming a cursed KO costs every super a pip back
@@ -2248,6 +2269,90 @@ export class Battle {
     this.phase = 'reward';
   }
 
+  // A fallen gym leader bursts into PokéCoins — a few-second victory lap
+  // where you drag your lead mon through the fountain before it fades.
+  private enterLoot() {
+    this.phase = 'loot';
+    this.lootT = 6;
+    this.lootDrag = false;
+    this.lootPos = null;
+    this.pickups = [];
+    this.lootCoins = [];
+    const ox = this.bossKilledAt?.x ?? this.arena.x + this.arena.w / 2;
+    const oy = this.bossKilledAt?.y ?? this.arena.y + this.arena.h / 2;
+    this.bossKilledAt = null;
+    const n = 16 + this.depth * 2;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + this.rng() * 0.5;
+      const sp = 280 + this.rng() * 560;
+      this.lootCoins.push({
+        x: ox,
+        y: oy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 300, // fountain arc — coins kick upward first
+        r: 11,
+        spin: this.rng() * Math.PI * 2,
+      });
+    }
+    this.waveSpecial = 'VICTORY LOOT!';
+    this.waveBanner = 1.6;
+    this.screenFlash('#ffd84d', 0.25);
+    sfx('perfect');
+  }
+
+  private stepLoot(dt: number) {
+    this.lootT -= dt;
+    const a = this.arena;
+    // the leash: lead mon chases your finger
+    const mon = this.players.find((p) => !p.dead);
+    if (mon && this.lootDrag && this.lootPos) {
+      mon.x += (this.lootPos.x - mon.x) * Math.min(1, dt * 9);
+      mon.y += (this.lootPos.y - mon.y) * Math.min(1, dt * 9);
+      mon.x = Math.max(a.x + mon.r, Math.min(a.x + a.w - mon.r, mon.x));
+      mon.y = Math.max(a.y + mon.r, Math.min(a.y + a.h - mon.r, mon.y));
+    }
+    for (const c of this.lootCoins) {
+      c.vy += 720 * dt; // gravity — coins arc, bounce, and settle
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      c.vx *= Math.exp(-1.1 * dt);
+      c.spin += dt * 11;
+      if (c.x < a.x + c.r) { c.x = a.x + c.r; c.vx = Math.abs(c.vx) * 0.7; }
+      if (c.x > a.x + a.w - c.r) { c.x = a.x + a.w - c.r; c.vx = -Math.abs(c.vx) * 0.7; }
+      if (c.y < a.y + c.r) { c.y = a.y + c.r; c.vy = Math.abs(c.vy) * 0.7; }
+      if (c.y > a.y + a.h - c.r) { // floor bounce with friction — coins pool up
+        c.y = a.y + a.h - c.r;
+        c.vy = -Math.abs(c.vy) * 0.55;
+        c.vx *= 0.85;
+      }
+      // a living mon vacuums whatever comes close, scoops on contact
+      for (const p of this.players) {
+        if (p.dead) continue;
+        const dx = p.x - c.x;
+        const dy = p.y - c.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d < p.r + c.r + 2) {
+          c.r = -1; // collected — swept below
+          this.score += 25;
+          this.burst(c.x, c.y, '#ffd84d', 5, 220, 0.5);
+          this.texts.push({ x: c.x, y: c.y - 16, text: '+25', t: 0.6, color: '#ffd84d', big: false });
+          sfx('tick');
+          break;
+        }
+        if (d < 130) {
+          c.vx += (dx / d) * 2800 * dt;
+          c.vy += (dy / d) * 2800 * dt - 720 * dt; // the pull beats gravity
+        }
+      }
+    }
+    this.lootCoins = this.lootCoins.filter((c) => c.r > 0);
+    if (this.lootT <= 0 || !this.lootCoins.length) {
+      this.lootCoins = [];
+      this.waveSpecial = null;
+      this.enterReward();
+    }
+  }
+
   pickPerk(i: number) {
     const perk = this.rewardOffers[i];
     if (!perk || this.phase !== 'reward') return;
@@ -2446,7 +2551,9 @@ export class Battle {
     if (this.phase === 'won') return;
     if (this.rewardPending) {
       this.rewardPending = false;
-      this.enterReward();
+      // a fallen gym leader pays out in style — coin shower first, relic after
+      if (this.waveHadGym) this.enterLoot();
+      else this.enterReward();
       return;
     }
     this.pendingAttacks = [];
@@ -2867,6 +2974,27 @@ export class Battle {
       if (img) ctx.drawImage(img, pk.x - 13, pk.y - 13 + bob, 26, 26);
     }
 
+    // victory loot — spinning gold discs with a star stamp, squash-flip spin
+    for (const c of this.lootCoins) {
+      const flip = Math.cos(c.spin);
+      ctx.save();
+      ctx.translate(c.x, c.y);
+      ctx.scale(Math.max(0.18, Math.abs(flip)), 1);
+      ctx.fillStyle = '#e8a010';
+      ctx.beginPath();
+      ctx.arc(0, 0, c.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath();
+      ctx.arc(0, 0, c.r - 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#e8a010';
+      ctx.font = font(10);
+      ctx.textAlign = 'center';
+      ctx.fillText('★', 0, 3);
+      ctx.restore();
+    }
+
     for (const w of this.waves) this.drawWave(ctx, w);
 
     // afterimage — fading ghost sprites smear the flight path, anime-style
@@ -3077,6 +3205,24 @@ export class Battle {
       ctx.strokeStyle = '#f0b02f';
       ctx.lineWidth = 1;
       ctx.strokeRect(bx, by + 5, bw, 7);
+    }
+
+    // victory loot HUD — a gold fuse draining over the court
+    if (this.phase === 'loot') {
+      const bx = 150, bw = 240;
+      ctx.fillStyle = '#000a';
+      ctx.fillRect(bx, a.y + 24, bw, 8);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillRect(bx, a.y + 24, bw * Math.max(this.lootT / 6, 0), 8);
+      ctx.strokeStyle = '#f0b02f';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(bx, a.y + 24, bw, 8);
+      ctx.font = font(10);
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.6 + Math.sin(this.time * 5) * 0.25;
+      ctx.fillStyle = '#ffe89d';
+      ctx.fillText(this.lootDrag ? 'SCOOP THEM UP!' : 'drag your mon through the coins!', 270, a.y + a.h - 14);
+      ctx.globalAlpha = 1;
     }
 
     // ascension tag — why the mobs feel bulkier today
