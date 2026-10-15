@@ -1092,8 +1092,15 @@ export function drawReward(
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 54);
     const lvl = boxLvl[i] ?? 1;
     if (lvl > 1) {
+      ctx.font = font(7);
+      const lw = ctx.measureText(`Lv${lvl}`).width + 8;
+      roundRect(ctx, r.x + 3, r.y + 3, lw, 11, 4);
+      ctx.fillStyle = '#0c1020dd';
+      ctx.fill();
+      ctx.textAlign = 'left';
       ctx.fillStyle = '#9df0ff';
-      ctx.fillText(`Lv${lvl}`, r.x + 6, r.y + 12);
+      ctx.fillText(`Lv${lvl}`, r.x + 7, r.y + 11);
+      ctx.textAlign = 'center';
     }
   });
   ctx.restore();
@@ -1129,8 +1136,15 @@ export function drawReward(
     ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 67);
     const lvl = teamLvl[i] ?? 1;
     if (lvl > 1) {
+      ctx.font = font(7);
+      const lw = ctx.measureText(`Lv${lvl}`).width + 8;
+      roundRect(ctx, r.x + 3, r.y + 3, lw, 11, 4);
+      ctx.fillStyle = '#0c1020dd';
+      ctx.fill();
+      ctx.textAlign = 'left';
       ctx.fillStyle = '#9df0ff';
-      ctx.fillText(`Lv${lvl}`, r.x + 8, r.y + 13);
+      ctx.fillText(`Lv${lvl}`, r.x + 7, r.y + 11);
+      ctx.textAlign = 'center';
     }
   });
   ctx.font = font(8);
