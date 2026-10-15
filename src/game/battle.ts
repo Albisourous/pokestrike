@@ -26,7 +26,7 @@ import {
   bumpCooldown,
   roleOf,
   ROLE_MODS,
-  MOVE_NAME,
+  moveOf,
 } from './stats';
 import type { Role } from './stats';
 import { font } from './screens';
@@ -1211,7 +1211,7 @@ export class Battle {
     // move callout and freeze-frame on the cast
     this.texts.push({
       x: p.x, y: p.y - p.r - 46,
-      text: `${p.def.name.toUpperCase()} used ${MOVE_NAME[src.def.type]}!`,
+      text: `${p.def.name.toUpperCase()} used ${moveOf(src.def.id, src.def.type)}!`,
       t: 1.05, color: TYPE_COLOR[src.def.type], big: true,
     });
     this.hitStop = Math.max(this.hitStop, 0.18);
@@ -2416,7 +2416,7 @@ export class Battle {
       }
       if (u.cd <= 0) {
         // ready: the move's name sits overhead — this is the thing to hit
-        const label = MOVE_NAME[u.def.type];
+        const label = moveOf(u.def.id, u.def.type);
         const ly = u.y + u.r + 30;
         ctx.font = font(8);
         ctx.textAlign = 'center';

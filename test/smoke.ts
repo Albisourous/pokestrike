@@ -3,7 +3,7 @@ import './shims';
 import { Battle } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById } from '../src/game/data';
 import { mulberry32 } from '../src/core/rng';
-import { roleOf, ROLE_MODS } from '../src/game/stats';
+import { roleOf, ROLE_MODS, moveOf, MOVE_NAME } from '../src/game/stats';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -76,15 +76,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(bad === 0, `40 seeded stages, ${bad} empty waves`);
 }
 
-// --- full autoplayed climb: naive aim, real physics, win or wipe -----------
-{
-  const rng = mulberry32(99);
-  const b = new Battle(arena, team(), makeStage(99), rng);
+// --- full autoplayed climbs: naive aim, real physics, win or wipe ---------
+for (const seed of [99, 2024, 777]) {
+  const rng = mulberry32(seed);
+  const b = new Battle(arena, team(), makeStage(seed), rng);
   b.asc = 0;
   let frames = 0;
+  let aimTries = 0;
   const step = (n: number) => { for (let i = 0; i < n; i++) b.update(1 / 60); };
-  while (b.phase !== 'won' && b.phase !== 'lost' && frames < 400000) {
+  while (b.phase !== 'won' && b.phase !== 'lost' && frames < 200000) {
     frames++;
+    if (b.phase === 'aim' && aimTries++ > 300) break; // stall detector
     if (b.phase === 'map') {
       b.pointerDown({ x: 270, y: 480 });
     } else if (b.phase === 'reward') {
@@ -92,9 +94,14 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
       if (b.phase === 'reward') b.pickPerk(0); // safety: force advance
     } else if (b.phase === 'aim') {
       const u = (b as any).active;
-      const foe = (b as any).enemies.find((e: any) => !e.dead);
-      if (!foe) { step(60); continue; }
-      const dx = foe.x - u.x, dy = foe.y - u.y;
+      if (!u || u.dead) { step(30); continue; }
+      const foes = (b as any).enemies.filter((e: any) => !e.dead);
+      if (!foes.length) { step(60); continue; }
+      // nearest live foe — but if one is sitting on us, aim at arena top instead
+      let foe = foes[0], bestD = Infinity;
+      for (const f of foes) { const d = Math.hypot(f.x - u.x, f.y - u.y); if (d < bestD) { bestD = d; foe = f; } }
+      const t = bestD > 60 ? foe : { x: arena.x + arena.w / 2, y: arena.y + 60 };
+      const dx = t.x - u.x, dy = t.y - u.y;
       const d = Math.hypot(dx, dy) || 1;
       b.pointerDown({ x: u.x, y: u.y });
       b.pointerMove({ x: u.x - (dx / d) * 200, y: u.y - (dy / d) * 200 });
@@ -104,9 +111,8 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
       step(30);
     }
   }
-  ok(b.phase === 'won' || b.phase === 'lost', `autoplay reaches an end state: ${b.phase} (depth ${(b as any).depth}, ${frames} ticks)`);
-  ok(b.score > 0, `score accumulates (${b.score})`);
-  console.log(`     -> reached depth ${(b as any).depth}/${TOTAL_STAGES - 3} · kos ${(b as any).totalKos} · badges: ${b.runBadges(b.phase === 'won').map((x) => x.name).join(', ')}`);
+  ok(b.phase === 'won' || b.phase === 'lost', `seed ${seed}: ${b.phase} (depth ${(b as any).depth}, score ${b.score}, kos ${(b as any).totalKos})`);
+  ok(b.score > 0, 'score accumulates');
 }
 
 // --- roster integrity -------------------------------------------------------
@@ -114,6 +120,9 @@ ok(ROSTER.length >= 29, `roster expanded (${ROSTER.length})`);
 ok(ROSTER.every((r) => speciesById(r.id)), 'every roster id resolves');
 const evo = ROSTER.filter((r) => r.evolvesTo).every((r) => speciesById(r.evolvesTo!));
 ok(evo, 'every evolvesTo resolves');
+ok(moveOf(25, 'electric') === 'THUNDERBOLT', 'pikachu override');
+ok(moveOf(129, 'water') === 'SPLASH', 'magikarp signature');
+ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move');
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
 process.exit(fails ? 1 : 0);

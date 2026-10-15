@@ -5,7 +5,7 @@ import { RARITY_COLOR } from './perks';
 import type { Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
-import { roleOf } from './stats';
+import { roleOf, moveOf } from './stats';
 import { dexIds, rankName, best } from './meta';
 
 export const W = 540;
@@ -745,12 +745,10 @@ export function drawDraft(
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillText(`${def.type.toUpperCase()} · ${role.toUpperCase()}`, r.x + r.w / 2, r.y + 198);
 
-    ctx.strokeStyle = '#2a3560';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(r.x + 14, r.y + 208);
-    ctx.lineTo(r.x + r.w - 14, r.y + 208);
-    ctx.stroke();
+    // the bump super this mon fires — a draft decision you can taste
+    ctx.font = font(8);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 212);
 
     // broadcast stat readout — 3x2 label+number pairs
     const st = def.stats;

@@ -467,11 +467,13 @@ function update(dt: number) {
           : `reached stage ${stageReached} of ${TOTAL_STAGES}`;
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
+      const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
       shareText = [
         `⚾ POKÉSTRIKE — sling & ricochet Pokémon roguelike`,
-        `🗺️ ${stage.name} — ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}`,
+        `🗺️ ${stage.name} — ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}${battle.asc ? ` · ASC ${battle.asc}` : ''}`,
         share.waves,
         `✨ ${teamNames}`,
+        ...(mvp.lvl > 1 ? [`👑 MVP ${mvp.def.name.toUpperCase()} Lv${mvp.lvl}`] : []),
         `⭐ ${result.score.toLocaleString('en-US')} pts · ⚡ ${result.shots} shots${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
         `🏅 ${result.badges.slice(0, 4).map((b) => b.name).join(' · ')}`,
         share.team,
