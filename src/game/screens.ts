@@ -622,8 +622,18 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'THE CLIMB',
-    lines: ['9 stages, a gym leader every 3rd — diamonds on the map', 'an item after every clear; rolled stages offer a riskier elite road'],
+    lines: ['9 stages, a gym every 3rd — pick your route on the map', 'elite stops hit harder but pay out better; rewards can be declined'],
     demo: demoClimb,
+  },
+  {
+    title: 'MAP STOPS',
+    lines: ['rest heals · find gives an item · mart trades 500 pts for a relic', 'shrine trades HP for power · ? is anyone\'s guess'],
+    demo: demoPickups,
+  },
+  {
+    title: 'SHINIES & STREAKS',
+    lines: ['gold-tinted foes are rare — KO one and it always joins your box', 'perfect releases build a streak — every gold-zone hit pays extra'],
+    demo: demoAim,
   },
 ];
 
