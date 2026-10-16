@@ -669,6 +669,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'a foe strikes when its number hits 0 — each shot you take ticks one down',
       'melee mons start low, so thin them out first',
       "a boss's drifting gold star is its weak face — hits there pay triple",
+      'tap (don’t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
   },

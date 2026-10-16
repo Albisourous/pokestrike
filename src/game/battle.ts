@@ -277,6 +277,7 @@ export class Battle {
   private stopTimer = 0;
   private shotT = 0; // launch timestamp — hard-caps a shot that never settles
   private enemyPhaseT = 0;
+  private inspect: { uid: number; t: number } | null = null; // tapped-foe scout card
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
@@ -880,7 +881,18 @@ export class Battle {
     this.dragging = false;
     const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
     const pullLen = len(pull);
-    if (pullLen < 12) return;
+    if (pullLen < 12) {
+      // a tap, not a pull — on a foe it pops a scout card instead of a shot
+      const hit = this.enemies.find(
+        (e) => !e.dead && Math.hypot(e.x - this.dragStart.x, e.y - this.dragStart.y) < e.r + 14,
+      );
+      if (hit) {
+        this.inspect = { uid: hit.uid, t: 2.8 };
+        sfx('ui');
+      }
+      return;
+    }
+    this.inspect = null; // a real pull dismisses the scout card
     const dir = norm(pull);
     const u = this.active;
     // direction from the pull; power from release timing on the meter
@@ -1015,6 +1027,10 @@ export class Battle {
     this.punch *= Math.exp(-9 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
     if (this.mapMsgT > 0) this.mapMsgT -= dt;
+    if (this.inspect) {
+      this.inspect.t -= dt;
+      if (this.inspect.t <= 0 || !this.enemies.some((e) => e.uid === this.inspect!.uid && !e.dead)) this.inspect = null;
+    }
     // squash impulses relax — sprites spring back after impacts
     for (const p of this.players) p.sq *= Math.exp(-9 * dt);
     for (const e of this.enemies) e.sq *= Math.exp(-9 * dt);
@@ -3853,6 +3869,9 @@ export class Battle {
       ctx.fillText(`ASC ${this.asc}`, a.x + 8, a.y + 16);
     }
 
+    // tapped-foe scout card — floats while aiming, a pull dismisses it
+    if (this.inspect && this.phase === 'aim') this.drawInspect(ctx);
+
     // onboarding: the first run gets kinetic coaching (a ghost pull on
     // loop); after that the same two faint captions show on any run
     if (this.phase === 'aim' && !this.dragging && !this.active.dead) {
@@ -3909,6 +3928,71 @@ export class Battle {
       }
       ctx.globalAlpha = 1;
     }
+  }
+
+  // The scout card: tapping a foe (instead of pulling) answers "what is
+  // that thing about to do" — name, bulk, type, and its attack countdown.
+  private drawInspect(ctx: CanvasRenderingContext2D) {
+    const e = this.enemies.find((x) => x.uid === this.inspect!.uid);
+    if (!e || e.dead) return;
+    const a = this.arena;
+    const w = 176;
+    const h = 76;
+    const cx = Math.min(Math.max(e.x - w / 2, a.x + 6), a.x + a.w - w - 6);
+    const cy = Math.max(a.y + 8, e.y - e.r - h - 16);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, this.inspect!.t * 2.5);
+    ctx.fillStyle = '#101430ee';
+    ctx.strokeStyle = '#c8a44d';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(cx, cy, w, h, 8);
+    ctx.fill();
+    ctx.stroke();
+    // a tick anchored under the card points at the scouted foe
+    ctx.beginPath();
+    ctx.moveTo(Math.min(Math.max(e.x, cx + 12), cx + w - 12) - 6, cy + h);
+    ctx.lineTo(Math.min(Math.max(e.x, cx + 12), cx + w - 12) + 6, cy + h);
+    ctx.lineTo(Math.min(Math.max(e.x, cx + 12), cx + w - 12), cy + h + 8);
+    ctx.closePath();
+    ctx.fill();
+    if (e.shiny) drawShiny(ctx, e.def.id, cx + 26, cy + 28, 36);
+    else drawMon(ctx, e.def.id, cx + 26, cy + 28, 36);
+    ctx.textAlign = 'left';
+    ctx.font = font(10);
+    ctx.fillStyle = '#f0e6c8';
+    ctx.fillText(`${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}  Lv${e.lvl}`, cx + 50, cy + 16);
+    // hp bar — the number players actually scout for
+    ctx.fillStyle = '#2a3050';
+    ctx.fillRect(cx + 50, cy + 24, w - 62, 7);
+    ctx.fillStyle = e.hp / e.maxHp > 0.3 ? '#6fdc6f' : '#ff6b6b';
+    ctx.fillRect(cx + 50, cy + 24, (w - 62) * Math.max(0, e.hp / e.maxHp), 7);
+    ctx.font = font(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`${Math.ceil(e.hp)}/${e.maxHp}`, cx + 50, cy + 42);
+    ctx.fillStyle = TYPE_COLOR[e.def.type];
+    ctx.textAlign = 'right';
+    ctx.fillText(e.def.type.toUpperCase(), cx + w - 10, cy + 16);
+    // the threat readout — when it swings, and what makes it special
+    ctx.textAlign = 'left';
+    ctx.font = font(8);
+    ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
+    const tag = e.boss
+      ? `ATTACKS IN ${Math.ceil(e.timer)} · GOLD SPOT ×3`
+      : e.supp === 'medic'
+        ? `ATTACKS IN ${Math.ceil(e.timer)} · HEALS ALLIES`
+        : e.supp === 'aegis'
+          ? `ATTACKS IN ${Math.ceil(e.timer)} · SHIELDS ALLIES`
+          : e.volatile
+            ? `ATTACKS IN ${Math.ceil(e.timer)} · EXPLODES ON KO`
+            : e.link
+              ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
+              : `ATTACKS IN ${Math.ceil(e.timer)}`;
+    ctx.fillText(tag, cx + 50, cy + 58);
+    ctx.fillStyle = '#6a7498';
+    ctx.font = font(7);
+    ctx.fillText(e.def.melee ? 'melee — lunges into your team' : 'ranged — fires from range', cx + 50, cy + 70);
+    ctx.restore();
   }
 
   // First-run teaching — kinetic beats, each dismissed by doing the thing.

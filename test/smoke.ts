@@ -749,6 +749,23 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(b.phase === 'aim' && u.vx === 0 && u.vy === 0, 'pointercancel drops the drag, no shot');
 }
 
+// --- a tap on a foe pops its scout card, not a shot ---------------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  b.phase = 'aim';
+  const u = (b as any).active;
+  const e = b.enemies[0];
+  b.pointerDown({ x: e.x, y: e.y });
+  b.pointerUp();
+  ok((b as any).inspect?.uid === e.uid, 'tap on a foe opens the scout card');
+  ok(b.phase === 'aim' && u.vx === 0, 'a scout tap never fires a shot');
+  b.pointerDown({ x: u.x, y: u.y });
+  b.pointerMove({ x: u.x - 150, y: u.y });
+  b.pointerUp();
+  ok(b.phase === 'shot' && !(b as any).inspect, 'a real pull dismisses the card');
+}
+
 // --- corrupt saves can't NaN or crash the run --------------------------------
 {
   localStorage.setItem('pk_best', '{}');
