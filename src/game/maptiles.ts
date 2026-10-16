@@ -15,6 +15,5 @@ export const TILE_GYM: TileRect = [392, 2, 74, 57]; // red-roofed center
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand
-export const TILE_TREE: TileRect = [1980, 90, 54, 54]; // round-canopy tree
 export const TILE_FLOWER: TileRect = [1710, 92, 16, 16]; // red flower patch
 export const TILE_ROCK: TileRect = [1590, 22, 28, 30]; // pocked boulder

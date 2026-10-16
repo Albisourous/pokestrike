@@ -1,13 +1,13 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL } from '../src/game/data';
 import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
 import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { rollEvent } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES } from '../src/game/meta';
 import { PERKS } from '../src/game/perks';
 
 let fails = 0;
@@ -290,6 +290,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     for (const w of trainerWave(mulberry32(s), 0, 'fire')) tmax = Math.max(tmax, tierOf(w.def));
   }
   ok(tmax <= 2, `depth-0 trainer squads stay ≤ tier 2 (max ${tmax})`);
+}
+
+// --- badge case: every leader is themed to a badge, paid once -------------
+{
+  ok(BOSS_POOL.length === 8 && BOSS_POOL.every((b) => badgeOf(b.id)), `8 leaders, all badge-themed (${BOSS_POOL.map((b) => b.name).join('/')})`);
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(1));
+  (b as any).spawnWave(2); // the gym wave — leader + entourage
+  const boss = (b as any).enemies.find((e: any) => e.boss);
+  ok(!!boss && !!badgeOf(boss.def.id), `gym boss maps to a badge (${boss?.def.name})`);
+  (b as any).hurt(boss, 999999, '#fff'); // KO the leader — caught or fainted, the badge pays
+  ok(gymBadges().has(boss.def.id), `gym KO banks the ${badgeOf(boss.def.id)?.name}`);
+  ok(earnBadge(boss.def.id) === null, 'the same leader pays the badge once');
 }
 
 // --- full autoplayed climbs: naive aim, real physics, win or wipe ---------

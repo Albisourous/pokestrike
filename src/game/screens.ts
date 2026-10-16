@@ -6,7 +6,7 @@ import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf } from './stats';
-import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest } from './meta';
+import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest, BADGES, gymBadges } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -901,9 +901,9 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText('catch wild mons to fill the dex: they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
-// --- trophy shelf: the StS-style achievement list ---
+// --- trophy shelf: the badge case on top, the StS-style achievement list under ---
 const ACH_ROW = 58;
-const ACH_HEAD = 62;
+const ACH_HEAD = 172; // the badge case owns the head — the trophy list scrolls below
 
 export function achScrollMax() {
   return Math.max(0, ACHIEVEMENTS.length * ACH_ROW - (DEX_PANEL.h - ACH_HEAD - 36));
@@ -923,6 +923,37 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.font = font(17);
   ctx.fillStyle = '#ffd84d';
   ctx.fillText(`TROPHIES ${got.size}/${ACHIEVEMENTS.length}`, r.x + r.w / 2, r.y + 40);
+
+  // the badge case: eight themed octagons — earned ones light in their
+  // badge color with the beaten leader's face inside
+  const held = gymBadges();
+  ctx.font = font(9);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(`BADGE CASE ${held.size}/${BADGES.length}`, r.x + r.w / 2, r.y + 62);
+  BADGES.forEach((b, i) => {
+    const cx = r.x + r.w / 2 + ((i % 4) - 1.5) * 106;
+    const cy = r.y + 92 + Math.floor(i / 4) * 58;
+    const has = held.has(b.boss);
+    ctx.beginPath();
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+      const px = cx + Math.cos(a) * 20, py = cy + Math.sin(a) * 20;
+      if (k) ctx.lineTo(px, py);
+      else ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = has ? b.color : '#1b2140';
+    ctx.fill();
+    ctx.strokeStyle = has ? '#ffd84d' : '#3a4370';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.globalAlpha = has ? 1 : 0.3;
+    drawMon(ctx, b.boss, cx, cy - 2, 30);
+    ctx.globalAlpha = 1;
+    ctx.font = font(6.5);
+    ctx.fillStyle = has ? PARCH : '#5a6288';
+    ctx.fillText(b.name.replace(' BADGE', ''), cx, cy + 33);
+  });
 
   ctx.save();
   ctx.beginPath();

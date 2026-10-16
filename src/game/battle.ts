@@ -204,9 +204,10 @@ interface Fx {
   life: number;
   size: number;
   color: string;
-  shape: 'dot' | 'streak' | 'star';
-  spin: number; // star rotation rate
+  shape: 'dot' | 'streak' | 'star' | 'leaf';
+  spin: number; // star/leaf rotation rate — doubles as the sway phase
   grav: number; // debris pulls down; sparks/stars fly straight
+  sway?: number; // horizontal wobble amplitude — leaves, embers, bubbles
 }
 export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'loot' | 'won' | 'lost';
 
@@ -218,6 +219,23 @@ export const MAP_OY = 128;
 // tile rows on screen at once — sized so the current triplet
 // (battle → utility → gym) fills the view as the climb scrolls north
 export const MAP_VIEW = 20;
+
+// island dressing — decor tiles are mons that *are* the scenery: palm
+// groves, boulders dozing in the sun, weed-mons rustling the grass.
+// [dex id, draw size, lift above tile center]; tile index picks the variant
+const DECOR_MONS: Record<'tree' | 'rock' | 'flower', [number, number, number][]> = {
+  tree: [[103, 46, 10]], // exeggutor
+  rock: [
+    [74, 30, 2], // geodude
+    [75, 34, 2], // graveler
+  ],
+  flower: [
+    [43, 26, 0], // oddish
+    [187, 24, 2], // hoppip
+    [192, 28, 0], // sunflora
+    [191, 22, 2], // sunkern
+  ],
+};
 
 const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
 const SHOT_MAX = 14; // seconds — gimmick courts can hold the ball above settle speed forever
@@ -1076,6 +1094,7 @@ export class Battle {
       f.vy += f.grav * dt;
       f.x += f.vx * dt;
       f.y += f.vy * dt;
+      if (f.sway) f.x += Math.sin(this.time * 6 + f.spin * 7) * f.sway * dt;
     }
     this.fx = this.fx.filter((f) => f.t > 0);
     for (const p of this.pops) p.t -= dt;
@@ -2278,6 +2297,7 @@ export class Battle {
     const color = TYPE_COLOR[src.def.type];
     this.impact(p.x, p.y, color, 1.6);
     this.burst(p.x, p.y, color, 22, 540);
+    this.flavor(p.x, p.y, src.def.type);
     this.addPunch(0.11);
     this.addShake(7);
     this.screenFlash(color, 0.12);
@@ -3254,11 +3274,17 @@ export class Battle {
       if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
     };
     switch (e.def.id) {
-      case 149: { // Dragonite — hyper beam: a burning line through the team
+      case 149: // Dragonite — hyper beam
+      case 125: { // Electabuzz — thunderbolt: same line, faster arc
         if (!target) break;
         sfx('beam');
-        this.beams.push({ x1: e.x, y1: e.y, x2: target.x, y2: target.y, t: 0.7, life: 0.7, color: '#f8d030', w: 2.2 });
-        this.hitStop = Math.max(this.hitStop, 0.25);
+        const zap = e.def.id === 125;
+        this.beams.push({
+          x1: e.x, y1: e.y, x2: target.x, y2: target.y,
+          t: zap ? 0.5 : 0.7, life: zap ? 0.5 : 0.7,
+          color: zap ? '#f8ff70' : '#f8d030', w: zap ? 1.7 : 2.2,
+        });
+        this.hitStop = Math.max(this.hitStop, zap ? 0.18 : 0.25);
         const dx = target.x - e.x, dy = target.y - e.y;
         const dl = Math.max(dx * dx + dy * dy, 1);
         for (const p of this.players) {
@@ -3271,36 +3297,38 @@ export class Battle {
         }
         break;
       }
-      case 130: { // Gyarados — thrash: a wall of water sweeping the whole court
+      case 130: // Gyarados — thrash: a wall of water sweeping the whole court
+      case 6: // Charizard — flame ring that scorches the floor on the way out
+      case 3: // Venusaur — frenzy plant: a creeping green ring
+      case 112: { // Rhydon — earthquake: the widest slam, hits off raw atk
+        const [R, color, scorched] =
+          e.def.id === 130 ? [300, '#6890f0', false]
+          : e.def.id === 6 ? [200, '#f08030', true]
+          : e.def.id === 3 ? [220, '#78c850', false]
+          : [240, '#b8a038', true];
         sfx('boom');
         this.waves.push({
-          x: e.x, y: e.y, r: 0, maxR: 300, t: 0.5, life: 0.5,
-          color: '#6890f0', hits: new Set(), hostile: true,
-          onHit: (p) => hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+          x: e.x, y: e.y, r: 0, maxR: R, t: 0.5, life: 0.5,
+          color, hits: new Set(), hostile: true,
+          onHit: (p) => hit(p, specDamage(e.def.id === 112 ? e.def.stats.atk : e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
         });
+        if (scorched) this.scar(e.x, e.y, 38);
         break;
       }
-      case 6: { // Charizard — flame ring that scorches the floor on the way out
-        sfx('boom');
-        this.waves.push({
-          x: e.x, y: e.y, r: 0, maxR: 200, t: 0.45, life: 0.45,
-          color: '#f08030', hits: new Set(), hostile: true,
-          onHit: (p) => hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
-        });
-        this.scar(e.x, e.y, 34);
-        break;
-      }
-      case 150: { // Mewtwo — twin psychic orbs that hunt the nearest pair
+      case 150: // Mewtwo — twin psychic orbs that hunt the nearest pair
+      case 94: { // Gengar — shadow ball: a third orb joins the hunt
         sfx('zap');
+        const n = e.def.id === 94 ? 3 : 2;
+        const color = e.def.id === 94 ? '#705898' : '#f85888';
         this.players
           .filter((p) => !p.dead)
           .sort((a, b) => dist(e, a) - dist(e, b))
-          .slice(0, 2)
+          .slice(0, n)
           .forEach((p, i) => {
             this.orbs.push({
               x: e.x, y: e.y, target: p,
               dmg: Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
-              t: 2.5, wob: i * 2.1, color: '#f85888', hostile: true,
+              t: 2.5, wob: i * 2.1, color, hostile: true,
             });
           });
         break;
@@ -3528,6 +3556,51 @@ export class Battle {
     this.burst(x, y, color, Math.round(8 * scale) + 4, 400 * Math.sqrt(scale), scale);
   }
 
+  // Cast motes keyed to the super's element — embers climb for fire,
+  // leaves flutter for grass, debris flies for rock. One call dresses
+  // every bump super in its own type instead of the same generic burst.
+  private flavor(x: number, y: number, type: PokeType) {
+    const c = TYPE_COLOR[type];
+    for (let i = 0; i < 14; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 90 + Math.random() * 220;
+      const f: Fx = {
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp,
+        t: 0.4 + Math.random() * 0.5,
+        life: 0.9,
+        size: 1.4 + Math.random() * 2.4,
+        color: c,
+        shape: 'dot',
+        spin: (Math.random() - 0.5) * 10,
+        grav: 0,
+      };
+      switch (type) {
+        case 'fire': f.vy = -Math.abs(f.vy) - 60; f.grav = -300; f.sway = 24; break;
+        case 'water': f.vy = -Math.abs(f.vy) * 0.7; f.grav = -160; f.sway = 40; f.color = Math.random() < 0.5 ? '#bfe8ff' : c; break;
+        case 'grass': f.shape = 'leaf'; f.grav = 90; f.sway = 60; f.vx *= 0.5; f.vy = Math.abs(f.vy) * 0.4 - 40; break;
+        case 'electric': f.shape = 'streak'; f.vx *= 1.8; f.vy *= 1.8; f.color = Math.random() < 0.4 ? '#ffffff' : '#f8d030'; break;
+        case 'psychic': f.shape = 'star'; f.vx *= 0.4; f.vy = -Math.abs(f.vy) * 0.5 - 30; f.sway = 50; break;
+        case 'flying': { // gale streaks swirl tangentially off the cast
+          f.shape = 'streak';
+          const ta = a + Math.PI / 2;
+          const ts = 240 + Math.random() * 260;
+          f.vx = Math.cos(ta) * ts;
+          f.vy = Math.sin(ta) * ts;
+          f.color = '#e8f6ff';
+          break;
+        }
+        case 'poison': f.vy = Math.abs(f.vy) * 0.4 + 60; f.grav = 420; break; // drips fall
+        case 'rock':
+        case 'fighting': f.shape = 'leaf'; f.grav = 640; f.vy = -Math.abs(f.vy) * 0.8; f.color = Math.random() < 0.5 ? '#c8b090' : c; break; // debris chips
+        case 'ghost': f.vy = -Math.abs(f.vy) * 0.4 - 20; f.grav = -60; f.sway = 34; f.size *= 1.5; f.t *= 1.4; f.life = 1.3; break;
+        default: f.shape = 'streak'; f.vx *= 2.2; f.vy *= 2.2; f.color = '#ffffff'; break; // normal speed lines
+      }
+      this.fx.push(f);
+    }
+  }
+
   // --- rendering ---
 
   render(ctx: CanvasRenderingContext2D) {
@@ -3727,6 +3800,19 @@ export class Battle {
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
 
+    // KO ghost-pops — the fallen sprite flares white and drifts skyward
+    if (this.pops.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const p of this.pops) {
+        const k = Math.max(p.t / p.life, 0);
+        ctx.globalAlpha = k;
+        drawMon(ctx, p.id, p.x, p.y - (1 - k) * 30, p.r * 2.6 * (1 + (1 - k) * 0.7));
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+
     // skull marks — a tiny bone-white badge pinned on the bounty foe
     for (const e of this.enemies) {
       if (e.dead || !e.skull) continue;
@@ -3864,6 +3950,15 @@ export class Battle {
           ctx.lineTo(-s, 0);
           ctx.lineTo(-s * 0.28, -s * 0.28);
           ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        } else if (f.shape === 'leaf') {
+          ctx.save();
+          ctx.translate(f.x, f.y);
+          ctx.rotate(f.spin * (f.life - f.t) * 2);
+          ctx.fillStyle = f.color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, f.size * 1.7, f.size * 0.8, 0, 0, Math.PI * 2);
           ctx.fill();
           ctx.restore();
         } else {
@@ -4335,8 +4430,17 @@ export class Battle {
         }
       }
       for (const [i, kind] of this.region.decor) {
-        const s = kind === 'tree' ? MT.TILE_TREE : kind === 'rock' ? MT.TILE_ROCK : MT.TILE_FLOWER;
-        drawTile(g, s, (i % MAP_W) * cell - cell * 0.2, Math.floor(i / MAP_W) * cell - cell * 0.5, cell * 1.4, cell * 1.4);
+        const [id, size, lift] = DECOR_MONS[kind][i % DECOR_MONS[kind].length];
+        const mx = (i % MAP_W) * cell + cell / 2, my = Math.floor(i / MAP_W) * cell + cell / 2;
+        g.fillStyle = 'rgba(20,40,20,0.3)';
+        g.beginPath();
+        g.ellipse(mx, my + cell * 0.32, size * 0.36, size * 0.14, 0, 0, Math.PI * 2);
+        g.fill();
+        try {
+          drawMon(g, id, mx, my - lift, size); // decor mons are preloaded via ALL_SPRITE_IDS
+        } catch {
+          continue;
+        }
       }
       this.regionBase = c;
     }
@@ -4874,7 +4978,8 @@ export class Battle {
       .filter((p) => !p.dead)
       .sort((a, b) => dist(e, a) - dist(e, b));
     switch (e.def.id) {
-      case 149: // hyper beam — the burning line to the nearest mon
+      case 149: // hyper beam / thunderbolt — the burning line to the nearest mon
+      case 125:
         if (targets[0]) {
           ctx.lineWidth = 12;
           ctx.beginPath();
@@ -4883,9 +4988,10 @@ export class Battle {
           ctx.stroke();
         }
         break;
-      case 150: // hunting orbs — marks on the two nearest mons
+      case 150: // hunting orbs — marks on the mons they'll chase
+      case 94:
         ctx.lineWidth = 3;
-        for (const p of targets.slice(0, 2)) {
+        for (const p of targets.slice(0, e.def.id === 94 ? 3 : 2)) {
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.r + 8, 0, Math.PI * 2);
           ctx.stroke();
@@ -4893,7 +4999,7 @@ export class Battle {
         break;
       default: { // ring/blast attacks — show the radius they'll sweep
         ctx.lineWidth = 3;
-        const R = e.def.id === 130 ? 300 : e.def.id === 6 ? 200 : 170;
+        const R = { 130: 300, 3: 220, 112: 240, 6: 200 }[e.def.id] ?? 170;
         ctx.beginPath();
         ctx.arc(e.x, e.y, R, 0, Math.PI * 2);
         ctx.stroke();
@@ -4932,6 +5038,19 @@ export class Battle {
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.82, u.r * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
+    // READY aura — a charged super rings its mon in type color
+    if (u.side === 'player' && u.cd <= 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.4 + Math.sin(this.time * 7) * 0.18;
+      ctx.strokeStyle = TYPE_COLOR[u.def.type];
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y + u.r * 0.35, u.r * 1.02 + Math.sin(this.time * 7) * 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
     // squash & stretch: speed smears the sprite along its flight and
     // impacts squash it flat — the pinball pop is most of the feel
     const spd = Math.hypot(u.vx, u.vy);
