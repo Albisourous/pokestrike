@@ -279,6 +279,7 @@ export class Battle {
   private enemyPhaseT = 0;
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
+  private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
   private shotCombo = 0; // pass-through links chained this shot
   private kosThisShot = 0; // enemies downed by the current shot
   private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false, hx: 0, hy: 0 };
@@ -355,6 +356,8 @@ export class Battle {
   echo: { def: SpeciesDef; lvl: number }[] | null = null; // last run's fallen team → rival wave
   echoCleared = false; // set when the rival wave was fought and won
   gymsBeaten = 0; // gym waves cleared this run — feeds trainer rank
+  coach = false; // first-run teaching: ghost pull + contextual beats (main.ts)
+  coachDone = false; // raised when the first coached wave clears → meta
   box: SpeciesDef[] = []; // captured mons — swap in between stages
   boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
   boxLvl: number[] = []; // each boxed mon's level — benching keeps earned levels
@@ -528,10 +531,12 @@ export class Battle {
     // each wave is a new scene — rotate the flat theme
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
-    // stale super timers mustn't carry hits into the fresh wave
+    // stale super timers mustn't carry hits into the fresh wave — orbs
+    // included, or a flight of homers retargets onto the next pack
     this.delays = [];
     this.waves = [];
     this.dashes = [];
+    this.orbs = [];
     // a legendary can crash any non-boss wave past the first — MS invades;
     // a dead run's team can return as a rival fight — fail-forward echo
     this.waveSpecial = null;
@@ -542,7 +547,7 @@ export class Battle {
       sfx('invade');
     } else if (!this.inEvent && this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
       spawns = this.curSpawns = rivalWave(this.echo.map((e) => e.def), this.rng);
-      this.waveSpecial = 'RIVAL BATTLE!';
+      this.waveSpecial = 'RIVAL BATTLE — YOUR FALLEN TEAM RETURNS!';
       this.inRival = true;
       sfx('invade');
     } else if (!this.inEvent && i > 0 && !this.waveHadGym && this.rng() < 0.09 + this.rank * 0.03) {
@@ -825,15 +830,8 @@ export class Battle {
         return;
       }
       if (this.mapWalk) return; // mid-walk — let the lead mon get there
-      // a wave is staged for the stop you're standing on — tap walks in
-      if (this.pendingNext <= this.waveIndex) {
-        sfx('ui');
-        this.nextTurn();
-        return;
-      }
       // StS routing: tap one of the linked stops to walk there — its kind
       // flavors the battle (trainer squad, rest heal, chest find)
-      if (this.mapWalk) return; // mid-walk — let the camera finish panning
       const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
       const cam = Math.round(this.mapCam * cell) / cell;
       const cur = this.region.nodes[this.mapNode];
@@ -865,6 +863,14 @@ export class Battle {
     if (this.dragging) this.dragNow = { ...p };
   }
 
+  // an OS interrupt (call, pull-down shade, scroll takeover) is not a
+  // release — drop the drag so a cancelled gesture can't fire a shot
+  pointerCancel() {
+    this.dragging = false;
+    this.lootDrag = false;
+    this.lootPos = null;
+  }
+
   pointerUp() {
     if (this.lootDrag) {
       this.lootDrag = false;
@@ -890,6 +896,7 @@ export class Battle {
     u.vy = dir.y * speed;
     u.sq = 1; // launch pop — the ball stretches off the sling
     this.bumpsThisShot.clear();
+    this.bumpNoted.clear();
     this.shotCombo = 0;
     this.kosThisShot = 0;
     u.wallN = 0;
@@ -932,6 +939,13 @@ export class Battle {
       sfx('perfect');
       this.award('perfect');
       buzz([30, 40, 60]);
+    } else {
+      // missed the band — say which side so the next release adjusts
+      this.texts.push({
+        x: u.x, y: u.y - u.r - 14,
+        text: charge < zone.c ? 'TOO EARLY' : 'TOO LATE',
+        t: 0.7, color: '#8a90a8', big: false,
+      });
     }
   }
 
@@ -1022,6 +1036,13 @@ export class Battle {
     else if (this.phase === 'enemy') {
       this.enemyPhaseT -= dt;
       if (this.enemyPhaseT <= 0) this.resolveEnemyTurn();
+    }
+    // orbs and delayed supers can clear a wave while you're just aiming —
+    // pay out on the spot instead of making the player shoot at nothing
+    if (this.rewardPending && this.phase === 'aim') {
+      this.rewardPending = false;
+      if (this.waveHadGym) this.enterLoot();
+      else this.enterReward();
     }
   }
 
@@ -1151,6 +1172,8 @@ export class Battle {
           sfx('sizzle');
         }
       }
+      // the court can kill the ball mid-flight — a dead mon connects nothing
+      if (u.dead) break;
       for (const e of wave) {
         if (this.enemies !== wave) break;
         if (e.dead) continue;
@@ -1185,6 +1208,10 @@ export class Battle {
       }
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
+    if (u.dead) {
+      this.endShot();
+      return;
+    }
 
     const speed = len({ x: u.vx, y: u.vy });
     if (speed < STOP_SPEED) {
@@ -1202,7 +1229,8 @@ export class Battle {
   private stepEnemyMovement(dt: number) {
     const alive = this.players.filter((p) => !p.dead);
     for (const e of this.enemies) {
-      if (e.boss && !e.dead) e.weakA += dt * 0.45; // the weak face drifts — watch it before you commit
+      if (e.dead) continue; // corpses don't drift, lunge, or shove
+      if (e.boss) e.weakA += dt * 0.45; // the weak face drifts — watch it before you commit
       const kn = Math.exp(-4 * dt);
       e.vx *= kn;
       e.vy *= kn;
@@ -1500,7 +1528,7 @@ export class Battle {
     return { x, y };
   }
 
-  // COMBO SHOT: two distinct contacts (enemy, ally, wall, stone) inside
+  // PINCH: two distinct contacts (enemy, ally, wall, stone) inside
   // one 0.35s window — the squeeze shot is the engine's fuel. Records every
   // contact; callers gate the payoff on static fields so silence absorbs
   // chains.
@@ -1511,7 +1539,7 @@ export class Battle {
   }
 
   private onPinch(x: number, y: number) {
-    this.texts.push({ x, y: y - 30, text: 'COMBO SHOT!', t: 0.8, color: '#9df0ff', big: true });
+    this.texts.push({ x, y: y - 30, text: 'PINCH!', t: 0.8, color: '#9df0ff', big: true });
     this.impact(x, y, '#9df0ff', 0.9);
     for (let k = 0; k < this.pinchPip; k++) this.chargeUp(this.active);
   }
@@ -1611,17 +1639,6 @@ export class Battle {
     const immune = d <= 0;
     if (immune) d = 1;
     e.hp -= d;
-    // the number IS the feedback: every source of damage pops a float,
-    // sized by the chunk it took — chip reads small, deletes read huge
-    this.texts.push({
-      x: e.x + (this.rng() - 0.5) * e.r * 1.4,
-      y: e.y - e.r - 4,
-      text: `${d}${crit ? ' CRIT' : ''}${suffix}`,
-      t: immune ? 0.45 : 0.75,
-      color: crit ? '#ffd84d' : color,
-      big: false,
-      size: immune ? 0.55 : Math.min(1.6, 0.6 + (d / Math.max(1, e.maxHp)) * 5),
-    });
     // enemy focus sash: the gym ace's held item hangs on at 1 HP once
     if (e.sash && e.hp <= 0) {
       e.sash = false;
@@ -2139,9 +2156,17 @@ export class Battle {
       );
     // passive talent: a small role effect on EVERY pass, on or off cooldown
     this.allyPassive(p, near, bumpDmg);
-    if (silenced) return; // static field: the link sparks but the super can't fire
+    if (silenced) {
+      // the field ate the super — say so or it reads as the shot failing
+      this.texts.push({ x: p.x, y: p.y - p.r - 46, text: 'SILENCED', t: 0.8, color: '#b090ff', big: false });
+      return;
+    }
     if (p.cd > 0) {
-      // super still recharging — link sparks but no attack
+      // super still recharging — name the wait once per ally per shot
+      if (!this.bumpNoted.has(p.uid)) {
+        this.bumpNoted.add(p.uid);
+        this.texts.push({ x: p.x, y: p.y - p.r - 46, text: `${Math.ceil(p.cd)} TO GO`, t: 0.7, color: '#8890b8', big: false });
+      }
       return;
     }
     // a copy pays the copied move's cooldown, not its own
@@ -2370,6 +2395,7 @@ export class Battle {
   }
 
   private waveCleared() {
+    if (this.coach) this.coachDone = true; // survived a wave — teaching's over
     if (this.inRival) {
       this.echoCleared = true; // the echo is beaten — reclaim it
       this.award('rival');
@@ -2451,6 +2477,7 @@ export class Battle {
     if (next) {
       if (owned) this.evolveUnit(owned, next);
       else this.box[bi] = this.box[bi].shiny || shiny ? { ...next, shiny: true } : next; // shininess survives a boxed evolution
+      recordCapture([next.id]); // evo-only species only ever enter the dex here
       this.texts.push({
         x: owned ? owned.x : this.arena.x + this.arena.w / 2,
         y: owned ? owned.y - owned.r - 40 : this.arena.y + 70,
@@ -2499,6 +2526,7 @@ export class Battle {
     if (p.dead) p.hp = 0;
     p.cdMax = Math.max(1, Math.round(bumpCooldown(nd.type) * this.cdMult) - p.cdMod);
     p.cd = Math.min(p.cd, p.cdMax);
+    this.refreshTraits(); // evolving can change type — retally immediately
   }
 
   // Reseat a unit on a new species: role/stats recomputed, hp carried as a
@@ -2583,6 +2611,7 @@ export class Battle {
         this.box.push(this.lastRecruit);
         this.boxHp.push(1);
         this.boxLvl.push(this.lastRecruit.lvl ?? 1);
+        recordCapture([this.lastRecruit.id]); // the dex logs it now, not at run end
       }
       sfx('caught');
     }
@@ -2846,6 +2875,7 @@ export class Battle {
     this.box.push({ ...def, lvl });
     this.boxHp.push(1);
     this.boxLvl.push(lvl);
+    recordCapture([def.id]);
     this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
     this.mapMsgT = 3;
     sfx('caught');
@@ -3152,7 +3182,27 @@ export class Battle {
   }
 
   private resolveEnemyTurn() {
-    for (const e of this.pendingAttacks) {
+    const attacks = this.pendingAttacks;
+    this.pendingAttacks = [];
+    if (!attacks.length) return; // already consumed — the volley's mid-flight
+    // staggered volley: each attacker fires on its own beat so every hit
+    // is attributable instead of one silent wall of damage
+    attacks.forEach((e, i) => this.later(i * 0.28, () => this.fireEnemy(e)));
+    this.later(Math.max(0, attacks.length - 1) * 0.28 + 0.35, () => {
+      if (this.phase !== 'enemy') return;
+      if (this.players.every((p) => p.dead)) {
+        this.phase = 'lost';
+        this.screenFlash('#ff6b6b', 0.3);
+        sfx('lose');
+        return;
+      }
+      this.nextTurn();
+    });
+  }
+
+  private fireEnemy(e: Unit) {
+    if (e.dead) return; // killed during the windup — the corpse stays down
+    {
       e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * (e.enraged ? 0.66 : 1);
       if (e.boss) {
         this.bossAttack(e);
@@ -3211,14 +3261,6 @@ export class Battle {
         }
       }
     }
-    this.pendingAttacks = [];
-    if (this.players.every((p) => p.dead)) {
-      this.phase = 'lost';
-      this.screenFlash('#ff6b6b', 0.3);
-      sfx('lose');
-      return;
-    }
-    this.nextTurn();
   }
 
   private damagePlayer(p: Unit, dmg: number) {
@@ -3254,6 +3296,7 @@ export class Battle {
     if (p.hp <= 0) {
       p.hp = 0;
       p.dead = true;
+      this.refreshTraits(); // a faint drops its type from the team bonus
       this.impact(p.x, p.y, '#ff6b6b', 1.5);
       this.burst(p.x, p.y, '#ffffff', 14, 420);
       this.addPunch(0.08);
@@ -3289,7 +3332,8 @@ export class Battle {
         const a = this.players[idx];
         this.texts.push({
           x: a.x, y: a.y - a.r - 8,
-          text: `GO! ${a.def.name.toUpperCase()}`,
+          // a charged super fires on launch — the GO! call is where it's taught
+          text: `GO! ${a.def.name.toUpperCase()}${a.cd <= 0 ? ' — SUPER READY!' : ''}`,
           t: 1, color: TYPE_COLOR[a.def.type], big: true,
         });
         return;
@@ -3485,20 +3529,6 @@ export class Battle {
         ctx.fill();
       }
       ctx.restore();
-    }
-
-    // loot HUD — the countdown bar and the running haul
-    if (this.phase === 'loot') {
-      const a = this.arena;
-      const frac = Math.max(0, this.lootT / 6);
-      ctx.fillStyle = 'rgba(10,14,30,0.7)';
-      ctx.fillRect(a.x + 40, a.y + 10, a.w - 80, 10);
-      ctx.fillStyle = frac < 0.25 ? '#ff6b6b' : '#ffd84d';
-      ctx.fillRect(a.x + 40, a.y + 10, (a.w - 80) * frac, 10);
-      ctx.font = font(11);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillText(this.lootGot > 0 ? `LOOTED +${this.lootGot}` : 'DRAG YOUR MON THROUGH THE FOUNTAIN!', a.x + a.w / 2, a.y + 38);
     }
 
     for (const w of this.waves) this.drawWave(ctx, w);
@@ -3723,6 +3753,15 @@ export class Battle {
     ctx.globalAlpha = 1;
 
     if (this.dragging) this.drawAim(ctx);
+    else if (this.phase === 'aim' && !this.active.dead) {
+      // ghost sweep sells the timing game before the first touch
+      const ph = this.time % 1.7;
+      const gfrac = ph < 0.85 ? ph / 0.85 : (1.7 - ph) / 0.85;
+      const z = this.sweetSpot();
+      ctx.globalAlpha = 0.55;
+      this.drawMeter(ctx, gfrac, Math.abs(gfrac - z.c) <= z.hw, TYPE_COLOR[this.active.def.type]);
+      ctx.globalAlpha = 1;
+    }
 
     ctx.restore();
 
@@ -3814,20 +3853,24 @@ export class Battle {
       ctx.fillText(`ASC ${this.asc}`, a.x + 8, a.y + 16);
     }
 
-    // onboarding hints for the first couple of shots
-    if (this.phase === 'aim' && this.shots < 2 && !this.dragging) {
-      ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
-      ctx.font = font(9);
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#e8ecff';
-      ctx.fillText(
-        this.shots === 0
-          ? 'pull back to aim, release in the gold'
-          : 'bounce through allies to fire their supers',
-        a.x + a.w / 2,
-        a.y + a.h - 16,
-      );
-      ctx.globalAlpha = 1;
+    // onboarding: the first run gets kinetic coaching (a ghost pull on
+    // loop); after that the same two faint captions show on any run
+    if (this.phase === 'aim' && !this.dragging && !this.active.dead) {
+      if (this.coach) this.drawCoach(ctx);
+      else if (this.shots < 2) {
+        ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
+        ctx.font = font(9);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#e8ecff';
+        ctx.fillText(
+          this.shots === 0
+            ? 'pull back to aim, release in the gold'
+            : 'bounce through allies to fire their supers',
+          a.x + a.w / 2,
+          a.y + a.h - 16,
+        );
+        ctx.globalAlpha = 1;
+      }
     }
 
     if (this.waveBanner > 0) {
@@ -3860,6 +3903,95 @@ export class Battle {
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
       ctx.globalAlpha = 1;
     }
+  }
+
+  // First-run teaching — kinetic beats, each dismissed by doing the thing.
+  // Beat 1 loops a ghost pull-back until the first launch; beat 2 routes a
+  // shot through a teammate; beat 3 rings the foe whose counter sits at 0.
+  private drawCoach(ctx: CanvasRenderingContext2D) {
+    const a = this.arena;
+    const u = this.active;
+    const line = (s: string, color = '#ffe89d') => {
+      ctx.font = font(10);
+      ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
+      ctx.fillStyle = color;
+      ctx.fillText(s, a.x + a.w / 2, a.y + a.h - 16);
+      ctx.globalAlpha = 1;
+    };
+    ctx.save();
+    ctx.textAlign = 'center';
+    if (this.shots === 0) {
+      // the gesture itself on loop: elastic pull + fingertip ring, flight
+      // dotted the other way — aimed at the nearest foe so it also aims
+      const tgt = this.enemies
+        .filter((e) => !e.dead)
+        .sort((x, y) => Math.hypot(x.x - u.x, x.y - u.y) - Math.hypot(y.x - u.x, y.y - u.y))[0];
+      let px = 0, py = 1;
+      if (tgt) {
+        const d = Math.hypot(u.x - tgt.x, u.y - tgt.y) || 1;
+        px = (u.x - tgt.x) / d;
+        py = (u.y - tgt.y) / d;
+      }
+      const ph = this.time % 1.7;
+      const ease = 1 - (1 - Math.min(ph / 0.9, 1)) ** 2;
+      const fade = ph > 1.2 ? Math.max(0, 1 - (ph - 1.2) / 0.5) : 1;
+      const gx = u.x + px * ease * 90;
+      const gy = u.y + py * ease * 90;
+      ctx.globalAlpha = 0.85 * fade;
+      ctx.strokeStyle = '#e8ecf8';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 8]);
+      ctx.beginPath();
+      ctx.moveTo(u.x - px * 26, u.y - py * 26);
+      ctx.lineTo(u.x - px * 140, u.y - py * 140);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = '#ffd84d';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(u.x, u.y);
+      ctx.lineTo(gx, gy);
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(gx, gy, 13, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      line('PULL BACK TO AIM · LET GO IN THE GOLD');
+    } else if (this.shots === 1) {
+      const ally = this.players.find((p) => p !== u && !p.dead);
+      if (ally) {
+        ctx.globalAlpha = 0.55 + Math.sin(this.time * 5) * 0.3;
+        ctx.strokeStyle = '#ffd84d';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([7, 7]);
+        ctx.beginPath();
+        ctx.moveTo(u.x, u.y);
+        ctx.lineTo(ally.x, ally.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(ally.x, ally.y, ally.r + 8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        line('FLY THROUGH A TEAMMATE — THE PASS SPEEDS THE BALL UP');
+      }
+    }
+    const threat = this.enemies.find((e) => !e.dead && e.timer <= 1);
+    if (threat && this.shots > 0 && this.shots <= 3) {
+      ctx.globalAlpha = 0.5 + Math.sin(this.time * 7) * 0.35;
+      ctx.strokeStyle = '#ff6b6b';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(threat.x, threat.y, threat.r + 12, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.font = font(9);
+      ctx.fillStyle = '#ffb0b0';
+      ctx.fillText('STRIKES AT 0', threat.x, threat.y - threat.r - 20);
+    }
+    ctx.restore();
   }
 
   // The climb as a town-map region: a seeded island of grass ringed by
@@ -4103,15 +4235,11 @@ export class Battle {
     ctx.fillRect(0, 0, 540, 960);
     ctx.font = font(12);
     ctx.fillStyle = '#aab4d8';
-    ctx.fillText(
-      this.pendingNext <= this.waveIndex ? 'tap to begin the climb' : 'choose your route: tap a linked stop',
-      270,
-      oy + view * cell + 30,
-    );
+    ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
     ctx.font = font(9);
     ctx.fillStyle = '#6a7498';
     ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + view * cell + 48);
-    ctx.fillText('CHEST free relic · ??? event — heal, catch or fight · REST heal+revive · GYM boss', 270, oy + view * cell + 64);
+    ctx.fillText('CHEST item, then a fight · REST heal+revive, then a fight · ??? surprise · GYM boss', 270, oy + view * cell + 64);
     // resolved events and egg ticks surface as a toast over the island
     if (this.mapMsgT > 0 && this.mapMsg) {
       ctx.globalAlpha = Math.min(1, this.mapMsgT);
@@ -4422,10 +4550,31 @@ export class Battle {
     ctx.restore();
   }
 
+  // Non-boss "about to strike" tell: a dashed leash to the mon it'll hit.
+  private drawFoeTell(ctx: CanvasRenderingContext2D, e: Unit) {
+    const t = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
+    if (!t) return;
+    ctx.save();
+    ctx.globalAlpha = 0.4 + Math.sin(this.time * 8) * 0.2;
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 6]);
+    ctx.beginPath();
+    ctx.moveTo(e.x, e.y);
+    ctx.lineTo(t.x, t.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
     if (u.dead) return;
-    // boss telegraph: one turn out, the signature's footprint ghosts in
-    if (u.side === 'enemy' && u.boss && u.timer <= 1) this.drawTelegraph(ctx, u);
+    // boss telegraph: one turn out, the signature's footprint ghosts in;
+    // fodder gets a dashed leash to its target so the zap isn't a surprise
+    if (u.side === 'enemy' && u.timer <= 1) {
+      if (u.boss) this.drawTelegraph(ctx, u);
+      else this.drawFoeTell(ctx, u);
+    }
     // soft shadow grounds the sprite on the court
     ctx.fillStyle = 'rgba(8,10,20,0.3)';
     ctx.beginPath();
@@ -4623,6 +4772,41 @@ export class Battle {
     }
   }
 
+  // The release-timing bar — "release in the gold" only teaches if the
+  // gold is on screen, so it renders during aim even before the first
+  // drag: a ghost fill sweeps the bar to show the ping-pong rhythm.
+  private drawMeter(ctx: CanvasRenderingContext2D, frac: number, lit: boolean, color: string) {
+    const a = this.arena;
+    const zone = this.sweetSpot();
+    const bw = Math.min(320, a.w * 0.64);
+    const bh = 16;
+    const bx = a.x + (a.w - bw) / 2;
+    const by = a.y + 14;
+    ctx.fillStyle = 'rgba(10,14,32,0.8)';
+    ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
+    ctx.strokeStyle = '#0a0e20';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx - 4, by - 4, bw + 8, bh + 8);
+    ctx.fillStyle = '#ffffff1c';
+    ctx.fillRect(bx, by, bw, bh);
+    // gold zone = the perfect-release window the fill ping-pongs into;
+    // its spot on the bar is the mon's own (speed-keyed), lit when hit
+    ctx.fillStyle = lit ? '#ffd84d55' : '#ffd84d33';
+    ctx.fillRect(bx + bw * (zone.c - zone.hw), by, bw * 2 * zone.hw, bh);
+    ctx.save();
+    if (lit) {
+      ctx.shadowColor = '#ffd84d';
+      ctx.shadowBlur = 14;
+    }
+    ctx.fillStyle = lit ? '#ffd84d' : color;
+    ctx.fillRect(bx, by, bw * frac, bh);
+    ctx.restore();
+    // gold ticks mark both edges of the max-power window
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillRect(bx + bw * (zone.c - zone.hw), by - 3, 2, bh + 6);
+    ctx.fillRect(bx + bw * (zone.c + zone.hw) - 2, by - 3, 2, bh + 6);
+  }
+
   private drawAim(ctx: CanvasRenderingContext2D) {
     const u = this.active;
     const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
@@ -4760,35 +4944,7 @@ export class Battle {
     }
 
     // timing bar under the HUD — this is what you read to release on max
-    {
-      const bw = Math.min(320, a.w * 0.64);
-      const bh = 16;
-      const bx = a.x + (a.w - bw) / 2;
-      const by = a.y + 14;
-      ctx.fillStyle = 'rgba(10,14,32,0.8)';
-      ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
-      ctx.strokeStyle = '#0a0e20';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(bx - 4, by - 4, bw + 8, bh + 8);
-      ctx.fillStyle = '#ffffff1c';
-      ctx.fillRect(bx, by, bw, bh);
-      // gold zone = the perfect-release window the fill ping-pongs into;
-      // its spot on the bar is the mon's own (speed-keyed), lit when hit
-      ctx.fillStyle = maxed ? '#ffd84d55' : '#ffd84d33';
-      ctx.fillRect(bx + bw * (zone.c - zone.hw), by, bw * 2 * zone.hw, bh);
-      ctx.save();
-      if (maxed) {
-        ctx.shadowColor = '#ffd84d';
-        ctx.shadowBlur = 14;
-      }
-      ctx.fillStyle = maxed ? '#ffd84d' : color;
-      ctx.fillRect(bx, by, bw * frac, bh);
-      ctx.restore();
-      // gold ticks mark both edges of the max-power window
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillRect(bx + bw * (zone.c - zone.hw), by - 3, 2, bh + 6);
-      ctx.fillRect(bx + bw * (zone.c + zone.hw) - 2, by - 3, 2, bh + 6);
-    }
+    this.drawMeter(ctx, frac, maxed, color);
 
     // launch arrow: unit -> opposite direction, length + glow from charge
     const ex = u.x + dir.x * (50 + frac * 160);

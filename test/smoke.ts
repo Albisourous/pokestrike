@@ -7,7 +7,8 @@ import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '.
 import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { rollEvent } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best } from '../src/game/meta';
+import { PERKS } from '../src/game/perks';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -608,6 +609,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   w9.hp = Math.floor(w9.maxHp * 0.4); // weakest → the ward target
   (b9 as any).pendingAttacks = [g9];
   (b9 as any).resolveEnemyTurn();
+  for (const d of [...(b9 as any).delays]) d.fn(); // the volley fires on beats
   ok(w9.shieldN === 1, 'aegis wards the weakest ally');
   const w9hp = w9.hp;
   (b9 as any).hurt(w9, 100, '#fff');
@@ -623,6 +625,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const h10hp = h10.hp;
   (b10 as any).pendingAttacks = [m10];
   (b10 as any).resolveEnemyTurn();
+  for (const d of [...(b10 as any).delays]) d.fn(); // the volley fires on beats
   ok(h10.hp > h10hp, `medic heals the pack (${h10hp} → ${h10.hp})`);
 
   // zombie loop: fell one while its partner stands → it rises at 40%;
@@ -697,6 +700,70 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const box0 = c.box.length;
   (c as any).tickEgg();
   ok(c.eggIn === 0 && c.box.length === box0 + 1, `egg hatches into the box (${c.box[c.box.length - 1]?.name})`);
+}
+
+// --- a corpse attacker never fires ------------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b as any).spawnWave(0);
+  const dead = b.enemies[0];
+  dead.dead = true;
+  const p = b.players[0];
+  const hp0 = p.hp;
+  (b as any).pendingAttacks = [dead];
+  (b as any).resolveEnemyTurn();
+  for (const d of [...(b as any).delays]) d.fn();
+  ok(p.hp === hp0, 'a mon killed in the windup never attacks');
+}
+
+// --- orbs die with their wave, perks retune the fielded team ----------------
+{
+  const bf = new Battle(arena, [ROSTER[1], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+  (bf as any).spawnWave(0);
+  const fp = bf.players[0];
+  fp.cd = 0;
+  (bf as any).bumpAlly(fp, fp);
+  ok((bf as any).orbs.length === 3, 'fire volley fields orbs');
+  (bf as any).spawnWave(1);
+  ok((bf as any).orbs.length === 0, 'orbs clear on the next wave');
+
+  const bp = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  const p = bp.players[0];
+  const cd0 = p.cdMax;
+  PERKS.find((x) => x.id === 'claw')!.apply(bp);
+  ok(p.cdMax < cd0, `quick claw retunes fielded cooldowns (${cd0} → ${p.cdMax})`);
+  const cd1 = p.cdMax;
+  PERKS.find((x) => x.id === 'pherb')!.apply(bp);
+  ok(p.cdMax === Math.max(1, cd1 - 1), `power herb shaves a shot (${cd1} → ${p.cdMax})`);
+}
+
+// --- a cancelled gesture never launches -------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  b.phase = 'aim';
+  const u = (b as any).active;
+  b.pointerDown({ x: u.x, y: u.y });
+  b.pointerMove({ x: u.x - 150, y: u.y - 150 });
+  b.pointerCancel();
+  ok(b.phase === 'aim' && u.vx === 0 && u.vy === 0, 'pointercancel drops the drag, no shot');
+}
+
+// --- corrupt saves can't NaN or crash the run --------------------------------
+{
+  localStorage.setItem('pk_best', '{}');
+  localStorage.setItem('pk_dex', '{"oops":true}');
+  const b = best();
+  ok(Number.isFinite(b.wins) && Number.isFinite(b.score), 'malformed pk_best falls back to defaults');
+  ok(Array.isArray(dexIds()), 'malformed pk_dex reads as an empty dex');
+  localStorage.removeItem('pk_best');
+  localStorage.removeItem('pk_dex');
+}
+
+// --- first-run coaching flag -------------------------------------------------
+{
+  markCoached();
+  ok(coachDone(), 'coaching flag persists once the first wave clears');
 }
 
 // --- roster integrity -------------------------------------------------------

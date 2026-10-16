@@ -327,7 +327,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
-  button(ctx, FREE_BTN, 'FREE PLAY', true);
+  button(ctx, FREE_BTN, 'START CLIMB', true);
 
   // ? badge, top corner — the how-to-play overlay
   ctx.beginPath();
@@ -551,6 +551,43 @@ function demoClimb(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   }
 }
 
+function demoHazards(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  const spots: [number, string, string][] = [
+    [0.25, '#f08030', 'HURT'],
+    [0.5, '#b090ff', 'HUSH'],
+    [0.75, '#58d858', 'BOOST'],
+  ];
+  ctx.font = font(8);
+  ctx.textAlign = 'center';
+  for (const [fx, c, lab] of spots) {
+    const hx = x + w * fx, hy = y + h * 0.42;
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(hx, hy, 26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = c;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = PARCH;
+    ctx.fillText(lab, hx, hy + 44);
+  }
+}
+
+function demoTraits(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  drawMon(ctx, 4, x + w * 0.34, y + h * 0.45, 46);
+  drawMon(ctx, 6, x + w * 0.66, y + h * 0.45, 46);
+  ctx.font = font(9);
+  ctx.textAlign = 'center';
+  const label = 'FIRE T2';
+  const tw = ctx.measureText(label).width + 12;
+  ctx.fillStyle = 'rgba(20,26,48,0.9)';
+  ctx.fillRect(x + w / 2 - tw / 2, y + h * 0.7, tw, 18);
+  ctx.fillStyle = '#f08030';
+  ctx.fillText(label, x + w / 2, y + h * 0.7 + 13);
+}
+
 interface HelpSection {
   title: string;
   lines: string[];
@@ -561,34 +598,42 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'AIM & POWER',
     lines: [
-      'drag back from your mon: the dotted line is the flight path',
-      'release inside the gold band for a PERFECT full-power shot',
+      'pull back anywhere: the dotted line is the flight path',
+      'pull distance only aims — power is the release timing on the meter',
+      'let go inside the gold band for a PERFECT full-power shot',
       "the band sits at your mon's own spot: fast ones are high and tight",
     ],
     demo: demoAim,
   },
   {
     title: 'BUMP COMBOS',
-    lines: ['bounce off a teammate mid-flight to trigger their super', 'each link adds damage and speed, so route through allies'],
+    lines: ['fly through a teammate mid-flight — full pips fire their super', 'each pass adds damage and speed, so route through allies'],
     demo: demoBump,
   },
   {
-    title: 'COMBO SHOTS',
+    title: 'PINCH SHOTS',
     lines: [
-      'the ball touching two different things — foe, ally, wall, stone — within 0.35s',
-      'flashes COMBO SHOT! (hitting the same thing twice doesn\'t count)',
+      'two different touches — foe, ally, wall, stone — within 0.35s flash PINCH!',
+      "hitting the same thing twice doesn't count",
       'relics cash it in: Binding Band pays +40% contact, Ether feeds a super pip',
     ],
     demo: demoBump,
   },
   {
     title: 'CHARGE PIPS',
-    lines: ['hits and KOs fill the gold pips under each mon', 'all-gold pips mean READY and the move name pulses'],
+    lines: [
+      'shots and KOs fill the gold pips under each mon — all-gold means READY',
+      'launch a READY mon and its super fires from the sling (STRIKE SHOT)',
+    ],
     demo: demoCharge,
   },
   {
-    title: 'ENEMY COUNTDOWN',
-    lines: ['enemies strike when the number over them hits zero', 'melee mons attack sooner, so thin them out first'],
+    title: 'ENEMIES',
+    lines: [
+      'a foe strikes when its number hits 0 — each shot you take ticks one down',
+      'melee mons start low, so thin them out first',
+      "a boss's drifting gold star is its weak face — hits there pay triple",
+    ],
     demo: demoCountdown,
   },
   {
@@ -608,12 +653,12 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'THE CLIMB',
-    lines: ['9 stages, a gym every 3rd: pick your route on the map', 'trainer stops field a mono-type squad — their mons can\'t be caught'],
+    lines: ['9 stages, a gym every 3rd: pick your route on the map', 'lose and your fallen team returns next run as the rival'],
     demo: demoClimb,
   },
   {
     title: 'MAP STOPS',
-    lines: ['rest heals · chest gives a relic · wilds and gyms can be caught', 'beat a trainer for better loot — their mons stay theirs'],
+    lines: ['rest heals+revives and chests pay an item — both still fight after', 'trainer squads can\'t be caught but pay better loot · ??? is a surprise'],
     demo: demoPickups,
   },
   {
@@ -626,19 +671,40 @@ const HELP_SECTIONS: HelpSection[] = [
     lines: ['boulder clusters wall off the lane: the ball banks right off them', 'block bounces count as wall hits: banking still pays damage'],
     demo: demoBump,
   },
+  {
+    title: 'FIELD GIMMICKS',
+    lines: ['red zones chip the ball, violet hushes supers — foes ignore both', 'warp pads teleport, green pads boost, dark wells bend the path'],
+    demo: demoHazards,
+  },
+  {
+    title: 'TYPE TRAITS',
+    lines: ['field 2+ of a type for a team-wide bonus — shinies count double', 'the chips on the map screen show what your team is running'],
+    demo: demoTraits,
+  },
 ];
 
-const HELP_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
+// Help is reference, not onboarding: two sections a page so nobody scrolls
+// a manual. Pages pair what belongs together — shot basics with the enemy
+// countdown, supers with their pips, map stops with the climb.
+const HELP_PAGES: { name: string; secs: number[] }[] = [
+  { name: 'YOUR SHOT', secs: [0, 4] },
+  { name: 'SUPERS', secs: [1, 3] },
+  { name: 'SHOT TECH', secs: [2, 5] },
+  { name: 'THE FIELD', secs: [11, 12] },
+  { name: 'GROWTH', secs: [6, 7] },
+  { name: 'THE CLIMB', secs: [8, 9] },
+  { name: 'EXTRAS', secs: [10, 13] },
+];
+export const HELP_PAGE_COUNT = HELP_PAGES.length;
+
+export const HELP_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const HELP_HEAD = 64; // title band inside the panel
-const HELP_FOOT = 40; // footer hint band
-const HELP_SECTION_H = 186; // heading + 104 demo box + 2 caption lines + gap
-const HELP_CONTENT_H = HELP_SECTIONS.length * HELP_SECTION_H;
+const HELP_FOOT = 44; // nav band
+export const HELP_PREV = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 6, w: 48, h: 32 };
+export const HELP_NEXT = { x: HELP_PANEL.x + HELP_PANEL.w - 62, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 6, w: 48, h: 32 };
+export const HELP_CLOSE = { x: HELP_PANEL.x + HELP_PANEL.w - 46, y: HELP_PANEL.y + 12, w: 34, h: 34 };
 
-export function helpScrollMax() {
-  return Math.max(0, HELP_CONTENT_H - (HELP_PANEL.h - HELP_HEAD - HELP_FOOT));
-}
-
-export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
+export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
   const r = HELP_PANEL;
   ctx.fillStyle = 'rgba(6,10,22,0.82)';
   ctx.fillRect(0, 0, W, H);
@@ -652,48 +718,55 @@ export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillStyle = '#ffd84d';
   ctx.fillText('HOW TO PLAY', r.x + r.w / 2, r.y + 42);
 
-  // scrollable body
-  ctx.save();
+  ctx.strokeStyle = '#8890b8';
+  ctx.lineWidth = 2;
+  const cx = HELP_CLOSE.x + HELP_CLOSE.w / 2, cy = HELP_CLOSE.y + HELP_CLOSE.h / 2;
   ctx.beginPath();
-  ctx.rect(r.x + 8, r.y + HELP_HEAD, r.w - 16, r.h - HELP_HEAD - HELP_FOOT);
-  ctx.clip();
-  HELP_SECTIONS.forEach((s, i) => {
-    const sy = r.y + HELP_HEAD + 10 + i * HELP_SECTION_H - scroll;
+  ctx.moveTo(cx - 7, cy - 7);
+  ctx.lineTo(cx + 7, cy + 7);
+  ctx.moveTo(cx + 7, cy - 7);
+  ctx.lineTo(cx - 7, cy + 7);
+  ctx.stroke();
+
+  // two roomy cards per page — bigger demos than the old scroll ever showed
+  HELP_PAGES[page].secs.forEach((si, slot) => {
+    const s = HELP_SECTIONS[si];
+    const sy = r.y + HELP_HEAD + 14 + slot * 336;
     const dx = r.x + 22, dw = r.w - 44;
     ctx.font = font(11);
     ctx.fillStyle = GOLD;
     ctx.fillText(s.title, r.x + r.w / 2, sy + 12);
 
-    const dy = sy + 22;
-    roundRect(ctx, dx, dy, dw, 104, 10);
+    const dy = sy + 20;
+    roundRect(ctx, dx, dy, dw, 210, 10);
     ctx.fillStyle = '#0d1126';
     ctx.fill();
     ctx.save();
-    roundRect(ctx, dx, dy, dw, 104, 10);
+    roundRect(ctx, dx, dy, dw, 210, 10);
     ctx.clip();
-    s.demo(ctx, dx, dy, dw, 104);
+    s.demo(ctx, dx, dy, dw, 210);
     ctx.restore();
 
     ctx.font = font(9);
     ctx.fillStyle = PARCH;
-    s.lines.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, dy + 128 + li * 15));
+    s.lines.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, dy + 234 + li * 16));
   });
-  ctx.restore();
 
-  // scroll track — a thumb hints there's more when the list is long
-  if (helpScrollMax() > 0) {
-    const trackY = r.y + HELP_HEAD, trackH = r.h - HELP_HEAD - HELP_FOOT;
-    const th = Math.max(30, (trackH / (HELP_CONTENT_H + trackH)) * trackH);
-    const ty = trackY + (scroll / helpScrollMax()) * (trackH - th);
-    ctx.fillStyle = '#2a3560';
-    ctx.fillRect(r.x + r.w - 12, trackY, 3, trackH);
-    ctx.fillStyle = GOLD;
-    ctx.fillRect(r.x + r.w - 12, ty, 3, th);
+  // footer nav: ‹ › arrows flank the page dots
+  ctx.font = font(14);
+  ctx.fillStyle = page > 0 ? '#e8ecf8' : '#3a4066';
+  ctx.fillText('‹', HELP_PREV.x + HELP_PREV.w / 2, HELP_PREV.y + 22);
+  ctx.fillStyle = page < HELP_PAGE_COUNT - 1 ? '#e8ecf8' : '#3a4066';
+  ctx.fillText('›', HELP_NEXT.x + HELP_NEXT.w / 2, HELP_NEXT.y + 22);
+  for (let i = 0; i < HELP_PAGE_COUNT; i++) {
+    ctx.fillStyle = i === page ? GOLD : '#3a4066';
+    ctx.beginPath();
+    ctx.arc(r.x + r.w / 2 + (i - (HELP_PAGE_COUNT - 1) / 2) * 16, HELP_PREV.y + 16, 4, 0, Math.PI * 2);
+    ctx.fill();
   }
-
   ctx.font = font(8);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('scroll to read · tap to close', r.x + r.w / 2, r.y + r.h - 16);
+  ctx.fillText(`${HELP_PAGES[page].name} — swipe or tap ‹ › · outside closes`, r.x + r.w / 2, r.y + r.h - 8);
 }
 
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
@@ -907,7 +980,7 @@ export function drawDraft(
     const role = roleOf(def.stats, def.healer);
     ctx.font = font(9);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${role.toUpperCase()}`, r.x + r.w / 2, r.y + 198);
+    ctx.fillText(`${def.type.toUpperCase()} · ${role === 'wild' ? 'BALANCED' : role.toUpperCase()}`, r.x + r.w / 2, r.y + 198);
 
     // the bump super this mon fires — a draft decision you can taste
     ctx.font = font(8);
@@ -989,7 +1062,10 @@ export function drawDraft(
 
   ctx.font = font(8);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('tip: bounce off allies to trigger their attack', W / 2, 810);
+  ctx.fillText('tip: fly through an ally mid-shot — charged allies fire their super', W / 2, 810);
+  ctx.font = font(7);
+  ctx.fillStyle = '#6a7498';
+  ctx.fillText('PIERCE flies through foes · COPY repeats the bumper\'s super · speed sets launch & the gold window', W / 2, 826);
 }
 
 export interface ShareGrid {
@@ -1117,7 +1193,7 @@ export function drawReward(
   // captured box — tap a catch, then a teammate, to swap
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(`BOX: catch rate ${Math.round(catchPct * 100)}%`, W / 2, 620);
+  ctx.fillText(`BOX: beaten foes join at ${Math.round(catchPct * 100)}%`, W / 2, 620);
   if (box.length === 0) {
     ctx.font = font(8);
     ctx.fillStyle = '#5a6284';
@@ -1294,7 +1370,7 @@ export function drawResult(
   ctx.textAlign = 'center';
   ctx.font = font(26);
   ctx.fillStyle = res.won ? '#6fdc6f' : '#ff6b6b';
-  ctx.fillText(res.won ? 'STAGE CLEAR!' : 'WIPED OUT', W / 2, 300);
+  ctx.fillText(res.won ? 'CLIMB COMPLETE!' : 'WIPED OUT', W / 2, 300);
 
   ctx.font = font(16);
   ctx.fillStyle = '#f8d030';

@@ -6,6 +6,7 @@ import type { Battle } from './battle';
 import { pickWild } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
+import { recordCapture } from './meta';
 
 export interface EventOutcome {
   note: string; // flavor line — becomes the wave banner or a map toast
@@ -28,6 +29,7 @@ const boxCatch = (b: Battle, def: SpeciesDef, lvl: number, hpFrac: number) => {
   b.box.push({ ...def, lvl });
   b.boxHp.push(hpFrac);
   b.boxLvl.push(lvl);
+  recordCapture([def.id]); // a mid-run tab close keeps the dex honest
 };
 
 const EVENTS: GameEvent[] = [

@@ -9,6 +9,7 @@ const memAch = new Set<string>();
 let memGyms = 0;
 let memEcho: { id: number; lvl: number }[] | null = null;
 let memBest: Best | null = null;
+let memCoach = false;
 
 const load = <T>(key: string): T | null => {
   try {
@@ -29,7 +30,9 @@ const store = (key: string, value: unknown) => {
 };
 
 export function dexIds(): number[] {
-  return load<number[]>('pk_dex') ?? [...memDex];
+  const raw = load<unknown>('pk_dex');
+  // a corrupt save is a bad title screen, not a crash — shape-check reads
+  return Array.isArray(raw) ? raw.filter((x): x is number => Number.isFinite(x)) : [...memDex];
 }
 
 export function recordCapture(ids: number[]) {
@@ -39,7 +42,8 @@ export function recordCapture(ids: number[]) {
 
 // shiny catches get their own ledger — the dex shows them with a gold star
 export function shinyIds(): number[] {
-  return load<number[]>('pk_dex_shiny') ?? [...memShiny];
+  const raw = load<unknown>('pk_dex_shiny');
+  return Array.isArray(raw) ? raw.filter((x): x is number => Number.isFinite(x)) : [...memShiny];
 }
 
 export function recordShiny(id: number) {
@@ -52,7 +56,18 @@ export function recordShiny(id: number) {
 export const SHINY_CHARM_AT = 100;
 export const shinyCharm = () => dexIds().length >= SHINY_CHARM_AT;
 
-const gyms = () => load<number>('pk_gyms') ?? memGyms;
+// First-run coaching: set once the first wave clears — quit mid-run and the
+// ghost pull comes back next launch.
+export const coachDone = () => load<boolean>('pk_coach') ?? memCoach;
+export function markCoached() {
+  memCoach = true;
+  store('pk_coach', true);
+}
+
+const gyms = () => {
+  const g = load<unknown>('pk_gyms');
+  return typeof g === 'number' && Number.isFinite(g) ? g : memGyms;
+};
 
 export function recordGymWin() {
   memGyms = gyms() + 1;
@@ -71,8 +86,13 @@ export function rankName(r = rank()): string {
 // The echo stores species + earned level — a fallen team comes back at
 // the strength it died with. Old saves held bare ids; read those as Lv1.
 export function echoIds(): { id: number; lvl: number }[] | null {
-  const raw = load<(number | { id: number; lvl: number })[]>('pk_echo') ?? memEcho;
-  return raw?.map((e) => (typeof e === 'number' ? { id: e, lvl: 1 } : e)) ?? null;
+  const raw = load<unknown>('pk_echo');
+  const arr = Array.isArray(raw) ? raw : memEcho;
+  return (
+    arr
+      ?.map((e) => (typeof e === 'number' ? { id: e, lvl: 1 } : e))
+      .filter((e): e is { id: number; lvl: number } => !!e && Number.isFinite(e.id) && Number.isFinite(e.lvl)) ?? null
+  );
 }
 
 export function saveEcho(mons: { id: number; lvl: number }[]) {
@@ -99,10 +119,15 @@ export interface Best {
 }
 
 export function best(): Best {
-  return (
-    load<Best>('pk_best') ??
-    memBest ?? { score: 0, stage: 0, wins: 0, runs: 0 }
-  );
+  const b = memBest ?? { score: 0, stage: 0, wins: 0, runs: 0 };
+  const raw = load<Partial<Best>>('pk_best');
+  // merge over defaults field by field — a malformed save can't NaN the run
+  if (raw && typeof raw === 'object')
+    for (const k of ['score', 'stage', 'wins', 'runs'] as const) {
+      const v = raw[k];
+      if (typeof v === 'number' && Number.isFinite(v)) b[k] = v;
+    }
+  return b;
 }
 
 // Call once when a run ends.
@@ -143,7 +168,8 @@ export const ACHIEVEMENTS: Achievement[] = [
 ];
 
 export function unlockedAch(): Set<string> {
-  return new Set(load<string[]>('pk_ach') ?? [...memAch]);
+  const raw = load<unknown>('pk_ach');
+  return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [...memAch]);
 }
 
 // Returns true the first time an id unlocks — callers show the toast.

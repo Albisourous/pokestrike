@@ -1,5 +1,6 @@
 import type { Battle } from './battle';
 import type { PokeType } from './types';
+import { bumpCooldown } from './stats';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 
@@ -57,7 +58,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'protein', name: 'Protein', item: 'protein',
-    desc: '+10% contact damage',
+    desc: '+10% hit damage',
     rarity: 'common',
     apply: (b) => { b.physMult *= 1.1; },
   },
@@ -105,7 +106,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'cband', name: 'Choice Band', item: 'choice-band',
-    desc: '+25% contact damage',
+    desc: '+25% hit damage',
     rarity: 'common',
     apply: (b) => { b.physMult *= 1.25; },
   },
@@ -157,9 +158,16 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'claw', name: 'Quick Claw', item: 'quick-claw',
-    desc: 'supers recharge 1 shot sooner',
+    desc: 'supers recharge sooner',
     rarity: 'uncommon',
-    apply: (b) => { b.cdMult *= 0.66; },
+    // cdMult only feeds construction — retune the fielded team in place
+    apply: (b) => {
+      b.cdMult *= 0.66;
+      for (const p of b.players) {
+        p.cdMax = Math.max(1, Math.round(bumpCooldown(p.def.type) * b.cdMult) - p.cdMod);
+        p.cd = Math.min(p.cd, p.cdMax);
+      }
+    },
   },
   {
     id: 'leftovers', name: 'Leftovers', item: 'leftovers',
@@ -205,7 +213,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'metro', name: 'Metronome', item: 'metronome',
-    desc: 'each combo link +10% damage',
+    desc: '+10% damage per ally hit in a chain',
     rarity: 'uncommon',
     apply: (b) => { b.comboDmg += 0.1; },
   },
@@ -271,7 +279,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'bband', name: 'Binding Band', item: 'muscle-band',
-    desc: '+40% contact on combo shots',
+    desc: '+40% hit damage on ally chains',
     rarity: 'uncommon',
     apply: (b) => { b.pinchMult += 0.4; },
   },
@@ -322,7 +330,12 @@ export const PERKS: Perk[] = [
     id: 'pherb', name: 'Power Herb', item: 'power-herb',
     desc: 'all supers recharge 1 sooner',
     rarity: 'rare',
-    apply: (b) => b.players.forEach((p) => { p.cdMod += 1; }),
+    // cdMod feeds construction too — but the fielded team needs it now
+    apply: (b) => b.players.forEach((p) => {
+      p.cdMod += 1;
+      p.cdMax = Math.max(1, p.cdMax - 1);
+      p.cd = Math.min(p.cd, p.cdMax);
+    }),
   },
   {
     id: 'eviolite', name: 'Eviolite', item: 'eviolite',
@@ -341,7 +354,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'gclaw', name: 'Grip Claw', item: 'grip-claw',
-    desc: 'each wall bounce this shot: +15% contact damage',
+    desc: 'each wall bounce this shot: +15% hit damage',
     rarity: 'rare',
     apply: (b) => { b.wallRamp += 0.15; },
   },
@@ -353,7 +366,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'soothebell', name: 'Soothe Bell', item: 'shell-bell',
-    desc: 'ally bumps +15% contact this shot',
+    desc: 'ally bumps add +15% hit damage this shot',
     rarity: 'rare',
     minRank: 1,
     apply: (b) => { b.volleyBoost += 0.15; },
@@ -388,7 +401,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'adamant', name: 'Adamant Orb', item: 'adamant-orb',
-    desc: '+30% contact & +15% launch',
+    desc: '+30% hits & +15% launch',
     rarity: 'legendary',
     apply: (b) => {
       b.physMult *= 1.3;

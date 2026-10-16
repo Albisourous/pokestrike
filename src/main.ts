@@ -7,9 +7,9 @@ import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ALL_SPECIES } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, ACHIEVEMENTS } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, ACHIEVEMENTS, coachDone, markCoached } from './game/meta';
 import {
   W,
   H,
@@ -35,7 +35,11 @@ import {
   drawPerkPick,
   CHARM_SKIP,
   REWARD_SKIP,
-  helpScrollMax,
+  HELP_PANEL,
+  HELP_PREV,
+  HELP_NEXT,
+  HELP_CLOSE,
+  HELP_PAGE_COUNT,
   DEX_BTN,
   drawDex,
   dexScrollMax,
@@ -83,13 +87,13 @@ let stage = makeStage(randSeed());
 // draft deals and the Battle both draw from it so a forced seed reproduces
 let runRng: () => number = Math.random;
 let helpOpen = false;
-let helpScroll = 0;
+let helpPage = 0;
 let dexOpen = false;
 let dexScroll = 0;
 let achOpen = false;
 let achScroll = 0;
 let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
-let helpDrag: { y0: number; s0: number; moved: boolean } | null = null;
+let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
 let startOffers: Perk[] = []; // starter charm pick between draft and battle
 let resultExtra: string | null = null;
@@ -122,7 +126,9 @@ function resize() {
   ox = (vw - W * scale) / 2;
   oy = (vh - H * scale) / 2;
   viewPad = Math.max(0, vh / scale - H) / 2;
-  if (battle) Object.assign(battle.arena, arenaRect());
+  // never re-fit mid-fight — units/hazards keep old-coord physics while the
+  // URL bar collapses; remap only between waves where spawnWave re-layouts
+  if (battle && ['map', 'reward', 'won', 'lost'].includes(battle.phase)) Object.assign(battle.arena, arenaRect());
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
 }
 addEventListener('resize', resize);
@@ -284,8 +290,8 @@ canvas.addEventListener('pointerdown', (e) => {
   const p = toLogical(e);
   if (scene === 'title') {
     if (helpOpen) {
-      // press starts a potential scroll-drag; a tap closes on release
-      helpDrag = { y0: p.y, s0: helpScroll, moved: false };
+      // press starts a potential page-swipe; taps route on release
+      helpDrag = { x0: p.x, y0: p.y, moved: false };
       return;
     }
     if (dexOpen || achOpen) {
@@ -307,7 +313,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (inRect(p.x, p.y, HELP_BTN)) {
       sfx('ui');
       helpOpen = true;
-      helpScroll = 0;
+      helpPage = 0;
       return;
     }
     if (inRect(p.x, p.y, MUTE_BTN)) {
@@ -340,6 +346,7 @@ canvas.addEventListener('pointerdown', (e) => {
       offerCache = null; // next round rerolls
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(arenaRect(), draft.picked.map(draftDef), stage, runRng);
+        battle.coach = !coachDone(); // first-ever run teaches by doing
         battle.rank = rank();
         battle.asc = Math.min(best().wins, 9); // every clear raises the heat
         battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
@@ -438,8 +445,7 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const p = toLogical(e);
   if (helpDrag) {
-    if (Math.abs(p.y - helpDrag.y0) > 6) helpDrag.moved = true;
-    helpScroll = Math.min(Math.max(helpDrag.s0 + helpDrag.y0 - p.y, 0), helpScrollMax());
+    if (Math.abs(p.x - helpDrag.x0) > 6 || Math.abs(p.y - helpDrag.y0) > 6) helpDrag.moved = true;
     return;
   }
   if (dexDrag) {
@@ -462,9 +468,18 @@ canvas.addEventListener('pointermove', (e) => {
 
 canvas.addEventListener('pointerup', (e) => {
   if (helpDrag) {
-    const { moved } = helpDrag;
+    const { x0, moved } = helpDrag;
     helpDrag = null;
-    if (!moved) helpOpen = false;
+    const p = toLogical(e);
+    if (moved) {
+      // horizontal swipe flips pages; vertical wiggle does nothing
+      if (p.x - x0 < -30) helpPage = Math.min(helpPage + 1, HELP_PAGE_COUNT - 1);
+      else if (p.x - x0 > 30) helpPage = Math.max(helpPage - 1, 0);
+      return;
+    }
+    if (inRect(p.x, p.y, HELP_CLOSE) || !inRect(p.x, p.y, HELP_PANEL)) helpOpen = false;
+    else if (inRect(p.x, p.y, HELP_NEXT)) helpPage = Math.min(helpPage + 1, HELP_PAGE_COUNT - 1);
+    else if (inRect(p.x, p.y, HELP_PREV)) helpPage = Math.max(helpPage - 1, 0);
     return;
   }
   if (dexDrag) {
@@ -499,7 +514,8 @@ canvas.addEventListener('pointercancel', () => {
   helpDrag = null;
   dexDrag = null;
   boxDrag = null;
-  if (scene === 'battle') battle?.pointerUp();
+  // an interrupt isn't a release — drop the drag, don't fire the shot
+  if (scene === 'battle') battle?.pointerCancel();
 });
 
 // wheel/trackpad scroll for desktop playtests — drag is the primary control
@@ -508,7 +524,7 @@ canvas.addEventListener(
   (e) => {
     if (scene === 'title' && helpOpen) {
       e.preventDefault();
-      helpScroll = Math.min(Math.max(helpScroll + e.deltaY, 0), helpScrollMax());
+      helpPage = Math.min(Math.max(helpPage + (e.deltaY + e.deltaX > 0 ? 1 : -1), 0), HELP_PAGE_COUNT - 1);
       return;
     }
     if (scene === 'title' && dexOpen) {
@@ -556,6 +572,11 @@ function update(dt: number) {
       clearEcho();
       battle.echoCleared = false; // consumed; battle only raises the flag
     }
+    if (battle.coachDone) {
+      markCoached();
+      battle.coachDone = false;
+      battle.coach = false;
+    }
     if (battle.phase === 'won' || battle.phase === 'lost') {
       const won = battle.phase === 'won';
       const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
@@ -593,11 +614,6 @@ function update(dt: number) {
       result.newDex = dexIds().length - dexBefore;
       if (dexIds().length >= 50) trophy('collector');
       if (dexIds().length >= CATCHABLE) trophy('living');
-      // run-end trophies: the battle toasts in-run awards itself
-      if (won && best().wins >= 3) unlockAch('triple');
-      const dexN = dexIds().length;
-      if (dexN >= 50) unlockAch('collector');
-      if (dexN >= ALL_SPECIES.length) unlockAch('living');
       if (!won) saveEcho(battle.players.map((p) => ({ id: p.def.id, lvl: p.lvl })));
       if (!won) {
         // near-miss framing: a deep wipe reads as "so close", not "failed"
@@ -658,7 +674,7 @@ function render() {
       break;
     case 'title':
       drawTitle(ctx);
-      if (helpOpen) drawHelp(ctx, helpScroll);
+      if (helpOpen) drawHelp(ctx, helpPage);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
       break;
@@ -734,8 +750,8 @@ Promise.all([
 ])
   .then(() => {
     scene = 'title';
-    // first visit opens the rules once — after that it's the HELP chip's job
-    if (best().runs === 0) helpOpen = true;
+    // no forced manual: first-run coaching lives in the battle itself —
+    // the ? chip is there for anyone who wants the reference
     startLoop(update, render);
   })
   .catch((err) => {
