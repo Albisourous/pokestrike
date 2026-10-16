@@ -672,6 +672,7 @@ function update(dt: number) {
         let extra = near
           ? `so close, fell at stage ${stageReached} of ${TOTAL_STAGES}`
           : `reached stage ${stageReached} of ${TOTAL_STAGES}`;
+        if (battle.killer) extra += ` — felled by ${battle.killer.toUpperCase()}`;
         // the sting: how close the killing wave itself was to falling
         const left = battle.enemies.filter((e) => !e.dead);
         if (left.length === 1) {

@@ -379,6 +379,7 @@ export class Battle {
   mapNode = 0; // index into region.nodes — the stop the team stands on
   hardWave = false; // the wave just cleared was a hard stop — bigger payout (trainers)
   eliteWave = false; // elite stops pay out rare-or-better relics only
+  killer: string | null = null; // what felled the run — named on the wipe screen
   lastRecruit: SpeciesDef | null = null; // gym ace prize, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
@@ -1317,7 +1318,7 @@ export class Battle {
           if (d < e.r + target.r + 4 || e.lunging <= 0) {
             e.lunging = 0;
             if (d < e.r + target.r + 8) {
-              this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower * 1.3));
+              this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower * 1.3), e);
               if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
             }
           }
@@ -3200,7 +3201,7 @@ export class Battle {
     sfx('zap');
     for (const p of this.players) {
       if (!p.dead && dist(e, p) <= e.r + p.r + 40) {
-        this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, zapPower));
+        this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, zapPower), e);
         if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
       }
     }
@@ -3223,7 +3224,7 @@ export class Battle {
     buzz([30, 40, 60]);
     this.scar(e.x, e.y, 26);
     const hit = (p: Unit, dmg: number) => {
-      this.damagePlayer(p, dmg);
+      this.damagePlayer(p, dmg, e);
       if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
     };
     switch (e.def.id) {
@@ -3331,7 +3332,7 @@ export class Battle {
           const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
           if (target) {
             sfx('zap');
-            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower), e);
             if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
           }
         }
@@ -3350,7 +3351,7 @@ export class Battle {
           const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
           if (target) {
             sfx('zap');
-            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower), e);
             if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
           }
         }
@@ -3366,14 +3367,14 @@ export class Battle {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
         if (target) {
           sfx('zap');
-          this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower));
+          this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower), e);
           if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
         }
       }
     }
   }
 
-  private damagePlayer(p: Unit, dmg: number) {
+  private damagePlayer(p: Unit, dmg: number, src?: Unit) {
     // flying trait: incoming attacks whiff outright — surfaced so a zero
     // never reads as a bug
     if (this.t('flying') > 0 && this.rng() < Math.min(0.25, this.t('flying') * 0.07)) {
@@ -3406,6 +3407,7 @@ export class Battle {
     if (p.hp <= 0) {
       p.hp = 0;
       p.dead = true;
+      this.killer = src?.def.name ?? 'the hazards'; // who lands the wipe — the result screen names it
       this.refreshTraits(); // a faint drops its type from the team bonus
       this.impact(p.x, p.y, '#ff6b6b', 1.5);
       this.burst(p.x, p.y, '#ffffff', 14, 420);
