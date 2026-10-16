@@ -50,7 +50,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Physics tunables are named consts at the top of `battle.ts`.
 - Asset canon is FRLG/Gen-3 (see Direction). Mons and items are vendored PNGs from PokeAPI/sprites; new scenery/props get sliced or blitted from `sprites/gracidea/` atlases.
-- Scenery is flat placeholder drawing until the gracidea prop pass lands — new scenery still means slice or blit from the pack, never invented blobs.
+- Scenery draws from the gracidea atlases (the prop pass landed) — new scenery still means slice or blit from the pack, never invented blobs.
 
 ## Installed agent tooling (`.devin/`)
 
