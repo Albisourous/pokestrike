@@ -958,7 +958,7 @@ export function drawDraft(
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(stageName, W / 2, 155);
-  ctx.fillText('one of three: choose for coverage and speed', W / 2, 180);
+  ctx.fillText('one of three — your picks become the balls you sling', W / 2, 180);
 
   offers.forEach((def, i) => {
     const r = draftCardRect(i);

@@ -4449,6 +4449,17 @@ export class Battle {
       ctx.strokeText(label, nx, ny - cell * 1.55);
       ctx.fillStyle = reachable ? (n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d') : current ? '#6fdc6f' : '#8a94b8';
       ctx.fillText(label, nx, ny - cell * 1.55);
+      // trainer squads are mono-type — name it so routing around a bad
+      // matchup is a choice, not a coin flip
+      if (n.kind === 'trainer') {
+        const ty = (n.ttype ?? 'normal').toUpperCase();
+        ctx.font = font(8);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(ty, nx, ny - cell * 1.55 + 12);
+        ctx.fillStyle = TYPE_COLOR[n.ttype ?? 'normal'];
+        ctx.fillText(ty, nx, ny - cell * 1.55 + 12);
+      }
     });
     ctx.restore(); // end island clip
     ctx.strokeStyle = '#2a3560';
