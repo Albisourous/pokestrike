@@ -1,7 +1,8 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES } from '../src/game/data';
+import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
 import { genRegion, routePath } from '../src/game/map';
@@ -290,6 +291,15 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     for (const w of trainerWave(mulberry32(s), 0, 'fire')) tmax = Math.max(tmax, tierOf(w.def));
   }
   ok(tmax <= 2, `depth-0 trainer squads stay ≤ tier 2 (max ${tmax})`);
+}
+
+// --- roster integrity: every evo chain resolves, every species has art ----
+{
+  const ids = new Set(ALL_SPECIES.map((d) => d.id));
+  const dangling = ALL_SPECIES.filter((d) => d.evolvesTo && !ids.has(d.evolvesTo));
+  ok(!dangling.length, `every evolvesTo resolves (${dangling.map((d) => `${d.name}->${d.evolvesTo}`).join(',') || 'none'})`);
+  const noArt = ALL_SPECIES.filter((d) => !existsSync(`public/sprites/${d.id}.png`));
+  ok(!noArt.length, `every species has a vendored sprite (${noArt.map((d) => `${d.name}#${d.id}`).join(',') || 'none'})`);
 }
 
 // --- badge case: every leader is themed to a badge, paid once -------------
