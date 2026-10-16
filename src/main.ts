@@ -7,9 +7,9 @@ import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ALL_SPECIES } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch } from './game/meta';
 import {
   W,
   H,
@@ -552,6 +552,11 @@ function update(dt: number) {
       // the next run's rival "echo"
       recordCapture(battle.box.map((b) => b.id));
       result.newDex = dexIds().length - dexBefore;
+      // run-end trophies: the battle toasts in-run awards itself
+      if (won && best().wins >= 3) unlockAch('triple');
+      const dexN = dexIds().length;
+      if (dexN >= 50) unlockAch('collector');
+      if (dexN >= ALL_SPECIES.length) unlockAch('living');
       if (!won) saveEcho(battle.players.map((p) => ({ id: p.def.id, lvl: p.lvl })));
       if (!won) {
         // near-miss framing: a deep wipe reads as "so close", not "failed"

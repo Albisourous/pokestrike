@@ -65,11 +65,11 @@ for (let iter = 0; iter < 400; iter++) {
       const cur = b.region.nodes[b.mapNode];
       const nodes = cur.links.map((li) => b.region.nodes[li]);
       const n = nodes.find((x) => x.kind === 'trainer') ?? nodes.find((x) => x.kind !== 'gym') ?? nodes[0];
-      return { tx: n.tx, ty: n.ty, kind: n.kind };
+      return { tx: n.tx, ty: n.ty, kind: n.kind, cam: b.mapCam };
     });
     if (!hit) { await sleep(300); continue; }
     const cell = 32, ox = (540 - 16 * cell) / 2, oy = 128;
-    await tap(ox + hit.tx * cell + cell / 2, oy + hit.ty * cell + cell / 2);
+    await tap(ox + hit.tx * cell + cell / 2, oy + (hit.ty - hit.cam) * cell + cell / 2);
     await page.waitForFunction(() => !window.__battle.mapWalk, null, { timeout: 15000 }).catch(() => {});
     if (hit.kind === 'trainer' && !trainerShot) {
       await waitPhase(['aim']);

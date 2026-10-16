@@ -4,6 +4,8 @@
 // in-memory values that still work for the session.
 
 const memDex = new Set<number>();
+const memShiny = new Set<number>();
+const memAch = new Set<string>();
 let memGyms = 0;
 let memEcho: { id: number; lvl: number }[] | null = null;
 let memBest: Best | null = null;
@@ -33,6 +35,16 @@ export function dexIds(): number[] {
 export function recordCapture(ids: number[]) {
   for (const id of ids) memDex.add(id);
   store('pk_dex', [...new Set([...dexIds(), ...ids])]);
+}
+
+// shiny catches get their own ledger — the dex shows them with a gold star
+export function shinyIds(): number[] {
+  return load<number[]>('pk_dex_shiny') ?? [...memShiny];
+}
+
+export function recordShiny(id: number) {
+  memShiny.add(id);
+  store('pk_dex_shiny', [...new Set([...shinyIds(), id])]);
 }
 
 // Shiny Charm — the dex-completion milestone. Fill 100 entries and every
@@ -104,4 +116,40 @@ export function recordRun(score: number, stage: number, won: boolean) {
   memBest = b;
   store('pk_best', b);
   return newBest;
+}
+
+// --- achievements: the StS-style trophy shelf ---
+// Unlocks are permanent and idempotent: unlockAch returns true once, ever.
+
+export interface Achievement {
+  id: string;
+  name: string;
+  desc: string;
+}
+
+export const ACHIEVEMENTS: Achievement[] = [
+  { id: 'first-clear', name: 'HALL OF FAME', desc: 'Finish a full climb' },
+  { id: 'ascended', name: 'ASCENDED', desc: 'Win a climb on Ascension I or higher' },
+  { id: 'triple', name: 'TRIPLE CROWN', desc: 'Win 3 climbs' },
+  { id: 'badge', name: 'GYM BREAKER', desc: 'Beat a gym leader' },
+  { id: 'rival', name: 'GRUDGE SETTLED', desc: 'Defeat your rival echo' },
+  { id: 'shiny', name: 'SHINING', desc: 'Catch a shiny' },
+  { id: 'myth', name: 'MYTH TAMER', desc: 'Catch a legendary invader' },
+  { id: 'perfect', name: 'DEAD CENTER', desc: 'Land a PERFECT release' },
+  { id: 'pinball', name: 'PINBALL WIZARD', desc: 'Chain 8+ hits in a single shot' },
+  { id: 'collector', name: 'COLLECTOR', desc: 'Fill 50 dex entries' },
+  { id: 'living', name: 'LIVING DEX', desc: 'Catch every species' },
+  { id: 'rampage', name: 'RAMPAGE', desc: 'Score 40+ KOs in one run' },
+];
+
+export function unlockedAch(): Set<string> {
+  return new Set(load<string[]>('pk_ach') ?? [...memAch]);
+}
+
+// Returns true the first time an id unlocks — callers show the toast.
+export function unlockAch(id: string): boolean {
+  if (memAch.has(id) || unlockedAch().has(id)) return false;
+  memAch.add(id);
+  store('pk_ach', [...unlockedAch(), id]);
+  return true;
 }

@@ -7,6 +7,7 @@ import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent } from './events';
 import { teamTraits } from './traits';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS } from './meta';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
@@ -920,6 +921,7 @@ export class Battle {
       this.addPunch(0.1);
       this.addShake(5);
       sfx('perfect');
+      this.award('perfect');
       buzz([30, 40, 60]);
     }
   }
@@ -1683,6 +1685,7 @@ export class Battle {
       // multi-KO callouts — chaining kills in one shot should feel huge
       this.kosThisShot++;
       this.totalKos++;
+      if (this.totalKos >= 40) this.award('rampage');
       this.maxKos = Math.max(this.maxKos, this.kosThisShot);
       // EXP: the mon that launched this shot levels up — growth you can
       // watch mid-run. Bigger foes teach more, and punching up doubles it,
@@ -1718,6 +1721,7 @@ export class Battle {
         color: caught ? '#ffd84d' : '#9df0ff',
         big: true,
       });
+      if (e.boss && this.waveHadGym) this.award('badge'); // leader down, caught or not
       if (caught) {
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
@@ -1725,8 +1729,13 @@ export class Battle {
           this.boxHp.push(1);
           this.boxLvl.push(Math.max(1, e.lvl)); // it keeps its level
         }
+        // record at capture time — a mid-run tab close keeps the dex honest
+        recordCapture([e.def.id]);
+        if (INVADERS.some((i) => i.id === e.def.id)) this.award('myth');
         if (e.boss) this.caughtBoss = true;
         if (e.shiny) {
+          recordShiny(e.def.id);
+          this.award('shiny');
           this.shiniesCaught++;
           this.score += 250;
           this.texts.push({ x: e.x, y: e.y - e.r - 56, text: 'SHINY BONUS +250', t: 1.4, color: '#ffd84d', big: true });
@@ -1895,6 +1904,7 @@ export class Battle {
     }
     this.shotCombo++;
     this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
+    if (this.maxCombo >= 8) this.award('pinball');
     // the bump feeds the launch: a momentum kick so every teammate passed
     // through literally speeds the ball up (damage ramps in strikeEnemy)
     u.vx *= 1.12;
@@ -2139,13 +2149,18 @@ export class Battle {
   }
 
   private waveCleared() {
-    if (this.inRival) this.echoCleared = true; // the echo is beaten — reclaim it
+    if (this.inRival) {
+      this.echoCleared = true; // the echo is beaten — reclaim it
+      this.award('rival');
+    }
     if (this.waveHadGym) this.gymsBeaten++;
     // last-kill slow-mo — the kill shot gets a beat to land
     this.hitStop = Math.max(this.hitStop, 0.35);
     this.burst(this.arena.x + this.arena.w / 2, this.arena.y + this.arena.h / 2, '#ffd84d', 20, 480, 1.1);
     if (this.waveIndex + 1 >= this.waveCount && this.depth >= FINAL_DEPTH) {
       this.phase = 'won';
+      this.award('first-clear');
+      if (this.asc > 0) this.award('ascended');
       this.screenFlash('#ffd84d', 0.35);
       this.addPunch(0.14);
       // victory star-shower — the whole court celebrates
@@ -2168,6 +2183,21 @@ export class Battle {
 
   // Earned level growth: pow rides the offensive stat, maxHp rides hp —
   // KOs, rare candy events and tutor drills all grow through this one path.
+  // unlockAch fires once per save ever — first unlock pops a trophy banner
+  private award(id: string) {
+    if (!unlockAch(id)) return;
+    const a = ACHIEVEMENTS.find((x) => x.id === id);
+    this.texts.push({
+      x: this.arena.x + this.arena.w / 2,
+      y: this.arena.y + 110,
+      text: `★ TROPHY: ${a?.name ?? id} ★`,
+      t: 2,
+      color: '#ffd84d',
+      big: true,
+    });
+    sfx('perfect');
+  }
+
   gainLevels(p: Unit, n: number) {
     if (p.dead || p.lvl >= LV_CAP) return;
     const l0 = p.lvl;

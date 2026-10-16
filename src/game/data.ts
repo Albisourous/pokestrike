@@ -402,7 +402,7 @@ export const ALL_SPRITE_IDS = [
   ...INVADERS.map((i) => i.id),
 ];
 
-const ALL_SPECIES = [...ROSTER, ...ENEMY_DB, ...ELITES, ...EVOS, ...INVADERS];
+export const ALL_SPECIES = [...ROSTER, ...ENEMY_DB, ...ELITES, ...EVOS, ...INVADERS];
 // any dex id -> its def; dupes exist across pools, first match (ROSTER) wins
 export const speciesById = (id: number): SpeciesDef | undefined =>
   ALL_SPECIES.find((d) => d.id === id);

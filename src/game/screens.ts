@@ -6,7 +6,7 @@ import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf } from './stats';
-import { dexIds, rankName, best, shinyCharm, SHINY_CHARM_AT } from './meta';
+import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -16,7 +16,7 @@ export const H = 960;
 const DEX_LIST = [...new Map([...ROSTER, ...ENEMY_DB, ...ELITES, ...INVADERS].map((s) => [s.id, s])).values()].sort(
   (a, b) => a.id - b.id,
 );
-const CATCHABLE = DEX_LIST.length;
+export const CATCHABLE = DEX_LIST.length;
 
 export interface RunResult {
   won: boolean;
@@ -377,8 +377,9 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
       ctx.stroke();
     }
   }
-  // the dex is a real button — same chrome as the menu buttons above
-  button(ctx, DEX_BTN, `POKÉDEX ${dexIds().length}/${CATCHABLE}`, true);
+  // the dex and the trophy shelf share one row — same chrome as the menus
+  button(ctx, DEX_BTN, `DEX ${dexIds().length}/${CATCHABLE}`, true);
+  button(ctx, ACH_BTN, `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, true);
   // the records line is the one-more-run hook — rank and best score
   const b = best();
   const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
@@ -695,7 +696,8 @@ export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
 }
 
 // --- dex overlay: every catchable mon — caught ones in color, the rest ??? ---
-export const DEX_BTN = { x: W / 2 - 140, y: FREE_BTN.y + FREE_BTN.h + 20, w: 280, h: 40 };
+export const DEX_BTN = { x: W / 2 - 140, y: FREE_BTN.y + FREE_BTN.h + 20, w: 135, h: 40 };
+export const ACH_BTN = { x: W / 2 + 5, y: DEX_BTN.y, w: 135, h: 40 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
@@ -721,6 +723,7 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText(`POKÉDEX ${dexIds().length}/${CATCHABLE}`, r.x + r.w / 2, r.y + 40);
 
   const seen = new Set(dexIds());
+  const shinies = new Set(shinyIds());
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, r.h - DEX_HEAD - 36);
@@ -734,6 +737,10 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
       drawMon(ctx, def.id, cx, cy, DEX_CELL - 20);
       ctx.fillStyle = PARCH;
       ctx.fillText(def.name.toUpperCase(), cx, cy + DEX_CELL / 2 - 8);
+      if (shinies.has(def.id)) { // a caught shiny earns the gold star
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText('★', cx + DEX_CELL / 2 - 12, cy - DEX_CELL / 2 + 14);
+      }
     } else {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       roundRect(ctx, cx - 12, cy - 12, 24, 24, 5);
@@ -756,6 +763,70 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   }
   ctx.fillStyle = '#8890b8';
   ctx.fillText('catch wild mons to fill the dex: they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+}
+
+// --- trophy shelf: the StS-style achievement list ---
+const ACH_ROW = 58;
+const ACH_HEAD = 62;
+
+export function achScrollMax() {
+  return Math.max(0, ACHIEVEMENTS.length * ACH_ROW - (DEX_PANEL.h - ACH_HEAD - 36));
+}
+
+export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
+  const r = DEX_PANEL;
+  ctx.fillStyle = 'rgba(6,10,22,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 14);
+
+  const got = unlockedAch();
+  ctx.textAlign = 'center';
+  ctx.font = font(17);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText(`TROPHIES ${got.size}/${ACHIEVEMENTS.length}`, r.x + r.w / 2, r.y + 40);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r.x + 8, r.y + ACH_HEAD, r.w - 16, r.h - ACH_HEAD - 36);
+  ctx.clip();
+  ACHIEVEMENTS.forEach((a, i) => {
+    const y = r.y + ACH_HEAD + 8 + i * ACH_ROW - scroll;
+    const has = got.has(a.id);
+    // the medallion: lit star when earned, hollow ring when not
+    ctx.strokeStyle = has ? '#ffd84d' : '#3a4370';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(r.x + 34, y + ACH_ROW / 2 - 4, 13, 0, Math.PI * 2);
+    ctx.stroke();
+    if (has) {
+      ctx.fillStyle = '#ffd84d';
+      ctx.font = font(11);
+      ctx.textAlign = 'center';
+      ctx.fillText('★', r.x + 34, y + ACH_ROW / 2);
+    }
+    ctx.textAlign = 'left';
+    ctx.font = font(10);
+    ctx.fillStyle = has ? '#ffd84d' : '#8890b8';
+    ctx.fillText(a.name, r.x + 58, y + 18);
+    ctx.font = font(8);
+    ctx.fillStyle = has ? PARCH : '#5a6288';
+    ctx.fillText(a.desc, r.x + 58, y + 36);
+    ctx.strokeStyle = 'rgba(90,98,136,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(r.x + 20, y + ACH_ROW - 8);
+    ctx.lineTo(r.x + r.w - 20, y + ACH_ROW - 8);
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.font = font(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('trophies persist across runs · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
 export function drawDraft(
