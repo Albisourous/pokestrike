@@ -32,7 +32,7 @@ export const TRAIT_DESC: Record<PokeType, string[]> = {
   fire:     ['+10% damage dealt', '+20% damage dealt', '+30% damage dealt'],
   water:    ['team heals 3% after each shot', 'team heals 6% after each shot', 'team heals 9% after each shot'],
   grass:    ['hits heal weakest ally 4%', 'hits heal weakest ally 8%', 'hits heal weakest ally 12%'],
-  electric: ['combo links +4% contact damage', 'combo links +8% contact damage', 'combo links +12% contact damage'],
+  electric: ['each chain hit +4% damage', 'each chain hit +8% damage', 'each chain hit +12% damage'],
   psychic:  ['10% of each hit splashes', '20% of each hit splashes', '30% of each hit splashes'],
   rock:     ['team takes 7% less damage', 'team takes 14% less damage', 'team takes 21% less damage'],
   poison:   ['hits 25% chance to poison', 'hits 50% chance to poison', 'hits 75% chance to poison'],

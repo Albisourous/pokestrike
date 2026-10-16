@@ -2459,7 +2459,7 @@ export class Battle {
       this.burst(p.x, p.y, '#ffd84d', 32, 640, 1.4);
       this.addPunch(0.18);
       this.addShake(14);
-      this.texts.push({ x: p.x, y: p.y - p.r - 40, text: 'TEAM COMBO!', t: 1.2, color: '#ffd84d', big: true });
+      this.texts.push({ x: p.x, y: p.y - p.r - 40, text: 'TEAM CHAIN!', t: 1.2, color: '#ffd84d', big: true });
     }
   }
 
@@ -3041,7 +3041,7 @@ export class Battle {
     if (this.maxKos >= 4) b.push({ name: 'MEGA KO', rarity: 'legendary' });
     else if (this.maxKos >= 3) b.push({ name: 'TRIPLE KO', rarity: 'rare' });
     else if (this.maxKos >= 2) b.push({ name: 'DOUBLE KO', rarity: 'common' });
-    if (this.maxCombo >= 4) b.push({ name: 'COMBO CHAIN', rarity: 'rare' });
+    if (this.maxCombo >= 4) b.push({ name: 'LONG CHAIN', rarity: 'rare' });
     if (this.caughtBoss) b.push({ name: 'BOSS THIEF', rarity: 'legendary' });
     if (this.shiniesCaught > 0) b.push({ name: 'SHINY HUNTER', rarity: 'legendary' });
     if (this.box.length >= 3) b.push({ name: 'SAFARI ZONE', rarity: 'rare' });

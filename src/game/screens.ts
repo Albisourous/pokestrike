@@ -650,7 +650,7 @@ const HELP_SECTIONS: HelpSection[] = [
     demo: demoAim,
   },
   {
-    title: 'BUMP COMBOS',
+    title: 'ALLY CHAINS',
     lines: ['fly through a teammate mid-flight — full pips fire their super', 'each pass adds damage and speed, so route through allies'],
     demo: demoBump,
   },
