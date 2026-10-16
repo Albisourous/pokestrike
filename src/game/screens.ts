@@ -1018,7 +1018,7 @@ export function drawDraft(
   t: number,
   rerolls: number,
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null, true);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
 
   ctx.textAlign = 'center';
   ctx.font = font(18);
@@ -1467,7 +1467,7 @@ export function drawPerkPick(
   t = 0,
   team: SpeciesDef[] = [],
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null, true);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
   ctx.textAlign = 'center';
   ctx.font = font(20);
   ctx.fillStyle = '#f8d030';

@@ -237,6 +237,21 @@ const DECOR_MONS: Record<'tree' | 'rock' | 'flower', [number, number, number][]>
   ],
 };
 
+// hazard zones draw as overworld props — gracidea slices squashed to the
+// footprint; the tint pad underlays each so its radius stays readable
+const HZ_TINT: Record<Hazard['kind'], string> = {
+  lava: '#c23a0e', grass: '#2f7a2a', gust: '#bfe6ff', spikes: '#241f30', static: '#4a2a78',
+  mine: '#ff9a30', warp: '#c890ff', boost: '#2a5a30', well: '#101826', power: '#d83018',
+};
+const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
+  grass: [1715, 93, 78, 33], // tall-grass tufts
+  static: [90, 268, 55, 42], // still pond — keywords go quiet inside
+  warp: [292, 140, 40, 23], // cave mouth — enter here, exit the twin
+  well: [7, 639, 47, 66], // framed pool — the water drags you in
+  boost: MT.TILE_PATH, // dirt pad
+  power: MT.TILE_PATH,
+};
+
 const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
 const SHOT_MAX = 14; // seconds — gimmick courts can hold the ball above settle speed forever
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
@@ -4602,22 +4617,27 @@ export class Battle {
     ctx.beginPath();
     ctx.rect(ox - 6, oy - 6, MAP_W * cell + 12, view * cell + 12);
     ctx.clip();
-    // your lead mon waits at the current stop, or walks the carved route
+    // the trainer waits at the current stop, or walks the carved route
     // to the one you tapped — overworld style
     const at = this.region.nodes[this.mapNode];
-    const lead = this.players.find((p) => !p.dead);
     let lx = at ? at.tx : 0;
     let ly = at ? at.ty : 0;
+    let frame = 'may_down_0';
     if (this.mapWalk) {
       const { path, t } = this.mapWalk;
       const i = Math.min(Math.floor(t), path.length - 2);
       const f = t - i;
-      lx = path[i].x + (path[i + 1].x - path[i].x) * f;
-      ly = path[i].y + (path[i + 1].y - path[i].y) * f;
+      const dx = path[i + 1].x - path[i].x;
+      const dy = path[i + 1].y - path[i].y;
+      lx = path[i].x + dx * f;
+      ly = path[i].y + dy * f;
+      // walk cycle: face the travel direction, cycle step frames
+      const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+      frame = `may_${dir}_${[1, 0, 2][Math.floor(this.time * 8) % 3]}`;
     }
-    if (at && lead) {
-      const bob = Math.sin(this.time * 4) * 2;
-      drawMon(ctx, lead.def.id, ox + lx * cell + cell / 2, oy + (ly - cam) * cell - cell * 0.1 + bob, 30);
+    if (at) {
+      const bob = this.mapWalk ? 0 : Math.sin(this.time * 4) * 1.5;
+      drawNpc(ctx, frame, ox + lx * cell + cell / 2, oy + (ly - cam) * cell + cell * 0.55 + bob, cell * 1.7);
     }
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
@@ -4877,12 +4897,27 @@ export class Battle {
     return by;
   }
 
-  // Hazard zones are gameplay overlays (like the court paint), not
-  // scenery — translucent pools the ball visibly reacts to.
+  // Hazard zones read as overworld props — a gracidea slice squashed to
+  // the zone's footprint (vent, grass tufts, ponds, rocks, cave mouth)
+  // with the animated cue that sells what it does. The tinted pad keeps
+  // the radius readable while the atlas streams in. Mines are Voltorb.
   private drawHazard(ctx: CanvasRenderingContext2D, hz: Hazard) {
     const TAU = Math.PI * 2;
     ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = HZ_TINT[hz.kind];
+    ctx.beginPath();
+    ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.6, 0, 0, TAU);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    const prop = HZ_PROP[hz.kind];
+    if (prop) {
+      const dw = hz.r * 2.1;
+      const dh = Math.min(hz.r * 1.5, dw * (prop[3] / prop[2]) * 0.85);
+      drawTile(ctx, prop, hz.x - dw / 2, hz.y - dh / 2, dw, dh);
+    }
     if (hz.kind === 'lava') {
+      // molten pool — no atlas tile, the two-tone pulse reads as lava
       const pulse = 0.34 + Math.sin(this.time * 2.4) * 0.07;
       ctx.globalAlpha = pulse + 0.2;
       ctx.fillStyle = '#c23a0e';
@@ -4894,31 +4929,8 @@ export class Battle {
       ctx.beginPath();
       ctx.ellipse(hz.x, hz.y, hz.r * 0.55, hz.r * 0.36, 0, 0, TAU);
       ctx.fill();
-    } else if (hz.kind === 'grass') {
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = '#2f7a2a';
-      ctx.beginPath();
-      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.6, 0, 0, TAU);
-      ctx.fill();
-      ctx.globalAlpha = 0.8;
-      ctx.strokeStyle = '#57b04e';
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 9; i++) {
-        const a = (i / 9) * TAU;
-        const bx = hz.x + Math.cos(a) * hz.r * 0.7;
-        const by = hz.y + Math.sin(a) * hz.r * 0.42;
-        ctx.beginPath();
-        ctx.moveTo(bx, by);
-        ctx.lineTo(bx + Math.cos(a) * 4, by - 8);
-        ctx.stroke();
-      }
     } else if (hz.kind === 'gust') {
       const d = hz.dir ?? 1;
-      ctx.globalAlpha = 0.25;
-      ctx.fillStyle = '#bfe6ff';
-      ctx.beginPath();
-      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.5, 0, 0, TAU);
-      ctx.fill();
       ctx.globalAlpha = 0.7;
       ctx.strokeStyle = '#e8f6ff';
       ctx.lineWidth = 2.5;
@@ -4934,13 +4946,7 @@ export class Battle {
         ctx.stroke();
       }
     } else if (hz.kind === 'static') {
-      // silence field: a crackling violet pool — keywords can't fire inside
-      const pulse = 0.3 + Math.sin(this.time * 3.2) * 0.08;
-      ctx.globalAlpha = pulse + 0.2;
-      ctx.fillStyle = '#4a2a78';
-      ctx.beginPath();
-      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.6, 0, 0, TAU);
-      ctx.fill();
+      // silence pool: arcs rippling the surface — keywords go dead inside
       ctx.globalAlpha = 0.75;
       ctx.strokeStyle = '#c8a0ff';
       ctx.lineWidth = 2;
@@ -4951,19 +4957,15 @@ export class Battle {
         ctx.stroke();
       }
     } else if (hz.kind === 'warp') {
-      // linked portal: violet ring with a rotating inner swirl
+      // linked pads: a violet ring pulses around each cave mouth
       const pulse = 0.7 + Math.sin(this.time * 4) * 0.3;
-      ctx.globalAlpha = 0.35;
+      ctx.globalAlpha = 0.4;
       ctx.strokeStyle = '#c890ff';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(hz.x, hz.y, hz.r * (1 + pulse * 0.15), 0, TAU);
       ctx.stroke();
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#2a1840';
-      ctx.beginPath();
-      ctx.arc(hz.x, hz.y, hz.r * 0.7, 0, TAU);
-      ctx.fill();
+      ctx.globalAlpha = 0.8;
       ctx.strokeStyle = '#e0b0ff';
       ctx.lineWidth = 2;
       for (let i = 0; i < 3; i++) {
@@ -4973,13 +4975,8 @@ export class Battle {
         ctx.stroke();
       }
     } else if (hz.kind === 'boost') {
-      // speed-up panel: green pad, chevrons chasing around the rim
-      ctx.globalAlpha = 0.3;
-      ctx.fillStyle = '#2a5a30';
-      ctx.beginPath();
-      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.55, 0, 0, TAU);
-      ctx.fill();
-      ctx.globalAlpha = 0.8;
+      // speed-up pad: chevrons chase around the dirt patch
+      ctx.globalAlpha = 0.85;
       ctx.strokeStyle = '#9df09d';
       ctx.lineWidth = 2.5;
       for (let i = 0; i < 3; i++) {
@@ -4993,12 +4990,7 @@ export class Battle {
         ctx.stroke();
       }
     } else if (hz.kind === 'well') {
-      // gravity barrier: a dark disc with arcs spiraling inward
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = '#101826';
-      ctx.beginPath();
-      ctx.arc(hz.x, hz.y, hz.r, 0, TAU);
-      ctx.fill();
+      // whirlpool: arcs spiral inward over the deep pool
       ctx.globalAlpha = 0.6;
       ctx.strokeStyle = '#7ab8ff';
       ctx.lineWidth = 2;
@@ -5014,10 +5006,9 @@ export class Battle {
       ctx.arc(hz.x, hz.y, hz.r * 0.1, 0, TAU);
       ctx.fill();
     } else if (hz.kind === 'mine') {
-      // weaponizable trap: dark charge orb, pulsing hot core, faint blast
-      // rim so its reach is readable before you bank into it
+      // Voltorb IS the mine — the dashed rim marks the blast reach
       const pulse = 0.6 + Math.sin(this.time * 5) * 0.4;
-      ctx.globalAlpha = 0.25;
+      ctx.globalAlpha = 0.3 + pulse * 0.15;
       ctx.strokeStyle = '#ff9a30';
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 8]);
@@ -5026,20 +5017,18 @@ export class Battle {
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
-      ctx.fillStyle = '#1c1620';
-      ctx.beginPath();
-      ctx.arc(hz.x, hz.y, hz.r * 0.55, 0, TAU);
-      ctx.fill();
-      ctx.strokeStyle = '#ff9a30';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = pulse > 0.7 ? '#ffd84d' : '#f08030';
-      ctx.beginPath();
-      ctx.arc(hz.x, hz.y, hz.r * 0.2 * (0.8 + pulse * 0.4), 0, TAU);
-      ctx.fill();
+      try {
+        drawMon(ctx, 100, hz.x, hz.y - hz.r * 0.2, hz.r * 1.7);
+      } catch {
+        // sprite still streaming — the tinted pad + rim still read
+      }
+    } else if (hz.kind === 'spikes') {
+      // a cluster of Strength-rock boulders is the jagged strip
+      for (const [ox, oy] of [[-0.55, 0.05], [0.05, -0.18], [0.5, 0.1]] as const) {
+        drawTile(ctx, MT.TILE_ROCK, hz.x + ox * hz.r - hz.r * 0.45, hz.y + oy * hz.r - hz.r * 0.45, hz.r * 0.9, hz.r * 0.9);
+      }
     } else if (hz.kind === 'power') {
-      // ATK field: a hot red disc with chevrons marching upward — hits
-      // landed from inside carry +50% charge
+      // ATK field: chevrons march upward over the dirt ring
       const pulse = 0.16 + Math.sin(this.time * 3) * 0.04;
       ctx.globalAlpha = pulse + 0.14;
       ctx.fillStyle = '#d83018';
@@ -5059,26 +5048,8 @@ export class Battle {
         ctx.closePath();
         ctx.fill();
       }
-    } else {
-      ctx.globalAlpha = 0.45;
-      ctx.fillStyle = '#241f30';
-      ctx.beginPath();
-      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.55, 0, 0, TAU);
-      ctx.fill();
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = '#9a9ab0';
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * TAU + 0.4;
-        const sx = hz.x + Math.cos(a) * hz.r * 0.55;
-        const sy = hz.y + Math.sin(a) * hz.r * 0.3;
-        ctx.beginPath();
-        ctx.moveTo(sx - 4, sy);
-        ctx.lineTo(sx, sy - 9);
-        ctx.lineTo(sx + 4, sy);
-        ctx.closePath();
-        ctx.fill();
-      }
     }
+    // grass tufts carry the read on their own
     ctx.restore();
   }
 
