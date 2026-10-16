@@ -903,7 +903,7 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
 
 // --- trophy shelf: the badge case on top, the StS-style achievement list under ---
 const ACH_ROW = 58;
-const ACH_HEAD = 172; // the badge case owns the head — the trophy list scrolls below
+const ACH_HEAD = 204; // the badge case owns the head — the trophy list scrolls below
 
 export function achScrollMax() {
   return Math.max(0, ACHIEVEMENTS.length * ACH_ROW - (DEX_PANEL.h - ACH_HEAD - 36));
@@ -932,7 +932,7 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText(`BADGE CASE ${held.size}/${BADGES.length}`, r.x + r.w / 2, r.y + 62);
   BADGES.forEach((b, i) => {
     const cx = r.x + r.w / 2 + ((i % 4) - 1.5) * 106;
-    const cy = r.y + 92 + Math.floor(i / 4) * 58;
+    const cy = r.y + 96 + Math.floor(i / 4) * 64;
     const has = held.has(b.boss);
     ctx.beginPath();
     for (let k = 0; k < 8; k++) {
