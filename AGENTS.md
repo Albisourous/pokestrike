@@ -8,6 +8,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 
 - North star: **Monster Strike physics · Pokémon pixel-art theme · StS progression**. If a change serves none of the three, it's scope creep.
 - One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd), via the FREE PLAY button; `?seed=NNN` forces a seed for debugging. Endless is future work — don't build for it.
+- Two level canons: **battle arenas are Archero** — each wave pulls one hand-authored 9×11 room template (`ROOM_LAYOUTS`/`ROOM_BOSS` char grids in `data.ts`: `2` rock, `3` liquid moat, `4` mine, `S` spawn anchor), never procedural geometry; **the overworld map is Slay the Spire** — the seeded branching node map it already is.
 - Single art source: **Pokémon FireRed/LeafGreen (Gen 3 GBA)**. Mon sprites are official FRLG battle fronts vendored from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) (`sprites/pokemon/versions/generation-iii/firered-leafgreen/<id>.png`); item icons come from the same repo (`sprites/items/`). Scenery/props get sliced or blitted from the Gracidea `tileset`/`npcs` atlases at `public/sprites/gracidea/` (RSE, same era). Never procedural shapes.
 - Anti-goals: no monetization mechanics, no non-Pokémon content.
 - Replayability, in order: run variety → ascension modifiers → unlockables. Keep it simple until the core is solid.
@@ -24,11 +25,11 @@ server, 540×960 letterboxed logical space, custom circle physics.
 ## Layout
 
 - `src/core/` — engine plumbing: `vec.ts` (vector math), `loop.ts` (rAF loop), `assets.ts` (sprite cache), `audio.ts` (synth SFX + haptics)
-- `src/game/data.ts` — all content: roster/enemy species with canonical base stats, stage waves (normalized arena coords), seeded stage generator
+- `src/game/data.ts` — all content: roster/enemy species with canonical base stats, stage waves (normalized arena coords), seeded stage generator, `ROOM_LAYOUTS` 9×11 Archero room pool + `buildRoom` compiler
 - `src/game/stats.ts` — stat-to-mechanic formulas (Atk/Def = physical, SpA/SpD = special, Spe = movement)
 - `src/game/types.ts` — Pokémon type chart + colors
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering + the region-map interstitial
-- `src/game/map.ts` — seeded island generator for the climb map (value-noise terrain, decor); rows of 1–2 linked stops (wild/trainer/chest/rest/event, gyms forced every 3rd row) — branching route, not a linear path; tile draws key magenta from the gracidea tileset
+- `src/game/map.ts` — seeded island generator for the climb map (value-noise terrain, decor); a fixed-lane StS tree: triplets of fork(2 battle doors) → fan(3 utility doors) → gym(1), edges deterministic by lane (door→own side+center, fan→gym, gym→both doors); tile draws key magenta from the gracidea tileset
 - `src/game/events.ts` — the `?`-stop event pool (heals, catches, ambush scripted waves, egg)
 - `src/game/traits.ts` — tiered type traits from fielded mons (shiny counts double)
 - `src/game/maptiles.ts` — `TILE_*` source rects into `tileset.webp` for the map
@@ -38,6 +39,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `public/sprites/gracidea/` — scenery canon (see Direction): `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
 - `public/sprites/<id>.png` — 64×64 FRLG battle fronts by dex id, vendored from PokeAPI/sprites
 - `public/sprites/items/<name>.png` — item icons from the same PokeAPI repo (`sprites/items/<name>.png`)
+- `public/sprites/badges/<n>.png` — gym badge art from the same repo (`sprites/badges/<n>.png`, canon league order: Kanto 1–8, Johto 9–16, Hoenn 17–24); `GymBadge.icon` maps leaders to them
 - `public/sprites/cries/<id>.ogg` — mon cries, one per roster id, played lazily by `cry()`
 
 ## Conventions
@@ -48,6 +50,10 @@ server, 540×960 letterboxed logical space, custom circle physics.
   lives in `MOVE_NAME`, cooldown in `BUMP_CD` (all in `stats.ts`). Keep them
   in sync when changing a super.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
+- New battle rooms are data: author a 9×11 char grid in `ROOM_LAYOUTS`
+  (mirror-symmetric, anchors on floor, clear lanes — the loader validates
+  dims and P→E/anchor reachability). First three entries stay gentle for
+  stage openers; gyms use `ROOM_BOSS`.
 - Physics tunables are named consts at the top of `battle.ts`.
 - Asset canon is FRLG/Gen-3 (see Direction). Mons and items are vendored PNGs from PokeAPI/sprites; new scenery/props get sliced or blitted from `sprites/gracidea/` atlases.
 - Scenery draws from the gracidea atlases (the prop pass landed) — new scenery still means slice or blit from the pack, never invented blobs.

@@ -213,7 +213,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.boxHp.push(1);
   b.boxLvl.push(3);
   b.phase = 'reward';
+  b.teamSel = 1; // a swap started from the team side resolves the same way
   b.swapFromBox(0, 1); // bench the Lv7, bring in the box Lv3
+  ok(b.teamSel === -1 && b.boxSel === -1, 'swap clears both selections');
   ok(p.lvl === 3, `swapped-in mon carries its own level (lv${p.lvl})`);
   ok(b.boxLvl[0] === 7, `benched mon keeps earned levels (boxLvl ${b.boxLvl})`);
   ok(Math.abs(p.pow - ROLE_MODS[p.role].pow * lvlPow(offStat(p.def.stats, p.def.type), 3)) < 0.001, 'swap recomputes pow from its own level');
@@ -293,6 +295,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).pickEventChoice(3); // REVIVE 350
   ok(!p1.dead && p1.hp === Math.round(p1.maxHp / 2) && b.score === 250, 'mart revive trades score for a standing mon');
   ok(!!(b as any).eventChoice, 'mart keeps the board open until LEAVE');
+  (b as any).pickEventChoice(0); // POTION 200 — one-of-each stock…
+  ok(b.score === 50, 'mart potion trades score for a heal');
+  ok(!(b as any).eventChoice.options.some((o: { label: string }) => o.label.startsWith('POTION')), 'a bought shelf item leaves the board');
+  const left = (b as any).eventChoice.options.length;
+  (b as any).pickEventChoice(0); // RARE CANDY 400 — the wallet can't cover it
+  ok((b as any).eventChoice.options.length === left && b.score === 50, 'short score keeps the item on the shelf');
   (b as any).pickEventChoice((b as any).eventChoice.options.length - 1);
   ok(!(b as any).eventChoice, 'LEAVE resolves the mart stop');
 }
@@ -425,6 +433,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     'leader entourage is mono-type',
   );
   (b as any).hurt(boss, 999999, '#fff'); // KO the leader — caught or fainted, the badge pays
+  if (!boss.dead) (b as any).hurt(boss, 999999, '#fff'); // focus sash holds once — the second hit lands
   ok(gymBadges().has(boss.def.id), `gym KO banks the ${badgeOf(boss.def.id)?.name}`);
   ok(unlockedAch().has(`gym-${boss.def.id}`), `gym KO unlocks the leader trophy`);
   ok(earnBadge(boss.def.id) === null, 'the same leader pays the badge once');

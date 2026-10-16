@@ -1,8 +1,8 @@
 // Region map generator — porygion's idea (seeded island, banded stops,
 // Manhattan routes) kept simple: one wobbling island of grass ringed by
-// sand and sea, nine stops zigzagging south→north, scenery sprinkled on
-// the open land. Rows read as triplets — battle → utility → gym — and
-// the map view scrolls one triplet at a time.
+// sand and sea, a StS-style tree of stops climbing south→north, scenery
+// sprinkled on the open land. Rows read as triplets — fork(2) → fan(3) →
+// gym(1) — and the map view scrolls one triplet at a time.
 import { mulberry32 } from '../core/rng';
 import { gracidea } from '../core/assets';
 import { TOTAL_STAGES, TRAINER_TYPES } from './data';
@@ -29,7 +29,7 @@ export interface MapNode {
 }
 export interface RegionMap {
   tiles: Uint8Array; // MAP_W*MAP_H — T_*
-  nodes: MapNode[]; // TOTAL_STAGES stops, nodes[0] is the southern start
+  nodes: MapNode[]; // every stop on the tree — nodes[0] is the southern start
   route: Set<number>; // tile indices carved between nodes
   decor: Map<number, 'tree' | 'flower' | 'rock'>; // scenery on open land
 }
@@ -47,8 +47,8 @@ const vn = (x: number, y: number, s: number) => {
   return (a + (b - a) * xf) * (1 - yf) + (c + (d - c) * yf) * yf;
 };
 
-// Branching stops per row — gyms are forced singles every 3rd row; the
-// rest offer 1-2 linked choices (wild/trainer/chest/rest) StS-style.
+// Fixed-lane tree: fork rows field 2 stops, fan rows 3, gyms are forced
+// singles every 3rd row — so the graph is a clean branching tree.
 
 export function genRegion(seed: number): RegionMap {
   const rng = mulberry32(seed);
@@ -101,11 +101,11 @@ export function genRegion(seed: number): RegionMap {
   }
   const land = (x: number, y: number) => x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && tiles[y * MAP_W + x] === T_GRASS;
 
-  // Stops: HOME (row -1, where the draft happened — no fight) then triplet
-  // rows south→north. Each triplet reads fight-fork → utility-fork → gym:
-  // r%3==0 rows fork wild/trainer, r%3==1 rows fork two distinct utility
-  // doors (chest/rest/?), r%3==2 converges on a lone gym. Every non-gym
-  // row is a real left/right choice — no lone middle rows.
+  // Stops: HOME (row -1, where the draft happened — no fight) then a fixed
+  // tree south→north — each triplet is fork(2) → fan(3) → gym(1). r%3==0
+  // rows are two battle doors, r%3==1 rows fan three of the four utility
+  // kinds (chest/rest/mart/?), r%3==2 converges on a lone gym. Lanes never
+  // jitter — the tree shape is the same on every seed.
   const shuffle = <T>(arr: T[]) => {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
@@ -114,61 +114,34 @@ export function genRegion(seed: number): RegionMap {
     return arr;
   };
   const nodes: MapNode[] = [];
+  // the coastline can leave a lane in the sea — stamp a little grass
+  // clearing under every stop so nothing stands on water
+  const stop = (tx: number, ty: number, kind: NodeKind, row: number) => {
+    for (let dy = -1; dy <= 1; dy++)
+      for (let dx = -1; dx <= 1; dx++)
+        if (!dx || !dy) tiles[(ty + dy) * MAP_W + tx + dx] = T_GRASS;
+    nodes.push({
+      tx,
+      ty,
+      kind,
+      row,
+      links: [],
+      ...(kind === 'trainer' || kind === 'elite' ? { ttype: TRAINER_TYPES[Math.floor(rng() * TRAINER_TYPES.length)] } : {}),
+    });
+  };
   // HOME: the starter pick — nodes[0] so the climb starts standing on it,
-  // one row below stage 1's fork. It never hosts a wave. The island's
-  // coastline can put the bottom row in the sea, so clear a little lot.
-  nodes.push({ tx: Math.round(cx), ty: MAP_H - 2, kind: 'start', row: -1, links: [] });
-  for (let dy = -1; dy <= 1; dy++)
-    for (let dx = -1; dx <= 1; dx++)
-      if (!dx || !dy) tiles[(MAP_H - 2 + dy) * MAP_W + Math.round(cx) + dx] = T_GRASS;
+  // one row below stage 1's fork. It never hosts a wave.
+  stop(Math.round(cx), MAP_H - 2, 'start', -1);
   for (let r = 0; r < TOTAL_STAGES; r++) {
     const ty = MAP_H - 2 - (r + 1) * ROW_GAP;
-    let kinds: NodeKind[];
-    if (r % 3 === 2) kinds = ['gym'];
-    // utility rows always field 3 of the 4 kinds — a half's rest/?/mart
+    // utility rows field 3 of the 4 kinds — a half's rest/?/mart
     // guarantees below need three donors on the back nine's lone row
-    else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'mart', 'event']).slice(0, 3);
-    // battle fork: a catchable door vs harder doors — three-lane rows add
-    // an ELITE squad to the wild/trainer mix
-    else kinds = shuffle<NodeKind>(rng() < 0.5 ? ['wild', 'trainer', 'elite'] : rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
+    const kinds: NodeKind[] =
+      r % 3 === 2 ? ['gym']
+      : r % 3 === 1 ? shuffle<NodeKind>(['chest', 'rest', 'mart', 'event']).slice(0, 3)
+      : shuffle<NodeKind>(rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
     const xs = kinds.length === 1 ? [0.5] : kinds.length === 3 ? [0.16, 0.5, 0.84] : [0.28, 0.72];
-    kinds.forEach((kind, k) => {
-      const want = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.6);
-      // a stop needs land + 4 tiles clear of its rowmates — labels like
-      // AROMA LADY are ~3.5 tiles wide, so anything tighter collides
-      const ok = (t: number) =>
-        t >= 1 && t <= MAP_W - 2 && land(t, ty) &&
-        !nodes.some((o) => o.row === r && Math.abs(o.tx - t) < 4);
-      let tx = want;
-      if (!ok(tx)) {
-        tx = -1;
-        for (let d = 1; d < MAP_W && tx < 0; d++)
-          for (const c of [want - d, want + d])
-            if (ok(c)) { tx = c; break; }
-        if (tx < 0) {
-          // no spaced land on this row — take the tile farthest from the
-          // rowmates (land preferred); links carve the route to it anyway
-          let bestT = want, bestScore = -1;
-          for (let t = 1; t <= MAP_W - 2; t++) {
-            const g = Math.min(
-              99,
-              ...nodes.filter((o) => o.row === r).map((o) => Math.abs(o.tx - t)),
-            );
-            const score = g * 100 + (land(t, ty) ? 50 : 0);
-            if (score > bestScore) { bestScore = score; bestT = t; }
-          }
-          tx = bestT;
-        }
-      }
-      nodes.push({
-        tx,
-        ty,
-        kind,
-        row: r,
-        links: [],
-        ...(kind === 'trainer' || kind === 'elite' ? { ttype: TRAINER_TYPES[Math.floor(rng() * TRAINER_TYPES.length)] } : {}),
-      });
-    });
+    kinds.forEach((kind, k) => stop(Math.round(xs[k] * (MAP_W - 1)), ty, kind, r));
   }
 
   // StS-style facility guarantees (pokelike's rule): each half of the
@@ -191,28 +164,18 @@ export function genRegion(seed: number): RegionMap {
     convert(lo, hi, 'mart');
   }
 
-  // StS-style routing: a stop only reaches ADJACENT lanes in the next
-  // row — outer lanes can't jump the whole board, so an early door can
-  // lock you out of a later reward. The nearest lane always opens; each
-  // side lane ~55%. Backfill keeps every stop reachable.
+  // StS tree edges — lane order is fixed, so the graph is deterministic:
+  // each battle door opens its own side of the fan + center (2→3), every
+  // fan lane converges on the gym (3→1), and the gym re-opens both battle
+  // doors (1→2). An early door can still lock you out of a later reward —
+  // that's the routing tension — but every stop stays reachable.
   const idxOf = (n: MapNode) => nodes.indexOf(n);
-  const nx = (n: MapNode) => n.tx / (MAP_W - 1);
   for (let r = 0; r < TOTAL_STAGES - 1; r++) {
     const from = nodes.filter((n) => n.row === r);
     const to = nodes.filter((n) => n.row === r + 1);
-    for (const a of from) {
-      const inReach = to
-        .filter((b) => Math.abs(nx(b) - nx(a)) <= 0.37)
-        .sort((x, y) => Math.abs(x.tx - a.tx) - Math.abs(y.tx - a.tx));
-      if (!inReach.length) inReach.push([...to].sort((x, y) => Math.abs(x.tx - a.tx) - Math.abs(y.tx - a.tx))[0]);
-      for (const [i, b] of inReach.entries()) if (i === 0 || rng() < 0.55) a.links.push(idxOf(b));
-    }
-    for (const b of to) {
-      if (!from.some((a) => a.links.includes(idxOf(b)))) {
-        const nearest = [...from].sort((x, y) => Math.abs(x.tx - b.tx) - Math.abs(y.tx - b.tx))[0];
-        nearest.links.push(idxOf(b));
-      }
-    }
+    for (const [i, a] of from.entries())
+      for (const b of from.length === 1 || to.length === 1 ? to : to.slice(i, i + 2))
+        a.links.push(idxOf(b));
   }
   // HOME feeds stage 1's whole fork — the first step is the only free one
   nodes[0].links = nodes.filter((n) => n.row === 0).map(idxOf);

@@ -939,8 +939,8 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillStyle = '#ffd84d';
   ctx.fillText(`TROPHIES ${got.size}/${ACHIEVEMENTS.length}`, r.x + r.w / 2, r.y + 40);
 
-  // the badge case: one themed octagon per leader — earned ones light in
-  // their badge color with the beaten leader's ace inside
+  // the badge case: one canon badge per leader, mounted on a dark
+  // octagon socket — earned glyphs light in their badge color
   const held = gymBadges();
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
@@ -958,13 +958,14 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
       else ctx.moveTo(px, py);
     }
     ctx.closePath();
-    ctx.fillStyle = has ? b.color : '#1b2140';
+    ctx.fillStyle = '#1b2140';
     ctx.fill();
     ctx.strokeStyle = has ? '#ffd84d' : '#3a4370';
     ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.globalAlpha = has ? 1 : 0.3;
-    drawMon(ctx, b.boss, cx, cy - 2, 30);
+    const img = itemSprite(`badges/${b.icon}`);
+    ctx.globalAlpha = has ? 1 : 0.28; // unearned slots read as indentations
+    if (img) ctx.drawImage(img, cx - 15, cy - 15, 30, 30);
     ctx.globalAlpha = 1;
     ctx.font = font(6.5);
     ctx.fillStyle = has ? PARCH : '#5a6288';
@@ -1259,6 +1260,7 @@ export function drawReward(
   teamHp: number[],
   teamLvl: number[],
   selBox: number,
+  selTeam: number,
   boxScroll: number,
   catchPct: number,
   recruit: SpeciesDef | null,
@@ -1321,7 +1323,7 @@ export function drawReward(
     ctx.globalAlpha = 1;
   }
 
-  // captured box — tap a catch, then a teammate, to swap
+  // captured box — tap a catch and a teammate, in either order, to swap
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(`BOX: beaten foes join at ${Math.round(catchPct * 100)}%`, W / 2, 620);
@@ -1341,15 +1343,24 @@ export function drawReward(
     ctx.fill();
     rim(ctx, r, 8, i === selBox ? '#ffd84d' : '#2a3560', i === selBox ? 2 : 1);
     edge(ctx, r, 8);
+    const ko = (boxHp[i] ?? 1) <= 0;
+    ctx.globalAlpha = ko ? 0.3 : 1;
     (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 23, 38);
-    if (def.shiny) {
+    ctx.globalAlpha = 1;
+    if (ko) {
+      ctx.font = font(9);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillText('KO', r.x + r.w / 2 + 1, r.y + 27);
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillText('KO', r.x + r.w / 2, r.y + 26);
+    } else if (def.shiny) {
       ctx.font = font(7);
       ctx.fillStyle = '#ffd84d';
       ctx.fillText('✦', r.x + r.w - 8, r.y + 11);
     }
     hpBar(ctx, r.x + 6, r.y + 42, r.w - 12, boxHp[i] ?? 1);
     ctx.font = font(8);
-    ctx.fillStyle = TYPE_COLOR[def.type];
+    ctx.fillStyle = ko ? '#5a6284' : TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 54);
     const lvl = boxLvl[i] ?? 1;
     if (lvl > 1) {
@@ -1381,7 +1392,7 @@ export function drawReward(
     roundRect(ctx, r.x, r.y, r.w, r.h, 8);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    rim(ctx, r, 8, selBox >= 0 ? GOLD : '#2a3560', 1);
+    rim(ctx, r, 8, i === selTeam ? '#ffd84d' : selBox >= 0 ? GOLD : '#2a3560', i === selTeam ? 2 : 1);
     edge(ctx, r, 8);
     ctx.fillStyle = TYPE_COLOR[def.type];
     ctx.fillRect(r.x + 5, r.y + 5, def.type2 ? (r.w - 10) / 2 : r.w - 10, 3);
@@ -1389,15 +1400,24 @@ export function drawReward(
       ctx.fillStyle = TYPE_COLOR[def.type2];
       ctx.fillRect(r.x + 5 + (r.w - 10) / 2, r.y + 5, (r.w - 10) / 2, 3);
     }
+    const ko = (teamHp[i] ?? 1) <= 0;
+    ctx.globalAlpha = ko ? 0.3 : 1;
     (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 30, 40);
-    if (def.shiny) {
+    ctx.globalAlpha = 1;
+    if (ko) {
+      ctx.font = font(10);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillText('KO', r.x + r.w / 2 + 1, r.y + 34);
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillText('KO', r.x + r.w / 2, r.y + 33);
+    } else if (def.shiny) {
       ctx.font = font(7);
       ctx.fillStyle = '#ffd84d';
       ctx.fillText('✦', r.x + r.w - 9, r.y + 13);
     }
     hpBar(ctx, r.x + 8, r.y + 54, r.w - 16, teamHp[i] ?? 1);
     ctx.font = font(8);
-    ctx.fillStyle = PARCH;
+    ctx.fillStyle = ko ? '#5a6284' : PARCH;
     ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 67);
     const lvl = teamLvl[i] ?? 1;
     if (lvl > 1) {
@@ -1415,7 +1435,11 @@ export function drawReward(
   ctx.font = font(8);
   ctx.fillStyle = '#5a6284';
   ctx.fillText(
-    selBox >= 0 ? 'tap a teammate to swap in' : 'tap a box mon, then a teammate',
+    selTeam >= 0
+      ? 'tap a box mon to swap in'
+      : selBox >= 0
+        ? 'tap a teammate to swap in'
+        : 'tap a team mon and a box mon to swap them',
     W / 2,
     880,
   );

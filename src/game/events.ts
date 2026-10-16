@@ -12,6 +12,7 @@ import { recordCapture } from './meta';
 export interface EventChoice {
   label: string;
   run: (b: Battle) => EventOutcome;
+  cost?: number; // mart shelf price — the board dims what the wallet can't cover
 }
 
 export interface EventOutcome {
@@ -261,39 +262,53 @@ const EVENTS: GameEvent[] = [
 
 // Poké Mart: the ?-choice box doubles as a shop board — every buy re-prompts
 // the shelf until LEAVE, and score is the wallet so purchases tax the run's
-// final tally. One mart per map half is guaranteed by genRegion.
-export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT’LL IT BE?'): { prompt: string; options: EventChoice[] } {
-  const shelf = (cost: number, label: string, buy: (bb: Battle) => string): EventChoice => ({
+// final tally. One mart per map half is guaranteed by genRegion. Stock is
+// one-of-each per visit — `sold` rides the re-prompt chain so a bought
+// item leaves the board.
+export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT’LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[] } {
+  const reprompt = (bb: Battle, note: string): EventOutcome => ({ note, choices: martStock(bb, note, sold) });
+  const shelf = (key: string, cost: number, label: string, buy: (bb: Battle) => string): EventChoice => ({
     label: `${label} — ${cost} SCORE`,
+    cost,
     run: (bb) => {
-      const note = bb.score < cost ? 'NOT ENOUGH SCORE.' : (bb.score -= cost, buy(bb));
-      return { note, choices: martStock(bb, note) };
+      if (bb.score < cost) return reprompt(bb, 'NOT ENOUGH SCORE.');
+      bb.score -= cost;
+      sold.add(key);
+      return reprompt(bb, buy(bb));
     },
   });
-  const options: EventChoice[] = [
-    shelf(200, 'POTION — TEAM HEALS 40%', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!')),
-    shelf(400, 'RARE CANDY — TEAM +1 LV', (bb) => {
+  const stock: [string, EventChoice][] = [
+    ['potion', shelf('potion', 200, 'POTION — TEAM HEALS 40%', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!'))],
+    ['candy', shelf('candy', 400, 'RARE CANDY — TEAM +1 LV', (bb) => {
       for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
       return 'EVERYONE GREW +1 LEVEL!';
-    }),
-    shelf(300, 'MYSTERY ITEM', (bb) => {
-      const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
-      if (!p) return 'SOLD OUT. THE CLERK SHRUGGED.';
-      p.apply(bb);
-      bb.heldItems.push(p.item);
-      return `IT WAS ${p.name.toUpperCase()}!`;
-    }),
+    })],
+    ['mystery', {
+      label: 'MYSTERY ITEM — 300 SCORE',
+      cost: 300,
+      run: (bb) => {
+        // roll the goods before charging — a blind shelf shouldn't take
+        // score when there's nothing in the bag
+        const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
+        if (!p) return reprompt(bb, 'SOLD OUT. THE CLERK SHRUGGED.');
+        if (bb.score < 300) return reprompt(bb, 'NOT ENOUGH SCORE.');
+        bb.score -= 300;
+        sold.add('mystery');
+        p.apply(bb);
+        bb.heldItems.push(p.item);
+        return reprompt(bb, `IT WAS ${p.name.toUpperCase()}!`);
+      },
+    }],
   ];
   if (b.players.some((p) => p.dead))
-    options.push(
-      shelf(350, 'REVIVE — AT HALF HP', (bb) => {
-        const dead = bb.players.filter((p) => p.dead);
-        const p = dead[Math.floor(bb.roll() * dead.length)];
-        p.dead = false;
-        p.hp = Math.round(p.maxHp / 2);
-        return `${p.def.name.toUpperCase()} IS BACK ON ITS FEET!`;
-      }),
-    );
+    stock.push(['revive', shelf('revive', 350, 'REVIVE — AT HALF HP', (bb) => {
+      const dead = bb.players.filter((p) => p.dead);
+      const p = dead[Math.floor(bb.roll() * dead.length)];
+      p.dead = false;
+      p.hp = Math.round(p.maxHp / 2);
+      return `${p.def.name.toUpperCase()} IS BACK ON ITS FEET!`;
+    })]);
+  const options = stock.filter(([key]) => !sold.has(key)).map(([, o]) => o);
   options.push({ label: 'LEAVE', run: () => ({ note: 'YOU HEADED BACK TO THE ROUTE.', skip: true }) });
   return { prompt, options };
 }

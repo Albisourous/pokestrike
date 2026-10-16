@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, drawShiny, itemSprite, drawNpc } from '../core/assets';
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild, bst, FLOATERS } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -16,6 +16,9 @@ import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WAT
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
+
+// SPIKE ?mark=a|b|c — team-readability mockups, not shipping UI
+const MARK = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('mark');
 import {
   playerHp,
   enemyHp,
@@ -445,6 +448,7 @@ export class Battle {
   shiniesCaught = 0; // gold KOs this run — shiny KOs always land in the box
   perksTaken = 0;
   boxSel = -1; // box index picked for swapping
+  teamSel = -1; // team index picked — a swap starts from either side
   depth = 0; // rolled stages survived past the opening trio
   rewardOffers: Perk[] = [];
   mapNode = 0; // index into region.nodes — the stop the team stands on
@@ -652,16 +656,18 @@ export class Battle {
     }
     this.curSpawns = spawns; // rival/invade overrides still feed the recruit roll
     if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
-    // Archero-style room furniture: seeded stone clusters the ball banks
-    // off. Boss rooms stay open — the leader fight is the spectacle;
-    // trainer battles are always furnished.
+    // Archero room pull: the wave's court is one hand-authored template —
+    // slabs, moats, mines and spawn anchors all come with the room. Boss
+    // waves take the open gym arena; openers stay gentle; trainer battles
+    // are always furnished.
     const bossWave = spawns.some((s) => s.boss);
     let li = 0;
     if (!bossWave) {
       if (i === 0) li = Math.floor(this.rng() * 3); // gentle openers
-      else if (this.inTrainer || this.rng() < 0.8) li = 1 + Math.floor(this.rng() * (BLOCK_LAYOUTS.length - 1));
+      else if (this.inTrainer || this.rng() < 0.8) li = 1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1));
     }
-    this.blocks = BLOCK_LAYOUTS[li].map((b) => ({
+    const room = buildRoom(bossWave ? ROOM_BOSS : ROOM_LAYOUTS[li], this.theme, this.rng);
+    this.blocks = room.blocks.map((b) => ({
       x: this.arena.x + this.arena.w * b.nx,
       y: this.arena.y + this.arena.h * b.ny,
       w: this.arena.w * b.nw,
@@ -674,6 +680,21 @@ export class Battle {
         p.x = at.x;
         p.y = at.y;
       }
+    }
+    // spawn anchors drive enemy placement — Archero foes enter where the
+    // room designer put the hooks, not on scattered slots. Bosses keep
+    // their authored entrance; leftovers keep rolled positions.
+    const anchors = [...room.anchors];
+    for (const s of spawns) {
+      if (s.boss || !anchors.length) continue;
+      let best = 0;
+      for (let k = 1; k < anchors.length; k++) {
+        const d = (anchors[k].nx - s.nx) ** 2 + (anchors[k].ny - s.ny) ** 2;
+        if (d < (anchors[best].nx - s.nx) ** 2 + (anchors[best].ny - s.ny) ** 2) best = k;
+      }
+      const a = anchors.splice(best, 1)[0];
+      s.nx = a.nx;
+      s.ny = a.ny;
     }
     this.enemies = spawns.map((s) => this.makeEnemy(s, i));
     // spawn dust — the pack pours in instead of blinking onto the court
@@ -794,9 +815,9 @@ export class Battle {
         t: this.rng() * 6,
       });
     }
-    // court gimmicks for this wave's theme — lava pools, tall grass,
-    // wind bands, spike strips (normalized layout → arena px)
-    this.hazards = hazardsFor(this.theme, this.rng).map((z) => ({
+    // the room's hazard cells land as zones — lava ponds, silence pools,
+    // mines (normalized layout → arena px)
+    this.hazards = room.hazards.map((z) => ({
       kind: z.kind,
       x: this.arena.x + this.arena.w * z.nx,
       y: this.arena.y + this.arena.h * z.ny,
@@ -817,8 +838,12 @@ export class Battle {
     // cross them get waded out to the shoreline before anyone sees
     // them standing inside the prop
     for (const u of [...this.players, ...this.enemies])
-      if (!u.dead)
+      if (!u.dead) {
         for (const hz of this.hazards) if (isSolid(hz, u.def)) resolveZone(u, hz);
+        const at = this.unstick(u.x, u.y, u.r + 2); // wading out can land on a slab
+        u.x = at.x;
+        u.y = at.y;
+      }
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -2860,6 +2885,7 @@ export class Battle {
     this.boxLvl.push(Math.max(1, p.lvl)); // earned levels ride back to the bench
     this.applyDef(p, def, lvl, frac);
     this.boxSel = -1;
+    this.teamSel = -1;
     this.screenFlash('#ffd84d', 0.12);
     sfx('caught');
   }
@@ -2901,6 +2927,7 @@ export class Battle {
 
   private enterReward() {
     this.boxSel = -1;
+    this.teamSel = -1;
     // hard stops pay out uncommon-or-better relics — the risk has a price;
     // elites go further: rare-or-better only
     this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 1 : this.hardWave ? 2 : 3, this.rank, this.teamTypes());
@@ -4953,14 +4980,23 @@ export class Battle {
       }));
       ctx.font = font(11);
       ctx.textAlign = 'center';
+      if (this.eventChoice.node.kind === 'mart') {
+        // the mart's wallet is run score — keep it over the shelf so a buy
+        // is always weighed against what's in hand
+        ctx.font = font(13);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText(`WALLET: ${this.score} SCORE`, 270, oy - 12);
+        ctx.font = font(11);
+      }
       this.choiceHit.forEach((r, i) => {
+        const afford = opts[i].cost === undefined || opts[i].cost <= this.score;
         roundRect(ctx, r.x, r.y, r.w, r.h, 10);
         ctx.fillStyle = '#12162b';
         ctx.fill();
-        ctx.strokeStyle = i === 0 ? '#ffd84d' : '#c8a44d';
+        ctx.strokeStyle = afford ? (i === 0 ? '#ffd84d' : '#c8a44d') : '#3a4260';
         ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.fillStyle = '#f0e6c8';
+        ctx.fillStyle = afford ? '#f0e6c8' : '#5a6488';
         ctx.fillText(opts[i].label, r.x + r.w / 2, r.y + 28);
       });
     }
@@ -5278,6 +5314,33 @@ export class Battle {
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.82, u.r * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
+    // SPIKE A — team base ring: gold yours, red theirs
+    if (MARK === 'a') {
+      ctx.strokeStyle = u.side === 'player' ? '#ffd84d' : '#e05050';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.95, u.r * 0.38, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // SPIKE C — overhead marker: pokeball yours, red chevron theirs
+    if (MARK === 'c') {
+      const my = u.y - u.r - 30;
+      if (u.side === 'player') {
+        const pb = itemSprite('poke-ball');
+        if (pb) ctx.drawImage(pb, u.x - 7, my - 7, 14, 14);
+      } else {
+        ctx.fillStyle = '#e05050';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(u.x - 6, my - 5);
+        ctx.lineTo(u.x + 6, my - 5);
+        ctx.lineTo(u.x, my + 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
     // READY aura — a charged super rings its mon in type color
     if (u.side === 'player' && u.cd <= 0) {
       ctx.save();
@@ -5338,8 +5401,16 @@ export class Battle {
     const pct = Math.max(u.hp / u.maxHp, 0);
     ctx.fillStyle = '#000a';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw, 5);
-    ctx.fillStyle = pct > 0.5 ? '#6fdc6f' : pct > 0.25 ? '#ffd84d' : '#ff6b6b';
+    // SPIKE B — team-colored bars: enemies flat red, allies green + ball chip
+    ctx.fillStyle =
+      MARK === 'b'
+        ? u.side === 'enemy' ? '#e05050' : '#6fdc6f'
+        : pct > 0.5 ? '#6fdc6f' : pct > 0.25 ? '#ffd84d' : '#ff6b6b';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
+    if (MARK === 'b' && u.side === 'player') {
+      const pb = itemSprite('poke-ball');
+      if (pb) ctx.drawImage(pb, u.x - bw / 2 - 11, u.y + u.r + 1, 11, 11);
+    }
 
     if (u.side === 'enemy') {
       // aegis ward: a cyan bubble eats the next hit entirely

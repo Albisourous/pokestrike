@@ -164,20 +164,21 @@ export interface GymBadge {
   boss: number; // species id of the leader who pays it out
   name: string;
   color: string;
+  icon: number; // sprites/badges/<n>.png — PokeAPI canon league order
 }
 
 export const BADGES: GymBadge[] = [
-  { boss: 130, name: 'CASCADE BADGE', color: '#6890f0' }, // Gyarados
-  { boss: 125, name: 'THUNDER BADGE', color: '#f8d030' }, // Electabuzz
-  { boss: 3, name: 'RAINBOW BADGE', color: '#78c850' }, // Venusaur
-  { boss: 94, name: 'SOUL BADGE', color: '#a040a0' }, // Gengar
-  { boss: 150, name: 'MARSH BADGE', color: '#f85888' }, // Mewtwo
-  { boss: 6, name: 'VOLCANO BADGE', color: '#f08030' }, // Charizard
-  { boss: 112, name: 'EARTH BADGE', color: '#b8a038' }, // Rhydon
-  { boss: 149, name: 'ZEPHYR BADGE', color: '#a890f0' }, // Dragonite
-  { boss: 289, name: 'BALANCE BADGE', color: '#a8a878' }, // Slaking (Norman's ace)
-  { boss: 110, name: 'TOXIC BADGE', color: '#705898' }, // Weezing
-  { boss: 297, name: 'KNUCKLE BADGE', color: '#c03028' }, // Hariyama (Brawly's ace)
+  { boss: 130, name: 'CASCADE BADGE', color: '#6890f0', icon: 2 }, // Gyarados
+  { boss: 125, name: 'THUNDER BADGE', color: '#f8d030', icon: 3 }, // Electabuzz
+  { boss: 3, name: 'RAINBOW BADGE', color: '#78c850', icon: 4 }, // Venusaur
+  { boss: 94, name: 'FOG BADGE', color: '#705898', icon: 12 }, // Gengar — Ecruteak's ghost badge
+  { boss: 150, name: 'MARSH BADGE', color: '#f85888', icon: 6 }, // Mewtwo
+  { boss: 6, name: 'VOLCANO BADGE', color: '#f08030', icon: 7 }, // Charizard
+  { boss: 112, name: 'EARTH BADGE', color: '#b8a038', icon: 8 }, // Rhydon
+  { boss: 149, name: 'ZEPHYR BADGE', color: '#a890f0', icon: 9 }, // Dragonite
+  { boss: 289, name: 'BALANCE BADGE', color: '#a8a878', icon: 21 }, // Slaking (Norman's ace)
+  { boss: 110, name: 'SOUL BADGE', color: '#a040a0', icon: 5 }, // Weezing — Fuchsia's poison badge, Koga's own ace
+  { boss: 297, name: 'KNUCKLE BADGE', color: '#c03028', icon: 18 }, // Hariyama (Brawly's ace)
 ];
 
 export const badgeOf = (bossId: number) => BADGES.find((b) => b.boss === bossId);

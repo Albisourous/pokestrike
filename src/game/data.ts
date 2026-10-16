@@ -857,65 +857,156 @@ const SLOTS: [number, number][] = [
   [0.44, 0.3], [0.53, 0.3], [0.44, 0.66], [0.53, 0.66],
 ];
 
-// Archero-style room blocks: sparse stone clusters the ball banks off.
-// Normalized arena coords; stays out of the bottom spawn band (y < 0.7)
-// and open layouts stay common — a gym leader's room is always clear.
+// Archero room canon: a wave's court pulls one hand-authored 9x11
+// template from this pool — never procedural geometry. One char per
+// cell; the court walls already draw the '1' ring, so the border is
+// authored for readability only (the parser reads interior rows 1-9,
+// cols 1-7). Tile legend:
+//   0 floor · 2 rock slab (ball banks off) · 3 liquid moat · 4 mine
+//   S enemy spawn anchor · 1/E/P border dressing
+// Layouts [0..2] stay gentle — they're the stage-opener pool. Bosses
+// get ROOM_BOSS instead. Normalized arena coords as usual.
 export interface BlockDef {
   nx: number;
   ny: number;
   nw: number;
   nh: number;
 }
-export const BLOCK_LAYOUTS: BlockDef[][] = [
-  [],
-  // twin slabs — the classic Archero room divider
-  [{ nx: 0.16, ny: 0.3, nw: 0.09, nh: 0.2 }, { nx: 0.75, ny: 0.3, nw: 0.09, nh: 0.2 }],
-  [{ nx: 0.44, ny: 0.4, nw: 0.12, nh: 0.12 }], // center pillar
+export const ROOM_LAYOUTS: string[][] = [
+  // open — the classic clear room; anchors clustered center-north keep
+  // shot one a ricochet
+  [
+    '1111E1111',
+    '10S0S0S01',
+    '100S0S001',
+    '1S00000S1',
+    '1000S0001',
+    '10S000S01',
+    '100000001',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
   // corner quads — four banks, wide lanes between
   [
-    { nx: 0.13, ny: 0.24, nw: 0.08, nh: 0.09 },
-    { nx: 0.79, ny: 0.24, nw: 0.08, nh: 0.09 },
-    { nx: 0.13, ny: 0.5, nw: 0.08, nh: 0.09 },
-    { nx: 0.79, ny: 0.5, nw: 0.08, nh: 0.09 },
+    '1111E1111',
+    '1S0S0S0S1',
+    '102000201',
+    '1000S0001',
+    '100000001',
+    '10S0S0S01',
+    '102000201',
+    '100000001',
+    '100000001',
+    '1000P0001',
+    '111111111',
   ],
-  // staggered gates — forces the ball through a chicane
-  [{ nx: 0.28, ny: 0.24, nw: 0.08, nh: 0.18 }, { nx: 0.64, ny: 0.46, nw: 0.08, nh: 0.18 }],
-  [{ nx: 0.28, ny: 0.42, nw: 0.44, nh: 0.05 }], // mid bar, gaps at the edges
-  // scatter stones — ricochet pinballs
+  // center pillar — foes tuck behind the stone
   [
-    { nx: 0.24, ny: 0.5, nw: 0.06, nh: 0.06 },
-    { nx: 0.47, ny: 0.28, nw: 0.06, nh: 0.06 },
-    { nx: 0.7, ny: 0.5, nw: 0.06, nh: 0.06 },
+    '1111E1111',
+    '1S0S0S0S1',
+    '100S0S001',
+    '100020001',
+    '1S00S00S1',
+    '100000001',
+    '100S0S001',
+    '100000001',
+    '100000001',
+    '1000P0001',
+    '111111111',
   ],
-  // top pocket — foes can tuck into the alcove
+  // kill box — long center sightline, flanked pockets for tucked spawns
   [
-    { nx: 0.4, ny: 0.18, nw: 0.2, nh: 0.05 },
-    { nx: 0.4, ny: 0.18, nw: 0.05, nh: 0.15 },
-    { nx: 0.55, ny: 0.18, nw: 0.05, nh: 0.15 },
+    '1111E1111',
+    '1S0S0S0S1',
+    '122000221',
+    '12S0S0S21',
+    '120000021',
+    '10S0S0S01',
+    '120000021',
+    '122000221',
+    '100000001',
+    '1000P0001',
+    '111111111',
   ],
-  // fortress — U opening upward; enemies inside take banked approaches
+  // moat — a liquid band splits the court; non-swimmers thread the bridge
   [
-    { nx: 0.38, ny: 0.5, nw: 0.24, nh: 0.05 },
-    { nx: 0.38, ny: 0.34, nw: 0.05, nh: 0.21 },
-    { nx: 0.57, ny: 0.34, nw: 0.05, nh: 0.21 },
+    '1111E1111',
+    '1S0S0S0S1',
+    '1000S0001',
+    '133303331',
+    '100000001',
+    '14S0S0S41',
+    '100000001',
+    '1000S0001',
+    '100000001',
+    '1000P0001',
+    '111111111',
   ],
-  // twin bars — two staggered lanes, forces the low line or the high bank
+  // labyrinth — staggered clusters force a zig-zag approach
   [
-    { nx: 0.18, ny: 0.32, nw: 0.22, nh: 0.05 },
-    { nx: 0.6, ny: 0.5, nw: 0.22, nh: 0.05 },
+    '1111E1111',
+    '1S0S0S0S1',
+    '102202201',
+    '10S0000S1',
+    '100020001',
+    '1S00S00S1',
+    '122000221',
+    '10S0000S1',
+    '100000001',
+    '1000P0001',
+    '111111111',
   ],
-  // side pockets + center stone — edge banks and a mid ricochet
+  // fortress — a U-pocket at the door; the pack inside takes banked shots
   [
-    { nx: 0.08, ny: 0.34, nw: 0.06, nh: 0.16 },
-    { nx: 0.86, ny: 0.34, nw: 0.06, nh: 0.16 },
-    { nx: 0.47, ny: 0.42, nw: 0.06, nh: 0.06 },
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '102222201',
+    '102S0S201',
+    '102000201',
+    '10S0S0S01',
+    '100000001',
+    '100000001',
+    '1000P0001',
+    '111111111',
   ],
-  // double lanes — top and bottom bars split the room horizontally
+  // scatter — ricochet pinballs with mined flanks
   [
-    { nx: 0.3, ny: 0.26, nw: 0.4, nh: 0.05 },
-    { nx: 0.3, ny: 0.56, nw: 0.4, nh: 0.05 },
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '102000201',
+    '10S020S01',
+    '100000001',
+    '102000201',
+    '14S0S0S41',
+    '100000001',
+    '1000P0001',
+    '111111111',
   ],
 ];
+// Gym arenas stay open — the leader fight is the spectacle, so no
+// furniture; the entourage still enters on the anchor ring.
+export const ROOM_BOSS: string[] = [
+  '1111E1111',
+  '1S0S0S0S1',
+  '1000S0001',
+  '10S0S0S01',
+  '100000001',
+  '10S0S0S01',
+  '100000001',
+  '100000001',
+  '100000001',
+  '1000P0001',
+  '111111111',
+];
+export interface RoomDef {
+  blocks: BlockDef[];
+  hazards: HazardSpawn[];
+  anchors: { nx: number; ny: number }[];
+}
 
 // Gym flavor: the boss's entourage shares its type — every leader runs a
 // mono-type gym. All eleven types have fodder/elites, so the fallback only
@@ -1082,95 +1173,80 @@ export interface HazardSpawn {
   pair?: number; // warp only: pads sharing an id are linked
 }
 
-export function hazardsFor(theme: Theme, rng: () => number): HazardSpawn[] {
-  // r ~0.08-0.16; ny clamped so the zone's low edge clears the bottom quarter
-  const rad = () => 0.08 + rng() * 0.08;
-  const spot = (r: number, yLo: number, yHi: number) => ({
-    nx: r + rng() * (1 - 2 * r),
-    ny: yLo + rng() * (Math.min(yHi, 0.75 - r) - yLo),
-    r,
-  });
-  const n = (lo: number, hi: number) => lo + Math.floor(rng() * (hi - lo + 1));
-  const out = themeHazards(theme, rng, rad, spot, n);
-  // roamer gimmick: ~1/3 of any court gets one extra MS-style fixture —
+// Compile one room template into court furniture: '2' cells merge into
+// horizontal slabs, '3' themes into lava pools (volcano) or silence
+// ponds, '4' drops a mine, 'S' lists the wave's spawn anchors.
+export function buildRoom(grid: string[], theme: Theme, rng: () => number): RoomDef {
+  const blocks: BlockDef[] = [];
+  const hazards: HazardSpawn[] = [];
+  const anchors: { nx: number; ny: number }[] = [];
+  for (let r = 1; r <= 9; r++) {
+    let run = -1;
+    for (let c = 1; c <= 7; c++) {
+      const ch = grid[r][c];
+      if (ch === '2') {
+        if (run < 0) run = c;
+      } else if (run >= 0) {
+        blocks.push({ nx: run / 9, ny: r / 11, nw: (c - run) / 9, nh: 1 / 11 });
+        run = -1;
+      }
+      const at = { nx: (c + 0.5) / 9, ny: (r + 0.5) / 11 };
+      if (ch === '3') hazards.push({ kind: theme === 'volcano' ? 'lava' : 'static', ...at, r: 0.062 });
+      else if (ch === '4') hazards.push({ kind: 'mine', ...at, r: 0.05 });
+      else if (ch === 'S') anchors.push(at);
+    }
+    if (run >= 0) blocks.push({ nx: run / 9, ny: r / 11, nw: (8 - run) / 9, nh: 1 / 11 });
+  }
+  // roamer gimmick: ~1/3 of rooms get one extra MS-style fixture —
   // a linked warp pair, a boost pad, or a gravity well
   if (rng() < 0.35) {
+    const spot = (r: number) => ({
+      nx: r + rng() * (1 - 2 * r),
+      ny: 0.15 + rng() * (Math.min(0.55, 0.75 - r) - 0.15),
+      r,
+    });
     const g = rng();
     if (g < 0.4) {
       // MS warp panels: two linked pads — the ball exits the twin keeping
       // its velocity, so a bad lane can become a trick shot
-      const a = spot(0.05, 0.15, 0.5);
-      const b = spot(0.05, 0.15, 0.5);
+      const a = spot(0.05);
+      const b = spot(0.05);
       if (Math.hypot(a.nx - b.nx, a.ny - b.ny) > 0.2) {
-        out.push({ kind: 'warp', ...a, pair: 1 }, { kind: 'warp', ...b, pair: 1 });
+        hazards.push({ kind: 'warp', ...a, pair: 1 }, { kind: 'warp', ...b, pair: 1 });
       }
     } else if (g < 0.7) {
       // speed-up panel: crossing it re-launches the ball faster
-      out.push({ kind: 'boost', ...spot(0.06, 0.15, 0.55) });
+      hazards.push({ kind: 'boost', ...spot(0.06) });
     } else {
       // gravity barrier: the ball curves toward the well while inside
-      out.push({ kind: 'well', nx: 0.3 + rng() * 0.4, ny: 0.2 + rng() * 0.35, r: 0.16 + rng() * 0.06 });
+      hazards.push({ kind: 'well', nx: 0.3 + rng() * 0.4, ny: 0.2 + rng() * 0.35, r: 0.16 + rng() * 0.06 });
     }
   }
-  return out;
+  return { blocks, hazards, anchors };
 }
 
-function themeHazards(
-  theme: Theme,
-  rng: () => number,
-  rad: () => number,
-  spot: (r: number, yLo: number, yHi: number) => { nx: number; ny: number; r: number },
-  n: (lo: number, hi: number) => number,
-): HazardSpawn[] {
-  switch (theme) {
-    case 'volcano': {
-      const lavas: HazardSpawn[] = Array.from({ length: n(1, 3) }, () => {
-        const r = rad();
-        return { kind: 'lava', ...spot(r, 0.15, 0.6) };
-      });
-      // MS mines: small pads that detonate when the ball touches them —
-      // a trap you can weaponize against the pack
-      const mines: HazardSpawn[] = Array.from({ length: n(0, 2) }, () => ({ kind: 'mine' as const, ...spot(0.05, 0.15, 0.6) }));
-      return lavas.concat(mines);
-    }
-    case 'grove':
-      return Array.from({ length: n(2, 4) }, () => {
-        const r = rad();
-        return { kind: 'grass', ...spot(r, 0.1, 0.7) };
-      });
-    case 'sky': {
-      // wide horizontal wind bands, centered-ish, pushing left or right
-      const gusts: HazardSpawn[] = Array.from({ length: n(1, 2) }, () => {
-        const r = 0.18 + rng() * 0.05;
-        return {
-          kind: 'gust',
-          nx: 0.5 + (rng() - 0.5) * 0.1,
-          ny: 0.2 + rng() * (0.55 - r - 0.2),
-          r,
-          dir: rng() < 0.5 ? -1 : 1,
-        };
-      });
-      // static pools: silence fields — keywords & bump supers go dead inside
-      const pools: HazardSpawn[] = Array.from({ length: n(0, 2) }, () => {
-        const r = rad();
-        return { kind: 'static', ...spot(r, 0.2, 0.55) };
-      });
-      return gusts.concat(pools);
-    }
-    case 'cavern':
-      // jagged strips shoved off-center, one side or the other, plus
-      // the odd buried mine — a trap the ball can weaponize
-      return [
-        ...Array.from({ length: n(1, 3) }, () => {
-          const r = rad();
-          const nx = rng() < 0.5
-            ? r + rng() * (0.42 - r)
-            : 0.58 + rng() * (1 - 0.58 - r);
-          return { kind: 'spikes' as const, nx, ny: 0.15 + rng() * (Math.min(0.6, 0.75 - r) - 0.15), r };
-        }),
-        ...Array.from({ length: n(0, 2) }, () => ({ kind: 'mine' as const, ...spot(0.05, 0.15, 0.6) })),
-      ];
-    default:
-      return [];
+// Template guardrails — the rules Archero rooms live by: exact 9x11 dims,
+// known tiles only, and a walkable lane from the player row to the door
+// and every spawn anchor (liquids wall off anything that can't swim or
+// fly; mines don't block). Runs at module load — a bad room fails the
+// build, not the player.
+for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
+  if (grid.length !== 11 || grid.some((row) => row.length !== 9)) throw new Error('room grid must be 9x11');
+  const seen = new Set<string>();
+  const q = [[4, 9]];
+  while (q.length) {
+    const [c, r] = q.pop()!;
+    const k = `${c},${r}`;
+    if (seen.has(k) || c < 1 || c > 7 || r < 1 || r > 9) continue;
+    if (grid[r][c] !== '0' && grid[r][c] !== 'S' && grid[r][c] !== '4' && grid[r][c] !== 'P') continue;
+    seen.add(k);
+    q.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
   }
+  if (!seen.has('4,1')) throw new Error('room has no lane to the door');
+  for (let r = 1; r <= 9; r++)
+    for (let c = 1; c <= 7; c++) {
+      const ch = grid[r][c];
+      if (!'0234SP'.includes(ch)) throw new Error(`bad room tile '${ch}'`);
+      if (ch === 'S' && !seen.has(`${c},${r}`)) throw new Error('room anchor is walled in');
+    }
 }

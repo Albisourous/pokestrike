@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, recordDaily } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, recordDaily, BADGES } from './game/meta';
 import {
   W,
   H,
@@ -461,13 +461,14 @@ canvas.addEventListener('pointerdown', (e) => {
         boxDrag = { x0: p.x, s0: boxScroll, moved: false };
         return;
       }
-      if (battle.boxSel >= 0) {
-        for (let i = 0; i < battle.players.length; i++) {
-          if (inRect(p.x, p.y, teamSlotRect(i))) {
-            battle.swapFromBox(battle.boxSel, i);
-            return;
-          }
+      for (let i = 0; i < battle.players.length; i++) {
+        if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
+        if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
+        else if (battle.box.length > 0) {
+          battle.teamSel = battle.teamSel === i ? -1 : i;
+          sfx('ui');
         }
+        return;
       }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
         if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
@@ -563,8 +564,11 @@ canvas.addEventListener('pointerup', (e) => {
       if (inRect(p.x, p.y, BOX_STRIP)) {
         for (let i = 0; i < battle.box.length; i++) {
           if (!inRect(p.x, p.y, boxSlotRect(i, battle.box.length, boxScroll))) continue;
-          battle.boxSel = battle.boxSel === i ? -1 : i;
-          sfx('ui');
+          if (battle.teamSel >= 0) battle.swapFromBox(i, battle.teamSel);
+          else {
+            battle.boxSel = battle.boxSel === i ? -1 : i;
+            sfx('ui');
+          }
           break;
         }
       }
@@ -808,6 +812,7 @@ function render() {
             battle.players.map((p) => (p.maxHp ? p.hp / p.maxHp : 0)),
             battle.players.map((p) => p.lvl),
             battle.boxSel,
+            battle.teamSel,
             boxScroll,
             battle.captureChance,
             battle.lastRecruit,
@@ -852,6 +857,7 @@ Promise.all([
   loadItem('protein'),
   loadItem('elixir'),
   ...PERKS.map((p) => loadItem(p.item)),
+  ...BADGES.map((b) => loadItem(`badges/${b.icon}`)),
   document.fonts.load('700 10px rc').catch(() => console.warn('rc font failed, using monospace')),
 ])
   .then(() => {
