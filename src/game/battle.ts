@@ -1808,7 +1808,12 @@ export class Battle {
       t: 0.9,
       color: immune ? '#8a90a8' : crit ? '#ffd84d' : color,
       big: crit || suffix === '!',
+      // the number sells the hit — chunkier damage pops bigger
+      size: Math.min(1.7, 0.85 + d / 90),
     });
+    // a chunk of the health bar at once gets the anime flash frame —
+    // bumps, orbs and dot ticks all deserve it, not just contact
+    if (!immune && d >= Math.max(30, e.maxHp * 0.25)) this.impact(e.x, e.y, color, 0.8);
     if (crit) {
       this.addShake(4);
       this.burst(e.x, e.y, '#ffd84d', 10, 380);
@@ -1821,7 +1826,7 @@ export class Battle {
       // shockwave and a camera lunge all at once
       this.impact(e.x, e.y, TYPE_COLOR[e.def.type] ?? '#ffffff', e.boss ? 2.4 : 1.3);
       this.burst(e.x, e.y, '#ffffff', e.boss ? 26 : 14, e.boss ? 620 : 420, e.boss ? 1.6 : 1);
-      this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3.2, t: 0.35, life: 0.35, color: '#ffffff', hits: new Set() });
+      this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3.2, t: 0.35, life: 0.35, color: TYPE_COLOR[e.def.type] ?? '#ffffff', hits: new Set() });
       this.hitStop = Math.max(this.hitStop, e.boss ? 0.48 : 0.18);
       this.addPunch(e.boss ? 0.2 : 0.09);
       this.addShake(e.boss ? 14 : 6);
@@ -3645,18 +3650,24 @@ export class Battle {
     // stone blocks — solid cover the ball banks off
     for (const b of this.blocks) this.drawBlock(ctx, b);
 
-    // ambient motes — embers in the volcano, petals in the grove; the
-    // little drift that keeps a still room from reading dead
+    // ambient drift keyed to the court — petals ride the grove breeze, dust
+    // hangs in cavern shafts, embers climb and flicker in the volcano, snow
+    // slants through the sky court. Still rooms shouldn't read dead.
     {
-      const MO: Record<string, string> = { grove: '#cfe898', cavern: '#8a94c0', volcano: '#ff9d4d', sky: '#e8f6ff' };
-      ctx.fillStyle = MO[this.theme] ?? '#cfe898';
-      for (let k = 0; k < 14; k++) {
-        const sp = 10 + (k % 4) * 6;
-        const mx = a.x + ((k * 97.31 + Math.sin(this.time * 0.4 + k) * 20 + a.w) % a.w);
-        const my = a.y + (((k * 61.7 - this.time * sp) % a.h) + a.h) % a.h;
-        ctx.globalAlpha = 0.12 + 0.1 * Math.sin(this.time * 2 + k * 1.7);
+      const AMBIENT: Record<Theme, { n: number; col: string; vx: number; vy: number; r: number; tw: number; wob: number }> = {
+        grove: { n: 16, col: '#cfe898', vx: 18, vy: 16, r: 2.1, tw: 0.1, wob: 26 }, // petals fall on the breeze
+        cavern: { n: 12, col: '#8a94c0', vx: 6, vy: 8, r: 1.7, tw: 0.16, wob: 12 }, // dust hangs in the light shafts
+        volcano: { n: 20, col: '#ff9d4d', vx: 10, vy: -34, r: 2.0, tw: 0.3, wob: 18 }, // embers climb, flicker hard
+        sky: { n: 16, col: '#ffffff', vx: -16, vy: 24, r: 1.9, tw: 0.12, wob: 20 }, // snow slants downwind
+      };
+      const amb = AMBIENT[this.theme];
+      ctx.fillStyle = amb.col;
+      for (let k = 0; k < amb.n; k++) {
+        const mx = a.x + (((k * 97.31 + this.time * amb.vx + Math.sin(this.time * 1.1 + k * 2.3) * amb.wob) % a.w) + a.w) % a.w;
+        const my = a.y + (((k * 61.7 - this.time * amb.vy) % a.h) + a.h) % a.h;
+        ctx.globalAlpha = 0.1 + amb.tw * (1 + Math.sin(this.time * 2.4 + k * 1.7));
         ctx.beginPath();
-        ctx.arc(mx, my, 1.6 + (k % 3) * 0.7, 0, Math.PI * 2);
+        ctx.arc(mx, my, amb.r * (0.7 + (k % 3) * 0.3), 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;

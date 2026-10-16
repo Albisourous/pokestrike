@@ -560,6 +560,9 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     fp.cd = 0;
     (bf as any).bumpAlly(fp, fp);
     ok((bf as any).orbs.length === 3, `fire volley launches 3 homing orbs (${(bf as any).orbs.length})`);
+    // cast motes: every super scatters element-flavored fx — embers for
+    // fire rise against gravity
+    ok((bf as any).fx.some((f: any) => f.grav < 0), 'fire cast scatters rising embers');
 
     const be = new Battle(arena, [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
     (be as any).spawnWave(0);
