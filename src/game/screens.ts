@@ -1087,7 +1087,7 @@ export function drawDraft(
   if (types.length) {
     ctx.font = font(7);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('COVERAGE', W / 2, 772);
+    ctx.fillText('COVERAGE — matching types unlock team TRAITS', W / 2, 772);
     types.forEach((ty, i) => {
       const cx = W / 2 - (types.length * 34 - 6) / 2 + i * 34;
       roundRect(ctx, cx, 778, 28, 12, 6);

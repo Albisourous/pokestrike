@@ -3901,6 +3901,12 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#f0e6c8';
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
+      // boss weak points are the gym's whole trick — say it on the banner
+      if (gym) {
+        ctx.font = font(11);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText('HIT THE GOLD SPOT FOR ×3 DAMAGE', a.x + a.w / 2, cy + 52);
+      }
       ctx.globalAlpha = 1;
     }
   }
