@@ -6,7 +6,7 @@ import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf } from './stats';
-import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch } from './meta';
+import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -398,7 +398,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = 'center';
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
   button(ctx, FREE_BTN, 'START CLIMB', true);
-  button(ctx, DAILY_BTN, 'DAILY CLIMB', true);
+  const dBest = dailyBest();
+  button(ctx, DAILY_BTN, dBest ? `DAILY · BEST ${dBest}` : 'DAILY CLIMB', true);
 
   // ? badge, top corner — the how-to-play overlay
   ctx.beginPath();

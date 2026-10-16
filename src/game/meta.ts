@@ -56,6 +56,16 @@ export function recordShiny(id: number) {
 export const SHINY_CHARM_AT = 100;
 export const shinyCharm = () => dexIds().length >= SHINY_CHARM_AT;
 
+// Daily climb: one rolling best per calendar day — replays chase it
+export function dailyBest(): number {
+  const d = load<{ day: number; score: number }>('pk_daily');
+  return d && d.day === Math.floor(Date.now() / 86400000) ? d.score : 0;
+}
+
+export function recordDaily(score: number) {
+  if (score > dailyBest()) store('pk_daily', { day: Math.floor(Date.now() / 86400000), score });
+}
+
 // First-run coaching: set once the first wave clears — quit mid-run and the
 // ghost pull comes back next launch.
 export const coachDone = () => load<boolean>('pk_coach') ?? memCoach;
