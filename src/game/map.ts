@@ -129,13 +129,33 @@ export function genRegion(seed: number): RegionMap {
     else kinds = shuffle<NodeKind>(['wild', 'trainer']); // fork: catchable door vs harder door
     const xs = kinds.length === 1 ? [0.5] : [0.28, 0.72];
     kinds.forEach((kind, k) => {
-      let tx = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.6);
-      let guard = 0;
-      while (
-        (!land(tx, ty) || nodes.some((o) => o.row === r && Math.abs(o.tx - tx) < 3)) &&
-        tx !== Math.round(cx) &&
-        guard++ < 10
-      ) tx += Math.sign(cx - tx) || 1;
+      const want = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.6);
+      // a stop needs land + 5 tiles clear of its rowmate — labels like
+      // AROMA LADY are ~4 tiles wide, so anything tighter collides
+      const ok = (t: number) =>
+        t >= 1 && t <= MAP_W - 2 && land(t, ty) &&
+        !nodes.some((o) => o.row === r && Math.abs(o.tx - t) < 5);
+      let tx = want;
+      if (!ok(tx)) {
+        tx = -1;
+        for (let d = 1; d < MAP_W && tx < 0; d++)
+          for (const c of [want - d, want + d])
+            if (ok(c)) { tx = c; break; }
+        if (tx < 0) {
+          // no spaced land on this row — take the tile farthest from the
+          // rowmates (land preferred); links carve the route to it anyway
+          let bestT = want, bestScore = -1;
+          for (let t = 1; t <= MAP_W - 2; t++) {
+            const g = Math.min(
+              99,
+              ...nodes.filter((o) => o.row === r).map((o) => Math.abs(o.tx - t)),
+            );
+            const score = g * 100 + (land(t, ty) ? 50 : 0);
+            if (score > bestScore) { bestScore = score; bestT = t; }
+          }
+          tx = bestT;
+        }
+      }
       nodes.push({
         tx,
         ty,
