@@ -4415,6 +4415,30 @@ export class Battle {
       }
       ctx.textAlign = 'center';
     }
+    // team strip under the legend — who's hurt decides whether you route
+    // the REST; this is the read that makes the map a decision
+    {
+      const py = oy + view * cell + 114;
+      ctx.font = font(8);
+      ctx.textAlign = 'center';
+      const px0 = 270 - (this.players.length - 1) * 36;
+      this.players.forEach((p, i) => {
+        const px = px0 + i * 72;
+        ctx.globalAlpha = p.dead ? 0.3 : 1;
+        (p.shiny ? drawShiny : drawMon)(ctx, p.def.id, px, py, 34);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#000a';
+        ctx.fillRect(px - 17, py + 21, 34, 5);
+        if (p.dead) {
+          ctx.fillStyle = '#ff6b6b';
+          ctx.fillText('KO', px, py + 25);
+        } else {
+          const pct = Math.max(0, p.hp / p.maxHp);
+          ctx.fillStyle = pct > 0.5 ? '#6fdc6f' : pct > 0.25 ? '#ffd84d' : '#ff6b6b';
+          ctx.fillRect(px - 17, py + 21, 34 * pct, 5);
+        }
+      });
+    }
     // a resolved ? event tells its story in a proper FRLG text box —
     // modal: dims the map, waits for a tap
     if (this.eventBox) {
