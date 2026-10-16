@@ -9,14 +9,16 @@ export const TRAIT_TIERS = [2, 3, 5];
 export interface TraitUnit {
   dead: boolean;
   shiny: boolean;
-  def: { type: PokeType };
+  def: { type: PokeType; type2?: PokeType };
 }
 
 export function teamTraits(players: TraitUnit[]): Map<PokeType, number> {
   const counts = new Map<PokeType, number>();
   for (const p of players) {
     if (p.dead) continue;
-    counts.set(p.def.type, (counts.get(p.def.type) ?? 0) + (p.shiny ? 2 : 1));
+    const n = p.shiny ? 2 : 1;
+    counts.set(p.def.type, (counts.get(p.def.type) ?? 0) + n);
+    if (p.def.type2) counts.set(p.def.type2, (counts.get(p.def.type2) ?? 0) + n);
   }
   const out = new Map<PokeType, number>();
   for (const [t, c] of counts) {

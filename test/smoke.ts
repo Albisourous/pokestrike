@@ -7,6 +7,7 @@ import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
 import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
+import { typeMult, strikeType } from '../src/game/types';
 import { rollEvent } from '../src/game/events';
 import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES } from '../src/game/meta';
 import { PERKS } from '../src/game/perks';
@@ -109,6 +110,59 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(p.def.id === 130, `Magikarp evolved into ${p.def.name}`);
   const m = ROLE_MODS[roleOf(p.def.stats, p.def.healer)];
   ok(Math.abs(p.pow - m.pow * lvlPow(offStat(p.def.stats, p.def.type), 50)) < 0.001, `levels survive evolution (pow ${p.pow.toFixed(2)} vs base ${m.pow})`);
+}
+
+// --- split evolution defers to the player's pick on the reward screen ----
+{
+  const eevee = ROSTER.find((r) => r.id === 133)!;
+  const b = new Battle(arena, [eevee, ...team().slice(0, 3)], makeStage(3, 'T'), mulberry32(3));
+  const p = (b as any).players[0];
+  (b as any).absorbDupe(eevee); // a dupe normally auto-evolves — a branch can't
+  ok(p.def.id === 133 && (b as any).evoPending.length === 1, 'split evo waits for a pick');
+  (b as any).enterReward();
+  ok(b.evoChoice?.options.length === 3, `eevee offers its three forms (${b.evoChoice?.options.map((o) => o.name).join('/')})`);
+  b.pickEvo(1); // Jolteon
+  ok(p.def.id === 135 && b.evoChoice === null, `picked branch becomes ${p.def.name}`);
+  ok(p.def.luck === 1, 'the absorbed dupe banked a luck point through evolution');
+}
+
+// --- fusion luck pays out as bonus gym loot ------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(5));
+  const p = (b as any).players[0];
+  (b as any).absorbDupe(p.def); // Pikachu dupe: +1 luck AND evolves to Raichu
+  ok(p.def.luck === 1 && p.def.id === 26, `dupe banks luck through evolution (${p.def.name} luck ${p.def.luck})`);
+  (p as any).def = { ...p.def, luck: 45 }; // a heavily-fused mon
+  (b as any).enterLoot();
+  const n = 24 + (b as any).depth * 3;
+  const base = Math.max(2, Math.round(n * 0.18));
+  const gems = (b as any).lootCoins.filter((c: any) => c.kind === 'gem').length;
+  ok(gems === base + 4 || gems === base + 5, `team luck 45 pays ~4 bonus gems (${gems} vs base ${base})`);
+}
+
+// --- dual-typing: multiplied matchups, better-type strikes ---------------
+{
+  ok(typeMult('rock', speciesById(6)!) === 4, 'charizard (fire/flying) takes 4x rock');
+  ok(typeMult('electric', speciesById(130)!) === 4, 'gyarados (water/flying) takes 4x electric');
+  ok(typeMult('ghost', speciesById(282)!) === 0, 'gardevoir (psychic/normal) is ghost-immune');
+  ok(strikeType(speciesById(260)!, speciesById(6)!) === 'rock', 'swampert leads with rock vs charizard');
+  ok(strikeType(speciesById(260)!, speciesById(130)!) === 'rock', 'swampert leads with rock vs gyarados too (rock 2x2)');
+  ok(strikeType(speciesById(260)!, speciesById(383)!) === 'water', 'swampert leads with water vs groudon');
+}
+
+// --- gauge shot: a gold-zone release arms +20% contact --------------------
+{
+  const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(2));
+  (b as any).spawnWave(0);
+  b.phase = 'aim';
+  const u = (b as any).active;
+  b.pointerDown({ x: u.x, y: u.y });
+  // park the ping-pong meter dead-center in the gold band for this mon's speed
+  const n = Math.min(u.def.stats.spe / 120, 1);
+  (b as any).dragT = (0.68 + 0.27 * n) * 0.85;
+  b.pointerMove({ x: u.x + 60, y: u.y });
+  b.pointerUp();
+  ok(b.phase === 'shot' && (b as any).shotGold === true, 'gold release arms the gauge bonus');
 }
 
 // --- benching keeps earned levels ------------------------------------------
@@ -296,7 +350,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 // --- roster integrity: every evo chain resolves, every species has art ----
 {
   const ids = new Set(ALL_SPECIES.map((d) => d.id));
-  const dangling = ALL_SPECIES.filter((d) => d.evolvesTo && !ids.has(d.evolvesTo));
+  const dangling = ALL_SPECIES.filter(
+    (d) => d.evolvesTo != null && (Array.isArray(d.evolvesTo) ? d.evolvesTo : [d.evolvesTo]).some((id) => !ids.has(id)),
+  );
   ok(!dangling.length, `every evolvesTo resolves (${dangling.map((d) => `${d.name}->${d.evolvesTo}`).join(',') || 'none'})`);
   const noArt = ALL_SPECIES.filter((d) => !existsSync(`public/sprites/${d.id}.png`));
   ok(!noArt.length, `every species has a vendored sprite (${noArt.map((d) => `${d.name}#${d.id}`).join(',') || 'none'})`);
@@ -344,8 +400,9 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       b.pointerDown({ x: MAP_OX + n.tx * MAP_CELL + MAP_CELL / 2, y: MAP_OY + (n.ty - (b as any).mapCam) * MAP_CELL + MAP_CELL / 2 });
       step(240); // the lead mon walks the route over ~6 tiles/sec
     } else if (b.phase === 'reward') {
-      b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
-      if (b.phase === 'reward') b.pickPerk(0); // safety: force advance
+      if (b.evoChoice) b.pickEvo(Math.floor(rng() * b.evoChoice.options.length)); // a split evo asks first
+      else b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
+      if (b.phase === 'reward' && !b.evoChoice) b.pickPerk(0); // safety: force advance
     } else if (b.phase === 'aim') {
       const u = (b as any).active;
       if (!u || u.dead) { step(30); continue; }
@@ -939,7 +996,9 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
 // --- roster integrity -------------------------------------------------------
 ok(ROSTER.length >= 29, `roster expanded (${ROSTER.length})`);
 ok(ROSTER.every((r) => speciesById(r.id)), 'every roster id resolves');
-const evo = ROSTER.filter((r) => r.evolvesTo).every((r) => speciesById(r.evolvesTo!));
+const evo = ROSTER.filter((r) => r.evolvesTo).every((r) =>
+  (Array.isArray(r.evolvesTo) ? r.evolvesTo : [r.evolvesTo!]).every((id) => speciesById(id)),
+);
 ok(evo, 'every evolvesTo resolves');
 ok(moveOf(25, 'electric') === 'THUNDERBOLT', 'pikachu override');
 ok(moveOf(129, 'water') === 'SPLASH', 'magikarp signature');

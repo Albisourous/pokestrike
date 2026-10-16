@@ -20,6 +20,7 @@ import {
   drawReward,
   draftCardRect,
   perkCardRect,
+  evoCardRect,
   boxSlotRect,
   boxScrollMax,
   BOX_STRIP,
@@ -447,6 +448,14 @@ canvas.addEventListener('pointerdown', (e) => {
       }
     }
     if (battle?.phase === 'reward') {
+      // a split evolution swallows taps until its form is chosen
+      if (battle.evoChoice) {
+        const opts = battle.evoChoice.options;
+        for (let i = 0; i < opts.length; i++) {
+          if (inRect(p.x, p.y, evoCardRect(i, opts.length))) battle.pickEvo(i);
+        }
+        return;
+      }
       // box strip swallows the pointer — release decides tap vs scroll drag
       if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
         boxDrag = { x0: p.x, s0: boxScroll, moved: false };
@@ -809,6 +818,8 @@ function render() {
             },
             battle.score,
             battle.heldItems,
+            battle.evoChoice,
+            battle.teamLuck(),
           );
       }
       break;

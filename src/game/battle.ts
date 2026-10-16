@@ -11,7 +11,7 @@ import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES } from './meta';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
-import { effectiveness, TYPE_COLOR } from './types';
+import { typeMult, strikeType, TYPE_COLOR } from './types';
 import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND } from './map';
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
@@ -298,6 +298,11 @@ export class Battle {
   private shotT = 0; // launch timestamp — hard-caps a shot that never settles
   private enemyPhaseT = 0;
   private inspect: { uid: number; t: number } | null = null; // tapped-foe scout card
+  // branching evolution: a dupe-fed split waits on the reward screen's pick —
+  // unit for a fielded mon, boxDef for a boxed one (re-found at pick time so
+  // a mid-queue box swap can't evolve the wrong entry)
+  private evoPending: { from: SpeciesDef; options: SpeciesDef[]; unit?: Unit; boxDef?: SpeciesDef }[] = [];
+  evoChoice: { from: SpeciesDef; options: SpeciesDef[]; unit?: Unit; boxDef?: SpeciesDef } | null = null;
   paused = false; // mid-fight freeze — the pause chip in the arena corner
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
@@ -325,6 +330,7 @@ export class Battle {
   private shotVolleyBoost = 0; // volleyBoost accumulated this shot
   streak = 0; // consecutive perfect launches — shown in the HUD
   private shotStreak = 1; // this shot's streak damage bonus
+  private shotGold = false; // gold-zone release — MS gauge shot: +20% contact this shot
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
   scoreMult = 1; // lucky egg: score amplifies
   private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
@@ -972,6 +978,7 @@ export class Battle {
     // resets the moment a release misses the gold
     this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
+    this.shotGold = gold;
     const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
@@ -1965,7 +1972,9 @@ export class Battle {
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
     // impact ring in the attacker's type color — every contact pops
-    this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 1.7, t: 0.2, life: 0.2, color: TYPE_COLOR[shooter.def.type] ?? '#ffffff', hits: new Set() });
+    // dual-typed strikers lead with whichever type hits this target harder
+    const at = strikeType(shooter.def, e.def);
+    this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 1.7, t: 0.2, life: 0.2, color: TYPE_COLOR[at] ?? '#ffffff', hits: new Set() });
     const pinched = this.pinch(e.uid);
     // taunt toll-booth: while a magnet mon lives, contact damage routes
     // through it — pierce still passes, it just can't hurt anything else
@@ -1978,7 +1987,7 @@ export class Battle {
     const hitN = this.shotHitN.get(e.uid) ?? 0;
     this.shotHitN.set(e.uid, hitN + 1);
     if (pinched && !this.inStatic(shooter.x, shooter.y)) this.onPinch(e.x, e.y);
-    const mult = effectiveness(shooter.def.type, e.def.type);
+    const mult = typeMult(at, e.def);
     // weak point: the boss's rotating gold face takes triple contact
     // damage — MS's signature precision check. Drifts, so read it first.
     let weak = false;
@@ -1999,8 +2008,9 @@ export class Battle {
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
         shooter.pow * this.physMult * this.shotPhys * spdMul * (1 + this.shotCombo * (0.1 + this.comboDmg + this.t('electric') * 0.04)) *
         (1 + this.wallRamp * shooter.wallN) *
-        (this.typePow[shooter.def.type] ?? 1) *
+        (this.typePow[at] ?? 1) *
         this.shotStreak *
+        (this.shotGold ? 1.2 : 1) *
         (1 + this.shotVolleyBoost) *
         (pinched ? 1 + this.pinchMult : 1) *
         (weak ? 3 : 1) *
@@ -2020,7 +2030,7 @@ export class Battle {
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     // contact sparks in the attacker's type color — every hit showers
-    if (!e.dead || !weak) this.impact(e.x, e.y, TYPE_COLOR[shooter.def.type] ?? '#ffffff', (weak ? 1.3 : mult > 1 ? 1.1 : 0.8) * Math.min(1.5, 0.7 + spd / 1800));
+    if (!e.dead || !weak) this.impact(e.x, e.y, TYPE_COLOR[at] ?? '#ffffff', (weak ? 1.3 : mult > 1 ? 1.1 : 0.8) * Math.min(1.5, 0.7 + spd / 1800));
     // gacha hit-stop: a frame of slowdown on EVERY hit, heavier on SE —
     // combos feel like chains of little freezes, not a smear
     this.hitStop = Math.max(this.hitStop, mult > 1 ? 0.055 : 0.03);
@@ -2030,7 +2040,9 @@ export class Battle {
     buzz(8);
     if (shooter.wallN >= 2)
       this.texts.push({ x: e.x, y: e.y - e.r - 58, text: `BANKED ×${shooter.wallN}!`, t: 0.9, color: '#9df0ff', big: false });
-    if (mult > 1)
+    if (mult >= 4)
+      this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'ULTRA EFFECTIVE!', t: 1, color: '#ffd84d', big: true });
+    else if (mult > 1)
       this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'SUPER EFFECTIVE!', t: 0.8, color: '#ffd84d', big: false });
   }
 
@@ -2261,7 +2273,7 @@ export class Battle {
     // shooter's stats and typing, fired from the copier's position
     const src = p.def.copy ? u : p;
     const phys = bumpIsPhysical(src.def.type);
-    const eff = (e: Unit) => effectiveness(src.def.type, e.def.type);
+    const eff = (e: Unit) => typeMult(src.def.type, e.def);
     // Physical bump attacks roll Attack vs Defense; elemental ones SpA vs SpD.
     const bumpDmg = (e: Unit, power: number) =>
       Math.round(
@@ -2592,11 +2604,36 @@ export class Battle {
       owned.shiny = true;
       owned.def = { ...owned.def, shiny: true }; // marker rides the def into the box
     }
-    const evoId = def.evolvesTo;
-    const next = evoId != null ? SPECIES_DB.find((s) => s.id === evoId) : undefined;
+    // fusion: every absorbed dupe banks a luck point — MS's drop-rate stat,
+    // spent on bonus gems in the gym loot fountain
+    if (owned) owned.def = { ...owned.def, luck: Math.min(99, (owned.def.luck ?? 0) + 1) };
+    else this.box[bi] = { ...this.box[bi], luck: Math.min(99, (this.box[bi].luck ?? 0) + 1) };
+    this.texts.push({
+      x: owned ? owned.x : this.arena.x + this.arena.w / 2,
+      y: owned ? owned.y - owned.r - 58 : this.arena.y + 50,
+      text: '+1 LUCK!',
+      t: 0.9, color: '#6fdc6f', big: false,
+    });
+    const evoIds = def.evolvesTo == null ? [] : Array.isArray(def.evolvesTo) ? def.evolvesTo : [def.evolvesTo];
+    const options = evoIds
+      .map((id) => SPECIES_DB.find((s) => s.id === id))
+      .filter((s): s is SpeciesDef => !!s);
+    if (options.length > 1) {
+      // a split path asks, not answers — the pick waits on the reward screen
+      this.evoPending.push({ from: def, options, unit: owned, boxDef: owned ? undefined : this.box[bi] });
+      this.texts.push({
+        x: owned ? owned.x : this.arena.x + this.arena.w / 2,
+        y: owned ? owned.y - owned.r - 40 : this.arena.y + 70,
+        text: `${def.name.toUpperCase()} IS EVOLVING…`,
+        t: 1.4, color: '#ffd84d', big: true,
+      });
+      sfx('ready');
+      return true;
+    }
+    const next = options[0];
     if (next) {
       if (owned) this.evolveUnit(owned, next);
-      else this.box[bi] = this.box[bi].shiny || shiny ? { ...next, shiny: true } : next; // shininess survives a boxed evolution
+      else this.box[bi] = this.evoMerge(this.box[bi], next, shiny); // markers survive a boxed evolution
       recordCapture([next.id]); // evo-only species only ever enter the dex here
       this.texts.push({
         x: owned ? owned.x : this.arena.x + this.arena.w / 2,
@@ -2628,6 +2665,42 @@ export class Battle {
     return true;
   }
 
+  // Boxed evolution: shininess and banked luck ride the new form's def.
+  private evoMerge(from: SpeciesDef, to: SpeciesDef, shiny = false): SpeciesDef {
+    return from.shiny || shiny || from.luck
+      ? { ...to, shiny: from.shiny || shiny || undefined, luck: from.luck }
+      : to;
+  }
+
+  // The player's pick on a branching evolution — deferred to the reward
+  // screen, then the next queued split steps up
+  pickEvo(i: number) {
+    const c = this.evoChoice;
+    if (!c || this.phase !== 'reward') return;
+    const next = c.options[i];
+    if (!next) return;
+    if (c.unit) this.evolveUnit(c.unit, next);
+    else if (c.boxDef) {
+      const bi = this.box.indexOf(c.boxDef);
+      if (bi >= 0) this.box[bi] = this.evoMerge(c.boxDef, next);
+      else {
+        // it left the box mid-queue (swapped onto the team) — find the unit
+        const u = this.players.find((p) => p.def === c.boxDef);
+        if (u) this.evolveUnit(u, next);
+      }
+    }
+    recordCapture([next.id]);
+    this.texts.push({
+      x: this.arena.x + this.arena.w / 2,
+      y: this.arena.y + 120,
+      text: `${c.from.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`,
+      t: 1.4, color: '#ffd84d', big: true,
+    });
+    sfx('caught');
+    cry(next.id, 0.5);
+    this.evoChoice = this.evoPending.shift() ?? null;
+  }
+
   // Mid-run evolution: same slot, new species — hp fraction carries over
   // and a fainted mon stays fainted (evolving isn't a revive).
   private evolveUnit(p: Unit, nd: SpeciesDef) {
@@ -2635,7 +2708,7 @@ export class Battle {
     const role = roleOf(nd.stats, nd.healer);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(nd.stats) * m.hp);
-    p.def = p.shiny ? { ...nd, shiny: true } : nd; // the marker rides the def into the box
+    p.def = p.shiny || p.def.luck ? { ...nd, shiny: p.shiny || undefined, luck: p.def.luck } : nd; // markers ride the def into the box
     p.role = role;
     p.pow = m.pow * lvlPow(offStat(nd.stats, nd.type), p.lvl); // earned levels survive evolution
     p.rngMul = m.range;
@@ -2715,7 +2788,17 @@ export class Battle {
 
   // every type on the active team or in the box — charm offers follow it
   teamTypes() {
-    return new Set<PokeType>([...this.players.map((p) => p.def.type), ...this.box.map((d) => d.type)]);
+    const s = new Set<PokeType>();
+    for (const d of [...this.players.map((p) => p.def), ...this.box]) {
+      s.add(d.type);
+      if (d.type2) s.add(d.type2);
+    }
+    return s;
+  }
+
+  // fusion tally — MS luck: absorbed dupes pay out as bonus gym loot
+  teamLuck() {
+    return this.players.reduce((a, p) => a + (p.def.luck ?? 0), 0);
   }
 
   private enterReward() {
@@ -2742,6 +2825,8 @@ export class Battle {
       p.vy = 0;
     }
     this.phase = 'reward';
+    // a queued split evolution asks its question on the reward screen
+    if (!this.evoChoice) this.evoChoice = this.evoPending.shift() ?? null;
   }
 
   // A fallen gym leader bursts into PokéCoins — a few-second victory lap
@@ -2791,6 +2876,25 @@ export class Battle {
         val: 100,
       });
     }
+    // team luck pays: MS's drop-rate stat — every ~10 fusion points rolls a
+    // bonus gem into the fountain
+    const luck = this.teamLuck();
+    const bonus = Math.min(6, Math.floor(luck / 10) + (this.rng() < (luck % 10) / 10 ? 1 : 0));
+    for (let i = 0; i < bonus; i++) {
+      const a = this.rng() * Math.PI * 2;
+      const sp = 200 + this.rng() * 380;
+      this.lootCoins.push({
+        x: ox, y: oy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 340,
+        r: 14,
+        spin: this.rng() * Math.PI * 2,
+        kind: 'gem',
+        val: 100,
+      });
+    }
+    if (bonus > 0)
+      this.texts.push({ x: ox, y: oy - 70, text: `LUCKY! +${bonus} GEM${bonus > 1 ? 'S' : ''}`, t: 1.4, color: '#9df0ff', big: true });
     for (const kind of ['heart', 'candy'] as const) {
       const a = this.rng() * Math.PI * 2;
       const sp = 220 + this.rng() * 300;
@@ -4250,7 +4354,7 @@ export class Battle {
     ctx.fillText(`${Math.ceil(e.hp)}/${e.maxHp}`, cx + 50, cy + 42);
     ctx.fillStyle = TYPE_COLOR[e.def.type];
     ctx.textAlign = 'right';
-    ctx.fillText(e.def.type.toUpperCase(), cx + w - 10, cy + 16);
+    ctx.fillText(e.def.type2 ? `${e.def.type}/${e.def.type2}`.toUpperCase() : e.def.type.toUpperCase(), cx + w - 10, cy + 16);
     // the readout — foes show their attack clock; teammates show their super
     ctx.textAlign = 'left';
     ctx.font = font(8);
@@ -5406,10 +5510,11 @@ export class Battle {
           label = 'BLOCKED';
           lc = '#8a90a8';
         } else {
-          const mult = effectiveness(u.def.type, hit.def.type);
+          const at = strikeType(u.def, hit.def);
+          const mult = typeMult(at, hit.def);
           const est = Math.max(1, Math.round(
             physDamage(u.def.stats.atk, hit.def.stats.def, mult) *
-              u.pow * this.physMult * this.dmgMult * (this.typePow[u.def.type] ?? 1) *
+              u.pow * this.physMult * this.dmgMult * (this.typePow[at] ?? 1) *
               (hit.boss ? 1 + this.bossSlayer : 1),
           ));
           label = est >= hit.hp ? `≈${est} KO` : `≈${est}`;

@@ -28,6 +28,18 @@ const CHART: Record<PokeType, Partial<Record<PokeType, number>>> = {
 
 export const effectiveness = (atk: PokeType, def: PokeType) => CHART[atk][def] ?? 1;
 
+// Dual-typing: the second type multiplies defensive matchups — 4x
+// weaknesses, stacked resists and full immunities all fall out of it.
+export interface Typed {
+  type: PokeType;
+  type2?: PokeType;
+}
+export const typeMult = (atk: PokeType, def: Typed) =>
+  effectiveness(atk, def.type) * (def.type2 ? effectiveness(atk, def.type2) : 1);
+// a dual-typed striker leads with whichever of its types hits harder
+export const strikeType = (att: Typed, def: Typed): PokeType =>
+  att.type2 && typeMult(att.type2, def) > typeMult(att.type, def) ? att.type2 : att.type;
+
 export const TYPE_COLOR: Record<PokeType, string> = {
   normal: '#a8a878',
   fire: '#f08030',

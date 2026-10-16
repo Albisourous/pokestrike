@@ -113,6 +113,12 @@ export function teamSlotRect(i: number) {
   return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 772, w, h: 70 };
 }
 
+// split-evolution option cards — centered row over the dimmed reward screen
+export function evoCardRect(i: number, n: number) {
+  const w = 140, gap = 14;
+  return { x: W / 2 - (n * w + (n - 1) * gap) / 2 + i * (w + gap), y: 400, w, h: 170 };
+}
+
 export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -690,7 +696,11 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'CATCHING',
-    lines: ['beaten foes sometimes drop a ball: catches go to your box', 'a duplicate evolves or feeds the copy you own · beat a gym, take the ace'],
+    lines: [
+      'beaten foes sometimes drop a ball: catches go to your box · beat a gym, take the ace',
+      'a duplicate feeds the copy you own: +1 LUCK every fusion, paid out in gym loot',
+      'split evolutions (Eevee, Tyrogue…) ask which form after the fight',
+    ],
     demo: demoCatch,
   },
   {
@@ -725,7 +735,11 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'TYPE TRAITS',
-    lines: ['field 2+ of a type for a team-wide bonus — shinies count double', 'the chips on the map screen show what your team is running'],
+    lines: [
+      'field 2+ of a type for a team-wide bonus — shinies count double',
+      'dual-typed mons count for both types and strike with whichever hits harder',
+      'the chips on the map screen show what your team is running',
+    ],
     demo: demoTraits,
   },
   {
@@ -1038,7 +1052,9 @@ export function drawDraft(
 
     // evolution hint rides the top-left — Magikarp is secretly Gyarados
     if (def.evolvesTo != null) {
-      const nx = speciesById(def.evolvesTo)?.name.toUpperCase();
+      const nx = Array.isArray(def.evolvesTo)
+        ? `${def.evolvesTo.length} FORMS`
+        : speciesById(def.evolvesTo)?.name.toUpperCase();
       if (nx) {
         ctx.textAlign = 'left';
         ctx.font = font(7);
@@ -1241,6 +1257,8 @@ export function drawReward(
   next: { stage: number; gym: boolean; rolled: boolean },
   score: number,
   heldItems: string[],
+  evo: { from: SpeciesDef; options: SpeciesDef[] } | null,
+  luck: number,
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -1264,6 +1282,11 @@ export function drawReward(
   ctx.font = font(10);
   ctx.fillStyle = '#e8ecf8';
   ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 356);
+  if (luck > 0) {
+    ctx.font = font(8);
+    ctx.fillStyle = '#6fdc6f';
+    ctx.fillText(`TEAM LUCK ${luck} — fusion dupes feed the gym fountain`, W / 2, 372);
+  }
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
@@ -1353,7 +1376,11 @@ export function drawReward(
     rim(ctx, r, 8, selBox >= 0 ? GOLD : '#2a3560', 1);
     edge(ctx, r, 8);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillRect(r.x + 5, r.y + 5, r.w - 10, 3);
+    ctx.fillRect(r.x + 5, r.y + 5, def.type2 ? (r.w - 10) / 2 : r.w - 10, 3);
+    if (def.type2) {
+      ctx.fillStyle = TYPE_COLOR[def.type2];
+      ctx.fillRect(r.x + 5 + (r.w - 10) / 2, r.y + 5, (r.w - 10) / 2, 3);
+    }
     (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 30, 40);
     if (def.shiny) {
       ctx.font = font(7);
@@ -1397,6 +1424,38 @@ export function drawReward(
   }
   // StS lets you decline a reward — here it cashes out as score instead
   button(ctx, REWARD_SKIP, 'DECLINE +150', true);
+
+  // a split evolution blocks the reward pick until its form is chosen
+  if (evo) {
+    ctx.fillStyle = 'rgba(4,6,16,0.78)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = font(13);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, W / 2, 372);
+    evo.options.forEach((opt, i) => {
+      const r = evoCardRect(i, evo.options.length);
+      roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+      ctx.fillStyle = '#12162b';
+      ctx.fill();
+      rim(ctx, r, 10, i === 0 ? '#ffd84d' : GOLD, 2);
+      edge(ctx, r, 10);
+      // split strip sells the dual-type at a glance
+      ctx.fillStyle = TYPE_COLOR[opt.type];
+      ctx.fillRect(r.x + 8, r.y + 8, opt.type2 ? (r.w - 16) / 2 : r.w - 16, 4);
+      if (opt.type2) {
+        ctx.fillStyle = TYPE_COLOR[opt.type2];
+        ctx.fillRect(r.x + 8 + (r.w - 16) / 2, r.y + 8, (r.w - 16) / 2, 4);
+      }
+      (opt.shiny ? drawShiny : drawMon)(ctx, opt.id, r.x + r.w / 2, r.y + 66, 76);
+      ctx.font = font(10);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(opt.name.toUpperCase(), r.x + r.w / 2, r.y + 136);
+      ctx.font = font(7);
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText(opt.type2 ? `${opt.type}/${opt.type2}` : opt.type, r.x + r.w / 2, r.y + 152);
+    });
+  }
 }
 
 // Starter-charm pick before stage 1 — same card look, standalone screen.
