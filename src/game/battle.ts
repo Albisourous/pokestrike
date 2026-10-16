@@ -378,6 +378,7 @@ export class Battle {
   rewardOffers: Perk[] = [];
   mapNode = 0; // index into region.nodes — the stop the team stands on
   hardWave = false; // the wave just cleared was a hard stop — bigger payout (trainers)
+  eliteWave = false; // elite stops pay out rare-or-better relics only
   lastRecruit: SpeciesDef | null = null; // gym ace prize, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
@@ -512,8 +513,10 @@ export class Battle {
     this.waveIndex = i;
     // trainer stops field a mono-type squad — the node's ttype picks it;
     // rolled rows still don't exist until the stop is chosen
-    const ttype = node?.kind === 'trainer' ? node.ttype ?? 'normal' : null;
+    const elite = node?.kind === 'elite';
+    const ttype = node?.kind === 'trainer' || elite ? node.ttype ?? 'normal' : null;
     this.inTrainer = ttype != null;
+    this.eliteWave = elite;
     this.inEvent = false;
     this.waveShots = 0;
     this.refreshTraits();
@@ -534,7 +537,8 @@ export class Battle {
         this.depth++;
         this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
       }
-      spawns = ttype ? trainerWave(this.rng, this.depth, ttype) : this.stage.waves[i];
+      // elite doors field the same mono-type squad but one depth tier hotter
+      spawns = ttype ? trainerWave(this.rng, this.depth + (elite ? 1 : 0), ttype) : this.stage.waves[i];
     }
     this.hardWave = this.inTrainer || this.inEvent;
     this.curSpawns = spawns;
@@ -554,7 +558,9 @@ export class Battle {
     this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent;
     this.inRival = false;
     if (ttype) {
-      this.waveSpecial = `${TRAINER_CLASS[ttype]?.title ?? 'TRAINER'} WANTS TO BATTLE!`;
+      this.waveSpecial = elite
+        ? `ACE TRAINER — RARE LOOT ON THE LINE!`
+        : `${TRAINER_CLASS[ttype]?.title ?? 'TRAINER'} WANTS TO BATTLE!`;
       sfx('invade');
     } else if (!this.inEvent && this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
       spawns = this.curSpawns = rivalWave(this.echo.map((e) => e.def), this.rng);
@@ -832,8 +838,9 @@ export class Battle {
 
   // pause chip lives just inside the arena's top-left corner
   private pauseChip() {
-    const a = this.arena;
-    return { x: a.x + 10, y: a.y + 26, w: 30, h: 30 };
+    // header band, top-left — never inside the arena, or a ball resting in
+    // that corner gets caught under the chip and can't be pulled
+    return { x: 14, y: 30, w: 30, h: 30 };
   }
 
   pointerDown(p: Vec) {
@@ -2661,9 +2668,11 @@ export class Battle {
 
   private enterReward() {
     this.boxSel = -1;
-    // hard stops pay out uncommon-or-better relics — the risk has a price
-    this.rewardOffers = rollPerks(this.rng, this.hardWave ? 2 : 3, this.rank, this.teamTypes());
+    // hard stops pay out uncommon-or-better relics — the risk has a price;
+    // elites go further: rare-or-better only
+    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 1 : this.hardWave ? 2 : 3, this.rank, this.teamTypes());
     this.hardWave = false;
+    this.eliteWave = false;
     // trainer mons stay with their owner; only a fallen gym pays its ace —
     // ordinary stages earn no free catch
     this.lastRecruit = this.inTrainer || !this.waveHadGym ? null : this.rollRecruit();
@@ -4391,10 +4400,11 @@ export class Battle {
       if (n.kind === 'chest') {
         const ball = itemSprite('poke-ball');
         if (ball) ctx.drawImage(ball, nx - 15, ny - 24, 30, 30);
-      } else if (n.kind === 'trainer') {
-        // the class's overworld sprite stands on the stop — colored ring is
-        // the squad's type
-        if (n.ttype) drawNpc(ctx, TRAINER_CLASS[n.ttype].frame, nx, ny + cell * 0.5, cell * 1.7);
+      } else if (n.kind === 'trainer' || n.kind === 'elite') {
+        // the class's overworld sprite stands on the stop — elites get the
+        // ace trainer, the colored ring is still the squad's type
+        const frame = n.kind === 'elite' ? 'ace_trainer_down_0' : TRAINER_CLASS[n.ttype ?? 'normal'].frame;
+        drawNpc(ctx, frame, nx, ny + cell * 0.5, cell * 1.7);
       } else if (n.kind === 'wild') {
         // a flower patch = tall grass — something wild is rustling there
         drawTile(ctx, MT.TILE_FLOWER, nx - cell * 0.6, ny - cell * 0.6, cell * 1.2, cell * 1.2);
@@ -4418,7 +4428,9 @@ export class Battle {
         }
       }
       ctx.globalAlpha = cleared ? 0.35 : reachable ? 1 : 0.5;
-      ctx.strokeStyle = reachable ? (n.kind === 'trainer' ? '#ff6b6b' : '#ffd84d') : current ? '#6fdc6f' : '#c8d0e8';
+      ctx.strokeStyle = reachable
+        ? (n.kind === 'elite' ? '#b090ff' : n.kind === 'trainer' ? '#ff6b6b' : '#ffd84d')
+        : current ? '#6fdc6f' : '#c8d0e8';
       ctx.lineWidth = reachable || current ? 3 : 2;
       ctx.beginPath();
       ctx.arc(nx, ny, cell * (reachable ? 0.6 + Math.sin(this.time * 5) * 0.08 : 0.42), 0, Math.PI * 2);
@@ -4446,15 +4458,18 @@ export class Battle {
         : n.kind === 'event' ? '???'
         : n.kind === 'rest' ? 'REST'
         : n.kind === 'chest' ? 'CHEST'
+        : n.kind === 'elite' ? 'ELITE'
         : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title
         : n.kind === 'start' ? 'HOME'
         : 'WILD';
       ctx.strokeText(label, nx, ny - cell * 1.55);
-      ctx.fillStyle = reachable ? (n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d') : current ? '#6fdc6f' : '#8a94b8';
+      ctx.fillStyle = reachable
+        ? (n.kind === 'elite' ? '#c8b0ff' : n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d')
+        : current ? '#6fdc6f' : '#8a94b8';
       ctx.fillText(label, nx, ny - cell * 1.55);
       // trainer squads are mono-type — name it so routing around a bad
       // matchup is a choice, not a coin flip
-      if (n.kind === 'trainer') {
+      if (n.kind === 'trainer' || n.kind === 'elite') {
         const ty = (n.ttype ?? 'normal').toUpperCase();
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
@@ -4488,7 +4503,7 @@ export class Battle {
     ctx.font = font(9);
     ctx.fillStyle = '#6a7498';
     ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + view * cell + 48);
-    ctx.fillText('CHEST item, then a fight · REST heal+revive, then a fight · ??? surprise · GYM boss', 270, oy + view * cell + 64);
+    ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
     // resolved events and egg ticks surface as a toast over the island
     if (this.mapMsgT > 0 && this.mapMsg) {
       ctx.globalAlpha = Math.min(1, this.mapMsgT);

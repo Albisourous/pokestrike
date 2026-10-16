@@ -72,6 +72,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(es.every((e: any) => e.timer > (e.def.melee ? 2 : 3)), 'opening wave foes give one extra beat');
 }
 
+// --- elite stops: deeper mono-type squad, rare-or-better loot -------------
+{
+  const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(4));
+  (b as any).spawnWave(0, { kind: 'elite', ttype: 'fire', row: 0, tx: 0, ty: 0, links: [] });
+  const es = (b as any).enemies;
+  ok(es.every((e: any) => e.def.type === 'fire'), `elite fields a mono-type squad (${es.length} mons)`);
+  (b as any).enterReward();
+  ok(
+    b.rewardOffers.length > 0 && b.rewardOffers.every((p) => p.rarity === 'rare' || p.rarity === 'legendary'),
+    `elite pays rare+ relics (${b.rewardOffers.map((p) => p.rarity).join(',')})`,
+  );
+}
+
 // --- KOs level the shooter ----------------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));
@@ -316,11 +329,19 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       if (!u || u.dead) { step(30); continue; }
       const foes = (b as any).enemies.filter((e: any) => !e.dead);
       if (!foes.length) { step(60); continue; }
-      // nearest live foe — but if one is sitting on us, aim at arena top instead
+      // nearest live foe — but if one is sitting on us, aim at arena top instead.
+      // when straight shots keep whiffing into stone, the bot flails: cycles
+      // targets and banks the pull angle so a dead lane can't stall the climb
       let foe = foes[0], bestD = Infinity;
       for (const f of foes) { const d = Math.hypot(f.x - u.x, f.y - u.y); if (d < bestD) { bestD = d; foe = f; } }
       const t = bestD > 60 ? foe : { x: arena.x + arena.w / 2, y: arena.y + 60 };
-      const dx = t.x - u.x, dy = t.y - u.y;
+      let dx = t.x - u.x, dy = t.y - u.y;
+      if (aimTries > 120) {
+        const alt = foes[aimTries % foes.length];
+        const wob = ((aimTries * 37) % 9 - 4) * 0.28; // swing the aim ±64° in steps
+        const cs = Math.cos(wob), sn = Math.sin(wob);
+        [dx, dy] = [ (alt.x - u.x) * cs - (alt.y - u.y) * sn, (alt.x - u.x) * sn + (alt.y - u.y) * cs ];
+      }
       const d = Math.hypot(dx, dy) || 1;
       b.pointerDown({ x: u.x, y: u.y });
       b.pointerMove({ x: u.x - (dx / d) * 200, y: u.y - (dy / d) * 200 });

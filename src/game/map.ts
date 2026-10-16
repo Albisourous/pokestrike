@@ -18,7 +18,7 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'trainer' | 'chest' | 'rest' | 'event' | 'gym';
+export type NodeKind = 'start' | 'wild' | 'trainer' | 'elite' | 'chest' | 'rest' | 'event' | 'gym';
 export interface MapNode {
   tx: number;
   ty: number;
@@ -126,7 +126,9 @@ export function genRegion(seed: number): RegionMap {
     let kinds: NodeKind[];
     if (r % 3 === 2) kinds = ['gym'];
     else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'event']).slice(0, 2);
-    else kinds = shuffle<NodeKind>(['wild', 'trainer']); // fork: catchable door vs harder door
+    // battle fork: a catchable door vs a harder door — sometimes the hard
+    // door is an ELITE (deeper-tier squad, rare-or-better loot)
+    else kinds = shuffle<NodeKind>(rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
     const xs = kinds.length === 1 ? [0.5] : [0.28, 0.72];
     kinds.forEach((kind, k) => {
       const want = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.6);
@@ -162,7 +164,7 @@ export function genRegion(seed: number): RegionMap {
         kind,
         row: r,
         links: [],
-        ...(kind === 'trainer' ? { ttype: TRAINER_TYPES[Math.floor(rng() * TRAINER_TYPES.length)] } : {}),
+        ...(kind === 'trainer' || kind === 'elite' ? { ttype: TRAINER_TYPES[Math.floor(rng() * TRAINER_TYPES.length)] } : {}),
       });
     });
   }

@@ -700,7 +700,7 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'MAP STOPS',
-    lines: ['rest heals+revives and chests pay an item — both still fight after', 'trainer squads can\'t be caught but pay better loot · ??? is a surprise'],
+    lines: ['rest heals+revives and chests pay an item — both still fight after', 'trainer squads can\'t be caught but pay better loot · ELITE doors fight deeper, pay rare+ relics · ??? is a surprise'],
     demo: demoPickups,
   },
   {
