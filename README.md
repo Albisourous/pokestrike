@@ -21,9 +21,9 @@ leaders to win the run.
 | --- | --- | --- |
 | ![swarm wave](docs/mutator.png) | ![mine hazard](docs/mines.png) | ![gym weak point](docs/weakpoint.png) |
 
-| Victory loot | Soul-linked pair | |
+| Victory loot | Soul-linked pair | Power zone + auras |
 | --- | --- | --- |
-| ![coin shower after a gym](docs/loot.png) | ![zombie pair tether](docs/zombie.png) | |
+| ![coin shower after a gym](docs/loot.png) | ![zombie pair tether](docs/zombie.png) | ![power zone, gravity aura, skull mark](docs/powerzone.png) |
 
 ## How to play
 
@@ -104,7 +104,11 @@ scrollable in-game manual, and it opens itself on your first visit.
    burst onto neighbors, A BIG ONE supersizes a fodder, a gold glint
    guarantees one shiny in the pack, and a **soul-linked pair** shares a
    green tether — fell one and its partner drags it back at partial HP
-   (twice each, then they're done), so drop both in the same shot. An
+   (twice each, then they're done), so drop both in the same shot.
+   Rarer affixes: a **skull-marked foe** pays a team heal + score bounty
+   on KO, a **gravity aura** carrier slows your ball to a crawl inside
+   its bubble, and a **power zone** paints an ATK field — shots landing
+   from inside it hit +50% harder. An
    **Air Balloon** item floats over all of it. **Field pickups** spawn
    each wave and the ball collects them by touch: **Oran Berry** heals the
    team, **Protein** boosts contact damage for the rest of the shot,

@@ -640,7 +640,7 @@ export function rivalWave(defs: SpeciesDef[], rng: () => number): WaveSpawn[] {
 // Hazard zones: per-theme arena dangers laid out alongside a wave's spawns.
 // Same normalized coords as WaveSpawn; r is a fraction of arena width.
 // Zones stay out of the bottom 25% (player turf) and inside the side walls.
-export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well';
+export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power';
 export interface HazardSpawn {
   kind: HazardKind;
   nx: number;

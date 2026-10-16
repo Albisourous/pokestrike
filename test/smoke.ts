@@ -533,6 +533,30 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b11 as any).hurt(z2, z2.hp + 1, '#fff');
   (b11 as any).endShot();
   ok(z1.dead && z2.dead, 'double-kill breaks the zombie loop');
+
+  // skull mark: the KO pays a bounty — score pop + team heal
+  const b12 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b12 as any).spawnWave(0);
+  const sk = b12.enemies[0];
+  sk.skull = true;
+  const s0 = b12.score;
+  b12.players[0].hp = 10;
+  (b12 as any).hurt(sk, sk.hp + 1, '#fff');
+  ok(b12.score - s0 >= 150, `skull bounty pays +150 on top of the KO (${b12.score - s0})`);
+  ok(b12.players[0].hp > 10, `skull bounty heals the team (${b12.players[0].hp})`);
+
+  // gravity aura: a ball inside the carrier's bubble bleeds speed
+  const b13 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b13 as any).spawnWave(0);
+  const g13 = b13.enemies[0];
+  const u13 = (b13 as any).active;
+  u13.x = g13.x + 130; // inside the aura, clear of the sprite
+  u13.y = g13.y;
+  g13.gravR = 160;
+  u13.vx = 600;
+  u13.vy = 0;
+  for (let i = 0; i < 12; i++) (b13 as any).stepShot(1 / 60);
+  ok(u13.vx < 500, `gravity aura drags the ball (vx ${Math.round(u13.vx)})`);
 }
 
 // --- gym boss relic + egg hatch ---------------------------------------------

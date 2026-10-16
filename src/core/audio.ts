@@ -21,8 +21,9 @@ export function toggleMute() {
 
 export function unlockAudio() {
   if (ac) {
+    // just a resume — restarting the sequencer here restarts the song on
+    // every tap while the old scheduled notes still ring = doubled audio
     if (ac.state === 'suspended') ac.resume();
-    restart();
     return;
   }
   try {
@@ -31,7 +32,7 @@ export function unlockAudio() {
     master.gain.value = muted ? 0 : 0.5;
     master.connect(ac.destination);
     mGain = ac.createGain();
-    mGain.gain.value = 0.42; // music sits under the sfx
+    mGain.gain.value = 0.3; // music sits under the sfx
     // a gentle lowpass on the music bus takes the rasp off square leads —
     // the single biggest "this sounds grating" fix
     mFilter = ac.createBiquadFilter();
@@ -213,6 +214,7 @@ interface Track {
   bassGate?: number;
   echo?: number; // wet-echo send 0..0.4 — ambient swims, battle stays tight
   alt?: number[]; // second lead phrase — loops alternate A/A' so repeats drift
+  altHarm?: number[]; // harmony voiced to the alt lead — plays under it
   guitar?: boolean; // route the lead through the distortion bus — J-rock shred
   slap?: boolean; // bass gets a pitch-snap + pick click per note — slap feel
   stab?: number[][]; // synth-brass chord stabs — midi arrays per step, [] = rest
@@ -303,6 +305,20 @@ const battleLeadB = [
 
 const battleLeadAll = [...battleLead, ...battleLeadB];
 
+// Second verse: the loop's next pass answers the riff instead of
+// restating it — a call-and-response counter-melody over the same chug.
+const battleLeadAlt = [
+  0, 0, 81, 0, 79, 0, 81, 0, // let the riff breathe, then answer
+  76, 0, 79, 0, 81, 0, 79, 0,
+  83, 0, 81, 0, 79, 0, 76, 0, // descend
+  74, 0, 76, 0, 78, 0, 79, 0, // walk back up
+  81, 0, 83, 0, 84, 0, 83, 0, // peak at C6
+  81, 0, 79, 0, 76, 0, 74, 0, // fall
+  71, 0, 74, 0, 76, 0, 79, 0, // rebuild
+  83, 0, 81, 0, 79, 0, 0, 0, // breathe before the chug
+  ...battleLeadB,
+];
+
 const TRACKS: Record<TrackName, Track> = {
   title: {
     bpm: 96,
@@ -341,6 +357,8 @@ const TRACKS: Record<TrackName, Track> = {
     bpm: 170,
     lead: battleLeadAll,
     harm: battleLeadAll.map((n) => (n ? thirdDown(n) : 0)),
+    alt: battleLeadAlt,
+    altHarm: battleLeadAlt.map((n) => (n ? thirdDown(n) : 0)),
     leadWave: 'sawtooth',
     guitar: true,
     slap: true,
@@ -627,9 +645,9 @@ function pump() {
       const m = arr?.[i];
       if (m) mnote(M2F(m), t0, stepDur * gate, type, vol, 0, vib, dest);
     };
-    const leadArr = leadSel % 2 === 1 && tr.alt ? tr.alt : tr.lead;
-    voice(leadArr, 0.055, tr.leadWave ?? 'square', tr.leadGate ?? 0.92, tr.vib, tr.guitar ? gBus ?? undefined : undefined);
-    voice(tr.harm, 0.03, tr.leadWave ?? 'square', tr.leadGate ?? 0.9);
+    const altPass = leadSel % 2 === 1 && tr.alt;
+    voice(altPass ? tr.alt! : tr.lead, 0.055, tr.leadWave ?? 'square', tr.leadGate ?? 0.92, tr.vib, tr.guitar ? gBus ?? undefined : undefined);
+    voice(altPass ? (tr.altHarm ?? tr.harm) : tr.harm, 0.03, tr.leadWave ?? 'square', tr.leadGate ?? 0.9);
     voice(tr.arp, 0.026, 'square', tr.arpGate ?? 0.4);
     const bm = tr.bass[i];
     if (bm) {
@@ -640,12 +658,12 @@ function pump() {
     }
     // arcade brass: short bright chord stabs on their own channel
     const st = tr.stab?.[i];
-    if (st) for (const m of st) if (m) mnote(M2F(m), t0, stepDur * 0.6, 'square', 0.04);
+    if (st) for (const m of st) if (m) mnote(M2F(m), t0, stepDur * 0.6, 'square', 0.032);
     if (tr.kick[i] && tr.kick[i] !== '.') mnote(150, t0, 0.13, 'sine', 0.45, 45);
     if (tr.snare[i] && tr.snare[i] !== '.') mnoise(t0, 0.14, 1900, 0.16);
     const hc = tr.hat[i];
     if (hc === 'c') mnoise(t0, 0.4, 5500, 0.11); // crash — section accents
-    else if (hc && hc !== '.') mnoise(t0, 0.05, 7000, 0.045);
+    else if (hc && hc !== '.') mnoise(t0, 0.05, 7000, 0.038);
     stepIdx++;
     nextT += stepDur;
     if (stepIdx >= tr.lead.length) {

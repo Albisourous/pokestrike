@@ -92,6 +92,8 @@ interface Unit {
   supp?: 'medic' | 'aegis'; // support foe — heals or shields the pack on its turn
   link?: Unit; // zombie pair — falls while its partner lives → resurrects
   revives: number; // soul-link charges left — capped so a weak team can't hard-stall
+  skull?: boolean; // skull-marked — the KO pays a bounty (MS skull icon)
+  gravR: number; // gravity aura radius — the ball crawls inside the bubble
   shieldN: number; // aegis wards — each stack negates one incoming hit
   warpT: number; // last warp ride — cooldown stops portal ping-pong
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
@@ -131,7 +133,7 @@ interface Wave {
 }
 // A themed hazard zone on the court — MS damage-wall/gimmick analog.
 interface Hazard {
-  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well';
+  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power';
   x: number;
   y: number;
   r: number; // px radius of the zone
@@ -447,6 +449,7 @@ export class Battle {
         weakA: 0,
         shieldN: 0,
         revives: 0,
+        gravR: 0,
         warpT: -9,
         boostT: -9,
       });
@@ -584,8 +587,9 @@ export class Battle {
     }
     // wave mutators: a third of rolled non-boss waves get an affix —
     // same stop, different fight (StS hallway affixes)
+    let powerZoneSpawn = false; // 'power' mutator pushes its zone once hazards land
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < 0.35) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -641,8 +645,21 @@ export class Battle {
           }
           break;
         }
+        case 'skull': { // a marked fodder — the KO pays a bounty
+          const e = this.enemies.find((x) => !x.boss);
+          if (e) e.skull = true;
+          break;
+        }
+        case 'grav': { // gravity aura — shots crawl inside the bubble
+          const e = this.enemies[Math.floor(this.rng() * this.enemies.length)];
+          if (e) e.gravR = 110;
+          break;
+        }
+        case 'power': // an ATK field — hits landed from inside hit harder
+          powerZoneSpawn = true;
+          break;
       }
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -672,6 +689,15 @@ export class Battle {
       dir: z.dir,
       pair: z.pair,
     }));
+    if (powerZoneSpawn) { // the 'power' mutator's ATK field, dropped mid-court
+      const pr = this.arena.w * 0.14;
+      const at = this.unstick(
+        this.arena.x + this.arena.w * (0.2 + this.rng() * 0.6),
+        this.arena.y + this.arena.h * (0.18 + this.rng() * 0.4),
+        pr,
+      );
+      this.hazards.push({ kind: 'power', x: at.x, y: at.y, r: pr });
+    }
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -714,7 +740,7 @@ export class Battle {
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       wx: 0,
       wy: 0,
-      wT: Math.random() * 0.8,
+      wT: this.rng() * 0.8,
       wMul: 1,
       lunging: 0,
       boss: !!s.boss,
@@ -744,6 +770,7 @@ export class Battle {
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
       shieldN: 0,
       revives: 0,
+      gravR: 0,
       warpT: -9,
       boostT: -9,
     };
@@ -991,6 +1018,16 @@ export class Battle {
       const damp = Math.exp(-FRICTION * this.frictionMult * h);
       u.vx *= damp;
       u.vy *= damp;
+      // gravity auras: inside a carrier's bubble the ball crawls — aim
+      // around it or burn a turn punching through
+      for (const e of wave) {
+        if (e.dead || !e.gravR) continue;
+        if (Math.hypot(u.x - e.x, u.y - e.y) < e.gravR + u.r) {
+          const gd = Math.exp(-5 * h);
+          u.vx *= gd;
+          u.vy *= gd;
+        }
+      }
       u.x += u.vx * h;
       u.y += u.vy * h;
       // speed trail while flying fast — ghost positions smear the path
@@ -1169,11 +1206,11 @@ export class Battle {
           // erratic approach: seek the player but wander with random darts
           e.wT -= dt;
           if (e.wT <= 0) {
-            e.wT = 0.35 + Math.random() * 0.9;
-            const a = Math.random() * Math.PI * 2;
+            e.wT = 0.35 + this.rng() * 0.9;
+            const a = this.rng() * Math.PI * 2;
             e.wx = Math.cos(a);
             e.wy = Math.sin(a);
-            e.wMul = Math.random() < 0.22 ? 2.4 : 0.5 + Math.random();
+            e.wMul = this.rng() < 0.22 ? 2.4 : 0.5 + this.rng();
           }
           if (d > e.r + target.r + 6) {
             e.x += (dir.x * 0.55 + e.wx * e.wMul) * e.drift * dt;
@@ -1705,6 +1742,14 @@ export class Battle {
         cry(e.def.id, 0.45);
         buzz([30, 50, 30, 50, 60]);
       }
+      // skull mark: the bounty pops on the KO — team heal + score
+      if (e.skull) {
+        this.score += 150;
+        for (const p of this.players) if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.12));
+        this.texts.push({ x: e.x, y: e.y - e.r - 72, text: 'SKULL BONUS!', t: 1.2, color: '#c8ff70', big: true });
+        this.burst(e.x, e.y, '#c8ff70', 12, 320, 1);
+        sfx('heal');
+      }
       // VOLATILE mod: the KO detonates — a chunk of its max hp splashes
       // onto every neighbor, and volatile kills can chain
       if (e.volatile) {
@@ -1763,6 +1808,9 @@ export class Battle {
         (1 + this.shotVolleyBoost) *
         (pinched ? 1 + this.pinchMult : 1) *
         (weak ? 3 : 1) *
+        // power zone: hits landed while the ball's inside the ATK field
+        // carry the field's charge
+        (this.hazards.some((hz) => hz.kind === 'power' && Math.hypot(shooter.x - hz.x, shooter.y - hz.y) < hz.r) ? 1.5 : 1) *
         Math.pow(0.9, hitN),
     );
     if (weak) {
@@ -3048,6 +3096,25 @@ export class Battle {
       ctx.restore();
       ctx.globalAlpha = 1;
     }
+    // gravity auras — a dark bubble around the carrier, teal rim
+    for (const e of this.enemies) {
+      if (e.dead || !e.gravR) continue;
+      ctx.globalAlpha = 0.1 + Math.sin(this.time * 2.5) * 0.03;
+      ctx.fillStyle = '#0a1420';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.gravR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = '#58c8d8';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 8]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.gravR, this.time * 0.8, this.time * 0.8 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+
     // soul-link tethers — the zombie pair must read before you shoot
     ctx.strokeStyle = '#a0e060';
     for (const e of this.enemies) {
@@ -3065,6 +3132,23 @@ export class Battle {
 
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
+
+    // skull marks — a tiny bone-white badge pinned on the bounty foe
+    for (const e of this.enemies) {
+      if (e.dead || !e.skull) continue;
+      const sx = e.x + e.r * 0.7;
+      const sy = e.y - e.r - 10 + Math.sin(this.time * 4) * 1.5;
+      ctx.fillStyle = '#f0f0e8';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(sx - 3, sy + 3, 6, 4); // jaw
+      ctx.fillStyle = '#101018';
+      ctx.beginPath();
+      ctx.arc(sx - 2.2, sy - 0.5, 1.6, 0, Math.PI * 2);
+      ctx.arc(sx + 2.2, sy - 0.5, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // anime speedlines — a blazing shot drags the whole frame along
     if (this.phase === 'shot' && !this.active.dead) {
@@ -3783,6 +3867,28 @@ export class Battle {
       ctx.beginPath();
       ctx.arc(hz.x, hz.y, hz.r * 0.2 * (0.8 + pulse * 0.4), 0, TAU);
       ctx.fill();
+    } else if (hz.kind === 'power') {
+      // ATK field: a hot red disc with chevrons marching upward — hits
+      // landed from inside carry +50% charge
+      const pulse = 0.16 + Math.sin(this.time * 3) * 0.04;
+      ctx.globalAlpha = pulse + 0.14;
+      ctx.fillStyle = '#d83018';
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.68, 0, 0, TAU);
+      ctx.fill();
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = '#ffb040';
+      for (let i = 0; i < 3; i++) {
+        const cy = hz.y + hz.r * 0.3 - ((this.time * 40 + i * 26) % (hz.r * 0.9));
+        ctx.globalAlpha = 0.75 * (1 - (hz.y + hz.r * 0.3 - cy) / (hz.r * 0.9));
+        ctx.beginPath();
+        ctx.moveTo(hz.x - 14, cy);
+        ctx.lineTo(hz.x, cy - 10);
+        ctx.lineTo(hz.x + 14, cy);
+        ctx.lineTo(hz.x, cy - 4);
+        ctx.closePath();
+        ctx.fill();
+      }
     } else {
       ctx.globalAlpha = 0.45;
       ctx.fillStyle = '#241f30';
