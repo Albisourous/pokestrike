@@ -1083,7 +1083,7 @@ export function drawDraft(
     rim(ctx, rr, 10, live ? GOLD : '#2a3560', 1.5);
     ctx.font = font(9);
     ctx.fillStyle = live ? PARCH : '#5a6284';
-    ctx.fillText(live ? 'REROLL (1)' : 'REROLL USED', rr.x + rr.w / 2, rr.y + 19);
+    ctx.fillText(live ? `REROLL (${rerolls})` : 'REROLL USED', rr.x + rr.w / 2, rr.y + 19);
   }
 
   // picked team strip

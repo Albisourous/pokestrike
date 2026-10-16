@@ -155,7 +155,7 @@ export interface Achievement {
 export const ACHIEVEMENTS: Achievement[] = [
   { id: 'first-clear', name: 'HALL OF FAME', desc: 'Finish a full climb' },
   { id: 'ascended', name: 'ASCENDED', desc: 'Win a climb on Ascension I or higher' },
-  { id: 'triple', name: 'TRIPLE CROWN', desc: 'Win 3 climbs' },
+  { id: 'triple', name: 'TRIPLE CROWN', desc: 'Win 3 climbs (+1 draft reroll)' },
   { id: 'badge', name: 'GYM BREAKER', desc: 'Beat a gym leader' },
   { id: 'rival', name: 'GRUDGE SETTLED', desc: 'Defeat your rival echo' },
   { id: 'shiny', name: 'SHINING', desc: 'Catch a shiny' },

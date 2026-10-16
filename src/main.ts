@@ -224,7 +224,10 @@ function startDraft() {
       .map(speciesById)
       .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id)),
   ];
-  draft = { order: draftOrder(runRng), picked: [], shiny: new Set(), lvls: new Map(), rerolls: 1 };
+  // TRIPLE CROWN (3 wins) pays a second board reshuffle — the draft gets
+  // friendlier once you've proven the climb
+  const rerolls = 1 + (unlockedAch().has('triple') ? 1 : 0);
+  draft = { order: draftOrder(runRng), picked: [], shiny: new Set(), lvls: new Map(), rerolls };
   for (let i = ROSTER.length; i < draftPool.length; i++) {
     draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
   }
