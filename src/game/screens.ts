@@ -51,6 +51,24 @@ export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 40 };
 export const FREE_BTN = { x: W / 2 - 140, y: 740, w: 280, h: 64 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
+// the same ? badge shrunk for mid-run lookups — shown between fights
+// (map + reward), where a player actually wants the reference
+export const HELP_CHIP = { x: W - 58, y: 54, w: 34, h: 34 };
+export function drawHelpChip(ctx: CanvasRenderingContext2D) {
+  const cx = HELP_CHIP.x + HELP_CHIP.w / 2;
+  const cy = HELP_CHIP.y + HELP_CHIP.h / 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+  ctx.fillStyle = '#12152bcc';
+  ctx.fill();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.font = font(12);
+  ctx.fillStyle = PARCH;
+  ctx.textAlign = 'center';
+  ctx.fillText('?', cx, cy + 5);
+}
 export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
@@ -1057,6 +1075,9 @@ export function drawDraft(
       roundRect(ctx, cx, 778, 28, 12, 6);
       ctx.fillStyle = TYPE_COLOR[ty];
       ctx.fill();
+      // color alone can't carry the info — 3-letter tag on the chip
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(ty.slice(0, 3).toUpperCase(), cx + 14, 787.5);
     });
   }
 
@@ -1451,6 +1472,13 @@ export function drawResult(
         ctx.fillText('★', mx, sy + 4);
       }
     });
+  }
+
+  // the echo tease — losing isn't a dead end, the team comes back hostile
+  if (!res.won) {
+    ctx.font = font(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('this fallen team may return as a RIVAL next run', W / 2, share ? 460 + badgeRows.length * 28 + 64 : 560);
   }
 
   button(ctx, RETRY_BTN, 'REMATCH', true);

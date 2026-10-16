@@ -29,6 +29,8 @@ import {
   TITLE_BTN,
   FREE_BTN,
   HELP_BTN,
+  HELP_CHIP,
+  drawHelpChip,
   MUTE_BTN,
   DRAFT_REROLL,
   drawHelp,
@@ -288,12 +290,12 @@ canvas.addEventListener('pointerdown', (e) => {
   unlockAudio(); // first gesture spins up the synth
   sceneMusic();
   const p = toLogical(e);
+  // the help pager swallows all input while it's up — any scene
+  if (helpOpen) {
+    helpDrag = { x0: p.x, y0: p.y, moved: false };
+    return;
+  }
   if (scene === 'title') {
-    if (helpOpen) {
-      // press starts a potential page-swipe; taps route on release
-      helpDrag = { x0: p.x, y0: p.y, moved: false };
-      return;
-    }
     if (dexOpen || achOpen) {
       dexDrag = { y0: p.y, s0: dexOpen ? dexScroll : achScroll, moved: false };
       return;
@@ -392,6 +394,13 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     return;
   } else if (scene === 'battle') {
+    // mid-run reference: the ? chip shows between fights
+    if (battle && (battle.phase === 'map' || battle.phase === 'reward') && inRect(p.x, p.y, HELP_CHIP)) {
+      sfx('ui');
+      helpOpen = true;
+      helpPage = 0;
+      return;
+    }
     if (battle?.phase === 'reward') {
       // box strip swallows the pointer — release decides tap vs scroll drag
       if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
@@ -522,7 +531,7 @@ canvas.addEventListener('pointercancel', () => {
 canvas.addEventListener(
   'wheel',
   (e) => {
-    if (scene === 'title' && helpOpen) {
+    if (helpOpen) {
       e.preventDefault();
       helpPage = Math.min(Math.max(helpPage + (e.deltaY + e.deltaX > 0 ? 1 : -1), 0), HELP_PAGE_COUNT - 1);
       return;
@@ -674,7 +683,6 @@ function render() {
       break;
     case 'title':
       drawTitle(ctx);
-      if (helpOpen) drawHelp(ctx, helpPage);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
       break;
@@ -733,6 +741,9 @@ function render() {
       if (result) drawResult(ctx, result, resultExtra, share, t);
       break;
   }
+  // the ? chip rides between fights; the pager itself floats over any scene
+  if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward')) drawHelpChip(ctx);
+  if (helpOpen) drawHelp(ctx, helpPage);
   ctx.restore();
 }
 
