@@ -50,6 +50,8 @@ export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 40 };
 export const FREE_BTN = { x: W / 2 - 140, y: 740, w: 280, h: 64 };
+// everyone's island for the day — one seed, shared climb
+export const DAILY_BTN = { x: W / 2 - 90, y: FREE_BTN.y + FREE_BTN.h + 12, w: 180, h: 34 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -396,6 +398,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = 'center';
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
   button(ctx, FREE_BTN, 'START CLIMB', true);
+  button(ctx, DAILY_BTN, 'DAILY CLIMB', true);
 
   // ? badge, top corner — the how-to-play overlay
   ctx.beginPath();
@@ -832,7 +835,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
 
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
 // --- haven't caught; the count is the only hint at what's out there -------
-export const DEX_BTN = { x: W / 2 - 140, y: FREE_BTN.y + FREE_BTN.h + 20, w: 135, h: 40 };
+export const DEX_BTN = { x: W / 2 - 140, y: DAILY_BTN.y + DAILY_BTN.h + 10, w: 135, h: 40 };
 export const ACH_BTN = { x: W / 2 + 5, y: DEX_BTN.y, w: 135, h: 40 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;

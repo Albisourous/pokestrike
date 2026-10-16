@@ -28,6 +28,7 @@ import {
   SHARE_BTN,
   TITLE_BTN,
   FREE_BTN,
+  DAILY_BTN,
   HELP_BTN,
   HELP_CHIP,
   MUTE_CHIP,
@@ -195,13 +196,25 @@ function draftOffers(): number[] {
 // isn't already in it — catching mons is how new faces join future drafts.
 // draftOrder only deals roster indices, so the extras get shuffled into the
 // deal here or they'd never be offered.
-// one run setup shared by START CLIMB and REMATCH — ?seed=NNN replays the
-// same climb (debug/sharing), anything else rolls a fresh island
-function newRun() {
+let dailyRun = false; // the day's shared island — same climb for everyone
+
+// one run setup shared by START CLIMB, DAILY CLIMB and REMATCH — ?seed=NNN
+// always wins (debug/sharing), daily seeds off the calendar, else fresh
+function newRun(daily = false) {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
   const has = Number.isFinite(forced) && forced > 0;
-  runRng = has ? mulberry32(forced) : Math.random;
-  stage = makeStage(has ? forced : randSeed());
+  dailyRun = daily && !has;
+  if (has) {
+    runRng = mulberry32(forced);
+    stage = makeStage(forced);
+  } else if (daily) {
+    const today = Math.floor(Date.now() / 86400000);
+    runRng = mulberry32(today);
+    stage = makeStage(today, 'DAILY CLIMB');
+  } else {
+    runRng = Math.random;
+    stage = makeStage(randSeed());
+  }
 }
 
 function startDraft() {
@@ -342,6 +355,14 @@ canvas.addEventListener('pointerdown', (e) => {
       startDraft();
       scene = 'draft';
       sceneMusic();
+      return;
+    }
+    if (inRect(p.x, p.y, DAILY_BTN)) {
+      sfx('ui');
+      newRun(true);
+      startDraft();
+      scene = 'draft';
+      sceneMusic();
     }
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
@@ -448,9 +469,10 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       shareResult();
     } else if (inRect(p.x, p.y, RETRY_BTN)) {
-      // REMATCH: one tap back into a fresh draft — the loop stays hot
+      // REMATCH: one tap back into a fresh draft — a daily replays the same
+      // island, that's the score-chase; anything else rolls fresh
       sfx('ui');
-      newRun();
+      newRun(dailyRun);
       battle = null;
       result = null;
       resultExtra = null;
