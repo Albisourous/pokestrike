@@ -373,8 +373,11 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       r.nodes.filter((n) => n.row === 0).every((n) => r.nodes[0].links.includes(r.nodes.indexOf(n))),
       `seed ${s}: HOME links to stage 1's whole fork`,
     );
-    const forks = [0, 1, 3, 4, 6, 7].every((row) => r.nodes.filter((n) => n.row === row).length === 2);
-    ok(forks, `seed ${s}: every choice row is a left/right fork`);
+    const forks = [0, 1, 3, 4, 6, 7].every((row) => {
+      const n = r.nodes.filter((x) => x.row === row).length;
+      return n >= 2 && n <= 3;
+    });
+    ok(forks, `seed ${s}: every choice row is a 2-3 lane fork`);
     ok(r.nodes.every((n) => n.kind !== 'trainer' || !!n.ttype), `seed ${s}: trainer stops carry a type`);
     ok(r.nodes.length >= 9 && r.nodes.length <= 24, `seed ${s}: ${r.nodes.length} stops`);
     // every linked pair must have a walkable carved route between them

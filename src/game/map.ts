@@ -125,18 +125,18 @@ export function genRegion(seed: number): RegionMap {
     const ty = MAP_H - 2 - (r + 1) * ROW_GAP;
     let kinds: NodeKind[];
     if (r % 3 === 2) kinds = ['gym'];
-    else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'event']).slice(0, 2);
-    // battle fork: a catchable door vs a harder door — sometimes the hard
-    // door is an ELITE (deeper-tier squad, rare-or-better loot)
-    else kinds = shuffle<NodeKind>(rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
-    const xs = kinds.length === 1 ? [0.5] : [0.28, 0.72];
+    else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'event']).slice(0, rng() < 0.5 ? 3 : 2);
+    // battle fork: a catchable door vs harder doors — three-lane rows add
+    // an ELITE squad to the wild/trainer mix
+    else kinds = shuffle<NodeKind>(rng() < 0.5 ? ['wild', 'trainer', 'elite'] : rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
+    const xs = kinds.length === 1 ? [0.5] : kinds.length === 3 ? [0.16, 0.5, 0.84] : [0.28, 0.72];
     kinds.forEach((kind, k) => {
       const want = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.6);
-      // a stop needs land + 5 tiles clear of its rowmate — labels like
-      // AROMA LADY are ~4 tiles wide, so anything tighter collides
+      // a stop needs land + 4 tiles clear of its rowmates — labels like
+      // AROMA LADY are ~3.5 tiles wide, so anything tighter collides
       const ok = (t: number) =>
         t >= 1 && t <= MAP_W - 2 && land(t, ty) &&
-        !nodes.some((o) => o.row === r && Math.abs(o.tx - t) < 5);
+        !nodes.some((o) => o.row === r && Math.abs(o.tx - t) < 4);
       let tx = want;
       if (!ok(tx)) {
         tx = -1;
@@ -186,16 +186,21 @@ export function genRegion(seed: number): RegionMap {
     convert(lo, hi, 'event');
   }
 
-  // forward links: each stop reaches the 1-2 nearest stops in the next row,
-  // and every next-row stop is reachable from somewhere — no dead ends
+  // StS-style routing: a stop only reaches ADJACENT lanes in the next
+  // row — outer lanes can't jump the whole board, so an early door can
+  // lock you out of a later reward. The nearest lane always opens; each
+  // side lane ~55%. Backfill keeps every stop reachable.
   const idxOf = (n: MapNode) => nodes.indexOf(n);
+  const nx = (n: MapNode) => n.tx / (MAP_W - 1);
   for (let r = 0; r < TOTAL_STAGES - 1; r++) {
     const from = nodes.filter((n) => n.row === r);
     const to = nodes.filter((n) => n.row === r + 1);
     for (const a of from) {
-      const sorted = [...to].sort((x, y) => Math.abs(x.tx - a.tx) - Math.abs(y.tx - a.tx));
-      a.links.push(idxOf(sorted[0]));
-      if (sorted.length > 1 && rng() < 0.45) a.links.push(idxOf(sorted[1]));
+      const inReach = to
+        .filter((b) => Math.abs(nx(b) - nx(a)) <= 0.37)
+        .sort((x, y) => Math.abs(x.tx - a.tx) - Math.abs(y.tx - a.tx));
+      if (!inReach.length) inReach.push([...to].sort((x, y) => Math.abs(x.tx - a.tx) - Math.abs(y.tx - a.tx))[0]);
+      for (const [i, b] of inReach.entries()) if (i === 0 || rng() < 0.55) a.links.push(idxOf(b));
     }
     for (const b of to) {
       if (!from.some((a) => a.links.includes(idxOf(b)))) {
