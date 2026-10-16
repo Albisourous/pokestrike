@@ -60,6 +60,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(boss?.enraged === true, 'ASC 6 gym leaders arrive enraged');
 }
 
+// --- designed opener: clustered first pack + breathing room -------------
+{
+  const b = new Battle(arena, team(), makeStage(5, 'T'), mulberry32(9));
+  (b as any).spawnWave(0);
+  const es = (b as any).enemies;
+  ok(es.length === 3, 'opener fields three fodder');
+  const xs = es.map((e: any) => (e.x - arena.x) / arena.w);
+  const spread = Math.max(...xs) - Math.min(...xs);
+  ok(spread < 0.45, `opener foes clustered for the ricochet (spread ${spread.toFixed(2)})`);
+  ok(es.every((e: any) => e.timer > (e.def.melee ? 2 : 3)), 'opening wave foes give one extra beat');
+}
+
 // --- KOs level the shooter ----------------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));

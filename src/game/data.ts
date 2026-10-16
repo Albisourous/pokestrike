@@ -568,11 +568,20 @@ export function makeStage(seed: number, name?: string): StageDef {
   const fodder = fodderPool(theme, 0); // the opening stretch is tier ≤1 only
   const add = () => ({ def: fodder[Math.floor(rng() * fodder.length)], ...slot() });
   const elite = () => ({ def: eliteAt(rng, 0), ...slot() });
+  // designed opener: the first pack a run pulls into is clustered around a
+  // seeded point, so the ricochet that defines the genre shows on shot one
+  const cx = 0.3 + rng() * 0.4;
+  const cy = 0.2 + rng() * 0.18;
+  const opener = () => ({
+    def: fodder[Math.floor(rng() * fodder.length)],
+    nx: Math.min(0.88, Math.max(0.12, cx + (rng() - 0.5) * 0.24)),
+    ny: Math.min(0.68, Math.max(0.1, cy + (rng() - 0.5) * 0.2)),
+  });
   return {
     name: name ?? THEME_NAME[theme],
     theme,
     waves: [
-      [add(), add(), add()],
+      [opener(), opener(), opener()],
       [add(), add(), add(), elite()],
       [...gymPack(boss, 2, rng, slot, fodder, 0), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
     ],

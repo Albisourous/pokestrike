@@ -765,7 +765,7 @@ export class Battle {
       r,
       hp: ehp,
       maxHp: ehp,
-      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult(),
+      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() + (wi === 0 ? 1 : 0),
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       wx: 0,
       wy: 0,
