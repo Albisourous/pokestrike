@@ -656,7 +656,7 @@ const HELP_SECTIONS: HelpSection[] = [
     lines: [
       'two different touches — foe, ally, wall, stone — within 0.35s flash PINCH!',
       "hitting the same thing twice doesn't count",
-      'relics cash it in: Binding Band pays +40% contact, Ether feeds a super pip',
+      'relics cash it in: Binding Band pays +40% hit damage, Ether feeds a super pip',
     ],
     demo: demoBump,
   },

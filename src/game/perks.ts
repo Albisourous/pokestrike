@@ -360,7 +360,7 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'ether', name: 'Ether', item: 'elixir',
-    desc: "combo shots charge the launcher's super",
+    desc: "PINCH hits charge the launcher's super",
     rarity: 'rare',
     apply: (b) => { b.pinchPip += 1; },
   },
