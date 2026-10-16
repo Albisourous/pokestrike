@@ -882,8 +882,8 @@ export class Battle {
     const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
     const pullLen = len(pull);
     if (pullLen < 12) {
-      // a tap, not a pull — on a foe it pops a scout card instead of a shot
-      const hit = this.enemies.find(
+      // a tap, not a pull — on a mon it pops a scout card instead of a shot
+      const hit = [...this.enemies, ...this.players].find(
         (e) => !e.dead && Math.hypot(e.x - this.dragStart.x, e.y - this.dragStart.y) < e.r + 14,
       );
       if (hit) {
@@ -1029,7 +1029,8 @@ export class Battle {
     if (this.mapMsgT > 0) this.mapMsgT -= dt;
     if (this.inspect) {
       this.inspect.t -= dt;
-      if (this.inspect.t <= 0 || !this.enemies.some((e) => e.uid === this.inspect!.uid && !e.dead)) this.inspect = null;
+      const alive = [...this.enemies, ...this.players].some((e) => e.uid === this.inspect!.uid && !e.dead);
+      if (this.inspect.t <= 0 || !alive) this.inspect = null;
     }
     // squash impulses relax — sprites spring back after impacts
     for (const p of this.players) p.sq *= Math.exp(-9 * dt);
@@ -3933,8 +3934,9 @@ export class Battle {
   // The scout card: tapping a foe (instead of pulling) answers "what is
   // that thing about to do" — name, bulk, type, and its attack countdown.
   private drawInspect(ctx: CanvasRenderingContext2D) {
-    const e = this.enemies.find((x) => x.uid === this.inspect!.uid);
+    const e = [...this.enemies, ...this.players].find((x) => x.uid === this.inspect!.uid);
     if (!e || e.dead) return;
+    const foe = e.side === 'enemy';
     const a = this.arena;
     const w = 176;
     const h = 76;
@@ -3973,25 +3975,37 @@ export class Battle {
     ctx.fillStyle = TYPE_COLOR[e.def.type];
     ctx.textAlign = 'right';
     ctx.fillText(e.def.type.toUpperCase(), cx + w - 10, cy + 16);
-    // the threat readout — when it swings, and what makes it special
+    // the readout — foes show their attack clock; teammates show their super
     ctx.textAlign = 'left';
     ctx.font = font(8);
-    ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
-    const tag = e.boss
-      ? `ATTACKS IN ${Math.ceil(e.timer)} · GOLD SPOT ×3`
-      : e.supp === 'medic'
-        ? `ATTACKS IN ${Math.ceil(e.timer)} · HEALS ALLIES`
-        : e.supp === 'aegis'
-          ? `ATTACKS IN ${Math.ceil(e.timer)} · SHIELDS ALLIES`
-          : e.volatile
-            ? `ATTACKS IN ${Math.ceil(e.timer)} · EXPLODES ON KO`
-            : e.link
-              ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
-              : `ATTACKS IN ${Math.ceil(e.timer)}`;
-    ctx.fillText(tag, cx + 50, cy + 58);
-    ctx.fillStyle = '#6a7498';
-    ctx.font = font(7);
-    ctx.fillText(e.def.melee ? 'melee — lunges into your team' : 'ranged — fires from range', cx + 50, cy + 70);
+    if (foe) {
+      ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
+      const tag = e.boss
+        ? `ATTACKS IN ${Math.ceil(e.timer)} · GOLD SPOT ×3`
+        : e.supp === 'medic'
+          ? `ATTACKS IN ${Math.ceil(e.timer)} · HEALS ALLIES`
+          : e.supp === 'aegis'
+            ? `ATTACKS IN ${Math.ceil(e.timer)} · SHIELDS ALLIES`
+            : e.volatile
+              ? `ATTACKS IN ${Math.ceil(e.timer)} · EXPLODES ON KO`
+              : e.link
+                ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
+                : `ATTACKS IN ${Math.ceil(e.timer)}`;
+      ctx.fillText(tag, cx + 50, cy + 58);
+      ctx.fillStyle = '#6a7498';
+      ctx.font = font(7);
+      ctx.fillText(e.def.melee ? 'melee — lunges into your team' : 'ranged — fires from range', cx + 50, cy + 70);
+    } else {
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
+      ctx.fillStyle = e.cd <= 0 ? '#6fdc6f' : '#8890b8';
+      ctx.font = font(7);
+      ctx.fillText(
+        e.cd <= 0 ? `super ready — launch ${e.def.name} to fire it` : `super ready in ${e.cd} shot${e.cd === 1 ? '' : 's'}`,
+        cx + 50,
+        cy + 70,
+      );
+    }
     ctx.restore();
   }
 

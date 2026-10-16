@@ -761,6 +761,9 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok((b as any).inspect?.uid === e.uid, 'tap on a foe opens the scout card');
   ok(b.phase === 'aim' && u.vx === 0, 'a scout tap never fires a shot');
   b.pointerDown({ x: u.x, y: u.y });
+  b.pointerUp();
+  ok((b as any).inspect?.uid === u.uid, 'tap on your own mon scouts it too');
+  b.pointerDown({ x: u.x, y: u.y });
   b.pointerMove({ x: u.x - 150, y: u.y });
   b.pointerUp();
   ok(b.phase === 'shot' && !(b as any).inspect, 'a real pull dismisses the card');
