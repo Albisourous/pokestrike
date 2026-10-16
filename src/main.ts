@@ -611,7 +611,8 @@ function hud(name: string) {
 
 function update(dt: number) {
   t += dt;
-  if (scene === 'battle' && battle) {
+  if (scene === 'battle' && battle && !helpOpen) {
+    // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
     if (battle.phase !== 'reward') boxScroll = 0;
     // metagame polls — same spot the battle→scene transitions already live
