@@ -561,6 +561,28 @@ canvas.addEventListener('pointerup', (e) => {
   }
   if (scene === 'battle') battle?.pointerUp();
 });
+// desktop keys: Esc/? toggles the manual, arrows page it, P pauses a live
+// fight, M mutes — pointer paths stay the single source of truth
+addEventListener('keydown', (e) => {
+  unlockAudio();
+  if (helpOpen) {
+    if (e.key === 'Escape' || e.key === '?') helpOpen = false;
+    else if (e.key === 'ArrowRight') helpPage = Math.min(helpPage + 1, HELP_PAGE_COUNT - 1);
+    else if (e.key === 'ArrowLeft') helpPage = Math.max(0, helpPage - 1);
+    return;
+  }
+  if (e.key === 'Escape' || e.key === '?') {
+    helpOpen = true;
+    helpPage = 0;
+  } else if ((e.key === 'p' || e.key === 'P') && battle && (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy')) {
+    battle.paused = !battle.paused;
+    if (battle.paused) battle.pointerCancel(); // a frozen game drops the half-pull
+    sfx('ui');
+  } else if (e.key === 'm' || e.key === 'M') {
+    toggleMute();
+  }
+});
+
 canvas.addEventListener('pointercancel', () => {
   helpDrag = null;
   dexDrag = null;
