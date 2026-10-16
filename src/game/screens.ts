@@ -93,7 +93,7 @@ export const inRect = (x: number, y: number, r: { x: number; y: number; w: numbe
 export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
-export const CHARM_SKIP = { x: W / 2 - 90, y: 610, w: 180, h: 34 };
+export const CHARM_SKIP = { x: W / 2 - 90, y: 596, w: 180, h: 34 };
 export const REWARD_SKIP = { x: W - 152, y: 908, w: 134, h: 30 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
@@ -1392,10 +1392,10 @@ export function drawPerkPick(
   if (team.length) {
     ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('YOUR TEAM', W / 2, 640);
+    ctx.fillText('YOUR TEAM', W / 2, 664);
     team.forEach((def, i) => {
       const mx = W / 2 + (i - (team.length - 1) / 2) * 92;
-      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, 696, 62);
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, 702, 62);
       ctx.font = font(8);
       ctx.fillStyle = PARCH;
       ctx.fillText(def.name.toUpperCase(), mx, 736);
