@@ -193,6 +193,15 @@ function draftOffers(): number[] {
 // isn't already in it — catching mons is how new faces join future drafts.
 // draftOrder only deals roster indices, so the extras get shuffled into the
 // deal here or they'd never be offered.
+// one run setup shared by START CLIMB and REMATCH — ?seed=NNN replays the
+// same climb (debug/sharing), anything else rolls a fresh island
+function newRun() {
+  const forced = Number(new URLSearchParams(location.search).get('seed'));
+  const has = Number.isFinite(forced) && forced > 0;
+  runRng = has ? mulberry32(forced) : Math.random;
+  stage = makeStage(has ? forced : randSeed());
+}
+
 function startDraft() {
   draftPool = [
     ...ROSTER,
@@ -327,11 +336,8 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
-      // ?seed=NNN forces the run — debug sharable climbs
-      const forced = Number(new URLSearchParams(location.search).get('seed'));
-      runRng = Number.isFinite(forced) && forced > 0 ? mulberry32(forced) : Math.random;
+      newRun();
       startDraft();
-      stage = makeStage(Number.isFinite(forced) && forced > 0 ? forced : randSeed());
       scene = 'draft';
       sceneMusic();
     }
@@ -438,8 +444,7 @@ canvas.addEventListener('pointerdown', (e) => {
     } else if (inRect(p.x, p.y, RETRY_BTN)) {
       // REMATCH: one tap back into a fresh draft — the loop stays hot
       sfx('ui');
-      runRng = Math.random;
-      stage = makeStage(randSeed());
+      newRun();
       battle = null;
       result = null;
       resultExtra = null;
