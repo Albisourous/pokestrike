@@ -2,7 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, drawShiny, itemSprite, drawNpc } from '../core/assets';
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild, bst } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild, bst, FLOATERS } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -291,6 +291,33 @@ function resolveBlock(u: Ball, b: Rect): boolean {
   else if (m === rr) { u.x = b.x + b.w + u.r; u.vx = Math.abs(u.vx) * WALL_REST; }
   else if (m === t) { u.y = b.y - u.r; u.vy = -Math.abs(u.vy) * WALL_REST; }
   else { u.y = b.y + b.h + u.r; u.vy = Math.abs(u.vy) * WALL_REST; }
+  return true;
+}
+
+// Zones drawn as solid props are solid: water walls off anything that
+// can't swim/fly/hover, spike boulders wall off anything that can't hop
+// them — everything else banks off the surface like a stone slab.
+const flies = (d: SpeciesDef) => d.type === 'flying' || d.type2 === 'flying' || FLOATERS.has(d.id);
+const canSwim = (d: SpeciesDef) => d.type === 'water' || d.type2 === 'water' || flies(d);
+const isWater = (hz: Hazard) => hz.kind === 'static' || hz.kind === 'well';
+const isSolid = (hz: Hazard, d: SpeciesDef) =>
+  (isWater(hz) && !canSwim(d)) || (hz.kind === 'spikes' && !flies(d));
+
+// Circle-vs-circle: push the unit back to the shoreline and reflect the
+// incoming velocity — same restitution as the court walls.
+function resolveZone(u: Ball, hz: Hazard): boolean {
+  const dx = u.x - hz.x, dy = u.y - hz.y, lim = u.r + hz.r;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= lim * lim) return false;
+  const d = Math.sqrt(d2);
+  const nx = d > 0 ? dx / d : 0, ny = d > 0 ? dy / d : -1; // dead center pops out upward
+  u.x = hz.x + nx * lim;
+  u.y = hz.y + ny * lim;
+  const dot = u.vx * nx + u.vy * ny;
+  if (dot < 0) {
+    u.vx -= (1 + WALL_REST) * dot * nx;
+    u.vy -= (1 + WALL_REST) * dot * ny;
+  }
   return true;
 }
 
@@ -786,6 +813,12 @@ export class Battle {
       );
       this.hazards.push({ kind: 'power', x: at.x, y: at.y, r: pr });
     }
+    // new ponds/boulders can land on parked bodies — units that can't
+    // cross them get waded out to the shoreline before anyone sees
+    // them standing inside the prop
+    for (const u of [...this.players, ...this.enemies])
+      if (!u.dead)
+        for (const hz of this.hazards) if (isSolid(hz, u.def)) resolveZone(u, hz);
     this.waveBanner = 1.4;
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -1216,9 +1249,13 @@ export class Battle {
       }
       this.hitWalls(u);
       this.hitBlocks(u);
+      this.hitSolid(u);
       // court gimmicks — the ball feels the floor it's flying over
       for (const hz of this.hazards) {
-        if (hz.spent || dist(u, hz) > u.r + hz.r) continue;
+        if (hz.spent || dist(u, hz) > u.r + hz.r + 1) continue;
+        // a landlocked ball never enters the water — hitSolid banks it
+        // off the surface, so its effects only touch swimmers
+        if (isWater(hz) && !canSwim(u.def)) continue;
         if (hz.kind === 'mine') {
           // MS mine: the ball's touch detonates it — the blast SHOVES the
           // pack around (enemies take no environment damage; the court is
@@ -1406,6 +1443,7 @@ export class Battle {
         }
       }
       for (const b of this.blocks) resolveBlock(e, b); // creeps slide off the stones
+      this.hitSolid(e); // and creeps bank off water/boulders they can't cross
       this.clampToArena(e);
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
@@ -1540,6 +1578,7 @@ export class Battle {
       d.u.x += dir.x * step;
       d.u.y += dir.y * step;
       for (const b of this.blocks) resolveBlock(d.u, b); // dashes respect the stones too
+      this.hitSolid(d.u); // and the solid prop zones
     }
     this.dashes = this.dashes.filter((d) => !d.done);
   }
@@ -1613,6 +1652,20 @@ export class Battle {
       u.wallN++;
       this.onBounceFx(u);
       if (this.pinch(-3) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
+    }
+  }
+
+  // Solid prop zones (ponds, spike boulders) are walls to bodies that
+  // can't cross them — swim/fly/hover over, otherwise bank off the
+  // surface and take the bounce credit a stone slab would pay.
+  private hitSolid(u: Unit) {
+    const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
+    let kind: Hazard['kind'] | null = null;
+    for (const hz of this.hazards) if (isSolid(hz, u.def) && resolveZone(u, hz)) kind = hz.kind;
+    if (kind && fast && u.side === 'player') {
+      u.wallN++;
+      this.onBounceFx(u);
+      if (this.pinch(kind === 'spikes' ? -5 : -4) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
     }
   }
 
@@ -1925,6 +1978,7 @@ export class Battle {
       });
       if (e.boss && this.waveHadGym) {
         this.award('badge'); // leader down, caught or not
+        this.award(`gym-${e.def.id}`); // the leader's own trophy
         // the badge case: each leader pays out its themed badge, once ever
         const badge = earnBadge(e.def.id);
         if (badge) {
@@ -2138,6 +2192,7 @@ export class Battle {
     // wall — every enemy within `halfW` of the ray eats it
     const lineBlast = (to: Unit, color: string, halfW: number, power: number, w: number) => {
       const d = norm({ x: to.x - p.x, y: to.y - p.y });
+      halfW *= 1.4; // hit corridor tracks the fatter drawn beam
       this.beams.push({ x1: p.x, y1: p.y, x2: p.x + d.x * 1400, y2: p.y + d.y * 1400, t: 0.6, life: 0.6, color, w });
       for (const e of foes) {
         const t = (e.x - p.x) * d.x + (e.y - p.y) * d.y;
@@ -2145,10 +2200,10 @@ export class Battle {
         const dx = e.x - (p.x + d.x * t), dy = e.y - (p.y + d.y * t);
         if (Math.hypot(dx, dy) < halfW + e.r) this.hurt(e, bumpDmg(e, power), '#ffffff');
       }
-      this.screenFlash(color, 0.22);
-      this.hitStop = Math.max(this.hitStop, 0.34);
-      this.addPunch(0.16);
-      this.addShake(14);
+      this.screenFlash(color, 0.3);
+      this.hitStop = Math.max(this.hitStop, 0.42);
+      this.addPunch(0.22);
+      this.addShake(18);
       sfx('beam');
       buzz([40, 30, 60]);
     };
@@ -2172,22 +2227,22 @@ export class Battle {
       case 'PSYCHO BOOST': { // Mewtwo's nuke — detonates the biggest target
         this.screenFlash('#f85888', 0.25);
         this.waves.push({
-          x: fattest.x, y: fattest.y, r: 0, maxR: 190, t: 0.5, life: 0.5,
+          x: fattest.x, y: fattest.y, r: 0, maxR: 285, t: 0.55, life: 0.55,
           color: '#f85888', hits: new Set(),
           onHit: (e) => this.hurt(e, bumpDmg(e, e === fattest ? 2.6 : 1.3), '#f8b8d0'),
         });
-        this.scar(fattest.x, fattest.y, 30);
-        this.hitStop = Math.max(this.hitStop, 0.3);
-        this.addPunch(0.14);
-        this.addShake(12);
+        this.scar(fattest.x, fattest.y, 45);
+        this.hitStop = Math.max(this.hitStop, 0.34);
+        this.addPunch(0.18);
+        this.addShake(15);
         return true;
       }
       case 'ERUPTION': // the whole pack erupts in staggered bursts
         foes.slice(0, 6).forEach((e, i) => {
           this.later(i * 0.12, () => {
-            this.burst(e.x, e.y, '#f08030', 16, 460, 1.2);
-            this.scar(e.x, e.y, 16);
-            this.addShake(6);
+            this.burst(e.x, e.y, '#f08030', 22, 560, 1.8);
+            this.scar(e.x, e.y, 24);
+            this.addShake(9);
             if (!e.dead) this.hurt(e, bumpDmg(e, 1.2), '#ffb088');
             sfx('boom');
           });
@@ -2198,11 +2253,11 @@ export class Battle {
         this.screenFlash('#ffffff', 0.35);
         for (const e of foes) this.hurt(e, bumpDmg(e, 1.5), '#ffffff');
         p.hp = Math.max(1, p.hp - Math.round(p.maxHp * 0.15));
-        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 400, t: 0.55, life: 0.55, color: '#ffd84d', hits: new Set() });
-        this.scar(p.x, p.y, 40);
-        this.hitStop = Math.max(this.hitStop, 0.34);
-        this.addPunch(0.18);
-        this.addShake(16);
+        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 560, t: 0.6, life: 0.6, color: '#ffd84d', hits: new Set() });
+        this.scar(p.x, p.y, 58);
+        this.hitStop = Math.max(this.hitStop, 0.4);
+        this.addPunch(0.24);
+        this.addShake(20);
         sfx('boom');
         buzz([60, 40, 80]);
         return true;
@@ -2210,12 +2265,12 @@ export class Battle {
       case 'BLAST BURN': { // a fire wave that scorches every tile it sweeps
         this.screenFlash('#f08030', 0.22);
         this.waves.push({
-          x: p.x, y: p.y, r: 0, maxR: 260, t: 0.5, life: 0.5,
+          x: p.x, y: p.y, r: 0, maxR: 390, t: 0.55, life: 0.55,
           color: '#f08030', hits: new Set(),
-          onHit: (e) => { this.scar(e.x, e.y, 14); this.hurt(e, bumpDmg(e, 1.9), '#ffb088'); },
+          onHit: (e) => { this.scar(e.x, e.y, 20); this.hurt(e, bumpDmg(e, 1.9), '#ffb088'); },
         });
-        this.hitStop = Math.max(this.hitStop, 0.24);
-        this.addShake(11);
+        this.hitStop = Math.max(this.hitStop, 0.28);
+        this.addShake(14);
         sfx('boom');
         return true;
       }
@@ -2229,11 +2284,11 @@ export class Battle {
         for (let i = 0; i < 3; i++) {
           this.later(i * 0.16, () => {
             if (t.dead) return;
-            this.impact(t.x, t.y, '#7038f8', 1.2);
+            this.impact(t.x, t.y, '#7038f8', 1.8);
             this.hurt(t, bumpDmg(t, 1.1), '#c8a8ff');
             const d = norm({ x: t.x - p.x, y: t.y - p.y });
             t.vx += d.x * 300; t.vy += d.y * 300;
-            this.addShake(8);
+            this.addShake(10);
             sfx('hit');
           });
         }
@@ -2243,12 +2298,12 @@ export class Battle {
         const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
         this.screenFlash('#98d8d8', 0.28);
         this.waves.push({
-          x: t.x, y: t.y, r: 0, maxR: 160, t: 0.45, life: 0.45,
+          x: t.x, y: t.y, r: 0, maxR: 240, t: 0.5, life: 0.5,
           color: '#98d8d8', hits: new Set(),
           onHit: (e) => this.hurt(e, bumpDmg(e, e === t ? 2.4 : 0.9), '#d8f0f8'),
         });
-        this.hitStop = Math.max(this.hitStop, 0.28);
-        this.addShake(10);
+        this.hitStop = Math.max(this.hitStop, 0.32);
+        this.addShake(13);
         sfx('splash');
         return true;
       }
@@ -2352,8 +2407,8 @@ export class Battle {
     this.burst(p.x, p.y, color, 22, 540);
     this.flavor(p.x, p.y, src.def.type);
     this.addPunch(0.11);
-    this.addShake(7);
-    this.screenFlash(color, 0.12);
+    this.addShake(10);
+    this.screenFlash(color, 0.18);
     sfx(SUPER_SFX[src.def.type]);
     cry(p.def.id, 0.35);
     buzz(20);
@@ -2365,7 +2420,7 @@ export class Battle {
         this.screenFlash('#f08030', 0.15);
         this.addShake(8);
         this.waves.push({
-          x: p.x, y: p.y, r: 0, maxR: 170 * p.rngMul, t: 0.4, life: 0.4,
+          x: p.x, y: p.y, r: 0, maxR: 255 * p.rngMul, t: 0.45, life: 0.45,
           color, hits: new Set(),
           onHit: (e) => {
             const dir = norm({ x: e.x - p.x, y: e.y - p.y });
@@ -2405,7 +2460,7 @@ export class Battle {
             if (c.e.dead) return;
             // the arc itself — a bright line jumps from the last link to this one
             this.beams.push({ x1: c.a.x, y1: c.a.y, x2: c.e.x, y2: c.e.y, t: 0.28, life: 0.28 });
-            this.impact(c.e.x, c.e.y, '#f8d030', 0.9);
+            this.impact(c.e.x, c.e.y, '#f8d030', 1.4);
             this.hurt(c.e, bumpDmg(c.e, c.mult), '#9df0ff');
             this.hitStop = Math.max(this.hitStop, 0.05);
             this.addShake(5);
@@ -2427,6 +2482,7 @@ export class Battle {
           this.hurt(e, dmg, '#9df0ff');
         }
         if (dealt > 0) this.tryHeal(this.players, () => Math.max(Math.round(dealt * 0.35), 4));
+        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 210 * p.rngMul, t: 0.4, life: 0.4, color, hits: new Set() });
         // + seed flares: homing spores chase the 2 farthest enemies and
         // siphon them back to the team on impact
         near(Infinity)
@@ -2459,7 +2515,7 @@ export class Battle {
         // off the ally, off walls, off each other
         const radius = 170;
         this.waves.push({
-          x: p.x, y: p.y, r: 0, maxR: radius * p.rngMul, t: 0.32, life: 0.32,
+          x: p.x, y: p.y, r: 0, maxR: radius * 1.5 * p.rngMul, t: 0.4, life: 0.4,
           color, hits: new Set(),
         });
         this.addShake(7);
@@ -2484,6 +2540,8 @@ export class Battle {
         const radius = 210;
         this.screenFlash(color, 0.1);
         this.addShake(5);
+        // the vortex ring — sells the drag-in, since the pull alone is invisible
+        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 240 * p.rngMul, t: 0.45, life: 0.45, color, hits: new Set() });
         for (const e of near(radius)) {
           const dir = norm({ x: p.x - e.x, y: p.y - e.y });
           e.vx += dir.x * 640;
@@ -2496,6 +2554,8 @@ export class Battle {
         // toxic: gas cloud now, then a cut of max HP at the end of each of
         // your shots — re-toxining stacks the timer
         this.screenFlash('#a040a0', 0.12);
+        // the gas ring rolling out — toxic had no visible front before
+        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 220 * p.rngMul, t: 0.4, life: 0.4, color, hits: new Set() });
         for (const e of near(140)) {
           e.dotTicks = Math.min(e.dotTicks + 2, 6);
           e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
@@ -2513,11 +2573,11 @@ export class Battle {
           .slice(0, 3)
           .forEach((t, i) => {
             this.later(0.14 + i * 0.16, () => {
-              this.scar(t.x, t.y, 14); // the meteor lands whether or not it kills
+              this.scar(t.x, t.y, 20); // the meteor lands whether or not it kills
               this.screenFlash('#b8a038', 0.12);
               this.addShake(12);
               if (t.dead) return;
-              this.impact(t.x, t.y, '#b8a038', 1.1);
+              this.impact(t.x, t.y, '#b8a038', 1.7);
               this.hurt(t, bumpDmg(t, i === 0 ? 2.2 : 1.5), '#9df0ff');
             });
           });
@@ -2526,6 +2586,8 @@ export class Battle {
       case 'ghost': {
         // hex: wisps converge on every enemy from the dark
         this.screenFlash('#705898', 0.18);
+        // whole-court shadow ring — hex hits everything, so the ring does too
+        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 430, t: 0.5, life: 0.5, color, hits: new Set() });
         for (const e of near(Infinity)) {
           this.hurt(e, bumpDmg(e, 1.1), '#9df0ff');
         }
@@ -4040,14 +4102,14 @@ export class Battle {
     for (const o of this.orbs) {
       ctx.save();
       ctx.shadowColor = o.color;
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 22;
       ctx.fillStyle = o.color;
       ctx.beginPath();
-      ctx.arc(o.x, o.y, 8, 0, Math.PI * 2);
+      ctx.arc(o.x, o.y, 12, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(o.x - 2, o.y - 2, 3, 0, Math.PI * 2);
+      ctx.arc(o.x - 3.5, o.y - 3.5, 4.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -4057,7 +4119,7 @@ export class Battle {
     // beams carry their own color and a fat core
     for (const bm of this.beams) {
       const alpha = bm.t / bm.life;
-      const w = bm.w ?? 1;
+      const w = (bm.w ?? 1) * 1.5; // supers read oversized — anime-scale beams
       ctx.globalAlpha = alpha;
       // outer glow halo
       ctx.strokeStyle = bm.color ?? '#ffd84d';
@@ -4149,15 +4211,6 @@ export class Battle {
     ctx.globalAlpha = 1;
 
     if (this.dragging) this.drawAim(ctx);
-    else if (this.phase === 'aim' && !this.active.dead) {
-      // ghost sweep sells the timing game before the first touch
-      const ph = this.time % 1.7;
-      const gfrac = ph < 0.85 ? ph / 0.85 : (1.7 - ph) / 0.85;
-      const z = this.sweetSpot();
-      ctx.globalAlpha = 0.55;
-      this.drawMeter(ctx, gfrac, Math.abs(gfrac - z.c) <= z.hw, TYPE_COLOR[this.active.def.type]);
-      ctx.globalAlpha = 1;
-    }
 
     ctx.restore();
 
@@ -4325,9 +4378,11 @@ export class Battle {
       ctx.lineTo(W_CANVAS_FALLBACK, cy + 34);
       ctx.stroke();
       // shrink-to-fit: long specials would overflow the strip — size the
-      // fit against the popped scale too, or the pop clips at spawn
+      // fit against the popped scale too, or the pop clips at spawn.
+      // a gym label also leaves room for the leader portrait at each end
+      const npcMargin = gym && this.waveHadGym && !this.waveSpecial ? 170 : 0;
       ctx.font = `bold 34px Georgia, serif`;
-      const fit = Math.min(1, (W_CANVAS_FALLBACK - 48) / (ctx.measureText(label).width * scaleIn));
+      const fit = Math.min(1, (W_CANVAS_FALLBACK - 48 - npcMargin) / (ctx.measureText(label).width * scaleIn));
       ctx.font = `bold ${Math.round(34 * scaleIn * fit)}px Georgia, serif`;
       ctx.textAlign = 'center';
       ctx.fillStyle = '#f0e6c8';
@@ -4343,6 +4398,13 @@ export class Battle {
         ctx.font = font(11);
         ctx.fillStyle = '#ffd84d';
         ctx.fillText('HIT THE GOLD SPOT FOR ×3 DAMAGE', a.x + a.w / 2, cy + 52);
+        // the leader's face flanks its name — only when the gym label is
+        // up (a shiny or special announcement keeps the whole ribbon)
+        if (this.waveHadGym && !this.waveSpecial) {
+          const npc = LEADER_NPC[gym.def.type];
+          drawNpc(ctx, npc, a.x + 44, cy + 34, 62);
+          drawNpc(ctx, npc, a.x + a.w - 44, cy + 34, 62);
+        }
       }
       ctx.globalAlpha = 1;
     }
@@ -5421,9 +5483,8 @@ export class Battle {
     }
   }
 
-  // The release-timing bar — "release in the gold" only teaches if the
-  // gold is on screen, so it renders during aim even before the first
-  // drag: a ghost fill sweeps the bar to show the ping-pong rhythm.
+  // The release-timing bar — only exists while a pull is on, so the
+  // court stays clean until the player starts aiming.
   private drawMeter(ctx: CanvasRenderingContext2D, frac: number, lit: boolean, color: string) {
     const a = this.arena;
     const zone = this.sweetSpot();
@@ -5505,6 +5566,11 @@ export class Battle {
         for (const b of this.blocks) {
           sb.x = sx; sb.y = sy; sb.vx = svx; sb.vy = svy;
           if (resolveBlock(sb, b)) { sx = sb.x; sy = sb.y; svx = sb.vx; svy = sb.vy; bounced = true; }
+        }
+        for (const hz of this.hazards) {
+          if (!isSolid(hz, u.def)) continue;
+          sb.x = sx; sb.y = sy; sb.vx = svx; sb.vy = svy;
+          if (resolveZone(sb, hz)) { sx = sb.x; sy = sb.y; svx = sb.vx; svy = sb.vy; bounced = true; }
         }
         for (const e of this.enemies)
           if (!e.dead && Math.hypot(sx - e.x, sy - e.y) < u.r + e.r) {
@@ -5652,7 +5718,7 @@ export class Battle {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     // translucent body — the shockwave's mass, fading as it expands
-    ctx.globalAlpha = alpha * 0.16;
+    ctx.globalAlpha = alpha * 0.22;
     ctx.fillStyle = w.color;
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
@@ -5660,9 +5726,9 @@ export class Battle {
     // glowing rim
     ctx.globalAlpha = alpha;
     ctx.shadowColor = w.color;
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 26;
     ctx.strokeStyle = w.color;
-    ctx.lineWidth = 7;
+    ctx.lineWidth = 11;
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
     ctx.stroke();
@@ -5670,9 +5736,9 @@ export class Battle {
     // hot white leading edge — the anime energy front
     ctx.globalAlpha = alpha * 0.85;
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 3.5;
     ctx.beginPath();
-    ctx.arc(w.x, w.y, Math.max(0, w.r - 5), 0, Math.PI * 2);
+    ctx.arc(w.x, w.y, Math.max(0, w.r - 7), 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }

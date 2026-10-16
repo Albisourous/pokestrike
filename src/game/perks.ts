@@ -295,7 +295,7 @@ export const PERKS: Perk[] = [
     rarity: 'uncommon',
     apply: (b) => { b.volleyNth = 3; },
   },
-  // type charms — +20% damage for one type; the drafting hook that makes
+  // type charms — +50% damage for one type; the drafting hook that makes
   // "all-in on water" or "spread coverage" a real build call
   ...(Object.entries({
     normal: ['Silk Scarf', 'silk-scarf'], fire: ['Charcoal', 'charcoal'],
@@ -308,9 +308,9 @@ export const PERKS: Perk[] = [
     id: `type-${ty}`,
     name,
     item,
-    desc: `+20% ${ty}-type damage, stacks`,
+    desc: `+50% ${ty}-type damage, stacks`,
     rarity: 'uncommon',
-    apply: (b) => { b.typePow[ty] = (b.typePow[ty] ?? 1) * 1.2; },
+    apply: (b) => { b.typePow[ty] = (b.typePow[ty] ?? 1) * 1.5; },
   })),
 
   // --- rare: strong single effects ---

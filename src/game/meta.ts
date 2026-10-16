@@ -1,3 +1,5 @@
+import { speciesById } from './data';
+
 // Run-to-run persistence: the caught-dex, gym-win count (which sets rank),
 // and the last losing team saved as the next run's rival "echo".
 // localStorage throws in private mode, so every access falls back to
@@ -153,47 +155,10 @@ export function recordRun(score: number, stage: number, won: boolean) {
   return newBest;
 }
 
-// --- achievements: the StS-style trophy shelf ---
-// Unlocks are permanent and idempotent: unlockAch returns true once, ever.
-
-export interface Achievement {
-  id: string;
-  name: string;
-  desc: string;
-}
-
-export const ACHIEVEMENTS: Achievement[] = [
-  { id: 'first-clear', name: 'HALL OF FAME', desc: 'Finish a full climb' },
-  { id: 'ascended', name: 'ASCENDED', desc: 'Win a climb on Ascension I or higher' },
-  { id: 'triple', name: 'TRIPLE CROWN', desc: 'Win 3 climbs (+1 draft reroll)' },
-  { id: 'badge', name: 'GYM BREAKER', desc: 'Beat a gym leader' },
-  { id: 'league', name: 'LEAGUE CHAMPION', desc: 'Collect all 8 gym badges' },
-  { id: 'rival', name: 'GRUDGE SETTLED', desc: 'Defeat your rival echo' },
-  { id: 'shiny', name: 'SHINING', desc: 'Catch a shiny' },
-  { id: 'myth', name: 'MYTH TAMER', desc: 'Catch a legendary invader' },
-  { id: 'perfect', name: 'DEAD CENTER', desc: 'Land a PERFECT release' },
-  { id: 'pinball', name: 'PINBALL WIZARD', desc: 'Chain 8+ hits in a single shot' },
-  { id: 'collector', name: 'COLLECTOR', desc: 'Fill 50 dex entries' },
-  { id: 'living', name: 'LIVING DEX', desc: 'Catch every species' },
-  { id: 'rampage', name: 'RAMPAGE', desc: 'Score 40+ KOs in one run' },
-];
-
-export function unlockedAch(): Set<string> {
-  const raw = load<unknown>('pk_ach');
-  return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [...memAch]);
-}
-
-// Returns true the first time an id unlocks — callers show the toast.
-export function unlockAch(id: string): boolean {
-  if (memAch.has(id) || unlockedAch().has(id)) return false;
-  memAch.add(id);
-  store('pk_ach', [...unlockedAch(), id]);
-  return true;
-}
-
 // --- the badge case: one canon badge per gym leader ----------------------
 // Each badge is themed to its leader's typing; together they're the climb's
-// real trophy — a full case means LEAGUE CHAMPION.
+// real trophy — a full case means LEAGUE CHAMPION. Declared above the
+// achievements so each leader can seed its own trophy.
 
 export interface GymBadge {
   boss: number; // species id of the leader who pays it out
@@ -210,11 +175,57 @@ export const BADGES: GymBadge[] = [
   { boss: 6, name: 'VOLCANO BADGE', color: '#f08030' }, // Charizard
   { boss: 112, name: 'EARTH BADGE', color: '#b8a038' }, // Rhydon
   { boss: 149, name: 'ZEPHYR BADGE', color: '#a890f0' }, // Dragonite
+  { boss: 289, name: 'BALANCE BADGE', color: '#a8a878' }, // Slaking (Norman's ace)
+  { boss: 110, name: 'TOXIC BADGE', color: '#705898' }, // Weezing
+  { boss: 297, name: 'KNUCKLE BADGE', color: '#c03028' }, // Hariyama (Brawly's ace)
 ];
 
-let memBadges = new Set<number>();
-
 export const badgeOf = (bossId: number) => BADGES.find((b) => b.boss === bossId);
+
+// --- achievements: the StS-style trophy shelf ---
+// Unlocks are permanent and idempotent: unlockAch returns true once, ever.
+
+export interface Achievement {
+  id: string;
+  name: string;
+  desc: string;
+}
+
+export const ACHIEVEMENTS: Achievement[] = [
+  { id: 'first-clear', name: 'HALL OF FAME', desc: 'Finish a full climb' },
+  { id: 'ascended', name: 'ASCENDED', desc: 'Win a climb on Ascension I or higher' },
+  { id: 'triple', name: 'TRIPLE CROWN', desc: 'Win 3 climbs (+1 draft reroll)' },
+  { id: 'badge', name: 'GYM BREAKER', desc: 'Beat a gym leader' },
+  { id: 'league', name: 'LEAGUE CHAMPION', desc: 'Collect every gym badge' },
+  { id: 'rival', name: 'GRUDGE SETTLED', desc: 'Defeat your rival echo' },
+  { id: 'shiny', name: 'SHINING', desc: 'Catch a shiny' },
+  { id: 'myth', name: 'MYTH TAMER', desc: 'Catch a legendary invader' },
+  { id: 'perfect', name: 'DEAD CENTER', desc: 'Land a PERFECT release' },
+  { id: 'pinball', name: 'PINBALL WIZARD', desc: 'Chain 8+ hits in a single shot' },
+  { id: 'collector', name: 'COLLECTOR', desc: 'Fill 50 dex entries' },
+  { id: 'living', name: 'LIVING DEX', desc: 'Catch every species' },
+  { id: 'rampage', name: 'RAMPAGE', desc: 'Score 40+ KOs in one run' },
+  // one trophy per leader — generated off the badge case so they stay in sync
+  ...BADGES.map((b) => {
+    const d = speciesById(b.boss);
+    return { id: `gym-${b.boss}`, name: b.name, desc: `Defeat Gym Leader ${d?.name ?? '???'}, the ${d?.type ?? ''} specialist` };
+  }),
+];
+
+export function unlockedAch(): Set<string> {
+  const raw = load<unknown>('pk_ach');
+  return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : [...memAch]);
+}
+
+// Returns true the first time an id unlocks — callers show the toast.
+export function unlockAch(id: string): boolean {
+  if (memAch.has(id) || unlockedAch().has(id)) return false;
+  memAch.add(id);
+  store('pk_ach', [...unlockedAch(), id]);
+  return true;
+}
+
+let memBadges = new Set<number>();
 
 export function gymBadges(): Set<number> {
   const raw = load<unknown>('pk_badges');

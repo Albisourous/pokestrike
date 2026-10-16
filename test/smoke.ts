@@ -408,13 +408,25 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 
 // --- badge case: every leader is themed to a badge, paid once -------------
 {
-  ok(BOSS_POOL.length === 8 && BOSS_POOL.every((b) => badgeOf(b.id)), `8 leaders, all badge-themed (${BOSS_POOL.map((b) => b.name).join('/')})`);
+  ok(
+    BOSS_POOL.length === 11 && new Set(BOSS_POOL.map((b) => b.type)).size === 11 && BOSS_POOL.every((b) => badgeOf(b.id)),
+    `11 leaders, one per type, all badge-themed (${BOSS_POOL.map((b) => b.name).join('/')})`,
+  );
+  ok(
+    BOSS_POOL.every((b) => ACHIEVEMENTS.some((a) => a.id === `gym-${b.id}`)),
+    'every leader seeds its own trophy',
+  );
   const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(1));
   (b as any).spawnWave(2); // the gym wave — leader + entourage
   const boss = (b as any).enemies.find((e: any) => e.boss);
   ok(!!boss && !!badgeOf(boss.def.id), `gym boss maps to a badge (${boss?.def.name})`);
+  ok(
+    b.enemies.filter((e: any) => !e.boss).every((e: any) => e.def.type === boss.def.type),
+    'leader entourage is mono-type',
+  );
   (b as any).hurt(boss, 999999, '#fff'); // KO the leader — caught or fainted, the badge pays
   ok(gymBadges().has(boss.def.id), `gym KO banks the ${badgeOf(boss.def.id)?.name}`);
+  ok(unlockedAch().has(`gym-${boss.def.id}`), `gym KO unlocks the leader trophy`);
   ok(earnBadge(boss.def.id) === null, 'the same leader pays the badge once');
 }
 
@@ -631,6 +643,9 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   (b as any).spawnWave(2);
   const boss = b.enemies.find((e) => e.boss)!;
+  // drop the entourage — a taunt minion (Shuckle & co.) would toll-booth
+  // the boss's contact hits and the weak-point check would read 0
+  for (const e of b.enemies) if (!e.boss) e.dead = true;
 
   // weak point: contact on the marked face pays triple
   const u = b.players[0];
@@ -789,17 +804,82 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b7 as any).stepShot(1 / 60);
   ok(u7.vx > 550, `boost pad re-launches the ball (${Math.round(u7.vx)})`);
 
-  // well: the ball gains velocity toward the core while inside
+  // well: a swimmer's ball gains velocity toward the core while inside —
+  // landlocked balls bank off the surface instead
   const b8 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
   (b8 as any).spawnWave(0);
   (b8 as any).hazards = [{ kind: 'well', x: 400, y: 300, r: 80 }];
   const u8 = (b8 as any).active;
+  u8.def = speciesById(7); // Squirtle swims into the pull
   u8.x = 320;
   u8.y = 300;
   u8.vx = 0;
   u8.vy = 0;
   for (let i = 0; i < 10; i++) (b8 as any).stepShot(1 / 60);
   ok(u8.vx > 5, `gravity well drags the ball inward (vx ${Math.round(u8.vx)})`);
+
+  // ponds & pools are walls to landlocked mons — swimmers, flyers and
+  // hoverers cross, everything else banks off the surface
+  const bw = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
+  (bw as any).spawnWave(0);
+  (bw as any).hazards = [{ kind: 'static', x: 300, y: 300, r: 60 }];
+  const uw = (bw as any).active;
+  uw.def = speciesById(4); // Charmander can't swim
+  uw.x = 300 - 60 - uw.r + 6; // nose already over the surface
+  uw.y = 300;
+  uw.vx = 400;
+  uw.vy = 0;
+  (bw as any).stepShot(1 / 60);
+  ok(uw.vx < 0 && Math.hypot(uw.x - 300, uw.y - 300) >= uw.r + 60 - 0.5, `pond banks a land ball (vx ${Math.round(uw.vx)})`);
+  uw.def = speciesById(7); // Squirtle swims
+  uw.x = 300 - 60 - uw.r - 8;
+  uw.vx = 400;
+  uw.vy = 0;
+  (bw as any).stepShot(1 / 60);
+  ok(uw.vx > 0 && uw.x > 300 - 60 - uw.r - 8, `water type swims across (x ${Math.round(uw.x)})`);
+  uw.def = speciesById(92); // Gastly hovers — no water/flying type needed
+  uw.x = 300 - 60 - uw.r - 8;
+  uw.vx = 400;
+  uw.vy = 0;
+  (bw as any).stepShot(1 / 60);
+  ok(uw.vx > 0 && uw.x > 300 - 60 - uw.r - 8, `floating mon hovers across (x ${Math.round(uw.x)})`);
+  // landlocked foes can't stand in the pond either
+  const ew = bw.enemies.find((e) => !e.dead);
+  ew.def = speciesById(4);
+  ew.x = 310;
+  ew.y = 300;
+  (bw as any).stepEnemyMovement(1 / 60);
+  ok(Math.hypot(ew.x - 300, ew.y - 300) >= ew.r + 60 - 0.5, `landlocked foe is ejected to the shore (d ${Math.round(Math.hypot(ew.x - 300, ew.y - 300))})`);
+
+  // spikes are boulder walls: land bodies bank off, flyers clear the
+  // strip, and pressing into the rim still chips like a damage wall
+  (bw as any).hazards = [{ kind: 'spikes', x: 300, y: 300, r: 60 }];
+  uw.def = speciesById(4); // Charmander can't climb boulders
+  uw.x = 300 - 60 - uw.r + 6;
+  uw.y = 300;
+  uw.vx = 400;
+  uw.vy = 0;
+  (bw as any).stepShot(1 / 60);
+  ok(uw.vx < 0 && Math.hypot(uw.x - 300, uw.y - 300) >= uw.r + 60 - 0.5, `spike boulders bank a land ball (vx ${Math.round(uw.vx)})`);
+  uw.def = speciesById(16); // Pidgey flies over the strip
+  uw.x = 300 - 60 - uw.r - 8;
+  uw.vx = 400;
+  uw.vy = 0;
+  (bw as any).stepShot(1 / 60);
+  ok(uw.vx > 0 && uw.x > 300 - 60 - uw.r - 8, `flying mon clears the boulders (x ${Math.round(uw.x)})`);
+  uw.def = speciesById(4);
+  uw.x = 300 - 60 - uw.r + 6; // nose already over the rim
+  uw.vx = 60;
+  uw.vy = 0;
+  uw.hzT = -1;
+  const hpw = uw.hp;
+  (bw as any).stepShot(1 / 60);
+  ok(uw.hp < hpw, `grinding into the boulders still chips (hp ${hpw} → ${uw.hp})`);
+  ew.def = speciesById(4);
+  ew.x = 300;
+  ew.y = 300;
+  (bw as any).stepEnemyMovement(1 / 60);
+  ok(Math.hypot(ew.x - 300, ew.y - 300) >= ew.r + 60 - 0.5, `landlocked foe banks off the boulders (d ${Math.round(Math.hypot(ew.x - 300, ew.y - 300))})`);
 
   // aegis: the guardian wards an ally, and the ward eats one whole hit
   const b9 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));

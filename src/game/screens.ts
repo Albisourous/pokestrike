@@ -1,12 +1,12 @@
-import { itemSprite, drawMon, drawShiny, gracidea } from '../core/assets';
+import { itemSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById } from './data';
+import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, LEADER_NPC } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf } from './stats';
-import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest, BADGES, gymBadges } from './meta';
+import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest, BADGES, gymBadges, badgeOf } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -653,6 +653,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'pull distance only aims — power is the release timing on the meter',
       'let go inside the gold band for a PERFECT full-power shot',
       "the band sits at your mon's own spot: fast ones are high and tight",
+      'stronger mons are harder to control — tighter band, faster meter, the top end drifts',
       'on keys: ? help · P pause · M mute · arrows turn pages',
     ],
     demo: demoAim,
@@ -938,15 +939,16 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillStyle = '#ffd84d';
   ctx.fillText(`TROPHIES ${got.size}/${ACHIEVEMENTS.length}`, r.x + r.w / 2, r.y + 40);
 
-  // the badge case: eight themed octagons — earned ones light in their
-  // badge color with the beaten leader's face inside
+  // the badge case: one themed octagon per leader — earned ones light in
+  // their badge color with the beaten leader's ace inside
   const held = gymBadges();
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(`BADGE CASE ${held.size}/${BADGES.length}`, r.x + r.w / 2, r.y + 62);
   BADGES.forEach((b, i) => {
-    const cx = r.x + r.w / 2 + ((i % 4) - 1.5) * 106;
-    const cy = r.y + 96 + Math.floor(i / 4) * 64;
+    const rowN = Math.min(6, BADGES.length - Math.floor(i / 6) * 6); // center the short last row
+    const cx = r.x + r.w / 2 + ((i % 6) - (rowN - 1) / 2) * 66;
+    const cy = r.y + 96 + Math.floor(i / 6) * 64;
     const has = held.has(b.boss);
     ctx.beginPath();
     for (let k = 0; k < 8; k++) {
@@ -983,10 +985,16 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.arc(r.x + 34, y + ACH_ROW / 2 - 4, 13, 0, Math.PI * 2);
     ctx.stroke();
     if (has) {
-      ctx.fillStyle = '#ffd84d';
-      ctx.font = font(11);
-      ctx.textAlign = 'center';
-      ctx.fillText('★', r.x + 34, y + ACH_ROW / 2);
+      const gym = a.id.startsWith('gym-') ? badgeOf(+a.id.slice(4)) : undefined;
+      const gymDef = gym && speciesById(gym.boss);
+      if (gymDef) {
+        drawNpc(ctx, LEADER_NPC[gymDef.type], r.x + 34, y + ACH_ROW / 2 + 9, 26);
+      } else {
+        ctx.fillStyle = '#ffd84d';
+        ctx.font = font(11);
+        ctx.textAlign = 'center';
+        ctx.fillText('★', r.x + 34, y + ACH_ROW / 2);
+      }
     }
     ctx.textAlign = 'left';
     ctx.font = font(10);
@@ -1181,7 +1189,7 @@ export function drawDraft(
   ctx.fillText('tip: fly through an ally mid-shot — charged allies fire their super', W / 2, 810);
   ctx.font = font(7);
   ctx.fillStyle = '#6a7498';
-  ctx.fillText('PIERCE flies through foes · COPY repeats the bumper\'s super · speed sets launch & the gold window', W / 2, 826);
+  ctx.fillText('PIERCE flies through foes · COPY repeats the bumper\'s super · speed sets launch, power tightens the gold window', W / 2, 826);
 }
 
 export interface ShareGrid {

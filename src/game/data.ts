@@ -195,8 +195,8 @@ export function draftOrder(rng: () => number): number[] {
   return order;
 }
 
-// Fodder first, the eight gym leaders last — pools below slice on that.
-// Every leader is themed to a badge (BADGES in meta.ts).
+// Fodder first, the gym leaders last — one per PokeType; pools below slice
+// on that. Every leader is themed to a badge (BADGES in meta.ts).
 // 'Ground-ish' mons (Diglett, Cubone, Rhyhorn, ...) ride the rock type —
 // PokeType has no ground.
 export const ENEMY_DB: SpeciesDef[] = [
@@ -379,6 +379,9 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 94, name: 'Gengar', type: 'ghost', type2: 'poison', stats: st(60, 65, 60, 130, 75, 110), pierce: true },
   { id: 125, name: 'Electabuzz', type: 'electric', stats: st(65, 83, 57, 95, 85, 105) },
   { id: 112, name: 'Rhydon', type: 'rock', stats: st(105, 130, 120, 45, 45, 40), melee: true },
+  { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true },
+  { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60) },
+  { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },
 ];
 
 // Capturable elites: evolved mons that only appear on later waves — the
@@ -762,8 +765,30 @@ export const ALL_SPECIES = [...ROSTER, ...ENEMY_DB, ...ELITES, ...EVOS, ...INVAD
 export const speciesById = (id: number): SpeciesDef | undefined =>
   ALL_SPECIES.find((d) => d.id === id);
 
-const ENEMY_POOL = ENEMY_DB.slice(0, -8);
-export const BOSS_POOL = ENEMY_DB.slice(-8);
+// Canon levitators/hoverers — cross water zones like water/flying types.
+export const FLOATERS = new Set([
+  81, 82, 462, // magnemite line
+  92, 93, 94, // gastly line
+  109, 110, // koffing line
+  200, 429, // misdreavus line
+  201, 337, 338, // unown, lunatone, solrock
+  343, 344, // baltoy line
+  355, 356, 477, // duskull line
+  425, 436, 437, // drifloon, bronzor line
+  479, 480, 481, 482, 488, 491, // rotom, lake trio, cresselia, darkrai
+  602, 603, 604, // tynamo line
+  607, 608, 609, // litwick line
+  599, 600, 601, // klink line
+  151, 150, 251, 385, 386, // hovering mythics
+  353, 562, // shuppet, yamask
+  137, 233, 474, // porygon line
+  577, 578, 579, // solosis line
+  374, 375, 376, // beldum line
+  605, 606, 358, 351, // elgyem line, chimecho, castform
+]);
+
+const ENEMY_POOL = ENEMY_DB.slice(0, -11);
+export const BOSS_POOL = ENEMY_DB.slice(-11);
 
 // Competitive-style power tiers by BST — the climb's power curve.
 // 0 LC (<360) · 1 low (360-459) · 2 high (460-559) · 3 uber (560+).
@@ -892,8 +917,9 @@ export const BLOCK_LAYOUTS: BlockDef[][] = [
   ],
 ];
 
-// Gym flavor: the boss's entourage shares its type when the pools have
-// candidates — every gym leader runs a little mono-type gym.
+// Gym flavor: the boss's entourage shares its type — every leader runs a
+// mono-type gym. All eleven types have fodder/elites, so the fallback only
+// covers a future type added without species.
 function gymPack(
   boss: SpeciesDef,
   n: number,
@@ -904,7 +930,7 @@ function gymPack(
 ): WaveSpawn[] {
   const same = [...ENEMY_POOL, ...elitePool(depth)].filter((d) => d.type === boss.type);
   return Array.from({ length: n }, () => {
-    const pool = same.length && rng() < 0.7 ? same : fodder;
+    const pool = same.length ? same : fodder;
     return { def: pool[Math.floor(rng() * pool.length)], ...slot() };
   });
 }
@@ -984,6 +1010,23 @@ export const TRAINER_CLASS: Record<PokeType, { frame: string; title: string }> =
   ghost: { frame: 'elder_f_down_0', title: 'CHANNELER' },
 };
 export const TRAINER_TYPES = Object.keys(TRAINER_CLASS) as PokeType[];
+
+// The face on each gym: canon leaders where the gracidea atlas has them
+// (Norman, Brawly, Roxanne), a trainer-class stand-in for the rest — same
+// atlas as TRAINER_CLASS, so the art stays Gen-3.
+export const LEADER_NPC: Record<PokeType, string> = {
+  normal: 'norman_down_0',
+  fire: 'pokemaniac_down_0',
+  water: 'sailor_down_0',
+  grass: 'aroma_down_0',
+  electric: 'guitarist_down_0',
+  psychic: 'psychic_down_0',
+  rock: 'roxanne_down_0',
+  poison: 'scientist_down_0',
+  flying: 'ranger_m_down_0',
+  fighting: 'brawly_down_0',
+  ghost: 'elder_f_down_0',
+};
 
 // A trainer fields a whole squad of one type — evo-lines welcome, the way
 // real NPC teams mix stages. The ace (highest BST) anchors center-top.
