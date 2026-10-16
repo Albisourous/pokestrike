@@ -188,6 +188,48 @@ const EVENTS: GameEvent[] = [
     }),
   },
   {
+    // a tune-up stop: every charged gauge snaps to ready
+    w: 2,
+    run: (b) => {
+      let n = 0;
+      for (const p of b.players) if (!p.dead && p.cd > 0) { p.cd = 0; n++; }
+      return {
+        note: n ? `A MYSTIC TUNED THE TEAM — ${n} SUPER${n > 1 ? 'S' : ''} CHARGED!` : 'THE MYSTIC FOUND NOTHING TO TUNE.',
+        skip: true,
+      };
+    },
+  },
+  {
+    // the well fight is opt-in — a small sure thing vs a risky payday
+    w: 2,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A WELL ECHOES WITH BATTLE CRIES — CLIMB DOWN?',
+        options: [
+          {
+            label: 'CLIMB DOWN — FIGHT',
+            run: (bb) => ({
+              note: 'SOMETHING MOVED IN THE DARK!',
+              wave: [92, 353, 355, 198, 302].map((id, i) => ({
+                def: speciesById(id)!,
+                nx: 0.2 + (i % 3) * 0.3 + (bb.roll() - 0.5) * 0.08,
+                ny: 0.18 + Math.floor(i / 3) * 0.32,
+              })),
+            }),
+          },
+          {
+            label: 'TOSS A COIN IN',
+            run: (bb) => {
+              bb.score += 100;
+              return { note: 'YOU WISHED FOR LUCK — +100 SCORE.', skip: true };
+            },
+          },
+        ],
+      },
+    }),
+  },
+  {
     // the weakest link gets a stranger at +4 — a real team-building call
     w: 2,
     skip: (b) => !b.players.some((p) => !p.dead),
