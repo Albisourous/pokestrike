@@ -30,7 +30,9 @@ import {
   FREE_BTN,
   HELP_BTN,
   HELP_CHIP,
+  MUTE_CHIP,
   drawHelpChip,
+  drawMuteChip,
   MUTE_BTN,
   DRAFT_REROLL,
   drawHelp,
@@ -395,11 +397,18 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   } else if (scene === 'battle') {
     // mid-run reference: the ? chip shows between fights
-    if (battle && (battle.phase === 'map' || battle.phase === 'reward') && inRect(p.x, p.y, HELP_CHIP)) {
-      sfx('ui');
-      helpOpen = true;
-      helpPage = 0;
-      return;
+    if (battle && (battle.phase === 'map' || battle.phase === 'reward')) {
+      if (inRect(p.x, p.y, HELP_CHIP)) {
+        sfx('ui');
+        helpOpen = true;
+        helpPage = 0;
+        return;
+      }
+      if (inRect(p.x, p.y, MUTE_CHIP)) {
+        toggleMute();
+        sfx('ui');
+        return;
+      }
     }
     if (battle?.phase === 'reward') {
       // box strip swallows the pointer — release decides tap vs scroll drag
@@ -741,8 +750,11 @@ function render() {
       if (result) drawResult(ctx, result, resultExtra, share, t);
       break;
   }
-  // the ? chip rides between fights; the pager itself floats over any scene
-  if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward')) drawHelpChip(ctx);
+  // the ?/mute chips ride between fights; the pager floats over any scene
+  if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward')) {
+    drawHelpChip(ctx);
+    drawMuteChip(ctx);
+  }
   if (helpOpen) drawHelp(ctx, helpPage);
   ctx.restore();
 }

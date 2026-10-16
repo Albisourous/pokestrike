@@ -69,6 +69,19 @@ export function drawHelpChip(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = 'center';
   ctx.fillText('?', cx, cy + 5);
 }
+export const MUTE_CHIP = { x: W - 100, y: 54, w: 34, h: 34 };
+export function drawMuteChip(ctx: CanvasRenderingContext2D) {
+  const cx = MUTE_CHIP.x + MUTE_CHIP.w / 2;
+  const cy = MUTE_CHIP.y + MUTE_CHIP.h / 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+  ctx.fillStyle = '#12152bcc';
+  ctx.fill();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  speakerGlyph(ctx, cx, cy, 0.72);
+}
 export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
@@ -112,6 +125,38 @@ export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
 // dark edge with a light inner rim — on cards, chips and panels.
 const GOLD = '#c8a44d';
 const PARCH = '#f0e6c8';
+
+// speaker glyph + slash — shared by the title badge and the mid-run chip
+function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
+  ctx.fillStyle = PARCH;
+  ctx.beginPath();
+  ctx.moveTo(cx - 8 * s, cy - 3 * s);
+  ctx.lineTo(cx - 3 * s, cy - 3 * s);
+  ctx.lineTo(cx + 2 * s, cy - 8 * s);
+  ctx.lineTo(cx + 2 * s, cy + 8 * s);
+  ctx.lineTo(cx - 3 * s, cy + 3 * s);
+  ctx.lineTo(cx - 8 * s, cy + 3 * s);
+  ctx.closePath();
+  ctx.fill();
+  if (isMuted()) {
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 3 * s;
+    ctx.beginPath();
+    ctx.moveTo(cx - 4 * s, cy - 7 * s);
+    ctx.lineTo(cx + 9 * s, cy + 7 * s);
+    ctx.moveTo(cx + 9 * s, cy - 7 * s);
+    ctx.lineTo(cx - 4 * s, cy + 7 * s);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = PARCH;
+    ctx.lineWidth = 2 * s;
+    for (const rr of [6, 10]) {
+      ctx.beginPath();
+      ctx.arc(cx + 2 * s, cy, rr * s, -0.9, 0.9);
+      ctx.stroke();
+    }
+  }
+}
 
 
 function edge(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
@@ -368,34 +413,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = PARCH;
-  ctx.beginPath();
-  ctx.moveTo(mcx - 8, mcy - 3);
-  ctx.lineTo(mcx - 3, mcy - 3);
-  ctx.lineTo(mcx + 2, mcy - 8);
-  ctx.lineTo(mcx + 2, mcy + 8);
-  ctx.lineTo(mcx - 3, mcy + 3);
-  ctx.lineTo(mcx - 8, mcy + 3);
-  ctx.closePath();
-  ctx.fill();
-  if (isMuted()) {
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(mcx - 4, mcy - 7);
-    ctx.lineTo(mcx + 9, mcy + 7);
-    ctx.moveTo(mcx + 9, mcy - 7);
-    ctx.lineTo(mcx - 4, mcy + 7);
-    ctx.stroke();
-  } else {
-    ctx.strokeStyle = PARCH;
-    ctx.lineWidth = 2;
-    for (const rr of [6, 10]) {
-      ctx.beginPath();
-      ctx.arc(mcx + 2, mcy, rr, -0.9, 0.9);
-      ctx.stroke();
-    }
-  }
+  speakerGlyph(ctx, mcx, mcy, 1);
   // the dex and the trophy shelf share one row — same chrome as the menus
   button(ctx, DEX_BTN, `DEX ${dexIds().length}/${CATCHABLE}`, true);
   button(ctx, ACH_BTN, `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, true);
