@@ -818,6 +818,21 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(seq(a) === seq(b), 'same seed → same wave (replayable climbs)');
 }
 
+// --- the pause chip freezes the sim, a tap thaws it ---------------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  b.phase = 'aim';
+  const chip = (b as any).pauseChip();
+  b.pointerDown({ x: chip.x + 15, y: chip.y + 15 });
+  ok(b.paused === true, 'pause chip freezes the fight');
+  const ehp = b.enemies.map((e) => e.hp).join(',');
+  for (let i = 0; i < 120; i++) b.update(1 / 60);
+  ok(b.enemies.map((e) => e.hp).join(',') === ehp && b.phase === 'aim', 'nothing moves while paused');
+  b.pointerDown({ x: 270, y: 480 });
+  ok(b.paused === false, 'any tap resumes');
+}
+
 // --- corrupt saves can't NaN or crash the run --------------------------------
 {
   localStorage.setItem('pk_best', '{}');

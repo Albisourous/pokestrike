@@ -279,6 +279,7 @@ export class Battle {
   private shotT = 0; // launch timestamp — hard-caps a shot that never settles
   private enemyPhaseT = 0;
   private inspect: { uid: number; t: number } | null = null; // tapped-foe scout card
+  paused = false; // mid-fight freeze — the pause chip in the arena corner
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
@@ -821,7 +822,27 @@ export class Battle {
 
   // --- input (logical coords) ---
 
+  // pause chip lives just inside the arena's top-left corner
+  private pauseChip() {
+    const a = this.arena;
+    return { x: a.x + 10, y: a.y + 26, w: 30, h: 30 };
+  }
+
   pointerDown(p: Vec) {
+    if (this.paused) { // any tap unfreezes
+      this.paused = false;
+      sfx('ui');
+      return;
+    }
+    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') {
+      const c = this.pauseChip();
+      if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
+        this.paused = true;
+        this.dragging = false; // a frozen game shouldn't hold a half-pull
+        sfx('ui');
+        return;
+      }
+    }
     if (this.phase === 'loot') { // grab the leash — drag your mon through the coins
       this.lootDrag = true;
       this.lootPos = { ...p };
@@ -991,6 +1012,10 @@ export class Battle {
   // --- simulation ---
 
   update(dt0: number) {
+    if (this.paused) {
+      this.time += dt0; // the overlay still breathes
+      return;
+    }
     // scene music follows the phase: ambient on the map, the gym-leader
     // theme under any boss (aces, alphas, invaders, rivals), the march
     // under trainers, the wild loop everywhere else
@@ -3873,6 +3898,17 @@ export class Battle {
       ctx.textAlign = 'right';
       ctx.fillStyle = '#8890b8';
       ctx.fillText(`${left} LEFT`, a.x + a.w - 8, a.y + 16);
+      // pause chip, opposite corner — a quiet brake during the action
+      const c = this.pauseChip();
+      ctx.globalAlpha = 0.6;
+      ctx.fillStyle = '#101430';
+      ctx.beginPath();
+      ctx.arc(c.x + c.w / 2, c.y + c.h / 2, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#8890b8';
+      ctx.fillRect(c.x + 10, c.y + 8, 4, 14);
+      ctx.fillRect(c.x + 17, c.y + 8, 4, 14);
     }
 
     // boss nameplate — the gym fight reads as a real boss encounter
@@ -3988,6 +4024,22 @@ export class Battle {
         ctx.fillStyle = '#ffd84d';
         ctx.fillText('HIT THE GOLD SPOT FOR ×3 DAMAGE', a.x + a.w / 2, cy + 52);
       }
+      ctx.globalAlpha = 1;
+    }
+
+    // the freeze frame — drawn dead last so nothing paints over it; a tap
+    // anywhere thaws (pointerDown drops it before any other handling)
+    if (this.paused) {
+      ctx.fillStyle = 'rgba(4,6,16,0.6)';
+      ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
+      ctx.textAlign = 'center';
+      ctx.font = font(24);
+      ctx.fillStyle = '#f0e6c8';
+      ctx.fillText('PAUSED', 270, 460);
+      ctx.font = font(10);
+      ctx.globalAlpha = 0.6 + Math.sin(this.time * 4) * 0.25;
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText('tap anywhere to resume', 270, 492);
       ctx.globalAlpha = 1;
     }
   }
