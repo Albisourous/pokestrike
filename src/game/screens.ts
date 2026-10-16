@@ -723,6 +723,24 @@ const HELP_SECTIONS: HelpSection[] = [
     lines: ['field 2+ of a type for a team-wide bonus — shinies count double', 'the chips on the map screen show what your team is running'],
     demo: demoTraits,
   },
+  {
+    title: 'SUPER INDEX I',
+    lines: [
+      'NORMAL dash-slams the nearest · FIGHTING rains meteors',
+      'ROCK rains meteors · FLYING piles foes with a vortex',
+      'WATER sends homing orbs · ELECTRIC chains lightning',
+    ],
+    demo: demoBump,
+  },
+  {
+    title: 'SUPER INDEX II',
+    lines: [
+      'GRASS drains foes to heal · POISON bleeds foes each shot',
+      'FIRE flame ring + fireballs · GHOST hexes every foe',
+      'PSYCHIC shoves the pack away — more charge, bigger effect',
+    ],
+    demo: demoCharge,
+  },
 ];
 
 // Help is reference, not onboarding: two sections a page so nobody scrolls
@@ -731,6 +749,7 @@ const HELP_SECTIONS: HelpSection[] = [
 const HELP_PAGES: { name: string; secs: number[] }[] = [
   { name: 'YOUR SHOT', secs: [0, 4] },
   { name: 'SUPERS', secs: [1, 3] },
+  { name: 'SUPER INDEX', secs: [14, 15] },
   { name: 'SHOT TECH', secs: [2, 5] },
   { name: 'THE FIELD', secs: [11, 12] },
   { name: 'GROWTH', secs: [6, 7] },

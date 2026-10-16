@@ -22,6 +22,22 @@ const BUMP_CD: Record<PokeType, number> = {
 };
 export const bumpCooldown = (t: PokeType) => BUMP_CD[t];
 
+// What the bump super actually does — surfaced on scout cards and the
+// help index. Keep synced with the bumpAlly switch in battle.ts.
+export const SUPER_DESC: Record<PokeType, string> = {
+  normal: 'dash-slams the nearest foe',
+  fighting: 'meteors rain on far foes',
+  rock: 'meteors rain on far foes',
+  flying: 'vortex piles foes together',
+  water: 'orbs hunt the nearest foes',
+  electric: 'lightning chains foe to foe',
+  grass: 'drains foes, heals the team',
+  poison: 'toxins bleed foes each shot',
+  fire: 'flame ring + homing fireballs',
+  ghost: 'hex hits every foe at once',
+  psychic: 'shockwave flings foes away',
+};
+
 // Same shaping both directions: base damage, then the defender's matching
 // stat shrinks it (60 stat ≈ half damage, 0 stat = full damage).
 const mit = (defense: number) => 60 / (60 + defense);

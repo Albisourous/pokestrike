@@ -31,6 +31,7 @@ import {
   roleOf,
   ROLE_MODS,
   moveOf,
+  SUPER_DESC,
   LV_CAP,
   offStat,
   lvlPow,
@@ -4070,7 +4071,7 @@ export class Battle {
     const foe = e.side === 'enemy';
     const a = this.arena;
     const w = 176;
-    const h = 76;
+    const h = foe ? 76 : 92; // teammates get a line for what the super does
     const cx = Math.min(Math.max(e.x - w / 2, a.x + 6), a.x + a.w - w - 6);
     const cy = Math.max(a.y + 8, e.y - e.r - h - 16);
     ctx.save();
@@ -4136,6 +4137,8 @@ export class Battle {
         cx + 50,
         cy + 70,
       );
+      ctx.fillStyle = '#6a7498';
+      ctx.fillText(SUPER_DESC[e.def.type], cx + 50, cy + 82);
     }
     ctx.restore();
   }
