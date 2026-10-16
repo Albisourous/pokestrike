@@ -259,6 +259,45 @@ const EVENTS: GameEvent[] = [
   },
 ];
 
+// Poké Mart: the ?-choice box doubles as a shop board — every buy re-prompts
+// the shelf until LEAVE, and score is the wallet so purchases tax the run's
+// final tally. One mart per map half is guaranteed by genRegion.
+export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT’LL IT BE?'): { prompt: string; options: EventChoice[] } {
+  const shelf = (cost: number, label: string, buy: (bb: Battle) => string): EventChoice => ({
+    label: `${label} — ${cost} SCORE`,
+    run: (bb) => {
+      const note = bb.score < cost ? 'NOT ENOUGH SCORE.' : (bb.score -= cost, buy(bb));
+      return { note, choices: martStock(bb, note) };
+    },
+  });
+  const options: EventChoice[] = [
+    shelf(200, 'POTION — TEAM HEALS 40%', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!')),
+    shelf(400, 'RARE CANDY — TEAM +1 LV', (bb) => {
+      for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
+      return 'EVERYONE GREW +1 LEVEL!';
+    }),
+    shelf(300, 'MYSTERY ITEM', (bb) => {
+      const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
+      if (!p) return 'SOLD OUT. THE CLERK SHRUGGED.';
+      p.apply(bb);
+      bb.heldItems.push(p.item);
+      return `IT WAS ${p.name.toUpperCase()}!`;
+    }),
+  ];
+  if (b.players.some((p) => p.dead))
+    options.push(
+      shelf(350, 'REVIVE — AT HALF HP', (bb) => {
+        const dead = bb.players.filter((p) => p.dead);
+        const p = dead[Math.floor(bb.roll() * dead.length)];
+        p.dead = false;
+        p.hp = Math.round(p.maxHp / 2);
+        return `${p.def.name.toUpperCase()} IS BACK ON ITS FEET!`;
+      }),
+    );
+  options.push({ label: 'LEAVE', run: () => ({ note: 'YOU HEADED BACK TO THE ROUTE.', skip: true }) });
+  return { prompt, options };
+}
+
 export function rollEvent(b: Battle): EventOutcome {
   const pool = EVENTS.filter((e) => !e.skip?.(b));
   let r = b.roll() * pool.reduce((a, e) => a + e.w, 0);

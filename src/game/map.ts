@@ -18,7 +18,7 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'trainer' | 'elite' | 'chest' | 'rest' | 'event' | 'gym';
+export type NodeKind = 'start' | 'wild' | 'trainer' | 'elite' | 'chest' | 'rest' | 'mart' | 'event' | 'gym';
 export interface MapNode {
   tx: number;
   ty: number;
@@ -125,7 +125,9 @@ export function genRegion(seed: number): RegionMap {
     const ty = MAP_H - 2 - (r + 1) * ROW_GAP;
     let kinds: NodeKind[];
     if (r % 3 === 2) kinds = ['gym'];
-    else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'event']).slice(0, rng() < 0.5 ? 3 : 2);
+    // utility rows always field 3 of the 4 kinds — a half's rest/?/mart
+    // guarantees below need three donors on the back nine's lone row
+    else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'mart', 'event']).slice(0, 3);
     // battle fork: a catchable door vs harder doors — three-lane rows add
     // an ELITE squad to the wild/trainer mix
     else kinds = shuffle<NodeKind>(rng() < 0.5 ? ['wild', 'trainer', 'elite'] : rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
@@ -175,15 +177,18 @@ export function genRegion(seed: number): RegionMap {
   const convert = (lo: number, hi: number, kind: NodeKind) => {
     const band = nodes.filter((n) => n.row >= lo && n.row <= hi && n.row % 3 === 1);
     if (band.some((n) => n.kind === kind)) return;
-    // never eat a half's last rest or ? — that's a guarantee, not a donor
+    // never eat a half's last rest, mart or ? — that's a guarantee, not a donor
     const pool = band.filter(
-      (n) => (n.kind !== 'rest' && n.kind !== 'event') || band.filter((m) => m.kind === n.kind).length > 1,
+      (n) =>
+        (n.kind !== 'rest' && n.kind !== 'event' && n.kind !== 'mart') ||
+        band.filter((m) => m.kind === n.kind).length > 1,
     );
     if (pool.length) pool[Math.floor(rng() * pool.length)].kind = kind;
   };
   for (const [lo, hi] of [[1, 4], [5, 7]] as const) {
     convert(lo, hi, 'rest');
     convert(lo, hi, 'event');
+    convert(lo, hi, 'mart');
   }
 
   // StS-style routing: a stop only reaches ADJACENT lanes in the next

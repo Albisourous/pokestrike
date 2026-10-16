@@ -5,7 +5,7 @@ import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild, bst } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
-import { rollEvent } from './events';
+import { rollEvent, martStock } from './events';
 import type { EventChoice } from './events';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES } from './meta';
@@ -604,6 +604,8 @@ export class Battle {
     // a dead run's team can return as a rival fight — fail-forward echo
     this.waveSpecial = null;
     this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent;
+    // gym leaders own their sky — every gym court runs weather
+    if (this.waveHadGym) this.weather = WEATHER_FOR[this.theme];
     this.inRival = false;
     if (ttype) {
       this.waveSpecial = elite
@@ -3128,6 +3130,11 @@ export class Battle {
     this.eventChoice = null;
     this.choiceHit = [];
     sfx('ui');
+    if (out.choices) {
+      // a pick can ask again — marts keep the board open until LEAVE
+      this.eventChoice = { ...out.choices, node: c.node };
+      return;
+    }
     if (out.wave) {
       this.pendingEventWave = out.wave;
       this.mapNote = out.note;
@@ -3210,6 +3217,10 @@ export class Battle {
         ? `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}, ${revived} REVIVED`
         : `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}`);
       sfx('heal');
+    } else if (n.kind === 'mart') {
+      // Poké Mart: the ?-choice box doubles as a shop board — buys re-prompt
+      // the shelf until LEAVE, score is the wallet
+      this.eventChoice = { ...martStock(this), node: n };
     } else if (n.kind === 'chest') {
       const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
       if (p) {
@@ -4717,8 +4728,8 @@ export class Battle {
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN; // start + rest are towns
         drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
-        if (n.kind === 'rest') {
-          const potion = itemSprite('max-potion');
+        if (n.kind === 'rest' || n.kind === 'mart') {
+          const potion = itemSprite(n.kind === 'rest' ? 'max-potion' : 'potion');
           if (potion) ctx.drawImage(potion, nx - 10, ny - cell * 2, 20, 20);
         }
       }
@@ -4752,6 +4763,7 @@ export class Battle {
         n.kind === 'gym' ? 'GYM'
         : n.kind === 'event' ? '???'
         : n.kind === 'rest' ? 'REST'
+        : n.kind === 'mart' ? 'MART'
         : n.kind === 'chest' ? 'CHEST'
         : n.kind === 'elite' ? 'ELITE'
         : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title

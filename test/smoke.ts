@@ -283,6 +283,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(!p1.dead && p1.hp === p1.maxHp, 'rest revives a fainted mon');
   (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'chest', row: 0, links: [] });
   ok(b.heldItems.length === items0 + 1, 'chest stop grants a relic');
+  // the mart boards a shop shelf — buys re-prompt until LEAVE
+  p1.dead = true;
+  p1.hp = 0;
+  (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'mart', row: 0, links: [] });
+  ok((b as any).eventChoice?.options.length === 5, 'mart shelf lists revive when a mon is down');
+  (b as any).phase = 'map';
+  b.score = 600;
+  (b as any).pickEventChoice(3); // REVIVE 350
+  ok(!p1.dead && p1.hp === Math.round(p1.maxHp / 2) && b.score === 250, 'mart revive trades score for a standing mon');
+  ok(!!(b as any).eventChoice, 'mart keeps the board open until LEAVE');
+  (b as any).pickEventChoice((b as any).eventChoice.options.length - 1);
+  ok(!(b as any).eventChoice, 'LEAVE resolves the mart stop');
 }
 
 // --- trainer stops: mono-type squads, no catches --------------------------
@@ -413,12 +425,14 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   b.asc = asc;
   let frames = 0;
   let aimTries = 0;
+  let shopPicks = 0;
   const step = (n: number) => { for (let i = 0; i < n; i++) b.update(1 / 60); };
   while (b.phase !== 'won' && b.phase !== 'lost' && frames < 200000) {
     frames++;
     if (b.phase === 'aim' && aimTries++ > 600) break; // stall detector — bouncier physics makes a dumb bot's fights run longer
-    if ((b as any).eventChoice) { // a ? is asking — answer it, first option
-      (b as any).pickEventChoice(0);
+    if ((b as any).eventChoice) { // a ? is asking — buy once, then LEAVE (last option) if the board re-asks
+      const opts = (b as any).eventChoice.options;
+      (b as any).pickEventChoice(shopPicks++ % 2 ? opts.length - 1 : 0);
       step(5);
       continue;
     }
@@ -517,6 +531,9 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     const ev1 = r.nodes.some((n) => n.kind === 'event' && n.row >= 1 && n.row <= 4);
     const ev2 = r.nodes.some((n) => n.kind === 'event' && n.row >= 5 && n.row <= 7);
     ok(ev1 && ev2, `seed ${s}: a ? stop is offered in each half`);
+    const m1 = r.nodes.some((n) => n.kind === 'mart' && n.row >= 1 && n.row <= 4);
+    const m2 = r.nodes.some((n) => n.kind === 'mart' && n.row >= 5 && n.row <= 7);
+    ok(m1 && m2, `seed ${s}: a mart is offered in each half`);
   }
 }
 
