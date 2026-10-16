@@ -100,6 +100,8 @@ let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
 let startOffers: Perk[] = []; // starter charm pick between draft and battle
+let charmPicks = 1; // ASC 3+ veterans start the climb with two charms
+let charmBonus = false;
 let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
 let shareText = '';
@@ -370,8 +372,10 @@ canvas.addEventListener('pointerdown', (e) => {
         // ?dev exposes the live battle for poking around during playtests
         if (new URLSearchParams(location.search).has('dev'))
           (window as unknown as { __battle: Battle }).__battle = battle;
-        // the charm pick gates the climb — one held item before stage 1
+        // the charm pick gates the climb — ASC 3+ pays out a second charm
         startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes());
+        charmBonus = battle.asc >= 3;
+        charmPicks = charmBonus ? 2 : 1;
         scene = 'charm';
       }
       return;
@@ -395,6 +399,8 @@ canvas.addEventListener('pointerdown', (e) => {
         battle.heldItems.push(perk.item);
         battle.perksTaken++;
       }
+      startOffers.splice(i, 1);
+      if (--charmPicks > 0 && startOffers.length) return; // ascension bonus: take a second
       startOffers = [];
       scene = 'battle';
       sceneMusic();
@@ -661,6 +667,7 @@ function update(dt: number) {
           // name the new modifier when a threshold tier unlocks
           const mod =
             nextAsc === 2 ? ' foes wind up faster.' :
+            nextAsc === 3 ? ' you start with two charms.' :
             nextAsc === 4 ? ' Poké Centers heal less.' :
             nextAsc === 6 ? ' gym leaders arrive enraged.' :
             ' the climb gets meaner.';
@@ -708,7 +715,10 @@ function render() {
       if (achOpen) drawAch(ctx, achScroll);
       break;
     case 'charm':
-      drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM', 'one held item starts the climb', t, draft.picked.map(draftDef));
+      drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM',
+        charmBonus ? (charmPicks > 1 ? 'ASCENSION III BONUS — take two charms' : 'one more — ascension pays')
+                   : 'one held item starts the climb',
+        t, draft.picked.map(draftDef));
       break;
     case 'draft': {
       const offers = draftOffers().map(draftDef);

@@ -690,7 +690,7 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'LEVELING UP',
-    lines: ['every KO levels the mon that launched the shot, tougher foes teach more (Lv100 cap)', 'levels survive evolution; each win raises ASCENSION: foes tougher, then faster (2), weaker rests (4), enraged gyms (6)'],
+    lines: ['every KO levels the mon that launched the shot, tougher foes teach more (Lv100 cap)', 'levels survive evolution; each win raises ASCENSION: foes tougher, faster (2), a second charm (3), weaker rests (4), enraged gyms (6)'],
     demo: demoCharge,
   },
   {
