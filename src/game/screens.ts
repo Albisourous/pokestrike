@@ -696,7 +696,8 @@ export function drawHelp(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText('scroll to read · tap to close', r.x + r.w / 2, r.y + r.h - 16);
 }
 
-// --- dex overlay: every catchable mon — caught ones in color, the rest ??? ---
+// --- dex overlay: caught mons only — a real dex doesn't list what you ---
+// --- haven't caught; the count is the only hint at what's out there -------
 export const DEX_BTN = { x: W / 2 - 140, y: FREE_BTN.y + FREE_BTN.h + 20, w: 135, h: 40 };
 export const ACH_BTN = { x: W / 2 + 5, y: DEX_BTN.y, w: 135, h: 40 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
@@ -705,7 +706,7 @@ const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
 const DEX_HEAD = 60;
 
 export function dexScrollMax() {
-  const rows = Math.ceil(DEX_LIST.length / DEX_COLS);
+  const rows = Math.ceil(dexIds().length / DEX_COLS);
   return Math.max(0, rows * DEX_CELL - (DEX_PANEL.h - DEX_HEAD - 36));
 }
 
@@ -730,28 +731,23 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, r.h - DEX_HEAD - 36);
   ctx.clip();
   ctx.font = font(7);
-  DEX_LIST.forEach((def, i) => {
+  DEX_LIST.filter((def) => seen.has(def.id)).forEach((def, i) => {
     const cx = r.x + 20 + (i % DEX_COLS) * DEX_CELL + DEX_CELL / 2;
     const cy = r.y + DEX_HEAD + 8 + Math.floor(i / DEX_COLS) * DEX_CELL - scroll + DEX_CELL / 2;
-    const got = seen.has(def.id);
-    if (got) {
-      drawMon(ctx, def.id, cx, cy, DEX_CELL - 20);
-      ctx.fillStyle = PARCH;
-      ctx.fillText(def.name.toUpperCase(), cx, cy + DEX_CELL / 2 - 8);
-      if (shinies.has(def.id)) { // a caught shiny earns the gold star
-        ctx.fillStyle = '#ffd84d';
-        ctx.fillText('★', cx + DEX_CELL / 2 - 12, cy - DEX_CELL / 2 + 14);
-      }
-    } else {
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      roundRect(ctx, cx - 12, cy - 12, 24, 24, 5);
-      ctx.fill();
-      ctx.fillStyle = '#3a4370';
-      ctx.fillText('???', cx, cy + 4);
-      ctx.fillText(`#${String(def.id).padStart(3, '0')}`, cx, cy + DEX_CELL / 2 - 8);
+    drawMon(ctx, def.id, cx, cy, DEX_CELL - 20);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(def.name.toUpperCase(), cx, cy + DEX_CELL / 2 - 8);
+    if (shinies.has(def.id)) { // a caught shiny earns the gold star
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText('★', cx + DEX_CELL / 2 - 12, cy - DEX_CELL / 2 + 14);
     }
   });
   ctx.restore();
+  if (!seen.size) {
+    ctx.font = font(10);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('NO CATCHES YET', r.x + r.w / 2, r.y + r.h / 2);
+  }
 
   // the completion milestone is the promise that keeps hunters grinding
   ctx.font = font(8);

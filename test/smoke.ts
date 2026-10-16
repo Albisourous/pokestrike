@@ -472,6 +472,26 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   b3.pointerUp();
   ok(u3.cd > 0, `strike shot spends the super on launch (cd ${u3.cd})`);
 
+  // long-range supers: fire lobs homing fireballs at the far pack, and
+  // electric's chain leaves visible arcs
+  {
+    const bf = new Battle(arena, [ROSTER[1], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+    (bf as any).spawnWave(0);
+    const fp = bf.players[0];
+    fp.cd = 0;
+    (bf as any).bumpAlly(fp, fp);
+    ok((bf as any).orbs.length === 3, `fire volley launches 3 homing orbs (${(bf as any).orbs.length})`);
+
+    const be = new Battle(arena, [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+    (be as any).spawnWave(0);
+    const ep = be.players[0];
+    ep.cd = 0;
+    (be as any).bumpAlly(ep, ep);
+    // the arcs are scheduled a beat apart — drain the delay queue
+    for (const d of [...(be as any).delays]) d.fn();
+    ok((be as any).beams.length > 0, `chain lightning draws its arcs (${(be as any).beams.length})`);
+  }
+
   // mines: ball contact detonates — the blast SHOVES foes but never
   // damages them (enemies take no environment damage)
   const b4 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));

@@ -118,6 +118,7 @@ interface Orb {
   wob: number; // spiral phase — each orb corkscrews on its own beat
   color: string;
   hostile?: boolean; // boss orbs hunt players instead of enemies
+  drain?: boolean; // the hit feeds the team — grass seed flares
 }
 // Expanding shockwave: the front sweeps outward and hits each enemy once
 // when it reaches them — fire blast, psychic ring.
@@ -1308,6 +1309,11 @@ export class Battle {
           this.damagePlayer(o.target, o.dmg);
         } else {
           this.hurt(o.target, o.dmg, '#9df0ff');
+          if (o.drain) this.tryHeal(this.players, () => Math.max(1, Math.round(o.dmg * 0.35)));
+          // every orb landing is a mini hit — small stop + shake
+          this.hitStop = Math.max(this.hitStop, 0.05);
+          this.addShake(4);
+          this.addPunch(0.03);
         }
         this.waves.push({
           x: o.x, y: o.y, r: 0, maxR: 52, t: 0.3, life: 0.3,
@@ -2038,6 +2044,14 @@ export class Battle {
             this.hurt(e, bumpDmg(e, 1.6), '#9df0ff');
           },
         });
+        // + fireball volley: homing fire-orbs arc into the 3 FARTHEST
+        // enemies — nobody outruns the burn
+        near(Infinity)
+          .sort((a, b) => dist(p, b) - dist(p, a))
+          .slice(0, 3)
+          .forEach((e, i) => {
+            this.orbs.push({ x: p.x, y: p.y, target: e, dmg: bumpDmg(e, 0.9), t: 2.5, wob: i * 2.1, color });
+          });
         break;
       }
       case 'electric': {
@@ -2048,7 +2062,7 @@ export class Battle {
         let mult = 1.3;
         for (let i = 0; i < 3; i++) {
           const next = this.enemies
-            .filter((e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 190 * p.rngMul)
+            .filter((e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 340 * p.rngMul)
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
           if (!next) break;
           hit.add(next.uid);
@@ -2059,8 +2073,12 @@ export class Battle {
         chain.forEach((c, i) => {
           this.later(i * 0.1, () => {
             if (c.e.dead) return;
+            // the arc itself — a bright line jumps from the last link to this one
+            this.beams.push({ x1: c.a.x, y1: c.a.y, x2: c.e.x, y2: c.e.y, t: 0.28, life: 0.28 });
+            this.impact(c.e.x, c.e.y, '#f8d030', 0.9);
             this.hurt(c.e, bumpDmg(c.e, c.mult), '#9df0ff');
-            this.addShake(4);
+            this.hitStop = Math.max(this.hitStop, 0.05);
+            this.addShake(5);
             sfx('zap');
           });
         });
@@ -2079,6 +2097,14 @@ export class Battle {
           this.hurt(e, dmg, '#9df0ff');
         }
         if (dealt > 0) this.tryHeal(this.players, () => Math.max(Math.round(dealt * 0.35), 4));
+        // + seed flares: homing spores chase the 2 farthest enemies and
+        // siphon them back to the team on impact
+        near(Infinity)
+          .sort((a, b) => dist(p, b) - dist(p, a))
+          .slice(0, 2)
+          .forEach((e, i) => {
+            this.orbs.push({ x: p.x, y: p.y, target: e, dmg: bumpDmg(e, 0.8), t: 2.5, wob: i * 2.1, color, drain: true });
+          });
         break;
       }
       case 'water':
@@ -2113,6 +2139,13 @@ export class Battle {
           e.vy += dir.y * 720;
           this.hurt(e, bumpDmg(e, 1.2), '#9df0ff');
         }
+        // + twin psy-orbs hunt the farthest stragglers the shove misses
+        near(Infinity)
+          .sort((a, b) => dist(p, b) - dist(p, a))
+          .slice(0, 2)
+          .forEach((e, i) => {
+            this.orbs.push({ x: p.x, y: p.y, target: e, dmg: bumpDmg(e, 0.9), t: 2.5, wob: i * 2.1 + 1, color });
+          });
         break;
       }
       case 'flying': {
@@ -2141,19 +2174,23 @@ export class Battle {
         break;
       case 'rock':
       case 'fighting': {
-        // meteor fist: the nearest enemy eats a one-two of falling rock —
-        // second hit lands a beat later and leaves a crater
+        // meteor shower: jab the nearest, then rocks rain down on the 3
+        // farthest enemies — anywhere on the court is inside the kill box
         const e = nearest(p, 200);
-        if (e) {
-          this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
-          this.later(0.14, () => {
-            this.scar(e.x, e.y, 14); // the meteor lands whether or not it kills
-            if (e.dead) return;
-            this.screenFlash('#b8a038', 0.12);
-            this.addShake(12);
-            this.hurt(e, bumpDmg(e, 2.2), '#9df0ff');
+        if (e) this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
+        near(Infinity)
+          .sort((a, b) => dist(p, b) - dist(p, a))
+          .slice(0, 3)
+          .forEach((t, i) => {
+            this.later(0.14 + i * 0.16, () => {
+              this.scar(t.x, t.y, 14); // the meteor lands whether or not it kills
+              this.screenFlash('#b8a038', 0.12);
+              this.addShake(12);
+              if (t.dead) return;
+              this.impact(t.x, t.y, '#b8a038', 1.1);
+              this.hurt(t, bumpDmg(t, i === 0 ? 2.2 : 1.5), '#9df0ff');
+            });
           });
-        }
         break;
       }
       case 'ghost': {
