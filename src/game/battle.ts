@@ -6,6 +6,7 @@ import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, 
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent } from './events';
+import type { EventChoice } from './events';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS } from './meta';
 import { drawBackdrop, drawWall, THEMES } from './bg';
@@ -391,6 +392,8 @@ export class Battle {
   private mapCam = -1; // island-row the viewport starts at — lerps toward mapCamTarget
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
   eventBox: string | null = null; // resolved ? event — modal FRLG text box, tap to close
+  private eventChoice: { prompt: string; options: EventChoice[]; node: MapNode } | null = null; // ? that asks — row waits on the pick
+  private choiceHit: { x: number; y: number; w: number; h: number }[] = []; // last-drawn option rects
   private mapMsgT = 0;
   // victory loot — a gym boss bursts into PokéCoins; drag the lead mon to
   // scoop them before the lap ends
@@ -825,6 +828,14 @@ export class Battle {
       return;
     }
     if (this.phase === 'map') {
+      if (this.eventChoice) {
+        // a ? with options swallows taps until the player picks one
+        const i = this.choiceHit.findIndex(
+          (r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h,
+        );
+        if (i >= 0) this.pickEventChoice(i);
+        return;
+      }
       if (this.eventBox) { // event text box is up — a tap dismisses it first
         this.eventBox = null;
         sfx('ui');
@@ -2855,6 +2866,7 @@ export class Battle {
     this.pendingNext = n.row;
     this.arriveAtNode(n);
     this.tickEgg();
+    if (this.eventChoice) return; // a ? is asking — resolve the row on the pick
     if (this.skipWave) {
       // the event resolved the stop — row clears with no fight, at the
       // cost of the wave's recruits and perk draft (StS ?-node trade).
@@ -2871,6 +2883,34 @@ export class Battle {
     }
     this.spawnWave(this.pendingNext, n);
     this.nextTurn();
+  }
+
+  // The player's answer to a choice ? — runs the picked option, then resolves
+  // the row the same way finishMapWalk would have: a staged wave fights now,
+  // a peaceful outcome clears the row and waits on the map.
+  private pickEventChoice(i: number) {
+    const c = this.eventChoice;
+    if (!c || this.phase !== 'map') return;
+    const out = c.options[i]?.run(this);
+    if (!out) return;
+    this.eventChoice = null;
+    this.choiceHit = [];
+    sfx('ui');
+    if (out.wave) {
+      this.pendingEventWave = out.wave;
+      this.mapNote = out.note;
+      this.spawnWave(c.node.row, c.node);
+      this.nextTurn();
+      return;
+    }
+    // peaceful pick — the same row bookkeeping as a skip resolution
+    this.waveIndex = c.node.row;
+    if (c.node.row >= this.stage.waves.length) {
+      this.depth++;
+      this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+    }
+    this.pendingNext = c.node.row + 1;
+    this.eventBox = out.note;
   }
 
   // Egg from the ? pool: rustles on every stop advance, then hatches a
@@ -2908,6 +2948,11 @@ export class Battle {
       // the ? pool: heals and finds resolve on the spot; ambushes stage a
       // scripted wave that replaces whatever the row would have rolled
       const out = rollEvent(this);
+      if (out.choices) {
+        // the ? asks — the row stays unresolved until pickEventChoice lands
+        this.eventChoice = { ...out.choices, node: n };
+        return;
+      }
       if (out.wave) {
         this.pendingEventWave = out.wave;
         this.mapNote = out.note;
@@ -4375,39 +4420,74 @@ export class Battle {
     if (this.eventBox) {
       ctx.fillStyle = 'rgba(4,6,16,0.55)';
       ctx.fillRect(0, 0, 540, 960);
-      const bx = 20, bw = 500;
-      ctx.font = font(13);
-      const lines: string[] = [];
-      let line = '';
-      for (const w of this.eventBox.split(' ')) {
-        const t = line ? `${line} ${w}` : w;
-        if (line && ctx.measureText(t).width > bw - 56) { lines.push(line); line = w; }
-        else line = t;
-      }
-      lines.push(line);
-      const bh = 48 + lines.length * 24;
-      const by = 960 - bh - 40;
-      roundRect(ctx, bx, by, bw, bh, 10);
-      ctx.fillStyle = '#12152bf4';
-      ctx.fill();
-      ctx.strokeStyle = '#ffd84d';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-      roundRect(ctx, bx + 5, by + 5, bw - 10, bh - 10, 6);
-      ctx.strokeStyle = '#c8a44d';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#f0e6c8';
-      lines.forEach((l, i) => ctx.fillText(l, bx + 26, by + 36 + i * 24));
+      const by = this.drawMapTextBox(ctx, this.eventBox);
       // FRLG continue arrow — blink so it reads as waiting for the tap
       if (Math.sin(this.time * 6) > -0.3) {
         ctx.textAlign = 'right';
         ctx.fillStyle = '#ffd84d';
-        ctx.fillText('▼', bx + bw - 18, by + bh - 14);
+        ctx.fillText('▼', 20 + 500 - 18, by + this.textBoxH - 14);
       }
       ctx.textAlign = 'center';
     }
+    // a choice ? asks — prompt card up top, tappable option buttons under it
+    if (this.eventChoice) {
+      ctx.fillStyle = 'rgba(4,6,16,0.55)';
+      ctx.fillRect(0, 0, 540, 960);
+      const by = this.drawMapTextBox(ctx, this.eventChoice.prompt);
+      const bw = 380, bh = 46, gap = 10;
+      const opts = this.eventChoice.options;
+      const oy = by - 18 - opts.length * bh - (opts.length - 1) * gap;
+      this.choiceHit = opts.map((_, i) => ({
+        x: (540 - bw) / 2,
+        y: oy + i * (bh + gap),
+        w: bw,
+        h: bh,
+      }));
+      ctx.font = font(11);
+      ctx.textAlign = 'center';
+      this.choiceHit.forEach((r, i) => {
+        roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+        ctx.fillStyle = '#12162b';
+        ctx.fill();
+        ctx.strokeStyle = i === 0 ? '#ffd84d' : '#c8a44d';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = '#f0e6c8';
+        ctx.fillText(opts[i].label, r.x + r.w / 2, r.y + 28);
+      });
+    }
+  }
+
+  private textBoxH = 0; // last prompt height — the ▼ arrow reads it
+  // Shared FRLG text box: word-wraps into the bottom card, returns its top y.
+  private drawMapTextBox(ctx: CanvasRenderingContext2D, text: string) {
+    const bx = 20, bw = 500;
+    ctx.font = font(13);
+    const lines: string[] = [];
+    let line = '';
+    for (const w of text.split(' ')) {
+      const t = line ? `${line} ${w}` : w;
+      if (line && ctx.measureText(t).width > bw - 56) { lines.push(line); line = w; }
+      else line = t;
+    }
+    lines.push(line);
+    const bh = 48 + lines.length * 24;
+    const by = 960 - bh - 40;
+    this.textBoxH = bh;
+    roundRect(ctx, bx, by, bw, bh, 10);
+    ctx.fillStyle = '#12152bf4';
+    ctx.fill();
+    ctx.strokeStyle = '#ffd84d';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    roundRect(ctx, bx + 5, by + 5, bw - 10, bh - 10, 6);
+    ctx.strokeStyle = '#c8a44d';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#f0e6c8';
+    lines.forEach((l, i) => ctx.fillText(l, bx + 26, by + 36 + i * 24));
+    return by;
   }
 
   // Hazard zones are gameplay overlays (like the court paint), not

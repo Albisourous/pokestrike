@@ -253,6 +253,11 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   while (b.phase !== 'won' && b.phase !== 'lost' && frames < 200000) {
     frames++;
     if (b.phase === 'aim' && aimTries++ > 600) break; // stall detector — bouncier physics makes a dumb bot's fights run longer
+    if ((b as any).eventChoice) { // a ? is asking — answer it, first option
+      (b as any).pickEventChoice(0);
+      step(5);
+      continue;
+    }
     if ((b as any).eventBox) { // an event popup holds the map — dismiss it first
       b.pointerDown({ x: 270, y: 850 });
       step(5);
@@ -700,6 +705,40 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const box0 = c.box.length;
   (c as any).tickEgg();
   ok(c.eggIn === 0 && c.box.length === box0 + 1, `egg hatches into the box (${c.box[c.box.length - 1]?.name})`);
+}
+
+// --- choice events: the row waits for a pick, options do what they say -------
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(77));
+  // salesman: paying lands a relic, walking away clears the row
+  const s0 = 500;
+  b.score = s0;
+  const items0 = b.heldItems.length;
+  const sale = rollEventChoices(b, 'PAY 300 SCORE');
+  ok(sale !== null, 'salesman choice surfaced');
+  if (sale) {
+    sale.run(b);
+    ok(b.score === s0 - 300, `paying the salesman costs score (${s0} → ${b.score})`);
+    ok(b.heldItems.length === items0 + 1, 'the mystery box pays a relic');
+  }
+  // shrine: the offer trades hp for levels
+  const shrine = rollEventChoices(b, 'OFFER 15% HP — +2 LEVELS');
+  ok(shrine !== null, 'shrine choice surfaced');
+  if (shrine) {
+    const p = b.players[0];
+    const hp0 = p.hp;
+    const lv0 = p.lvl;
+    shrine.run(b);
+    ok(p.hp < hp0 && p.lvl === lv0 + 2, `shrine trades hp for levels (lv${lv0} → ${p.lvl})`);
+  }
+}
+function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
+  for (let i = 0; i < 200; i++) {
+    const out = rollEvent(b);
+    const opt = out.choices?.options.find((o) => o.label === label);
+    if (opt) return opt;
+  }
+  return null;
 }
 
 // --- a corpse attacker never fires ------------------------------------------

@@ -6,12 +6,20 @@ import type { Battle } from './battle';
 import { pickWild } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
+import { rollPerks } from './perks';
 import { recordCapture } from './meta';
+
+export interface EventChoice {
+  label: string;
+  run: (b: Battle) => EventOutcome;
+}
 
 export interface EventOutcome {
   note: string; // flavor line — becomes the wave banner or a map toast
   wave?: WaveSpawn[]; // scripted fight replacing the row's wave
   skip?: boolean; // resolved peacefully — no battle this stop
+  // the stop ASKS instead of resolving — the map holds until the player picks
+  choices?: { prompt: string; options: EventChoice[] };
 }
 
 interface GameEvent {
@@ -129,6 +137,83 @@ const EVENTS: GameEvent[] = [
       }));
       return { note: 'A WILD PACK AMBUSHES YOU!', wave };
     },
+  },
+  {
+    // StS question marks ask something — a score sink priced like a reward
+    w: 3,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A SHADY SALESMAN FLASHES A MYSTERY BOX — 300 SCORE?',
+        options: [
+          {
+            label: 'PAY 300 SCORE',
+            run: (bb) => {
+              if (bb.score < 300) return { note: 'HE SCOWLED — “COME BACK RICHER.”', skip: true };
+              bb.score -= 300;
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
+              if (!p) return { note: 'THE BOX WAS EMPTY. HE VANISHED.', skip: true };
+              p.apply(bb);
+              bb.heldItems.push(p.item);
+              return { note: `THE BOX HELD ${p.name.toUpperCase()}!`, skip: true };
+            },
+          },
+          { label: 'WALK AWAY', run: () => ({ note: 'YOU KEPT WALKING.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    // blood shrine: pay in HP, gain in levels — the classic risk pick
+    w: 2,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A STRANGE SHRINE HUMS. OFFER YOUR TEAM’S STRENGTH?',
+        options: [
+          {
+            label: 'OFFER 15% HP — +2 LEVELS',
+            run: (bb) => {
+              for (const p of bb.players) {
+                if (p.dead) continue;
+                p.hp = Math.max(1, Math.round(p.hp - p.maxHp * 0.15));
+                bb.gainLevels(p, 2);
+              }
+              return { note: 'THE SHRINE DRANK DEEP — EVERYONE GREW +2 LEVELS.', skip: true };
+            },
+          },
+          { label: 'LEAVE IT', run: () => ({ note: 'THE HUM FADED BEHIND YOU.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    // the weakest link gets a stranger at +4 — a real team-building call
+    w: 2,
+    skip: (b) => !b.players.some((p) => !p.dead),
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A COLLECTOR WANTS YOUR WEAKEST MON — OFFERS A STRANGER +4 LEVELS.',
+        options: [
+          {
+            label: 'MAKE THE TRADE',
+            run: (bb) => {
+              const alive = bb.players.filter((p) => !p.dead);
+              if (!alive.length) return { note: 'THE DEAL COLLAPSED.', skip: true };
+              const weak = alive.sort((a, z) => a.lvl - z.lvl)[0];
+              const def = pickWild(bb.roll, bb.depth + 1);
+              const shiny = bb.roll() < 1 / 48;
+              const name = weak.def.name.toUpperCase();
+              bb.applyDef(weak, { ...def, shiny: shiny || undefined }, Math.min(100, weak.lvl + 4), weak.hp / weak.maxHp);
+              recordCapture([def.id]); // the stranger lands in the dex
+              return { note: `${name} LEFT… ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED AT Lv${weak.lvl}!`, skip: true };
+            },
+          },
+          { label: 'DECLINE', run: () => ({ note: 'THE COLLECTOR NODDED AND MOVED ON.', skip: true }) },
+        ],
+      },
+    }),
   },
 ];
 
