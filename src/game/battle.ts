@@ -3849,6 +3849,22 @@ export class Battle {
       ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
     }
     ctx.globalAlpha = 1;
+    // wipe pressure: a nearly-dead team breathes a red vignette — the danger
+    // is felt at the edges before anyone reads a health bar
+    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') {
+      const alive = this.players.filter((p) => !p.dead);
+      if (alive.length) {
+        const avg = alive.reduce((s, p) => s + p.hp / p.maxHp, 0) / alive.length;
+        if (alive.length === 1 || avg < 0.35) {
+          const pulse = 0.10 + Math.sin(this.time * 4) * 0.05;
+          const g = ctx.createRadialGradient(270, 480, 220, 270, 480, 560);
+          g.addColorStop(0, 'rgba(200,30,30,0)');
+          g.addColorStop(1, `rgba(200,30,30,${pulse})`);
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
+        }
+      }
+    }
 
     // foes remaining, top-right — the wave's progress bar
     const left = this.enemies.filter((e) => !e.dead).length;

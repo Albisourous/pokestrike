@@ -808,6 +808,16 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(b.phase === 'shot' && !(b as any).inspect, 'a real pull dismisses the card');
 }
 
+// --- seeded runs replay identically ------------------------------------------
+{
+  const a = new Battle(arena, team(), makeStage(42, 'T'), mulberry32(42));
+  const b = new Battle(arena, team(), makeStage(42, 'T'), mulberry32(42));
+  (a as any).spawnWave(0);
+  (b as any).spawnWave(0);
+  const seq = (bb: Battle) => bb.enemies.map((e) => `${e.def.id}:${e.hp}`).join(',');
+  ok(seq(a) === seq(b), 'same seed → same wave (replayable climbs)');
+}
+
 // --- corrupt saves can't NaN or crash the run --------------------------------
 {
   localStorage.setItem('pk_best', '{}');
