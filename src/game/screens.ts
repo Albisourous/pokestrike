@@ -390,6 +390,11 @@ export function drawTitle(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
+  // the pitch in one line — a stranger gets the loop before they tap a thing
+  ctx.font = font(11);
+  ctx.fillStyle = '#c8d2f0';
+  ctx.textAlign = 'center';
+  ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
   button(ctx, FREE_BTN, 'START CLIMB', true);
 
   // ? badge, top corner — the how-to-play overlay

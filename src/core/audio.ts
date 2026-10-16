@@ -2,6 +2,7 @@
 // Browsers require a user gesture first, so call unlock() from pointerdown.
 
 let ac: AudioContext | null = null;
+let visBound = false;
 let master: GainNode | null = null;
 let mGain: GainNode | null = null;
 let mFilter: BiquadFilterNode | null = null; // music-bus lowpass — softens square-wave edge
@@ -27,6 +28,16 @@ export function unlockAudio() {
     return;
   }
   try {
+    // a backgrounded tab shouldn't keep the sequencer running — suspend on
+    // hide, resume on return (iOS suspends on its own; this covers the rest)
+    if (typeof document !== 'undefined' && !visBound) {
+      visBound = true;
+      document.addEventListener('visibilitychange', () => {
+        if (!ac) return;
+        if (document.hidden) void ac.suspend();
+        else if (!muted) void ac.resume();
+      });
+    }
     ac = new AudioContext();
     master = ac.createGain();
     master.gain.value = muted ? 0 : 0.5;
