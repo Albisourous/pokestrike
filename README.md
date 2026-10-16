@@ -95,11 +95,12 @@ scrollable in-game manual, and it opens itself on your first visit.
    to ambient embers, petals, and wisps drifting over the floor.
    **Stone clusters** stand mid-court as bounceable cover; bank off them
    like walls for the same per-bounce damage bonus. The court
-   fights back too: **lava pools** scorch the ball and anything standing
-   in them, **tall grass** drags your launch to a crawl, **wind bands**
-   push the ball sideways, **spike strips** chip it on contact, and
-   **mine pads** detonate when the ball touches them — a trap you can
-   weaponize against the pack. Deep waves can roll a **mutator**: SWARM
+   fights back too — but only against you (enemies take no environment
+   damage): **lava pools** scorch the ball, **tall grass** drags your
+   launch to a crawl, **wind bands** push the ball sideways, **spike
+   strips** chip it on contact, and **mine pads** detonate when the ball
+   touches them — the blast still chips you, but it shoves the pack
+   around for free repositioning. Deep waves can roll a **mutator**: SWARM
    floods in extra fodder, HASTY starts timers low, VOLATILE makes KOs
    burst onto neighbors, A BIG ONE supersizes a fodder, a gold glint
    guarantees one shiny in the pack, and a **soul-linked pair** shares a

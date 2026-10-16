@@ -1,15 +1,18 @@
 // Region map generator — porygion's idea (seeded island, banded stops,
 // Manhattan routes) kept simple: one wobbling island of grass ringed by
 // sand and sea, nine stops zigzagging south→north, scenery sprinkled on
-// the open land. Town-map stop kinds: gyms every 3rd, trainer battles,
-// chests, Poké Center rests.
+// the open land. Rows read as triplets — battle → utility → gym — and
+// the map view scrolls one triplet at a time.
 import { mulberry32 } from '../core/rng';
 import { gracidea } from '../core/assets';
 import { TOTAL_STAGES, TRAINER_TYPES } from './data';
 import type { PokeType } from './types';
 
 export const MAP_W = 16;
-export const MAP_H = 22;
+// 6-tile row gaps + generous margins — the climb scrolls through a
+// ~20-row viewport instead of showing the whole island at once
+export const MAP_H = 58;
+const ROW_GAP = 6;
 
 export const T_WATER = 0;
 export const T_SAND = 1;
@@ -20,7 +23,7 @@ export interface MapNode {
   tx: number;
   ty: number;
   kind: NodeKind;
-  row: number; // climb depth 0..8 — gyms forced on rows 2/5/8
+  row: number; // climb depth 0..8 — row%3: 0 battle, 1 utility, 2 gym
   links: number[]; // indices into nodes[] — the stops you can pick next
   ttype?: PokeType; // trainer stops: the mono-type squad waiting there
 }
@@ -62,7 +65,7 @@ export function genRegion(seed: number): RegionMap {
   }
   // inland ponds — a couple of small blobs make it read as terrain, not a
   // disc; center must sit on grass so the pond actually shows
-  const ponds = 1 + Math.floor(rng() * 2);
+  const ponds = 2 + Math.floor(rng() * 3);
   for (let p = 0; p < ponds; p++) {
     let px = cx, py = cy, tries = 0;
     do {
@@ -98,8 +101,11 @@ export function genRegion(seed: number): RegionMap {
   }
   const land = (x: number, y: number) => x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && tiles[y * MAP_W + x] === T_GRASS;
 
-  // Stops: branching rows south→north. Row 0 is the single start, every
-  // 3rd row is a lone gym; the rest get 2-3 stops spread across the band.
+  // Stops: triplet rows south→north. Every 3-row block reads
+  // battle → utility → gym: row 0 is the lone HOME start (its wave is
+  // stage 1's wild fight); r%3==0 rows are battle stops (wild/trainer);
+  // r%3==1 rows fork two distinct utility doors (chest/rest/?);
+  // r%3==2 is a lone gym.
   const shuffle = <T>(arr: T[]) => {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
@@ -115,20 +121,20 @@ export function genRegion(seed: number): RegionMap {
   };
   const nodes: MapNode[] = [];
   for (let r = 0; r < TOTAL_STAGES; r++) {
-    const band = r / (TOTAL_STAGES - 1);
-    const ty = Math.round(MAP_H - 3 - band * (MAP_H - 6));
+    const ty = MAP_H - 4 - r * ROW_GAP;
     let kinds: NodeKind[];
     if (r === 0) kinds = ['start'];
-    else if ((r + 1) % 3 === 0) kinds = ['gym'];
+    else if (r % 3 === 2) kinds = ['gym'];
+    else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'event']).slice(0, 2);
     else {
-      // a real fork: wild is always one door, the other gets flavored —
-      // ~1/3 of rows are a lone stop instead of a choice
-      const flavor = weighted<NodeKind>([['trainer', 5], ['chest', 3], ['rest', 3], ['event', 4], ['wild', 2]]);
-      kinds = rng() < 0.35 ? [flavor] : shuffle(['wild', flavor]);
+      // a real fork: a catchable wild door vs a harder trainer door —
+      // ~1/3 of battle rows are a lone stop instead
+      const lone = weighted<NodeKind>([['wild', 3], ['trainer', 2]]);
+      kinds = rng() < 0.35 ? [lone] : shuffle<NodeKind>(['wild', 'trainer']);
     }
-    const xs = kinds.length === 1 ? [0.5] : [0.3, 0.7];
+    const xs = kinds.length === 1 ? [0.5] : [0.28, 0.72];
     kinds.forEach((kind, k) => {
-      let tx = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.4);
+      let tx = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.6);
       let guard = 0;
       while (
         (!land(tx, ty) || nodes.some((o) => o.row === r && Math.abs(o.tx - tx) < 3)) &&
@@ -147,20 +153,15 @@ export function genRegion(seed: number): RegionMap {
   }
 
   // StS-style facility guarantees (pokelike's rule): each half of the
-  // climb always offers a rest and a ? stop. Conversions prefer wild
-  // stops, falling back to chests/trainers — never gyms or the start.
+  // climb always offers a rest and a ? stop. Donors are utility-row
+  // stops only — battle rows keep their fight, gyms are untouchable.
   const convert = (lo: number, hi: number, kind: NodeKind) => {
-    const band = nodes.filter((n) => n.row >= lo && n.row <= hi);
+    const band = nodes.filter((n) => n.row >= lo && n.row <= hi && n.row % 3 === 1);
     if (band.some((n) => n.kind === kind)) return;
     // never eat a half's last rest or ? — that's a guarantee, not a donor
-    const donor = (n: MapNode) =>
-      n.kind !== 'rest' && n.kind !== 'event' ||
-      band.filter((m) => m.kind === n.kind).length > 1;
-    // prefer converting wilds, then chests/trainers, events, rests last
-    const pool =
-      [['wild'], ['chest', 'trainer'], ['event'], ['rest']]
-        .map((ks) => band.filter((n) => ks.includes(n.kind) && donor(n)))
-        .find((p) => p.length) ?? [];
+    const pool = band.filter(
+      (n) => (n.kind !== 'rest' && n.kind !== 'event') || band.filter((m) => m.kind === n.kind).length > 1,
+    );
     if (pool.length) pool[Math.floor(rng() * pool.length)].kind = kind;
   };
   for (const [lo, hi] of [[1, 4], [5, 7]] as const) {
@@ -211,8 +212,9 @@ export function genRegion(seed: number): RegionMap {
     nodes.some((n) => Math.abs(n.tx - x) + Math.abs(n.ty - y) <= 1);
   const free = (x: number, y: number) =>
     land(x, y) && !route.has(y * MAP_W + x) && !nearNode(x, y) && !decor.has(y * MAP_W + x);
-  // 3-5 tree clumps of 2-4 trees — reads as forest, not polka dots
-  const clumps = 3 + Math.floor(rng() * 3);
+  // tree clumps of 2-4 trees — reads as forest, not polka dots; the
+  // taller island gets a few more of everything
+  const clumps = 8 + Math.floor(rng() * 7);
   for (let c = 0; c < clumps; c++) {
     const tx = 1 + Math.floor(rng() * (MAP_W - 2)), ty = 1 + Math.floor(rng() * (MAP_H - 2));
     const n = 2 + Math.floor(rng() * 3);
@@ -221,9 +223,9 @@ export function genRegion(seed: number): RegionMap {
       if (free(x, y)) decor.set(y * MAP_W + x, 'tree');
     }
   }
-  // one boulder outcrop — the craggy patch overworld maps get from cliffs;
-  // retry until at least a couple land on open grass
-  for (let attempt = 0, placed = 0; attempt < 12 && placed < 2; attempt++) {
+  // boulder outcrops — the craggy patch overworld maps get from cliffs;
+  // retry until a handful land on open grass
+  for (let attempt = 0, placed = 0; attempt < 20 && placed < 5; attempt++) {
     const rx = 2 + Math.floor(rng() * (MAP_W - 4)), ry = 2 + Math.floor(rng() * (MAP_H - 4));
     for (let t = 0; t < 4; t++) {
       const x = rx + Math.floor(rng() * 3) - 1, y = ry + Math.floor(rng() * 3) - 1;

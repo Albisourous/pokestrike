@@ -208,12 +208,18 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   while (b.phase !== 'won' && b.phase !== 'lost' && frames < 200000) {
     frames++;
     if (b.phase === 'aim' && aimTries++ > 600) break; // stall detector — bouncier physics makes a dumb bot's fights run longer
+    if ((b as any).eventBox) { // an event popup holds the map — dismiss it first
+      b.pointerDown({ x: 270, y: 850 });
+      step(5);
+      continue;
+    }
     if (b.phase === 'map') {
       // pick a linked stop — same cell math drawRegion/pointerDown use
       const region = (b as any).region;
       const cur = region.nodes[(b as any).mapNode];
       const n = region.nodes[cur.links[Math.floor(rng() * cur.links.length)]];
-      b.pointerDown({ x: MAP_OX + n.tx * MAP_CELL + MAP_CELL / 2, y: MAP_OY + n.ty * MAP_CELL + MAP_CELL / 2 });
+      // the map viewport scrolls — screen y is island row minus camera
+      b.pointerDown({ x: MAP_OX + n.tx * MAP_CELL + MAP_CELL / 2, y: MAP_OY + (n.ty - (b as any).mapCam) * MAP_CELL + MAP_CELL / 2 });
       step(240); // the lead mon walks the route over ~6 tiles/sec
     } else if (b.phase === 'reward') {
       b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
@@ -414,21 +420,27 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   b3.pointerUp();
   ok(u3.cd > 0, `strike shot spends the super on launch (cd ${u3.cd})`);
 
-  // mines: ball contact detonates, splashing foes and chipping the ball
+  // mines: ball contact detonates — the blast SHOVES foes but never
+  // damages them (enemies take no environment damage)
   const b4 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
   (b4 as any).spawnWave(0);
   const e4 = b4.enemies[0];
-  const mx = e4.x + e4.r + 20;
+  // the ball detonates the pad without touching the foe — any hp loss
+  // would be the blast itself, not a contact hit
+  const mx = e4.x + e4.r + 45;
   (b4 as any).hazards = [{ kind: 'mine', x: mx, y: e4.y, r: 30 }];
   const e4hp = e4.hp;
   const u4 = (b4 as any).active;
-  u4.x = mx;
+  // ball (r 26) parked just off the foe — touching it would deal contact
+  // damage and muddle what the blast does
+  u4.x = mx + 14;
   u4.y = e4.y;
   u4.vx = 0;
   u4.vy = 0;
   (b4 as any).stepShot(1 / 60);
   ok(b4.hazards[0].spent === true, 'mine detonates on ball contact');
-  ok(e4.hp < e4hp, `mine blasts nearby foes (${e4hp} → ${e4.hp})`);
+  ok(e4.hp === e4hp, `mine blast can't hurt foes (${e4.hp})`);
+  ok(Math.hypot(e4.vx, e4.vy) > 50, `mine blast shoves foes (v ${Math.round(Math.hypot(e4.vx, e4.vy))})`);
 
   // volatile: a KO splashes neighbors and can chain
   const b5 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));

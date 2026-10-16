@@ -208,6 +208,9 @@ export type Phase = 'aim' | 'shot' | 'enemy' | 'reward' | 'map' | 'loot' | 'won'
 export const MAP_CELL = 32;
 export const MAP_OX = (540 - MAP_W * MAP_CELL) / 2;
 export const MAP_OY = 128;
+// tile rows on screen at once — sized so the current triplet
+// (battle → utility → gym) fills the view as the climb scrolls north
+export const MAP_VIEW = 20;
 
 const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
 const SHOT_MAX = 14; // seconds — gimmick courts can hold the ball above settle speed forever
@@ -376,6 +379,7 @@ export class Battle {
   eggJustLaid = false; // the laying arrival doesn't consume a tick
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
   private splashing = false; // psychic trait re-entry guard
+  private mapCam = -1; // island-row the viewport starts at — lerps toward mapCamTarget
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
   eventBox: string | null = null; // resolved ? event — modal FRLG text box, tap to close
   private mapMsgT = 0;
@@ -455,6 +459,7 @@ export class Battle {
       });
     });
     this.region = genRegion(Math.floor(this.rng() * 2 ** 31));
+    this.mapCam = this.mapCamTarget();
     this.spawnWave(0);
     this.phase = 'map'; // the climb starts on the region map, not mid-wave
   }
@@ -819,13 +824,15 @@ export class Battle {
       }
       // StS routing: tap one of the linked stops to walk there — its kind
       // flavors the battle (trainer squad, rest heal, chest find)
+      if (this.mapWalk) return; // mid-walk — let the camera finish panning
       const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
+      const cam = Math.round(this.mapCam * cell) / cell;
       const cur = this.region.nodes[this.mapNode];
       const hit = cur.links
         .map((li) => this.region.nodes[li])
         .find(
           (n) =>
-            Math.hypot(p.x - (ox + n.tx * cell + cell / 2), p.y - (oy + n.ty * cell + cell / 2)) <
+            Math.hypot(p.x - (ox + n.tx * cell + cell / 2), p.y - (oy + (n.ty - cam) * cell + cell / 2)) <
             cell * 1.2,
         );
       if (!hit) return; // tapping open island just admires the map
@@ -991,6 +998,7 @@ export class Battle {
     this.stepWaves(dt);
     this.stepDashes(dt);
     if (this.phase === 'map' && this.mapWalk) this.stepMapWalk(dt);
+    if (this.phase === 'map') this.mapCam += (this.mapCamTarget() - this.mapCam) * Math.min(1, dt * 4.5);
     for (const d of this.delays) d.t -= dt;
     const due = this.delays.filter((d) => d.t <= 0);
     this.delays = this.delays.filter((d) => d.t > 0);
@@ -1044,8 +1052,9 @@ export class Battle {
       for (const hz of this.hazards) {
         if (hz.spent || dist(u, hz) > u.r + hz.r) continue;
         if (hz.kind === 'mine') {
-          // MS mine: the ball's touch detonates it — a trap you can
-          // weaponize against the pack (it chips the ball too — commit)
+          // MS mine: the ball's touch detonates it — the blast SHOVES the
+          // pack around (enemies take no environment damage; the court is
+          // their turf) and still chips the ball — commit
           hz.spent = true;
           this.addShake(8);
           this.addPunch(0.09);
@@ -1055,7 +1064,9 @@ export class Battle {
           this.waves.push({ x: hz.x, y: hz.y, r: 0, maxR: hz.r * 3.2, t: 0.35, life: 0.35, color: '#ff9a30', hits: new Set() });
           for (const e of this.enemies) {
             if (!e.dead && dist(hz, e) < hz.r * 2.2 + e.r) {
-              this.hurt(e, Math.max(1, Math.round(e.maxHp * 0.14)), '#ff9a30');
+              const d = Math.max(30, dist(hz, e));
+              e.vx += ((e.x - hz.x) / d) * 520;
+              e.vy += ((e.y - hz.y) / d) * 520;
             }
           }
           this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.05)));
@@ -1223,17 +1234,8 @@ export class Battle {
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
-      // lava burns whatever stands in it — enemies included, but bosses
-      // shrug it off (a spawn inside a pool shouldn't cook them to death)
-      if (!e.dead && !e.boss) {
-        for (const hz of this.hazards) {
-          if (hz.kind === 'lava' && dist(e, hz) < hz.r + e.r * 0.4 && this.time - e.hzT > 0.6) {
-            e.hzT = this.time;
-            this.hurt(e, Math.max(1, Math.ceil(e.maxHp * 0.03)), '#f08030');
-            break;
-          }
-        }
-      }
+      // enemies take no environment damage — lava pools, mines and the
+      // court's other tricks only ever punish the ball
     }
     // pairwise separation between enemies
     for (let i = 0; i < this.enemies.length; i++) {
@@ -2444,6 +2446,20 @@ export class Battle {
     this.phase = 'map';
   }
 
+  // Map camera: the viewport trails the walker's tile row — while you're
+  // standing on a stop it holds that row near the bottom third so the
+  // next couple of rows are what's on screen
+  private mapCamTarget() {
+    let ty = this.region.nodes[this.mapNode]?.ty ?? 0;
+    const mw = this.mapWalk;
+    if (mw) {
+      const i = Math.min(Math.floor(mw.t), mw.path.length - 2);
+      const f = mw.t - i;
+      ty = mw.path[i].y + (mw.path[i + 1].y - mw.path[i].y) * f;
+    }
+    return Math.min(Math.max(ty - (MAP_VIEW - 5), 0), MAP_H - MAP_VIEW);
+  }
+
   // Overworld walk: the lead mon travels the carved route to the stop you
   // tapped, then the stop's effect and its battle fire on arrival.
   private stepMapWalk(dt: number) {
@@ -3456,6 +3472,10 @@ export class Battle {
     }
 
     const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
+    const cam = Math.round(this.mapCam * cell) / cell; // pixel-snap keeps the baked tiles crisp
+    const view = MAP_VIEW;
+    const y0 = Math.max(0, Math.floor(cam));
+    const y1 = Math.min(MAP_H, Math.ceil(cam + view));
     const img = gracidea();
     // bake the island once — the region is fixed per run, so 350 tile
     // blits + save/restores per frame collapse into a single drawImage
@@ -3481,27 +3501,29 @@ export class Battle {
     }
     const sparkle = Math.floor(this.time * 4);
     if (this.regionBase) {
-      ctx.drawImage(this.regionBase, ox, oy);
+      // a slice of the island — the camera tracks the climb so only the
+      // current triplet (battle → utility → gym) is ever on screen
+      ctx.drawImage(this.regionBase, 0, cam * cell, MAP_W * cell, view * cell, ox, oy, MAP_W * cell, view * cell);
       // only the water glints stay live
-      for (let y = 0; y < MAP_H; y++) {
+      for (let y = y0; y < y1; y++) {
         for (let x = 0; x < MAP_W; x++) {
           if (this.region.tiles[y * MAP_W + x] !== T_WATER || this.region.route.has(y * MAP_W + x)) continue;
           if ((x * 7 + y * 11 + sparkle) % 23 === 0) {
             ctx.fillStyle = 'rgba(255,255,255,0.25)';
-            ctx.fillRect(ox + x * cell + cell * 0.3, oy + y * cell + cell * 0.35, cell * 0.4, 2);
+            ctx.fillRect(ox + x * cell + cell * 0.3, oy + (y - cam) * cell + cell * 0.35, cell * 0.4, 2);
           }
         }
       }
     } else {
       const flat = (c: string, x: number, y: number) => {
         ctx.fillStyle = c;
-        ctx.fillRect(ox + x * cell, oy + y * cell, cell, cell);
+        ctx.fillRect(ox + x * cell, oy + (y - cam) * cell, cell, cell);
       };
-      for (let y = 0; y < MAP_H; y++) {
+      for (let y = y0; y < y1; y++) {
         for (let x = 0; x < MAP_W; x++) {
           const i = y * MAP_W + x;
           const t = this.region.tiles[i];
-          const px = ox + x * cell, py = oy + y * cell;
+          const px = ox + x * cell, py = oy + (y - cam) * cell;
           if (this.region.route.has(i)) flat('#c8a868', x, y);
           else if (t === T_WATER) {
             flat('#3060b0', x, y);
@@ -3514,6 +3536,12 @@ export class Battle {
         }
       }
     }
+    // everything island-space lives inside the viewport — walking mons
+    // and offscreen stops clip at the frame instead of bleeding over the HUD
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(ox - 6, oy - 6, MAP_W * cell + 12, view * cell + 12);
+    ctx.clip();
     // your lead mon waits at the current stop, or walks the carved route
     // to the one you tapped — overworld style
     const at = this.region.nodes[this.mapNode];
@@ -3529,7 +3557,7 @@ export class Battle {
     }
     if (at && lead) {
       const bob = Math.sin(this.time * 4) * 2;
-      drawMon(ctx, lead.def.id, ox + lx * cell + cell / 2, oy + ly * cell - cell * 0.1 + bob, 30);
+      drawMon(ctx, lead.def.id, ox + lx * cell + cell / 2, oy + (ly - cam) * cell - cell * 0.1 + bob, 30);
     }
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
@@ -3541,7 +3569,7 @@ export class Battle {
       for (const li of links) {
         const t = this.region.nodes[li];
         const mx = ox + ((cur0.tx + t.tx) / 2) * cell + cell / 2;
-        const my = oy + ((cur0.ty + t.ty) / 2) * cell + cell / 2;
+        const my = oy + ((cur0.ty + t.ty) / 2 - cam) * cell + cell / 2;
         ctx.globalAlpha = 0.45 + Math.sin(this.time * 4) * 0.3;
         ctx.fillStyle = '#ffd84d';
         ctx.beginPath();
@@ -3551,8 +3579,9 @@ export class Battle {
       }
     }
     this.region.nodes.forEach((n, i) => {
+      if (n.ty - cam < -3 || n.ty - cam > view + 1) return; // offscreen row
       const nx = ox + n.tx * cell + cell / 2;
-      const ny = oy + n.ty * cell + cell / 2;
+      const ny = oy + (n.ty - cam) * cell + cell / 2;
       const cleared = n.row < this.pendingNext;
       const reachable = links.includes(i);
       const current = i === this.mapNode;
@@ -3600,9 +3629,9 @@ export class Battle {
     });
     // labels in a second pass so buildings can't paint over a neighbor's name
     this.region.nodes.forEach((n, i) => {
-      if (n.row < this.pendingNext) return;
+      if (n.row < this.pendingNext || n.ty - cam < -3 || n.ty - cam > view + 1) return;
       const nx = ox + n.tx * cell + cell / 2;
-      const ny = oy + n.ty * cell + cell / 2;
+      const ny = oy + (n.ty - cam) * cell + cell / 2;
       const reachable = links.includes(i);
       const current = i === this.mapNode;
       // town-map style: every stop is named, choices glow brightest
@@ -3621,11 +3650,20 @@ export class Battle {
       ctx.fillStyle = reachable ? (n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d') : current ? '#6fdc6f' : '#8a94b8';
       ctx.fillText(label, nx, ny - cell * 1.55);
     });
+    ctx.restore(); // end island clip
     ctx.strokeStyle = '#2a3560';
     ctx.lineWidth = 3;
-    ctx.strokeRect(ox - 8, oy - 8, MAP_W * cell + 16, MAP_H * cell + 16);
+    ctx.strokeRect(ox - 8, oy - 8, MAP_W * cell + 16, view * cell + 16);
+    // sheers at both edges sell the scroll — the island keeps going
+    for (const [fy, up] of [[oy, 0], [oy + view * cell, 1]] as const) {
+      const g2 = ctx.createLinearGradient(0, fy, 0, up ? fy - cell * 1.6 : fy + cell * 1.6);
+      g2.addColorStop(0, 'rgba(10,14,28,0.7)');
+      g2.addColorStop(1, 'rgba(10,14,28,0)');
+      ctx.fillStyle = g2;
+      ctx.fillRect(ox - 4, up ? fy - cell * 1.6 : fy, MAP_W * cell + 8, cell * 1.6);
+    }
     // soft vignette keeps the eye on the island
-    const vg = ctx.createRadialGradient(270, oy + MAP_H * cell / 2, 200, 270, oy + MAP_H * cell / 2, 520);
+    const vg = ctx.createRadialGradient(270, oy + view * cell / 2, 200, 270, oy + view * cell / 2, 520);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vg;
@@ -3635,12 +3673,12 @@ export class Battle {
     ctx.fillText(
       this.pendingNext <= this.waveIndex ? 'tap to begin the climb' : 'choose your route: tap a linked stop',
       270,
-      oy + MAP_H * cell + 44,
+      oy + view * cell + 30,
     );
     ctx.font = font(9);
     ctx.fillStyle = '#6a7498';
-    ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + MAP_H * cell + 62);
-    ctx.fillText('CHEST free relic · ??? event — heal, catch or fight · REST heal+revive · GYM boss', 270, oy + MAP_H * cell + 78);
+    ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + view * cell + 48);
+    ctx.fillText('CHEST free relic · ??? event — heal, catch or fight · REST heal+revive · GYM boss', 270, oy + view * cell + 64);
     // resolved events and egg ticks surface as a toast over the island
     if (this.mapMsgT > 0 && this.mapMsg) {
       ctx.globalAlpha = Math.min(1, this.mapMsgT);
@@ -3660,9 +3698,9 @@ export class Battle {
       for (const [ty, tier] of this.traits) {
         const name = `${ty.toUpperCase()} T${tier}`;
         ctx.fillStyle = 'rgba(20,26,48,0.85)';
-        ctx.fillRect(tx - 3, oy + MAP_H * cell + 88, ctx.measureText(name).width + 8, 14);
+        ctx.fillRect(tx - 3, oy + view * cell + 78, ctx.measureText(name).width + 8, 14);
         ctx.fillStyle = TYPE_COLOR[ty];
-        ctx.fillText(name, tx + 1, oy + MAP_H * cell + 98);
+        ctx.fillText(name, tx + 1, oy + view * cell + 88);
         tx += ctx.measureText(name).width + 14;
       }
       ctx.textAlign = 'center';
