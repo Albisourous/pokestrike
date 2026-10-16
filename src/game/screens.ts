@@ -169,7 +169,7 @@ export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number;
 // UI font: Roboto Condensed bold — the broadcast-graphics look — vendored
 // as a variable TTF in public/fonts; monospace is the boot/failure fallback.
 const PIXEL_FONT = 'rc, monospace';
-const FONT_SCALE = 1.15;
+const FONT_SCALE = 1.4;
 export const font = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px ${PIXEL_FONT}`;
 
 // Mons standing the ring around the logo — all ids are in ALL_SPRITE_IDS.

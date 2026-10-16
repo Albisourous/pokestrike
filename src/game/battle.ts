@@ -152,6 +152,8 @@ interface Beam {
   y2: number;
   t: number;
   life: number;
+  color?: string; // default gold — signature nukes tint it
+  w?: number; // width multiplier — hyper beam is FAT
 }
 // Normal-type quick attack: the bumped ally physically lunges at the
 // target, slams it, and holds position next to it.
@@ -1935,6 +1937,141 @@ export class Battle {
     }
   }
 
+  // Iconic signature nukes: a curated set of canon moves get bespoke FX
+  // instead of the generic type super — the gacha-game money shots.
+  // Returns true when one fired. `src` is the move owner (copy replays it),
+  // `p` is the bumped ally the blast emanates from.
+  private signatureMove(
+    src: Unit,
+    p: Unit,
+    bumpDmg: (e: Unit, power: number) => number,
+  ): boolean {
+    const foes = this.enemies.filter((e) => !e.dead);
+    if (!foes.length) return false;
+    const farthest = foes.slice().sort((a, b) => dist(p, b) - dist(p, a))[0];
+    const fattest = foes.slice().sort((a, b) => b.maxHp - a.maxHp)[0];
+    // a piercing beam from the caster THROUGH the anchor enemy to the far
+    // wall — every enemy within `halfW` of the ray eats it
+    const lineBlast = (to: Unit, color: string, halfW: number, power: number, w: number) => {
+      const d = norm({ x: to.x - p.x, y: to.y - p.y });
+      this.beams.push({ x1: p.x, y1: p.y, x2: p.x + d.x * 1400, y2: p.y + d.y * 1400, t: 0.6, life: 0.6, color, w });
+      for (const e of foes) {
+        const t = (e.x - p.x) * d.x + (e.y - p.y) * d.y;
+        if (t < 0) continue; // behind the caster
+        const dx = e.x - (p.x + d.x * t), dy = e.y - (p.y + d.y * t);
+        if (Math.hypot(dx, dy) < halfW + e.r) this.hurt(e, bumpDmg(e, power), '#ffffff');
+      }
+      this.screenFlash(color, 0.22);
+      this.hitStop = Math.max(this.hitStop, 0.34);
+      this.addPunch(0.16);
+      this.addShake(14);
+      sfx('beam');
+      buzz([40, 30, 60]);
+    };
+    switch (moveOf(src.def.id, src.def.type)) {
+      case 'HYPER BEAM': // the golden wall of light — fattest beam in the game
+        lineBlast(farthest, '#ffd84d', 38, 2.6, 2.4);
+        return true;
+      case 'SOLARBEAM': // same line, photosynthesis green
+        lineBlast(farthest, '#78c850', 32, 2.2, 1.8);
+        return true;
+      case 'HYDRO CANNON': // a water jet that punches through the pack
+        lineBlast(farthest, '#6890f0', 34, 2.3, 2.0);
+        sfx('splash');
+        return true;
+      case 'ZAP CANNON': { // one fat thunderball tracks the farthest foe
+        this.orbs.push({ x: p.x, y: p.y, target: farthest, dmg: bumpDmg(farthest, 2.6), t: 3, wob: 0, color: '#f8d030' });
+        this.screenFlash('#f8d030', 0.16);
+        sfx('zap');
+        return true;
+      }
+      case 'PSYCHO BOOST': { // Mewtwo's nuke — detonates the biggest target
+        this.screenFlash('#f85888', 0.25);
+        this.waves.push({
+          x: fattest.x, y: fattest.y, r: 0, maxR: 190, t: 0.5, life: 0.5,
+          color: '#f85888', hits: new Set(),
+          onHit: (e) => this.hurt(e, bumpDmg(e, e === fattest ? 2.6 : 1.3), '#f8b8d0'),
+        });
+        this.scar(fattest.x, fattest.y, 30);
+        this.hitStop = Math.max(this.hitStop, 0.3);
+        this.addPunch(0.14);
+        this.addShake(12);
+        return true;
+      }
+      case 'ERUPTION': // the whole pack erupts in staggered bursts
+        foes.slice(0, 6).forEach((e, i) => {
+          this.later(i * 0.12, () => {
+            this.burst(e.x, e.y, '#f08030', 16, 460, 1.2);
+            this.scar(e.x, e.y, 16);
+            this.addShake(6);
+            if (!e.dead) this.hurt(e, bumpDmg(e, 1.2), '#ffb088');
+            sfx('boom');
+          });
+        });
+        this.screenFlash('#f08030', 0.2);
+        return true;
+      case 'EXPLOSION': { // everything goes — caster pays 15% recoil
+        this.screenFlash('#ffffff', 0.35);
+        for (const e of foes) this.hurt(e, bumpDmg(e, 1.5), '#ffffff');
+        p.hp = Math.max(1, p.hp - Math.round(p.maxHp * 0.15));
+        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 400, t: 0.55, life: 0.55, color: '#ffd84d', hits: new Set() });
+        this.scar(p.x, p.y, 40);
+        this.hitStop = Math.max(this.hitStop, 0.34);
+        this.addPunch(0.18);
+        this.addShake(16);
+        sfx('boom');
+        buzz([60, 40, 80]);
+        return true;
+      }
+      case 'BLAST BURN': { // a fire wave that scorches every tile it sweeps
+        this.screenFlash('#f08030', 0.22);
+        this.waves.push({
+          x: p.x, y: p.y, r: 0, maxR: 260, t: 0.5, life: 0.5,
+          color: '#f08030', hits: new Set(),
+          onHit: (e) => { this.scar(e.x, e.y, 14); this.hurt(e, bumpDmg(e, 1.9), '#ffb088'); },
+        });
+        this.hitStop = Math.max(this.hitStop, 0.24);
+        this.addShake(11);
+        sfx('boom');
+        return true;
+      }
+      case 'FRENZY PLANT': // drain orbs swarm the four farthest foes
+        foes.slice().sort((a, b) => dist(p, b) - dist(p, a)).slice(0, 4).forEach((e, i) => {
+          this.orbs.push({ x: p.x, y: p.y, target: e, dmg: bumpDmg(e, 1.0), t: 3, wob: i * 1.7, color: '#78c850', drain: true });
+        });
+        return true;
+      case 'OUTRAGE': { // rampage — three staggered smashes on the nearest
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        for (let i = 0; i < 3; i++) {
+          this.later(i * 0.16, () => {
+            if (t.dead) return;
+            this.impact(t.x, t.y, '#7038f8', 1.2);
+            this.hurt(t, bumpDmg(t, 1.1), '#c8a8ff');
+            const d = norm({ x: t.x - p.x, y: t.y - p.y });
+            t.vx += d.x * 300; t.vy += d.y * 300;
+            this.addShake(8);
+            sfx('hit');
+          });
+        }
+        return true;
+      }
+      case 'SHEER COLD': { // the arena flash-freezes around the nearest foe
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        this.screenFlash('#98d8d8', 0.28);
+        this.waves.push({
+          x: t.x, y: t.y, r: 0, maxR: 160, t: 0.45, life: 0.45,
+          color: '#98d8d8', hits: new Set(),
+          onHit: (e) => this.hurt(e, bumpDmg(e, e === t ? 2.4 : 0.9), '#d8f0f8'),
+        });
+        this.hitStop = Math.max(this.hitStop, 0.28);
+        this.addShake(10);
+        sfx('splash');
+        return true;
+      }
+    }
+    return false;
+  }
+
   // Bump an ally mid-shot: every pass is a combo link; the signature
   // super fires only when recharged (cd counts down per shot).
   private bumpAlly(p: Unit, u: Unit) {
@@ -2028,7 +2165,7 @@ export class Battle {
     cry(p.def.id, 0.35);
     buzz(20);
 
-    switch (src.def.type) {
+    if (!this.signatureMove(src, p, bumpDmg)) switch (src.def.type) {
       case 'fire': {
         // flame burst: a shockwave ring rolls out from the ally — enemies
         // catch fire as the front passes over them
@@ -2953,7 +3090,8 @@ export class Battle {
       case 149: { // Dragonite — hyper beam: a burning line through the team
         if (!target) break;
         sfx('beam');
-        this.beams.push({ x1: e.x, y1: e.y, x2: target.x, y2: target.y, t: 0.5, life: 0.5 });
+        this.beams.push({ x1: e.x, y1: e.y, x2: target.x, y2: target.y, t: 0.7, life: 0.7, color: '#f8d030', w: 2.2 });
+        this.hitStop = Math.max(this.hitStop, 0.25);
         const dx = target.x - e.x, dy = target.y - e.y;
         const dl = Math.max(dx * dx + dy * dy, 1);
         for (const p of this.players) {
@@ -3498,18 +3636,27 @@ export class Battle {
     }
 
 
-    // boss beam afterglow — a fading bright line over the field
+    // beam afterglow — a fading bright line over the field; signature
+    // beams carry their own color and a fat core
     for (const bm of this.beams) {
       const alpha = bm.t / bm.life;
+      const w = bm.w ?? 1;
       ctx.globalAlpha = alpha;
-      ctx.strokeStyle = '#ffd84d';
-      ctx.lineWidth = 14 * alpha + 2;
+      // outer glow halo
+      ctx.strokeStyle = bm.color ?? '#ffd84d';
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.lineWidth = 30 * w * alpha + 4;
       ctx.beginPath();
       ctx.moveTo(bm.x1, bm.y1);
       ctx.lineTo(bm.x2, bm.y2);
       ctx.stroke();
+      // colored body
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 14 * w * alpha + 2;
+      ctx.stroke();
+      // white-hot core
       ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 4 * alpha + 1;
+      ctx.lineWidth = 5 * w * alpha + 1;
       ctx.stroke();
     }
     ctx.globalAlpha = 1;

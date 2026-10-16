@@ -490,6 +490,30 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     // the arcs are scheduled a beat apart — drain the delay queue
     for (const d of [...(be as any).delays]) d.fn();
     ok((be as any).beams.length > 0, `chain lightning draws its arcs (${(be as any).beams.length})`);
+
+    // signature nukes: Dragonite's HYPER BEAM is a piercing line, not the
+    // generic flying pull — foes on the ray take damage, off it don't
+    const bd = new Battle(arena, [ROSTER[1], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+    (bd as any).spawnWave(0);
+    const dp = bd.players[0];
+    dp.def = { ...dp.def, id: 149, name: 'Dragonite' };
+    dp.cd = 0;
+    // line three foes up on the beam path: caster at left, targets east
+    dp.x = 60; dp.y = 400;
+    bd.enemies.forEach((e, i) => { e.x = 200 + i * 60; e.y = 400; e.vx = e.vy = 0; });
+    const hps = bd.enemies.map((e) => e.hp);
+    (bd as any).bumpAlly(dp, dp);
+    ok((bd as any).beams.length > 0 && (bd as any).beams[0].w! > 2, 'hyper beam fires the fat line');
+    ok(bd.enemies.every((e, i) => e.hp < hps[i]), 'hyper beam pierces every foe on the line');
+    // a foe parked behind the caster stays untouched
+    (bd as any).spawnWave(0);
+    const behind = bd.enemies[0];
+    behind.x = dp.x - 80; behind.y = dp.y;
+    bd.enemies.forEach((e, i) => { if (i > 0) { e.x = 500; e.y = 800; } });
+    dp.cd = 0;
+    const bhp = behind.hp;
+    (bd as any).bumpAlly(dp, dp);
+    ok(behind.hp === bhp, 'hyper beam spares foes behind the caster');
   }
 
   // mines: ball contact detonates — the blast SHOVES foes but never
