@@ -7,7 +7,7 @@ import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
 import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
-import { typeMult, strikeType } from '../src/game/types';
+import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent } from '../src/game/events';
 import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES } from '../src/game/meta';
 import { PERKS } from '../src/game/perks';
@@ -163,6 +163,42 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.pointerMove({ x: u.x + 60, y: u.y });
   b.pointerUp();
   ok(b.phase === 'shot' && (b as any).shotGold === true, 'gold release arms the gauge bonus');
+}
+
+// --- gauge difficulty: stronger species get tighter, drifting windows ------
+{
+  const easy = new Battle(arena, [speciesById(129)!, ROSTER[1], ROSTER[2], ROSTER[3]], makeStage(3, 'T'), mulberry32(2));
+  const hard = new Battle(arena, [speciesById(149)!, ROSTER[1], ROSTER[2], ROSTER[3]], makeStage(3, 'T'), mulberry32(2));
+  const ez = (easy as any).sweetSpot();
+  const hd = (hard as any).sweetSpot();
+  ok(hd.hw < ez.hw * 0.6, `dragonite's gold window is much tighter than magikarp's (${hd.hw.toFixed(3)} vs ${ez.hw.toFixed(3)})`);
+  (easy as any).dragT = 1.3;
+  ok((easy as any).sweetSpot().c === ez.c, 'weak mons keep a steady gold band');
+  (hard as any).dragT = Math.PI / 4.8; // sin peak — dragT * 2.4 = π/2
+  ok(Math.abs((hard as any).sweetSpot().c - hd.c) > 0.03, 'legendary-tier gold band drifts while held');
+}
+
+// --- weather courts: the sky tilts the matchup table -----------------------
+{
+  ok(weatherMult('sun', 'fire') === 1.5 && weatherMult('sun', 'water') === 0.75, 'sun boosts fire, dulls water');
+  ok(weatherMult(null, 'fire') === 1 && weatherMult('rain', 'grass') === 1, 'clear sky and neutral types unchanged');
+  const FOR: Record<string, string> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
+  const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(7));
+  (b as any).spawnWave(0);
+  ok((b as any).weather === null || (b as any).weather === FOR[(b as any).theme], 'wave weather follows the court theme');
+  const strike = (w: string | null) => {
+    const bb = new Battle(arena, [speciesById(4)!, ROSTER[1], ROSTER[2], ROSTER[3]], makeStage(3, 'T'), mulberry32(5));
+    (bb as any).spawnWave(0);
+    (bb as any).hazards = [];
+    (bb as any).weather = w;
+    const u = (bb as any).players[0];
+    const e = (bb as any).enemies[0];
+    const hp0 = e.hp;
+    (bb as any).strikeEnemy(u, e);
+    return hp0 - e.hp;
+  };
+  const clear = strike(null), sunny = strike('sun');
+  ok(sunny > clear, `sun buffs charmander's contact (${clear} -> ${sunny})`);
 }
 
 // --- benching keeps earned levels ------------------------------------------

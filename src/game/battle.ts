@@ -2,20 +2,20 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { drawMon, drawShiny, itemSprite, drawNpc } from '../core/assets';
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, hazardsFor, rivalWave, BLOCK_LAYOUTS, pickWild, bst } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent } from './events';
 import type { EventChoice } from './events';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES } from './meta';
-import { drawBackdrop, drawWall, THEMES } from './bg';
+import { drawBackdrop, drawWall, THEMES, hash } from './bg';
 import type { Theme } from './bg';
-import { typeMult, strikeType, TYPE_COLOR } from './types';
+import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT } from './types';
 import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND } from './map';
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
-import type { PokeType } from './types';
+import type { PokeType, Weather } from './types';
 import {
   playerHp,
   enemyHp,
@@ -252,6 +252,10 @@ const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
   power: MT.TILE_PATH,
 };
 
+// theme → its sky: groves rain, caverns swirl sand, the volcano bakes
+// under sun, the heights blow. ~Half of rolled courts get weather.
+const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
+
 const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
 const SHOT_MAX = 14; // seconds — gimmick courts can hold the ball above settle speed forever
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
@@ -302,6 +306,7 @@ export class Battle {
   shots = 0;
   time = 0;
   waveBanner = 0;
+  weather: Weather | null = null; // this wave's sky — null is a clear court
 
   private dragging = false;
   private dragStart: Vec = vec();
@@ -584,9 +589,11 @@ export class Battle {
     this.hardWave = this.inTrainer || this.inEvent;
     this.curSpawns = spawns;
     this.hpScale = 1 + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
-    // each wave is a new scene — rotate the flat theme
+    // each wave is a new scene — rotate the flat theme; about half roll
+    // weather, which tilts the type table until the wave ends
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
+    this.weather = this.rng() < 0.5 ? WEATHER_FOR[this.theme] : null;
     // stale super timers mustn't carry hits into the fresh wave — orbs
     // included, or a flight of homers retargets onto the next pack
     this.delays = [];
@@ -1052,20 +1059,32 @@ export class Battle {
     }
   }
 
-  // Power meter: ping-pongs 0→1→0 while held (0.85s per direction) —
-  // release in the gold zone for a full-power launch. Pull distance only
-  // aims; it no longer feeds power.
+  // Power meter: ping-pongs 0→1→0 while held (~0.85s per direction —
+  // stronger species sweep faster) — release in the gold zone for a
+  // full-power launch. Pull distance only aims; it no longer feeds power.
   private charge() {
-    const P = 0.85;
+    const P = 0.85 - 0.3 * this.gaugeDifficulty();
     const ph = this.dragT % (2 * P);
     return ph < P ? ph / P : 2 - ph / P;
   }
 
+  // How hard a mon's gauge is, 0→1, keyed off base-stat total: fodder
+  // releases are forgiving, aces and legendaries fight you.
+  private gaugeDifficulty() {
+    return Math.min(Math.max((bst(this.active.def) - 320) / 300, 0), 1);
+  }
+
   // The gold zone sits where base Speed puts it: fast mons release high
-  // and tight, slow mons get a lower, wider target. Center/half-width.
+  // and tight, slow mons get a lower, wider target. Stronger species
+  // narrow the window further, and the top end drifts while you hold —
+  // you release where the band will be, not where it is.
   private sweetSpot() {
     const n = Math.min(this.active.def.stats.spe / 120, 1);
-    return { c: 0.68 + 0.27 * n, hw: 0.09 - 0.05 * n };
+    const d = this.gaugeDifficulty();
+    const hw = Math.max(0.09 - 0.05 * n - 0.04 * d, 0.025);
+    const drift = Math.max(d - 0.5, 0) * 0.16 * Math.sin(this.dragT * 2.4);
+    const c = Math.min(Math.max(0.68 + 0.27 * n + drift, hw), 1 - hw);
+    return { c, hw };
   }
 
   // --- simulation ---
@@ -2002,7 +2021,7 @@ export class Battle {
     const hitN = this.shotHitN.get(e.uid) ?? 0;
     this.shotHitN.set(e.uid, hitN + 1);
     if (pinched && !this.inStatic(shooter.x, shooter.y)) this.onPinch(e.x, e.y);
-    const mult = typeMult(at, e.def);
+    const mult = typeMult(at, e.def) * weatherMult(this.weather, at);
     // weak point: the boss's rotating gold face takes triple contact
     // damage — MS's signature precision check. Drifts, so read it first.
     let weak = false;
@@ -2288,7 +2307,7 @@ export class Battle {
     // shooter's stats and typing, fired from the copier's position
     const src = p.def.copy ? u : p;
     const phys = bumpIsPhysical(src.def.type);
-    const eff = (e: Unit) => typeMult(src.def.type, e.def);
+    const eff = (e: Unit) => typeMult(src.def.type, e.def) * weatherMult(this.weather, src.def.type);
     // Physical bump attacks roll Attack vs Defense; elemental ones SpA vs SpD.
     const bumpDmg = (e: Unit, power: number) =>
       Math.round(
@@ -3792,6 +3811,8 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
+    this.drawWeather(ctx);
+
     // field pickups: a soft halo under a bobbing item icon
     for (const pk of this.pickups) {
       const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
@@ -4300,6 +4321,12 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#f0e6c8';
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
+      // the sky calls itself out in the ribbon — weather tilts the matchup
+      if (this.weather) {
+        ctx.font = font(11);
+        ctx.fillStyle = WEATHER_TINT[this.weather];
+        ctx.fillText(WEATHER_LINE[this.weather], a.x + a.w / 2, cy - 12);
+      }
       // boss weak points are the gym's whole trick — say it on the banner
       if (gym) {
         ctx.font = font(11);
@@ -4897,6 +4924,59 @@ export class Battle {
     return by;
   }
 
+  // Court weather: a faint sky-colored wash plus directional motes — rain
+  // slants down, embers climb in the sun, sand drifts, wind streaks by.
+  private drawWeather(ctx: CanvasRenderingContext2D) {
+    const w = this.weather;
+    if (!w) return;
+    const a = this.arena;
+    const TAU = Math.PI * 2;
+    ctx.save();
+    ctx.beginPath();
+    roundRect(ctx, a.x, a.y, a.w, a.h, 18);
+    ctx.clip();
+    ctx.fillStyle = WEATHER_TINT[w];
+    ctx.globalAlpha = 0.06;
+    ctx.fillRect(a.x, a.y, a.w, a.h);
+    const t = this.time;
+    for (let i = 0; i < 24; i++) {
+      const h1 = hash(i * 7.3 + 1), h2 = hash(i * 3.7 + 5), h3 = hash(i * 9.1 + 2);
+      ctx.globalAlpha = 0.16 + h3 * 0.2;
+      if (w === 'rain') {
+        const y = a.y + ((h1 * a.h + t * 640 + i * 37) % a.h);
+        const x = a.x + h2 * a.w;
+        ctx.strokeStyle = '#9dc0ff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - 3, y + 11);
+        ctx.stroke();
+      } else if (w === 'sun') {
+        const y = a.y + a.h - ((h1 * a.h + t * 38 + i * 29) % a.h);
+        const x = a.x + h2 * a.w + Math.sin(t * 1.4 + i) * 8;
+        ctx.fillStyle = '#ffd060';
+        ctx.beginPath();
+        ctx.arc(x, y, 1.8, 0, TAU);
+        ctx.fill();
+      } else if (w === 'sand') {
+        const x = a.x + ((h1 * a.w + t * 80 + i * 53) % a.w);
+        const y = a.y + h2 * a.h + Math.sin(t * 2 + i) * 5;
+        ctx.fillStyle = '#e0c070';
+        ctx.fillRect(x, y, 2, 2);
+      } else {
+        const x = a.x + ((h1 * a.w + t * 300 + i * 61) % a.w);
+        const y = a.y + h2 * a.h;
+        ctx.strokeStyle = '#e8f6ff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + 18 + h3 * 12, y - 3);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   // Hazard zones read as overworld props — a gracidea slice squashed to
   // the zone's footprint (vent, grass tufts, ponds, rocks, cave mouth)
   // with the animated cue that sells what it does. The tinted pad keeps
@@ -5482,7 +5562,7 @@ export class Battle {
           lc = '#8a90a8';
         } else {
           const at = strikeType(u.def, hit.def);
-          const mult = typeMult(at, hit.def);
+          const mult = typeMult(at, hit.def) * weatherMult(this.weather, at);
           const est = Math.max(1, Math.round(
             physDamage(u.def.stats.atk, hit.def.stats.def, mult) *
               u.pow * this.physMult * this.dmgMult * (this.typePow[at] ?? 1) *
