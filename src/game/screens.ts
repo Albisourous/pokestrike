@@ -646,6 +646,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'pull distance only aims — power is the release timing on the meter',
       'let go inside the gold band for a PERFECT full-power shot',
       "the band sits at your mon's own spot: fast ones are high and tight",
+      'on keys: ? help · P pause · M mute · arrows turn pages',
     ],
     demo: demoAim,
   },
