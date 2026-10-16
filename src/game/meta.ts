@@ -167,6 +167,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'ascended', name: 'ASCENDED', desc: 'Win a climb on Ascension I or higher' },
   { id: 'triple', name: 'TRIPLE CROWN', desc: 'Win 3 climbs (+1 draft reroll)' },
   { id: 'badge', name: 'GYM BREAKER', desc: 'Beat a gym leader' },
+  { id: 'league', name: 'LEAGUE CHAMPION', desc: 'Collect all 8 gym badges' },
   { id: 'rival', name: 'GRUDGE SETTLED', desc: 'Defeat your rival echo' },
   { id: 'shiny', name: 'SHINING', desc: 'Catch a shiny' },
   { id: 'myth', name: 'MYTH TAMER', desc: 'Catch a legendary invader' },
@@ -188,4 +189,44 @@ export function unlockAch(id: string): boolean {
   memAch.add(id);
   store('pk_ach', [...unlockedAch(), id]);
   return true;
+}
+
+// --- the badge case: one canon badge per gym leader ----------------------
+// Each badge is themed to its leader's typing; together they're the climb's
+// real trophy — a full case means LEAGUE CHAMPION.
+
+export interface GymBadge {
+  boss: number; // species id of the leader who pays it out
+  name: string;
+  color: string;
+}
+
+export const BADGES: GymBadge[] = [
+  { boss: 130, name: 'CASCADE BADGE', color: '#6890f0' }, // Gyarados
+  { boss: 125, name: 'THUNDER BADGE', color: '#f8d030' }, // Electabuzz
+  { boss: 3, name: 'RAINBOW BADGE', color: '#78c850' }, // Venusaur
+  { boss: 94, name: 'SOUL BADGE', color: '#a040a0' }, // Gengar
+  { boss: 150, name: 'MARSH BADGE', color: '#f85888' }, // Mewtwo
+  { boss: 6, name: 'VOLCANO BADGE', color: '#f08030' }, // Charizard
+  { boss: 112, name: 'EARTH BADGE', color: '#b8a038' }, // Rhydon
+  { boss: 149, name: 'ZEPHYR BADGE', color: '#a890f0' }, // Dragonite
+];
+
+let memBadges = new Set<number>();
+
+export const badgeOf = (bossId: number) => BADGES.find((b) => b.boss === bossId);
+
+export function gymBadges(): Set<number> {
+  const raw = load<unknown>('pk_badges');
+  return new Set(Array.isArray(raw) ? raw.filter((x): x is number => Number.isFinite(x)) : [...memBadges]);
+}
+
+// The first KO of a leader banks the badge and returns it; repeats return
+// null so the celebration only fires once per badge.
+export function earnBadge(bossId: number): GymBadge | null {
+  const b = badgeOf(bossId);
+  if (!b || gymBadges().has(bossId)) return null;
+  memBadges.add(bossId);
+  store('pk_badges', [...gymBadges()]);
+  return b;
 }

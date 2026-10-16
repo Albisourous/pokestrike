@@ -8,7 +8,7 @@ import type { Rarity } from './perks';
 import { rollEvent } from './events';
 import type { EventChoice } from './events';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES } from './meta';
 import { drawBackdrop, drawWall, THEMES } from './bg';
 import type { Theme } from './bg';
 import { effectiveness, TYPE_COLOR } from './types';
@@ -411,6 +411,7 @@ export class Battle {
   private bossKilledAt: { x: number; y: number } | null = null; // coin fountain origin
   private trail: { x: number; y: number; t: number }[] = []; // speed smear — ghost positions of the flying ball
   private fx: Fx[] = []; // sparks, streaks and stars from every impact
+  private pops: { x: number; y: number; id: number; r: number; t: number; life: number }[] = []; // KO ghost-outs — the sprite flashes skyward
   private punch = 0; // camera zoom-kick — big hits lunge the screen
 
   constructor(
@@ -600,6 +601,8 @@ export class Battle {
       }
     }
     this.enemies = spawns.map((s) => this.makeEnemy(s, i));
+    // spawn dust — the pack pours in instead of blinking onto the court
+    for (const e of this.enemies) this.burst(e.x, e.y, '#8890b8', 5, 200, 0.7);
     // rival echo fights at the levels it earned — the ghost of a stacked
     // run is a real fight, not a victory lap
     if (this.inRival) {
@@ -1075,6 +1078,8 @@ export class Battle {
       f.y += f.vy * dt;
     }
     this.fx = this.fx.filter((f) => f.t > 0);
+    for (const p of this.pops) p.t -= dt;
+    this.pops = this.pops.filter((p) => p.t > 0);
     this.shake *= Math.exp(-6 * dt);
     this.punch *= Math.exp(-9 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
@@ -1851,7 +1856,25 @@ export class Battle {
         color: caught ? '#ffd84d' : '#9df0ff',
         big: true,
       });
-      if (e.boss && this.waveHadGym) this.award('badge'); // leader down, caught or not
+      if (e.boss && this.waveHadGym) {
+        this.award('badge'); // leader down, caught or not
+        // the badge case: each leader pays out its themed badge, once ever
+        const badge = earnBadge(e.def.id);
+        if (badge) {
+          this.texts.push({
+            x: e.x, y: e.y - e.r - 74,
+            text: `★ EARNED THE ${badge.name}! ★`,
+            t: 2.1, color: badge.color, big: true,
+          });
+          this.burst(e.x, e.y, badge.color, 26, 520, 1.4);
+          this.impact(e.x, e.y, badge.color, 2);
+          this.screenFlash(badge.color, 0.22);
+          this.hitStop = Math.max(this.hitStop, 0.35);
+          this.addPunch(0.12);
+          sfx('perfect');
+          if (gymBadges().size >= BADGES.length) this.award('league');
+        }
+      }
       if (caught) {
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
@@ -1882,6 +1905,9 @@ export class Battle {
         sfx('caught');
         cry(e.def.id, 0.45);
         buzz([30, 50, 30, 50, 60]);
+      } else {
+        // a faint flashes the sprite out — the ghost drifts up and gone
+        this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
       }
       // skull mark: the bounty pops on the KO — team heal + score
       if (e.skull) {
@@ -3411,6 +3437,7 @@ export class Battle {
       this.refreshTraits(); // a faint drops its type from the team bonus
       this.impact(p.x, p.y, '#ff6b6b', 1.5);
       this.burst(p.x, p.y, '#ffffff', 14, 420);
+      this.pops.push({ x: p.x, y: p.y, id: p.def.id, r: p.r, t: 0.55, life: 0.55 });
       this.addPunch(0.08);
       this.hitStop = Math.max(this.hitStop, 0.15);
       this.addShake(6);
@@ -5270,6 +5297,28 @@ export class Battle {
 
     // timing bar under the HUD — this is what you read to release on max
     this.drawMeter(ctx, frac, maxed, color);
+
+    // charge ring on the ball — same timing read at the spot eyes are on
+    const rr = u.r + 16, a0 = -Math.PI / 2;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#ffffff22';
+    ctx.beginPath();
+    ctx.arc(u.x, u.y, rr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffd84d66';
+    ctx.beginPath();
+    ctx.arc(u.x, u.y, rr, a0 + Math.PI * 2 * (zone.c - zone.hw), a0 + Math.PI * 2 * (zone.c + zone.hw));
+    ctx.stroke();
+    ctx.save();
+    if (maxed) {
+      ctx.shadowColor = '#ffd84d';
+      ctx.shadowBlur = 12;
+    }
+    ctx.strokeStyle = maxed ? '#ffd84d' : color;
+    ctx.beginPath();
+    ctx.arc(u.x, u.y, rr, a0, a0 + Math.PI * 2 * frac);
+    ctx.stroke();
+    ctx.restore();
 
     // launch arrow: unit -> opposite direction, length + glow from charge
     const ex = u.x + dir.x * (50 + frac * 160);

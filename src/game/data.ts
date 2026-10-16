@@ -102,7 +102,8 @@ export function draftOrder(rng: () => number): number[] {
   return order;
 }
 
-// Fodder first, the four gym bosses last — pools below slice on that.
+// Fodder first, the eight gym leaders last — pools below slice on that.
+// Every leader is themed to a badge (BADGES in meta.ts).
 // 'Ground-ish' mons (Diglett, Cubone, Rhyhorn, ...) ride the rock type —
 // PokeType has no ground.
 export const ENEMY_DB: SpeciesDef[] = [
@@ -202,6 +203,10 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 130, name: 'Gyarados', type: 'water', stats: st(95, 125, 79, 60, 100, 81) },
   { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80) },
   { id: 6, name: 'Charizard', type: 'fire', stats: st(78, 84, 78, 109, 85, 100) },
+  { id: 3, name: 'Venusaur', type: 'grass', stats: st(80, 82, 83, 100, 100, 80), healer: true },
+  { id: 94, name: 'Gengar', type: 'ghost', stats: st(60, 65, 60, 130, 75, 110), pierce: true },
+  { id: 125, name: 'Electabuzz', type: 'electric', stats: st(65, 83, 57, 95, 85, 105) },
+  { id: 112, name: 'Rhydon', type: 'rock', stats: st(105, 130, 120, 45, 45, 40), melee: true },
 ];
 
 // Capturable elites: evolved mons that only appear on later waves — the
@@ -407,8 +412,8 @@ export const ALL_SPECIES = [...ROSTER, ...ENEMY_DB, ...ELITES, ...EVOS, ...INVAD
 export const speciesById = (id: number): SpeciesDef | undefined =>
   ALL_SPECIES.find((d) => d.id === id);
 
-const ENEMY_POOL = ENEMY_DB.slice(0, -4);
-const BOSS_POOL = ENEMY_DB.slice(-4);
+const ENEMY_POOL = ENEMY_DB.slice(0, -8);
+export const BOSS_POOL = ENEMY_DB.slice(-8);
 
 // Competitive-style power tiers by BST — the climb's power curve.
 // 0 LC (<360) · 1 low (360-459) · 2 high (460-559) · 3 uber (560+).

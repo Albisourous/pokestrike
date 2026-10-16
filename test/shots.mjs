@@ -37,18 +37,20 @@ await shot('06-map');
 
 // walk to the first linked stop — same cell math drawRegion/pointerDown use
 const stepMap = async () => {
-  const node = await pg.evaluate(() => {
+  const kind = await pg.evaluate(() => {
     const b = window.__battle;
     if (b.phase !== 'map') return null;
     const region = b.region;
     const cur = region.nodes[b.mapNode];
-    const n = region.nodes[cur.links[0]];
-    return { x: 7 + n.tx * 58 + 29, y: 34 + (n.ty - b.mapCam) * 58 + 29, kind: n.kind };
+    const li = cur.links[0];
+    const n = region.nodes[li];
+    const cell = 32, ox = (540 - 16 * cell) / 2, oy = 128; // MAP_W = 16
+    b.pointerDown({ x: ox + n.tx * cell + cell / 2, y: oy + (n.ty - b.mapCam) * cell + cell / 2 });
+    return n.kind;
   });
-  if (!node) return null;
-  await pg.mouse.click(node.x, node.y);
-  await sleep(1600); // lead mon walks the route
-  return node.kind;
+  if (!kind) return null;
+  await sleep(1800); // lead mon walks the route
+  return kind;
 };
 
 const kind = await stepMap();
