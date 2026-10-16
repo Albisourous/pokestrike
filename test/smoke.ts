@@ -35,6 +35,31 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(hpB > hpA, `ascension scales enemy hp (${hpA} -> ${hpB})`);
 }
 
+// --- ascension modifiers: named tiers on top of the bulk ------------------
+{
+  const base = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(1));
+  (base as any).spawnWave(0);
+  const t0 = (base as any).enemies.find((e: any) => !e.def.melee)?.timer;
+  const hot = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(1));
+  hot.asc = 2;
+  (hot as any).spawnWave(0);
+  const t1 = (hot as any).enemies.find((e: any) => !e.def.melee)?.timer;
+  ok(t1 !== undefined && t0 !== undefined && t1 < t0, `ASC 2 foes wind up faster (${t0} -> ${t1})`);
+
+  const rest = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(1));
+  rest.asc = 4;
+  const p = (rest as any).players[0];
+  p.hp = 10;
+  (rest as any).arriveAtNode({ kind: 'rest' });
+  ok(p.hp === Math.round(p.maxHp * 0.75), `ASC 4 rests heal to 75% (${p.hp}/${p.maxHp})`);
+
+  const gym = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  gym.asc = 6;
+  (gym as any).spawnWave(2);
+  const boss = (gym as any).enemies.find((e: any) => e.boss);
+  ok(boss?.enraged === true, 'ASC 6 gym leaders arrive enraged');
+}
+
 // --- KOs level the shooter ----------------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));

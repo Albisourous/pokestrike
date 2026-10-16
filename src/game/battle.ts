@@ -502,6 +502,11 @@ export class Battle {
     this.traits = teamTraits(this.players);
   }
 
+  // ASC 2+: foes don't wait politely — their attack cycle shortens
+  private ascTimerMult() {
+    return this.asc >= 2 ? 0.85 : 1;
+  }
+
   private spawnWave(i: number, node?: MapNode) {
     this.waveIndex = i;
     // trainer stops field a mono-type squad — the node's ttype picks it;
@@ -760,7 +765,7 @@ export class Battle {
       r,
       hp: ehp,
       maxHp: ehp,
-      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult,
+      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult(),
       drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
       wx: 0,
       wy: 0,
@@ -768,6 +773,8 @@ export class Battle {
       wMul: 1,
       lunging: 0,
       boss: !!s.boss,
+      // ASC 6+: gym leaders walk in furious — fast attack cycle from bell one
+      enraged: !!s.boss && this.asc >= 6,
       // shinies: wild fodder rolls gold; your rival echo keeps the palette
       // it died with — including a shiny if you lost one. Trainer mons are
       // owned already: never shiny, never catchable.
@@ -2988,18 +2995,20 @@ export class Battle {
       return;
     }
     if (n.kind === 'rest') {
-      // a real Poké Center: living mons to full, fainted ones revived
+      // a real Poké Center: living mons healed, fainted ones revived —
+      // ASC 4+ centers run on fumes (75% heal)
+      const healTo = this.asc >= 4 ? 0.75 : 1;
       let revived = 0;
       for (const p of this.players) {
         if (p.dead) {
           p.dead = false;
           revived++;
         }
-        p.hp = p.maxHp;
+        p.hp = Math.round(p.maxHp * healTo);
       }
-      this.mapNote = revived
-        ? `POKÉ CENTER: TEAM FULLY HEALED, ${revived} REVIVED`
-        : 'POKÉ CENTER: TEAM FULLY HEALED';
+      this.mapNote = (revived
+        ? `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}, ${revived} REVIVED`
+        : `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}`);
       sfx('heal');
     } else if (n.kind === 'chest') {
       const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
@@ -3294,7 +3303,7 @@ export class Battle {
   private fireEnemy(e: Unit) {
     if (e.dead) return; // killed during the windup — the corpse stays down
     {
-      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * (e.enraged ? 0.66 : 1);
+      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1);
       if (e.boss) {
         this.bossAttack(e);
       } else if (e.supp === 'aegis') {
@@ -3963,12 +3972,17 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
-    // ascension tag — why the mobs feel bulkier today
+    // ascension tag — why the mobs feel bulkier today, and which
+    // named modifiers are stacked on
     if (this.asc > 0) {
+      const mods = [`ASC ${this.asc}`];
+      if (this.asc >= 2) mods.push('FOES WIND UP FAST');
+      if (this.asc >= 4) mods.push('RESTS WEAKENED');
+      if (this.asc >= 6) mods.push('BOSSES ENRAGED');
       ctx.font = font(9);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#f0b02f';
-      ctx.fillText(`ASC ${this.asc}`, a.x + 8, a.y + 16);
+      ctx.fillText(mods.join(' · '), a.x + 8, a.y + 16);
     }
 
     // tapped-foe scout card — floats while aiming, a pull dismisses it

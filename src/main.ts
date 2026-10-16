@@ -657,8 +657,15 @@ function update(dt: number) {
       } else {
         // a clear raises the heat — say so, that's the "again?" hook
         const nextAsc = Math.min(best().wins, 9);
-        if (nextAsc > battle.asc && nextAsc <= 9)
-          resultExtra = `ASCENSION ${nextAsc} UNLOCKED. The climb gets meaner`;
+        if (nextAsc > battle.asc && nextAsc <= 9) {
+          // name the new modifier when a threshold tier unlocks
+          const mod =
+            nextAsc === 2 ? ' foes wind up faster.' :
+            nextAsc === 4 ? ' Poké Centers heal less.' :
+            nextAsc === 6 ? ' gym leaders arrive enraged.' :
+            ' the climb gets meaner.';
+          resultExtra = `ASCENSION ${nextAsc} UNLOCKED —${mod}`;
+        }
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       shareText = [
