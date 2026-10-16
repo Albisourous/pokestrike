@@ -3118,12 +3118,16 @@ export class Battle {
       return;
     }
     this.pendingAttacks = [];
+    let warned = false;
     for (const e of this.enemies) {
       e.timer--;
       if (e.timer <= 0) {
         this.pendingAttacks.push(e);
+      } else if (e.timer === 1) {
+        warned = true; // it swings after this shot — one soft warning tick
       }
     }
+    if (warned) sfx('warn');
     if (this.pendingAttacks.length > 0) {
       this.phase = 'enemy';
       this.enemyPhaseT = ENEMY_TURN_DELAY;

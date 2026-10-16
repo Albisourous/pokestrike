@@ -117,7 +117,7 @@ function noise(dur: number, freq: number, vol: number, delay = 0, slide = 0) {
 export type Sfx =
   | 'launch' | 'perfect' | 'hit' | 'ko' | 'caught' | 'hurt'
   | 'zap' | 'boom' | 'splash' | 'heal' | 'ui' | 'wave' | 'lose' | 'ready'
-  | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick' | 'bounce';
+  | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick' | 'bounce' | 'warn';
 
 export function sfx(name: Sfx, pitch = 1) {
   switch (name) {
@@ -132,6 +132,10 @@ export function sfx(name: Sfx, pitch = 1) {
       break;
     case 'tick': // timing cue — the fill just crossed into the gold zone
       tone(1760, 1760, 0.035, 'square', 0.045);
+      break;
+    case 'warn': // a foe's countdown hit 1 — two low blips, it swings next
+      tone(340, 220, 0.1, 'triangle', 0.10);
+      tone(340, 220, 0.1, 'triangle', 0.10, 0.14);
       break;
     case 'bounce': // pinball thock — pitch follows impact speed
       tone(340 * pitch, 110 * pitch, 0.05, 'sine', 0.11);
