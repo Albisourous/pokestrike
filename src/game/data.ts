@@ -409,7 +409,27 @@ export const speciesById = (id: number): SpeciesDef | undefined =>
 
 const ENEMY_POOL = ENEMY_DB.slice(0, -4);
 const BOSS_POOL = ENEMY_DB.slice(-4);
-const FOES = [...ENEMY_POOL, ...ELITES];
+
+// Competitive-style power tiers by BST — the climb's power curve.
+// 0 LC (<360) · 1 low (360-459) · 2 high (460-559) · 3 uber (560+).
+// Draft picks are tier ≤1; wild pools unlock heavier bodies with depth
+// and the 560+ monsters (Metagross, Tyranitar, Slaking) lurk past depth 3.
+export const bst = (d: SpeciesDef) =>
+  d.stats.hp + d.stats.atk + d.stats.def + d.stats.spa + d.stats.spd + d.stats.spe;
+export const tierOf = (d: SpeciesDef) => (bst(d) >= 560 ? 3 : bst(d) >= 460 ? 2 : bst(d) >= 360 ? 1 : 0);
+// depth 0 (seeded stages 1-3) → tier ≤1; rolled depth 1-2 → ≤2; deeper → all
+const tierCap = (depth: number) => (depth <= 0 ? 1 : depth < 3 ? 2 : 3);
+const capped = (src: SpeciesDef[], depth: number) => {
+  const p = src.filter((d) => tierOf(d) <= tierCap(depth));
+  return p.length ? p : src;
+};
+const fodderPool = (theme: Theme | undefined, depth: number) =>
+  capped(theme ? ENEMY_THEME[theme] : ENEMY_POOL, depth);
+const elitePool = (depth: number) => capped(ELITES, depth);
+const eliteAt = (rng: () => number, depth: number) => {
+  const p = elitePool(depth);
+  return p[Math.floor(rng() * p.length)];
+};
 
 // Biome pools: waves draw fodder from their stage's theme so each stretch
 // feels like a place — grass/bug-ish in the grove, rock/poison/ghost in the
@@ -525,8 +545,9 @@ function gymPack(
   rng: () => number,
   slot: () => { nx: number; ny: number },
   fodder: SpeciesDef[],
+  depth: number,
 ): WaveSpawn[] {
-  const same = FOES.filter((d) => d.type === boss.type);
+  const same = [...ENEMY_POOL, ...elitePool(depth)].filter((d) => d.type === boss.type);
   return Array.from({ length: n }, () => {
     const pool = same.length && rng() < 0.7 ? same : fodder;
     return { def: pool[Math.floor(rng() * pool.length)], ...slot() };
@@ -544,16 +565,16 @@ export function makeStage(seed: number, name?: string): StageDef {
     const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
-  const fodder = ENEMY_THEME[theme];
+  const fodder = fodderPool(theme, 0); // the opening stretch is tier ≤1 only
   const add = () => ({ def: fodder[Math.floor(rng() * fodder.length)], ...slot() });
-  const elite = () => ({ def: ELITES[Math.floor(rng() * ELITES.length)], ...slot() });
+  const elite = () => ({ def: eliteAt(rng, 0), ...slot() });
   return {
     name: name ?? THEME_NAME[theme],
     theme,
     waves: [
       [add(), add(), add()],
       [add(), add(), add(), elite()],
-      [...gymPack(boss, 2, rng, slot, fodder), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
+      [...gymPack(boss, 2, rng, slot, fodder, 0), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
     ],
   };
 }
@@ -562,22 +583,22 @@ export function makeStage(seed: number, name?: string): StageDef {
 // a gym boss every 3rd.
 // `theme` picks the biome pool for fodder; omit it to fall back to the flat pool.
 export function rollWave(rng: () => number, depth: number, theme?: Theme): WaveSpawn[] {
-  const fodder = theme ? ENEMY_THEME[theme] : ENEMY_POOL;
+  const fodder = fodderPool(theme, depth);
   const slots = [...SLOTS];
   const slot = () => {
     const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
   const add = () => ({
-    // deeper waves mix in capturable elites (~40%)
-    def: depth > 0 && rng() < 0.4
-      ? ELITES[Math.floor(rng() * ELITES.length)]
+    // deeper waves mix in capturable elites — odds and tier cap both ramp
+    def: depth > 0 && rng() < 0.15 + depth * 0.05
+      ? eliteAt(rng, depth)
       : fodder[Math.floor(rng() * fodder.length)],
     ...slot(),
   });
   const boss = depth % 3 === 0 ? BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)] : null;
   const n = Math.min(3 + Math.floor(depth / 2), 6);
-  const wave: WaveSpawn[] = boss ? gymPack(boss, n, rng, slot, fodder) : Array.from({ length: n }, add);
+  const wave: WaveSpawn[] = boss ? gymPack(boss, n, rng, slot, fodder, depth) : Array.from({ length: n }, add);
   if (boss) wave.push({ def: boss, nx: 0.5, ny: 0.3, boss: true });
   return wave;
 }
@@ -603,7 +624,10 @@ export const TRAINER_TYPES = Object.keys(TRAINER_CLASS) as PokeType[];
 // A trainer fields a whole squad of one type — evo-lines welcome, the way
 // real NPC teams mix stages. The ace (highest BST) anchors center-top.
 export function trainerWave(rng: () => number, depth: number, type: PokeType): WaveSpawn[] {
-  const pool = [...ENEMY_POOL, ...ELITES, ...EVOS].filter((d) => d.type === type);
+  // same depth gate as wild waves — a stage-2 youngster can't field ubers
+  const pool = [...fodderPool(undefined, depth), ...elitePool(depth), ...capped(EVOS, depth)].filter(
+    (d) => d.type === type,
+  );
   const fodder = pool.length ? pool : ENEMY_POOL;
   const slots = [...SLOTS];
   const slot = () => {
@@ -622,8 +646,9 @@ export function trainerWave(rng: () => number, depth: number, type: PokeType): W
 // Depth tilts fodder→elite the same way rolled waves do; `elite` forces
 // the deep pool (alpha bosses deserve a monster).
 export function pickWild(rng: () => number, depth: number, elite = false): SpeciesDef {
-  const pool = elite || (depth > 0 && rng() < 0.4) ? ELITES : ENEMY_POOL;
-  return pool[Math.floor(rng() * pool.length)];
+  if (elite || (depth > 0 && rng() < 0.4)) return eliteAt(rng, depth);
+  const p = fodderPool(undefined, depth);
+  return p[Math.floor(rng() * p.length)];
 }
 
 // Rival-echo wave: the player's own team turns up on the enemy side — ace

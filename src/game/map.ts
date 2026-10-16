@@ -23,7 +23,7 @@ export interface MapNode {
   tx: number;
   ty: number;
   kind: NodeKind;
-  row: number; // climb depth 0..8 — row%3: 0 battle, 1 utility, 2 gym
+  row: number; // climb depth 0..8 = stages; -1 = the home start marker
   links: number[]; // indices into nodes[] — the stops you can pick next
   ttype?: PokeType; // trainer stops: the mono-type squad waiting there
 }
@@ -101,11 +101,11 @@ export function genRegion(seed: number): RegionMap {
   }
   const land = (x: number, y: number) => x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && tiles[y * MAP_W + x] === T_GRASS;
 
-  // Stops: triplet rows south→north. Every 3-row block reads
-  // battle → utility → gym: row 0 is the lone HOME start (its wave is
-  // stage 1's wild fight); r%3==0 rows are battle stops (wild/trainer);
-  // r%3==1 rows fork two distinct utility doors (chest/rest/?);
-  // r%3==2 is a lone gym.
+  // Stops: HOME (row -1, where the draft happened — no fight) then triplet
+  // rows south→north. Each triplet reads fight-fork → utility-fork → gym:
+  // r%3==0 rows fork wild/trainer, r%3==1 rows fork two distinct utility
+  // doors (chest/rest/?), r%3==2 converges on a lone gym. Every non-gym
+  // row is a real left/right choice — no lone middle rows.
   const shuffle = <T>(arr: T[]) => {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));
@@ -113,25 +113,20 @@ export function genRegion(seed: number): RegionMap {
     }
     return arr;
   };
-  const weighted = <T>(pairs: [T, number][]) => {
-    const total = pairs.reduce((a, p) => a + p[1], 0);
-    let r = rng() * total;
-    for (const [v, w] of pairs) { r -= w; if (r <= 0) return v; }
-    return pairs[0][0];
-  };
   const nodes: MapNode[] = [];
+  // HOME: the starter pick — nodes[0] so the climb starts standing on it,
+  // one row below stage 1's fork. It never hosts a wave. The island's
+  // coastline can put the bottom row in the sea, so clear a little lot.
+  nodes.push({ tx: Math.round(cx), ty: MAP_H - 2, kind: 'start', row: -1, links: [] });
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++)
+      if (!dx || !dy) tiles[(MAP_H - 2 + dy) * MAP_W + Math.round(cx) + dx] = T_GRASS;
   for (let r = 0; r < TOTAL_STAGES; r++) {
-    const ty = MAP_H - 4 - r * ROW_GAP;
+    const ty = MAP_H - 2 - (r + 1) * ROW_GAP;
     let kinds: NodeKind[];
-    if (r === 0) kinds = ['start'];
-    else if (r % 3 === 2) kinds = ['gym'];
+    if (r % 3 === 2) kinds = ['gym'];
     else if (r % 3 === 1) kinds = shuffle<NodeKind>(['chest', 'rest', 'event']).slice(0, 2);
-    else {
-      // a real fork: a catchable wild door vs a harder trainer door —
-      // ~1/3 of battle rows are a lone stop instead
-      const lone = weighted<NodeKind>([['wild', 3], ['trainer', 2]]);
-      kinds = rng() < 0.35 ? [lone] : shuffle<NodeKind>(['wild', 'trainer']);
-    }
+    else kinds = shuffle<NodeKind>(['wild', 'trainer']); // fork: catchable door vs harder door
     const xs = kinds.length === 1 ? [0.5] : [0.28, 0.72];
     kinds.forEach((kind, k) => {
       let tx = Math.round(xs[k] * (MAP_W - 1) + (rng() - 0.5) * 1.6);
@@ -187,6 +182,8 @@ export function genRegion(seed: number): RegionMap {
       }
     }
   }
+  // HOME feeds stage 1's whole fork — the first step is the only free one
+  nodes[0].links = nodes.filter((n) => n.row === 0).map(idxOf);
 
   // Manhattan L-routes — random corner order, porygion's connectCities
   const route = new Set<number>();

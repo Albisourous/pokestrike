@@ -1,12 +1,13 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf } from '../src/game/data';
 import { mulberry32 } from '../src/core/rng';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
 import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { rollEvent } from '../src/game/events';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS } from '../src/game/meta';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -87,6 +88,20 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).hurt(e, e.hp + 50, '#fff');
   ok(b.box.length === box0 + 1, 'shiny KO always catches');
   ok(b.shiniesCaught === 1, 'shiniesCaught counts');
+  // capture-time persistence: the dex + shiny ledger update the moment the
+  // ball lands, not at run end — a closed tab can't lose a catch
+  ok(dexIds().includes(e.def.id), 'catch writes the dex immediately');
+  ok(shinyIds().includes(e.def.id), 'shiny catch writes the shiny ledger');
+  ok(unlockedAch().has('shiny'), 'shiny catch unlocks the SHINING trophy');
+  ok(!unlockAch('shiny'), 'trophy unlock is idempotent');
+}
+
+// --- trophy shelf: list sanity + award dedupe -------------------------------
+{
+  ok(ACHIEVEMENTS.length >= 10, `${ACHIEVEMENTS.length} trophies defined`);
+  ok(new Set(ACHIEVEMENTS.map((a) => a.id)).size === ACHIEVEMENTS.length, 'trophy ids unique');
+  ok(unlockAch('test-noop') === true, 'fresh trophy unlocks');
+  ok(unlockAch('test-noop') === false, 'repeat unlock is a no-op');
 }
 
 // --- level variance: draft 5-14, wilds scale with depth, catches keep it --
@@ -197,6 +212,35 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(bad === 0, `40 seeded stages, ${bad} empty waves`);
 }
 
+// --- power tiers: weak draft, depth-gated wild pools ------------------------
+{
+  ok(ROSTER.every((r) => tierOf(r) <= 1), `draft pool is weak mons only (max BST tier ${Math.max(...ROSTER.map(tierOf))})`);
+  // seeded openers never field a heavy hitter
+  let heavy = 0;
+  for (let s = 1; s <= 30; s++) {
+    for (const w of makeStage(s).waves[0]) if (tierOf(w.def) >= 2) heavy++;
+  }
+  ok(heavy === 0, `stage-1 fodder stays tier ≤1 (${heavy} heavy)`);
+  // shallow rolled waves can't roll ubers; deep ones can (bosses excluded —
+  // gym aces are the marquee exception, not fodder)
+  let uber = 0;
+  for (let s = 1; s <= 40; s++) {
+    for (const w of rollWave(mulberry32(s), 1, 'grove')) if (!w.boss && tierOf(w.def) >= 3) uber++;
+  }
+  ok(uber === 0, `depth-1 waves field no ubers (${uber})`);
+  let deep = 0;
+  for (let s = 1; s <= 60; s++) {
+    for (const w of rollWave(mulberry32(s), 6, 'grove')) if (!w.boss && tierOf(w.def) >= 3) deep++;
+  }
+  ok(deep > 0, `deep waves roll 560+ elites (${deep})`);
+  // trainers obey the same gate — a stage-2 squad tops out at tier 2
+  let tmax = 0;
+  for (let s = 1; s <= 30; s++) {
+    for (const w of trainerWave(mulberry32(s), 0, 'fire')) tmax = Math.max(tmax, tierOf(w.def));
+  }
+  ok(tmax <= 2, `depth-0 trainer squads stay ≤ tier 2 (max ${tmax})`);
+}
+
 // --- full autoplayed climbs: naive aim, real physics, win or wipe ---------
 for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const rng = mulberry32(seed);
@@ -259,6 +303,14 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     ok(reachable.size === r.nodes.length, `seed ${s}: every stop reachable (${reachable.size}/${r.nodes.length})`);
     const gyms = [2, 5, 8].map((row) => r.nodes.filter((n) => n.row === row));
     ok(gyms.every((g) => g.length === 1 && g[0].kind === 'gym'), `seed ${s}: forced single gyms on rows 2/5/8`);
+    // triplet shape: HOME at row -1, then every non-gym row is a left/right fork
+    ok(r.nodes[0].kind === 'start' && r.nodes[0].row === -1, `seed ${s}: HOME anchors the climb`);
+    ok(
+      r.nodes.filter((n) => n.row === 0).every((n) => r.nodes[0].links.includes(r.nodes.indexOf(n))),
+      `seed ${s}: HOME links to stage 1's whole fork`,
+    );
+    const forks = [0, 1, 3, 4, 6, 7].every((row) => r.nodes.filter((n) => n.row === row).length === 2);
+    ok(forks, `seed ${s}: every choice row is a left/right fork`);
     ok(r.nodes.every((n) => n.kind !== 'trainer' || !!n.ttype), `seed ${s}: trainer stops carry a type`);
     ok(r.nodes.length >= 9 && r.nodes.length <= 24, `seed ${s}: ${r.nodes.length} stops`);
     // every linked pair must have a walkable carved route between them
@@ -569,6 +621,25 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   u13.vy = 0;
   for (let i = 0; i < 12; i++) (b13 as any).stepShot(1 / 60);
   ok(u13.vx < 500, `gravity aura drags the ball (vx ${Math.round(u13.vx)})`);
+
+  // victory loot: the fountain mixes coins with rare drops, and scooping
+  // pays score into the running tally
+  const b14 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
+  (b14 as any).spawnWave(0);
+  (b14 as any).enterLoot();
+  const kinds = new Set((b14 as any).lootCoins.map((c: any) => c.kind));
+  ok(kinds.has('coin') && kinds.has('gem') && kinds.has('heart') && kinds.has('candy'),
+    `loot fountain mixes all kinds (${[...kinds].join(',')})`);
+  ok((b14 as any).lootCoins.length >= 24, `fountain size scales (${(b14 as any).lootCoins.length} pieces)`);
+  // park a mon mid-fountain and let the sim scoop whatever drifts through —
+  // coins land at one origin first, so several can vacuum in a single tick
+  const mon = b14.players[0];
+  mon.x = arena.x + arena.w / 2;
+  mon.y = arena.y + arena.h / 2;
+  const s14 = b14.score;
+  for (let i = 0; i < 30; i++) (b14 as any).stepLoot(1 / 60);
+  ok(b14.score > s14 && (b14 as any).lootGot > 0, `scooping pays into the tally (score +${b14.score - s14})`);
+  ok((b14 as any).lootCoins.length < 30, `coins get collected (left: ${(b14 as any).lootCoins.length})`);
 }
 
 // --- gym boss relic + egg hatch ---------------------------------------------

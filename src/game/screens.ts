@@ -30,6 +30,7 @@ export interface RunResult {
   newDex: number; // fresh dex entries this run added
   mvpIdx: number; // highest-level mon — crowned on the team row
   shortOfBest: number; // pts shy of the record, when it was close
+  newAch: string[]; // trophy names this run just unlocked
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -1329,6 +1330,12 @@ export function drawResult(
     ctx.font = font(11);
     ctx.fillStyle = '#f8d030';
     ctx.fillText(extra, W / 2, res.newDex > 0 ? 400 : 395);
+  }
+  // fresh trophies get their own gold line under the score block
+  if (res.newAch.length) {
+    ctx.font = font(9);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`★ ${res.newAch.join(' · ')} ★`, W / 2, extra ? 414 : 408);
   }
 
   // run badges — rarity-colored chips, up to two rows

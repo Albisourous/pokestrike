@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ALL_SPECIES } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, ACHIEVEMENTS } from './game/meta';
 import {
   W,
   H,
@@ -39,6 +39,10 @@ import {
   DEX_BTN,
   drawDex,
   dexScrollMax,
+  ACH_BTN,
+  drawAch,
+  achScrollMax,
+  CATCHABLE,
   inRect,
   font,
 } from './game/screens';
@@ -82,6 +86,8 @@ let helpOpen = false;
 let helpScroll = 0;
 let dexOpen = false;
 let dexScroll = 0;
+let achOpen = false;
+let achScroll = 0;
 let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
@@ -122,6 +128,12 @@ function resize() {
 addEventListener('resize', resize);
 window.visualViewport?.addEventListener('resize', resize);
 resize();
+// ?dev also exposes the scene machine + coordinate transform for playtest probes
+if (new URLSearchParams(location.search).has('dev'))
+  (window as unknown as { __dbg: { scene: () => Scene; xy: (x: number, y: number) => { x: number; y: number } } }).__dbg = {
+    scene: () => scene,
+    xy: (x, y) => { const p = toLogical({ clientX: x, clientY: y } as PointerEvent); return { x: p.x, y: p.y }; },
+  };
 
 function toLogical(e: PointerEvent) {
   const r = canvas.getBoundingClientRect();
@@ -258,10 +270,12 @@ async function shareResult() {
 
 // --- input routing ---
 
-// title+draft share the title loop; result keeps whatever the battle queued
+// title+draft share the title loop; result keeps whatever the battle queued.
+// battle picks its own track every frame (map/gym/trainer/wild) — stepping in
+// here would flip-flop and restart the song on every drag
 function sceneMusic() {
-  if (scene === 'result') return;
-  music(scene === 'battle' ? 'battle' : 'title');
+  if (scene === 'result' || scene === 'battle') return;
+  music('title');
 }
 
 canvas.addEventListener('pointerdown', (e) => {
@@ -274,14 +288,20 @@ canvas.addEventListener('pointerdown', (e) => {
       helpDrag = { y0: p.y, s0: helpScroll, moved: false };
       return;
     }
-    if (dexOpen) {
-      dexDrag = { y0: p.y, s0: dexScroll, moved: false };
+    if (dexOpen || achOpen) {
+      dexDrag = { y0: p.y, s0: dexOpen ? dexScroll : achScroll, moved: false };
       return;
     }
     if (inRect(p.x, p.y, DEX_BTN)) {
       sfx('ui');
       dexOpen = true;
       dexScroll = 0;
+      return;
+    }
+    if (inRect(p.x, p.y, ACH_BTN)) {
+      sfx('ui');
+      achOpen = true;
+      achScroll = 0;
       return;
     }
     if (inRect(p.x, p.y, HELP_BTN)) {
@@ -424,7 +444,8 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (dexDrag) {
     if (Math.abs(p.y - dexDrag.y0) > 6) dexDrag.moved = true;
-    dexScroll = Math.min(Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0), dexScrollMax());
+    const s = Math.min(Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0), achOpen ? achScrollMax() : dexScrollMax());
+    if (achOpen) achScroll = s; else dexScroll = s;
     return;
   }
   if (boxDrag) {
@@ -449,7 +470,10 @@ canvas.addEventListener('pointerup', (e) => {
   if (dexDrag) {
     const { moved } = dexDrag;
     dexDrag = null;
-    if (!moved) dexOpen = false;
+    if (!moved) {
+      dexOpen = false;
+      achOpen = false;
+    }
     return;
   }
   if (boxDrag) {
@@ -473,6 +497,7 @@ canvas.addEventListener('pointerup', (e) => {
 });
 canvas.addEventListener('pointercancel', () => {
   helpDrag = null;
+  dexDrag = null;
   boxDrag = null;
   if (scene === 'battle') battle?.pointerUp();
 });
@@ -489,6 +514,11 @@ canvas.addEventListener(
     if (scene === 'title' && dexOpen) {
       e.preventDefault();
       dexScroll = Math.min(Math.max(dexScroll + e.deltaY, 0), dexScrollMax());
+      return;
+    }
+    if (scene === 'title' && achOpen) {
+      e.preventDefault();
+      achScroll = Math.min(Math.max(achScroll + e.deltaY, 0), achScrollMax());
       return;
     }
     if (scene !== 'battle' || battle?.phase !== 'reward') return;
@@ -546,12 +576,23 @@ function update(dt: number) {
         newDex: 0,
         mvpIdx: battle.players.indexOf(mvp),
         shortOfBest: !newBest && gap > 0 && gap <= 500 ? gap : 0,
+        newAch: [],
       };
+      // run-level trophies — battle awards its own (perfect, pinball, catches)
+      const trophy = (id: string) => {
+        if (unlockAch(id)) result!.newAch.push(ACHIEVEMENTS.find((a) => a.id === id)!.name);
+      };
+      if (won) trophy('first-clear');
+      if (won && battle.asc >= 1) trophy('ascended');
+      if (won && best().wins >= 3) trophy('triple');
+      if (battle.totalKos >= 40) trophy('rampage');
       share = buildShare(battle, won);
       // catches join the dex either way; a loss leaves the team behind as
       // the next run's rival "echo"
       recordCapture(battle.box.map((b) => b.id));
       result.newDex = dexIds().length - dexBefore;
+      if (dexIds().length >= 50) trophy('collector');
+      if (dexIds().length >= CATCHABLE) trophy('living');
       // run-end trophies: the battle toasts in-run awards itself
       if (won && best().wins >= 3) unlockAch('triple');
       const dexN = dexIds().length;
@@ -619,6 +660,7 @@ function render() {
       drawTitle(ctx);
       if (helpOpen) drawHelp(ctx, helpScroll);
       if (dexOpen) drawDex(ctx, dexScroll);
+      if (achOpen) drawAch(ctx, achScroll);
       break;
     case 'charm':
       drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM', 'one held item starts the climb', t, draft.picked.map(draftDef));
