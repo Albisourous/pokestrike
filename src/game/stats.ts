@@ -25,33 +25,33 @@ export const bumpCooldown = (t: PokeType) => BUMP_CD[t];
 // What the bump super actually does — surfaced on scout cards and the
 // help index. Keep synced with the bumpAlly switch in battle.ts.
 export const SUPER_DESC: Record<PokeType, string> = {
-  normal: 'dash-slams the nearest foe',
-  fighting: 'meteors rain on far foes',
-  rock: 'meteors rain on far foes',
-  flying: 'vortex piles foes together',
-  water: 'orbs hunt the nearest foes',
-  electric: 'lightning chains foe to foe',
-  grass: 'drains foes, heals the team',
-  poison: 'toxins bleed foes each shot',
-  fire: 'flame ring + homing fireballs',
-  ghost: 'hex hits every foe at once',
-  psychic: 'shockwave flings foes away',
+  normal: 'dashes to the nearest target and slams it',
+  fighting: 'jabs up close, then meteors rain on the farthest',
+  rock: 'jabs up close, then meteors rain on the farthest',
+  flying: 'a vortex drags every nearby enemy into a pile',
+  water: 'homing orbs corkscrew into the nearest enemies',
+  electric: 'lightning chains through up to 3 enemies',
+  grass: 'drains the pack to heal the team, spores chase too',
+  poison: 'gas cloud now, venom ticks at the end of each shot',
+  fire: 'flame ring, then fireballs hunt the farthest',
+  ghost: 'a hex strikes every enemy on the court at once',
+  psychic: 'shockwave flings enemies, psy-orbs chase stragglers',
 };
 
 // Signature supers that replace the type default — keep synced with the
 // signatureMove switch in battle.ts.
 export const MOVE_DESC: Record<string, string> = {
-  'HYPER BEAM': 'a fat beam pierces the farthest foe',
-  'SOLARBEAM': 'a fat beam pierces the farthest foe',
-  'HYDRO CANNON': 'a fat beam punches through the pack',
-  'ZAP CANNON': 'a thunderball hunts the farthest foe',
-  'PSYCHO BOOST': 'huge burst on the biggest foe',
-  'ERUPTION': 'staggered bursts rock the whole pack',
-  'EXPLOSION': 'hits every foe — costs 15% HP',
-  'BLAST BURN': 'a fire wave scorches all it sweeps',
-  'FRENZY PLANT': 'drain orbs hunt the farthest foes',
-  'OUTRAGE': 'three smashes on the nearest foe',
-  'SHEER COLD': 'flash-freeze bursts the nearest foe',
+  'HYPER BEAM': 'the fattest beam in the game, pierces to the far wall',
+  'SOLARBEAM': 'a green beam pierces through to the far wall',
+  'HYDRO CANNON': 'a water jet punches through the whole pack',
+  'ZAP CANNON': 'one huge thunderball hunts down the farthest enemy',
+  'PSYCHO BOOST': 'detonates the biggest target in a huge burst',
+  'ERUPTION': 'staggered bursts erupt under the whole pack',
+  'EXPLOSION': 'hits everything on the court — costs the caster 15% HP',
+  'BLAST BURN': 'a rolling fire wave scorches everything it sweeps',
+  'FRENZY PLANT': 'drain orbs swarm the four farthest enemies',
+  'OUTRAGE': 'three staggered smashes on the nearest enemy',
+  'SHEER COLD': 'a flash-freeze bursts around the nearest enemy',
 };
 
 // Move-aware super description: signature nukes override the type line.

@@ -41,7 +41,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, roundRect, button } from './screens';
+import { font, fontB, fitFont, roundRect, button, wrap2 } from './screens';
 
 export interface Rect {
   x: number;
@@ -4469,7 +4469,7 @@ export class Battle {
     const foe = e.side === 'enemy';
     const a = this.arena;
     const w = 176;
-    const h = foe ? 76 : 92; // teammates get a line for what the super does
+    const h = foe ? 76 : 100; // teammates get two lines for what the super does
     const cx = Math.min(Math.max(e.x - w / 2, a.x + 6), a.x + a.w - w - 6);
     const cy = Math.max(a.y + 8, e.y - e.r - h - 16);
     ctx.save();
@@ -4536,7 +4536,8 @@ export class Battle {
         cy + 70,
       );
       ctx.fillStyle = '#6a7498';
-      ctx.fillText(superDesc(e.def.id, e.def.type), cx + 50, cy + 82);
+      wrap2(ctx, superDesc(e.def.id, e.def.type), w - 60).forEach((l, li) =>
+        ctx.fillText(l, cx + 50, cy + 80 + li * 9));
     }
     ctx.restore();
   }

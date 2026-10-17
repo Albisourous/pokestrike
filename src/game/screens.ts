@@ -253,7 +253,7 @@ export function fitFont(ctx: CanvasRenderingContext2D, label: string, px: number
 
 // greedy word-wrap into at most two lines at the current font — descs are
 // short enough that a third line never earns its keep
-function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+export function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
   if (ctx.measureText(text).width <= maxW) return [text];
   const words = text.split(' ');
   let first = '';
@@ -1207,11 +1207,11 @@ export function drawDraft(
     // the bump super this mon fires — a draft decision you can taste
     ctx.font = fontB(11);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 238);
+    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 234);
     ctx.font = fontB(9);
     ctx.fillStyle = '#a8b0d0';
     const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 16);
-    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 253 + li * 11));
+    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 248 + li * 11));
   });
 
   // one board reshuffle per draft — dimmed once spent
@@ -1264,7 +1264,7 @@ export function drawDraft(
   ctx.fillText('tip: fly through an ally mid-shot — charged allies fire their super', W / 2, 810);
   ctx.font = fontB(7);
   ctx.fillStyle = '#6a7498';
-  ctx.fillText('PIERCE flies through foes · COPY repeats the bumper\'s super · speed sets launch, power tightens the gold window', W / 2, 826);
+  ctx.fillText('PIERCE flies through enemies · COPY repeats the bumper\'s super · speed sets launch, power tightens the gold window', W / 2, 826);
 }
 
 export interface ShareGrid {
@@ -1570,7 +1570,8 @@ export function drawReward(
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(opt.id, opt.type)}`, r.x + r.w / 2, r.y + 156);
       ctx.fillStyle = '#8890b8';
-      ctx.fillText(superDesc(opt.id, opt.type), r.x + r.w / 2, r.y + 169);
+      wrap2(ctx, superDesc(opt.id, opt.type), r.w - 14).forEach((l, li) =>
+        ctx.fillText(l, r.x + r.w / 2, r.y + 167 + li * 9));
     });
   }
 }
