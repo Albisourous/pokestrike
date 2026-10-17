@@ -52,9 +52,9 @@ export const DRAFT_STOPS = [0.7, 1.0, 1.3];
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
-export const FREE_BTN = { x: W / 2 - 140, y: 740, w: 280, h: 64 };
+export const FREE_BTN = { x: W / 2 - 150, y: 704, w: 300, h: 68 };
 // everyone's island for the day — one seed, shared climb
-export const DAILY_BTN = { x: W / 2 - 90, y: FREE_BTN.y + FREE_BTN.h + 12, w: 180, h: 44 };
+export const DAILY_BTN = { x: 24, y: FREE_BTN.y + FREE_BTN.h + 14, w: 150, h: 48 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -303,22 +303,28 @@ export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXE
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
 export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
 
-// Mons standing the ring around the logo — all draft-pool faces (ROSTER),
-// so the title shows who you'll actually sling, not legendaries you'll never
-// be offered. All ids are in ALL_SPRITE_IDS.
-const RING_MONS: [number, number][] = [
-  [95, 82], // Onix anchors the top
-  [4, 58], [7, 62], [1, 60], [25, 60], [133, 52],
-  [66, 56], [39, 58], [92, 56], [129, 58], [183, 58], [403, 60],
+// The hero beat: one mon mid-flight along a dotted arc into a pack of foes —
+// the game's whole verb read in a glance. The shot springs off a ball pad.
+const HERO_SHOT = {
+  start: { x: 128, y: 482 },
+  pad: { x: 128, y: 512 },
+  cp: { x: 320, y: 200 },
+  tgt: { x: 418, y: 318 },
+  u: 0.8, // where the flying mon sits along the arc
+};
+const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
+  [129, 430, 336, 58],
+  [92, 484, 292, 50],
+  [66, 476, 382, 54],
 ];
 
-// Wild mons at the field edges, clear of the ring — [id, x, y]
+// Wild mons at the field edges, clear of the hero arc — [id, x, y]
 const WILD_MONS: [number, number, number][] = [
   [16, 484, 118],
-  [43, 52, 636],
-  [52, 488, 640],
-  [19, 72, 852],
-  [41, 476, 856],
+  [43, 52, 630],
+  [52, 488, 624],
+  [19, 72, 884],
+  [41, 476, 884],
 ];
 
 // A clean flat-grass tile of the gracidea tileset, blurred up and
@@ -379,17 +385,16 @@ function monShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: nu
   ctx.fill();
 }
 
-// Ring mons stand on the pitch ellipse; nearer ones (lower) are a touch
-// larger so the field reads with some depth.
-function drawRingMons(ctx: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number) {
-  RING_MONS.forEach(([id, size], i) => {
-    const a = -Math.PI / 2 + (i / RING_MONS.length) * Math.PI * 2;
-    const s = size * (1 + Math.sin(a) * 0.22);
-    const x = cx + Math.cos(a) * rx;
-    const y = cy + Math.sin(a) * ry;
-    monShadow(ctx, x, y, s);
-    drawMon(ctx, id, x, y - s * 0.05, s);
-  });
+// 4-point hit sparkle — the game's impact star
+function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.quadraticCurveTo(x, y, x, y + r);
+  ctx.quadraticCurveTo(x, y, x - r, y);
+  ctx.quadraticCurveTo(x, y, x, y - r);
+  ctx.fill();
 }
 
 // Big leaning wordmark: gold gradient fill, navy outline, hard drop shadow.
@@ -425,40 +430,95 @@ function drawWildMons(ctx: CanvasRenderingContext2D) {
   });
 }
 
-export function drawTitle(ctx: CanvasRenderingContext2D) {
+export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   drawField(ctx);
   drawWildMons(ctx);
 
-  const cx = W / 2;
-  const cy = 396;
-
-  // stadium pitch marking — the mons stand on the circle line
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, 240, 266, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
-  drawRingMons(ctx, cx, cy, 240, 266);
-
-  const ball = itemSprite('poke-ball');
-  if (ball) {
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(ball, cx - 122, cy - 122, 244, 244);
-    ctx.restore();
-  }
-  // the real wordmark — vendored logo art, already arched, rides the ball top
-  const logo = itemSprite('ui/pokemon-logo');
-  if (logo) ctx.drawImage(logo, cx - 165, cy - 155, 330, 121);
-  logoBig(ctx, 'STRIKE', cx, cy + 148, 64, 320);
-
-  // stadium shadow at the edges keeps the eye on the crest
-  const vig = ctx.createRadialGradient(cx, cy, 280, cx, cy, 640);
+  // stadium shadow at the edges keeps the eye on logo + impact
+  const vig = ctx.createRadialGradient(W / 2, 400, 280, W / 2, 400, 640);
   vig.addColorStop(0, '#00000000');
   vig.addColorStop(1, 'rgba(6,14,6,0.2)');
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
+
+  // wordmark rides upper-left — the action owns the rest of the pitch
+  const logo = itemSprite('ui/pokemon-logo');
+  if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
+  logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
+
+  const { start, pad, cp, tgt } = HERO_SHOT;
+  const bez = (u: number) => ({
+    x: (1 - u) * (1 - u) * start.x + 2 * (1 - u) * u * cp.x + u * u * tgt.x,
+    y: (1 - u) * (1 - u) * start.y + 2 * (1 - u) * u * cp.y + u * u * tgt.y,
+  });
+
+  // flight arc — the dashes literally march toward the impact
+  ctx.save();
+  ctx.strokeStyle = 'rgba(232,236,248,0.8)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([9, 11]);
+  ctx.lineDashOffset = -t * 34;
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  ctx.quadraticCurveTo(cp.x, cp.y, tgt.x, tgt.y);
+  ctx.stroke();
+  ctx.restore();
+
+  // launch pad: the ball the mon sprang from + the pull-back drag arrow
+  const ball = itemSprite('poke-ball');
+  if (ball) {
+    monShadow(ctx, pad.x, pad.y + 4, 76);
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(ball, pad.x - 36, pad.y - 36, 72, 72);
+    ctx.restore();
+  }
+  const dl = Math.hypot(tgt.x - pad.x, tgt.y - pad.y);
+  const ux = (tgt.x - pad.x) / dl, uy = (tgt.y - pad.y) / dl;
+  const wag = Math.sin(t * 3) * 3; // the drag charges, it doesn't sit still
+  helpArrow(ctx, pad.x - ux * 46, pad.y - uy * 46 + wag, pad.x - ux * 110, pad.y - uy * 110 + wag, GOLD);
+
+  // the pack wobbles in place — targets waiting to get hit
+  TITLE_FOES.forEach(([id, x, y, s], i) => {
+    monShadow(ctx, x, y + s * 0.05, s);
+    drawMon(ctx, id, x, y + Math.sin(t * 2.2 + i * 1.7) * 2.5, s);
+  });
+
+  // the shot itself: a mon mid-arc, tilted along its flight vector — the
+  // fading ghosts behind it are what read "moving" instead of "floating"
+  const u = HERO_SHOT.u + Math.sin(t * 2) * 0.02;
+  const pos = bez(u);
+  const ahead = bez(u + 0.03), behind = bez(Math.max(0, u - 0.03));
+  const ang = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 0.7;
+  for (const [du, al] of [[0.05, 0.3], [0.1, 0.13]] as const) {
+    const g = bez(u - du);
+    ctx.save();
+    ctx.globalAlpha = al;
+    ctx.translate(g.x, g.y);
+    ctx.rotate(ang);
+    drawMon(ctx, 7, 0, 0, 80);
+    ctx.restore();
+  }
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.rotate(ang);
+  drawMon(ctx, 7, 0, 0, 80);
+  ctx.restore();
+
+  // impact: pulsing sparkles + the combo counters the hit feeds
+  const pulse = 1 + Math.sin(t * 5) * 0.18;
+  sparkle(ctx, tgt.x - 12, tgt.y - 18, 13 * pulse, '#ffd84d');
+  sparkle(ctx, tgt.x + 72, tgt.y - 32, 8 * pulse, '#9df0ff');
+  ctx.textAlign = 'center';
+  ctx.font = fontB(10);
+  ctx.strokeStyle = '#000';
+  ctx.lineWidth = 3;
+  ctx.strokeText('×4', tgt.x - 28, tgt.y - 44);
+  ctx.fillStyle = '#9df0ff';
+  ctx.fillText('×4', tgt.x - 28, tgt.y - 44);
+  ctx.strokeText('×6', tgt.x + 88, tgt.y - 54);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('×6', tgt.x + 88, tgt.y - 54);
 
   // the pitch in one line — a stranger gets the loop before they tap a thing
   ctx.font = font(11);
@@ -914,8 +974,8 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
 
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
 // --- haven't caught; the count is the only hint at what's out there -------
-export const DEX_BTN = { x: W / 2 - 140, y: DAILY_BTN.y + DAILY_BTN.h + 10, w: 135, h: 44 };
-export const ACH_BTN = { x: W / 2 + 5, y: DEX_BTN.y, w: 135, h: 44 };
+export const DEX_BTN = { x: W / 2 - 84, y: DAILY_BTN.y, w: 154, h: 48 };
+export const ACH_BTN = { x: W / 2 + 80, y: DEX_BTN.y, w: 166, h: 48 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
