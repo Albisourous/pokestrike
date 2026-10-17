@@ -13,14 +13,25 @@ export interface EventChoice {
   label: string;
   run: (b: Battle) => EventOutcome;
   cost?: number; // mart shelf price — the board dims what the wallet can't cover
+  icon?: string; // items/<name>.png drawn on the button — shelf goods get a face
+}
+
+// The pop-up card's art window: an npc face, a mon front, an item icon, a
+// cycling slot reel — or nothing, which draws the glinting ? emblem.
+export interface EventArt {
+  npc?: string;
+  mon?: number;
+  item?: string;
+  slot?: string[];
 }
 
 export interface EventOutcome {
   note: string; // flavor line — becomes the wave banner or a map toast
+  art?: EventArt; // the card's stage picture
   wave?: WaveSpawn[]; // scripted fight replacing the row's wave
   skip?: boolean; // resolved peacefully — no battle this stop
   // the stop ASKS instead of resolving — the map holds until the player picks
-  choices?: { prompt: string; options: EventChoice[] };
+  choices?: { prompt: string; options: EventChoice[]; art?: EventArt };
 }
 
 interface GameEvent {
@@ -46,32 +57,40 @@ const EVENTS: GameEvent[] = [
     w: 3,
     run: (b) => {
       for (const p of b.players) { p.dead = false; p.hp = p.maxHp; }
-      return { note: 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!', skip: true };
+      return { note: 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!', art: { item: 'mystic-water' }, skip: true };
     },
   },
   {
     w: 4,
     run: (b) => {
       healAll(b, 0.3);
-      return { note: 'YOU FOUND A BERRY BUSH — THE TEAM RECOVERED 30%!', skip: true };
+      return {
+        note: 'YOU FOUND A BERRY BUSH — THE TEAM RECOVERED 30%!',
+        art: { item: b.roll() < 0.5 ? 'oran-berry' : 'sitrus-berry' },
+        skip: true,
+      };
     },
   },
   {
     w: 3,
     run: (b) => {
       for (const p of b.players) b.gainLevels(p, 2);
-      return { note: 'YOU DUG UP A RARE CANDY STASH — EVERYONE +2 LEVELS!', skip: true };
+      return { note: 'YOU DUG UP A RARE CANDY STASH — EVERYONE +2 LEVELS!', art: { item: 'hp-up' }, skip: true };
     },
   },
   {
     w: 3,
     run: (b) => {
       const p = b.players.filter((x) => !x.dead).sort((a, z) => z.lvl - a.lvl)[0];
-      if (!p) return { note: 'THE TUTOR FOUND NOONE TO TEACH.', skip: true };
+      if (!p) return { note: 'THE TUTOR FOUND NO ONE TO TEACH.', skip: true };
       p.cdMod += 1; // a real lesson: the super recharges one shot sooner, forever
       p.cdMax = Math.max(1, p.cdMax - 1);
       p.cd = Math.min(p.cd, p.cdMax);
-      return { note: `A WANDERING TUTOR DRILLED ${p.def.name.toUpperCase()} — SUPER -1 SHOT!`, skip: true };
+      return {
+        note: `A WANDERING TUTOR DRILLED ${p.def.name.toUpperCase()} — SUPER -1 SHOT!`,
+        art: { npc: 'expert_f_down_0' },
+        skip: true,
+      };
     },
   },
   {
@@ -80,7 +99,11 @@ const EVENTS: GameEvent[] = [
       const def = pickWild(b.roll, b.depth);
       const lvl = Math.min(100, 5 + b.waveIndex * 10 + Math.floor(b.roll() * 5));
       boxCatch(b, def, lvl, 0.35);
-      return { note: `A WOUNDED ${def.name.toUpperCase()} TRUSTS YOU — IT JOINED YOUR BOX!`, skip: true };
+      return {
+        note: `A WOUNDED ${def.name.toUpperCase()} TRUSTS YOU — IT JOINED YOUR BOX!`,
+        art: { mon: def.id },
+        skip: true,
+      };
     },
   },
   {
@@ -89,7 +112,7 @@ const EVENTS: GameEvent[] = [
     run: (b) => {
       b.eggIn = 3;
       b.eggJustLaid = true;
-      return { note: 'YOU FOUND AN EGG! IT RUSTLES… (HATCHES IN 3 STOPS)', skip: true };
+      return { note: 'YOU FOUND AN EGG! IT RUSTLES… (HATCHES IN 3 STOPS)', art: { item: 'lucky-egg' }, skip: true };
     },
   },
   {
@@ -106,6 +129,7 @@ const EVENTS: GameEvent[] = [
       b.applyDef(p, { ...def, shiny: shiny || undefined }, p.lvl, p.hp / p.maxHp);
       return {
         note: `${name} LEFT… AND ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED!`,
+        art: { mon: def.id },
         skip: true,
       };
     },
@@ -146,11 +170,13 @@ const EVENTS: GameEvent[] = [
       note: '',
       choices: {
         prompt: 'A SHADY SALESMAN FLASHES A MYSTERY BOX — 300 SCORE?',
+        // the box is a slot reel — it never stops deciding what's inside
+        art: { slot: ['poke-ball', 'ultra-ball', 'master-ball', 'revive', 'hp-up', 'lucky-egg', 'leftovers', 'metronome'] },
         options: [
           {
             label: 'PAY 300 SCORE',
             run: (bb) => {
-              if (bb.score < 300) return { note: 'HE SCOWLED — “COME BACK RICHER.”', skip: true };
+              if (bb.score < 300) return { note: 'HE SCOWLED — "COME BACK RICHER."', skip: true };
               bb.score -= 300;
               const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
               if (!p) return { note: 'THE BOX WAS EMPTY. HE VANISHED.', skip: true };
@@ -170,7 +196,8 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A STRANGE SHRINE HUMS. OFFER YOUR TEAM’S STRENGTH?',
+        prompt: 'A STRANGE SHRINE HUMS. OFFER YOUR TEAM\'S STRENGTH?',
+        art: { npc: 'elder_f_down_0' },
         options: [
           {
             label: 'OFFER 15% HP — +2 LEVELS',
@@ -196,6 +223,7 @@ const EVENTS: GameEvent[] = [
       for (const p of b.players) if (!p.dead && p.cd > 0) { p.cd = 0; n++; }
       return {
         note: n ? `A MYSTIC TUNED THE TEAM — ${n} SUPER${n > 1 ? 'S' : ''} CHARGED!` : 'THE MYSTIC FOUND NOTHING TO TUNE.',
+        art: { item: 'metronome' },
         skip: true,
       };
     },
@@ -203,10 +231,12 @@ const EVENTS: GameEvent[] = [
   {
     // the well fight is opt-in — a small sure thing vs a risky payday
     w: 2,
-    run: () => ({
+    run: (b) => ({
       note: '',
       choices: {
         prompt: 'A WELL ECHOES WITH BATTLE CRIES — CLIMB DOWN?',
+        // the card flashes whichever ghost is waiting below
+        art: { mon: [92, 353, 355, 198, 302][Math.floor(b.roll() * 5)] },
         options: [
           {
             label: 'CLIMB DOWN — FIGHT',
@@ -238,6 +268,7 @@ const EVENTS: GameEvent[] = [
       note: '',
       choices: {
         prompt: 'A COLLECTOR WANTS YOUR WEAKEST MON — OFFERS A STRANGER +4 LEVELS.',
+        art: { npc: 'pokefan_down_0' },
         options: [
           {
             label: 'MAKE THE TRADE',
@@ -265,11 +296,12 @@ const EVENTS: GameEvent[] = [
 // final tally. One mart per map half is guaranteed by genRegion. Stock is
 // one-of-each per visit — `sold` rides the re-prompt chain so a bought
 // item leaves the board.
-export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT’LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[] } {
+export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[]; art?: EventArt } {
   const reprompt = (bb: Battle, note: string): EventOutcome => ({ note, choices: martStock(bb, note, sold) });
-  const shelf = (key: string, cost: number, label: string, buy: (bb: Battle) => string): EventChoice => ({
+  const shelf = (key: string, cost: number, label: string, icon: string, buy: (bb: Battle) => string): EventChoice => ({
     label: `${label} — ${cost} SCORE`,
     cost,
+    icon,
     run: (bb) => {
       if (bb.score < cost) return reprompt(bb, 'NOT ENOUGH SCORE.');
       bb.score -= cost;
@@ -278,14 +310,15 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT’LL IT BE?',
     },
   });
   const stock: [string, EventChoice][] = [
-    ['potion', shelf('potion', 200, 'POTION — TEAM HEALS 40%', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!'))],
-    ['candy', shelf('candy', 400, 'RARE CANDY — TEAM +1 LV', (bb) => {
+    ['potion', shelf('potion', 200, 'POTION — TEAM HEALS 40%', 'potion', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!'))],
+    ['candy', shelf('candy', 400, 'RARE CANDY — TEAM +1 LV', 'hp-up', (bb) => {
       for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
       return 'EVERYONE GREW +1 LEVEL!';
     })],
     ['mystery', {
       label: 'MYSTERY ITEM — 300 SCORE',
       cost: 300,
+      icon: 'lucky-egg',
       run: (bb) => {
         // roll the goods before charging — a blind shelf shouldn't take
         // score when there's nothing in the bag
@@ -301,7 +334,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT’LL IT BE?',
     }],
   ];
   if (b.players.some((p) => p.dead))
-    stock.push(['revive', shelf('revive', 350, 'REVIVE — AT HALF HP', (bb) => {
+    stock.push(['revive', shelf('revive', 350, 'REVIVE — AT HALF HP', 'revive', (bb) => {
       const dead = bb.players.filter((p) => p.dead);
       const p = dead[Math.floor(bb.roll() * dead.length)];
       p.dead = false;
@@ -310,7 +343,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT’LL IT BE?',
     })]);
   const options = stock.filter(([key]) => !sold.has(key)).map(([, o]) => o);
   options.push({ label: 'LEAVE', run: () => ({ note: 'YOU HEADED BACK TO THE ROUTE.', skip: true }) });
-  return { prompt, options };
+  return { prompt, options, art: { npc: 'shopkeeper_m_down_0' } };
 }
 
 export function rollEvent(b: Battle): EventOutcome {

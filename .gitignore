@@ -4,3 +4,4 @@ dist
 .env
 .devin/mcp_config.local.json
 graphify-out/
+.playwright-cli/

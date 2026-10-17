@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "skills": {
+    "design-taste-frontend": {
+      "source": "leonxlnx/taste-skill",
+      "sourceType": "github",
+      "skillPath": "skills/taste-skill/SKILL.md",
+      "computedHash": "18f81679d2b0247ce9da298b03ed8e47ecd3c206f2951d70eefb1b65d3219345"
+    },
+    "dithered": {
+      "source": "bergside/awesome-design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/dithered/SKILL.md",
+      "computedHash": "4b0e7c51d97b2ac1505b6df7c26ac6390f7f9ec9b27b5fd0eff89aeec1ac9e85"
+    },
+    "humanizer": {
+      "source": "blader/humanizer",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "d85c4727f62296887c3206e32a99caeed7611af7c4701c1b9931897260e31a73"
+    },
+    "image-to-code": {
+      "source": "leonxlnx/taste-skill",
+      "sourceType": "github",
+      "skillPath": "skills/image-to-code-skill/SKILL.md",
+      "computedHash": "58517b03b2a01f4c9ba65861559d03df931400871bbc200978c975b24bb92c73"
+    },
+    "playwright-cli": {
+      "source": "microsoft/playwright-cli",
+      "sourceType": "github",
+      "skillPath": "skills/playwright-cli/SKILL.md",
+      "computedHash": "ffbd59a973d4e2c19c6ecc31254a14497069c362f1d1820b6a6cfbe62de34a73"
+    },
+    "retro": {
+      "source": "bergside/awesome-design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/retro/SKILL.md",
+      "computedHash": "882a9079cd9c0c93f570fb466be392154fba9e35495a02d8278844292bcc2ed6"
+    },
+    "sega": {
+      "source": "bergside/awesome-design-skills",
+      "sourceType": "github",
+      "skillPath": "skills/sega/SKILL.md",
+      "computedHash": "b9ada835b51cfe1ba92a63408a516df2ff8bd909eba0549111c50674c067c684"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
+    }
+  }
+}

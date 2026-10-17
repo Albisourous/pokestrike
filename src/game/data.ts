@@ -765,6 +765,10 @@ export const ALL_SPECIES = [...ROSTER, ...ENEMY_DB, ...ELITES, ...EVOS, ...INVAD
 export const speciesById = (id: number): SpeciesDef | undefined =>
   ALL_SPECIES.find((d) => d.id === id);
 
+// The draft's final pick is an ace: a veteran mid-stager that still has a
+// ceiling (it evolves). Three runts and one anchor beats four runts.
+export const ACE_POOL = EVOS.filter((d) => d.evolvesTo != null);
+
 // Canon levitators/hoverers — cross water zones like water/flying types.
 export const FLOATERS = new Set([
   81, 82, 462, // magnemite line

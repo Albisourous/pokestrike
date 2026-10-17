@@ -1,12 +1,12 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
-import { drawMon, drawShiny, itemSprite, drawNpc } from '../core/assets';
+import { drawMon, drawShiny, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
-import type { EventChoice } from './events';
+import type { EventChoice, EventArt } from './events';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES } from './meta';
 import { drawBackdrop, drawWall, THEMES, hash } from './bg';
@@ -41,7 +41,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, roundRect } from './screens';
+import { font, fontB, fitFont, roundRect, button } from './screens';
 
 export interface Rect {
   x: number;
@@ -470,8 +470,9 @@ export class Battle {
   private splashing = false; // psychic trait re-entry guard
   private mapCam = -1; // island-row the viewport starts at — lerps toward mapCamTarget
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
-  eventBox: string | null = null; // resolved ? event — modal FRLG text box, tap to close
-  private eventChoice: { prompt: string; options: EventChoice[]; node: MapNode } | null = null; // ? that asks — row waits on the pick
+  eventBox: { note: string; art?: EventArt } | null = null; // resolved ? event — modal card, tap to close
+  private eventChoice: { prompt: string; options: EventChoice[]; art?: EventArt; node: MapNode } | null = null; // ? that asks — row waits on the pick
+  private cardT = 0; // event-card pop timer — the card scales in when it opens
   private choiceHit: { x: number; y: number; w: number; h: number }[] = []; // last-drawn option rects
   private mapMsgT = 0;
   // victory loot — a gym boss bursts into PokéCoins; drag the lead mon to
@@ -1166,6 +1167,7 @@ export class Battle {
     if (hit) this.hitStop -= dt0;
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
+    this.cardT += dt;
     if (this.dragging) {
       this.dragT += dt;
       // a soft tick each time the fill crosses into the gold — the
@@ -3222,6 +3224,7 @@ export class Battle {
     if (out.choices) {
       // a pick can ask again — marts keep the board open until LEAVE
       this.eventChoice = { ...out.choices, node: c.node };
+      this.cardT = 0; // the board re-pops with the result
       return;
     }
     if (out.wave) {
@@ -3238,7 +3241,9 @@ export class Battle {
       this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
     }
     this.pendingNext = c.node.row + 1;
-    this.eventBox = out.note;
+    // the result card keeps the event's face when the pick brings none
+    this.eventBox = { note: out.note, art: out.art ?? c.art };
+    this.cardT = 0;
   }
 
   // Egg from the ? pool: rustles on every stop advance, then hatches a
@@ -3279,6 +3284,7 @@ export class Battle {
       if (out.choices) {
         // the ? asks — the row stays unresolved until pickEventChoice lands
         this.eventChoice = { ...out.choices, node: n };
+        this.cardT = 0;
         return;
       }
       if (out.wave) {
@@ -3286,7 +3292,8 @@ export class Battle {
         this.mapNote = out.note;
       } else {
         this.skipWave = out.skip === true;
-        this.eventBox = out.note;
+        this.eventBox = { note: out.note, art: out.art };
+        this.cardT = 0;
       }
       return;
     }
@@ -3310,6 +3317,7 @@ export class Battle {
       // Poké Mart: the ?-choice box doubles as a shop board — buys re-prompt
       // the shelf until LEAVE, score is the wallet
       this.eventChoice = { ...martStock(this), node: n };
+      this.cardT = 0;
     } else if (n.kind === 'chest') {
       const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
       if (p) {
@@ -4355,7 +4363,7 @@ export class Battle {
       if (this.asc >= 2) mods.push('FOES WIND UP FAST');
       if (this.asc >= 4) mods.push('RESTS WEAKENED');
       if (this.asc >= 6) mods.push('BOSSES ENRAGED');
-      ctx.font = font(9);
+      ctx.font = fontB(9);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#f0b02f';
       ctx.fillText(mods.join(' · '), a.x + 8, a.y + 16);
@@ -4370,7 +4378,7 @@ export class Battle {
       if (this.coach) this.drawCoach(ctx);
       else if (this.shots < 2) {
         ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
-        ctx.font = font(9);
+        ctx.font = fontB(9);
         ctx.textAlign = 'center';
         ctx.fillStyle = '#e8ecff';
         ctx.fillText(
@@ -4416,13 +4424,13 @@ export class Battle {
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
       // the sky calls itself out in the ribbon — weather tilts the matchup
       if (this.weather) {
-        ctx.font = font(11);
+        ctx.font = font(9);
         ctx.fillStyle = WEATHER_TINT[this.weather];
         ctx.fillText(WEATHER_LINE[this.weather], a.x + a.w / 2, cy - 12);
       }
       // boss weak points are the gym's whole trick — say it on the banner
       if (gym) {
-        ctx.font = font(11);
+        ctx.font = font(9);
         ctx.fillStyle = '#ffd84d';
         ctx.fillText('HIT THE GOLD SPOT FOR ×3 DAMAGE', a.x + a.w / 2, cy + 52);
         // the leader's face flanks its name — only when the gym label is
@@ -4483,7 +4491,7 @@ export class Battle {
     if (e.shiny) drawShiny(ctx, e.def.id, cx + 26, cy + 28, 36);
     else drawMon(ctx, e.def.id, cx + 26, cy + 28, 36);
     ctx.textAlign = 'left';
-    ctx.font = font(10);
+    ctx.font = font(9);
     ctx.fillStyle = '#f0e6c8';
     ctx.fillText(`${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}  Lv${e.lvl}`, cx + 50, cy + 16);
     // hp bar — the number players actually scout for
@@ -4491,7 +4499,7 @@ export class Battle {
     ctx.fillRect(cx + 50, cy + 24, w - 62, 7);
     ctx.fillStyle = e.hp / e.maxHp > 0.3 ? '#6fdc6f' : '#ff6b6b';
     ctx.fillRect(cx + 50, cy + 24, (w - 62) * Math.max(0, e.hp / e.maxHp), 7);
-    ctx.font = font(8);
+    ctx.font = fontB(8);
     ctx.fillStyle = '#8890b8';
     ctx.fillText(`${Math.ceil(e.hp)}/${e.maxHp}`, cx + 50, cy + 42);
     ctx.fillStyle = TYPE_COLOR[e.def.type];
@@ -4499,7 +4507,7 @@ export class Battle {
     ctx.fillText(e.def.type2 ? `${e.def.type}/${e.def.type2}`.toUpperCase() : e.def.type.toUpperCase(), cx + w - 10, cy + 16);
     // the readout — foes show their attack clock; teammates show their super
     ctx.textAlign = 'left';
-    ctx.font = font(8);
+    ctx.font = fontB(8);
     if (foe) {
       ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
       const tag = e.boss
@@ -4515,13 +4523,13 @@ export class Battle {
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
       ctx.fillText(tag, cx + 50, cy + 58);
       ctx.fillStyle = '#6a7498';
-      ctx.font = font(7);
-      ctx.fillText(e.def.melee ? 'melee — lunges into your team' : 'ranged — fires from range', cx + 50, cy + 70);
+      ctx.font = fontB(7);
+      ctx.fillText(e.def.melee ? 'melee — lunges into your team' : 'ranged — fires a projectile', cx + 50, cy + 70);
     } else {
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
       ctx.fillStyle = e.cd <= 0 ? '#6fdc6f' : '#8890b8';
-      ctx.font = font(7);
+      ctx.font = fontB(7);
       ctx.fillText(
         e.cd <= 0 ? `super ready — launch ${e.def.name} to fire it` : `super ready in ${e.cd} shot${e.cd === 1 ? '' : 's'}`,
         cx + 50,
@@ -4540,7 +4548,7 @@ export class Battle {
     const a = this.arena;
     const u = this.active;
     const line = (s: string, color = '#ffe89d') => {
-      ctx.font = font(10);
+      ctx.font = fontB(10);
       ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
       ctx.fillStyle = color;
       ctx.fillText(s, a.x + a.w / 2, a.y + a.h - 16);
@@ -4630,8 +4638,9 @@ export class Battle {
     ctx.fillStyle = '#0a0e1c';
     ctx.fillRect(0, 0, 540, 960);
     ctx.textAlign = 'center';
-    ctx.font = font(22);
     ctx.fillStyle = '#f8d030';
+    // long region names shrink instead of running under the corner chips
+    fitFont(ctx, this.stage.name.toUpperCase(), 22, 320);
     ctx.fillText(this.stage.name.toUpperCase(), 270, 64);
     ctx.font = font(12);
     ctx.fillStyle = '#8890b8';
@@ -4645,7 +4654,7 @@ export class Battle {
     preview.forEach((s, i) => {
       const x = 270 - preview.length * 17 + i * 34 + 17;
       try {
-        drawMon(ctx, s.def.id, x, 112, 30); // unspawned waves may not be loaded yet
+        drawMon(ctx, s.def.id, x, 104, 24); // unspawned waves may not be loaded yet
       } catch {
         return;
       }
@@ -4653,15 +4662,15 @@ export class Battle {
         ctx.strokeStyle = '#f0b02f';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(x, 112, 18, 0, Math.PI * 2);
+        ctx.arc(x, 104, 13, 0, Math.PI * 2);
         ctx.stroke();
       }
     });
     if (!preview.length && this.pendingNext > this.waveIndex) {
       // rolled rows deal their wave when the stop is picked — unknowns for now
-      ctx.font = font(16);
+      ctx.font = font(12);
       ctx.fillStyle = '#3a4370';
-      ctx.fillText('?  ?  ?', 270, 118);
+      ctx.fillText('?  ?  ?', 270, 110);
     }
 
     const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
@@ -4893,17 +4902,17 @@ export class Battle {
     vg.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, 540, 960);
-    ctx.font = font(12);
+    ctx.font = font(9);
     ctx.fillStyle = '#aab4d8';
     ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
-    ctx.font = font(9);
+    ctx.font = fontB(9);
     ctx.fillStyle = '#6a7498';
     ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + view * cell + 48);
     ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
     // resolved events and egg ticks surface as a toast over the island
     if (this.mapMsgT > 0 && this.mapMsg) {
       ctx.globalAlpha = Math.min(1, this.mapMsgT);
-      ctx.font = font(13);
+      fitFont(ctx, this.mapMsg, 13, 500);
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 4;
       ctx.strokeText(this.mapMsg, 270, oy - 20);
@@ -4950,88 +4959,127 @@ export class Battle {
         }
       });
     }
-    // a resolved ? event tells its story in a proper FRLG text box —
-    // modal: dims the map, waits for a tap
+    // ?-stop theatre: a resolved event or an open question pops a cabinet
+    // card center-screen — art window up top, the words beneath, chunky
+    // buttons or a blinking ▼
     if (this.eventBox) {
       ctx.fillStyle = 'rgba(4,6,16,0.55)';
       ctx.fillRect(0, 0, 540, 960);
-      const by = this.drawMapTextBox(ctx, this.eventBox);
-      // FRLG continue arrow — blink so it reads as waiting for the tap
-      if (Math.sin(this.time * 6) > -0.3) {
-        ctx.textAlign = 'right';
-        ctx.fillStyle = '#ffd84d';
-        ctx.fillText('▼', 20 + 500 - 18, by + this.textBoxH - 14);
-      }
-      ctx.textAlign = 'center';
+      this.drawEventCard(ctx, this.eventBox.art, this.eventBox.note, null);
     }
-    // a choice ? asks — prompt card up top, tappable option buttons under it
     if (this.eventChoice) {
       ctx.fillStyle = 'rgba(4,6,16,0.55)';
       ctx.fillRect(0, 0, 540, 960);
-      const by = this.drawMapTextBox(ctx, this.eventChoice.prompt);
-      const bw = 380, bh = 46, gap = 10;
-      const opts = this.eventChoice.options;
-      const oy = by - 18 - opts.length * bh - (opts.length - 1) * gap;
-      this.choiceHit = opts.map((_, i) => ({
-        x: (540 - bw) / 2,
-        y: oy + i * (bh + gap),
-        w: bw,
-        h: bh,
-      }));
-      ctx.font = font(11);
-      ctx.textAlign = 'center';
-      if (this.eventChoice.node.kind === 'mart') {
-        // the mart's wallet is run score — keep it over the shelf so a buy
-        // is always weighed against what's in hand
-        ctx.font = font(13);
-        ctx.fillStyle = '#ffd84d';
-        ctx.fillText(`WALLET: ${this.score} SCORE`, 270, oy - 12);
-        ctx.font = font(11);
-      }
-      this.choiceHit.forEach((r, i) => {
-        const afford = opts[i].cost === undefined || opts[i].cost <= this.score;
-        roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-        ctx.fillStyle = '#12162b';
-        ctx.fill();
-        ctx.strokeStyle = afford ? (i === 0 ? '#ffd84d' : '#c8a44d') : '#3a4260';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        ctx.fillStyle = afford ? '#f0e6c8' : '#5a6488';
-        ctx.fillText(opts[i].label, r.x + r.w / 2, r.y + 28);
-      });
+      this.drawEventCard(ctx, this.eventChoice.art, this.eventChoice.prompt, this.eventChoice.options);
     }
   }
 
-  private textBoxH = 0; // last prompt height — the ▼ arrow reads it
-  // Shared FRLG text box: word-wraps into the bottom card, returns its top y.
-  private drawMapTextBox(ctx: CanvasRenderingContext2D, text: string) {
-    const bx = 20, bw = 500;
-    ctx.font = font(13);
+  // The pop-up event card: hard-cornered, gold-framed, offset shadow — same
+  // cabinet language as the buttons. Scales in with a small overshoot.
+  private drawEventCard(
+    ctx: CanvasRenderingContext2D,
+    art: EventArt | undefined,
+    prompt: string,
+    options: EventChoice[] | null,
+  ) {
+    // wrap first — card height depends on the line count
+    ctx.font = fontB(13);
     const lines: string[] = [];
     let line = '';
-    for (const w of text.split(' ')) {
+    for (const w of prompt.split(' ')) {
       const t = line ? `${line} ${w}` : w;
-      if (line && ctx.measureText(t).width > bw - 56) { lines.push(line); line = w; }
+      if (line && ctx.measureText(t).width > 396) { lines.push(line); line = w; }
       else line = t;
     }
-    lines.push(line);
-    const bh = 48 + lines.length * 24;
-    const by = 960 - bh - 40;
-    this.textBoxH = bh;
-    roundRect(ctx, bx, by, bw, bh, 10);
-    ctx.fillStyle = '#12152bf4';
-    ctx.fill();
+    if (line) lines.push(line);
+
+    const CW = 460, PAD = 22, AH = 132;
+    const mart = this.eventChoice?.node.kind === 'mart';
+    const optH = options ? options.length * 56 + (mart ? 34 : 0) + 8 : 30;
+    const ch = PAD + AH + 16 + lines.length * 24 + (options ? 12 + optH : 0) + PAD;
+    const cx0 = (540 - CW) / 2, cy0 = (960 - ch) / 2 - 20;
+
+    const pop = Math.min(1, this.cardT / 0.24);
+    const ease = 1 + 2.2 * (pop - 1) ** 3 + 1.4 * (pop - 1) ** 2;
+    ctx.save();
+    ctx.globalAlpha = pop;
+    ctx.translate(270, cy0 + ch / 2);
+    ctx.scale(0.72 + 0.28 * ease, 0.72 + 0.28 * ease);
+    ctx.translate(-270, -(cy0 + ch / 2));
+
+    ctx.fillStyle = '#0a0d18';
+    ctx.fillRect(cx0 + 6, cy0 + 6, CW, ch);
+    ctx.fillStyle = '#12152b';
+    ctx.fillRect(cx0, cy0, CW, ch);
     ctx.strokeStyle = '#ffd84d';
     ctx.lineWidth = 3;
-    ctx.stroke();
-    roundRect(ctx, bx + 5, by + 5, bw - 10, bh - 10, 6);
+    ctx.strokeRect(cx0 + 1.5, cy0 + 1.5, CW - 3, ch - 3);
     ctx.strokeStyle = '#c8a44d';
     ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.textAlign = 'left';
+    ctx.strokeRect(cx0 + 7, cy0 + 7, CW - 14, ch - 14);
+
+    // art window — an inset dark stage, the event's face bobs in it
+    const ax = cx0 + PAD, ay = cy0 + PAD, aw = CW - PAD * 2;
+    ctx.fillStyle = '#0a0f22';
+    ctx.fillRect(ax, ay, aw, AH);
+    ctx.strokeStyle = '#3a4370';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(ax, ay, aw, AH);
+    const axc = ax + aw / 2;
+    const bob = Math.sin(this.time * 3) * 3;
+    ctx.imageSmoothingEnabled = false;
+    ctx.textAlign = 'center';
+    if (art?.npc) drawNpc(ctx, art.npc, axc, ay + AH - 10 + bob * 0.4, 108);
+    else if (art?.mon !== undefined) {
+      try { drawMon(ctx, art.mon, axc, ay + AH / 2 + 8 + bob, 92); } catch { /* sprite still loading */ }
+    } else if (art?.item || art?.slot) {
+      const pool = art.slot ?? [art.item!];
+      for (const n of pool) void loadItem(n);
+      const img = itemSprite(art.slot ? pool[Math.floor(this.time * 5) % pool.length] : pool[0]);
+      if (img) ctx.drawImage(img, axc - 34, ay + AH / 2 - 34 + bob * 0.6, 68, 68);
+      if (art.slot) {
+        ctx.fillStyle = '#ffd84d';
+        for (let i = 0; i < 3; i++) ctx.fillRect(axc - 18 + i * 14, ay + AH - 24, 8, 4);
+      }
+    } else {
+      // no art claimed — the glinting ? diamond the stop wears on the map
+      ctx.save();
+      ctx.translate(axc, ay + AH / 2 + bob * 0.4);
+      ctx.rotate(Math.PI / 4);
+      const d = 26 + Math.sin(this.time * 4) * 3;
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillRect(-d, -d, d * 2, d * 2);
+      ctx.restore();
+      ctx.font = font(26);
+      ctx.fillStyle = '#2a3560';
+      ctx.fillText('?', axc, ay + AH / 2 + 10 + bob * 0.4);
+    }
+
+    ctx.font = fontB(13);
     ctx.fillStyle = '#f0e6c8';
-    lines.forEach((l, i) => ctx.fillText(l, bx + 26, by + 36 + i * 24));
-    return by;
+    lines.forEach((l, i) => ctx.fillText(l, 270, ay + AH + 34 + i * 24));
+
+    if (!options) {
+      if (Math.sin(this.time * 6) > -0.3) {
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText('▼', cx0 + CW - 32, cy0 + ch - 18);
+      }
+    } else {
+      let oy = ay + AH + 16 + lines.length * 24 + 14;
+      if (mart) {
+        // the mart's wallet is run score — keep it over the shelf so a buy
+        // is always weighed against what's in hand
+        ctx.font = font(11);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText(`WALLET: ${this.score} SCORE`, 270, oy + 10);
+        oy += 34;
+      }
+      const bw = 380, bh = 46;
+      this.choiceHit = options.map((_, i) => ({ x: (540 - bw) / 2, y: oy + i * (bh + 10), w: bw, h: bh }));
+      options.forEach((o, i) =>
+        button(ctx, this.choiceHit[i], o.label, o.cost === undefined || o.cost <= this.score, o.icon));
+    }
+    ctx.restore();
   }
 
   // Court weather: a faint sky-colored wash plus directional motes — rain
@@ -5401,10 +5449,11 @@ export class Battle {
     const pct = Math.max(u.hp / u.maxHp, 0);
     ctx.fillStyle = '#000a';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw, 5);
-    // SPIKE B — team-colored bars: enemies flat red, allies green + ball chip
+    // enemies read hostile flat red; allies keep the health ramp — or flat
+    // green + a ball chip under the ?mark=b spike
     ctx.fillStyle =
-      MARK === 'b'
-        ? u.side === 'enemy' ? '#e05050' : '#6fdc6f'
+      u.side === 'enemy' ? '#e05050'
+        : MARK === 'b' ? '#6fdc6f'
         : pct > 0.5 ? '#6fdc6f' : pct > 0.25 ? '#ffd84d' : '#ff6b6b';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
     if (MARK === 'b' && u.side === 'player') {
@@ -5521,7 +5570,7 @@ export class Battle {
         // ready: the move's name sits overhead — this is the thing to hit
         const label = moveOf(u.def.id, u.def.type);
         const ly = u.y + u.r + 30;
-        ctx.font = font(8);
+        ctx.font = fontB(8);
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
@@ -5544,7 +5593,7 @@ export class Battle {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        ctx.font = font(10);
+        ctx.font = font(9);
         ctx.textAlign = 'center';
         ctx.lineWidth = 3;
         ctx.strokeText(u.def.name.toUpperCase(), u.x, ty - 17);

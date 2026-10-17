@@ -7,7 +7,7 @@ import { vec } from './core/vec';
 import { Battle } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
 import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, recordDaily, BADGES } from './game/meta';
 import {
@@ -219,12 +219,17 @@ function newRun(daily = false) {
 }
 
 function startDraft() {
-  draftPool = [
-    ...ROSTER,
-    ...dexIds()
-      .map(speciesById)
-      .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id)),
-  ];
+  // Catches feed the draft by tier: weak species join the general deal as
+  // new faces, but tier-2+ monsters only surface on the ace board — a caught
+  // Dragonite is a last-pick treat, not a round-one freebie.
+  const caught = dexIds()
+    .map(speciesById)
+    .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id));
+  draftPool = [...ROSTER, ...caught.filter((d) => tierOf(d) <= 1)];
+  const aceCandidates = [...ACE_POOL];
+  for (const d of caught) {
+    if (tierOf(d) >= 2 && !aceCandidates.some((a) => a.id === d.id)) aceCandidates.push(d);
+  }
   // TRIPLE CROWN (3 wins) pays a second board reshuffle — the draft gets
   // friendlier once you've proven the climb
   const rerolls = 1 + (unlockedAch().has('triple') ? 1 : 0);
@@ -232,6 +237,17 @@ function startDraft() {
   for (let i = ROSTER.length; i < draftPool.length; i++) {
     draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
   }
+  // ace round: the last pick always deals three veterans — three scrappy
+  // picks stay, but every team gets one anchor with an evo ceiling
+  const aceTypes = new Set<string>();
+  const aces: number[] = [];
+  while (aces.length < 3) {
+    const c = aceCandidates[Math.floor(runRng() * aceCandidates.length)];
+    if (aceTypes.has(c.type)) continue;
+    aceTypes.add(c.type);
+    aces.push(draftPool.push(c) - 1);
+  }
+  draft.order.splice((DRAFT_ROUNDS - 1) * 3, 3, ...aces);
   // ~1/50 of draft cards roll shiny — a gold card is the run's first
   // high-roll; the Shiny Charm milestone doubles it
   const shinyOdds = 0.02 * (shinyCharm() ? 2 : 1);
@@ -859,6 +875,7 @@ Promise.all([
   ...PERKS.map((p) => loadItem(p.item)),
   ...BADGES.map((b) => loadItem(`badges/${b.icon}`)),
   document.fonts.load('700 10px rc').catch(() => console.warn('rc font failed, using monospace')),
+  document.fonts.load('10px ps2p').catch(() => console.warn('ps2p font failed, using rc')),
 ])
   .then(() => {
     scene = 'title';

@@ -50,6 +50,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
   lives in `MOVE_NAME`, cooldown in `BUMP_CD` (all in `stats.ts`). Keep them
   in sync when changing a super.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
+- Two UI faces: `font()` = Press Start 2P pixel display (vendored `public/fonts/PressStart2P-Regular.ttf`), `fontB()` = Roboto Condensed for dense stat/small print — pixel type runs ~1.7x wider, so cramped readouts use `fontB` and long labels `fitFont()`.
 - New battle rooms are data: author a 9×11 char grid in `ROOM_LAYOUTS`
   (mirror-symmetric, anchors on floor, clear lanes — the loader validates
   dims and P→E/anchor reachability). First three entries stay gentle for
@@ -62,6 +63,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 
 - `skills/ponytail*` — lazy senior-dev mode (see ruleset below)
 - `skills/*` from obra/superpowers — brainstorming, TDD, debugging, etc.
+- `skills/design-taste-frontend`, `image-to-code`, `web-design-guidelines`, `playwright-cli` — installed via `npx skills add … -a devin`; design packs `retro`/`sega`/`dithered` from bergside/awesome-design-skills
 - `skills/reverse-engineer-anything` + `mcp_config.json` — REA MCP server
 - `hooks.v1.json` — SessionStart hook injecting the superpowers bootstrap
 
