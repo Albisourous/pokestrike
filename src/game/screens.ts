@@ -1,13 +1,13 @@
 import { itemSprite, loadItem, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted, sfx } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, bst, LEADER_NPC } from './data';
-import { RARITY_COLOR } from './perks';
+import { PERKS, RARITY_COLOR } from './perks';
 import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
-import { TYPE_COLOR, type PokeType } from './types';
-import { roleOf, moveOf, superDesc, launchMult, ROLE_MODS } from './stats';
+import { TYPE_COLOR, typeMult, type PokeType } from './types';
+import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
 import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED } from './battle';
-import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest, BADGES, gymBadges, badgeOf } from './meta';
+import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -37,7 +37,7 @@ export interface RunResult {
 // --- draft layout: 3 offer cards, team strip at the bottom ---
 
 const CARD_W = 162;
-const CARD_H = 264;
+const CARD_H = 276;
 const CARD_GAP = 9;
 const CARDS_X = (W - (3 * CARD_W + 2 * CARD_GAP)) / 2;
 const CARDS_Y = 300;
@@ -45,17 +45,15 @@ const CARDS_Y = 300;
 export function draftCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: CARDS_Y, w: CARD_W, h: CARD_H };
 }
-export const DRAFT_REROLL = { x: W / 2 - 85, y: CARDS_Y + CARD_H + 16, w: 170, h: 40 };
+export const DRAFT_REROLL = { x: W / 2 - 85, y: CARDS_Y + CARD_H + 12, w: 170, h: 40 };
 // slot-reel reveal: each offer card spins a strip of pool faces that brakes
-// onto the dealt mon — staggered left to right. Spin age counts seconds.
-export const DRAFT_STOPS = [0.7, 1.0, 1.3];
+// onto the deal — staggered left to right. Spin age counts seconds.
+export const REEL_STOPS = [0.7, 1.0, 1.3];
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
 export const FREE_BTN = { x: W / 2 - 150, y: 704, w: 300, h: 68 };
-// everyone's island for the day — one seed, shared climb
-export const DAILY_BTN = { x: 24, y: FREE_BTN.y + FREE_BTN.h + 14, w: 150, h: 48 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -306,56 +304,87 @@ export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXE
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
 export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
 
-// The hero beat teaches the whole loop on one ~3.6s cycle: pull back, sling
-// THROUGH the teammate — his super (chain lightning) fires on the bump —
-// then ricochet foe → wall → foe → floor → back to the pad. Straight legs
-// only: the shot banks, never curves.
-const HERO_SHOT = {
-  mon: 7, // squirtle rides the demo shot
-  pad: { x: 128, y: 508 },
-  hit1: { x: 440, y: 329 }, // through pikachu into gastly's lower face
-  w1: { x: 430, y: 294 }, // taps the ceiling…
-  hit2: { x: 430, y: 342 }, // …drops on machop
-  w2: { x: 430, y: 638 }, // banks off the floor…
-  home: { x: 128, y: 508 }, // …and ricochets home to the pad
+// The hero beat teaches the bump combo on one loop: pikachu pulls back,
+// slings through the squad — every pass fires that teammate's super — clips
+// a foe on the way out, then cruises home. Straight legs: the scripted shot
+// banks, never curves, and runs the same checks the live sandbox does.
+const ATTRACT = {
+  windup: 0.85,
+  rest: 0.9,
+  speed: 300,
+  legs: [
+    { x: 400, y: 560 }, // pad — pikachu's mark
+    { x: 118, y: 335 }, // through bulbasaur
+    { x: 150, y: 585 }, // through squirtle
+    { x: 200, y: 620 }, // through charmander
+    { x: 430, y: 395 }, // clips machop on the way out
+  ],
 };
-const TITLE_MATE = { id: 25, x: 272, y: 425, s: 56 }; // pikachu sits on the launch lane
-// cycle timing (s): windup → bump → gastly → ceiling → machop → floor → home
-const HERO_T = { windup: 0.85, bump: 1.2, hit1: 1.6, w1: 1.68, hit2: 1.78, w2: 2.4, home: 3.08, cycle: 3.6 };
+// leg start times, windup first; the last leg lands back on the pad
+const ATTRACT_T = (() => {
+  const t = [ATTRACT.windup];
+  for (let i = 1; i < ATTRACT.legs.length; i++) {
+    const p = ATTRACT.legs[i], q = ATTRACT.legs[i - 1];
+    t.push(t[i - 1] + Math.hypot(p.x - q.x, p.y - q.y) / ATTRACT.speed);
+  }
+  return t;
+})();
+const ATTRACT_CYCLE = ATTRACT_T[ATTRACT_T.length - 1] + ATTRACT.rest;
+const attractPos = (tc: number) => {
+  for (let i = 1; i < ATTRACT_T.length; i++) {
+    if (tc <= ATTRACT_T[i]) {
+      const u = Math.min(1, (tc - ATTRACT_T[i - 1]) / (ATTRACT_T[i] - ATTRACT_T[i - 1]));
+      const p = ATTRACT.legs[i - 1];
+      const q = i === ATTRACT.legs.length - 1 ? play.aim : ATTRACT.legs[i];
+      return { x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u };
+    }
+  }
+  return ATTRACT.legs[0];
+};
 const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
   [92, 470, 288, 50],
   [66, 430, 395, 54],
 ];
+// your squad fields like a real wave — pikachu leads off and the other
+// three's homes ARE the scripted legs, so the loop bumps all of them
+const TITLE_TEAM: [number, number, number][] = [ // id, home x, home y
+  [25, ATTRACT.legs[0].x, ATTRACT.legs[0].y], // pikachu starts on the pad
+  [1, 118, 335], // bulbasaur
+  [7, 150, 585], // squirtle
+  [4, 200, 620], // charmander
+];
 
 // --- playable title sandbox --------------------------------------------------
 // The pitch between the wordmark and the buttons is a live demo: the scripted
-// attract loop plays until a drag lands on the grass, then the pad mon is the
-// player's ball — pull-back sling, wall bounces, supers on contact. Launch,
-// meter and physics are the real battle rules (battle.ts constants + the
-// pointerUp charge formula), not a tuned-down toy version.
+// attract loop plays until a drag lands on the grass, then the squad is the
+// player's — pull-back sling, wall bounces, bump a teammate and their super
+// fires. Launch, meter, physics and turn rotation are the real battle rules
+// (battle.ts constants + the pointerUp charge formula), not a tuned-down toy.
 export const TITLE_FIELD = { x: 26, y: 268, w: W - 52, h: 396 };
 const BALL_R = 26;
 
-const heroDef = speciesById(HERO_SHOT.mon)!;
-const heroLaunch = launchMult(heroDef.stats) * ROLE_MODS[roleOf(heroDef.stats, heroDef.healer)].launch;
-
-// same formulas as Battle.charge / Battle.sweetSpot, fixed to the title mon
-const heroDiff = () => Math.min(Math.max((bst(heroDef) - 320) / 300, 0), 1);
-const heroCharge = (dragT: number) => {
-  const P = 0.85 - 0.3 * heroDiff();
+// same formulas as Battle.charge / Battle.sweetSpot, keyed to whoever's up
+const monDiff = (def: SpeciesDef) => Math.min(Math.max((bst(def) - 320) / 300, 0), 1);
+const monCharge = (def: SpeciesDef, dragT: number) => {
+  const P = 0.85 - 0.3 * monDiff(def);
   const ph = dragT % (2 * P);
   return ph < P ? ph / P : 2 - ph / P;
 };
-const heroZone = () => {
-  const n = Math.min(heroDef.stats.spe / 120, 1);
-  const d = heroDiff();
+const monZone = (def: SpeciesDef) => {
+  const n = Math.min(def.stats.spe / 120, 1);
+  const d = monDiff(def);
   const hw = Math.max(0.09 - 0.05 * n - 0.04 * d, 0.025);
   const c = Math.min(Math.max(0.68 + 0.27 * n, hw), 1 - hw);
   return { c, hw };
 };
+const monLaunch = (def: SpeciesDef) => launchMult(def.stats) * ROLE_MODS[roleOf(def.stats, def.healer)].launch;
 
 interface TitleFoe {
-  id: number; hx: number; hy: number; x: number; y: number; vx: number; vy: number; s: number;
+  id: number; ax: number; ay: number; wT: number;
+  x: number; y: number; vx: number; vy: number; s: number; timer: number;
+}
+interface TitleMon {
+  id: number; x: number; y: number; s: number; fired: boolean; pulse: number;
 }
 const play = {
   live: false, // flips once the player grabs the field — theirs from then on
@@ -364,18 +393,31 @@ const play = {
   dragT: 0,
   wasGold: false,
   launched: false, // once you've slung one the drag prompt has done its job
-  ball: { x: HERO_SHOT.pad.x, y: HERO_SHOT.pad.y, vx: 0, vy: 0, live: false, trail: [] as { x: number; y: number }[] },
-  mate: { x: TITLE_MATE.x, y: TITLE_MATE.y, s: TITLE_MATE.s, pulse: 0, fired: false },
-  bolts: [] as { x1: number; y1: number; x2: number; y2: number; t: number; delay: number; foe: TitleFoe }[],
-  foes: TITLE_FOES.map(([id, x, y, s]): TitleFoe => ({ id, hx: x, hy: y, x, y, vx: 0, vy: 0, s })),
-  orbs: [] as { x: number; y: number; vx: number; vy: number; t: number; tgt: TitleFoe }[],
+  turn: 0, // squad index riding the sling — a settled shot hands it on
+  t: 0, // attract clock — drives the scripted rider until live flips
+  ball: { x: TITLE_TEAM[0][1], y: TITLE_TEAM[0][2], vx: 0, vy: 0, live: false, trail: [] as { x: number; y: number }[] },
+  team: TITLE_TEAM.map(([id, x, y]): TitleMon => ({ id, x, y, s: 52, fired: false, pulse: 0 })),
+  bolts: [] as { x1: number; y1: number; x2: number; y2: number; t: number; delay: number; foe: TitleFoe; dmg: number }[],
+  foes: TITLE_FOES.map(([id, x, y, s], i): TitleFoe => ({ id, ax: x, ay: y, wT: Math.random() * 0.9, x, y, vx: 0, vy: 0, s, timer: 3 - i })),
+  aim: { x: 430, y: 395 }, // the scripted way-out leg clips the nearest foe
+  orbs: [] as { x: number; y: number; vx: number; vy: number; t: number; tgt: TitleFoe | TitleMon; c: string; dmg: number }[],
+  waves: [] as { x: number; y: number; r: number; maxR: number; t: number; life: number; dmg: (f: TitleFoe) => number; hits: Set<TitleFoe> }[],
   pops: [] as { x: number; y: number; t: number; label: string; color: string }[],
-  hits: 0,
+  hitSet: new Set<TitleFoe>(), // a scripted pass sits on its leg — one hit each
+  lastTc: 0, // wraps each attract cycle — the foe countdown ticks per shot
 };
+const activeMon = () => play.team[play.turn];
+const activeDef = () => speciesById(activeMon().id)!;
 
 export function titlePointerDown(p: { x: number; y: number }): boolean {
   if (!inRect(p.x, p.y, TITLE_FIELD)) return false;
   play.live = true;
+  // a scripted pass may be mid-flight — park the ball on whoever's up
+  const a = activeMon();
+  Object.assign(play.ball, { x: a.x, y: a.y, vx: 0, vy: 0, live: false });
+  play.ball.trail = [];
+  play.hitSet.clear();
+  for (const m of play.team) m.fired = false;
   play.dragStart = { x: p.x, y: p.y };
   play.dragNow = { x: p.x, y: p.y };
   play.dragT = 0;
@@ -391,54 +433,191 @@ export function titlePointerUp() {
   // same launch as Battle.pointerUp: pull aims, meter timing powers
   const pull = { x: play.dragStart.x - play.dragNow.x, y: play.dragStart.y - play.dragNow.y };
   const d = Math.hypot(pull.x, pull.y);
-  const frac = heroCharge(play.dragT);
-  const zone = heroZone();
+  const def = activeDef();
+  const frac = monCharge(def, play.dragT);
+  const zone = monZone(def);
   const gold = Math.abs(frac - zone.c) <= zone.hw;
   play.dragStart = play.dragNow = null;
   if (d < 12 || b.live) return; // a tap isn't a pull
-  const speed = BASE_SHOT_SPEED * POWER * heroLaunch * (0.4 + 0.6 * (gold ? 1 : frac));
+  const speed = BASE_SHOT_SPEED * POWER * monLaunch(def) * (0.4 + 0.6 * (gold ? 1 : frac));
   b.vx = (pull.x / d) * speed;
   b.vy = (pull.y / d) * speed;
   b.live = true;
   b.trail = [];
-  play.hits = 0;
+  play.hitSet.clear();
   play.launched = true;
-  play.mate.fired = false; // bump combo re-arms each shot, like the real cd
+  for (const f of play.foes) f.timer = f.timer <= 1 ? 3 : f.timer - 1;
+  for (const m of play.team) m.fired = false; // bump combo re-arms each shot, like the real cd
   sfx('launch');
 }
 export function titlePointerCancel() {
   play.dragStart = play.dragNow = null;
 }
 
+// the bump super, keyed to the bumped mon's type — a pocket version of
+// battle's bumpAlly cases: chain, homing orbs, flame front + fireballs, drain
+const fireSuper = (m: TitleMon) => {
+  const md = speciesById(m.id)!;
+  play.pops.push({ x: m.x, y: m.y - 46, t: 0.9, label: `${moveOf(m.id, md.type)}!`, color: TYPE_COLOR[md.type] });
+  const foeDef = (f: TitleFoe) => speciesById(f.id)!;
+  const dmg = (f: TitleFoe, pw = 1) =>
+    Math.round(specDamage(md.stats.spa, foeDef(f).stats.spd, typeMult(md.type, foeDef(f)), 0.7 * pw));
+  if (md.type === 'electric') {
+    // chain lightning hops the pack, enemy → enemy like bumpAlly's case
+    sfx('zap');
+    let from = { x: m.x, y: m.y };
+    const chained: TitleFoe[] = [];
+    for (let i = 0; i < play.foes.length; i++) {
+      const next = play.foes
+        .filter((f) => !chained.includes(f))
+        .sort((a, c) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(c.x - from.x, c.y - from.y))[0];
+      if (!next) break;
+      chained.push(next);
+      play.bolts.push({ x1: from.x, y1: from.y, x2: next.x, y2: next.y, t: 0.3, delay: i * 0.1, foe: next, dmg: dmg(next) });
+      from = next;
+    }
+  } else if (md.type === 'water') {
+    // homing orbs on the nearest 3
+    sfx('splash');
+    play.foes
+      .slice()
+      .sort((a, c) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(c.x - m.x, c.y - m.y))
+      .slice(0, 3)
+      .forEach((tgt, i) => {
+        const a = (i / 3) * Math.PI * 2;
+        play.orbs.push({ x: m.x, y: m.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, t: 1.8, tgt, c: '#6890f0', dmg: dmg(tgt) });
+      });
+  } else if (md.type === 'fire') {
+    // flame ring rolls out, fireballs hunt the farthest — the real fire
+    // super's one-two, not just a shove
+    sfx('sizzle');
+    play.waves.push({ x: m.x, y: m.y, r: 0, maxR: 220, t: 0.45, life: 0.45, dmg: (f) => dmg(f, 1.4), hits: new Set() });
+    play.foes
+      .slice()
+      .sort((a, c) => Math.hypot(c.x - m.x, c.y - m.y) - Math.hypot(a.x - m.x, a.y - m.y))
+      .slice(0, 3)
+      .forEach((tgt, i) => {
+        const a = (i / 3) * Math.PI * 2;
+        play.orbs.push({ x: m.x, y: m.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, t: 1.8, tgt, c: '#f08030', dmg: dmg(tgt, 0.9) });
+      });
+  } else {
+    // grass drain — wisps leech off every foe back into the bumped mon
+    sfx('heal');
+    for (const f of play.foes) {
+      play.pops.push({ x: f.x, y: f.y - 30, t: 0.7, label: String(dmg(f)), color: '#78c850' });
+      play.orbs.push({ x: f.x, y: f.y, vx: 0, vy: 0, t: 1.4, tgt: m, c: '#78c850', dmg: 0 });
+    }
+  }
+};
+
 export function updateTitle(dt: number) {
   // the meter runs while a pull is held — gold-entry tick, same cue as battle
   if (play.dragStart) {
     play.dragT += dt;
-    const z = heroZone();
-    const inGold = Math.abs(heroCharge(play.dragT) - z.c) <= z.hw;
+    const z = monZone(activeDef());
+    const inGold = Math.abs(monCharge(activeDef(), play.dragT) - z.c) <= z.hw;
     if (inGold && !play.wasGold) sfx('tick');
     play.wasGold = inGold;
   }
-  // knocked foes spring back to their marks, springy and damped
+  // foes roam the whole pitch like battle creeps — hop to a nearby spot,
+  // dart across now and then; the same spring eats knockback, so hits
+  // still shove and settle
   for (const f of play.foes) {
-    f.vx += (f.hx - f.x) * 26 * dt;
-    f.vy += (f.hy - f.y) * 26 * dt;
+    f.wT -= dt;
+    if (f.wT <= 0) {
+      f.wT = 0.5 + Math.random() * 0.9;
+      const m = f.s * 0.5 + 10;
+      const dart = Math.random() < 0.22;
+      const tx = dart ? TITLE_FIELD.x + m + Math.random() * (TITLE_FIELD.w - 2 * m) : f.x + (Math.random() - 0.5) * 160;
+      const ty = dart ? TITLE_FIELD.y + m + Math.random() * (TITLE_FIELD.h - 2 * m) : f.y + (Math.random() - 0.5) * 160;
+      f.ax = Math.min(Math.max(tx, TITLE_FIELD.x + m), TITLE_FIELD.x + TITLE_FIELD.w - m);
+      f.ay = Math.min(Math.max(ty, TITLE_FIELD.y + m), TITLE_FIELD.y + TITLE_FIELD.h - m);
+    }
+    f.vx += (f.ax - f.x) * 26 * dt;
+    f.vy += (f.ay - f.y) * 26 * dt;
     const damp = Math.exp(-7 * dt);
     f.vx *= damp;
     f.vy *= damp;
     f.x += f.vx * dt;
     f.y += f.vy * dt;
   }
+  // no piling up — foes shoulder off each other, the squad, the parked ball
+  for (let i = 0; i < play.foes.length; i++)
+    for (let j = i + 1; j < play.foes.length; j++) {
+      const a = play.foes[i], c = play.foes[j];
+      const dx = a.x - c.x, dy = a.y - c.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const min = a.s * 0.5 + c.s * 0.5;
+      if (d >= min) continue;
+      const push = (min - d) / 2;
+      a.x += (dx / d) * push; a.y += (dy / d) * push;
+      c.x -= (dx / d) * push; c.y -= (dy / d) * push;
+    }
+  for (const f of play.foes) {
+    for (const m of play.team) {
+      if (m === activeMon()) continue;
+      const dx = f.x - m.x, dy = f.y - m.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const min = f.s * 0.5 + m.s * 0.5;
+      if (d < min) { f.x += (dx / d) * (min - d); f.y += (dy / d) * (min - d); }
+    }
+    if (!play.ball.live) {
+      const dx = f.x - play.ball.x, dy = f.y - play.ball.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const min = f.s * 0.5 + 30;
+      if (d < min) { f.x += (dx / d) * (min - d); f.y += (dy / d) * (min - d); }
+    }
+  }
   const b = play.ball;
-  if (b.live) {
-    b.trail.push({ x: b.x, y: b.y });
-    if (b.trail.length > 7) b.trail.shift();
-    const sp = Math.hypot(b.vx, b.vy);
-    if (sp < STOP_SPEED) {
-      // settled — the ball holds its landing spot like the real game; the
-      // next pull launches it from right here, so the rally keeps going
+  let flying = false;
+  if (!play.live) {
+    // attract loop: pikachu rides scripted legs — the shared checks below
+    // fire the bumps and score the hits, same as a real pull
+    play.t += dt;
+    const tc = play.t % ATTRACT_CYCLE;
+    if (tc < play.lastTc) for (const f of play.foes) f.timer = f.timer <= 1 ? 3 : f.timer - 1;
+    play.lastTc = tc;
+    const pos = attractPos(Math.min(tc, ATTRACT_T[ATTRACT_T.length - 1]));
+    if (tc < ATTRACT.windup || tc >= ATTRACT_T[ATTRACT_T.length - 1]) {
       b.live = false;
       b.vx = b.vy = 0;
+      b.x = ATTRACT.legs[0].x;
+      b.y = ATTRACT.legs[0].y;
+      if (tc < ATTRACT.windup) {
+        play.hitSet.clear();
+        for (const m of play.team) m.fired = false;
+        // the way-out leg clips whichever foe has drifted nearest the lane
+        const nf = play.foes
+          .slice()
+          .sort((a, c) => Math.hypot(a.x - 430, a.y - 395) - Math.hypot(c.x - 430, c.y - 395))[0];
+        if (nf) { play.aim.x = nf.x; play.aim.y = nf.y; }
+      }
+    } else {
+      const ahead = attractPos(Math.min(tc + 0.03, ATTRACT_T[ATTRACT_T.length - 1]));
+      b.vx = (ahead.x - pos.x) / 0.03;
+      b.vy = (ahead.y - pos.y) / 0.03;
+      b.x = pos.x;
+      b.y = pos.y;
+      b.live = true;
+      flying = true;
+    }
+  } else if (b.live) {
+    flying = true;
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp < STOP_SPEED) {
+      // settled — the mon holds its landing spot like the real game and the
+      // next squad member steps up wherever it rests
+      b.live = false;
+      b.vx = b.vy = 0;
+      const me = activeMon();
+      me.x = b.x;
+      me.y = b.y;
+      play.turn = (play.turn + 1) % play.team.length;
+      const nx = activeMon();
+      b.x = nx.x;
+      b.y = nx.y;
+      const nd = activeDef();
+      play.pops.push({ x: nx.x, y: nx.y - 40, t: 0.8, label: `${nd.name} UP`, color: TYPE_COLOR[nd.type] });
     } else {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -452,57 +631,46 @@ export function updateTitle(dt: number) {
     if (b.x > F.x + F.w - BALL_R) { b.x = F.x + F.w - BALL_R; wall(b.vx); b.vx = -Math.abs(b.vx) * WALL_REST; }
     if (b.y < F.y + BALL_R) { b.y = F.y + BALL_R; wall(b.vy); b.vy = Math.abs(b.vy) * WALL_REST; }
     if (b.y > F.y + F.h - BALL_R) { b.y = F.y + F.h - BALL_R; wall(b.vy); b.vy = -Math.abs(b.vy) * WALL_REST; }
+  }
+  if (flying) {
+    b.trail.push({ x: b.x, y: b.y });
+    if (b.trail.length > 7) b.trail.shift();
+    const sp = Math.hypot(b.vx, b.vy);
+    const bDef = activeDef();
     for (const f of play.foes) {
+      if (play.hitSet.has(f)) continue;
       const fr2 = f.s * 0.5;
       const dx = b.x - f.x, dy = b.y - f.y;
       const d = Math.hypot(dx, dy);
       if (d >= BALL_R + fr2 || d === 0) continue;
       const nx = dx / d, ny = dy / d; // unit normal, foe → ball
-      b.x = f.x + nx * (BALL_R + fr2);
-      b.y = f.y + ny * (BALL_R + fr2);
-      const vn = b.vx * nx + b.vy * ny;
-      b.vx = (b.vx - 2 * vn * nx) * UNIT_REST;
-      b.vy = (b.vy - 2 * vn * ny) * UNIT_REST;
+      if (play.live) {
+        b.x = f.x + nx * (BALL_R + fr2);
+        b.y = f.y + ny * (BALL_R + fr2);
+        const vn = b.vx * nx + b.vy * ny;
+        b.vx = (b.vx - 2 * vn * nx) * UNIT_REST;
+        b.vy = (b.vy - 2 * vn * ny) * UNIT_REST;
+      } else {
+        play.hitSet.add(f);
+      }
       f.vx -= nx * sp * 0.5;
       f.vy -= ny * sp * 0.5;
-      play.hits++;
+      const fDef = speciesById(f.id)!;
+      const eff = typeMult(bDef.type, fDef);
       play.pops.push({
         x: f.x, y: f.y, t: 0.8,
-        label: `×${play.hits}`,
-        color: play.hits > 1 ? '#ffd84d' : '#9df0ff',
+        label: String(physDamage(bDef.stats.atk, fDef.stats.def, eff, 1.4)),
+        color: eff > 1 ? '#ffd84d' : '#e8ecf8',
       });
-      // the hit is when the super fires — homing water orbs on the nearest 3
-      play.pops.push({ x: b.x, y: b.y - 46, t: 0.8, label: `${moveOf(HERO_SHOT.mon, 'water')}!`, color: '#6890f0' });
-      play.foes
-        .slice()
-        .sort((a, c) => Math.hypot(a.x - b.x, a.y - b.y) - Math.hypot(c.x - b.x, c.y - b.y))
-        .slice(0, 3)
-        .forEach((tgt, i) => {
-          const a = (i / 3) * Math.PI * 2;
-          play.orbs.push({ x: b.x, y: b.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, t: 1.8, tgt });
-        });
-      sfx('splash');
-      sfx('hit', Math.min(2, 0.9 + play.hits * 0.15));
+      sfx('hit', 0.9);
     }
-    // bumping the teammate fires his super — chain lightning hops the pack,
-    // enemy → enemy like bumpAlly's electric case
-    const m = play.mate;
-    if (!m.fired && Math.hypot(b.x - m.x, b.y - m.y) < BALL_R + m.s * 0.5) {
+    // bumping a teammate fires their super — the same trigger as bumpAlly
+    for (const m of play.team) {
+      if (m === activeMon() || m.fired) continue;
+      if (Math.hypot(b.x - m.x, b.y - m.y) >= BALL_R + m.s * 0.5) continue;
       m.fired = true;
       m.pulse = 1;
-      play.pops.push({ x: m.x, y: m.y - 46, t: 0.9, label: `${moveOf(TITLE_MATE.id, 'electric')}!`, color: '#f8d030' });
-      sfx('zap');
-      let from = { x: m.x, y: m.y };
-      const chained: TitleFoe[] = [];
-      for (let i = 0; i < play.foes.length; i++) {
-        const next = play.foes
-          .filter((f) => !chained.includes(f))
-          .sort((a, c) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(c.x - from.x, c.y - from.y))[0];
-        if (!next) break;
-        chained.push(next);
-        play.bolts.push({ x1: from.x, y1: from.y, x2: next.x, y2: next.y, t: 0.3, delay: i * 0.1, foe: next });
-        from = next;
-      }
+      fireSuper(m);
     }
   }
   for (let i = play.orbs.length - 1; i >= 0; i--) {
@@ -517,12 +685,32 @@ export function updateTitle(dt: number) {
     o.y += o.vy * dt;
     if (d < o.tgt.s * 0.5 + 8 || o.t <= 0) {
       if (d < o.tgt.s * 0.5 + 8) {
-        o.tgt.vx += (dx / d) * 160;
-        o.tgt.vy += (dy / d) * 160;
-        play.pops.push({ x: o.tgt.x, y: o.tgt.y, t: 0.5, label: '', color: '#9df0ff' });
+        if ('vx' in o.tgt) { // a foe eats it — knock + the damage number
+          o.tgt.vx += (dx / d) * 160;
+          o.tgt.vy += (dy / d) * 160;
+          play.pops.push({ x: o.tgt.x, y: o.tgt.y, t: 0.7, label: String(o.dmg), color: o.c });
+        } else {
+          play.pops.push({ x: o.tgt.x, y: o.tgt.y, t: 0.5, label: '', color: o.c });
+        }
       }
       play.orbs.splice(i, 1);
     }
+  }
+  // a rolling flame front catches each foe once as it passes over
+  for (let i = play.waves.length - 1; i >= 0; i--) {
+    const w = play.waves[i];
+    w.t -= dt;
+    w.r = (1 - Math.max(0, w.t) / w.life) * w.maxR;
+    for (const f of play.foes) {
+      if (w.hits.has(f)) continue;
+      const d = Math.hypot(f.x - w.x, f.y - w.y);
+      if (d > w.r + f.s * 0.5) continue;
+      w.hits.add(f);
+      f.vx += ((f.x - w.x) / (d || 1)) * 170;
+      f.vy += ((f.y - w.y) / (d || 1)) * 170;
+      play.pops.push({ x: f.x, y: f.y - 26, t: 0.7, label: String(w.dmg(f)), color: '#f08030' });
+    }
+    if (w.t <= 0) play.waves.splice(i, 1);
   }
   // chain arcs land a beat apart — each one knocks its target on arrival
   for (let i = play.bolts.length - 1; i >= 0; i--) {
@@ -533,7 +721,7 @@ export function updateTitle(dt: number) {
         const d = Math.hypot(bl.foe.x - bl.x1, bl.foe.y - bl.y1) || 1;
         bl.foe.vx += ((bl.foe.x - bl.x1) / d) * 200;
         bl.foe.vy += ((bl.foe.y - bl.y1) / d) * 200;
-        play.pops.push({ x: bl.foe.x, y: bl.foe.y, t: 0.5, label: '', color: '#f8d030' });
+        play.pops.push({ x: bl.foe.x, y: bl.foe.y, t: 0.7, label: String(bl.dmg), color: '#f8d030' });
         sfx('zap', 1.15);
       }
     } else {
@@ -541,7 +729,7 @@ export function updateTitle(dt: number) {
       if (bl.t <= 0) play.bolts.splice(i, 1);
     }
   }
-  if (play.mate.pulse > 0) play.mate.pulse -= dt * 3;
+  for (const m of play.team) if (m.pulse > 0) m.pulse -= dt * 3;
   for (let i = play.pops.length - 1; i >= 0; i--) {
     play.pops[i].t -= dt;
     if (play.pops[i].t <= 0) play.pops.splice(i, 1);
@@ -676,6 +864,146 @@ function drawWildMons(ctx: CanvasRenderingContext2D) {
   });
 }
 
+// the friendly read — green hp bar + a row of charged pips, same chrome the
+// battle HUD gives your side
+const allyHud = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, ty: PokeType) => {
+  const bw = s * 0.75;
+  ctx.fillStyle = '#000a';
+  ctx.fillRect(x - bw / 2, y + s * 0.5 + 4, bw, 5);
+  ctx.fillStyle = '#6fdc6f';
+  ctx.fillRect(x - bw / 2, y + s * 0.5 + 4, bw, 5);
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = TYPE_COLOR[ty];
+    ctx.fillRect(x + (i - 1.5) * 7 - 2.5, y + s * 0.5 + 12, 5, 5);
+  }
+};
+
+// every actor on the pitch, shared by the attract loop and the live sandbox
+// — the scripted rider and a real pull feed the same play.ball
+function drawActors(ctx: CanvasRenderingContext2D, t: number) {
+  play.foes.forEach((f, i) => {
+    monShadow(ctx, f.x, f.y + f.s * 0.05, f.s);
+    const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
+    drawMon(ctx, f.id, f.x, f.y + wob, f.s);
+    // battle's hostile reads: flat-red hp bar + the attack countdown
+    ctx.fillStyle = '#000a';
+    ctx.fillRect(f.x - f.s * 0.38, f.y + f.s * 0.5 + 4, f.s * 0.75, 5);
+    ctx.fillStyle = '#e05050';
+    ctx.fillRect(f.x - f.s * 0.38, f.y + f.s * 0.5 + 4, f.s * 0.75, 5);
+    ctx.font = font(10);
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(`${Math.ceil(f.timer)}`, f.x + f.s * 0.5 - 2, f.y - f.s * 0.5 + 7);
+    ctx.fillStyle = f.timer <= 1 ? '#ff6b6b' : '#fff';
+    ctx.fillText(`${Math.ceil(f.timer)}`, f.x + f.s * 0.5 - 2, f.y - f.s * 0.5 + 7);
+  });
+
+  // the rest of the squad idles on the pitch — sling through one and
+  // their super fires
+  for (const m of play.team) {
+    if (m === activeMon()) continue; // the ball draws itself
+    monShadow(ctx, m.x, m.y + m.s * 0.05, m.s);
+    drawMon(ctx, m.id, m.x, m.y + Math.sin(t * 2.4 + m.id) * 2.5, m.s * (1 + Math.max(0, m.pulse) * 0.15));
+    if (m.pulse > 0) {
+      ctx.globalAlpha = m.pulse;
+      ctx.strokeStyle = TYPE_COLOR[speciesById(m.id)!.type];
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.s * 0.5 + (1 - m.pulse) * 30, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    allyHud(ctx, m.x, m.y, m.s, speciesById(m.id)!.type);
+  }
+
+  for (const bl of play.bolts) if (bl.delay <= 0) bolt(ctx, bl.x1, bl.y1, bl.x2, bl.y2);
+
+  // flame fronts — a hot lip rolling out over a faint scorch wash
+  for (const w of play.waves) {
+    const a = Math.max(0, w.t / w.life);
+    ctx.globalAlpha = a * 0.18;
+    ctx.fillStyle = '#f08030';
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = '#f08030';
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffe76a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  for (const o of play.orbs) {
+    ctx.fillStyle = o.c;
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffffcc';
+    ctx.beginPath();
+    ctx.arc(o.x, o.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const b = play.ball;
+  const bDef = activeDef();
+  if (b.live) {
+    b.trail.forEach((g, gi) => {
+      ctx.globalAlpha = ((gi + 1) / b.trail.length) * 0.22;
+      drawMon(ctx, bDef.id, g.x, g.y, 62);
+    });
+    ctx.globalAlpha = 1;
+    const ang = Math.atan2(b.vy, b.vx) * 0.7;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.rotate(ang);
+    drawMon(ctx, bDef.id, 0, 0, 78);
+    ctx.restore();
+  } else {
+    monShadow(ctx, b.x, b.y + 8, 76);
+    ctx.save();
+    ctx.translate(b.x, b.y + Math.sin(t * 2) * 1.5);
+    if (play.dragStart) ctx.rotate(-0.15); // coiling into the pull
+    drawMon(ctx, bDef.id, 0, 0, 76);
+    ctx.restore();
+    allyHud(ctx, b.x, b.y, 76, bDef.type);
+    // whose-turn marker — the gold chevron bobs over the mon on deck
+    if (!play.dragStart) {
+      const bob = Math.sin(t * 4) * 3;
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath();
+      ctx.moveTo(b.x - 8, b.y - 60 + bob);
+      ctx.lineTo(b.x + 8, b.y - 60 + bob);
+      ctx.lineTo(b.x, b.y - 50 + bob);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  const pulse = 1 + Math.sin(t * 5) * 0.15;
+  for (const pop of play.pops) {
+    ctx.globalAlpha = Math.min(1, pop.t / 0.3);
+    sparkle(ctx, pop.x, pop.y, 12 * pulse, pop.color);
+    if (pop.label) {
+      ctx.textAlign = 'center';
+      ctx.font = fontB(11);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(pop.label, pop.x, pop.y - 34);
+      ctx.fillStyle = pop.color;
+      ctx.fillText(pop.label, pop.x, pop.y - 34);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
 export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   drawField(ctx);
   drawWildMons(ctx);
@@ -692,8 +1020,6 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
   logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
-  const { pad, hit1, w1, hit2, w2, home } = HERO_SHOT;
-  const { windup, bump, hit1: T1, w1: Tw1, hit2: T2, w2: Tw2, home: Thome, cycle } = HERO_T;
   if (play.live) {
     // --- live sandbox: the pitch is the player's ---
     ctx.save();
@@ -702,60 +1028,19 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
     ctx.setLineDash([6, 10]);
     ctx.strokeRect(TITLE_FIELD.x, TITLE_FIELD.y, TITLE_FIELD.w, TITLE_FIELD.h);
     ctx.restore();
-
-    play.foes.forEach((f, i) => {
-      monShadow(ctx, f.x, f.y + f.s * 0.05, f.s);
-      const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
-      drawMon(ctx, f.id, f.x, f.y + wob, f.s);
-    });
-
-    // the teammate idles mid-lane — sling through him, his super fires
-    const m = play.mate;
-    monShadow(ctx, m.x, m.y + m.s * 0.05, m.s);
-    drawMon(ctx, TITLE_MATE.id, m.x, m.y + Math.sin(t * 2.4 + 1) * 2.5, m.s * (1 + Math.max(0, m.pulse) * 0.15));
-    if (m.pulse > 0) {
-      ctx.globalAlpha = m.pulse;
-      ctx.strokeStyle = '#f8d030';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.s * 0.5 + (1 - m.pulse) * 30, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-
-    for (const bl of play.bolts) if (bl.delay <= 0) bolt(ctx, bl.x1, bl.y1, bl.x2, bl.y2);
+    drawActors(ctx, t);
 
     const b = play.ball;
-    if (b.live) {
-      b.trail.forEach((g, gi) => {
-        ctx.globalAlpha = ((gi + 1) / b.trail.length) * 0.22;
-        drawMon(ctx, HERO_SHOT.mon, g.x, g.y, 62);
-      });
-      ctx.globalAlpha = 1;
-      const ang = Math.atan2(b.vy, b.vx) * 0.7;
-      ctx.save();
-      ctx.translate(b.x, b.y);
-      ctx.rotate(ang);
-      drawMon(ctx, HERO_SHOT.mon, 0, 0, 78);
-      ctx.restore();
-    } else {
-      monShadow(ctx, b.x, b.y + 8, 76);
-      ctx.save();
-      ctx.translate(b.x, b.y + Math.sin(t * 2) * 1.5);
-      if (play.dragStart) ctx.rotate(-0.15); // coiling into the pull
-      drawMon(ctx, HERO_SHOT.mon, 0, 0, 76);
-      ctx.restore();
-    }
-
+    const bDef = activeDef();
     // the real aim read: pull dir aims, the meter powers — same preview the
     // battle scene draws (path dots, charge ring, gold band, launch arrow)
     if (play.dragStart && play.dragNow && !b.live) {
       const pull = { x: play.dragStart.x - play.dragNow.x, y: play.dragStart.y - play.dragNow.y };
       const pullLen = Math.hypot(pull.x, pull.y);
-      const frac = heroCharge(play.dragT);
-      const zone = heroZone();
+      const frac = monCharge(bDef, play.dragT);
+      const zone = monZone(bDef);
       const maxed = Math.abs(frac - zone.c) <= zone.hw;
-      const color = TYPE_COLOR[heroDef.type];
+      const color = TYPE_COLOR[bDef.type];
       const F = TITLE_FIELD;
 
       // release-timing bar across the pitch top — Battle.drawMeter's layout
@@ -781,7 +1066,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
 
       if (pullLen >= 12) {
         const dir = { x: pull.x / pullLen, y: pull.y / pullLen };
-        const speed = BASE_SHOT_SPEED * POWER * heroLaunch * (0.4 + 0.6 * (maxed ? 1 : frac));
+        const speed = BASE_SHOT_SPEED * POWER * monLaunch(bDef) * (0.4 + 0.6 * (maxed ? 1 : frac));
 
         // predicted path — same sim as battle's aim: one wall bounce, stop
         // at first contact
@@ -875,176 +1160,14 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
       }
     }
 
-    for (const o of play.orbs) {
-      ctx.fillStyle = '#6890f0';
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#9df0ff';
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    const pulse = 1 + Math.sin(t * 5) * 0.15;
-    for (const pop of play.pops) {
-      ctx.globalAlpha = Math.min(1, pop.t / 0.3);
-      sparkle(ctx, pop.x, pop.y, 12 * pulse, pop.color);
-      if (pop.label) {
-        ctx.textAlign = 'center';
-        ctx.font = fontB(11);
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        ctx.strokeText(pop.label, pop.x, pop.y - 34);
-        ctx.fillStyle = pop.color;
-        ctx.fillText(pop.label, pop.x, pop.y - 34);
-      }
-    }
-    ctx.globalAlpha = 1;
   } else {
-  // --- scripted attract loop ---
-  const tc = t % cycle;
-  // straight legs with hard vertex bounces — the shot banks, never curves
-  const legs = [pad, hit1, w1, hit2, w2, home];
-  const times = [windup, T1, Tw1, T2, Tw2, Thome];
-  const posAt = (s: number) => {
-    for (let i = 1; i < times.length; i++) {
-      if (s <= times[i]) {
-        const u = Math.max(0, Math.min(1, (s - times[i - 1]) / (times[i] - times[i - 1])));
-        return {
-          x: legs[i - 1].x + (legs[i].x - legs[i - 1].x) * u,
-          y: legs[i - 1].y + (legs[i].y - legs[i - 1].y) * u,
-        };
-      }
-    }
-    return legs[legs.length - 1];
-  };
-
-  // flight lane — the dashes march along the ricochet path
-  ctx.save();
-  ctx.strokeStyle = 'rgba(232,236,248,0.8)';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([9, 11]);
-  ctx.lineDashOffset = -t * 34;
-  ctx.beginPath();
-  ctx.moveTo(pad.x, pad.y);
-  for (const p of legs.slice(1)) ctx.lineTo(p.x, p.y);
-  ctx.stroke();
-  ctx.restore();
-
-  // the pack wobbles; the chain zap flinches first, the ball knocks after
-  const boltFrom = [{ x: TITLE_FOES[1][1], y: TITLE_FOES[1][2] }, TITLE_MATE];
-  const knock = [
-    { x: 0.87, y: -0.5 }, // gastly — leg-1 travel dir
-    { x: 0, y: 1 }, // machop — dropped on from the ceiling
-  ];
-  TITLE_FOES.forEach(([id, x, y, s], i) => {
-    const boltHt = bump + (i === 0 ? 0.1 : 0); // machop eats the first arc; gastly gets the hop
-    const ballHt = i === 0 ? T1 : T2;
-    const fb = Math.max(0, 1 - Math.max(0, tc - boltHt) / 0.3);
-    const fh = Math.max(0, 1 - Math.max(0, tc - ballHt) / 0.3);
-    const zd = Math.hypot(x - boltFrom[i].x, y - boltFrom[i].y) || 1;
-    const zx = ((x - boltFrom[i].x) / zd) * 6 * fb;
-    const zy = ((y - boltFrom[i].y) / zd) * 6 * fb;
-    const f = fb + fh;
-    monShadow(ctx, x, y + s * 0.05, s);
-    drawMon(ctx, id, x + zx + knock[i].x * 10 * fh, y + zy + knock[i].y * 10 * fh + (f ? 0 : Math.sin(t * 2.2 + i * 1.7) * 2.5), s);
-  });
-
-  // the teammate waits on the lane — the shot passes through him and his
-  // super (chain lightning) hops machop → gastly, a beat apart
-  const mb = Math.max(0, 1 - Math.abs(tc - bump) / 0.4);
-  monShadow(ctx, TITLE_MATE.x, TITLE_MATE.y + TITLE_MATE.s * 0.05, TITLE_MATE.s);
-  drawMon(ctx, TITLE_MATE.id, TITLE_MATE.x, TITLE_MATE.y + (mb ? 0 : Math.sin(t * 2.4 + 1) * 2.5), TITLE_MATE.s * (1 + mb * 0.15));
-  const ba = tc - bump;
-  if (mb > 0) {
-    ctx.globalAlpha = mb;
-    ctx.strokeStyle = '#f8d030';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(TITLE_MATE.x, TITLE_MATE.y, TITLE_MATE.s * 0.5 + (1 - mb) * 30, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-  if (ba >= 0 && ba < 0.4) {
-    ctx.globalAlpha = Math.max(0, 1 - ba / 0.4);
-    bolt(ctx, TITLE_MATE.x, TITLE_MATE.y, TITLE_FOES[1][1], TITLE_FOES[1][2]);
-    if (ba > 0.1) bolt(ctx, TITLE_FOES[1][1], TITLE_FOES[1][2], TITLE_FOES[0][1], TITLE_FOES[0][2]);
-    ctx.globalAlpha = 1;
-  }
-
-  // the wall kisses flash where the shot banks
-  [[Tw1, w1], [Tw2, w2]].forEach(([ht, p]) => {
-    const a = tc - (ht as number);
-    if (a < 0 || a > 0.35) return;
-    ctx.globalAlpha = 1 - a / 0.35;
-    sparkle(ctx, (p as { x: number; y: number }).x, (p as { x: number; y: number }).y, 8 + a * 26, '#e8ecf8');
-    ctx.globalAlpha = 1;
-  });
-
-  // the shot itself: the pad mon IS the ball — it waits coiled, then flies.
-  // Ghosts trailing it are what read "moving" instead of "floating".
-  if (tc < windup) {
-    const dl = Math.hypot(hit1.x - pad.x, hit1.y - pad.y);
-    const ux = (hit1.x - pad.x) / dl, uy = (hit1.y - pad.y) / dl;
-    const popIn = Math.min(1, tc / 0.15); // re-spawn pop after each loop
-    const wag = Math.sin(t * 3) * 3; // the aim breathes, it doesn't sit still
-    helpArrow(ctx, pad.x + ux * 46, pad.y + uy * 46 + wag, pad.x + ux * 116, pad.y + uy * 116 + wag, '#6890f0');
-    monShadow(ctx, pad.x, pad.y + 8, 76);
-    ctx.save();
-    ctx.translate(pad.x - ux * 8, pad.y - uy * 8); // pulled back against the aim
-    ctx.rotate(-0.15);
-    drawMon(ctx, HERO_SHOT.mon, 0, 0, 76 * popIn);
-    ctx.restore();
-  } else {
-    const pos = posAt(tc);
-    const ahead = posAt(tc + 0.04), behind = posAt(tc - 0.04);
-    const ang = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 0.7;
-    const fade = Math.min(1, (T2 + 0.3 - tc) / 0.3); // it lands, then is gone
-    for (const [ds, al] of [[0.07, 0.3], [0.14, 0.13]] as const) {
-      const g = posAt(Math.max(windup, tc - ds));
-      ctx.save();
-      ctx.globalAlpha = al * fade;
-      ctx.translate(g.x, g.y);
-      ctx.rotate(ang);
-      drawMon(ctx, HERO_SHOT.mon, 0, 0, 80);
-      ctx.restore();
-    }
-    ctx.save();
-    ctx.globalAlpha = fade;
-    ctx.translate(pos.x, pos.y);
-    ctx.rotate(ang);
-    drawMon(ctx, HERO_SHOT.mon, 0, 0, 80);
-    ctx.restore();
-  }
-
-  // each landed hit pops a sparkle and the combo counter it feeds
-  const hitFx = (ht: number, x: number, y: number, label: string, color: string) => {
-    const a = tc - ht;
-    if (a < 0 || a > 0.8) return;
-    const pop = Math.min(1, a / 0.12);
-    const pulse = 1 + Math.sin(t * 5) * 0.15;
-    ctx.globalAlpha = Math.min(1, (0.8 - a) / 0.25 + 0.6);
-    sparkle(ctx, x + 8, y - 14, 14 * pulse * (0.7 + pop * 0.5), '#ffd84d');
-    sparkle(ctx, x - 16, y + 8, 8 * pulse, color);
-    ctx.globalAlpha = 1;
-    ctx.textAlign = 'center';
-    ctx.font = fontB(10 + 5 * (1 - pop));
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
-    ctx.strokeText(label, x, y - 44);
-    ctx.fillStyle = color;
-    ctx.fillText(label, x, y - 44);
-  };
-  hitFx(bump, TITLE_MATE.x, TITLE_MATE.y, `${moveOf(TITLE_MATE.id, 'electric')}!`, '#f8d030');
-  hitFx(T1, TITLE_FOES[0][1], TITLE_FOES[0][2], '×1', '#9df0ff');
-  hitFx(T2, TITLE_FOES[1][1], TITLE_FOES[1][2], '×2', '#ffd84d');
+    drawActors(ctx, t);
   }
 
   // drag prompt — a ghost pull loops the gesture until the first real launch
-  if (!play.launched) {
-    const bx = play.live ? play.ball.x : pad.x;
-    const by = play.live ? play.ball.y : pad.y;
+  if (!play.launched && !play.ball.live) {
+    const bx = play.ball.x;
+    const by = play.ball.y;
     const gp = (t % 1.7) / 1.7;
     const ga = gp < 0.75 ? Math.sin((gp / 0.75) * Math.PI) : 0;
     ctx.save();
@@ -1079,8 +1202,6 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   ctx.fillStyle = PARCH;
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
   button(ctx, FREE_BTN, 'START CLIMB', true);
-  const dBest = dailyBest();
-  button(ctx, DAILY_BTN, dBest ? `DAILY · BEST ${dBest}` : 'DAILY CLIMB', true);
 
   // ? badge, top corner — the how-to-play overlay
   ctx.fillStyle = '#12152b';
@@ -1525,8 +1646,8 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
 
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
 // --- haven't caught; the count is the only hint at what's out there -------
-export const DEX_BTN = { x: W / 2 - 84, y: DAILY_BTN.y, w: 154, h: 48 };
-export const ACH_BTN = { x: W / 2 + 80, y: DEX_BTN.y, w: 166, h: 48 };
+export const DEX_BTN = { x: W / 2 - 165, y: FREE_BTN.y + FREE_BTN.h + 14, w: 154, h: 48 };
+export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 10, y: DEX_BTN.y, w: 166, h: 48 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
@@ -1711,7 +1832,7 @@ export function drawDraft(
   ctx.fillStyle = '#8890b8';
   ctx.fillText(stageName, W / 2, 155);
   ctx.font = fontB(9);
-  const spinning = spin.age < DRAFT_STOPS[DRAFT_STOPS.length - 1];
+  const spinning = spin.age < REEL_STOPS[REEL_STOPS.length - 1];
   ctx.fillText(
     spinning
       ? 'reels rolling — tap to skip'
@@ -1733,7 +1854,7 @@ export function drawDraft(
     if (def.shiny) rim(ctx, r, 10, '#ffd84d', 2);
 
     // slot reel: pool faces scroll past until the reel brakes onto the offer
-    const stopAt = DRAFT_STOPS[i] ?? DRAFT_STOPS[DRAFT_STOPS.length - 1];
+    const stopAt = REEL_STOPS[i] ?? REEL_STOPS[REEL_STOPS.length - 1];
     const spinP = Math.min(spin.age / stopAt, 1);
     if (spinP < 1) {
       const win = { x: r.x + 10, y: r.y + 20, w: r.w - 20, h: 148 };
@@ -1774,7 +1895,7 @@ export function drawDraft(
       ctx.fillStyle = '#ffd84d';
       ctx.fillText('✦ SHINY ✦', r.x + r.w / 2, r.y + 34);
     }
-    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 106, 96 * pop);
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 100, 96 * pop);
 
     // evolution hint rides the top-left — Magikarp is secretly Gyarados
     if (def.evolvesTo != null) {
@@ -1802,27 +1923,27 @@ export function drawDraft(
     ctx.textAlign = 'center';
     fitFont(ctx, def.name, 14, r.w - 20);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 181);
+    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 179);
     ctx.fillStyle = PARCH;
-    ctx.fillText(def.name, r.x + r.w / 2, r.y + 180);
+    ctx.fillText(def.name, r.x + r.w / 2, r.y + 178);
 
     ctx.font = fontB(10);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 199);
+    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 200);
 
     const role = roleOf(def.stats, def.healer);
     ctx.font = fontB(10);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${role === 'wild' ? 'BALANCED' : role.toUpperCase()}`, r.x + r.w / 2, r.y + 216);
+    ctx.fillText(`${def.type.toUpperCase()} · ${role === 'wild' ? 'BALANCED' : role.toUpperCase()}`, r.x + r.w / 2, r.y + 220);
 
     // the bump super this mon fires — a draft decision you can taste
     ctx.font = fontB(11);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 234);
+    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 244);
     ctx.font = fontB(9);
     ctx.fillStyle = '#a8b0d0';
     const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 16);
-    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 248 + li * 11));
+    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 258 + li * 11));
   });
 
   // one board reshuffle per draft — dimmed once spent
@@ -1891,12 +2012,16 @@ function hpBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, f
   ctx.fillRect(x, y, w * Math.max(frac, 0), 4);
 }
 
+// the item reel cycles every held-item icon the game can deal
+const ITEM_REEL = [...new Set(PERKS.map((p) => p.item))];
+
 // One held-item offer card — shared by the post-stage reward and the
-// pre-run charm pick.
+// pre-run charm pick. `spin` runs the same reel reveal the draft uses.
 export function drawPerkCard(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
   perk: { name: string; item: string; desc: string; rarity: Rarity },
+  spin?: { age: number; i: number },
 ) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
@@ -1905,6 +2030,46 @@ export function drawPerkCard(
   ctx.fillStyle = '#12162b';
   ctx.fill();
   cardFrame(ctx, r, 10);
+
+  const stopAt = spin ? (REEL_STOPS[spin.i] ?? REEL_STOPS[REEL_STOPS.length - 1]) : 0;
+  if (spin && spin.age < stopAt) {
+    // slot reel: item icons scroll past until the reel brakes onto the deal —
+    // name/rarity stay hidden or the spin would spoil itself
+    const win = { x: r.x + 10, y: r.y + 18, w: r.w - 20, h: r.h - 40 };
+    ctx.save();
+    roundRect(ctx, win.x, win.y, win.w, win.h, 8);
+    ctx.clip();
+    ctx.fillStyle = '#0a0e1e';
+    ctx.fillRect(win.x, win.y, win.w, win.h);
+    // ease-out quart — a fast blur of icons that settles hard on the deal
+    const spinP = Math.min(spin.age / stopAt, 1);
+    const steps = 9 + spin.i * 3;
+    const pos = steps * (1 - Math.pow(1 - spinP, 4));
+    const L = ITEM_REEL.length;
+    const idx = Math.max(0, ITEM_REEL.indexOf(perk.item));
+    ctx.imageSmoothingEnabled = false;
+    for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
+      const img = itemSprite(ITEM_REEL[(((idx + j - steps) % L) + L) % L]);
+      if (img) ctx.drawImage(img, r.x + r.w / 2 - 24, win.y + win.h / 2 - 24 + (j - pos) * 60, 48, 48);
+    }
+    // fade the window edges so icons slide out of the dark
+    const g = ctx.createLinearGradient(0, win.y, 0, win.y + win.h);
+    g.addColorStop(0, 'rgba(10,14,30,0.9)');
+    g.addColorStop(0.3, 'rgba(10,14,30,0)');
+    g.addColorStop(0.7, 'rgba(10,14,30,0)');
+    g.addColorStop(1, 'rgba(10,14,30,0.9)');
+    ctx.fillStyle = g;
+    ctx.fillRect(win.x, win.y, win.w, win.h);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    ctx.font = font(9);
+    ctx.fillStyle = '#3a4468';
+    ctx.fillText('· · ·', r.x + r.w / 2, r.y + 178);
+    return;
+  }
+  // landing pop: the icon overshoots for a beat as the reel stops
+  const pop = spin ? 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15) : 1;
+
   ctx.fillStyle = RARITY_COLOR[perk.rarity];
   ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
 
@@ -1912,7 +2077,7 @@ export function drawPerkCard(
   if (img) {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, r.x + r.w / 2 - 21, r.y + 45, 42, 42);
+    ctx.drawImage(img, r.x + r.w / 2 - 21 * pop, r.y + 66 - 21 * pop, 42 * pop, 42 * pop);
     ctx.restore();
   } else {
     ctx.font = font(16);
@@ -1954,6 +2119,7 @@ export function drawReward(
   heldItems: string[],
   evo: { from: SpeciesDef; options: SpeciesDef[] } | null,
   luck: number,
+  spin: number, // reel age in seconds — counts up from the deal
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -1977,7 +2143,11 @@ export function drawReward(
   ctx.font = font(10);
   ctx.fillStyle = '#e8ecf8';
   ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 356);
-  if (luck > 0) {
+  if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('reels rolling — tap to skip', W / 2, 372);
+  } else if (luck > 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#6fdc6f';
     ctx.fillText(`TEAM LUCK ${luck} — fusion dupes feed the gym fountain`, W / 2, 372);
@@ -1992,7 +2162,7 @@ export function drawReward(
     335,
   );
 
-  offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk));
+  offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }));
 
   // held items — the run's build so far, a strip of icons between the
   // offer cards and the box so you can read your loadout at a glance

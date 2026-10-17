@@ -927,7 +927,7 @@ export class Battle {
   }
 
   // Held-item quirk on a boss — pokelike's curated aces. Rolled on the
-  // wave's seed so a daily climb always faces the same kit.
+  // wave's seed so a pinned ?seed= run always faces the same kit.
   private armBoss(e: Unit) {
     const GYM_RELICS = ['focus-sash', 'leftovers', 'choice-band', 'eviolite'];
     e.relic = GYM_RELICS[Math.floor(this.rng() * GYM_RELICS.length)];
@@ -5409,6 +5409,8 @@ export class Battle {
     // impacts squash it flat — the pinball pop is most of the feel
     const spd = Math.hypot(u.vx, u.vy);
     const st = Math.min(0.25, spd / 6000) + Math.min(u.sq, 1) * 0.22;
+    // the mon on deck reads a touch bigger — same whose-up cue as the title
+    const grow = u === this.active && this.phase === 'aim' ? 1.18 : 1;
     // everyone breathes a little — a standing army reads as a dead board
     const bob = Math.sin(this.time * 2.4 + u.uid * 1.7) * 1.2;
     if (st > 0.02) {
@@ -5416,12 +5418,12 @@ export class Battle {
       ctx.translate(u.x, u.y + bob);
       if (spd > 40) ctx.rotate(Math.atan2(u.vy, u.vx));
       ctx.scale(1 + st, Math.max(0.55, 1 - st * 0.7));
-      if (u.shiny) drawShiny(ctx, u.def.id, 0, 0, u.r * 2.6);
-      else drawMon(ctx, u.def.id, 0, 0, u.r * 2.6);
+      if (u.shiny) drawShiny(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
+      else drawMon(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
       ctx.restore();
     } else {
-      if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6);
-      else drawMon(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6);
+      if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
+      else drawMon(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
     }
 
     // shinies twinkle — three gold four-point stars drift around the sprite
@@ -5584,7 +5586,7 @@ export class Battle {
       // whose turn it is — arrow + name tag over the active mon, up only
       // while lining up the shot
       if (u === this.active && this.phase === 'aim') {
-        const ty = u.y - u.r - 14;
+        const ty = u.y - u.r - 14 + Math.sin(this.time * 4) * 3;
         ctx.fillStyle = '#ffd84d';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2.5;

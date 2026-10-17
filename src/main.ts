@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, recordDaily, BADGES } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES } from './game/meta';
 import {
   W,
   H,
@@ -29,7 +29,6 @@ import {
   SHARE_BTN,
   TITLE_BTN,
   FREE_BTN,
-  DAILY_BTN,
   HELP_BTN,
   HELP_CHIP,
   MUTE_CHIP,
@@ -37,7 +36,7 @@ import {
   drawMuteChip,
   MUTE_BTN,
   DRAFT_REROLL,
-  DRAFT_STOPS,
+  REEL_STOPS,
   drawHelp,
   drawPerkPick,
   CHARM_SKIP,
@@ -187,6 +186,10 @@ function respinDraft() {
   draftT0 = t;
   draftLanded = 0;
 }
+// item offers spin the same reels — rewardT0 stamps when the board dealt
+let rewardT0 = 0;
+let rewardLanded = 0;
+let wasReward = false;
 function draftOffers(): number[] {
   if (offerCache) return offerCache;
   const offers = draft.order
@@ -211,21 +214,13 @@ function draftOffers(): number[] {
 // isn't already in it — catching mons is how new faces join future drafts.
 // draftOrder only deals roster indices, so the extras get shuffled into the
 // deal here or they'd never be offered.
-let dailyRun = false; // the day's shared island — same climb for everyone
-
-// one run setup shared by START CLIMB, DAILY CLIMB and REMATCH — ?seed=NNN
-// always wins (debug/sharing), daily seeds off the calendar, else fresh
-function newRun(daily = false) {
+// one run setup shared by START CLIMB and REMATCH — ?seed=NNN
+// always wins (debug/sharing), else fresh
+function newRun() {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
-  const has = Number.isFinite(forced) && forced > 0;
-  dailyRun = daily && !has;
-  if (has) {
+  if (Number.isFinite(forced) && forced > 0) {
     runRng = mulberry32(forced);
     stage = makeStage(forced);
-  } else if (daily) {
-    const today = Math.floor(Date.now() / 86400000);
-    runRng = mulberry32(today);
-    stage = makeStage(today, 'DAILY CLIMB');
   } else {
     runRng = Math.random;
     stage = makeStage(randSeed());
@@ -393,14 +388,6 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (inRect(p.x, p.y, DAILY_BTN)) {
-      sfx('ui');
-      newRun(true);
-      startDraft();
-      scene = 'draft';
-      sceneMusic();
-      return;
-    }
     // the pitch is playable — a drag on the grass grabs the demo ball
     if (titlePointerDown(p)) return;
   } else if (scene === 'draft') {
@@ -410,8 +397,8 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     // reels still rolling — any tap fast-forwards to the dealt board
-    if (t - draftT0 < DRAFT_STOPS[DRAFT_STOPS.length - 1]) {
-      draftT0 = t - DRAFT_STOPS[DRAFT_STOPS.length - 1];
+    if (t - draftT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
+      draftT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
       return;
     }
     const offers = draftOffers();
@@ -497,6 +484,11 @@ canvas.addEventListener('pointerdown', (e) => {
         }
         return;
       }
+      // item reels still rolling — a tap fast-forwards, never picks blind
+      if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
+        rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
+        return;
+      }
       // box strip swallows the pointer — release decides tap vs scroll drag
       if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
         boxDrag = { x0: p.x, s0: boxScroll, moved: false };
@@ -523,10 +515,10 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       shareResult();
     } else if (inRect(p.x, p.y, RETRY_BTN)) {
-      // REMATCH: one tap back into a fresh draft — a daily replays the same
-      // island, that's the score-chase; anything else rolls fresh
+      // REMATCH: one tap back into a fresh draft — rolls fresh unless a
+      // ?seed= is pinned, which replays the same island
       sfx('ui');
-      newRun(dailyRun);
+      newRun();
       battle = null;
       result = null;
       resultExtra = null;
@@ -697,6 +689,11 @@ function update(dt: number) {
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
+    if (battle.phase === 'reward' && !wasReward) {
+      rewardT0 = t;
+      rewardLanded = 0;
+    }
+    wasReward = battle.phase === 'reward';
     if (battle.phase !== 'reward') boxScroll = 0;
     // metagame polls — same spot the battle→scene transitions already live
     while (battle.gymsBeaten > lastGyms) {
@@ -719,7 +716,6 @@ function update(dt: number) {
       const prevBest = best().score;
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
       const newBest = recordRun(battle.score, stageReached, won);
-      if (dailyRun) recordDaily(battle.score);
       const gap = prevBest - battle.score;
       result = {
         won,
@@ -800,9 +796,17 @@ function update(dt: number) {
   }
   // draft reels land one by one — a rising thunk per stop
   if (scene === 'draft') {
-    const landed = DRAFT_STOPS.filter((s) => t - draftT0 >= s).length;
+    const landed = REEL_STOPS.filter((s) => t - draftT0 >= s).length;
     if (landed > draftLanded) {
       draftLanded = landed;
+      sfx('bounce', 0.8 + landed * 0.25);
+    }
+  }
+  // item reels thunk the same way when the reward board deals
+  if (scene === 'battle' && battle?.phase === 'reward') {
+    const landed = REEL_STOPS.filter((s) => t - rewardT0 >= s).length;
+    if (landed > rewardLanded) {
+      rewardLanded = landed;
       sfx('bounce', 0.8 + landed * 0.25);
     }
   }
@@ -879,6 +883,7 @@ function render() {
             battle.heldItems,
             battle.evoChoice,
             battle.teamLuck(),
+            t - rewardT0,
           );
       }
       break;
