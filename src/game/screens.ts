@@ -358,14 +358,13 @@ interface TitleFoe {
   id: number; hx: number; hy: number; x: number; y: number; vx: number; vy: number; s: number;
 }
 const play = {
-  live: false, // flips once the player grabs the field — attract resumes on idle
-  idle: 0,
+  live: false, // flips once the player grabs the field — theirs from then on
   dragStart: null as { x: number; y: number } | null,
   dragNow: null as { x: number; y: number } | null,
   dragT: 0,
   wasGold: false,
   launched: false, // once you've slung one the drag prompt has done its job
-  ball: { x: HERO_SHOT.pad.x, y: HERO_SHOT.pad.y, vx: 0, vy: 0, live: false, home: 0, trail: [] as { x: number; y: number }[] },
+  ball: { x: HERO_SHOT.pad.x, y: HERO_SHOT.pad.y, vx: 0, vy: 0, live: false, trail: [] as { x: number; y: number }[] },
   mate: { x: TITLE_MATE.x, y: TITLE_MATE.y, s: TITLE_MATE.s, pulse: 0, fired: false },
   bolts: [] as { x1: number; y1: number; x2: number; y2: number; t: number; delay: number; foe: TitleFoe }[],
   foes: TITLE_FOES.map(([id, x, y, s]): TitleFoe => ({ id, hx: x, hy: y, x, y, vx: 0, vy: 0, s })),
@@ -377,7 +376,6 @@ const play = {
 export function titlePointerDown(p: { x: number; y: number }): boolean {
   if (!inRect(p.x, p.y, TITLE_FIELD)) return false;
   play.live = true;
-  play.idle = 0;
   play.dragStart = { x: p.x, y: p.y };
   play.dragNow = { x: p.x, y: p.y };
   play.dragT = 0;
@@ -402,7 +400,6 @@ export function titlePointerUp() {
   b.vx = (pull.x / d) * speed;
   b.vy = (pull.y / d) * speed;
   b.live = true;
-  b.home = 0;
   b.trail = [];
   play.hits = 0;
   play.launched = true;
@@ -438,17 +435,10 @@ export function updateTitle(dt: number) {
     if (b.trail.length > 7) b.trail.shift();
     const sp = Math.hypot(b.vx, b.vy);
     if (sp < STOP_SPEED) {
-      // settled — slide home and hand the ball back
-      b.home += dt;
-      b.vx *= Math.exp(-10 * dt);
-      b.vy *= Math.exp(-10 * dt);
-      b.x += (HERO_SHOT.pad.x - b.x) * Math.min(1, 8 * dt);
-      b.y += (HERO_SHOT.pad.y - b.y) * Math.min(1, 8 * dt);
-      if (b.home > 0.55) {
-        b.live = false;
-        b.x = HERO_SHOT.pad.x;
-        b.y = HERO_SHOT.pad.y;
-      }
+      // settled — the ball holds its landing spot like the real game; the
+      // next pull launches it from right here, so the rally keeps going
+      b.live = false;
+      b.vx = b.vy = 0;
     } else {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -514,9 +504,6 @@ export function updateTitle(dt: number) {
         from = next;
       }
     }
-  } else if (!play.dragStart) {
-    play.idle += dt;
-    if (play.idle > 6) play.live = false; // back to the scripted demo
   }
   for (let i = play.orbs.length - 1; i >= 0; i--) {
     const o = play.orbs[i];
@@ -579,11 +566,9 @@ function bolt(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number,
   ctx.stroke();
 }
 
-// Wild mons at the field edges, clear of the hero arc — [id, x, y]
+// Wild mons at the screen edges — the stadium crowd, clear of the pitch
 const WILD_MONS: [number, number, number][] = [
   [16, 484, 118],
-  [43, 52, 630],
-  [52, 488, 624],
   [19, 72, 884],
   [41, 476, 884],
 ];
