@@ -308,16 +308,18 @@ export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, m
 
 // The hero beat: a mon pulls back on the pad, launches, and ricochets target
 // to target — the game's whole sling-bounce-hit loop on one ~3.6s cycle.
+// Straight legs only: the demo shot banks off the floor into gastly, taps
+// the ceiling, and drops on machop — real bounce kinematics, no arcs.
 const HERO_SHOT = {
   mon: 7, // squirtle rides the demo shot
   pad: { x: 128, y: 508 },
-  c1: { x: 300, y: 160 },
-  hit1: { x: 470, y: 288 }, // first bounce — gastly waits here
-  c2: { x: 490, y: 380 },
-  hit2: { x: 430, y: 395 }, // ricochet lands on machop
+  w1: { x: 221, y: 638 }, // banks off the floor…
+  hit1: { x: 440, y: 329 }, // …up-right into gastly's lower face
+  w2: { x: 430, y: 294 }, // taps the ceiling…
+  hit2: { x: 430, y: 342 }, // …and drops straight onto machop
 };
-// cycle timing (s): windup → leg 1 → leg 2 → linger, then it loops
-const HERO_T = { windup: 0.85, hit1: 1.85, hit2: 2.45, cycle: 3.6 };
+// cycle timing (s): windup → leg to floor → leg to gastly → ceiling → machop
+const HERO_T = { windup: 0.85, w1: 1.2, hit1: 2.02, w2: 2.1, hit2: 2.2, cycle: 3.6 };
 const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
   [92, 470, 288, 50],
   [66, 430, 395, 54],
@@ -645,8 +647,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
   logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
-  const { pad, c1, hit1, c2, hit2 } = HERO_SHOT;
-  const { windup, hit1: T1, hit2: T2, cycle } = HERO_T;
+  const { pad, w1, hit1, w2, hit2 } = HERO_SHOT;
+  const { windup, w1: Tw1, hit1: T1, w2: Tw2, hit2: T2, cycle } = HERO_T;
   if (play.live) {
     // --- live sandbox: the pitch is the player's ---
     ctx.save();
@@ -841,17 +843,23 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   } else {
   // --- scripted attract loop ---
   const tc = t % cycle;
-  const bez = (p0: { x: number; y: number }, c: { x: number; y: number }, p1: { x: number; y: number }, u: number) => ({
-    x: (1 - u) * (1 - u) * p0.x + 2 * (1 - u) * u * c.x + u * u * p1.x,
-    y: (1 - u) * (1 - u) * p0.y + 2 * (1 - u) * u * c.y + u * u * p1.y,
-  });
-  // position along the whole shot at cycle time s (clamped to the flown path)
-  const posAt = (s: number) =>
-    s <= T1
-      ? bez(pad, c1, hit1, Math.max(0, Math.min(1, (s - windup) / (T1 - windup))))
-      : bez(hit1, c2, hit2, Math.max(0, Math.min(1, (s - T1) / (T2 - T1))));
+  // straight legs with hard vertex bounces — the shot banks, never curves
+  const legs = [pad, w1, hit1, w2, hit2];
+  const times = [windup, Tw1, T1, Tw2, T2];
+  const posAt = (s: number) => {
+    for (let i = 1; i < times.length; i++) {
+      if (s <= times[i]) {
+        const u = Math.max(0, Math.min(1, (s - times[i - 1]) / (times[i] - times[i - 1])));
+        return {
+          x: legs[i - 1].x + (legs[i].x - legs[i - 1].x) * u,
+          y: legs[i - 1].y + (legs[i].y - legs[i - 1].y) * u,
+        };
+      }
+    }
+    return legs[legs.length - 1];
+  };
 
-  // flight lane — the dashes literally march toward the pack
+  // flight lane — the dashes march along the ricochet path
   ctx.save();
   ctx.strokeStyle = 'rgba(232,236,248,0.8)';
   ctx.lineWidth = 3;
@@ -859,26 +867,33 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   ctx.lineDashOffset = -t * 34;
   ctx.beginPath();
   ctx.moveTo(pad.x, pad.y);
-  ctx.quadraticCurveTo(c1.x, c1.y, hit1.x, hit1.y);
-  ctx.quadraticCurveTo(c2.x, c2.y, hit2.x, hit2.y);
+  for (const p of legs.slice(1)) ctx.lineTo(p.x, p.y);
   ctx.stroke();
   ctx.restore();
 
   // the pack wobbles; a landed hit knocks its target along the ricochet
+  const knock = [{ x: 0.58, y: -0.82 }, { x: 0, y: 1 }, { x: 0, y: 0 }];
   TITLE_FOES.forEach(([id, x, y, s], i) => {
     const ht = i === 0 ? T1 : i === 1 ? T2 : -1;
-    const k = i === 0 ? { x: c2.x - hit1.x, y: c2.y - hit1.y } : i === 1 ? { x: hit2.x - c2.x, y: hit2.y - c2.y } : { x: 0, y: 0 };
-    const kl = Math.hypot(k.x, k.y) || 1;
     const f = ht > 0 ? Math.max(0, 1 - Math.max(0, tc - ht) / 0.3) : 0;
     monShadow(ctx, x, y + s * 0.05, s);
-    drawMon(ctx, id, x + (k.x / kl) * 10 * f, y + (k.y / kl) * 10 * f + (f ? 0 : Math.sin(t * 2.2 + i * 1.7) * 2.5), s);
+    drawMon(ctx, id, x + knock[i].x * 10 * f, y + knock[i].y * 10 * f + (f ? 0 : Math.sin(t * 2.2 + i * 1.7) * 2.5), s);
+  });
+
+  // the wall kisses flash where the shot banks
+  [[Tw1, w1], [Tw2, w2]].forEach(([ht, p]) => {
+    const a = tc - (ht as number);
+    if (a < 0 || a > 0.35) return;
+    ctx.globalAlpha = 1 - a / 0.35;
+    sparkle(ctx, (p as { x: number; y: number }).x, (p as { x: number; y: number }).y, 8 + a * 26, '#e8ecf8');
+    ctx.globalAlpha = 1;
   });
 
   // the shot itself: the pad mon IS the ball — it waits coiled, then flies.
   // Ghosts trailing it are what read "moving" instead of "floating".
   if (tc < windup) {
-    const dl = Math.hypot(hit1.x - pad.x, hit1.y - pad.y);
-    const ux = (hit1.x - pad.x) / dl, uy = (hit1.y - pad.y) / dl;
+    const dl = Math.hypot(w1.x - pad.x, w1.y - pad.y);
+    const ux = (w1.x - pad.x) / dl, uy = (w1.y - pad.y) / dl;
     const popIn = Math.min(1, tc / 0.15); // re-spawn pop after each loop
     const wag = Math.sin(t * 3) * 3; // the aim breathes, it doesn't sit still
     helpArrow(ctx, pad.x + ux * 46, pad.y + uy * 46 + wag, pad.x + ux * 116, pad.y + uy * 116 + wag, '#6890f0');
@@ -928,8 +943,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillStyle = color;
     ctx.fillText(label, x, y - 44);
   };
-  hitFx(T1, hit1.x, hit1.y, '×1', '#9df0ff');
-  hitFx(T2, hit2.x, hit2.y, '×2', '#ffd84d');
+  hitFx(T1, TITLE_FOES[0][1], TITLE_FOES[0][2], '×1', '#9df0ff');
+  hitFx(T2, TITLE_FOES[1][1], TITLE_FOES[1][2], '×2', '#ffd84d');
   }
 
   // drag prompt — a ghost pull loops the gesture until the first real launch
