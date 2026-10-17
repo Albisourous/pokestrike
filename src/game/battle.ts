@@ -34,7 +34,7 @@ import {
   roleOf,
   ROLE_MODS,
   moveOf,
-  SUPER_DESC,
+  superDesc,
   LV_CAP,
   offStat,
   lvlPow,
@@ -4536,7 +4536,7 @@ export class Battle {
         cy + 70,
       );
       ctx.fillStyle = '#6a7498';
-      ctx.fillText(SUPER_DESC[e.def.type], cx + 50, cy + 82);
+      ctx.fillText(superDesc(e.def.id, e.def.type), cx + 50, cy + 82);
     }
     ctx.restore();
   }

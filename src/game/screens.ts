@@ -5,7 +5,7 @@ import { RARITY_COLOR } from './perks';
 import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
-import { roleOf, moveOf } from './stats';
+import { roleOf, moveOf, superDesc } from './stats';
 import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest, BADGES, gymBadges, badgeOf } from './meta';
 
 export const W = 540;
@@ -35,9 +35,9 @@ export interface RunResult {
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
 
-const CARD_W = 150;
-const CARD_H = 250;
-const CARD_GAP = 15;
+const CARD_W = 162;
+const CARD_H = 264;
+const CARD_GAP = 9;
 const CARDS_X = (W - (3 * CARD_W + 2 * CARD_GAP)) / 2;
 const CARDS_Y = 300;
 
@@ -115,7 +115,7 @@ export function teamSlotRect(i: number) {
 // split-evolution option cards — centered row over the dimmed reward screen
 export function evoCardRect(i: number, n: number) {
   const w = 140, gap = 14;
-  return { x: W / 2 - (n * w + (n - 1) * gap) / 2 + i * (w + gap), y: 400, w, h: 170 };
+  return { x: W / 2 - (n * w + (n - 1) * gap) / 2 + i * (w + gap), y: 400, w, h: 184 };
 }
 
 export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -249,6 +249,20 @@ export function fitFont(ctx: CanvasRenderingContext2D, label: string, px: number
   ctx.font = font(size);
   while (size > 6 && ctx.measureText(label).width > maxW) ctx.font = font(--size);
   return size;
+}
+
+// greedy word-wrap into at most two lines at the current font — descs are
+// short enough that a third line never earns its keep
+function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+  if (ctx.measureText(text).width <= maxW) return [text];
+  const words = text.split(' ');
+  let first = '';
+  let used = 0;
+  while (used < words.length && ctx.measureText(first ? `${first} ${words[used]}` : words[used]).width <= maxW) {
+    first = first ? `${first} ${words[used]}` : words[used];
+    used++;
+  }
+  return [first, words.slice(used).join(' ')];
 }
 
 // arcade cabinet button: hard corners, solid offset block the face presses into
@@ -1144,14 +1158,12 @@ export function drawDraft(
 
     // a shiny draft card glows gold — the rarest pick on the board
     if (def.shiny) {
-      drawShiny(ctx, def.id, r.x + r.w / 2, r.y + 94, 84 * pop);
       ctx.textAlign = 'center';
-      ctx.font = font(8);
+      ctx.font = font(9);
       ctx.fillStyle = '#ffd84d';
-      ctx.fillText('✦ SHINY ✦', r.x + r.w / 2, r.y + 30);
-    } else {
-      drawMon(ctx, def.id, r.x + r.w / 2, r.y + 94, 84 * pop);
+      ctx.fillText('✦ SHINY ✦', r.x + r.w / 2, r.y + 34);
     }
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 106, 96 * pop);
 
     // evolution hint rides the top-left — Magikarp is secretly Gyarados
     if (def.evolvesTo != null) {
@@ -1160,9 +1172,9 @@ export function drawDraft(
         : speciesById(def.evolvesTo)?.name.toUpperCase();
       if (nx) {
         ctx.textAlign = 'left';
-        ctx.font = fontB(7);
-        ctx.fillStyle = '#8890b8';
-        ctx.fillText(`→ ${nx}`, r.x + 8, r.y + 14);
+        ctx.font = fontB(9);
+        ctx.fillStyle = '#9df0ff';
+        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 17);
       }
     }
 
@@ -1171,58 +1183,35 @@ export function drawDraft(
       ctx.textAlign = 'right';
       ctx.font = font(8);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 8, r.y + 19);
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 20);
       ctx.fillStyle = '#ffd84d';
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 18);
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 19);
     }
 
-    // name + dex number, kept centered as one unit
-    const ns = fitFont(ctx, def.name, 11, r.w - 72);
-    const nw = ctx.measureText(def.name).width;
-    ctx.font = fontB(8);
-    const idTxt = `#${String(def.id).padStart(3, '0')} Lv${def.lvl ?? 1}`;
-    const nx = r.x + r.w / 2 - (nw + 5 + ctx.measureText(idTxt).width) / 2;
-    ctx.textAlign = 'left';
-    ctx.font = font(ns);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.name, nx + 1, r.y + 181);
-    ctx.fillStyle = PARCH;
-    ctx.fillText(def.name, nx, r.y + 180);
-    ctx.font = fontB(8);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(idTxt, nx + nw + 5, r.y + 180);
     ctx.textAlign = 'center';
+    fitFont(ctx, def.name, 14, r.w - 20);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 181);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(def.name, r.x + r.w / 2, r.y + 180);
+
+    ctx.font = fontB(10);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 199);
 
     const role = roleOf(def.stats, def.healer);
-    ctx.font = fontB(9);
+    ctx.font = fontB(10);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${role === 'wild' ? 'BALANCED' : role.toUpperCase()}`, r.x + r.w / 2, r.y + 198);
+    ctx.fillText(`${def.type.toUpperCase()} · ${role === 'wild' ? 'BALANCED' : role.toUpperCase()}`, r.x + r.w / 2, r.y + 216);
 
     // the bump super this mon fires — a draft decision you can taste
-    ctx.font = fontB(8);
+    ctx.font = fontB(11);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 212);
-
-    // broadcast stat readout — 3x2 label+number pairs
-    const st = def.stats;
-    const cells: [string, number][] = [
-      ['HP', st.hp], ['ATK', st.atk], ['DEF', st.def],
-      ['SPA', st.spa], ['SPD', st.spd], ['SPE', st.spe],
-    ];
-    ctx.font = fontB(8);
-    ctx.textAlign = 'left';
-    cells.forEach(([lab, v], k) => {
-      const cx = r.x + 12 + ((r.w - 24) / 6) * (2 * (k % 3) + 1);
-      const cy = r.y + 224 + ((k / 3) | 0) * 16;
-      const lw = ctx.measureText(lab).width;
-      const vw = ctx.measureText(`${v}`).width;
-      const tx = cx - (lw + 3 + vw) / 2;
-      ctx.fillStyle = '#8890b8';
-      ctx.fillText(lab, tx, cy);
-      ctx.fillStyle = PARCH;
-      ctx.fillText(`${v}`, tx + lw + 3, cy);
-    });
-    ctx.textAlign = 'center';
+    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 238);
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#a8b0d0';
+    const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 16);
+    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 253 + li * 11));
   });
 
   // one board reshuffle per draft — dimmed once spent
@@ -1517,6 +1506,13 @@ export function drawReward(
       ctx.textAlign = 'center';
     }
   });
+  // the selected mon's super reads here — swapping is a move pick too
+  const selDef = selBox >= 0 ? box[selBox] : selTeam >= 0 ? team[selTeam] : null;
+  if (selDef) {
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}`, W / 2, 862);
+  }
   ctx.font = fontB(8);
   ctx.fillStyle = '#5a6284';
   ctx.fillText(
@@ -1567,10 +1563,14 @@ export function drawReward(
       (opt.shiny ? drawShiny : drawMon)(ctx, opt.id, r.x + r.w / 2, r.y + 66, 76);
       fitFont(ctx, opt.name.toUpperCase(), 9, r.w - 12);
       ctx.fillStyle = PARCH;
-      ctx.fillText(opt.name.toUpperCase(), r.x + r.w / 2, r.y + 136);
+      ctx.fillText(opt.name.toUpperCase(), r.x + r.w / 2, r.y + 128);
       ctx.font = fontB(7);
       ctx.fillStyle = '#8890b8';
-      ctx.fillText(opt.type2 ? `${opt.type}/${opt.type2}` : opt.type, r.x + r.w / 2, r.y + 152);
+      ctx.fillText(opt.type2 ? `${opt.type}/${opt.type2}` : opt.type, r.x + r.w / 2, r.y + 141);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(`★ ${moveOf(opt.id, opt.type)}`, r.x + r.w / 2, r.y + 156);
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText(superDesc(opt.id, opt.type), r.x + r.w / 2, r.y + 169);
     });
   }
 }

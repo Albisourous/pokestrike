@@ -38,6 +38,26 @@ export const SUPER_DESC: Record<PokeType, string> = {
   psychic: 'shockwave flings foes away',
 };
 
+// Signature supers that replace the type default — keep synced with the
+// signatureMove switch in battle.ts.
+export const MOVE_DESC: Record<string, string> = {
+  'HYPER BEAM': 'a fat beam pierces the farthest foe',
+  'SOLARBEAM': 'a fat beam pierces the farthest foe',
+  'HYDRO CANNON': 'a fat beam punches through the pack',
+  'ZAP CANNON': 'a thunderball hunts the farthest foe',
+  'PSYCHO BOOST': 'huge burst on the biggest foe',
+  'ERUPTION': 'staggered bursts rock the whole pack',
+  'EXPLOSION': 'hits every foe — costs 15% HP',
+  'BLAST BURN': 'a fire wave scorches all it sweeps',
+  'FRENZY PLANT': 'drain orbs hunt the farthest foes',
+  'OUTRAGE': 'three smashes on the nearest foe',
+  'SHEER COLD': 'flash-freeze bursts the nearest foe',
+};
+
+// Move-aware super description: signature nukes override the type line.
+export const superDesc = (id: number, type: PokeType): string =>
+  MOVE_DESC[moveOf(id, type)] ?? SUPER_DESC[type];
+
 // Same shaping both directions: base damage, then the defender's matching
 // stat shrinks it (60 stat ≈ half damage, 0 stat = full damage).
 const mit = (defense: number) => 60 / (60 + defense);
