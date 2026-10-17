@@ -30,6 +30,7 @@ import {
   bumpIsPhysical,
   zapPower,
   blastPower,
+  bossPow,
   bumpCooldown,
   roleOf,
   ROLE_MODS,
@@ -3578,7 +3579,7 @@ export class Battle {
           .forEach((p, i) => {
             this.orbs.push({
               x: e.x, y: e.y, target: p,
-              dmg: Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+              dmg: Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower) * bossPow), // orbs carry no src — bake the boss bonus in
               t: 2.5, wob: i * 2.1, color, hostile: true,
             });
           });
@@ -3691,7 +3692,7 @@ export class Battle {
     // rock trait shaves every hit; the waveShots ramp is the anti-stall —
     // after 10 unanswered shots a wave fights back harder each turn
     const pressure = 1 + Math.max(0, this.waveShots - 10) * 0.12;
-    dmg = Math.max(1, Math.round(dmg * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
+    dmg = Math.max(1, Math.round(dmg * (src?.boss ? bossPow : 1) * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP

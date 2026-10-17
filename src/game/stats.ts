@@ -69,9 +69,9 @@ export const specDamage = (spa: number, spd: number, mult = 1, power = 1) =>
 // Role-based HP: players need to survive a few rounds, bosses are sponges.
 export const playerHp = (s: Stats) => 60 + Math.round(s.hp * 1.15);
 export const enemyHp = (s: Stats) => 50 + Math.round(s.hp * 1.0);
-// ~2/3 the old bulk — summons, hops and the attack rotation carry the
+// ~1/3 the old bulk — summons, hops and the attack rotation carry the
 // fight's difficulty now instead of a long HP wall
-export const bossHp = (s: Stats) => Math.round(s.hp * 4.4);
+export const bossHp = (s: Stats) => Math.round(s.hp * 2.2);
 
 // Speed -> motion. Spe 90 ≈ 1.35x launch; enemies approach at ~30 u/s.
 export const launchMult = (s: Stats) => 0.75 + s.spe / 150;
@@ -80,6 +80,9 @@ export const enemyDrift = (s: Stats) => 12 + s.spe * 0.22;
 // Enemy attacks: zap is physical, boss blast is special.
 export const zapPower = 0.28;
 export const blastPower = 0.2;
+// Glass-cannon bosses: half the HP, so each hit has to land harder to keep
+// the fight tense over the shorter clock.
+export const bossPow = 1.5;
 
 // --- Roles, derived from real stats ---
 // Fast mons are combo triggers, defensive mons are tanks, high-SpA frail mons
