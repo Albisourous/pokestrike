@@ -306,24 +306,25 @@ export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXE
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
 export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
 
-// The hero beat: a mon pulls back on the pad, launches, and ricochets target
-// to target — the game's whole sling-bounce-hit loop on one ~3.6s cycle.
-// Straight legs only: the demo shot banks off the floor into gastly, taps
-// the ceiling, and drops on machop — real bounce kinematics, no arcs.
+// The hero beat teaches the whole loop on one ~3.6s cycle: pull back, sling
+// THROUGH the teammate — his super (chain lightning) fires on the bump —
+// then ricochet foe → wall → foe → floor → back to the pad. Straight legs
+// only: the shot banks, never curves.
 const HERO_SHOT = {
   mon: 7, // squirtle rides the demo shot
   pad: { x: 128, y: 508 },
-  w1: { x: 221, y: 638 }, // banks off the floor…
-  hit1: { x: 440, y: 329 }, // …up-right into gastly's lower face
-  w2: { x: 430, y: 294 }, // taps the ceiling…
-  hit2: { x: 430, y: 342 }, // …and drops straight onto machop
+  hit1: { x: 440, y: 329 }, // through pikachu into gastly's lower face
+  w1: { x: 430, y: 294 }, // taps the ceiling…
+  hit2: { x: 430, y: 342 }, // …drops on machop
+  w2: { x: 430, y: 638 }, // banks off the floor…
+  home: { x: 128, y: 508 }, // …and ricochets home to the pad
 };
-// cycle timing (s): windup → leg to floor → leg to gastly → ceiling → machop
-const HERO_T = { windup: 0.85, w1: 1.2, hit1: 2.02, w2: 2.1, hit2: 2.2, cycle: 3.6 };
+const TITLE_MATE = { id: 25, x: 272, y: 425, s: 56 }; // pikachu sits on the launch lane
+// cycle timing (s): windup → bump → gastly → ceiling → machop → floor → home
+const HERO_T = { windup: 0.85, bump: 1.2, hit1: 1.6, w1: 1.68, hit2: 1.78, w2: 2.4, home: 3.08, cycle: 3.6 };
 const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
   [92, 470, 288, 50],
   [66, 430, 395, 54],
-  [129, 508, 318, 58], // magikarp spectates — the next shot's problem
 ];
 
 // --- playable title sandbox --------------------------------------------------
@@ -365,6 +366,8 @@ const play = {
   wasGold: false,
   launched: false, // once you've slung one the drag prompt has done its job
   ball: { x: HERO_SHOT.pad.x, y: HERO_SHOT.pad.y, vx: 0, vy: 0, live: false, home: 0, trail: [] as { x: number; y: number }[] },
+  mate: { x: TITLE_MATE.x, y: TITLE_MATE.y, s: TITLE_MATE.s, pulse: 0, fired: false },
+  bolts: [] as { x1: number; y1: number; x2: number; y2: number; t: number; delay: number; foe: TitleFoe }[],
   foes: TITLE_FOES.map(([id, x, y, s]): TitleFoe => ({ id, hx: x, hy: y, x, y, vx: 0, vy: 0, s })),
   orbs: [] as { x: number; y: number; vx: number; vy: number; t: number; tgt: TitleFoe }[],
   pops: [] as { x: number; y: number; t: number; label: string; color: string }[],
@@ -403,6 +406,7 @@ export function titlePointerUp() {
   b.trail = [];
   play.hits = 0;
   play.launched = true;
+  play.mate.fired = false; // bump combo re-arms each shot, like the real cd
   sfx('launch');
 }
 export function titlePointerCancel() {
@@ -490,6 +494,26 @@ export function updateTitle(dt: number) {
       sfx('splash');
       sfx('hit', Math.min(2, 0.9 + play.hits * 0.15));
     }
+    // bumping the teammate fires his super — chain lightning hops the pack,
+    // enemy → enemy like bumpAlly's electric case
+    const m = play.mate;
+    if (!m.fired && Math.hypot(b.x - m.x, b.y - m.y) < BALL_R + m.s * 0.5) {
+      m.fired = true;
+      m.pulse = 1;
+      play.pops.push({ x: m.x, y: m.y - 46, t: 0.9, label: `${moveOf(TITLE_MATE.id, 'electric')}!`, color: '#f8d030' });
+      sfx('zap');
+      let from = { x: m.x, y: m.y };
+      const chained: TitleFoe[] = [];
+      for (let i = 0; i < play.foes.length; i++) {
+        const next = play.foes
+          .filter((f) => !chained.includes(f))
+          .sort((a, c) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(c.x - from.x, c.y - from.y))[0];
+        if (!next) break;
+        chained.push(next);
+        play.bolts.push({ x1: from.x, y1: from.y, x2: next.x, y2: next.y, t: 0.3, delay: i * 0.1, foe: next });
+        from = next;
+      }
+    }
   } else if (!play.dragStart) {
     play.idle += dt;
     if (play.idle > 6) play.live = false; // back to the scripted demo
@@ -513,10 +537,46 @@ export function updateTitle(dt: number) {
       play.orbs.splice(i, 1);
     }
   }
+  // chain arcs land a beat apart — each one knocks its target on arrival
+  for (let i = play.bolts.length - 1; i >= 0; i--) {
+    const bl = play.bolts[i];
+    if (bl.delay > 0) {
+      bl.delay -= dt;
+      if (bl.delay <= 0) {
+        const d = Math.hypot(bl.foe.x - bl.x1, bl.foe.y - bl.y1) || 1;
+        bl.foe.vx += ((bl.foe.x - bl.x1) / d) * 200;
+        bl.foe.vy += ((bl.foe.y - bl.y1) / d) * 200;
+        play.pops.push({ x: bl.foe.x, y: bl.foe.y, t: 0.5, label: '', color: '#f8d030' });
+        sfx('zap', 1.15);
+      }
+    } else {
+      bl.t -= dt;
+      if (bl.t <= 0) play.bolts.splice(i, 1);
+    }
+  }
+  if (play.mate.pulse > 0) play.mate.pulse -= dt * 3;
   for (let i = play.pops.length - 1; i >= 0; i--) {
     play.pops[i].t -= dt;
     if (play.pops[i].t <= 0) play.pops.splice(i, 1);
   }
+}
+
+// jagged chain-lightning arc — regenerated every frame so it crackles
+function bolt(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const dl = Math.hypot(dx, dy) || 1;
+  const px = -dy / dl, py = dx / dl;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  for (const u of [0.33, 0.66])
+    ctx.lineTo(x1 + dx * u + px * (Math.random() - 0.5) * dl * 0.16, y1 + dy * u + py * (Math.random() - 0.5) * dl * 0.16);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = '#f8d030';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.strokeStyle = '#fff8d0';
+  ctx.lineWidth = 1.2;
+  ctx.stroke();
 }
 
 // Wild mons at the field edges, clear of the hero arc — [id, x, y]
@@ -647,8 +707,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
   logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
-  const { pad, w1, hit1, w2, hit2 } = HERO_SHOT;
-  const { windup, w1: Tw1, hit1: T1, w2: Tw2, hit2: T2, cycle } = HERO_T;
+  const { pad, hit1, w1, hit2, w2, home } = HERO_SHOT;
+  const { windup, bump, hit1: T1, w1: Tw1, hit2: T2, w2: Tw2, home: Thome, cycle } = HERO_T;
   if (play.live) {
     // --- live sandbox: the pitch is the player's ---
     ctx.save();
@@ -663,6 +723,22 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
       const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
       drawMon(ctx, f.id, f.x, f.y + wob, f.s);
     });
+
+    // the teammate idles mid-lane — sling through him, his super fires
+    const m = play.mate;
+    monShadow(ctx, m.x, m.y + m.s * 0.05, m.s);
+    drawMon(ctx, TITLE_MATE.id, m.x, m.y + Math.sin(t * 2.4 + 1) * 2.5, m.s * (1 + Math.max(0, m.pulse) * 0.15));
+    if (m.pulse > 0) {
+      ctx.globalAlpha = m.pulse;
+      ctx.strokeStyle = '#f8d030';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.s * 0.5 + (1 - m.pulse) * 30, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    for (const bl of play.bolts) if (bl.delay <= 0) bolt(ctx, bl.x1, bl.y1, bl.x2, bl.y2);
 
     const b = play.ball;
     if (b.live) {
@@ -844,8 +920,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   // --- scripted attract loop ---
   const tc = t % cycle;
   // straight legs with hard vertex bounces — the shot banks, never curves
-  const legs = [pad, w1, hit1, w2, hit2];
-  const times = [windup, Tw1, T1, Tw2, T2];
+  const legs = [pad, hit1, w1, hit2, w2, home];
+  const times = [windup, T1, Tw1, T2, Tw2, Thome];
   const posAt = (s: number) => {
     for (let i = 1; i < times.length; i++) {
       if (s <= times[i]) {
@@ -871,14 +947,46 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   ctx.stroke();
   ctx.restore();
 
-  // the pack wobbles; a landed hit knocks its target along the ricochet
-  const knock = [{ x: 0.58, y: -0.82 }, { x: 0, y: 1 }, { x: 0, y: 0 }];
+  // the pack wobbles; the chain zap flinches first, the ball knocks after
+  const boltFrom = [{ x: TITLE_FOES[1][1], y: TITLE_FOES[1][2] }, TITLE_MATE];
+  const knock = [
+    { x: 0.87, y: -0.5 }, // gastly — leg-1 travel dir
+    { x: 0, y: 1 }, // machop — dropped on from the ceiling
+  ];
   TITLE_FOES.forEach(([id, x, y, s], i) => {
-    const ht = i === 0 ? T1 : i === 1 ? T2 : -1;
-    const f = ht > 0 ? Math.max(0, 1 - Math.max(0, tc - ht) / 0.3) : 0;
+    const boltHt = bump + (i === 0 ? 0.1 : 0); // machop eats the first arc; gastly gets the hop
+    const ballHt = i === 0 ? T1 : T2;
+    const fb = Math.max(0, 1 - Math.max(0, tc - boltHt) / 0.3);
+    const fh = Math.max(0, 1 - Math.max(0, tc - ballHt) / 0.3);
+    const zd = Math.hypot(x - boltFrom[i].x, y - boltFrom[i].y) || 1;
+    const zx = ((x - boltFrom[i].x) / zd) * 6 * fb;
+    const zy = ((y - boltFrom[i].y) / zd) * 6 * fb;
+    const f = fb + fh;
     monShadow(ctx, x, y + s * 0.05, s);
-    drawMon(ctx, id, x + knock[i].x * 10 * f, y + knock[i].y * 10 * f + (f ? 0 : Math.sin(t * 2.2 + i * 1.7) * 2.5), s);
+    drawMon(ctx, id, x + zx + knock[i].x * 10 * fh, y + zy + knock[i].y * 10 * fh + (f ? 0 : Math.sin(t * 2.2 + i * 1.7) * 2.5), s);
   });
+
+  // the teammate waits on the lane — the shot passes through him and his
+  // super (chain lightning) hops machop → gastly, a beat apart
+  const mb = Math.max(0, 1 - Math.abs(tc - bump) / 0.4);
+  monShadow(ctx, TITLE_MATE.x, TITLE_MATE.y + TITLE_MATE.s * 0.05, TITLE_MATE.s);
+  drawMon(ctx, TITLE_MATE.id, TITLE_MATE.x, TITLE_MATE.y + (mb ? 0 : Math.sin(t * 2.4 + 1) * 2.5), TITLE_MATE.s * (1 + mb * 0.15));
+  const ba = tc - bump;
+  if (mb > 0) {
+    ctx.globalAlpha = mb;
+    ctx.strokeStyle = '#f8d030';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(TITLE_MATE.x, TITLE_MATE.y, TITLE_MATE.s * 0.5 + (1 - mb) * 30, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (ba >= 0 && ba < 0.4) {
+    ctx.globalAlpha = Math.max(0, 1 - ba / 0.4);
+    bolt(ctx, TITLE_MATE.x, TITLE_MATE.y, TITLE_FOES[1][1], TITLE_FOES[1][2]);
+    if (ba > 0.1) bolt(ctx, TITLE_FOES[1][1], TITLE_FOES[1][2], TITLE_FOES[0][1], TITLE_FOES[0][2]);
+    ctx.globalAlpha = 1;
+  }
 
   // the wall kisses flash where the shot banks
   [[Tw1, w1], [Tw2, w2]].forEach(([ht, p]) => {
@@ -892,8 +1000,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   // the shot itself: the pad mon IS the ball — it waits coiled, then flies.
   // Ghosts trailing it are what read "moving" instead of "floating".
   if (tc < windup) {
-    const dl = Math.hypot(w1.x - pad.x, w1.y - pad.y);
-    const ux = (w1.x - pad.x) / dl, uy = (w1.y - pad.y) / dl;
+    const dl = Math.hypot(hit1.x - pad.x, hit1.y - pad.y);
+    const ux = (hit1.x - pad.x) / dl, uy = (hit1.y - pad.y) / dl;
     const popIn = Math.min(1, tc / 0.15); // re-spawn pop after each loop
     const wag = Math.sin(t * 3) * 3; // the aim breathes, it doesn't sit still
     helpArrow(ctx, pad.x + ux * 46, pad.y + uy * 46 + wag, pad.x + ux * 116, pad.y + uy * 116 + wag, '#6890f0');
@@ -943,6 +1051,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillStyle = color;
     ctx.fillText(label, x, y - 44);
   };
+  hitFx(bump, TITLE_MATE.x, TITLE_MATE.y, `${moveOf(TITLE_MATE.id, 'electric')}!`, '#f8d030');
   hitFx(T1, TITLE_FOES[0][1], TITLE_FOES[0][2], '×1', '#9df0ff');
   hitFx(T2, TITLE_FOES[1][1], TITLE_FOES[1][2], '×2', '#ffd84d');
   }
