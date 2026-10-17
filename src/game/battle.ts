@@ -1,5 +1,5 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
-import { drawMon, drawShiny, itemSprite, drawNpc, loadItem } from '../core/assets';
+import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS } from './data';
@@ -354,6 +354,9 @@ export class Battle {
   // a mid-queue box swap can't evolve the wrong entry)
   private evoPending: { from: SpeciesDef; options: SpeciesDef[]; unit?: Unit; boxDef?: SpeciesDef }[] = [];
   evoChoice: { from: SpeciesDef; options: SpeciesDef[]; unit?: Unit; boxDef?: SpeciesDef } | null = null;
+  // queued evolution cinematics — the arena dims, the sprite whites out and
+  // flickers old↔new faster and faster, then the new form lands
+  private evoFx: { u: Unit; from: number; to: number; t: number; revealed: boolean }[] = [];
   paused = false; // mid-fight freeze — the pause chip in the arena corner
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
@@ -1185,6 +1188,19 @@ export class Battle {
     this.flashes = this.flashes.filter((f) => f.t > 0);
     for (const b of this.balls) b.t -= dt;
     this.balls = this.balls.filter((b) => b.t > 0);
+    // evolution cinematics tick with the fight — the payoff (burst, cry)
+    // lands the moment the flicker resolves, not when the dupe was absorbed
+    for (const f of this.evoFx) {
+      f.t += dt;
+      if (!f.revealed && f.t >= 1.0) {
+        f.revealed = true;
+        this.impact(f.u.x, f.u.y, '#ffd84d', 1.4);
+        this.burst(f.u.x, f.u.y, '#ffffff', 16, 380);
+        sfx('caught');
+        cry(f.to, 0.5);
+      }
+    }
+    this.evoFx = this.evoFx.filter((f) => f.t < 1.35);
     for (const p of this.pickups) p.t += dt;
     for (const s of this.scars) s.t += dt;
     this.scars = this.scars.filter((s) => s.t < s.life);
@@ -2758,7 +2774,7 @@ export class Battle {
     }
     const next = options[0];
     if (next) {
-      if (owned) this.evolveUnit(owned, next);
+      if (owned) this.evolveUnit(owned, next); // the flicker cinematic owns the payoff
       else this.box[bi] = this.evoMerge(this.box[bi], next, shiny); // markers survive a boxed evolution
       recordCapture([next.id]); // evo-only species only ever enter the dex here
       this.texts.push({
@@ -2767,10 +2783,13 @@ export class Battle {
         text: `${def.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`,
         t: 1.4, color: '#ffd84d', big: true,
       });
-      this.impact(owned ? owned.x : this.arena.x + this.arena.w / 2, owned ? owned.y : this.arena.y + 90, '#ffd84d', 1.4);
-      this.burst(owned ? owned.x : this.arena.x + this.arena.w / 2, owned ? owned.y : this.arena.y + 90, '#ffffff', 16, 380);
-      sfx('caught');
-      cry(next.id, 0.5);
+      // boxed merges get the instant fanfare — no sprite on the field to flicker
+      if (!owned) {
+        this.impact(this.arena.x + this.arena.w / 2, this.arena.y + 90, '#ffd84d', 1.4);
+        this.burst(this.arena.x + this.arena.w / 2, this.arena.y + 90, '#ffffff', 16, 380);
+        sfx('caught');
+        cry(next.id, 0.5);
+      }
       return true;
     }
     if (owned) {
@@ -2822,14 +2841,18 @@ export class Battle {
       text: `${c.from.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`,
       t: 1.4, color: '#ffd84d', big: true,
     });
-    sfx('caught');
-    cry(next.id, 0.5);
+    // a fielded pick plays out in the cinematic — boxed picks need the cue here
+    if (!c.unit) {
+      sfx('caught');
+      cry(next.id, 0.5);
+    }
     this.evoChoice = this.evoPending.shift() ?? null;
   }
 
   // Mid-run evolution: same slot, new species — hp fraction carries over
   // and a fainted mon stays fainted (evolving isn't a revive).
   private evolveUnit(p: Unit, nd: SpeciesDef) {
+    const fromId = p.def.id; // the cinematic flickers from this sprite
     const frac = p.maxHp > 0 ? p.hp / p.maxHp : 1;
     const role = roleOf(nd.stats, nd.healer);
     const m = ROLE_MODS[role];
@@ -2846,6 +2869,7 @@ export class Battle {
     p.cdMax = Math.max(1, Math.round(bumpCooldown(nd.type) * this.cdMult) - p.cdMod);
     p.cd = Math.min(p.cd, p.cdMax);
     this.refreshTraits(); // evolving can change type — retally immediately
+    this.evoFx.push({ u: p, from: fromId, to: nd.id, t: 0, revealed: false });
   }
 
   // Reseat a unit on a new species: role/stats recomputed, hp carried as a
@@ -4071,6 +4095,47 @@ export class Battle {
       }
       ctx.restore();
       ctx.globalAlpha = 1;
+    }
+
+    // evolution cinematic: the arena dims, the mon whites out and flickers
+    // old↔new at an accelerating clip — the GBA silhouette swap — then the
+    // new form pops in under a gold ring
+    if (this.evoFx.length) {
+      const a = this.arena;
+      ctx.fillStyle = 'rgba(6,10,20,0.4)';
+      ctx.fillRect(a.x, a.y, a.w, a.h);
+      for (const f of this.evoFx) {
+        const u = f.u;
+        const size = u.r * 2.6;
+        if (f.t < 1.0) {
+          const ph = Math.min(1, Math.max(0, (f.t - 0.15) / 0.85));
+          const period = 0.16 - 0.11 * ph; // swaps speed up as it resolves
+          const which = f.t < 0.15 ? 0 : Math.floor((f.t - 0.15) / period) % 2;
+          ctx.save();
+          ctx.shadowColor = '#ffffff';
+          ctx.shadowBlur = 24;
+          ctx.drawImage(whiteSprite(which ? f.to : f.from), u.x - size / 2, u.y - size / 2, size, size);
+          ctx.restore();
+          ctx.strokeStyle = '#ffd84d';
+          ctx.lineWidth = 3;
+          ctx.globalAlpha = 0.5 + ph * 0.5;
+          ctx.beginPath();
+          ctx.arc(u.x, u.y, u.r * (1.1 + ph * 0.5), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        } else {
+          const rp = Math.min(1, (f.t - 1.0) / 0.35);
+          const pop = 1.5 - 0.5 * (1 - Math.pow(1 - rp, 3)); // overshoot in, settle
+          drawMon(ctx, f.to, u.x, u.y, size * pop);
+          ctx.strokeStyle = '#ffd84d';
+          ctx.lineWidth = 3;
+          ctx.globalAlpha = 1 - rp;
+          ctx.beginPath();
+          ctx.arc(u.x, u.y, u.r * (1.1 + rp * 1.6), 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
     }
 
     // skull marks — a tiny bone-white badge pinned on the bounty foe
@@ -5413,17 +5478,22 @@ export class Battle {
     const grow = u === this.active && this.phase === 'aim' ? 1.18 : 1;
     // everyone breathes a little — a standing army reads as a dead board
     const bob = Math.sin(this.time * 2.4 + u.uid * 1.7) * 1.2;
-    if (st > 0.02) {
-      ctx.save();
-      ctx.translate(u.x, u.y + bob);
-      if (spd > 40) ctx.rotate(Math.atan2(u.vy, u.vx));
-      ctx.scale(1 + st, Math.max(0.55, 1 - st * 0.7));
-      if (u.shiny) drawShiny(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
-      else drawMon(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
-      ctx.restore();
-    } else {
-      if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
-      else drawMon(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
+    // mid-evolution the cinematic owns the sprite — a white silhouette
+    // flickering old↔new — so the settled new form doesn't peek through
+    const evolving = this.evoFx.some((f) => f.u === u);
+    if (!evolving) {
+      if (st > 0.02) {
+        ctx.save();
+        ctx.translate(u.x, u.y + bob);
+        if (spd > 40) ctx.rotate(Math.atan2(u.vy, u.vx));
+        ctx.scale(1 + st, Math.max(0.55, 1 - st * 0.7));
+        if (u.shiny) drawShiny(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
+        else drawMon(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
+        ctx.restore();
+      } else {
+        if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
+        else drawMon(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
+      }
     }
 
     // shinies twinkle — three gold four-point stars drift around the sprite

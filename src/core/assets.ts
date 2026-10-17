@@ -99,6 +99,26 @@ export function drawShiny(ctx: CanvasRenderingContext2D, id: number, x: number, 
   ctx.restore();
 }
 
+// White silhouette of the front sprite — the evolving mon's glow frames.
+const whiteCache = new Map<number, HTMLCanvasElement>();
+export function whiteSprite(id: number): HTMLCanvasElement {
+  let c = whiteCache.get(id);
+  if (!c) {
+    const img = sprite(id);
+    c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const t = c.getContext('2d')!;
+    t.imageSmoothingEnabled = false;
+    t.drawImage(img, 0, 0);
+    t.globalCompositeOperation = 'source-in';
+    t.fillStyle = '#ffffff';
+    t.fillRect(0, 0, c.width, c.height);
+    whiteCache.set(id, c);
+  }
+  return c;
+}
+
 // --- sprite sheets (Makko-baked, or any strip/grid sheet) ---
 // Drop <name>.png + <name>.json into public/anim/. The JSON manifest is:
 //   { "frameW": 64, "frameH": 64, "fps": 12, "frames": [{"x":0,"y":0,"w":64,"h":64}, ...] }
