@@ -1,5 +1,5 @@
 import { itemSprite, loadItem, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
-import { isMuted } from '../core/audio';
+import { isMuted, sfx } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, LEADER_NPC } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Perk, Rarity } from './perks';
@@ -321,6 +321,159 @@ const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
   [129, 508, 318, 58], // magikarp spectates — the next shot's problem
 ];
 
+// --- playable title sandbox --------------------------------------------------
+// The pitch between the wordmark and the buttons is a live demo: the scripted
+// attract loop plays until a drag lands on the grass, then the pad mon is the
+// player's ball — real pull-back, wall bounces, supers on contact.
+export const TITLE_FIELD = { x: 26, y: 268, w: W - 52, h: 396 };
+const BALL_R = 26;
+
+interface TitleFoe {
+  id: number; hx: number; hy: number; x: number; y: number; vx: number; vy: number; s: number;
+}
+const play = {
+  live: false, // flips once the player grabs the field — attract resumes on idle
+  idle: 0,
+  drag: null as { x: number; y: number } | null,
+  ball: { x: HERO_SHOT.pad.x, y: HERO_SHOT.pad.y, vx: 0, vy: 0, live: false, home: 0, trail: [] as { x: number; y: number }[] },
+  foes: TITLE_FOES.map(([id, x, y, s]): TitleFoe => ({ id, hx: x, hy: y, x, y, vx: 0, vy: 0, s })),
+  orbs: [] as { x: number; y: number; vx: number; vy: number; t: number; tgt: TitleFoe }[],
+  pops: [] as { x: number; y: number; t: number; label: string; color: string }[],
+  hits: 0,
+};
+
+export function titlePointerDown(p: { x: number; y: number }): boolean {
+  if (!inRect(p.x, p.y, TITLE_FIELD)) return false;
+  play.live = true;
+  play.idle = 0;
+  play.drag = { x: p.x, y: p.y };
+  return true;
+}
+export function titlePointerMove(p: { x: number; y: number }) {
+  if (play.drag) play.drag = { x: p.x, y: p.y };
+}
+export function titlePointerUp(p: { x: number; y: number }) {
+  if (!play.drag) return;
+  play.drag = null;
+  const b = play.ball;
+  if (b.live) return;
+  const dx = b.x - p.x, dy = b.y - p.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 14) return; // a tap isn't a pull
+  const v = Math.min(d * 5.2, 1150);
+  b.vx = (dx / d) * v;
+  b.vy = (dy / d) * v;
+  b.live = true;
+  b.home = 0;
+  b.trail = [];
+  play.hits = 0;
+  sfx('launch');
+}
+export function titlePointerCancel() {
+  play.drag = null;
+}
+
+export function updateTitle(dt: number) {
+  // knocked foes spring back to their marks, springy and damped
+  for (const f of play.foes) {
+    f.vx += (f.hx - f.x) * 26 * dt;
+    f.vy += (f.hy - f.y) * 26 * dt;
+    const damp = Math.exp(-7 * dt);
+    f.vx *= damp;
+    f.vy *= damp;
+    f.x += f.vx * dt;
+    f.y += f.vy * dt;
+  }
+  const b = play.ball;
+  if (b.live) {
+    b.trail.push({ x: b.x, y: b.y });
+    if (b.trail.length > 7) b.trail.shift();
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp < 30) {
+      // settled — slide home and hand the ball back
+      b.home += dt;
+      b.vx *= Math.exp(-10 * dt);
+      b.vy *= Math.exp(-10 * dt);
+      b.x += (HERO_SHOT.pad.x - b.x) * Math.min(1, 8 * dt);
+      b.y += (HERO_SHOT.pad.y - b.y) * Math.min(1, 8 * dt);
+      if (b.home > 0.55) {
+        b.live = false;
+        b.x = HERO_SHOT.pad.x;
+        b.y = HERO_SHOT.pad.y;
+      }
+    } else {
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      const fr = Math.exp(-1.15 * dt);
+      b.vx *= fr;
+      b.vy *= fr;
+    }
+    const F = TITLE_FIELD;
+    if (b.x < F.x + BALL_R) { b.x = F.x + BALL_R; b.vx = Math.abs(b.vx) * 0.85; sfx('bounce', 0.9); }
+    if (b.x > F.x + F.w - BALL_R) { b.x = F.x + F.w - BALL_R; b.vx = -Math.abs(b.vx) * 0.85; sfx('bounce', 0.9); }
+    if (b.y < F.y + BALL_R) { b.y = F.y + BALL_R; b.vy = Math.abs(b.vy) * 0.85; sfx('bounce', 0.9); }
+    if (b.y > F.y + F.h - BALL_R) { b.y = F.y + F.h - BALL_R; b.vy = -Math.abs(b.vy) * 0.85; sfx('bounce', 0.9); }
+    for (const f of play.foes) {
+      const fr2 = f.s * 0.5;
+      const dx = b.x - f.x, dy = b.y - f.y;
+      const d = Math.hypot(dx, dy);
+      if (d >= BALL_R + fr2 || d === 0) continue;
+      const nx = dx / d, ny = dy / d; // unit normal, foe → ball
+      b.x = f.x + nx * (BALL_R + fr2);
+      b.y = f.y + ny * (BALL_R + fr2);
+      const vn = b.vx * nx + b.vy * ny;
+      b.vx = (b.vx - 2 * vn * nx) * 0.92;
+      b.vy = (b.vy - 2 * vn * ny) * 0.92;
+      f.vx -= nx * sp * 0.5;
+      f.vy -= ny * sp * 0.5;
+      play.hits++;
+      play.pops.push({
+        x: f.x, y: f.y, t: 0.8,
+        label: `×${play.hits}`,
+        color: play.hits > 1 ? '#ffd84d' : '#9df0ff',
+      });
+      // the hit is when the super fires — homing water orbs on the nearest 3
+      play.pops.push({ x: b.x, y: b.y - 46, t: 0.8, label: `${moveOf(HERO_SHOT.mon, 'water')}!`, color: '#6890f0' });
+      play.foes
+        .slice()
+        .sort((a, c) => Math.hypot(a.x - b.x, a.y - b.y) - Math.hypot(c.x - b.x, c.y - b.y))
+        .slice(0, 3)
+        .forEach((tgt, i) => {
+          const a = (i / 3) * Math.PI * 2;
+          play.orbs.push({ x: b.x, y: b.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, t: 1.8, tgt });
+        });
+      sfx('splash');
+      sfx('hit', Math.min(2, 0.9 + play.hits * 0.15));
+    }
+  } else if (!play.drag) {
+    play.idle += dt;
+    if (play.idle > 6) play.live = false; // back to the scripted demo
+  }
+  for (let i = play.orbs.length - 1; i >= 0; i--) {
+    const o = play.orbs[i];
+    o.t -= dt;
+    const dx = o.tgt.x - o.x, dy = o.tgt.y - o.y;
+    const d = Math.hypot(dx, dy) || 1;
+    const k = Math.min(1, 9 * dt);
+    o.vx += ((dx / d) * 520 - o.vx) * k;
+    o.vy += ((dy / d) * 520 - o.vy) * k;
+    o.x += o.vx * dt;
+    o.y += o.vy * dt;
+    if (d < o.tgt.s * 0.5 + 8 || o.t <= 0) {
+      if (d < o.tgt.s * 0.5 + 8) {
+        o.tgt.vx += (dx / d) * 160;
+        o.tgt.vy += (dy / d) * 160;
+        play.pops.push({ x: o.tgt.x, y: o.tgt.y, t: 0.5, label: '', color: '#9df0ff' });
+      }
+      play.orbs.splice(i, 1);
+    }
+  }
+  for (let i = play.pops.length - 1; i >= 0; i--) {
+    play.pops[i].t -= dt;
+    if (play.pops[i].t <= 0) play.pops.splice(i, 1);
+  }
+}
+
 // Wild mons at the field edges, clear of the hero arc — [id, x, y]
 const WILD_MONS: [number, number, number][] = [
   [16, 484, 118],
@@ -451,6 +604,91 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
 
   const { pad, c1, hit1, c2, hit2 } = HERO_SHOT;
   const { windup, hit1: T1, hit2: T2, cycle } = HERO_T;
+  if (play.live) {
+    // --- live sandbox: the pitch is the player's ---
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 10]);
+    ctx.strokeRect(TITLE_FIELD.x, TITLE_FIELD.y, TITLE_FIELD.w, TITLE_FIELD.h);
+    ctx.restore();
+
+    play.foes.forEach((f, i) => {
+      monShadow(ctx, f.x, f.y + f.s * 0.05, f.s);
+      const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
+      drawMon(ctx, f.id, f.x, f.y + wob, f.s);
+    });
+
+    const b = play.ball;
+    if (b.live) {
+      b.trail.forEach((g, gi) => {
+        ctx.globalAlpha = ((gi + 1) / b.trail.length) * 0.22;
+        drawMon(ctx, HERO_SHOT.mon, g.x, g.y, 62);
+      });
+      ctx.globalAlpha = 1;
+      const ang = Math.atan2(b.vy, b.vx) * 0.7;
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(ang);
+      drawMon(ctx, HERO_SHOT.mon, 0, 0, 78);
+      ctx.restore();
+    } else {
+      monShadow(ctx, b.x, b.y + 8, 76);
+      ctx.save();
+      ctx.translate(b.x, b.y + Math.sin(t * 2) * 1.5);
+      if (play.drag) ctx.rotate(-0.15); // coiling into the pull
+      drawMon(ctx, HERO_SHOT.mon, 0, 0, 76);
+      ctx.restore();
+    }
+
+    // pull-back arrow + a dotted aim line — the real game's two hints
+    if (play.drag && !b.live) {
+      const dx = b.x - play.drag.x, dy = b.y - play.drag.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 14) {
+        const ux = dx / d, uy = dy / d;
+        const al = Math.min(110, d * 0.5);
+        helpArrow(ctx, b.x - ux * 44, b.y - uy * 44, b.x - ux * al, b.y - uy * al, GOLD);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(232,236,248,0.55)';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([7, 9]);
+        ctx.beginPath();
+        ctx.moveTo(b.x + ux * 40, b.y + uy * 40);
+        ctx.lineTo(b.x + ux * 230, b.y + uy * 230);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    for (const o of play.orbs) {
+      ctx.fillStyle = '#6890f0';
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#9df0ff';
+      ctx.beginPath();
+      ctx.arc(o.x, o.y, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const pulse = 1 + Math.sin(t * 5) * 0.15;
+    for (const pop of play.pops) {
+      ctx.globalAlpha = Math.min(1, pop.t / 0.3);
+      sparkle(ctx, pop.x, pop.y, 12 * pulse, pop.color);
+      if (pop.label) {
+        ctx.textAlign = 'center';
+        ctx.font = fontB(11);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(pop.label, pop.x, pop.y - 34);
+        ctx.fillStyle = pop.color;
+        ctx.fillText(pop.label, pop.x, pop.y - 34);
+      }
+    }
+    ctx.globalAlpha = 1;
+  } else {
+  // --- scripted attract loop ---
   const tc = t % cycle;
   const bez = (p0: { x: number; y: number }, c: { x: number; y: number }, p1: { x: number; y: number }, u: number) => ({
     x: (1 - u) * (1 - u) * p0.x + 2 * (1 - u) * u * c.x + u * u * p1.x,
@@ -541,6 +779,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   };
   hitFx(T1, hit1.x, hit1.y, '×1', '#9df0ff');
   hitFx(T2, hit2.x, hit2.y, '×2', '#ffd84d');
+  }
 
   // the pitch in one line — a stranger gets the loop before they tap a thing
   ctx.font = font(11);

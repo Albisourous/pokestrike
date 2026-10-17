@@ -56,6 +56,11 @@ import {
   CATCHABLE,
   inRect,
   font,
+  titlePointerDown,
+  titlePointerMove,
+  titlePointerUp,
+  titlePointerCancel,
+  updateTitle,
 } from './game/screens';
 import type { RunResult, ShareGrid } from './game/screens';
 import type { PokeType } from './game/types';
@@ -394,7 +399,10 @@ canvas.addEventListener('pointerdown', (e) => {
       startDraft();
       scene = 'draft';
       sceneMusic();
+      return;
     }
+    // the pitch is playable — a drag on the grass grabs the demo ball
+    if (titlePointerDown(p)) return;
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
     if (draft.rerolls > 0 && inRect(p.x, p.y, DRAFT_REROLL)) {
@@ -560,6 +568,7 @@ canvas.addEventListener('pointermove', (e) => {
       );
     return;
   }
+  if (scene === 'title') titlePointerMove(p);
   if (scene === 'battle') battle?.pointerMove(p);
 });
 
@@ -608,6 +617,7 @@ canvas.addEventListener('pointerup', (e) => {
     }
     return;
   }
+  if (scene === 'title') titlePointerUp(toLogical(e));
   if (scene === 'battle') battle?.pointerUp();
 });
 // desktop keys: Esc/? toggles the manual, arrows page it, P pauses a live
@@ -637,6 +647,7 @@ canvas.addEventListener('pointercancel', () => {
   dexDrag = null;
   boxDrag = null;
   // an interrupt isn't a release — drop the drag, don't fire the shot
+  if (scene === 'title') titlePointerCancel();
   if (scene === 'battle') battle?.pointerCancel();
 });
 
@@ -682,6 +693,7 @@ function hud(name: string) {
 
 function update(dt: number) {
   t += dt;
+  if (scene === 'title') updateTitle(dt);
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
