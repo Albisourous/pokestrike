@@ -37,6 +37,7 @@ import {
   drawMuteChip,
   MUTE_BTN,
   DRAFT_REROLL,
+  DRAFT_STOPS,
   drawHelp,
   drawPerkPick,
   CHARM_SKIP,
@@ -173,6 +174,14 @@ function buildShare(b: Battle, won: boolean) {
 // team; top up from unpicked species when the deal runs dry. Rolled ONCE
 // per round and cached: re-rolling in render would flicker the cards.
 let offerCache: number[] | null = null;
+// slot-reel reveal: draftT0 marks when the board dealt, draftLanded counts
+// the reels already stopped — a tap mid-spin fast-forwards to the dealt board
+let draftT0 = 0;
+let draftLanded = 0;
+function respinDraft() {
+  draftT0 = t;
+  draftLanded = 0;
+}
 function draftOffers(): number[] {
   if (offerCache) return offerCache;
   const offers = draft.order
@@ -259,6 +268,7 @@ function startDraft() {
     draft.lvls.set(i, lvl);
   });
   offerCache = null;
+  respinDraft();
 }
 
 // a shiny or leveled slot hands Battle a cloned def — the shared species
@@ -282,6 +292,7 @@ function rerollDraft() {
   }
   draft.order = [...head, ...tail];
   offerCache = null;
+  respinDraft();
   sfx('ui');
 }
 
@@ -390,13 +401,19 @@ canvas.addEventListener('pointerdown', (e) => {
       rerollDraft();
       return;
     }
+    // reels still rolling — any tap fast-forwards to the dealt board
+    if (t - draftT0 < DRAFT_STOPS[DRAFT_STOPS.length - 1]) {
+      draftT0 = t - DRAFT_STOPS[DRAFT_STOPS.length - 1];
+      return;
+    }
     const offers = draftOffers();
     for (let i = 0; i < offers.length; i++) {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       sfx('ui');
       cry(draftPool[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
       draft.picked.push(offers[i]);
-      offerCache = null; // next round rerolls
+      offerCache = null;
+      respinDraft(); // next round spins a fresh board
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(arenaRect(), draft.picked.map(draftDef), stage, runRng);
         battle.coach = !coachDone(); // first-ever run teaches by doing
@@ -769,6 +786,14 @@ function update(dt: number) {
       music(won ? 'win' : null); // clear fanfare, or cut to silence on a loss
     }
   }
+  // draft reels land one by one — a rising thunk per stop
+  if (scene === 'draft') {
+    const landed = DRAFT_STOPS.filter((s) => t - draftT0 >= s).length;
+    if (landed > draftLanded) {
+      draftLanded = landed;
+      sfx('bounce', 0.8 + landed * 0.25);
+    }
+  }
 }
 
 function render() {
@@ -800,14 +825,15 @@ function render() {
         t, draft.picked.map(draftDef));
       break;
     case 'draft': {
-      const offers = draftOffers().map(draftDef);
+      const idx = draftOffers();
       drawDraft(
         ctx,
-        offers,
+        idx.map(draftDef),
         draft.picked.map(draftDef),
         stage.name,
         t,
         draft.rerolls,
+        { age: t - draftT0, pool: draftPool, idx },
       );
       break;
     }

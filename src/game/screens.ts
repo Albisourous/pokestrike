@@ -45,6 +45,9 @@ export function draftCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: CARDS_Y, w: CARD_W, h: CARD_H };
 }
 export const DRAFT_REROLL = { x: W / 2 - 85, y: CARDS_Y + CARD_H + 16, w: 170, h: 40 };
+// slot-reel reveal: each offer card spins a strip of pool faces that brakes
+// onto the dealt mon — staggered left to right. Spin age counts seconds.
+export const DRAFT_STOPS = [0.7, 1.0, 1.3];
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
@@ -1071,6 +1074,7 @@ export function drawDraft(
   stageName: string,
   t: number,
   rerolls: number,
+  spin: { age: number; pool: SpeciesDef[]; idx: number[] },
 ) {
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
 
@@ -1082,10 +1086,13 @@ export function drawDraft(
   ctx.fillStyle = '#8890b8';
   ctx.fillText(stageName, W / 2, 155);
   ctx.font = fontB(9);
+  const spinning = spin.age < DRAFT_STOPS[DRAFT_STOPS.length - 1];
   ctx.fillText(
-    picked.length === 3
-      ? 'ace round — a veteran anchors the team'
-      : 'one of three — your picks become the balls you sling',
+    spinning
+      ? 'reels rolling — tap to skip'
+      : picked.length === 3
+        ? 'ace round — a veteran anchors the team'
+        : 'one of three — your picks become the balls you sling',
     W / 2,
     180,
   );
@@ -1100,15 +1107,50 @@ export function drawDraft(
     cardFrame(ctx, r, 10);
     if (def.shiny) rim(ctx, r, 10, '#ffd84d', 2);
 
+    // slot reel: pool faces scroll past until the reel brakes onto the offer
+    const stopAt = DRAFT_STOPS[i] ?? DRAFT_STOPS[DRAFT_STOPS.length - 1];
+    const spinP = Math.min(spin.age / stopAt, 1);
+    if (spinP < 1) {
+      const win = { x: r.x + 10, y: r.y + 20, w: r.w - 20, h: 148 };
+      ctx.save();
+      roundRect(ctx, win.x, win.y, win.w, win.h, 8);
+      ctx.clip();
+      ctx.fillStyle = '#0a0e1e';
+      ctx.fillRect(win.x, win.y, win.w, win.h);
+      // ease-out quart — a fast blur of faces that settles hard on the deal
+      const steps = 9 + i * 3;
+      const pos = steps * (1 - Math.pow(1 - spinP, 4));
+      const L = spin.pool.length;
+      for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
+        const d = spin.pool[(((spin.idx[i] + j - steps) % L) + L) % L];
+        drawMon(ctx, d.id, r.x + r.w / 2, win.y + win.h / 2 + (j - pos) * 88, 80);
+      }
+      // fade the window edges so faces slide out of the dark
+      const g = ctx.createLinearGradient(0, win.y, 0, win.y + win.h);
+      g.addColorStop(0, 'rgba(10,14,30,0.9)');
+      g.addColorStop(0.3, 'rgba(10,14,30,0)');
+      g.addColorStop(0.7, 'rgba(10,14,30,0)');
+      g.addColorStop(1, 'rgba(10,14,30,0.9)');
+      ctx.fillStyle = g;
+      ctx.fillRect(win.x, win.y, win.w, win.h);
+      ctx.restore();
+      ctx.font = font(9);
+      ctx.fillStyle = '#3a4468';
+      ctx.fillText('· · ·', r.x + r.w / 2, r.y + 184);
+      return;
+    }
+    // landing pop: the sprite overshoots for a beat as the reel stops
+    const pop = 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15);
+
     // a shiny draft card glows gold — the rarest pick on the board
     if (def.shiny) {
-      drawShiny(ctx, def.id, r.x + r.w / 2, r.y + 94, 84);
+      drawShiny(ctx, def.id, r.x + r.w / 2, r.y + 94, 84 * pop);
       ctx.textAlign = 'center';
       ctx.font = font(8);
       ctx.fillStyle = '#ffd84d';
       ctx.fillText('✦ SHINY ✦', r.x + r.w / 2, r.y + 30);
     } else {
-      drawMon(ctx, def.id, r.x + r.w / 2, r.y + 94, 84);
+      drawMon(ctx, def.id, r.x + r.w / 2, r.y + 94, 84 * pop);
     }
 
     // evolution hint rides the top-left — Magikarp is secretly Gyarados
