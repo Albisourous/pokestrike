@@ -303,19 +303,22 @@ export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXE
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
 export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
 
-// The hero beat: one mon mid-flight along a dotted arc into a pack of foes —
-// the game's whole verb read in a glance. The shot springs off a ball pad.
+// The hero beat: a mon pulls back on the pad, launches, and ricochets target
+// to target — the game's whole sling-bounce-hit loop on one ~3.6s cycle.
 const HERO_SHOT = {
-  start: { x: 128, y: 482 },
-  pad: { x: 128, y: 512 },
-  cp: { x: 320, y: 200 },
-  tgt: { x: 418, y: 318 },
-  u: 0.8, // where the flying mon sits along the arc
+  mon: 7, // squirtle rides the demo shot
+  pad: { x: 128, y: 508 },
+  c1: { x: 300, y: 160 },
+  hit1: { x: 470, y: 288 }, // first bounce — gastly waits here
+  c2: { x: 490, y: 380 },
+  hit2: { x: 430, y: 395 }, // ricochet lands on machop
 };
+// cycle timing (s): windup → leg 1 → leg 2 → linger, then it loops
+const HERO_T = { windup: 0.85, hit1: 1.85, hit2: 2.45, cycle: 3.6 };
 const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
-  [129, 430, 336, 58],
-  [92, 484, 292, 50],
-  [66, 476, 382, 54],
+  [92, 470, 288, 50],
+  [66, 430, 395, 54],
+  [129, 508, 318, 58], // magikarp spectates — the next shot's problem
 ];
 
 // Wild mons at the field edges, clear of the hero arc — [id, x, y]
@@ -446,79 +449,98 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
   logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
-  const { start, pad, cp, tgt } = HERO_SHOT;
-  const bez = (u: number) => ({
-    x: (1 - u) * (1 - u) * start.x + 2 * (1 - u) * u * cp.x + u * u * tgt.x,
-    y: (1 - u) * (1 - u) * start.y + 2 * (1 - u) * u * cp.y + u * u * tgt.y,
+  const { pad, c1, hit1, c2, hit2 } = HERO_SHOT;
+  const { windup, hit1: T1, hit2: T2, cycle } = HERO_T;
+  const tc = t % cycle;
+  const bez = (p0: { x: number; y: number }, c: { x: number; y: number }, p1: { x: number; y: number }, u: number) => ({
+    x: (1 - u) * (1 - u) * p0.x + 2 * (1 - u) * u * c.x + u * u * p1.x,
+    y: (1 - u) * (1 - u) * p0.y + 2 * (1 - u) * u * c.y + u * u * p1.y,
   });
+  // position along the whole shot at cycle time s (clamped to the flown path)
+  const posAt = (s: number) =>
+    s <= T1
+      ? bez(pad, c1, hit1, Math.max(0, Math.min(1, (s - windup) / (T1 - windup))))
+      : bez(hit1, c2, hit2, Math.max(0, Math.min(1, (s - T1) / (T2 - T1))));
 
-  // flight arc — the dashes literally march toward the impact
+  // flight lane — the dashes literally march toward the pack
   ctx.save();
   ctx.strokeStyle = 'rgba(232,236,248,0.8)';
   ctx.lineWidth = 3;
   ctx.setLineDash([9, 11]);
   ctx.lineDashOffset = -t * 34;
   ctx.beginPath();
-  ctx.moveTo(start.x, start.y);
-  ctx.quadraticCurveTo(cp.x, cp.y, tgt.x, tgt.y);
+  ctx.moveTo(pad.x, pad.y);
+  ctx.quadraticCurveTo(c1.x, c1.y, hit1.x, hit1.y);
+  ctx.quadraticCurveTo(c2.x, c2.y, hit2.x, hit2.y);
   ctx.stroke();
   ctx.restore();
 
-  // launch pad: the ball the mon sprang from + the pull-back drag arrow
-  const ball = itemSprite('poke-ball');
-  if (ball) {
-    monShadow(ctx, pad.x, pad.y + 4, 76);
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(ball, pad.x - 36, pad.y - 36, 72, 72);
-    ctx.restore();
-  }
-  const dl = Math.hypot(tgt.x - pad.x, tgt.y - pad.y);
-  const ux = (tgt.x - pad.x) / dl, uy = (tgt.y - pad.y) / dl;
-  const wag = Math.sin(t * 3) * 3; // the drag charges, it doesn't sit still
-  helpArrow(ctx, pad.x - ux * 46, pad.y - uy * 46 + wag, pad.x - ux * 110, pad.y - uy * 110 + wag, GOLD);
-
-  // the pack wobbles in place — targets waiting to get hit
+  // the pack wobbles; a landed hit knocks its target along the ricochet
   TITLE_FOES.forEach(([id, x, y, s], i) => {
+    const ht = i === 0 ? T1 : i === 1 ? T2 : -1;
+    const k = i === 0 ? { x: c2.x - hit1.x, y: c2.y - hit1.y } : i === 1 ? { x: hit2.x - c2.x, y: hit2.y - c2.y } : { x: 0, y: 0 };
+    const kl = Math.hypot(k.x, k.y) || 1;
+    const f = ht > 0 ? Math.max(0, 1 - Math.max(0, tc - ht) / 0.3) : 0;
     monShadow(ctx, x, y + s * 0.05, s);
-    drawMon(ctx, id, x, y + Math.sin(t * 2.2 + i * 1.7) * 2.5, s);
+    drawMon(ctx, id, x + (k.x / kl) * 10 * f, y + (k.y / kl) * 10 * f + (f ? 0 : Math.sin(t * 2.2 + i * 1.7) * 2.5), s);
   });
 
-  // the shot itself: a mon mid-arc, tilted along its flight vector — the
-  // fading ghosts behind it are what read "moving" instead of "floating"
-  const u = HERO_SHOT.u + Math.sin(t * 2) * 0.02;
-  const pos = bez(u);
-  const ahead = bez(u + 0.03), behind = bez(Math.max(0, u - 0.03));
-  const ang = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 0.7;
-  for (const [du, al] of [[0.05, 0.3], [0.1, 0.13]] as const) {
-    const g = bez(u - du);
+  // the shot itself: the pad mon IS the ball — it waits coiled, then flies.
+  // Ghosts trailing it are what read "moving" instead of "floating".
+  if (tc < windup) {
+    const dl = Math.hypot(hit1.x - pad.x, hit1.y - pad.y);
+    const ux = (hit1.x - pad.x) / dl, uy = (hit1.y - pad.y) / dl;
+    const popIn = Math.min(1, tc / 0.15); // re-spawn pop after each loop
+    const wag = Math.sin(t * 3) * 3; // the drag charges, it doesn't sit still
+    helpArrow(ctx, pad.x - ux * 46, pad.y - uy * 46 + wag, pad.x - ux * 110, pad.y - uy * 110 + wag, GOLD);
+    monShadow(ctx, pad.x, pad.y + 8, 76);
     ctx.save();
-    ctx.globalAlpha = al;
-    ctx.translate(g.x, g.y);
+    ctx.translate(pad.x - ux * 8, pad.y - uy * 8); // pulled back against the aim
+    ctx.rotate(-0.15);
+    drawMon(ctx, HERO_SHOT.mon, 0, 0, 76 * popIn);
+    ctx.restore();
+  } else {
+    const pos = posAt(tc);
+    const ahead = posAt(tc + 0.04), behind = posAt(tc - 0.04);
+    const ang = Math.atan2(ahead.y - behind.y, ahead.x - behind.x) * 0.7;
+    const fade = Math.min(1, (T2 + 0.3 - tc) / 0.3); // it lands, then is gone
+    for (const [ds, al] of [[0.07, 0.3], [0.14, 0.13]] as const) {
+      const g = posAt(Math.max(windup, tc - ds));
+      ctx.save();
+      ctx.globalAlpha = al * fade;
+      ctx.translate(g.x, g.y);
+      ctx.rotate(ang);
+      drawMon(ctx, HERO_SHOT.mon, 0, 0, 80);
+      ctx.restore();
+    }
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(pos.x, pos.y);
     ctx.rotate(ang);
-    drawMon(ctx, 7, 0, 0, 80);
+    drawMon(ctx, HERO_SHOT.mon, 0, 0, 80);
     ctx.restore();
   }
-  ctx.save();
-  ctx.translate(pos.x, pos.y);
-  ctx.rotate(ang);
-  drawMon(ctx, 7, 0, 0, 80);
-  ctx.restore();
 
-  // impact: pulsing sparkles + the combo counters the hit feeds
-  const pulse = 1 + Math.sin(t * 5) * 0.18;
-  sparkle(ctx, tgt.x - 12, tgt.y - 18, 13 * pulse, '#ffd84d');
-  sparkle(ctx, tgt.x + 72, tgt.y - 32, 8 * pulse, '#9df0ff');
-  ctx.textAlign = 'center';
-  ctx.font = fontB(10);
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 3;
-  ctx.strokeText('×4', tgt.x - 28, tgt.y - 44);
-  ctx.fillStyle = '#9df0ff';
-  ctx.fillText('×4', tgt.x - 28, tgt.y - 44);
-  ctx.strokeText('×6', tgt.x + 88, tgt.y - 54);
-  ctx.fillStyle = '#ffd84d';
-  ctx.fillText('×6', tgt.x + 88, tgt.y - 54);
+  // each landed hit pops a sparkle and the combo counter it feeds
+  const hitFx = (ht: number, x: number, y: number, label: string, color: string) => {
+    const a = tc - ht;
+    if (a < 0 || a > 0.8) return;
+    const pop = Math.min(1, a / 0.12);
+    const pulse = 1 + Math.sin(t * 5) * 0.15;
+    ctx.globalAlpha = Math.min(1, (0.8 - a) / 0.25 + 0.6);
+    sparkle(ctx, x + 8, y - 14, 14 * pulse * (0.7 + pop * 0.5), '#ffd84d');
+    sparkle(ctx, x - 16, y + 8, 8 * pulse, color);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+    ctx.font = fontB(10 + 5 * (1 - pop));
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(label, x, y - 44);
+    ctx.fillStyle = color;
+    ctx.fillText(label, x, y - 44);
+  };
+  hitFx(T1, hit1.x, hit1.y, '×1', '#9df0ff');
+  hitFx(T2, hit2.x, hit2.y, '×2', '#ffd84d');
 
   // the pitch in one line — a stranger gets the loop before they tap a thing
   ctx.font = font(11);
