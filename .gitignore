@@ -3,3 +3,4 @@ dist
 .DS_Store
 .env
 .devin/mcp_config.local.json
+graphify-out/

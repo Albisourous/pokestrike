@@ -1,0 +1,12 @@
+# graphify scan scope: code only — assets, docs and tooling internals excluded
+public/
+.devin/
+docs/
+node_modules/
+dist/
+graphify-out/
+.playwright-cli/
+.env
+*.md
+package-lock.json
+skills-lock.json
