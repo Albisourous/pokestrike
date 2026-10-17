@@ -259,14 +259,14 @@ const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
 // under sun, the heights blow. ~Half of rolled courts get weather.
 const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
 
-const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
+export const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
 const SHOT_MAX = 14; // seconds — gimmick courts can hold the ball above settle speed forever
 const FINAL_DEPTH = TOTAL_STAGES - 3; // rolled stages: 4..9 are depths 1..6
-const BASE_SHOT_SPEED = 285; // 1.5x launch — under exponential friction range scales with speed
-const POWER = 8;
-const WALL_REST = 0.96; // pinball court — walls hand back nearly everything
-const UNIT_REST = 0.94; // meatier ricochets off bodies
-const FRICTION = 1.7;
+export const BASE_SHOT_SPEED = 285; // 1.5x launch — under exponential friction range scales with speed
+export const POWER = 8;
+export const WALL_REST = 0.96; // pinball court — walls hand back nearly everything
+export const UNIT_REST = 0.94; // meatier ricochets off bodies
+export const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
 const HEAL_CD = 5; // in-battle mends share this cooldown — one heal per few shots
 const SUPER_POW = 0.7; // supers hit softer so clean lines carry the damage
@@ -4823,7 +4823,8 @@ export class Battle {
         ctx.restore();
         ctx.font = font(16);
         ctx.fillStyle = '#2a3560';
-        ctx.fillText('?', nx, ny - 1);
+        // diamond center is ny - 6; the '?' glyph rides ~0.9em over baseline
+        ctx.fillText('?', nx + 3, ny + 8);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN; // start + rest are towns
         drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
@@ -5053,7 +5054,7 @@ export class Battle {
       ctx.restore();
       ctx.font = font(26);
       ctx.fillStyle = '#2a3560';
-      ctx.fillText('?', axc, ay + AH / 2 + 10 + bob * 0.4);
+      ctx.fillText('?', axc + 4, ay + AH / 2 + 23 + bob * 0.4);
     }
 
     ctx.font = fontB(13);

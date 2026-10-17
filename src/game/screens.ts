@@ -1,11 +1,12 @@
 import { itemSprite, loadItem, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted, sfx } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, LEADER_NPC } from './data';
+import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, bst, LEADER_NPC } from './data';
 import { RARITY_COLOR } from './perks';
 import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
-import { roleOf, moveOf, superDesc } from './stats';
+import { roleOf, moveOf, superDesc, launchMult, ROLE_MODS } from './stats';
+import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED } from './battle';
 import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, dailyBest, BADGES, gymBadges, badgeOf } from './meta';
 
 export const W = 540;
@@ -70,7 +71,9 @@ export function drawHelpChip(ctx: CanvasRenderingContext2D) {
   ctx.font = font(12);
   ctx.fillStyle = PARCH;
   ctx.textAlign = 'center';
-  ctx.fillText('?', cx, cy + 6);
+  // PS2P '?' has right side-bearing and sits ~0.9em above the baseline —
+  // nudge right and drop the baseline so the ink lands on the box center
+  ctx.fillText('?', cx + 2, cy + 11);
 }
 export const MUTE_CHIP = { x: W - 100, y: 54, w: 40, h: 40 };
 export function drawMuteChip(ctx: CanvasRenderingContext2D) {
@@ -324,9 +327,29 @@ const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
 // --- playable title sandbox --------------------------------------------------
 // The pitch between the wordmark and the buttons is a live demo: the scripted
 // attract loop plays until a drag lands on the grass, then the pad mon is the
-// player's ball — real pull-back, wall bounces, supers on contact.
+// player's ball — pull-back sling, wall bounces, supers on contact. Launch,
+// meter and physics are the real battle rules (battle.ts constants + the
+// pointerUp charge formula), not a tuned-down toy version.
 export const TITLE_FIELD = { x: 26, y: 268, w: W - 52, h: 396 };
 const BALL_R = 26;
+
+const heroDef = speciesById(HERO_SHOT.mon)!;
+const heroLaunch = launchMult(heroDef.stats) * ROLE_MODS[roleOf(heroDef.stats, heroDef.healer)].launch;
+
+// same formulas as Battle.charge / Battle.sweetSpot, fixed to the title mon
+const heroDiff = () => Math.min(Math.max((bst(heroDef) - 320) / 300, 0), 1);
+const heroCharge = (dragT: number) => {
+  const P = 0.85 - 0.3 * heroDiff();
+  const ph = dragT % (2 * P);
+  return ph < P ? ph / P : 2 - ph / P;
+};
+const heroZone = () => {
+  const n = Math.min(heroDef.stats.spe / 120, 1);
+  const d = heroDiff();
+  const hw = Math.max(0.09 - 0.05 * n - 0.04 * d, 0.025);
+  const c = Math.min(Math.max(0.68 + 0.27 * n, hw), 1 - hw);
+  return { c, hw };
+};
 
 interface TitleFoe {
   id: number; hx: number; hy: number; x: number; y: number; vx: number; vy: number; s: number;
@@ -334,7 +357,11 @@ interface TitleFoe {
 const play = {
   live: false, // flips once the player grabs the field — attract resumes on idle
   idle: 0,
-  drag: null as { x: number; y: number } | null,
+  dragStart: null as { x: number; y: number } | null,
+  dragNow: null as { x: number; y: number } | null,
+  dragT: 0,
+  wasGold: false,
+  launched: false, // once you've slung one the drag prompt has done its job
   ball: { x: HERO_SHOT.pad.x, y: HERO_SHOT.pad.y, vx: 0, vy: 0, live: false, home: 0, trail: [] as { x: number; y: number }[] },
   foes: TITLE_FOES.map(([id, x, y, s]): TitleFoe => ({ id, hx: x, hy: y, x, y, vx: 0, vy: 0, s })),
   orbs: [] as { x: number; y: number; vx: number; vy: number; t: number; tgt: TitleFoe }[],
@@ -346,34 +373,49 @@ export function titlePointerDown(p: { x: number; y: number }): boolean {
   if (!inRect(p.x, p.y, TITLE_FIELD)) return false;
   play.live = true;
   play.idle = 0;
-  play.drag = { x: p.x, y: p.y };
+  play.dragStart = { x: p.x, y: p.y };
+  play.dragNow = { x: p.x, y: p.y };
+  play.dragT = 0;
+  play.wasGold = false;
   return true;
 }
 export function titlePointerMove(p: { x: number; y: number }) {
-  if (play.drag) play.drag = { x: p.x, y: p.y };
+  if (play.dragStart) play.dragNow = { x: p.x, y: p.y };
 }
-export function titlePointerUp(p: { x: number; y: number }) {
-  if (!play.drag) return;
-  play.drag = null;
+export function titlePointerUp() {
+  if (!play.dragStart || !play.dragNow) return;
   const b = play.ball;
-  if (b.live) return;
-  const dx = b.x - p.x, dy = b.y - p.y;
-  const d = Math.hypot(dx, dy);
-  if (d < 14) return; // a tap isn't a pull
-  const v = Math.min(d * 5.2, 1150);
-  b.vx = (dx / d) * v;
-  b.vy = (dy / d) * v;
+  // same launch as Battle.pointerUp: pull aims, meter timing powers
+  const pull = { x: play.dragStart.x - play.dragNow.x, y: play.dragStart.y - play.dragNow.y };
+  const d = Math.hypot(pull.x, pull.y);
+  const frac = heroCharge(play.dragT);
+  const zone = heroZone();
+  const gold = Math.abs(frac - zone.c) <= zone.hw;
+  play.dragStart = play.dragNow = null;
+  if (d < 12 || b.live) return; // a tap isn't a pull
+  const speed = BASE_SHOT_SPEED * POWER * heroLaunch * (0.4 + 0.6 * (gold ? 1 : frac));
+  b.vx = (pull.x / d) * speed;
+  b.vy = (pull.y / d) * speed;
   b.live = true;
   b.home = 0;
   b.trail = [];
   play.hits = 0;
+  play.launched = true;
   sfx('launch');
 }
 export function titlePointerCancel() {
-  play.drag = null;
+  play.dragStart = play.dragNow = null;
 }
 
 export function updateTitle(dt: number) {
+  // the meter runs while a pull is held — gold-entry tick, same cue as battle
+  if (play.dragStart) {
+    play.dragT += dt;
+    const z = heroZone();
+    const inGold = Math.abs(heroCharge(play.dragT) - z.c) <= z.hw;
+    if (inGold && !play.wasGold) sfx('tick');
+    play.wasGold = inGold;
+  }
   // knocked foes spring back to their marks, springy and damped
   for (const f of play.foes) {
     f.vx += (f.hx - f.x) * 26 * dt;
@@ -389,7 +431,7 @@ export function updateTitle(dt: number) {
     b.trail.push({ x: b.x, y: b.y });
     if (b.trail.length > 7) b.trail.shift();
     const sp = Math.hypot(b.vx, b.vy);
-    if (sp < 30) {
+    if (sp < STOP_SPEED) {
       // settled — slide home and hand the ball back
       b.home += dt;
       b.vx *= Math.exp(-10 * dt);
@@ -404,15 +446,16 @@ export function updateTitle(dt: number) {
     } else {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
-      const fr = Math.exp(-1.15 * dt);
+      const fr = Math.exp(-FRICTION * dt);
       b.vx *= fr;
       b.vy *= fr;
     }
     const F = TITLE_FIELD;
-    if (b.x < F.x + BALL_R) { b.x = F.x + BALL_R; b.vx = Math.abs(b.vx) * 0.85; sfx('bounce', 0.9); }
-    if (b.x > F.x + F.w - BALL_R) { b.x = F.x + F.w - BALL_R; b.vx = -Math.abs(b.vx) * 0.85; sfx('bounce', 0.9); }
-    if (b.y < F.y + BALL_R) { b.y = F.y + BALL_R; b.vy = Math.abs(b.vy) * 0.85; sfx('bounce', 0.9); }
-    if (b.y > F.y + F.h - BALL_R) { b.y = F.y + F.h - BALL_R; b.vy = -Math.abs(b.vy) * 0.85; sfx('bounce', 0.9); }
+    const wall = (v: number) => { if (Math.abs(v) > 120) sfx('bounce', 0.9); };
+    if (b.x < F.x + BALL_R) { b.x = F.x + BALL_R; wall(b.vx); b.vx = Math.abs(b.vx) * WALL_REST; }
+    if (b.x > F.x + F.w - BALL_R) { b.x = F.x + F.w - BALL_R; wall(b.vx); b.vx = -Math.abs(b.vx) * WALL_REST; }
+    if (b.y < F.y + BALL_R) { b.y = F.y + BALL_R; wall(b.vy); b.vy = Math.abs(b.vy) * WALL_REST; }
+    if (b.y > F.y + F.h - BALL_R) { b.y = F.y + F.h - BALL_R; wall(b.vy); b.vy = -Math.abs(b.vy) * WALL_REST; }
     for (const f of play.foes) {
       const fr2 = f.s * 0.5;
       const dx = b.x - f.x, dy = b.y - f.y;
@@ -422,8 +465,8 @@ export function updateTitle(dt: number) {
       b.x = f.x + nx * (BALL_R + fr2);
       b.y = f.y + ny * (BALL_R + fr2);
       const vn = b.vx * nx + b.vy * ny;
-      b.vx = (b.vx - 2 * vn * nx) * 0.92;
-      b.vy = (b.vy - 2 * vn * ny) * 0.92;
+      b.vx = (b.vx - 2 * vn * nx) * UNIT_REST;
+      b.vy = (b.vy - 2 * vn * ny) * UNIT_REST;
       f.vx -= nx * sp * 0.5;
       f.vy -= ny * sp * 0.5;
       play.hits++;
@@ -445,7 +488,7 @@ export function updateTitle(dt: number) {
       sfx('splash');
       sfx('hit', Math.min(2, 0.9 + play.hits * 0.15));
     }
-  } else if (!play.drag) {
+  } else if (!play.dragStart) {
     play.idle += dt;
     if (play.idle > 6) play.live = false; // back to the scripted demo
   }
@@ -636,27 +679,135 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
       monShadow(ctx, b.x, b.y + 8, 76);
       ctx.save();
       ctx.translate(b.x, b.y + Math.sin(t * 2) * 1.5);
-      if (play.drag) ctx.rotate(-0.15); // coiling into the pull
+      if (play.dragStart) ctx.rotate(-0.15); // coiling into the pull
       drawMon(ctx, HERO_SHOT.mon, 0, 0, 76);
       ctx.restore();
     }
 
-    // pull-back arrow + a dotted aim line — the real game's two hints
-    if (play.drag && !b.live) {
-      const dx = b.x - play.drag.x, dy = b.y - play.drag.y;
-      const d = Math.hypot(dx, dy);
-      if (d > 14) {
-        const ux = dx / d, uy = dy / d;
-        const al = Math.min(110, d * 0.5);
-        helpArrow(ctx, b.x - ux * 44, b.y - uy * 44, b.x - ux * al, b.y - uy * al, GOLD);
-        ctx.save();
-        ctx.strokeStyle = 'rgba(232,236,248,0.55)';
-        ctx.lineWidth = 2.5;
-        ctx.setLineDash([7, 9]);
+    // the real aim read: pull dir aims, the meter powers — same preview the
+    // battle scene draws (path dots, charge ring, gold band, launch arrow)
+    if (play.dragStart && play.dragNow && !b.live) {
+      const pull = { x: play.dragStart.x - play.dragNow.x, y: play.dragStart.y - play.dragNow.y };
+      const pullLen = Math.hypot(pull.x, pull.y);
+      const frac = heroCharge(play.dragT);
+      const zone = heroZone();
+      const maxed = Math.abs(frac - zone.c) <= zone.hw;
+      const color = TYPE_COLOR[heroDef.type];
+      const F = TITLE_FIELD;
+
+      // release-timing bar across the pitch top — Battle.drawMeter's layout
+      const bw = Math.min(320, F.w * 0.64), bh = 14;
+      const bx = F.x + (F.w - bw) / 2, by = F.y + 10;
+      ctx.fillStyle = 'rgba(10,14,32,0.8)';
+      ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
+      ctx.fillStyle = '#ffffff1c';
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#ffd84d55';
+      ctx.fillRect(bx + bw * (zone.c - zone.hw), by, bw * 2 * zone.hw, bh);
+      ctx.save();
+      if (maxed) {
+        ctx.shadowColor = '#ffd84d';
+        ctx.shadowBlur = 14;
+      }
+      ctx.fillStyle = maxed ? '#ffd84d' : color;
+      ctx.fillRect(bx, by, bw * frac, bh);
+      ctx.restore();
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillRect(bx + bw * (zone.c - zone.hw), by - 3, 2, bh + 6);
+      ctx.fillRect(bx + bw * (zone.c + zone.hw) - 2, by - 3, 2, bh + 6);
+
+      if (pullLen >= 12) {
+        const dir = { x: pull.x / pullLen, y: pull.y / pullLen };
+        const speed = BASE_SHOT_SPEED * POWER * heroLaunch * (0.4 + 0.6 * (maxed ? 1 : frac));
+
+        // predicted path — same sim as battle's aim: one wall bounce, stop
+        // at first contact
+        let sx = b.x, sy = b.y, svx = dir.x * speed, svy = dir.y * speed;
+        const dots: { x: number; y: number }[] = [];
+        let dead = false;
+        sim: for (let i = 0; i < 60; i++) {
+          const damp = Math.exp(-FRICTION / 30);
+          svx *= damp;
+          svy *= damp;
+          sx += svx / 30;
+          sy += svy / 30;
+          if (Math.hypot(svx, svy) < 90) break;
+          if (sx - BALL_R < F.x) { sx = F.x + BALL_R; svx = -svx * WALL_REST; dead = true; }
+          else if (sx + BALL_R > F.x + F.w) { sx = F.x + F.w - BALL_R; svx = -svx * WALL_REST; dead = true; }
+          if (sy - BALL_R < F.y) { sy = F.y + BALL_R; svy = -svy * WALL_REST; dead = true; }
+          else if (sy + BALL_R > F.y + F.h) { sy = F.y + F.h - BALL_R; svy = -svy * WALL_REST; dead = true; }
+          for (const f of play.foes)
+            if (Math.hypot(sx - f.x, sy - f.y) < BALL_R + f.s * 0.5) { dead = true; break sim; }
+          if (dead) break;
+          if (i % 2 === 0) dots.push({ x: sx, y: sy });
+        }
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = color;
+        for (const q of dots) {
+          ctx.beginPath();
+          ctx.arc(q.x, q.y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        if (dead && dots.length) {
+          const q = dots[dots.length - 1];
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.globalAlpha = 0.8;
+          ctx.beginPath();
+          ctx.moveTo(q.x, q.y - 7);
+          ctx.lineTo(q.x + 7, q.y);
+          ctx.lineTo(q.x, q.y + 7);
+          ctx.lineTo(q.x - 7, q.y);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        // charge ring on the ball — the timing read where the eyes are
+        const rr = BALL_R + 16, a0 = -Math.PI / 2;
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#ffffff22';
         ctx.beginPath();
-        ctx.moveTo(b.x + ux * 40, b.y + uy * 40);
-        ctx.lineTo(b.x + ux * 230, b.y + uy * 230);
+        ctx.arc(b.x, b.y, rr, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.strokeStyle = '#ffd84d66';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, rr, a0 + Math.PI * 2 * (zone.c - zone.hw), a0 + Math.PI * 2 * (zone.c + zone.hw));
+        ctx.stroke();
+        ctx.save();
+        if (maxed) {
+          ctx.shadowColor = '#ffd84d';
+          ctx.shadowBlur = 12;
+        }
+        ctx.strokeStyle = maxed ? '#ffd84d' : color;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, rr, a0, a0 + Math.PI * 2 * frac);
+        ctx.stroke();
+        ctx.restore();
+
+        // launch arrow — points where the mon will fly, grows with charge
+        const ex = b.x + dir.x * (50 + frac * 160);
+        const ey = b.y + dir.y * (50 + frac * 160);
+        ctx.save();
+        if (maxed) {
+          ctx.shadowColor = '#ffd84d';
+          ctx.shadowBlur = 16;
+        }
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(b.x, b.y);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        const hs = 14;
+        const px = -dir.y, py = dir.x;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.moveTo(ex + dir.x * hs, ey + dir.y * hs);
+        ctx.lineTo(ex + px * hs * 0.6, ey + py * hs * 0.6);
+        ctx.lineTo(ex - px * hs * 0.6, ey - py * hs * 0.6);
+        ctx.fill();
         ctx.restore();
       }
     }
@@ -729,8 +880,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
     const dl = Math.hypot(hit1.x - pad.x, hit1.y - pad.y);
     const ux = (hit1.x - pad.x) / dl, uy = (hit1.y - pad.y) / dl;
     const popIn = Math.min(1, tc / 0.15); // re-spawn pop after each loop
-    const wag = Math.sin(t * 3) * 3; // the drag charges, it doesn't sit still
-    helpArrow(ctx, pad.x - ux * 46, pad.y - uy * 46 + wag, pad.x - ux * 110, pad.y - uy * 110 + wag, GOLD);
+    const wag = Math.sin(t * 3) * 3; // the aim breathes, it doesn't sit still
+    helpArrow(ctx, pad.x + ux * 46, pad.y + uy * 46 + wag, pad.x + ux * 116, pad.y + uy * 116 + wag, '#6890f0');
     monShadow(ctx, pad.x, pad.y + 8, 76);
     ctx.save();
     ctx.translate(pad.x - ux * 8, pad.y - uy * 8); // pulled back against the aim
@@ -781,6 +932,36 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   hitFx(T2, hit2.x, hit2.y, '×2', '#ffd84d');
   }
 
+  // drag prompt — a ghost pull loops the gesture until the first real launch
+  if (!play.launched) {
+    const bx = play.live ? play.ball.x : pad.x;
+    const by = play.live ? play.ball.y : pad.y;
+    const gp = (t % 1.7) / 1.7;
+    const ga = gp < 0.75 ? Math.sin((gp / 0.75) * Math.PI) : 0;
+    ctx.save();
+    ctx.globalAlpha = ga;
+    ctx.strokeStyle = '#e8ecf8';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(bx - 58 * Math.min(1, gp / 0.75), by + 64 * Math.min(1, gp / 0.75), 9, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = ga * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.lineTo(bx - 58 * Math.min(1, gp / 0.75), by + 64 * Math.min(1, gp / 0.75));
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 0.55 + Math.sin(t * 3.4) * 0.3;
+    ctx.textAlign = 'center';
+    fitFont(ctx, 'DRAG BACK · LET GO — THE PITCH IS PLAYABLE', 10, W - 60);
+    ctx.strokeStyle = '#0a2410';
+    ctx.lineWidth = 4;
+    ctx.strokeText('DRAG BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
+    ctx.fillStyle = '#ffe76a';
+    ctx.fillText('DRAG BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
+    ctx.globalAlpha = 1;
+  }
+
   // the pitch in one line — a stranger gets the loop before they tap a thing
   ctx.font = font(11);
   ctx.fillStyle = '#0a2410';
@@ -801,7 +982,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   ctx.strokeRect(HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
   ctx.font = font(16);
   ctx.fillStyle = PARCH;
-  ctx.fillText('?', HELP_BTN.x + HELP_BTN.w / 2, HELP_BTN.y + HELP_BTN.h / 2 + 7);
+  ctx.fillText('?', HELP_BTN.x + HELP_BTN.w / 2 + 3, HELP_BTN.y + HELP_BTN.h / 2 + 14);
 
   // mute badge, opposite corner — speaker glyph, slashed when off
   const mcx = MUTE_BTN.x + MUTE_BTN.w / 2, mcy = MUTE_BTN.y + MUTE_BTN.h / 2;
@@ -1627,7 +1808,7 @@ export function drawPerkCard(
   } else {
     ctx.font = font(16);
     ctx.fillStyle = PARCH;
-    ctx.fillText('?', r.x + r.w / 2, r.y + 74);
+    ctx.fillText('?', r.x + r.w / 2 + 3, r.y + 80);
   }
   ctx.textAlign = 'center';
   fitFont(ctx, perk.name, 9, r.w - 12);

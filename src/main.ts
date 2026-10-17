@@ -617,7 +617,7 @@ canvas.addEventListener('pointerup', (e) => {
     }
     return;
   }
-  if (scene === 'title') titlePointerUp(toLogical(e));
+  if (scene === 'title') titlePointerUp();
   if (scene === 'battle') battle?.pointerUp();
 });
 // desktop keys: Esc/? toggles the manual, arrows page it, P pauses a live
