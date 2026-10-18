@@ -396,7 +396,7 @@ export class Battle {
   ultIn = ULT_SHOTS; // shots until the map-wide ultimate — tap the charged active mon to fire
   private gaugeJit = 0; // per-pull variance: shifts the gold band and sweep pace
   private gaugeStart = 0; // per-pull variance: where on the cycle the needle starts
-  rewardStep: 'team' | 'item' = 'team'; // reward screen order — roster first, then the pick
+  rewardStep: 'team' | 'item' = 'item'; // reward screen order — the pick first, then the roster
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
   scoreMult = 1; // lucky egg: score amplifies
   private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
@@ -3041,7 +3041,7 @@ export class Battle {
   private enterReward() {
     this.boxSel = -1;
     this.teamSel = -1;
-    this.rewardStep = 'team'; // roster management comes before the item pick
+    this.rewardStep = 'item'; // the relic pick comes first — roster after
     // hard stops pay out uncommon-or-better relics — the risk has a price;
     // elites go further: rare-or-better only
     this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 1 : this.hardWave ? 2 : 3, this.rank, this.teamTypes());
@@ -3252,34 +3252,34 @@ export class Battle {
 
   pickPerk(i: number) {
     const perk = this.rewardOffers[i];
-    if (!perk || this.phase !== 'reward') return;
+    if (!perk || this.phase !== 'reward' || this.rewardStep !== 'item') return;
     sfx('ui');
     perk.apply(this);
     this.perksTaken++;
     this.heldItems.push(perk.item);
     this.rewardOffers = [];
-    this.pendingNext = this.waveIndex + 1;
-    this.phase = 'map'; // pick the next stop on the region map
+    this.rewardStep = 'team'; // relic banked — now set the lineup
   }
 
-  // Team step → item step. The reward break shows one job at a time: manage
-  // the roster first, then deal the relic cards.
+  // The reward break shows one job at a time: the relic pick first, then
+  // roster management — this button is the way out to the region map.
   advanceReward() {
     if (this.phase !== 'reward' || this.rewardStep !== 'team') return;
     this.rewardStep = 'item';
     this.boxSel = -1;
     this.teamSel = -1;
+    this.pendingNext = this.waveIndex + 1;
+    this.phase = 'map'; // pick the next stop on the region map
     sfx('ui');
   }
 
   // Declining pays score instead — StS reward skips keep dead offers honest.
   declineReward() {
-    if (this.phase !== 'reward') return;
+    if (this.phase !== 'reward' || this.rewardStep !== 'item') return;
     sfx('ui');
     this.score += Math.round(150 * (1 + 0.2 * this.asc));
     this.rewardOffers = [];
-    this.pendingNext = this.waveIndex + 1;
-    this.phase = 'map';
+    this.rewardStep = 'team'; // no relic — the lineup still wants a look
   }
 
   // Map camera: the viewport trails the walker's tile row — while you're

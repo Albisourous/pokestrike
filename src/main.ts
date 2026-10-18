@@ -42,7 +42,6 @@ import {
   CHARM_SKIP,
   REWARD_SKIP,
   REWARD_NEXT,
-  REWARD_BACK,
   HELP_PANEL,
   HELP_PREV,
   HELP_NEXT,
@@ -495,41 +494,37 @@ canvas.addEventListener('pointerdown', (e) => {
         }
         return;
       }
-      if (battle.rewardStep === 'team') {
-        // step one: the roster. Item offers wait until the team is set.
-        if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
-          boxDrag = { x0: p.x, s0: boxScroll, moved: false };
+      if (battle.rewardStep === 'item') {
+        // step one: the relic pick. Reels still rolling — a tap fast-forwards,
+        // never picks blind
+        if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
+          rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
           return;
         }
-        for (let i = 0; i < battle.players.length; i++) {
-          if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
-          if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
-          else if (battle.box.length > 0) {
-            battle.teamSel = battle.teamSel === i ? -1 : i;
-            sfx('ui');
-          }
-          return;
+        for (let i = 0; i < battle.rewardOffers.length; i++) {
+          if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
         }
-        if (inRect(p.x, p.y, REWARD_NEXT)) {
+        if (inRect(p.x, p.y, REWARD_SKIP)) battle.declineReward();
+        return;
+      }
+      // step two: the roster — the way out to the map is CONTINUE
+      if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
+        boxDrag = { x0: p.x, s0: boxScroll, moved: false };
+        return;
+      }
+      for (let i = 0; i < battle.players.length; i++) {
+        if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
+        if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
+        else if (battle.box.length > 0) {
+          battle.teamSel = battle.teamSel === i ? -1 : i;
           sfx('ui');
-          battle.advanceReward();
         }
         return;
       }
-      // step two: item reels still rolling — a tap fast-forwards, never picks blind
-      if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
-        rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
-        return;
-      }
-      if (inRect(p.x, p.y, REWARD_BACK)) {
+      if (inRect(p.x, p.y, REWARD_NEXT)) {
         sfx('ui');
-        battle.rewardStep = 'team';
-        return;
+        battle.advanceReward();
       }
-      for (let i = 0; i < battle.rewardOffers.length; i++) {
-        if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
-      }
-      if (inRect(p.x, p.y, REWARD_SKIP)) battle.declineReward();
     } else {
       battle?.pointerDown(p);
     }

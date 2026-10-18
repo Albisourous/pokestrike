@@ -229,19 +229,23 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   void swappedPow;
 }
 
-// --- reward flow: roster management gates the item pick ---------------------
+// --- reward flow: the item pick first, roster management last --------------
 {
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
   (b as any).spawnWave(0);
   (b as any).enterReward();
-  ok(b.phase === 'reward' && b.rewardStep === 'team', 'reward opens on the team step');
-  b.advanceReward();
-  ok(b.rewardStep === 'item', 'advanceReward flips to the item step');
-  b.rewardStep = 'team';
-  b.advanceReward();
-  ok(b.rewardStep === 'item', 'going back and re-advancing still reaches items');
+  ok(b.phase === 'reward' && b.rewardStep === 'item', 'reward opens on the item step');
   b.declineReward();
-  ok(b.phase !== 'reward', 'decline still exits the reward screen');
+  ok(b.phase === 'reward' && b.rewardStep === 'team', 'decline moves on to the team step');
+  b.advanceReward();
+  ok(b.phase !== 'reward', 'continue exits the reward screen');
+  (b as any).enterReward();
+  const n = b.rewardOffers.length;
+  b.pickPerk(0);
+  ok(b.phase === 'reward' && b.rewardStep === 'team' && b.rewardOffers.length === 0, 'a pick banks the relic and moves to team');
+  ok(n > 0, 'offers existed to pick');
+  b.advanceReward();
+  ok(b.phase === 'map', 'team step continue lands on the map');
 }
 
 // --- ultimate: a tap on the charged mon detonates the court -----------------
@@ -539,8 +543,8 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       step(240); // the lead mon walks the route over ~6 tiles/sec
     } else if (b.phase === 'reward') {
       if (b.evoChoice) b.pickEvo(Math.floor(rng() * b.evoChoice.options.length)); // a split evo asks first
-      else b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
-      if (b.phase === 'reward' && !b.evoChoice) b.pickPerk(0); // safety: force advance
+      else if (b.rewardStep === 'item') b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
+      else b.advanceReward(); // team step — straight through, no box juggling
     } else if (b.phase === 'aim') {
       const u = (b as any).active;
       if (!u || u.dead) { step(30); continue; }

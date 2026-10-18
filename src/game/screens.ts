@@ -97,9 +97,8 @@ export function perkCardRect(i: number) {
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
 export const REWARD_SKIP = { x: W - 152, y: 872, w: 134, h: 40 };
-// the reward break runs two steps: roster management, then the relic pick
+// the reward break runs two steps: the relic pick, then roster management
 export const REWARD_NEXT = { x: W / 2 - 90, y: 872, w: 180, h: 40 };
-export const REWARD_BACK = { x: 18, y: 872, w: 120, h: 40 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 500, w: W - 48, h: 56 };
@@ -2377,7 +2376,7 @@ export function drawReward(
   if (step === 'team') {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
-    ctx.fillText('set the lineup first — items deal on the next screen', W / 2, 372);
+    ctx.fillText('set the lineup — then pick the route', W / 2, 372);
   } else if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
@@ -2386,6 +2385,10 @@ export function drawReward(
     ctx.font = fontB(8);
     ctx.fillStyle = '#6fdc6f';
     ctx.fillText(`TEAM LUCK ${luck} — fusion dupes feed the gym fountain`, W / 2, 372);
+  } else {
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('pick a relic — the lineup comes next', W / 2, 372);
   }
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
@@ -2555,9 +2558,8 @@ export function drawReward(
     ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
   }
   if (step === 'team') {
-    button(ctx, REWARD_NEXT, 'ITEMS ▸', true);
+    button(ctx, REWARD_NEXT, 'CONTINUE ▸', true);
   } else {
-    button(ctx, REWARD_BACK, '◂ TEAM', true);
     // StS lets you decline a reward — here it cashes out as score instead
     button(ctx, REWARD_SKIP, 'DECLINE +150', true);
   }
