@@ -2416,7 +2416,81 @@ export function drawReward(
     ctx.globalAlpha = 1;
   }
 
+  if (step === 'team')
+    drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct);
+
+  // next row on the map — gyms announce themselves; wild rows stay quiet
+  // since the actual choice happens on the map now
+  ctx.font = font(8);
+  const nextY = 852;
+  if (next.gym) {
+    ctx.fillStyle = '#f85888';
+    ctx.fillText('NEXT: GYM LEADER', W / 2, nextY);
+  } else {
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
+  }
   if (step === 'team') {
+    button(ctx, REWARD_NEXT, 'CONTINUE ▸', true);
+  } else {
+    // StS lets you decline a reward — here it cashes out as score instead
+    button(ctx, REWARD_SKIP, 'DECLINE +150', true);
+  }
+
+  // a split evolution blocks the reward pick until its form is chosen
+  if (evo) {
+    ctx.fillStyle = 'rgba(4,6,16,0.78)';
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd84d';
+    fitFont(ctx, `${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, 13, W - 60);
+    ctx.fillText(`${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, W / 2, 372);
+    evo.options.forEach((opt, i) => {
+      const r = evoCardRect(i, evo.options.length);
+      roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+      ctx.fillStyle = '#12162b';
+      ctx.fill();
+      rim(ctx, r, 10, i === 0 ? '#ffd84d' : GOLD, 2);
+      edge(ctx, r, 10);
+      // split strip sells the dual-type at a glance
+      ctx.fillStyle = TYPE_COLOR[opt.type];
+      ctx.fillRect(r.x + 8, r.y + 8, opt.type2 ? (r.w - 16) / 2 : r.w - 16, 4);
+      if (opt.type2) {
+        ctx.fillStyle = TYPE_COLOR[opt.type2];
+        ctx.fillRect(r.x + 8 + (r.w - 16) / 2, r.y + 8, (r.w - 16) / 2, 4);
+      }
+      (opt.shiny ? drawShiny : drawMon)(ctx, opt.id, r.x + r.w / 2, r.y + 66, 76);
+      fitFont(ctx, opt.name.toUpperCase(), 9, r.w - 12);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(opt.name.toUpperCase(), r.x + r.w / 2, r.y + 128);
+      ctx.font = fontB(7);
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText(opt.type2 ? `${opt.type}/${opt.type2}` : opt.type, r.x + r.w / 2, r.y + 141);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(`★ ${moveOf(opt.id, opt.type)}`, r.x + r.w / 2, r.y + 156);
+      ctx.fillStyle = '#8890b8';
+      wrap2(ctx, superDesc(opt.id, opt.type), r.w - 14).forEach((l, li) =>
+        ctx.fillText(l, r.x + r.w / 2, r.y + 167 + li * 9));
+    });
+  }
+}
+
+// The roster manager — box strip + team slots with tap-to-swap. Shared by
+// the reward break's team step and the overworld TEAM · ITEMS panel (same
+// rects → same hit tests).
+function drawRoster(
+  ctx: CanvasRenderingContext2D,
+  box: SpeciesDef[],
+  boxHp: number[],
+  boxLvl: number[],
+  boxScroll: number,
+  selBox: number,
+  team: SpeciesDef[],
+  teamHp: number[],
+  teamLvl: number[],
+  selTeam: number,
+  catchPct: number,
+) {
   // captured box — tap a catch and a teammate, in either order, to swap
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
@@ -2544,62 +2618,78 @@ export function drawReward(
     W / 2,
     764,
   );
-  }
+}
 
-  // next row on the map — gyms announce themselves; wild rows stay quiet
-  // since the actual choice happens on the map now
-  ctx.font = font(8);
-  const nextY = 852;
-  if (next.gym) {
-    ctx.fillStyle = '#f85888';
-    ctx.fillText('NEXT: GYM LEADER', W / 2, nextY);
-  } else {
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
-  }
-  if (step === 'team') {
-    button(ctx, REWARD_NEXT, 'CONTINUE ▸', true);
-  } else {
-    // StS lets you decline a reward — here it cashes out as score instead
-    button(ctx, REWARD_SKIP, 'DECLINE +150', true);
-  }
+// Overworld roster drawer — the map keeps a single TEAM · ITEMS button where
+// the mon strip used to sit; the panel shows held items up top and the same
+// box/team management the reward break uses.
+export const MAP_MENU = { x: W / 2 - 120, y: 872, w: 240, h: 46 };
+export const TEAM_PANEL = { x: 24, y: 258, w: W - 48, h: 586 };
+export const MENU_CLOSE = { x: W / 2 - 90, y: 788, w: 180, h: 40 };
 
-  // a split evolution blocks the reward pick until its form is chosen
-  if (evo) {
-    ctx.fillStyle = 'rgba(4,6,16,0.78)';
-    ctx.fillRect(0, 0, W, H);
+export function drawTeamMenu(
+  ctx: CanvasRenderingContext2D,
+  box: SpeciesDef[],
+  boxHp: number[],
+  boxLvl: number[],
+  team: SpeciesDef[],
+  teamHp: number[],
+  teamLvl: number[],
+  selBox: number,
+  selTeam: number,
+  boxScroll: number,
+  catchPct: number,
+  heldItems: string[],
+) {
+  ctx.fillStyle = 'rgba(4,6,16,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, TEAM_PANEL.x, TEAM_PANEL.y, TEAM_PANEL.w, TEAM_PANEL.h, 10);
+  ctx.fillStyle = '#0d1122';
+  ctx.fill();
+  rim(ctx, TEAM_PANEL, 10, GOLD, 2);
+  ctx.textAlign = 'center';
+  ctx.font = font(16);
+  ctx.fillStyle = '#f8d030';
+  ctx.fillText('TEAM & ITEMS', W / 2, 300);
+
+  // held items — the run's build, each named with what it does
+  ctx.font = font(9);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('HELD ITEMS', W / 2, 330);
+  const shown = heldItems.slice(0, 5);
+  if (!shown.length) {
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('none yet — relic picks and chests stock it', W / 2, 356);
+  }
+  shown.forEach((item, i) => {
+    const y = 342 + i * 24;
+    const img = itemSprite(item);
+    if (img) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, 48, y - 6, 20, 20);
+      ctx.restore();
+    }
+    const perk = PERKS.find((p) => p.item === item);
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#e8ecf8';
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      `${(perk ? perk.name : item).toUpperCase()}${perk ? `  —  ${perk.desc}` : ''}`,
+      78,
+      y + 8,
+    );
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffd84d';
-    fitFont(ctx, `${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, 13, W - 60);
-    ctx.fillText(`${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, W / 2, 372);
-    evo.options.forEach((opt, i) => {
-      const r = evoCardRect(i, evo.options.length);
-      roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-      ctx.fillStyle = '#12162b';
-      ctx.fill();
-      rim(ctx, r, 10, i === 0 ? '#ffd84d' : GOLD, 2);
-      edge(ctx, r, 10);
-      // split strip sells the dual-type at a glance
-      ctx.fillStyle = TYPE_COLOR[opt.type];
-      ctx.fillRect(r.x + 8, r.y + 8, opt.type2 ? (r.w - 16) / 2 : r.w - 16, 4);
-      if (opt.type2) {
-        ctx.fillStyle = TYPE_COLOR[opt.type2];
-        ctx.fillRect(r.x + 8 + (r.w - 16) / 2, r.y + 8, (r.w - 16) / 2, 4);
-      }
-      (opt.shiny ? drawShiny : drawMon)(ctx, opt.id, r.x + r.w / 2, r.y + 66, 76);
-      fitFont(ctx, opt.name.toUpperCase(), 9, r.w - 12);
-      ctx.fillStyle = PARCH;
-      ctx.fillText(opt.name.toUpperCase(), r.x + r.w / 2, r.y + 128);
-      ctx.font = fontB(7);
-      ctx.fillStyle = '#8890b8';
-      ctx.fillText(opt.type2 ? `${opt.type}/${opt.type2}` : opt.type, r.x + r.w / 2, r.y + 141);
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillText(`★ ${moveOf(opt.id, opt.type)}`, r.x + r.w / 2, r.y + 156);
-      ctx.fillStyle = '#8890b8';
-      wrap2(ctx, superDesc(opt.id, opt.type), r.w - 14).forEach((l, li) =>
-        ctx.fillText(l, r.x + r.w / 2, r.y + 167 + li * 9));
-    });
+  });
+  if (heldItems.length > shown.length) {
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText(`+${heldItems.length - shown.length} more`, W / 2, 342 + shown.length * 24 + 8);
   }
+
+  drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct);
+  button(ctx, MENU_CLOSE, 'CLOSE', true);
 }
 
 // Starter-charm pick before stage 1 — same card look, standalone screen.

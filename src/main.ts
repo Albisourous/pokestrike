@@ -56,6 +56,10 @@ import {
   BOARD_BTN,
   drawBoard,
   CATCHABLE,
+  MAP_MENU,
+  TEAM_PANEL,
+  MENU_CLOSE,
+  drawTeamMenu,
   inRect,
   font,
   titlePointerDown,
@@ -101,6 +105,7 @@ let stage = makeStage(randSeed());
 // draft deals and the Battle both draw from it so a forced seed reproduces
 let runRng: () => number = Math.random;
 let helpOpen = false;
+let menuOpen = false; // overworld TEAM · ITEMS panel
 let helpPage = 0;
 let dexOpen = false;
 let dexScroll = 0;
@@ -421,6 +426,7 @@ canvas.addEventListener('pointerdown', (e) => {
       respinDraft(); // next round spins a fresh board
       if (draft.picked.length === DRAFT_ROUNDS) {
         battle = new Battle(arenaRect(), draft.picked.map(draftDef), stage, runRng);
+        menuOpen = false;
         battle.coach = !coachDone(); // first-ever run teaches by doing
         battle.rank = rank();
         battle.asc = Math.min(best().wins, 9); // every clear raises the heat
@@ -472,7 +478,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   } else if (scene === 'battle') {
     // mid-run reference: the ? chip shows between fights
-    if (battle && (battle.phase === 'map' || battle.phase === 'reward')) {
+    if (battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
       if (inRect(p.x, p.y, HELP_CHIP)) {
         sfx('ui');
         helpOpen = true;
@@ -482,6 +488,38 @@ canvas.addEventListener('pointerdown', (e) => {
       if (inRect(p.x, p.y, MUTE_CHIP)) {
         toggleMute();
         sfx('ui');
+        return;
+      }
+    }
+    if (battle?.phase === 'map') {
+      if (menuOpen) {
+        // modal panel — CLOSE or a tap outside dismisses; inside, roster ops only
+        if (inRect(p.x, p.y, MENU_CLOSE) || !inRect(p.x, p.y, TEAM_PANEL)) {
+          menuOpen = false;
+          battle.boxSel = -1;
+          battle.teamSel = -1;
+          sfx('ui');
+          return;
+        }
+        if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
+          boxDrag = { x0: p.x, s0: boxScroll, moved: false };
+          return;
+        }
+        for (let i = 0; i < battle.players.length; i++) {
+          if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
+          if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
+          else if (battle.box.length > 0) {
+            battle.teamSel = battle.teamSel === i ? -1 : i;
+            sfx('ui');
+          }
+          return;
+        }
+        return;
+      }
+      if (!battle.mapModal && inRect(p.x, p.y, MAP_MENU)) {
+        sfx('ui');
+        menuOpen = true;
+        battle.boxSel = battle.teamSel = -1; // no stale pick from the reward break
         return;
       }
     }
@@ -612,7 +650,11 @@ canvas.addEventListener('pointerup', (e) => {
     const { moved } = boxDrag;
     boxDrag = null;
     // a drag that never moved is a tap: pick a catch, then a teammate to swap into
-    if (!moved && scene === 'battle' && battle?.phase === 'reward' && battle.rewardStep === 'team') {
+    if (
+      !moved && scene === 'battle' && battle &&
+      ((battle.phase === 'reward' && battle.rewardStep === 'team') ||
+        (battle.phase === 'map' && menuOpen))
+    ) {
       const p = toLogical(e);
       if (inRect(p.x, p.y, BOX_STRIP)) {
         for (let i = 0; i < battle.box.length; i++) {
@@ -681,7 +723,13 @@ canvas.addEventListener(
       achScroll = Math.min(Math.max(achScroll + e.deltaY, 0), achScrollMax());
       return;
     }
-    if (scene !== 'battle' || battle?.phase !== 'reward' || battle.rewardStep !== 'team') return;
+    if (
+      scene !== 'battle' ||
+      !battle ||
+      !((battle.phase === 'reward' && battle.rewardStep === 'team') ||
+        (battle.phase === 'map' && menuOpen))
+    )
+      return;
     const max = boxScrollMax(battle.box.length);
     if (max <= 0) return;
     e.preventDefault();
@@ -716,7 +764,8 @@ function update(dt: number) {
       rewardLanded = 0;
     }
     wasReward = itemStep;
-    if (battle.phase !== 'reward') boxScroll = 0;
+    if (battle.phase !== 'reward' && !(battle.phase === 'map' && menuOpen)) boxScroll = 0;
+    if (battle.phase !== 'map') menuOpen = false;
     // metagame polls — same spot the battle→scene transitions already live
     while (battle.gymsBeaten > lastGyms) {
       recordGymWin();
@@ -922,6 +971,21 @@ function render() {
             t - rewardT0,
             battle.rewardStep,
           );
+        if (menuOpen && battle.phase === 'map')
+          drawTeamMenu(
+            ctx,
+            battle.box,
+            battle.boxHp,
+            battle.boxLvl,
+            battle.players.map((p) => p.def),
+            battle.players.map((p) => (p.maxHp ? p.hp / p.maxHp : 0)),
+            battle.players.map((p) => p.lvl),
+            battle.boxSel,
+            battle.teamSel,
+            boxScroll,
+            battle.captureChance,
+            battle.heldItems,
+          );
       }
       break;
     case 'result':
@@ -935,7 +999,7 @@ function render() {
       break;
   }
   // the ?/mute chips ride between fights; the pager floats over any scene
-  if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward')) {
+  if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
     drawHelpChip(ctx);
     drawMuteChip(ctx);
   }

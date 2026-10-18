@@ -42,7 +42,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, roundRect, button, wrap2 } from './screens';
+import { font, fontB, fitFont, roundRect, button, wrap2, MAP_MENU } from './screens';
 
 export interface Rect {
   x: number;
@@ -114,6 +114,8 @@ interface FloatText {
   color: string;
   big: boolean;
   size?: number; // scale multiplier — damage numbers grow with the hit
+  life?: number; // stamped on first frame so easings know the full span
+  tilt?: number; // radians of lean — damage numbers land off-axis for juice
 }
 interface Orb {
   x: number;
@@ -488,6 +490,11 @@ export class Battle {
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
   eventBox: { note: string; art?: EventArt } | null = null; // resolved ? event — modal card, tap to close
   private eventChoice: { prompt: string; options: EventChoice[]; art?: EventArt; node: MapNode } | null = null; // ? that asks — row waits on the pick
+  // a modal card or a walk-in-progress owns map taps — the team menu
+  // stays shut under them
+  get mapModal() {
+    return !!(this.eventBox || this.eventChoice || this.mapWalk);
+  }
   private cardT = 0; // event-card pop timer — the card scales in when it opens
   private choiceHit: { x: number; y: number; w: number; h: number }[] = []; // last-drawn option rects
   private mapMsgT = 0;
@@ -1974,7 +1981,7 @@ export class Battle {
       }
     }
     this.texts.push({
-      x: e.x,
+      x: e.x + (Math.random() - 0.5) * e.r * 1.2,
       y: e.y - e.r - 8,
       text: immune ? 'IMMUNE' : crit ? `${d} CRIT!` : `${d}${suffix}`,
       t: 0.9,
@@ -1982,6 +1989,7 @@ export class Battle {
       big: crit || suffix === '!',
       // the number sells the hit — chunkier damage pops bigger
       size: Math.min(1.7, 0.85 + d / 90),
+      tilt: (Math.random() - 0.5) * 0.16,
     });
     // a chunk of the health bar at once gets the anime flash frame —
     // bumps, orbs and dot ticks all deserve it, not just contact
@@ -2075,9 +2083,10 @@ export class Battle {
       if (caught) {
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
-          this.box.push(e.shiny ? { ...e.def, shiny: true, lvl: e.lvl } : { ...e.def, lvl: e.lvl });
+          const cl = this.catchLvl(e.lvl); // it keeps its level — up to the team's pace
+          this.box.push(e.shiny ? { ...e.def, shiny: true, lvl: cl } : { ...e.def, lvl: cl });
           this.boxHp.push(1);
-          this.boxLvl.push(Math.max(1, e.lvl)); // it keeps its level
+          this.boxLvl.push(Math.max(1, cl));
         }
         // record at capture time — a mid-run tab close keeps the dex honest
         recordCapture([e.def.id]);
@@ -2807,6 +2816,14 @@ export class Battle {
     sfx('perfect');
   }
 
+  // A catch can't outpace the team it joins — wild level is foe difficulty,
+  // not a free pass. Captures keep their level up to a few over your best,
+  // so a boss catch or a rival-echo mon never lands as a run-breaker.
+  catchLvl(lvl: number) {
+    const best = Math.max(1, ...this.players.map((p) => p.lvl));
+    return Math.min(lvl, best + 3);
+  }
+
   gainLevels(p: Unit, n: number) {
     if (p.dead || p.lvl >= LV_CAP) return;
     const l0 = p.lvl;
@@ -2984,7 +3001,9 @@ export class Battle {
   // belongs to the mon, not the slot: a hurt mon stays hurt in the box and a
   // fainted one stays fainted, so benching is never a free heal or revive.
   swapFromBox(bi: number, ti: number) {
-    if (this.phase !== 'reward') return;
+    // free roster management — the reward break and the map's team menu
+    // both allow it; mid-fight and mid-walk it stays locked
+    if (this.phase !== 'reward' && this.phase !== 'map') return;
     const def = this.box[bi];
     const frac = this.boxHp[bi] ?? 1;
     const lvl = this.boxLvl[bi] ?? 1;
@@ -3020,7 +3039,7 @@ export class Battle {
     const pool = fresh.length ? fresh : spawns;
     const pick = fresh.find((s) => s.boss) ?? spawns.find((s) => s.boss) ?? pool[Math.floor(this.rng() * pool.length)];
     // recruits arrive at wave-appropriate level — deep runs yield real mons
-    return { ...pick.def, lvl: Math.min(LV_CAP, 5 + this.waveIndex * 10 + (pick.boss ? 8 : 0) + (this.rng() < 0.5 ? 4 : 0)) };
+    return { ...pick.def, lvl: this.catchLvl(Math.min(LV_CAP, 5 + this.waveIndex * 10 + (pick.boss ? 8 : 0) + (this.rng() < 0.5 ? 4 : 0))) };
   }
 
   // every type on the active team or in the box — charm offers follow it
@@ -3383,7 +3402,7 @@ export class Battle {
       return;
     }
     const def = pickWild(this.rng, this.depth);
-    const lvl = Math.min(LV_CAP, 5 + this.waveIndex * 10 + Math.floor(this.rng() * 5));
+    const lvl = this.catchLvl(Math.min(LV_CAP, 5 + this.waveIndex * 10 + Math.floor(this.rng() * 5)));
     this.box.push({ ...def, lvl });
     this.boxHp.push(1);
     this.boxLvl.push(lvl);
@@ -4411,16 +4430,25 @@ export class Battle {
     }
 
     for (const t of this.texts) {
-      const pop = 1 + Math.max(0, t.t - 0.72) * (t.big ? 4.5 : 1.8);
+      const life = (t.life ??= t.t); // first frame stamps the span
+      const age = 1 - t.t / life; // 0 at birth → 1 at the fade
+      // punch-in: a ~2× spawn snaps to rest with a slight undershoot
+      const k = Math.min(age / 0.15, 1);
+      const ease = 1 + 2.70158 * (k - 1) ** 3 + 1.70158 * (k - 1) ** 2;
+      const pop = (t.big ? 2.3 : 1.9) * (1 - ease) + ease;
       ctx.globalAlpha = Math.min(t.t / 0.3, 1);
       ctx.font = font(16 * pop * (t.size ?? 1));
       ctx.textAlign = 'center';
       ctx.fillStyle = t.color;
       ctx.strokeStyle = '#000';
       ctx.lineWidth = t.big ? 4 : 3;
-      const dy = (0.9 - t.t) * 52;
-      ctx.strokeText(t.text, t.x, t.y - dy);
-      ctx.fillText(t.text, t.x, t.y - dy);
+      const dy = 52 * (1 - (1 - age) ** 3); // launch up fast, drift to a stop
+      ctx.save();
+      ctx.translate(t.x, t.y - dy);
+      ctx.rotate(t.tilt ?? 0);
+      ctx.strokeText(t.text, 0, 0);
+      ctx.fillText(t.text, 0, 0);
+      ctx.restore();
     }
     ctx.globalAlpha = 1;
 
@@ -5116,30 +5144,9 @@ export class Battle {
       }
       ctx.textAlign = 'center';
     }
-    // team strip under the legend — who's hurt decides whether you route
-    // the REST; this is the read that makes the map a decision
-    {
-      const py = oy + view * cell + 114;
-      ctx.font = font(8);
-      ctx.textAlign = 'center';
-      const px0 = 270 - (this.players.length - 1) * 36;
-      this.players.forEach((p, i) => {
-        const px = px0 + i * 72;
-        ctx.globalAlpha = p.dead ? 0.3 : 1;
-        (p.shiny ? drawShiny : drawMon)(ctx, p.def.id, px, py, 34);
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#000a';
-        ctx.fillRect(px - 17, py + 21, 34, 5);
-        if (p.dead) {
-          ctx.fillStyle = '#ff6b6b';
-          ctx.fillText('KO', px, py + 25);
-        } else {
-          const pct = Math.max(0, p.hp / p.maxHp);
-          ctx.fillStyle = pct > 0.5 ? '#6fdc6f' : pct > 0.25 ? '#ffd84d' : '#ff6b6b';
-          ctx.fillRect(px - 17, py + 21, 34 * pct, 5);
-        }
-      });
-    }
+    // roster lives behind the menu button — the map stays clean; items, hp
+    // and box swaps are one tap away
+    button(ctx, MAP_MENU, 'TEAM · ITEMS', true, 'poke-ball');
     // ?-stop theatre: a resolved event or an open question pops a cabinet
     // card center-screen — art window up top, the words beneath, chunky
     // buttons or a blinking ▼
@@ -5767,16 +5774,6 @@ export class Battle {
         ctx.fillStyle = i < filled ? (u.cd <= 0 ? '#ffd84d' : TYPE_COLOR[u.def.type]) : 'rgba(0,0,0,0.45)';
         ctx.fillRect(u.x + (i - (dots - 1) / 2) * 7 - 2.5, u.y + u.r + 12, 5, 5);
       }
-      // level tag on grown mons — KO'ing with a mon feeds it a level
-      if (u.lvl > 1) {
-        ctx.font = font(8);
-        ctx.textAlign = 'left';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2.5;
-        ctx.strokeText(`Lv${u.lvl}`, u.x - u.r - 4, u.y + u.r + 16);
-        ctx.fillStyle = '#9df0ff';
-        ctx.fillText(`Lv${u.lvl}`, u.x - u.r - 4, u.y + u.r + 16);
-      }
       if (u.cd <= 0) {
         // ready: the move's name sits overhead — this is the thing to hit
         const label = moveOf(u.def.id, u.def.type);
@@ -5977,34 +5974,6 @@ export class Battle {
         ctx.closePath();
         ctx.stroke();
         ctx.globalAlpha = 1;
-      }
-      // predicted contact damage over the first catch — the shot is the
-      // puzzle, so the answer is honest: type mult + taunt block, no crits
-      if (hit && !hit.dead) {
-        const taunted = this.enemies.some((x) => !x.dead && x.def.taunt) && !hit.def.taunt;
-        let label: string;
-        let lc = '#ffffff';
-        if (taunted) {
-          label = 'BLOCKED';
-          lc = '#8a90a8';
-        } else {
-          const at = strikeType(u.def, hit.def);
-          const mult = typeMult(at, hit.def) * weatherMult(this.weather, at);
-          const est = Math.max(1, Math.round(
-            physDamage(u.def.stats.atk, hit.def.stats.def, mult) *
-              u.pow * this.physMult * this.dmgMult * (this.typePow[at] ?? 1) *
-              (hit.boss ? 1 + this.bossSlayer : 1),
-          ));
-          label = est >= hit.hp ? `≈${est} KO` : `≈${est}`;
-          lc = est >= hit.hp ? '#ffd84d' : '#ffffff';
-        }
-        ctx.font = font(9);
-        ctx.textAlign = 'center';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 3;
-        ctx.strokeText(label, hit.x, hit.y - hit.r - 20);
-        ctx.fillStyle = lc;
-        ctx.fillText(label, hit.x, hit.y - hit.r - 20);
       }
     }
 

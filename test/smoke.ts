@@ -140,6 +140,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(gems === base + 4 || gems === base + 5, `team luck 45 pays ~4 bonus gems (${gems} vs base ${base})`);
 }
 
+// --- catches can't outlevel the team they join ----------------------------
+{
+  const b = new Battle(arena, team(), makeStage(8, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  const e = (b as any).enemies.find((x: any) => !team().some((t) => t.id === x.def.id));
+  e.lvl = 90; // a wild far above anything a young team could field
+  b.captureChance = 1; // the ball always lands
+  (b as any).hurt(e, e.hp + 50, '#fff');
+  // the KO's punch-up EXP lands before the catch — measure the cap after
+  const best = Math.max(...(b as any).players.map((p: any) => p.lvl));
+  ok((b as any).boxLvl[0] === best + 3, `a lvl-90 catch joins at team pace (box lvl ${(b as any).boxLvl[0]} vs team best ${best})`);
+}
+
 // --- dual-typing: multiplied matchups, better-type strikes ---------------
 {
   ok(typeMult('rock', speciesById(6)!) === 4, 'charizard (fire/flying) takes 4x rock');
@@ -338,7 +351,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const e = (b as any).enemies[0];
   const el = e.lvl;
   (b as any).hurt(e, e.hp + 50, '#fff');
-  ok(b.boxLvl[b.boxLvl.length - 1] === el, `caught mon keeps its level (Lv${el})`);
+  // keeps its level up to the catch cap — a few over the team's best
+  const best = Math.max(...(b as any).players.map((p: any) => p.lvl));
+  const want = Math.min(el, best + 3);
+  ok(b.boxLvl[b.boxLvl.length - 1] === want, `caught mon joins capped at team pace (Lv${el} wild → Lv${b.boxLvl[b.boxLvl.length - 1]}, cap ${want})`);
 }
 
 // --- map stop effects -------------------------------------------------------
