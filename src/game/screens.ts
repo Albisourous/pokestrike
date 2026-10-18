@@ -96,10 +96,10 @@ export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
-export const REWARD_SKIP = { x: W - 152, y: 904, w: 134, h: 40 };
+export const REWARD_SKIP = { x: W - 152, y: 872, w: 134, h: 40 };
 // the reward break runs two steps: roster management, then the relic pick
-export const REWARD_NEXT = { x: W / 2 - 90, y: 904, w: 180, h: 40 };
-export const REWARD_BACK = { x: 18, y: 904, w: 120, h: 40 };
+export const REWARD_NEXT = { x: W / 2 - 90, y: 872, w: 180, h: 40 };
+export const REWARD_BACK = { x: 18, y: 872, w: 120, h: 40 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 500, w: W - 48, h: 56 };
@@ -2457,7 +2457,7 @@ export function drawReward(
   // next row on the map — gyms announce themselves; wild rows stay quiet
   // since the actual choice happens on the map now
   ctx.font = font(8);
-  const nextY = step === 'team' ? 856 : 926;
+  const nextY = 852;
   if (next.gym) {
     ctx.fillStyle = '#f85888';
     ctx.fillText('NEXT: GYM LEADER', W / 2, nextY);
