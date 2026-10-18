@@ -198,6 +198,20 @@ function cardFrame(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: 
   edge(ctx, r, rad);
 }
 
+// a star drawn as a path — the ★ glyph's bearings drift off-center in a frame
+function fillStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+    const rad = i % 2 ? r * 0.42 : r;
+    const px = cx + Math.cos(a) * rad, py = cy + Math.sin(a) * rad;
+    if (i) ctx.lineTo(px, py);
+    else ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
 // Balatro-ish card face: dark panel with a type-colored glow behind the
 // art and an edge vignette. Reusable for any card that wants to show a type.
 function cardFace(
@@ -1915,9 +1929,7 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
         drawNpc(ctx, LEADER_NPC[gymDef.type], r.x + 34, y + ACH_ROW / 2 + 9, 26);
       } else {
         ctx.fillStyle = '#ffd84d';
-        ctx.font = font(11);
-        ctx.textAlign = 'center';
-        ctx.fillText('★', r.x + 34, y + ACH_ROW / 2);
+        fillStar(ctx, r.x + 34, y + ACH_ROW / 2 - 4, 8);
       }
     }
     ctx.textAlign = 'left';
