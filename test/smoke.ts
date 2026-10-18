@@ -1,6 +1,6 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle, MAP_CELL, MAP_OX, MAP_OY } from '../src/game/battle';
+import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES } from '../src/game/data';
 import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
@@ -9,7 +9,7 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier } from '../src/game/meta';
 import { PERKS } from '../src/game/perks';
 
 let fails = 0;
@@ -157,9 +157,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.phase = 'aim';
   const u = (b as any).active;
   b.pointerDown({ x: u.x, y: u.y });
-  // park the ping-pong meter dead-center in the gold band for this mon's speed
-  const n = Math.min(u.def.stats.spe / 120, 1);
-  (b as any).dragT = (0.68 + 0.27 * n) * 0.85;
+  // park the meter in the gold band — the band jitters per pull now, so
+  // solve dragT through the live charge/sweetSpot pair instead of constants
+  for (let i = 0; i < 6; i++) {
+    const z = (b as any).sweetSpot();
+    const P = (0.85 - 0.3 * (b as any).gaugeDifficulty()) * (1 + (b as any).gaugeJit * 0.14);
+    let dt = P * z.c - (b as any).gaugeStart * 2 * P;
+    dt = ((dt % (2 * P)) + 2 * P) % (2 * P);
+    (b as any).dragT = dt;
+    if (Math.abs((b as any).charge() - (b as any).sweetSpot().c) <= z.hw) break;
+  }
   b.pointerMove({ x: u.x + 60, y: u.y });
   b.pointerUp();
   ok(b.phase === 'shot' && (b as any).shotGold === true, 'gold release arms the gauge bonus');
@@ -220,6 +227,48 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(b.boxLvl[0] === 7, `benched mon keeps earned levels (boxLvl ${b.boxLvl})`);
   ok(Math.abs(p.pow - ROLE_MODS[p.role].pow * lvlPow(offStat(p.def.stats, p.def.type), 3)) < 0.001, 'swap recomputes pow from its own level');
   void swappedPow;
+}
+
+// --- reward flow: roster management gates the item pick ---------------------
+{
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  (b as any).enterReward();
+  ok(b.phase === 'reward' && b.rewardStep === 'team', 'reward opens on the team step');
+  b.advanceReward();
+  ok(b.rewardStep === 'item', 'advanceReward flips to the item step');
+  b.rewardStep = 'team';
+  b.advanceReward();
+  ok(b.rewardStep === 'item', 'going back and re-advancing still reaches items');
+  b.declineReward();
+  ok(b.phase !== 'reward', 'decline still exits the reward screen');
+}
+
+// --- ultimate: a tap on the charged mon detonates the court -----------------
+{
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  b.phase = 'aim';
+  b.ultIn = 0;
+  const u = (b as any).active;
+  const hp0 = (b as any).enemies.map((e: any) => e.hp);
+  b.pointerDown({ x: u.x, y: u.y });
+  b.pointerUp();
+  ok(b.ultIn === ULT_SHOTS, 'firing the ult re-arms the counter');
+  for (let i = 0; i < 60; i++) b.update(0.05); // the beams land on a stagger
+  ok((b as any).enemies.every((e: any, i: number) => e.dead || e.hp < hp0[i]), 'the ult hits every foe on the court');
+}
+
+// --- ranked ladder: depth pays, early wipes bleed ----------------------------
+{
+  const r0 = rating();
+  const w = applyRunRating(9, true, 0);
+  ok(w.delta > 0 && rating() === r0 + w.delta, `a clear climbs the ladder (+${w.delta})`);
+  const l = applyRunRating(1, false, 0);
+  ok(l.delta < 0, `an early wipe bleeds rating (${l.delta})`);
+  const deep = applyRunRating(8, false, 0);
+  ok(deep.delta > 0, 'a deep loss still climbs');
+  ok(tier(0).name === 'POKé BALL' && tier(900).name === 'CHAMPION', 'tier bands bracket the ladder');
 }
 
 // --- shiny roll + guaranteed catch ----------------------------------------

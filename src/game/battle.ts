@@ -277,6 +277,14 @@ const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
 const SHINY_RATE = 1 / 48; // ~2% of wild spawns roll the gold palette
 const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
+// every pickup gets a color + one-word tag so the drop reads before the
+// ball reaches it
+const PICKUP_META: Record<PickupKind, { label: string; color: string }> = {
+  'oran-berry': { label: 'HEAL', color: '#6fdc6f' },
+  protein: { label: 'ATK UP', color: '#f08030' },
+  elixir: { label: 'CD -1', color: '#9ecbff' },
+};
+export const ULT_SHOTS = 10; // shots to charge the ultimate — tap the charged mon to fire it
 // every species a mon can evolve into must be resolvable here — includes
 // enemy/invader pools so catches like Magikarp→Gyarados actually work
 const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS, ...ENEMY_DB, ...INVADERS];
@@ -385,6 +393,10 @@ export class Battle {
   streak = 0; // consecutive perfect launches — shown in the HUD
   private shotStreak = 1; // this shot's streak damage bonus
   private shotGold = false; // gold-zone release — MS gauge shot: +20% contact this shot
+  ultIn = ULT_SHOTS; // shots until the map-wide ultimate — tap the charged active mon to fire
+  private gaugeJit = 0; // per-pull variance: shifts the gold band and sweep pace
+  private gaugeStart = 0; // per-pull variance: where on the cycle the needle starts
+  rewardStep: 'team' | 'item' = 'team'; // reward screen order — roster first, then the pick
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
   scoreMult = 1; // lucky egg: score amplifies
   private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
@@ -1016,6 +1028,10 @@ export class Battle {
     this.dragging = true;
     this.dragT = 0;
     this.wasGold = false;
+    // every pull re-rolls the gauge's rhythm — the band and sweep don't sit
+    // where muscle memory left them
+    this.gaugeJit = Math.random() * 2 - 1;
+    this.gaugeStart = Math.random();
 
     this.dragStart = { ...p };
     this.dragNow = { ...p };
@@ -1048,6 +1064,11 @@ export class Battle {
       const hit = [...this.enemies, ...this.players].find(
         (e) => !e.dead && Math.hypot(e.x - this.dragStart.x, e.y - this.dragStart.y) < e.r + 14,
       );
+      // a charged mon fires its map-wide ultimate on tap — it outranks scouting
+      if (hit === this.active && this.ultIn <= 0 && this.phase === 'aim') {
+        this.fireUlt();
+        return;
+      }
       if (hit) {
         this.inspect = { uid: hit.uid, t: 2.8 };
         sfx('ui');
@@ -1088,6 +1109,7 @@ export class Battle {
     if (u.cd <= 0) this.bumpAlly(u, u);
     this.phase = 'shot';
     this.shots++;
+    if (this.ultIn > 0) this.ultIn--; // every shot banks charge toward the ultimate
     this.waveShots++; // anti-stall pressure counts shots inside the wave
     this.addShake(5);
     this.addPunch(0.03);
@@ -1127,9 +1149,11 @@ export class Battle {
   // Power meter: ping-pongs 0→1→0 while held (~0.85s per direction —
   // stronger species sweep faster) — release in the gold zone for a
   // full-power launch. Pull distance only aims; it no longer feeds power.
+  // The pace and needle start re-roll every pull, so the window is never
+  // the same shot twice.
   private charge() {
-    const P = 0.85 - 0.3 * this.gaugeDifficulty();
-    const ph = this.dragT % (2 * P);
+    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.14);
+    const ph = (this.dragT + this.gaugeStart * 2 * P) % (2 * P);
     return ph < P ? ph / P : 2 - ph / P;
   }
 
@@ -1142,13 +1166,14 @@ export class Battle {
   // The gold zone sits where base Speed puts it: fast mons release high
   // and tight, slow mons get a lower, wider target. Stronger species
   // narrow the window further, and the top end drifts while you hold —
-  // you release where the band will be, not where it is.
+  // you release where the band will be, not where it is. Each pull also
+  // nudges the band a little, so the timing never becomes memorized.
   private sweetSpot() {
     const n = Math.min(this.active.def.stats.spe / 120, 1);
     const d = this.gaugeDifficulty();
     const hw = Math.max(0.09 - 0.05 * n - 0.04 * d, 0.025);
     const drift = Math.max(d - 0.5, 0) * 0.16 * Math.sin(this.dragT * 2.4);
-    const c = Math.min(Math.max(0.68 + 0.27 * n + drift, hw), 1 - hw);
+    const c = Math.min(Math.max(0.68 + 0.27 * n + drift + this.gaugeJit * 0.09, hw), 1 - hw);
     return { c, hw };
   }
 
@@ -1418,7 +1443,7 @@ export class Battle {
       }
       for (let j = this.pickups.length - 1; j >= 0; j--) {
         const pk = this.pickups[j];
-        if (dist(u, pk) < u.r + 16) {
+        if (dist(u, pk) < u.r + 22) {
           this.pickups.splice(j, 1);
           this.grabPickup(pk);
         }
@@ -2668,6 +2693,60 @@ export class Battle {
     }
   }
 
+  // The run's ultimate: after ULT_SHOTS launches the active mon is charged —
+  // tapping it detonates its signature across the whole court, one staggered
+  // beam per enemy. Z-move energy: a flash, a freeze, then everything pays.
+  private fireUlt() {
+    const u = this.active;
+    this.ultIn = ULT_SHOTS;
+    const color = TYPE_COLOR[u.def.type];
+    this.texts.push({
+      x: u.x, y: u.y - u.r - 48,
+      text: `ULTIMATE ${moveOf(u.def.id, u.def.type)}!`,
+      t: 1.5, color, big: true,
+    });
+    this.hitStop = Math.max(this.hitStop, 0.55);
+    this.screenFlash('#ffffff', 0.3);
+    this.screenFlash(color, 0.28);
+    this.impact(u.x, u.y, color, 2.4);
+    this.burst(u.x, u.y, color, 34, 720, 1.5);
+    // the eruption ring sweeps the court — pure spectacle, beams do the work
+    this.waves.push({ x: u.x, y: u.y, r: 0, maxR: Math.max(this.arena.w, this.arena.h), t: 0.6, life: 0.6, color, hits: new Set() });
+    this.addPunch(0.2);
+    this.addShake(16);
+    this.flavor(u.x, u.y, u.def.type);
+    sfx(SUPER_SFX[u.def.type]);
+    cry(u.def.id, 0.4);
+    buzz([50, 40, 90]);
+    const phys = bumpIsPhysical(u.def.type);
+    const targets = this.enemies.filter((e) => !e.dead);
+    targets.forEach((e, i) => {
+      this.later(0.1 + i * 0.09, () => {
+        if (e.dead) return;
+        this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.34, life: 0.34, color, w: 2 });
+        this.impact(e.x, e.y, color, 1.9);
+        this.screenFlash(color, 0.06);
+        const mult = typeMult(u.def.type, e.def) * weatherMult(this.weather, u.def.type);
+        const dmg = Math.round(
+          (phys
+            ? physDamage(u.def.stats.atk, e.def.stats.def, mult)
+            : specDamage(u.def.stats.spa, e.def.stats.spd, mult)) *
+            u.pow * SUPER_POW * 4.5 * (e.boss ? 0.55 : 1),
+        );
+        this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+        this.addShake(7);
+        this.hitStop = Math.max(this.hitStop, 0.06);
+      });
+    });
+    this.award('ult');
+    // hurt() marks kills but doesn't chain the wave check — close it out
+    // after the last beam lands
+    this.later(0.15 + targets.length * 0.09, () => {
+      this.enemies = this.enemies.filter((e) => !e.dead);
+      if (!this.enemies.length && this.phase !== 'won' && this.phase === 'aim') this.waveCleared();
+    });
+  }
+
   private waveCleared() {
     if (this.coach) this.coachDone = true; // survived a wave — teaching's over
     if (this.inRival) {
@@ -2955,6 +3034,7 @@ export class Battle {
   private enterReward() {
     this.boxSel = -1;
     this.teamSel = -1;
+    this.rewardStep = 'team'; // roster management comes before the item pick
     // hard stops pay out uncommon-or-better relics — the risk has a price;
     // elites go further: rare-or-better only
     this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 1 : this.hardWave ? 2 : 3, this.rank, this.teamTypes());
@@ -3173,6 +3253,16 @@ export class Battle {
     this.rewardOffers = [];
     this.pendingNext = this.waveIndex + 1;
     this.phase = 'map'; // pick the next stop on the region map
+  }
+
+  // Team step → item step. The reward break shows one job at a time: manage
+  // the roster first, then deal the relic cards.
+  advanceReward() {
+    if (this.phase !== 'reward' || this.rewardStep !== 'team') return;
+    this.rewardStep = 'item';
+    this.boxSel = -1;
+    this.teamSel = -1;
+    sfx('ui');
   }
 
   // Declining pays score instead — StS reward skips keep dead offers honest.
@@ -3946,17 +4036,33 @@ export class Battle {
 
     this.drawWeather(ctx);
 
-    // field pickups: a soft halo under a bobbing item icon
+    // field pickups: a kind-colored ring + tag under the bobbing item icon —
+    // you can tell what it is (and that it's worth steering through) before
+    // the ball reaches it
     for (const pk of this.pickups) {
       const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
+      const meta = PICKUP_META[pk.kind];
       ctx.globalAlpha = 0.22 + Math.sin(this.time * 3 + pk.t) * 0.06;
       ctx.fillStyle = '#fff8dc';
       ctx.beginPath();
       ctx.ellipse(pk.x, pk.y + 9, 12, 5, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.globalAlpha = 0.45 + Math.sin(this.time * 4 + pk.t) * 0.18;
+      ctx.strokeStyle = meta.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(pk.x, pk.y + 9, 16, 7.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.globalAlpha = 1;
       const img = itemSprite(pk.kind);
       if (img) ctx.drawImage(img, pk.x - 13, pk.y - 13 + bob, 26, 26);
+      ctx.font = fontB(7);
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(meta.label, pk.x, pk.y + 27);
+      ctx.fillStyle = meta.color;
+      ctx.fillText(meta.label, pk.x, pk.y + 27);
     }
 
     // victory loot — each kind reads at a glance: gold coins, cyan gems,
@@ -5144,8 +5250,21 @@ export class Battle {
       }
       const bw = 380, bh = 46;
       this.choiceHit = options.map((_, i) => ({ x: (540 - bw) / 2, y: oy + i * (bh + 10), w: bw, h: bh }));
-      options.forEach((o, i) =>
-        button(ctx, this.choiceHit[i], o.label, o.cost === undefined || o.cost <= this.score, o.icon));
+      options.forEach((o, i) => {
+        button(ctx, this.choiceHit[i], o.label, o.cost === undefined || o.cost <= this.score, o.icon);
+        // the price rides the button's right edge — the label keeps its room
+        if (o.cost !== undefined) {
+          ctx.font = font(9);
+          ctx.textAlign = 'right';
+          const afford = o.cost <= this.score;
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 3;
+          ctx.strokeText(`${o.cost}`, this.choiceHit[i].x + bw - 10, this.choiceHit[i].y + bh / 2 + 4);
+          ctx.fillStyle = afford ? '#ffd84d' : '#6a7090';
+          ctx.fillText(`${o.cost}`, this.choiceHit[i].x + bw - 10, this.choiceHit[i].y + bh / 2 + 4);
+          ctx.textAlign = 'center';
+        }
+      });
     }
     ctx.restore();
   }
@@ -5674,6 +5793,24 @@ export class Battle {
         ctx.strokeText(u.def.name.toUpperCase(), u.x, ty - 17);
         ctx.fillStyle = '#ffd84d';
         ctx.fillText(u.def.name.toUpperCase(), u.x, ty - 17);
+      }
+      // charged ultimate — the mon carries a pulsing halo + a tap hint
+      if (u === this.active && this.phase === 'aim' && this.ultIn <= 0) {
+        const pulse = 0.5 + Math.sin(this.time * 6) * 0.5;
+        ctx.globalAlpha = 0.35 + pulse * 0.45;
+        ctx.strokeStyle = '#ffd84d';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.r + 7 + pulse * 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.font = font(7);
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText('ULT — TAP!', u.x, u.y - u.r - 52);
+        ctx.fillStyle = '#ffe76a';
+        ctx.fillText('ULT — TAP!', u.x, u.y - u.r - 52);
       }
     }
   }

@@ -85,6 +85,47 @@ export function rankName(r = rank()): string {
   return ['ROOKIE', 'ACE', 'CHAMPION'][r] ?? 'ROOKIE';
 }
 
+// --- ranked ladder: a persistent rating that rises on deep runs and ---
+// --- falls on early wipes, laddered into ball-tier leagues -------------
+
+let memRating = 0;
+
+export function rating(): number {
+  const r = load<unknown>('pk_rating');
+  return typeof r === 'number' && Number.isFinite(r) ? r : memRating;
+}
+
+export const LADDER: { at: number; name: string; color: string }[] = [
+  { at: 0, name: 'POKé BALL', color: '#f05038' },
+  { at: 120, name: 'GREAT BALL', color: '#5a9cf8' },
+  { at: 280, name: 'ULTRA BALL', color: '#f8d030' },
+  { at: 500, name: 'MASTER BALL', color: '#a040f0' },
+  { at: 800, name: 'CHAMPION', color: '#ffd84d' },
+];
+
+export function tier(r = rating()) {
+  let i = 0;
+  while (i + 1 < LADDER.length && r >= LADDER[i + 1].at) i++;
+  const cur = LADDER[i];
+  const next = LADDER[i + 1];
+  // progress through the current tier's band; maxed tiers sit at 1
+  const prog = next ? Math.min(1, (r - cur.at) / (next.at - cur.at)) : 1;
+  return { i, name: cur.name, color: cur.color, prog, next };
+}
+
+// Called once per finished run. Depth is the ladder's currency: every stage
+// pays, a clear pays double, and only a run that dies before stage 4 bleeds
+// points — losing deep is still a climb.
+export function applyRunRating(stage: number, won: boolean, asc: number) {
+  const before = rating();
+  const delta = Math.round(stage * 4 + (won ? 30 + asc * 5 : 0) - (won ? 0 : Math.max(0, 16 - stage * 3)));
+  const after = Math.max(0, before + delta);
+  memRating = after;
+  store('pk_rating', after);
+  const t0 = tier(before), t1 = tier(after);
+  return { delta: after - before, before, after, promoted: t1.i > t0.i, demoted: t1.i < t0.i, tier: t1 };
+}
+
 // The echo stores species + earned level — a fallen team comes back at
 // the strength it died with. Old saves held bare ids; read those as Lv1.
 export function echoIds(): { id: number; lvl: number }[] | null {
@@ -193,6 +234,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'myth', name: 'MYTH TAMER', desc: 'Catch a legendary invader' },
   { id: 'perfect', name: 'DEAD CENTER', desc: 'Land a PERFECT release' },
   { id: 'pinball', name: 'PINBALL WIZARD', desc: 'Chain 8+ hits in a single shot' },
+  { id: 'ult', name: 'FULL POWER', desc: 'Unleash a charged ultimate' },
   { id: 'collector', name: 'COLLECTOR', desc: 'Fill 50 dex entries' },
   { id: 'living', name: 'LIVING DEX', desc: 'Catch every species' },
   { id: 'rampage', name: 'RAMPAGE', desc: 'Score 40+ KOs in one run' },

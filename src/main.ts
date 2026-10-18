@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating } from './game/meta';
 import {
   W,
   H,
@@ -41,6 +41,8 @@ import {
   drawPerkPick,
   CHARM_SKIP,
   REWARD_SKIP,
+  REWARD_NEXT,
+  REWARD_BACK,
   HELP_PANEL,
   HELP_PREV,
   HELP_NEXT,
@@ -484,23 +486,35 @@ canvas.addEventListener('pointerdown', (e) => {
         }
         return;
       }
-      // item reels still rolling — a tap fast-forwards, never picks blind
+      if (battle.rewardStep === 'team') {
+        // step one: the roster. Item offers wait until the team is set.
+        if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
+          boxDrag = { x0: p.x, s0: boxScroll, moved: false };
+          return;
+        }
+        for (let i = 0; i < battle.players.length; i++) {
+          if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
+          if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
+          else if (battle.box.length > 0) {
+            battle.teamSel = battle.teamSel === i ? -1 : i;
+            sfx('ui');
+          }
+          return;
+        }
+        if (inRect(p.x, p.y, REWARD_NEXT)) {
+          sfx('ui');
+          battle.advanceReward();
+        }
+        return;
+      }
+      // step two: item reels still rolling — a tap fast-forwards, never picks blind
       if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
         rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
         return;
       }
-      // box strip swallows the pointer — release decides tap vs scroll drag
-      if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
-        boxDrag = { x0: p.x, s0: boxScroll, moved: false };
-        return;
-      }
-      for (let i = 0; i < battle.players.length; i++) {
-        if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
-        if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
-        else if (battle.box.length > 0) {
-          battle.teamSel = battle.teamSel === i ? -1 : i;
-          sfx('ui');
-        }
+      if (inRect(p.x, p.y, REWARD_BACK)) {
+        sfx('ui');
+        battle.rewardStep = 'team';
         return;
       }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
@@ -593,7 +607,7 @@ canvas.addEventListener('pointerup', (e) => {
     const { moved } = boxDrag;
     boxDrag = null;
     // a drag that never moved is a tap: pick a catch, then a teammate to swap into
-    if (!moved && scene === 'battle' && battle?.phase === 'reward') {
+    if (!moved && scene === 'battle' && battle?.phase === 'reward' && battle.rewardStep === 'team') {
       const p = toLogical(e);
       if (inRect(p.x, p.y, BOX_STRIP)) {
         for (let i = 0; i < battle.box.length; i++) {
@@ -662,7 +676,7 @@ canvas.addEventListener(
       achScroll = Math.min(Math.max(achScroll + e.deltaY, 0), achScrollMax());
       return;
     }
-    if (scene !== 'battle' || battle?.phase !== 'reward') return;
+    if (scene !== 'battle' || battle?.phase !== 'reward' || battle.rewardStep !== 'team') return;
     const max = boxScrollMax(battle.box.length);
     if (max <= 0) return;
     e.preventDefault();
@@ -679,7 +693,7 @@ function hud(name: string) {
   if (!battle) return;
   ctx.save();
   ctx.translate(0, -viewPad);
-  drawHud(ctx, battle.waveIndex, battle.shots, name, battle.score, battle.streak);
+  drawHud(ctx, battle.waveIndex, battle.shots, name, battle.score, battle.streak, battle.ultIn);
   ctx.restore();
 }
 
@@ -689,11 +703,14 @@ function update(dt: number) {
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
-    if (battle.phase === 'reward' && !wasReward) {
+    // the item reels deal when the item step opens — the team step is
+    // roster-only, so the spin keys off rewardStep flipping, not the phase
+    const itemStep = battle.phase === 'reward' && battle.rewardStep === 'item';
+    if (itemStep && !wasReward) {
       rewardT0 = t;
       rewardLanded = 0;
     }
-    wasReward = battle.phase === 'reward';
+    wasReward = itemStep;
     if (battle.phase !== 'reward') boxScroll = 0;
     // metagame polls — same spot the battle→scene transitions already live
     while (battle.gymsBeaten > lastGyms) {
@@ -717,6 +734,8 @@ function update(dt: number) {
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
       const newBest = recordRun(battle.score, stageReached, won);
       const gap = prevBest - battle.score;
+      // the ladder grades every run — deep runs climb, early wipes bleed
+      const rr = applyRunRating(stageReached, won, battle.asc);
       result = {
         won,
         shots: battle.shots,
@@ -730,6 +749,7 @@ function update(dt: number) {
         mvpIdx: battle.players.indexOf(mvp),
         shortOfBest: !newBest && gap > 0 && gap <= 500 ? gap : 0,
         newAch: [],
+        rating: { delta: rr.delta, tier: rr.tier.name, color: rr.tier.color, up: rr.promoted },
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
       const trophy = (id: string) => {
@@ -884,6 +904,7 @@ function render() {
             battle.evoChoice,
             battle.teamLuck(),
             t - rewardT0,
+            battle.rewardStep,
           );
       }
       break;

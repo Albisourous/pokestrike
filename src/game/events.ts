@@ -298,8 +298,10 @@ const EVENTS: GameEvent[] = [
 // item leaves the board.
 export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[]; art?: EventArt } {
   const reprompt = (bb: Battle, note: string): EventOutcome => ({ note, choices: martStock(bb, note, sold) });
+  // cost renders as a tag on the button's right edge — the label stays short
+  // enough to read at full pixel size
   const shelf = (key: string, cost: number, label: string, icon: string, buy: (bb: Battle) => string): EventChoice => ({
-    label: `${label} — ${cost} SCORE`,
+    label,
     cost,
     icon,
     run: (bb) => {
@@ -316,7 +318,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
       return 'EVERYONE GREW +1 LEVEL!';
     })],
     ['mystery', {
-      label: 'MYSTERY ITEM — 300 SCORE',
+      label: 'MYSTERY ITEM',
       cost: 300,
       icon: 'lucky-egg',
       run: (bb) => {
@@ -334,7 +336,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
     }],
   ];
   if (b.players.some((p) => p.dead))
-    stock.push(['revive', shelf('revive', 350, 'REVIVE — AT HALF HP', 'revive', (bb) => {
+    stock.push(['revive', shelf('revive', 350, 'REVIVE — BACK AT HALF HP', 'revive', (bb) => {
       const dead = bb.players.filter((p) => p.dead);
       const p = dead[Math.floor(bb.roll() * dead.length)];
       p.dead = false;

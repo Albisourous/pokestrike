@@ -22,6 +22,14 @@ const RIM: Record<Theme, string> = {
   volcano: '#241610',
   sky: '#5490ba',
 };
+// top-light bevel on each theme's wall band — the court reads as raised
+// boards, not a painted line
+const WALL_HI: Record<Theme, string> = {
+  grove: '#57a353',
+  cavern: '#6a6290',
+  volcano: '#7a4a2e',
+  sky: '#a8d8f4',
+};
 // soft light pool per theme: sun patch / light shaft / ember bed / sun glare
 const GLOW: Record<Theme, [number, number, number, number]> = {
   grove: [255, 234, 150, 0.12],
@@ -134,13 +142,68 @@ function floor(theme: Theme) {
   return c;
 }
 
-// Thick rim with a hairline chalk line just inside, so the edge reads as
-// painted stadium boards rather than a bare stroke.
+// Stadium boards: a dark seat under a theme band with a top-light bevel,
+// panel seams and chunky corner caps — the wall reads as built, not stroked.
 export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: number; w: number; h: number }, theme: Theme) {
+  // seat shadow so the boards lift off the floor
+  ctx.strokeStyle = 'rgba(0,0,0,0.38)';
+  ctx.lineWidth = 15;
+  rr(ctx, a.x, a.y + 2, a.w, a.h, 18);
+  ctx.stroke();
+  // the boards themselves
   ctx.strokeStyle = RIM[theme];
-  ctx.lineWidth = 10;
+  ctx.lineWidth = 11;
   rr(ctx, a.x, a.y, a.w, a.h, 18);
   ctx.stroke();
+  // bevel: light catches the inner top edge, the outer edge falls dark
+  ctx.strokeStyle = WALL_HI[theme];
+  ctx.lineWidth = 3;
+  rr(ctx, a.x + 4, a.y + 3.5, a.w - 8, a.h - 8, 14);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+  ctx.lineWidth = 2.5;
+  rr(ctx, a.x - 4.5, a.y - 4.5, a.w + 9, a.h + 9, 22);
+  ctx.stroke();
+  // panel seams — short tick marks spaced along each board run
+  ctx.strokeStyle = 'rgba(0,0,0,0.30)';
+  ctx.lineWidth = 2;
+  const step = 84;
+  ctx.beginPath();
+  for (let x = a.x + 30; x < a.x + a.w - 20; x += step) {
+    ctx.moveTo(x, a.y - 5.5);
+    ctx.lineTo(x, a.y + 5.5);
+    ctx.moveTo(x, a.y + a.h - 5.5);
+    ctx.lineTo(x, a.y + a.h + 5.5);
+  }
+  for (let y = a.y + 34; y < a.y + a.h - 20; y += step) {
+    ctx.moveTo(a.x - 5.5, y);
+    ctx.lineTo(a.x + 5.5, y);
+    ctx.moveTo(a.x + a.w - 5.5, y);
+    ctx.lineTo(a.x + a.w + 5.5, y);
+  }
+  ctx.stroke();
+  // corner caps — bolted plates where the board runs meet
+  ctx.fillStyle = WALL_HI[theme];
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1.5;
+  const corners: [number, number][] = [
+    [a.x + 4, a.y + 4],
+    [a.x + a.w - 4, a.y + 4],
+    [a.x + a.w - 4, a.y + a.h - 4],
+    [a.x + 4, a.y + a.h - 4],
+  ];
+  for (const [cx, cy] of corners) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 7, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(cx - 1.5, cy - 1.5, 2.2, 0, TAU);
+    ctx.fill();
+    ctx.fillStyle = WALL_HI[theme];
+  }
+  // hairline chalk just inside the boards
   ctx.strokeStyle = 'rgba(255,246,220,0.20)';
   ctx.lineWidth = 2;
   rr(ctx, a.x + 7, a.y + 7, a.w - 14, a.h - 14, 11);

@@ -6,8 +6,8 @@ import type { Perk, Rarity } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, typeMult, type PokeType } from './types';
 import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
-import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED } from './battle';
-import { dexIds, shinyIds, rankName, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf } from './meta';
+import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED, ULT_SHOTS } from './battle';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -32,6 +32,7 @@ export interface RunResult {
   mvpIdx: number; // highest-level mon — crowned on the team row
   shortOfBest: number; // pts shy of the record, when it was close
   newAch: string[]; // trophy names this run just unlocked
+  rating: { delta: number; tier: string; color: string; up: boolean }; // ladder movement this run
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -95,9 +96,12 @@ export function perkCardRect(i: number) {
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
 export const REWARD_SKIP = { x: W - 152, y: 904, w: 134, h: 40 };
+// the reward break runs two steps: roster management, then the relic pick
+export const REWARD_NEXT = { x: W / 2 - 90, y: 904, w: 180, h: 40 };
+export const REWARD_BACK = { x: 18, y: 904, w: 120, h: 40 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
-export const BOX_STRIP = { x: 24, y: 640, w: W - 48, h: 56 };
+export const BOX_STRIP = { x: 24, y: 500, w: W - 48, h: 56 };
 const BOX_SLOT = 56;
 const BOX_GAP = 10;
 export function boxScrollMax(n: number) {
@@ -110,7 +114,7 @@ export function boxSlotRect(i: number, n: number, scroll = 0) {
 }
 export function teamSlotRect(i: number) {
   const w = 100, gap = 14;
-  return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 772, w, h: 70 };
+  return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 652, w, h: 70 };
 }
 
 // split-evolution option cards — centered row over the dimmed reward screen
@@ -1226,13 +1230,30 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   // the dex and the trophy shelf share one row — same chrome as the menus
   button(ctx, DEX_BTN, `DEX ${dexIds().length}/${CATCHABLE}`, true);
   button(ctx, ACH_BTN, `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, true);
-  // the records line is the one-more-run hook — rank and best score
+  // the records line is the one-more-run hook — ranked ladder, best score
   const b = best();
-  const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
+  const ld = tier();
+  const bits = [`RANK ${ld.name}`, `BEST ${b.score.toLocaleString('en-US')}`];
   if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
   fitFont(ctx, bits.join(' · '), 8, W - 40);
   ctx.fillStyle = '#aab4dd';
   ctx.fillText(bits.join(' · '), W / 2, DEX_BTN.y + DEX_BTN.h + 22);
+  // the ladder: a fill bar toward the next tier, tinted to the current one
+  const rw = 220, rx = W / 2 - rw / 2, ry = DEX_BTN.y + DEX_BTN.h + 33;
+  ctx.fillStyle = '#1a2040';
+  ctx.fillRect(rx, ry, rw, 7);
+  ctx.fillStyle = ld.color;
+  ctx.fillRect(rx, ry, Math.max(3, rw * ld.prog), 7);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(rx + 0.5, ry + 0.5, rw - 1, 6);
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(
+    ld.next ? `${rating()} PTS — ${Math.round(ld.prog * 100)}% TO ${ld.next.name}` : `${rating()} PTS — TOP OF THE LADDER`,
+    W / 2,
+    ry + 19,
+  );
 }
 
 // --- help overlay: scrollable sections, each a mini diagram + a caption ---
@@ -1446,9 +1467,8 @@ const HELP_SECTIONS: HelpSection[] = [
       'pull back anywhere: the dotted line is the flight path',
       'pull distance only aims — power is the release timing on the meter',
       'let go inside the gold band for a PERFECT full-power shot',
-      "the band sits at your mon's own spot: fast ones are high and tight",
-      'stronger mons are harder to control — tighter band, faster meter, the top end drifts',
-      'on keys: ? help · P pause · M mute · arrows turn pages',
+      'fast mons aim high and tight; stronger mons get a faster sweep',
+      'the band drifts a little every pull — read it, don\'t memorize',
     ],
     demo: demoAim,
   },
@@ -1460,9 +1480,9 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'PINCH SHOTS',
     lines: [
-      'two different touches — foe, ally, wall, stone — within 0.35s flash PINCH!',
+      'two different touches — foe, ally, wall, stone — in 0.35s flash PINCH!',
       "hitting the same thing twice doesn't count",
-      'relics cash it in: Binding Band pays +40% hit damage, Ether feeds a super pip',
+      'relics cash it in: Binding Band +40% hits, Ether feeds a pip',
     ],
     demo: demoBump,
   },
@@ -1486,31 +1506,53 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'FIELD PICKUPS',
-    lines: ['roll the ball through them: they collect on touch', 'one spawns each wave, two when something big lurks'],
+    lines: [
+      'each wave seeds a pickup — the colored ring and tag name it',
+      'berry heals the team, protein buffs the shot, elixir charges pips',
+      'roll the ball through to collect on touch',
+      'one spawns each wave, two when something big lurks',
+    ],
     demo: demoPickups,
   },
   {
     title: 'CATCHING',
     lines: [
-      'beaten foes sometimes drop a ball: catches go to your box · beat a gym, take the ace',
-      'a duplicate feeds the copy you own: +1 LUCK every fusion, paid out in gym loot',
+      'beaten foes sometimes drop a ball: catches go to your box',
+      'beat a gym and its ace joins your box too',
+      'a duplicate feeds the copy you own: +1 LUCK every fusion',
+      'luck pays out in gym loot',
       'split evolutions (Eevee, Tyrogue…) ask which form after the fight',
     ],
     demo: demoCatch,
   },
   {
     title: 'LEVELING UP',
-    lines: ['every KO levels the mon that launched the shot, tougher foes teach more (Lv100 cap)', 'levels survive evolution; each win raises ASCENSION: foes tougher, faster (2), a second charm (3), weaker rests (4), enraged gyms (6)'],
+    lines: [
+      'every KO levels the mon that launched the shot',
+      'tougher foes teach more — cap Lv100, levels survive evolution',
+      'each win raises ASCENSION: foes get tougher and faster',
+      'ASC buys perks: a second charm (3), weaker rests (4), enraged gyms (6)',
+    ],
     demo: demoCharge,
   },
   {
     title: 'THE CLIMB',
-    lines: ['9 stages, a gym every 3rd: pick your route on the map', 'lose and your fallen team returns next run as the rival'],
+    lines: [
+      '9 stages, a gym every 3rd: pick your route on the map',
+      'after each fight: fix the lineup first, then take an item',
+      'lose and your fallen team returns next run as the rival',
+      'every run moves your ladder rating — wins climb, wipes drop',
+    ],
     demo: demoClimb,
   },
   {
     title: 'MAP STOPS',
-    lines: ['rest heals+revives and chests pay an item — both still fight after', 'trainer squads can\'t be caught but pay better loot · ELITE doors fight deeper, pay rare+ relics · ??? is a surprise'],
+    lines: [
+      'rests heal and revive · chests pay an item · both still fight after',
+      'trainer squads pay better loot but can\'t be caught',
+      'ELITE doors fight deeper and pay rare+ relics',
+      '??? is a surprise — heal, haul, or ambush',
+    ],
     demo: demoPickups,
   },
   {
@@ -1555,6 +1597,16 @@ const HELP_SECTIONS: HelpSection[] = [
     ],
     demo: demoCharge,
   },
+  {
+    title: 'ULTIMATE',
+    lines: [
+      'every shot arms the ult — 10 shots and your active mon glows gold',
+      'tap the glowing mon (don\'t pull) to unleash a map-wide strike',
+      'all foes take the hit · bosses shrug off most of it',
+      'on keys: ? help · P pause · M mute · arrows turn pages',
+    ],
+    demo: demoCharge,
+  },
 ];
 
 // Help is reference, not onboarding: two sections a page so nobody scrolls
@@ -1563,6 +1615,7 @@ const HELP_SECTIONS: HelpSection[] = [
 const HELP_PAGES: { name: string; secs: number[] }[] = [
   { name: 'YOUR SHOT', secs: [0, 4] },
   { name: 'SUPERS', secs: [1, 3] },
+  { name: 'ULTIMATE', secs: [16] },
   { name: 'SUPER INDEX', secs: [14, 15] },
   { name: 'SHOT TECH', secs: [2, 5] },
   { name: 'THE FIELD', secs: [11, 12] },
@@ -2120,6 +2173,7 @@ export function drawReward(
   evo: { from: SpeciesDef; options: SpeciesDef[] } | null,
   luck: number,
   spin: number, // reel age in seconds — counts up from the deal
+  step: 'team' | 'item',
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -2139,11 +2193,15 @@ export function drawReward(
 
   ctx.font = font(20);
   ctx.fillStyle = '#f8d030';
-  ctx.fillText('CHOOSE AN ITEM', W / 2, 300);
+  ctx.fillText(step === 'team' ? 'MANAGE YOUR TEAM' : 'CHOOSE AN ITEM', W / 2, 300);
   ctx.font = font(10);
   ctx.fillStyle = '#e8ecf8';
   ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 356);
-  if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
+  if (step === 'team') {
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('set the lineup first — items deal on the next screen', W / 2, 372);
+  } else if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
     ctx.fillText('reels rolling — tap to skip', W / 2, 372);
@@ -2162,11 +2220,11 @@ export function drawReward(
     335,
   );
 
-  offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }));
+  if (step === 'item') offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }));
 
-  // held items — the run's build so far, a strip of icons between the
-  // offer cards and the box so you can read your loadout at a glance
-  if (heldItems.length) {
+  // held items — the run's build so far, a strip of icons under the
+  // offer cards so you can read your loadout at a glance
+  if (step === 'item' && heldItems.length) {
     const iw = 22, gap = 6, n = Math.min(heldItems.length, 14);
     let ix = W / 2 - (n * (iw + gap) - gap) / 2;
     heldItems.slice(0, 14).forEach((item) => {
@@ -2178,14 +2236,15 @@ export function drawReward(
     ctx.globalAlpha = 1;
   }
 
+  if (step === 'team') {
   // captured box — tap a catch and a teammate, in either order, to swap
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(`BOX: beaten foes join at ${Math.round(catchPct * 100)}%`, W / 2, 620);
+  ctx.fillText(`BOX: beaten foes join at ${Math.round(catchPct * 100)}%`, W / 2, 480);
   if (box.length === 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
-    ctx.fillText('nothing caught yet: beaten foes sometimes join', W / 2, 668);
+    ctx.fillText('nothing caught yet: beaten foes sometimes join', W / 2, BOX_STRIP.y + 32);
   }
   ctx.save();
   ctx.beginPath();
@@ -2241,7 +2300,7 @@ export function drawReward(
 
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('YOUR TEAM', W / 2, 750);
+  ctx.fillText('YOUR TEAM', W / 2, 630);
   team.forEach((def, i) => {
     const r = teamSlotRect(i);
     roundRect(ctx, r.x, r.y, r.w, r.h, 8);
@@ -2292,7 +2351,7 @@ export function drawReward(
   if (selDef) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}`, W / 2, 862);
+    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}`, W / 2, 744);
   }
   ctx.font = fontB(8);
   ctx.fillStyle = '#5a6284';
@@ -2303,21 +2362,28 @@ export function drawReward(
         ? 'tap a teammate to swap in'
         : 'tap a team mon and a box mon to swap them',
     W / 2,
-    880,
+    764,
   );
+  }
 
   // next row on the map — gyms announce themselves; wild rows stay quiet
   // since the actual choice happens on the map now
   ctx.font = font(8);
+  const nextY = step === 'team' ? 856 : 926;
   if (next.gym) {
     ctx.fillStyle = '#f85888';
-    ctx.fillText('NEXT: GYM LEADER', W / 2, 926);
+    ctx.fillText('NEXT: GYM LEADER', W / 2, nextY);
   } else {
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, 926);
+    ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
   }
-  // StS lets you decline a reward — here it cashes out as score instead
-  button(ctx, REWARD_SKIP, 'DECLINE +150', true);
+  if (step === 'team') {
+    button(ctx, REWARD_NEXT, 'ITEMS ▸', true);
+  } else {
+    button(ctx, REWARD_BACK, '◂ TEAM', true);
+    // StS lets you decline a reward — here it cashes out as score instead
+    button(ctx, REWARD_SKIP, 'DECLINE +150', true);
+  }
 
   // a split evolution blocks the reward pick until its form is chosen
   if (evo) {
@@ -2469,6 +2535,18 @@ export function drawResult(
     ctx.fillText(`★ ${res.newAch.join(' · ')} ★`, W / 2, extra ? 414 : 408);
   }
 
+  // ranked movement — the ladder grades every run, wins or wipes
+  if (res.rating) {
+    const r = res.rating;
+    ctx.font = font(9);
+    ctx.fillStyle = r.color;
+    ctx.fillText(
+      `RATING ${r.delta >= 0 ? '+' : ''}${r.delta} — ${r.tier}${r.up ? ' ★ RANK UP ★' : ''}`,
+      W / 2,
+      424,
+    );
+  }
+
   // run badges — rarity-colored chips, up to two rows
   const badgeRows: { name: string; rarity: Rarity }[][] = [[]];
   for (const b of res.badges) {
@@ -2477,7 +2555,7 @@ export function drawResult(
     else row.push(b);
   }
   badgeRows.forEach((row, ri) => {
-    const y = 428 + ri * 28;
+    const y = 440 + ri * 28;
     ctx.font = fontB(8);
     const ws = row.map((b) => ctx.measureText(b.name).width + 20);
     let bx = W / 2 - (ws.reduce((a, c) => a + c, 0) + (row.length - 1) * 8) / 2;
@@ -2496,7 +2574,7 @@ export function drawResult(
   });
 
   if (share) {
-    const sy = 460 + badgeRows.length * 28;
+    const sy = 472 + badgeRows.length * 28;
     ctx.font = '30px system-ui';
     ctx.fillText(share.waves, W / 2, sy);
     // the squad as real sprites — reads as Pokémon at a glance
@@ -2516,7 +2594,7 @@ export function drawResult(
   if (!res.won) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('this fallen team may return as a RIVAL next run', W / 2, share ? 460 + badgeRows.length * 28 + 64 : 560);
+    ctx.fillText('this fallen team may return as a RIVAL next run', W / 2, share ? 472 + badgeRows.length * 28 + 64 : 560);
   }
 
   button(ctx, RETRY_BTN, 'REMATCH', true);
@@ -2524,7 +2602,7 @@ export function drawResult(
   button(ctx, TITLE_BTN, 'TITLE', true);
 }
 
-export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0) {
+export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1) {
   ctx.fillStyle = '#8890b8';
   ctx.font = fontB(9);
   ctx.textAlign = 'left';
@@ -2562,5 +2640,15 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   if (streak > 1) {
     ctx.fillStyle = '#f08030';
     ctx.fillText(`PERFECT ×${streak}`, W - 30, 76);
+  }
+  // the ultimate's charge rides the HUD — pulses gold once it's armed
+  ctx.font = fontB(8);
+  ctx.textAlign = 'right';
+  if (ultIn <= 0) {
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText('★ ULT READY', W - 30, 92);
+  } else {
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText(`ULT ${ULT_SHOTS - ultIn}/${ULT_SHOTS}`, W - 30, 92);
   }
 }
