@@ -1789,7 +1789,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
 
   const list = board();
   if (!list.length) {
-    ctx.font = font(10);
+    fitFont(ctx, 'NO RUNS YET — CLIMB AND CLAIM A SPOT', 10, r.w - 40);
     ctx.fillStyle = '#8890b8';
     ctx.fillText('NO RUNS YET — CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + r.h / 2);
   }
