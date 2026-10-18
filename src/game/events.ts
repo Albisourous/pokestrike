@@ -312,8 +312,8 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
     },
   });
   const stock: [string, EventChoice][] = [
-    ['potion', shelf('potion', 200, 'POTION — TEAM HEALS 40%', 'potion', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!'))],
-    ['candy', shelf('candy', 400, 'RARE CANDY — TEAM +1 LV', 'hp-up', (bb) => {
+    ['potion', shelf('potion', 200, 'POTION — HEAL 40%', 'potion', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!'))],
+    ['candy', shelf('candy', 400, 'RARE CANDY — +1 LV', 'hp-up', (bb) => {
       for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
       return 'EVERYONE GREW +1 LEVEL!';
     })],
@@ -336,7 +336,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
     }],
   ];
   if (b.players.some((p) => p.dead))
-    stock.push(['revive', shelf('revive', 350, 'REVIVE — BACK AT HALF HP', 'revive', (bb) => {
+    stock.push(['revive', shelf('revive', 350, 'REVIVE — HALF HP', 'revive', (bb) => {
       const dead = bb.players.filter((p) => p.dead);
       const p = dead[Math.floor(bb.roll() * dead.length)];
       p.dead = false;

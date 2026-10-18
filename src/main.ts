@@ -151,8 +151,9 @@ window.visualViewport?.addEventListener('resize', resize);
 resize();
 // ?dev also exposes the scene machine + coordinate transform for playtest probes
 if (new URLSearchParams(location.search).has('dev'))
-  (window as unknown as { __dbg: { scene: () => Scene; xy: (x: number, y: number) => { x: number; y: number } } }).__dbg = {
+  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number } } }).__dbg = {
     scene: () => scene,
+    battle: () => battle,
     xy: (x, y) => { const p = toLogical({ clientX: x, clientY: y } as PointerEvent); return { x: p.x, y: p.y }; },
   };
 

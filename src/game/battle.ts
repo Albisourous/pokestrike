@@ -1811,9 +1811,16 @@ export class Battle {
   private grabPickup(pk: Pickup) {
     this.burst(pk.x, pk.y, '#fff8dc', 9, 260, 0.9);
     switch (pk.kind) {
-      case 'oran-berry':
+      case 'oran-berry': {
+        const hp0 = this.players.reduce((a, p) => a + p.hp, 0);
         this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * 0.15)));
+        // if nobody needed it (full team, heal on cooldown) still say so —
+        // a pickup should never vanish without a word
+        if (this.players.reduce((a, p) => a + p.hp, 0) === hp0) {
+          this.texts.push({ x: pk.x, y: pk.y - 12, text: 'TEAM FULL', t: 0.9, color: '#6fdc6f', big: false });
+        }
         break;
+      }
       case 'protein':
         sfx('ui');
         this.shotPhys *= 1.5;
@@ -5251,18 +5258,28 @@ export class Battle {
       const bw = 380, bh = 46;
       this.choiceHit = options.map((_, i) => ({ x: (540 - bw) / 2, y: oy + i * (bh + 10), w: bw, h: bh }));
       options.forEach((o, i) => {
-        button(ctx, this.choiceHit[i], o.label, o.cost === undefined || o.cost <= this.score, o.icon);
-        // the price rides the button's right edge — the label keeps its room
+        const r = this.choiceHit[i];
+        const afford = o.cost === undefined || o.cost <= this.score;
         if (o.cost !== undefined) {
+          // priced picks: label sits left of the price tag — button()'s
+          // centered text ran its tail into the cost
+          button(ctx, r, '', afford, o.icon);
+          const lx = r.x + 50;
+          const ty = r.y + r.h / 2 + 4;
+          fitFont(ctx, o.label, 10, r.w - 50 - 64);
+          ctx.textAlign = 'left';
+          ctx.fillStyle = afford ? '#f0e6c8' : '#6a7090';
+          ctx.fillText(o.label, lx, ty);
           ctx.font = font(9);
           ctx.textAlign = 'right';
-          const afford = o.cost <= this.score;
           ctx.strokeStyle = '#000';
           ctx.lineWidth = 3;
-          ctx.strokeText(`${o.cost}`, this.choiceHit[i].x + bw - 10, this.choiceHit[i].y + bh / 2 + 4);
+          ctx.strokeText(`${o.cost}`, r.x + r.w - 10, ty);
           ctx.fillStyle = afford ? '#ffd84d' : '#6a7090';
-          ctx.fillText(`${o.cost}`, this.choiceHit[i].x + bw - 10, this.choiceHit[i].y + bh / 2 + 4);
+          ctx.fillText(`${o.cost}`, r.x + r.w - 10, ty);
           ctx.textAlign = 'center';
+        } else {
+          button(ctx, r, o.label, afford, o.icon);
         }
       });
     }

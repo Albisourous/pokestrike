@@ -2005,7 +2005,7 @@ export function drawDraft(
   // picked team strip
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('YOUR TEAM', W / 2, 640);
+  ctx.fillText('YOUR TEAM', W / 2, 650);
   for (let i = 0; i < 4; i++) {
     const sx = W / 2 - 4 * 44 + i * 88;
     const sr = { x: sx, y: 660, w: 76, h: 90 };
