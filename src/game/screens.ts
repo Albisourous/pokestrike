@@ -1855,7 +1855,7 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
 
 // --- trophy shelf: the badge case on top, the StS-style achievement list under ---
 const ACH_ROW = 58;
-const ACH_HEAD = 204; // the badge case owns the head — the trophy list scrolls below
+const ACH_HEAD = 234; // the badge case owns the head — the trophy list scrolls below
 
 export function achScrollMax() {
   return Math.max(0, ACHIEVEMENTS.length * ACH_ROW - (DEX_PANEL.h - ACH_HEAD - 36));
