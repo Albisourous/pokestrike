@@ -7,7 +7,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, typeMult, type PokeType } from './types';
 import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
 import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED, ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating } from './meta';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, board } from './meta';
 
 export const W = 540;
 export const H = 960;
@@ -33,6 +33,7 @@ export interface RunResult {
   shortOfBest: number; // pts shy of the record, when it was close
   newAch: string[]; // trophy names this run just unlocked
   rating: { delta: number; tier: string; color: string; up: boolean }; // ladder movement this run
+  place: number; // hall-of-fame slot earned (0-based), -1 = off the board
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -1230,6 +1231,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   // the dex and the trophy shelf share one row — same chrome as the menus
   button(ctx, DEX_BTN, `DEX ${dexIds().length}/${CATCHABLE}`, true);
   button(ctx, ACH_BTN, `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, true);
+  button(ctx, BOARD_BTN, 'TOP RUNS', true);
   // the records line is the one-more-run hook — ranked ladder, best score
   const b = best();
   const ld = tier();
@@ -1699,8 +1701,9 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
 
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
 // --- haven't caught; the count is the only hint at what's out there -------
-export const DEX_BTN = { x: W / 2 - 165, y: FREE_BTN.y + FREE_BTN.h + 14, w: 154, h: 48 };
-export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 10, y: DEX_BTN.y, w: 166, h: 48 };
+export const DEX_BTN = { x: W / 2 - 205, y: FREE_BTN.y + FREE_BTN.h + 14, w: 130, h: 48 };
+export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 10, y: DEX_BTN.y, w: 140, h: 48 };
+export const BOARD_BTN = { x: ACH_BTN.x + ACH_BTN.w + 10, y: DEX_BTN.y, w: 110, h: 48 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
@@ -1761,6 +1764,79 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   }
   ctx.fillStyle = '#8890b8';
   ctx.fillText('catch wild mons to fill the dex: they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+}
+
+// --- hall of fame: the top climbs this device has logged, score-ranked ---
+const BOARD_ROW = 74;
+const BOARD_HEAD = 84;
+
+export function drawBoard(ctx: CanvasRenderingContext2D) {
+  const r = DEX_PANEL;
+  ctx.fillStyle = 'rgba(6,10,22,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 14);
+
+  ctx.textAlign = 'center';
+  ctx.font = font(17);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('HALL OF FAME', r.x + r.w / 2, r.y + 40);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('the top climbs logged on this device — score rules all', r.x + r.w / 2, r.y + 58);
+
+  const list = board();
+  if (!list.length) {
+    ctx.font = font(10);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('NO RUNS YET — CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + r.h / 2);
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(r.x + 8, r.y + BOARD_HEAD, r.w - 16, r.h - BOARD_HEAD - 36);
+  ctx.clip();
+  list.forEach((e, i) => {
+    const y = r.y + BOARD_HEAD + i * BOARD_ROW;
+    const rx = r.x + 14, rw = r.w - 28;
+    roundRect(ctx, rx, y, rw, BOARD_ROW - 10, 8);
+    ctx.fillStyle = i === 0 ? '#1d2545' : '#0d1126';
+    ctx.fill();
+    ctx.strokeStyle = i === 0 ? GOLD : '#2a3560';
+    ctx.lineWidth = i === 0 ? 2 : 1;
+    ctx.stroke();
+    // rank plate — gold for the leader
+    ctx.font = font(11);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = i === 0 ? '#ffd84d' : '#8890b8';
+    ctx.fillText(`#${i + 1}`, rx + 14, y + 30);
+    ctx.font = font(11);
+    ctx.fillStyle = '#f0e6c8';
+    ctx.fillText(e.s.toLocaleString('en-US'), rx + 62, y + 30);
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#8890b8';
+    const line = `${e.w ? 'CLEARED' : `STAGE ${e.st}/${TOTAL_STAGES}`}${e.asc ? ` · ASC ${e.asc}` : ''}`;
+    ctx.fillText(line, rx + 62, y + 50);
+    const d = new Date(e.when);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, rx + rw - 12, y + 16);
+    // the run's lineup marches the right edge — the plaque's face
+    e.team.slice(0, 4).forEach((id, ti) => {
+      try {
+        drawMon(ctx, id, rx + rw - 110 + ti * 28, y + BOARD_ROW / 2 - 6, 26);
+      } catch {
+        /* sprite not warmed */
+      }
+    });
+    ctx.textAlign = 'center';
+  });
+  ctx.restore();
+
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
 // --- trophy shelf: the badge case on top, the StS-style achievement list under ---
@@ -2538,13 +2614,10 @@ export function drawResult(
   // ranked movement — the ladder grades every run, wins or wipes
   if (res.rating) {
     const r = res.rating;
-    ctx.font = font(9);
+    const line = `RATING ${r.delta >= 0 ? '+' : ''}${r.delta} — ${r.tier}${r.up ? ' ★ RANK UP' : ''}${res.place >= 0 ? ` · HOF #${res.place + 1}` : ''}`;
+    fitFont(ctx, line, 9, W - 60);
     ctx.fillStyle = r.color;
-    ctx.fillText(
-      `RATING ${r.delta >= 0 ? '+' : ''}${r.delta} — ${r.tier}${r.up ? ' ★ RANK UP ★' : ''}`,
-      W / 2,
-      424,
-    );
+    ctx.fillText(line, W / 2, 424);
   }
 
   // run badges — rarity-colored chips, up to two rows

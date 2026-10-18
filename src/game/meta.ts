@@ -126,6 +126,42 @@ export function applyRunRating(stage: number, won: boolean, asc: number) {
   return { delta: after - before, before, after, promoted: t1.i > t0.i, demoted: t1.i < t0.i, tier: t1 };
 }
 
+// --- hall of fame: the local leaderboard — your top climbs by score ------
+// no backend here; the board remembers this device, which is the arcade
+// answer anyway
+
+export interface BoardEntry {
+  s: number; // final score
+  st: number; // stage reached, 1-9
+  w: boolean; // cleared the whole climb
+  asc: number; // ascension the run was played at
+  team: number[]; // final lineup, dex ids — the sprites on the plaque
+  when: number; // epoch ms
+}
+export const BOARD_MAX = 8;
+let memBoard: BoardEntry[] = [];
+
+export function board(): BoardEntry[] {
+  const raw = load<unknown>('pk_board');
+  const list = Array.isArray(raw) ? raw : memBoard;
+  return list.filter(
+    (e): e is BoardEntry =>
+      !!e && typeof e.s === 'number' && Array.isArray(e.team) && typeof e.st === 'number',
+  );
+}
+
+// Returns the entry's 0-based slot on the board, or -1 when it missed.
+export function recordBoard(e: BoardEntry): number {
+  const list = board();
+  list.push(e);
+  list.sort((a, b) => b.s - a.s);
+  const i = list.indexOf(e);
+  list.splice(BOARD_MAX);
+  memBoard = list;
+  store('pk_board', list);
+  return i < BOARD_MAX ? i : -1;
+}
+
 // The echo stores species + earned level — a fallen team comes back at
 // the strength it died with. Old saves held bare ids; read those as Lv1.
 export function echoIds(): { id: number; lvl: number }[] | null {

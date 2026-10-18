@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard } from './game/meta';
 import {
   W,
   H,
@@ -54,6 +54,8 @@ import {
   ACH_BTN,
   drawAch,
   achScrollMax,
+  BOARD_BTN,
+  drawBoard,
   CATCHABLE,
   inRect,
   font,
@@ -105,6 +107,7 @@ let dexOpen = false;
 let dexScroll = 0;
 let achOpen = false;
 let achScroll = 0;
+let boardOpen = false;
 let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
@@ -356,7 +359,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (scene === 'title') {
-    if (dexOpen || achOpen) {
+    if (dexOpen || achOpen || boardOpen) {
       dexDrag = { y0: p.y, s0: dexOpen ? dexScroll : achScroll, moved: false };
       return;
     }
@@ -370,6 +373,11 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       achOpen = true;
       achScroll = 0;
+      return;
+    }
+    if (inRect(p.x, p.y, BOARD_BTN)) {
+      sfx('ui');
+      boardOpen = true;
       return;
     }
     if (inRect(p.x, p.y, HELP_BTN)) {
@@ -601,6 +609,7 @@ canvas.addEventListener('pointerup', (e) => {
     if (!moved) {
       dexOpen = false;
       achOpen = false;
+      boardOpen = false;
     }
     return;
   }
@@ -737,6 +746,15 @@ function update(dt: number) {
       const gap = prevBest - battle.score;
       // the ladder grades every run — deep runs climb, early wipes bleed
       const rr = applyRunRating(stageReached, won, battle.asc);
+      // hall of fame: log the run, keep the slot it earned (-1 = missed)
+      const place = recordBoard({
+        s: battle.score,
+        st: stageReached,
+        w: won,
+        asc: battle.asc,
+        team: battle.players.map((p) => p.def.id),
+        when: Date.now(),
+      });
       result = {
         won,
         shots: battle.shots,
@@ -751,6 +769,7 @@ function update(dt: number) {
         shortOfBest: !newBest && gap > 0 && gap <= 500 ? gap : 0,
         newAch: [],
         rating: { delta: rr.delta, tier: rr.tier.name, color: rr.tier.color, up: rr.promoted },
+        place,
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
       const trophy = (id: string) => {
@@ -854,6 +873,7 @@ function render() {
       drawTitle(ctx, t);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
+      if (boardOpen) drawBoard(ctx);
       break;
     case 'charm':
       drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM',

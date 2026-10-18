@@ -9,7 +9,7 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX } from '../src/game/meta';
 import { PERKS } from '../src/game/perks';
 
 let fails = 0;
@@ -269,6 +269,24 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const deep = applyRunRating(8, false, 0);
   ok(deep.delta > 0, 'a deep loss still climbs');
   ok(tier(0).name === 'POKé BALL' && tier(900).name === 'CHAMPION', 'tier bands bracket the ladder');
+}
+
+// --- hall of fame: sorted, capped, and honest about misses -------------------
+{
+  localStorage.removeItem('pk_board');
+  ok(board().length === 0, 'board starts empty');
+  const mk = (s: number) => ({ s, st: 5, w: false, asc: 0, team: [1, 4, 7], when: 0 });
+  recordBoard(mk(100));
+  recordBoard(mk(500));
+  recordBoard(mk(300));
+  ok(board()[0].s === 500 && board()[2].s === 100, 'board sorts by score');
+  ok(recordBoard(mk(50)) === 3, 'the lowest slot reports its placement');
+  for (let i = 0; i < BOARD_MAX + 2; i++) recordBoard(mk(1000 + i * 100));
+  ok(board().length === BOARD_MAX, `board caps at ${BOARD_MAX}`);
+  ok(recordBoard(mk(1)) === -1, 'a run under the cutoff misses the board');
+  localStorage.setItem('pk_board', '{broken');
+  ok(Array.isArray(board()), 'malformed pk_board falls back to memory copy');
+  localStorage.removeItem('pk_board');
 }
 
 // --- shiny roll + guaranteed catch ----------------------------------------
