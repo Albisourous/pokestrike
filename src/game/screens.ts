@@ -404,9 +404,15 @@ interface TitleFoe {
 }
 interface TitleMon {
   id: number; x: number; y: number; s: number; fired: boolean; pulse: number;
+  vx: number; vy: number;
 }
 const play = {
-  live: false, // flips once the player grabs the field — theirs from then on
+  live: false, // flips while the player's hands are on the field — the
+  // attract loop takes it back once they've been idle a beat
+  idle: 0,
+  grab: null as TitleMon | TitleFoe | null, // a mon under the finger lifts, no sling
+  grabVel: { x: 0, y: 0 },
+  grabLast: { x: 0, y: 0 },
   dragStart: null as { x: number; y: number } | null,
   dragNow: null as { x: number; y: number } | null,
   dragT: 0,
@@ -415,7 +421,7 @@ const play = {
   turn: 0, // squad index riding the sling — a settled shot hands it on
   t: 0, // attract clock — drives the scripted rider until live flips
   ball: { x: TITLE_TEAM[0][1], y: TITLE_TEAM[0][2], vx: 0, vy: 0, live: false, trail: [] as { x: number; y: number }[] },
-  team: TITLE_TEAM.map(([id, x, y]): TitleMon => ({ id, x, y, s: 52, fired: false, pulse: 0 })),
+  team: TITLE_TEAM.map(([id, x, y]): TitleMon => ({ id, x, y, s: 52, fired: false, pulse: 0, vx: 0, vy: 0 })),
   bolts: [] as { x1: number; y1: number; x2: number; y2: number; t: number; delay: number; foe: TitleFoe; dmg: number }[],
   foes: TITLE_FOES.map(([id, x, y, s], i): TitleFoe => ({ id, ax: x, ay: y, wT: Math.random() * 0.9, x, y, vx: 0, vy: 0, s, timer: 3 - i })),
   aim: { x: 430, y: 395 }, // the scripted way-out leg clips the nearest foe
@@ -431,12 +437,30 @@ const activeDef = () => speciesById(activeMon().id)!;
 export function titlePointerDown(p: { x: number; y: number }): boolean {
   if (!inRect(p.x, p.y, TITLE_FIELD)) return false;
   play.live = true;
-  // a scripted pass may be mid-flight — park the ball on whoever's up
+  play.idle = 0;
+  // a scripted pass may be mid-flight — the ball freezes where it was and
+  // that spot becomes the active mon's ground
   const a = activeMon();
-  Object.assign(play.ball, { x: a.x, y: a.y, vx: 0, vy: 0, live: false });
+  a.x = play.ball.x;
+  a.y = play.ball.y;
+  Object.assign(play.ball, { vx: 0, vy: 0, live: false });
   play.ball.trail = [];
   play.hitSet.clear();
   for (const m of play.team) m.fired = false;
+  // a mon under the finger gets picked up and dragged — grass is the sling
+  if (!play.ball.live) {
+    const inR = (x: number, y: number, s: number) => Math.hypot(p.x - x, p.y - y) <= Math.max(34, s * 0.62);
+    play.grab = inR(play.ball.x, play.ball.y, 76)
+      ? a // the ball mon IS the active one — grabbing it moves the pad
+      : (play.team.find((m) => m !== a && inR(m.x, m.y, m.s)) ??
+        play.foes.find((f) => inR(f.x, f.y, f.s)) ??
+        null);
+    if (play.grab) {
+      play.grabVel = { x: 0, y: 0 };
+      play.grabLast = { x: play.grab.x, y: play.grab.y };
+      return true;
+    }
+  }
   play.dragStart = { x: p.x, y: p.y };
   play.dragNow = { x: p.x, y: p.y };
   play.dragT = 0;
@@ -444,9 +468,33 @@ export function titlePointerDown(p: { x: number; y: number }): boolean {
   return true;
 }
 export function titlePointerMove(p: { x: number; y: number }) {
+  const g = play.grab;
+  if (g) {
+    const F = TITLE_FIELD;
+    const r = Math.max(20, g.s * 0.5);
+    g.x = Math.min(Math.max(p.x, F.x + r), F.x + F.w - r);
+    g.y = Math.min(Math.max(p.y, F.y + r), F.y + F.h - r);
+    if (g === activeMon()) { play.ball.x = g.x; play.ball.y = g.y; }
+    return;
+  }
   if (play.dragStart) play.dragNow = { x: p.x, y: p.y };
 }
 export function titlePointerUp() {
+  const g = play.grab;
+  if (g) {
+    // a flicked mon carries the hand's momentum; foes spring from the drop
+    const toss = 0.7;
+    if ('ax' in g) {
+      g.ax = g.x;
+      g.ay = g.y;
+    }
+    if (g !== activeMon()) {
+      g.vx = Math.min(Math.max(play.grabVel.x * toss, -900), 900);
+      g.vy = Math.min(Math.max(play.grabVel.y * toss, -900), 900);
+    }
+    play.grab = null;
+    return;
+  }
   if (!play.dragStart || !play.dragNow) return;
   const b = play.ball;
   // same launch as Battle.pointerUp: pull aims, meter timing powers
@@ -471,6 +519,7 @@ export function titlePointerUp() {
 }
 export function titlePointerCancel() {
   play.dragStart = play.dragNow = null;
+  play.grab = null;
 }
 
 // the bump super, keyed to the bumped mon's type — a pocket version of
@@ -538,10 +587,21 @@ export function updateTitle(dt: number) {
     if (inGold && !play.wasGold) sfx('tick');
     play.wasGold = inGold;
   }
+  // the grab rides the pointer — remember the hand's pace so the drop can toss
+  if (play.grab) {
+    const g = play.grab;
+    play.grabVel.x += (((g.x - play.grabLast.x) / dt) - play.grabVel.x) * 0.35;
+    play.grabVel.y += (((g.y - play.grabLast.y) / dt) - play.grabVel.y) * 0.35;
+    play.grabLast = { x: g.x, y: g.y };
+  }
   // foes roam the whole pitch like battle creeps — hop to a nearby spot,
   // dart across now and then; the same spring eats knockback, so hits
-  // still shove and settle
+  // still shove and settle. a held foe belongs to the hand, not the spring
   for (const f of play.foes) {
+    if (f === play.grab) {
+      f.vx = f.vy = 0;
+      continue;
+    }
     f.wT -= dt;
     if (f.wT <= 0) {
       f.wT = 0.5 + Math.random() * 0.9;
@@ -569,12 +629,13 @@ export function updateTitle(dt: number) {
       const min = a.s * 0.5 + c.s * 0.5;
       if (d >= min) continue;
       const push = (min - d) / 2;
-      a.x += (dx / d) * push; a.y += (dy / d) * push;
-      c.x -= (dx / d) * push; c.y -= (dy / d) * push;
+      if (a !== play.grab) { a.x += (dx / d) * push; a.y += (dy / d) * push; }
+      if (c !== play.grab) { c.x -= (dx / d) * push; c.y -= (dy / d) * push; }
     }
   for (const f of play.foes) {
+    if (f === play.grab) continue;
     for (const m of play.team) {
-      if (m === activeMon()) continue;
+      if (m === activeMon() || m === play.grab) continue;
       const dx = f.x - m.x, dy = f.y - m.y;
       const d = Math.hypot(dx, dy) || 1;
       const min = f.s * 0.5 + m.s * 0.5;
@@ -587,8 +648,35 @@ export function updateTitle(dt: number) {
       if (d < min) { f.x += (dx / d) * (min - d); f.y += (dy / d) * (min - d); }
     }
   }
+  // a tossed teammate glides out and settles — the separations above shove
+  // any foe it slides through
+  const F0 = TITLE_FIELD;
+  for (const m of play.team) {
+    if (m === play.grab || m === activeMon() || (!m.vx && !m.vy)) continue;
+    m.x += m.vx * dt;
+    m.y += m.vy * dt;
+    const fr0 = Math.exp(-6 * dt);
+    m.vx *= fr0;
+    m.vy *= fr0;
+    const r = m.s * 0.5;
+    m.x = Math.min(Math.max(m.x, F0.x + r), F0.x + F0.w - r);
+    m.y = Math.min(Math.max(m.y, F0.y + r), F0.y + F0.h - r);
+    if (Math.hypot(m.vx, m.vy) < 24) m.vx = m.vy = 0;
+  }
   const b = play.ball;
   let flying = false;
+  // hands off long enough and the pitch slips back into the demo cycle —
+  // any touch grabs it again
+  if (play.live && !play.dragStart && !play.grab && !b.live) {
+    play.idle += dt;
+    if (play.idle > 5) {
+      play.live = false;
+      play.t = 0;
+      play.lastTc = 0;
+    }
+  } else {
+    play.idle = 0;
+  }
   if (!play.live) {
     // attract loop: pikachu rides scripted legs — the shared checks below
     // fire the bumps and score the hits, same as a real pull
@@ -704,7 +792,7 @@ export function updateTitle(dt: number) {
     o.y += o.vy * dt;
     if (d < o.tgt.s * 0.5 + 8 || o.t <= 0) {
       if (d < o.tgt.s * 0.5 + 8) {
-        if ('vx' in o.tgt) { // a foe eats it — knock + the damage number
+        if ('ax' in o.tgt) { // a foe eats it — knock + the damage number
           o.tgt.vx += (dx / d) * 160;
           o.tgt.vy += (dy / d) * 160;
           play.pops.push({ x: o.tgt.x, y: o.tgt.y, t: 0.7, label: String(o.dmg), color: o.c });
@@ -902,8 +990,8 @@ const allyHud = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number,
 function drawActors(ctx: CanvasRenderingContext2D, t: number) {
   play.foes.forEach((f, i) => {
     monShadow(ctx, f.x, f.y + f.s * 0.05, f.s);
-    const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
-    drawMon(ctx, f.id, f.x, f.y + wob, f.s);
+    const wob = Math.hypot(f.vx, f.vy) < 30 && f !== play.grab ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
+    drawMon(ctx, f.id, f.x, f.y + wob - (f === play.grab ? 6 : 0), f.s * (f === play.grab ? 1.12 : 1));
     // battle's hostile reads: flat-red hp bar + the attack countdown
     ctx.fillStyle = '#000a';
     ctx.fillRect(f.x - f.s * 0.38, f.y + f.s * 0.5 + 4, f.s * 0.75, 5);
@@ -922,8 +1010,9 @@ function drawActors(ctx: CanvasRenderingContext2D, t: number) {
   // their super fires
   for (const m of play.team) {
     if (m === activeMon()) continue; // the ball draws itself
+    const held = m === play.grab;
     monShadow(ctx, m.x, m.y + m.s * 0.05, m.s);
-    drawMon(ctx, m.id, m.x, m.y + Math.sin(t * 2.4 + m.id) * 2.5, m.s * (1 + Math.max(0, m.pulse) * 0.15));
+    drawMon(ctx, m.id, m.x, m.y + (held ? -6 : Math.sin(t * 2.4 + m.id) * 2.5), m.s * (held ? 1.12 : 1 + Math.max(0, m.pulse) * 0.15));
     if (m.pulse > 0) {
       ctx.globalAlpha = m.pulse;
       ctx.strokeStyle = TYPE_COLOR[speciesById(m.id)!.type];
@@ -988,13 +1077,13 @@ function drawActors(ctx: CanvasRenderingContext2D, t: number) {
   } else {
     monShadow(ctx, b.x, b.y + 8, 76);
     ctx.save();
-    ctx.translate(b.x, b.y + Math.sin(t * 2) * 1.5);
+    ctx.translate(b.x, b.y + (play.grab === activeMon() ? -6 : Math.sin(t * 2) * 1.5));
     if (play.dragStart) ctx.rotate(-0.15); // coiling into the pull
     drawMon(ctx, bDef.id, 0, 0, 76);
     ctx.restore();
     allyHud(ctx, b.x, b.y, 76, bDef.type);
     // whose-turn marker — the gold chevron bobs over the mon on deck
-    if (!play.dragStart) {
+    if (!play.dragStart && !play.grab) {
       const bob = Math.sin(t * 4) * 3;
       ctx.fillStyle = '#ffd84d';
       ctx.beginPath();
@@ -1204,12 +1293,12 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
     ctx.restore();
     ctx.globalAlpha = 0.55 + Math.sin(t * 3.4) * 0.3;
     ctx.textAlign = 'center';
-    fitFont(ctx, 'DRAG BACK · LET GO — THE PITCH IS PLAYABLE', 10, W - 60);
+    fitFont(ctx, 'GRAB A MON · PULL BACK · LET GO — THE PITCH IS PLAYABLE', 10, W - 60);
     ctx.strokeStyle = '#0a2410';
     ctx.lineWidth = 4;
-    ctx.strokeText('DRAG BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
+    ctx.strokeText('GRAB A MON · PULL BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
     ctx.fillStyle = '#ffe76a';
-    ctx.fillText('DRAG BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
+    ctx.fillText('GRAB A MON · PULL BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
     ctx.globalAlpha = 1;
   }
 
