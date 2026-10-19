@@ -290,7 +290,7 @@ const PICKUP_META: Record<PickupKind, { label: string; color: string }> = {
   protein: { label: 'ATK UP', color: '#f08030' },
   elixir: { label: 'CD -1', color: '#9ecbff' },
 };
-export const ULT_SHOTS = 1; // TESTING: shots to charge the team ultimate — 1 arms it every turn; ship value is ~10
+export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 // every species a mon can evolve into must be resolvable here — includes
 // enemy/invader pools so catches like Magikarp→Gyarados actually work
 const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS, ...ENEMY_DB, ...INVADERS];
@@ -2778,6 +2778,7 @@ export class Battle {
         // the court, and leaves a short burn ticking
         targets.forEach((e, i) => {
           this.orbs.push({ x: e.x + (i % 2 ? 30 : -30), y: a.y - 40, target: e, dmg: dmgOf(e), t: 3, wob: i * 1.9, color });
+          this.flavor(e.x, e.y, 'fire'); // embers rise off each marked foe
           this.later(0.2 + i * 0.09, () => {
             if (e.dead) return;
             this.scar(e.x, e.y, 22);
@@ -2803,13 +2804,18 @@ export class Battle {
         break;
       }
       case 'grass': {
-        // FRENZY PLANT — vines root every foe (their countdown slips) and
-        // siphon a third of the damage back to the team
+        // FRENZY PLANT — the floor erupts under every foe: a fat vine
+        // column, leaf spray and a crater, rooting their countdown while a
+        // third of the damage drains back to the team
         let dealt = 0;
         targets.forEach((e, i) => {
           this.later(0.08 + i * 0.08, () => {
             if (e.dead) return;
-            this.beams.push({ x1: e.x, y1: e.y, x2: e.x, y2: Math.min(e.y + e.r + 26, a.y + a.h - 6), t: 0.4, life: 0.4, color, w: 3 });
+            this.beams.push({ x1: e.x, y1: e.y - e.r - 10, x2: e.x, y2: Math.min(e.y + e.r + 30, a.y + a.h - 4), t: 0.45, life: 0.45, color, w: 7 });
+            this.impact(e.x, e.y, color, 1.6);
+            this.flavor(e.x, e.y, 'grass');
+            this.scar(e.x, Math.min(e.y + e.r + 22, a.y + a.h - 6), 15);
+            this.addShake(6);
             e.timer += 1.5;
             const d = dmgOf(e, 0.7);
             dealt += d;
@@ -2834,12 +2840,21 @@ export class Battle {
           pw *= 0.65;
           this.later(0.08 + i * 0.1, () => {
             if (e.dead) return;
-            this.beams.push({ x1: a0.x, y1: a0.y, x2: e.x, y2: e.y, t: 0.3, life: 0.3 });
-            this.impact(e.x, e.y, color, 1.5);
+            this.beams.push({ x1: a0.x, y1: a0.y, x2: e.x, y2: e.y, t: 0.3, life: 0.3, color, w: 3 });
+            this.impact(e.x, e.y, color, 1.9);
+            this.flavor(e.x, e.y, 'electric');
+            this.screenFlash('#f8d030', 0.08);
             this.hurt(e, dmgOf(e, p), color);
             this.hitStop = Math.max(this.hitStop, 0.06);
+            this.addShake(6);
             sfx('zap');
           });
+        });
+        // the discharge — one thunderclap ring after the last hop lands
+        this.later(0.14 + chain.length * 0.1, () => {
+          this.waves.push({ x: u.x, y: u.y, r: 0, maxR: Math.max(a.w, a.h), t: 0.4, life: 0.4, color, hits: new Set() });
+          this.screenFlash('#ffffff', 0.2);
+          this.addPunch(0.1);
         });
         break;
       }
@@ -2854,59 +2869,74 @@ export class Battle {
               e.vx += (cx - e.x) * 1.1;
               e.vy += (cy - e.y) * 1.1;
             }
-            this.waves.push({ x: cx, y: cy, r: 0, maxR: 90 + k * 30, t: 0.3, life: 0.3, color, hits: new Set() });
+            this.waves.push({ x: cx, y: cy, r: 0, maxR: 150 + k * 60, t: 0.3, life: 0.3, color, hits: new Set() });
+            this.flavor(cx, cy, 'psychic');
           });
         }
         this.later(0.62, () => {
-          this.impact(cx, cy, color, 2.4);
-          this.addShake(12);
+          this.impact(cx, cy, color, 3);
+          this.burst(cx, cy, color, 26, 620, 1.4);
+          this.screenFlash(color, 0.22);
+          this.addPunch(0.12);
+          this.addShake(14);
           for (const e of this.enemies) if (!e.dead) this.hurt(e, dmgOf(e, 0.75), color);
         });
         break;
       }
       case 'rock': {
-        // ROCK SLIDE — one boulder per foe, dead centre, no RNG; the court
-        // keeps the craters
+        // ROCK SLIDE — boulders tear out of the sky, one per foe; the orb
+        // carries the hit, the court keeps the crater and the rubble
         targets.forEach((e, i) => {
-          this.later(0.1 + i * 0.12, () => {
-            this.scar(e.x, e.y, 24);
-            this.screenFlash(color, 0.1);
+          this.orbs.push({ x: e.x + (i % 2 ? 26 : -26), y: a.y - 40, target: e, dmg: dmgOf(e), t: 3, wob: i * 1.3, color });
+          this.later(0.55 + i * 0.1, () => {
+            this.scar(e.x, e.y, 26);
+            this.screenFlash(color, 0.12);
+            this.flavor(e.x, e.y, 'rock');
             this.addShake(11);
-            if (e.dead) return;
-            this.impact(e.x, e.y, color, 1.8);
-            this.hurt(e, dmgOf(e), color);
           });
         });
         break;
       }
       case 'poison': {
-        // VENOM BURST — the whole court takes the hit and every survivor
-        // keeps paying it off — the DoT toxic already ticks on
-        this.waves.push({
-          x: u.x, y: u.y, r: 0, maxR: Math.max(a.w, a.h), t: 0.55, life: 0.55,
-          color, hits: new Set(),
-          onHit: (e) => {
-            this.hurt(e, dmgOf(e, 0.5), color);
-            e.dotTicks = Math.min(e.dotTicks + 3, 6);
-            e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
-          },
-        });
+        // VENOM BURST — a toxic front sweeps the court, then the miasma
+        // slams back; every survivor keeps paying the DoT off
+        this.screenFlash(color, 0.18);
+        const venom = (delay: number, pw: number) =>
+          this.later(delay, () =>
+            this.waves.push({
+              x: u.x, y: u.y, r: 0, maxR: Math.max(a.w, a.h), t: 0.55, life: 0.55,
+              color, hits: new Set(),
+              onHit: (e) => {
+                this.hurt(e, dmgOf(e, pw), color);
+                this.burst(e.x, e.y, color, 12, 380, 1.2);
+                e.dotTicks = Math.min(e.dotTicks + 3, 6);
+                e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
+              },
+            }),
+          );
+        venom(0, 0.5);
+        venom(0.3, 0.35);
+        for (const e of targets) this.flavor(e.x, e.y, 'poison');
         break;
       }
       case 'flying': {
-        // SKY DIVE — one sweeping orbit: a clip per foe in angular order,
-        // each knocked a step toward the middle
+        // SKY DIVE — the comet sweeps a full orbit of the court: a gale
+        // front rings the arena, then clips each foe in angular order and
+        // knocks them a step toward the middle
         const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+        this.waves.push({ x: cx, y: cy, r: 0, maxR: Math.max(a.w, a.h), t: 0.6, life: 0.6, color, hits: new Set() });
         [...targets]
           .sort((x, y) => Math.atan2(x.y - u.y, x.x - u.x) - Math.atan2(y.y - u.y, y.x - u.x))
           .forEach((e, i) => {
             this.later(0.08 + i * 0.11, () => {
               if (e.dead) return;
-              this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.26, life: 0.26, color, w: 3 });
+              this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.26, life: 0.26, color, w: 5 });
+              this.impact(e.x, e.y, '#e8f6ff', 1.6);
+              this.flavor(e.x, e.y, 'flying');
               e.vx += (cx - e.x) * 0.6;
               e.vy += (cy - e.y) * 0.6;
               this.hurt(e, dmgOf(e, 0.8), color);
-              this.addShake(5);
+              this.addShake(6);
             });
           });
         break;
@@ -2929,7 +2959,10 @@ export class Battle {
         // pay extra — a culler's ult, best early in the wave
         this.screenFlash('#201830', 0.3);
         targets.forEach((e, i) => {
+          // two wisps per foe — the pack closing in is the scare
           this.orbs.push({ x: u.x, y: u.y, target: e, dmg: dmgOf(e, e.hp > e.maxHp * 0.5 ? 1.4 : 0.7), t: 3, wob: i * 2.6 + 1.3, color });
+          this.orbs.push({ x: u.x, y: u.y, target: e, dmg: Math.max(1, Math.round(dmgOf(e, 0.3))), t: 3, wob: i * 2.6 + 2.9, color: '#705898' });
+          this.flavor(e.x, e.y, 'ghost');
         });
         break;
       }
@@ -2942,7 +2975,11 @@ export class Battle {
           u.giant = true;
         }
         this.texts.push({ x: u.x, y: u.y - u.r - 20, text: 'GIANT MODE!', t: 1.2, color: '#ffd84d', big: true });
-        this.addShake(12);
+        // the swell itself is the spectacle — stomp ring + speed lines
+        this.waves.push({ x: u.x, y: u.y, r: 0, maxR: Math.max(a.w, a.h) * 0.7, t: 0.45, life: 0.45, color: '#ffd84d', hits: new Set() });
+        this.flavor(u.x, u.y, 'normal');
+        this.addPunch(0.15);
+        this.addShake(14);
         break;
       }
       default: {

@@ -1678,12 +1678,16 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'ULTIMATE',
-    lines: [
-      'every shot arms the ult — 10 shots and the whole team glows gold · charge resets each fight',
-      'tap any glowing mon (don\'t pull) — that mon\'s move is the one that fires',
-      'all foes take the hit · bosses shrug off most of it',
-      'on keys: ? help · P pause · M mute · arrows turn pages',
-    ],
+    // lazy: ULT_SHOTS lives in battle.ts, which imports this module — a
+    // top-level read would hit the const before it's initialized
+    get lines() {
+      return [
+        `not a per-mon super — one shared meter · every shot banks a pip, ${ULT_SHOTS} pips arm it`,
+        'when the gauge floods gold, TAP any glowing mon — its type picks the nuke',
+        'all foes take the hit · bosses shrug off most of it · charge resets each fight',
+        'on keys: ? help · P pause · M mute · arrows turn pages',
+      ];
+    },
     demo: demoCharge,
   },
 ];
@@ -2848,7 +2852,7 @@ export function drawResult(
   ctx.restore();
 }
 
-export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1) {
+export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1, t = 0) {
   ctx.fillStyle = '#8890b8';
   ctx.font = fontB(9);
   ctx.textAlign = 'left';
@@ -2887,7 +2891,34 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   // row would land inside the arena rim and get drawn over
   ctx.font = fontB(8);
   ctx.textAlign = 'left';
-  const bits = streak > 1 ? [`PERFECT ×${streak}`, ultIn <= 0 ? '★ ULT READY' : `ULT ${ULT_SHOTS - ultIn}/${ULT_SHOTS}`] : [ultIn <= 0 ? '★ ULT READY' : `ULT ${ULT_SHOTS - ultIn}/${ULT_SHOTS}`];
-  ctx.fillStyle = ultIn <= 0 ? '#ffd84d' : streak > 1 ? '#f08030' : '#5a6284';
-  ctx.fillText(bits.join(' · '), 52, 60);
+  const ready = ultIn <= 0;
+  let ux = 52;
+  if (streak > 1) {
+    ctx.fillStyle = '#f08030';
+    ctx.fillText(`PERFECT ×${streak}`, ux, 60);
+    ux += ctx.measureText(`PERFECT ×${streak}`).width + 10;
+  }
+  // the shared charge is a real gauge, not a tally: ULT label + a pip per
+  // banked shot, gold flood + pulse once it's armed
+  ctx.fillStyle = ready ? '#ffd84d' : '#5a6284';
+  ctx.fillText('ULT', ux, 60);
+  ux += ctx.measureText('ULT').width + 6;
+  const banked = ULT_SHOTS - Math.max(0, ultIn);
+  const pipW = Math.min(14, Math.max(6, Math.floor(120 / ULT_SHOTS) - 2));
+  const glow = ready ? 0.55 + Math.sin(t * 6) * 0.45 : 0;
+  for (let i = 0; i < ULT_SHOTS; i++) {
+    const on = i < banked || ready;
+    ctx.fillStyle = on ? '#ffd84d' : '#232840';
+    ctx.fillRect(ux + i * (pipW + 3), 52, pipW, 8);
+    if (ready) {
+      ctx.fillStyle = `rgba(255,216,77,${(0.25 + 0.35 * glow).toFixed(3)})`;
+      ctx.fillRect(ux + i * (pipW + 3) - 1, 51, pipW + 2, 10);
+    }
+  }
+  if (ready) {
+    ctx.globalAlpha = glow;
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText('TAP A TEAMMATE!', ux + ULT_SHOTS * (pipW + 3) + 8, 60);
+    ctx.globalAlpha = 1;
+  }
 }
