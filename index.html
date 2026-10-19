@@ -16,7 +16,8 @@
     />
     <meta property="og:url" content="https://albisourous.github.io/pokestrike/" />
     <meta property="og:image" content="https://albisourous.github.io/pokestrike/icon-512.png" />
-    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://albisourous.github.io/pokestrike/icon-512.png" />
     <meta name="twitter:title" content="Pokéstrike — sling & ricochet Pokémon roguelike" />
     <meta
       name="twitter:description"
@@ -42,10 +43,23 @@
         src: url('fonts/PressStart2P-Regular.ttf') format('truetype');
         font-weight: 400;
       }
+      .noscript-msg {
+        color: #fff;
+        font-family: 'ps2p', monospace;
+        text-align: center;
+        margin-top: 40vh;
+      }
     </style>
   </head>
   <body>
-    <canvas id="game"></canvas>
+    <canvas id="game" role="application" aria-label="Pokéstrike — a pull-and-bounce Pokémon roguelike. Enable JavaScript to play.">
+      Pokéstrike needs a browser with canvas support to play.
+    </canvas>
+    <noscript>
+      <p class="noscript-msg">
+        Pokéstrike is a JavaScript game — enable JavaScript to sling your team.
+      </p>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -91,6 +91,7 @@ interface Unit {
   lastHit: Map<number, number>; // shooter uid -> game time
   wallN: number; // wall bounces so far this shot (grip claw ramp)
   hzT: number; // last hazard tick — throttles lava/spike chips and burns
+  giant?: boolean; // GIGA ROMP'd — swollen hitbox until its shot ends, ×2 contact
   relic?: string; // held-item sprite name — gym bosses roll one quirk each
   sq: number; // squash impulse 0..1 — decays in update, flattens the sprite
   sumStage: number; // boss phase summons fired (0..2 — at 2/3 and 1/3 hp)
@@ -289,7 +290,7 @@ const PICKUP_META: Record<PickupKind, { label: string; color: string }> = {
   protein: { label: 'ATK UP', color: '#f08030' },
   elixir: { label: 'CD -1', color: '#9ecbff' },
 };
-export const ULT_SHOTS = 10; // shots to charge the ultimate — tap the charged mon to fire it
+export const ULT_SHOTS = 1; // TESTING: shots to charge the team ultimate — 1 arms it every turn; ship value is ~10
 // every species a mon can evolve into must be resolvable here — includes
 // enemy/invader pools so catches like Magikarp→Gyarados actually work
 const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS, ...ENEMY_DB, ...INVADERS];
@@ -398,7 +399,7 @@ export class Battle {
   streak = 0; // consecutive perfect launches — shown in the HUD
   private shotStreak = 1; // this shot's streak damage bonus
   private shotGold = false; // gold-zone release — MS gauge shot: +20% contact this shot
-  ultIn = ULT_SHOTS; // shots until the map-wide ultimate — tap the charged active mon to fire
+  ultIn = ULT_SHOTS; // shots until the map-wide ultimate — a team charge, tap any teammate to spend it
   private gaugeJit = 0; // per-pull variance: shifts the gold band and sweep pace
   private gaugeStart = 0; // per-pull variance: where on the cycle the needle starts
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
@@ -1089,9 +1090,10 @@ export class Battle {
       const hit = [...this.enemies, ...this.players].find(
         (e) => !e.dead && Math.hypot(e.x - this.dragStart.x, e.y - this.dragStart.y) < e.r + 14,
       );
-      // a charged mon fires its map-wide ultimate on tap — it outranks scouting
-      if (hit === this.active && this.ultIn <= 0 && this.phase === 'aim') {
-        this.fireUlt();
+      // the ult is a team charge — any living teammate can spend it, and
+      // the tapped mon's own signature is the one that detonates
+      if (hit && hit.side === 'player' && this.ultIn <= 0 && this.phase === 'aim') {
+        this.fireUlt(hit);
         return;
       }
       if (hit) {
@@ -2208,6 +2210,7 @@ export class Battle {
         // power zone: hits landed while the ball's inside the ATK field
         // carry the field's charge
         (this.hazards.some((hz) => hz.kind === 'power' && Math.hypot(shooter.x - hz.x, shooter.y - hz.y) < hz.r) ? 1.5 : 1) *
+        (shooter.giant ? 2 : 1) *
         Math.pow(0.9, hitN),
     );
     if (weak) {
@@ -2594,23 +2597,32 @@ export class Battle {
           });
         break;
       }
-      case 'water':
-        // hydro pump: homing orbs corkscrew into the 3 nearest enemies
-        near(Infinity)
-          .sort((a, b) => dist(p, a) - dist(p, b))
-          .slice(0, 3)
-          .forEach((e, i) => {
-            this.orbs.push({
-              x: p.x,
-              y: p.y,
-              target: e,
-              dmg: bumpDmg(e, 1.0),
-              t: 2.5,
-              wob: i * 2.1,
-              color,
-            });
-          });
+      case 'water': {
+        // HYDRO PUMP — a firehose jet, not three polite orbs: a fat
+        // pressurized beam spears the court on a lane to the nearest foe,
+        // hosing everything it crosses and washing them downstream
+        const e = nearest(p, Infinity);
+        if (!e) break;
+        const dir = norm({ x: e.x - p.x, y: e.y - p.y });
+        const end = { x: p.x + dir.x * 900, y: p.y + dir.y * 900 }; // pierce — the jet runs the whole court
+        this.beams.push({ x1: p.x, y1: p.y, x2: end.x, y2: end.y, t: 0.42, life: 0.42, color, w: 10 });
+        this.beams.push({ x1: p.x, y1: p.y, x2: end.x, y2: end.y, t: 0.3, life: 0.3, color: '#dff4ff', w: 4 }); // foam core
+        for (const t of near(Infinity)) {
+          const dx = t.x - p.x, dy = t.y - p.y;
+          const along = dx * dir.x + dy * dir.y; // how far down the jet
+          const off = Math.abs(dx * dir.y - dy * dir.x); // how far off the lane
+          if (along < 0 || off > t.r + 24) continue;
+          t.vx += dir.x * 640;
+          t.vy += dir.y * 640;
+          this.hurt(t, bumpDmg(t, 1.9), '#9df0ff');
+          this.impact(t.x, t.y, color, 1.7);
+        }
+        // spray at the nozzle + the mist rings where the jet crossed bodies
+        this.burst(p.x + dir.x * p.r, p.y + dir.y * p.r, '#dff4ff', 14, 380);
+        this.addShake(12);
+        this.screenFlash('#bfe8ff', 0.16);
         break;
+      }
       case 'psychic': {
         // telekinetic shove: real knockback impulse — enemies get flung
         // off the ally, off walls, off each other
@@ -2725,11 +2737,10 @@ export class Battle {
     }
   }
 
-  // The run's ultimate: after ULT_SHOTS launches the active mon is charged —
-  // tapping it detonates its signature across the whole court, one staggered
-  // beam per enemy. Z-move energy: a flash, a freeze, then everything pays.
-  private fireUlt() {
-    const u = this.active;
+  // The run's ultimate: after ULT_SHOTS launches the charge is armed — tap
+  // any teammate and ITS signature detonates across the whole court, one
+  // staggered beam per enemy. Z-move energy: a flash, then everything pays.
+  private fireUlt(u: Unit) {
     this.ultIn = ULT_SHOTS;
     const color = TYPE_COLOR[u.def.type];
     this.texts.push({
@@ -2751,25 +2762,204 @@ export class Battle {
     cry(u.def.id, 0.4);
     buzz([50, 40, 90]);
     const phys = bumpIsPhysical(u.def.type);
+    const multOf = (e: Unit) => typeMult(u.def.type, e.def) * weatherMult(this.weather, u.def.type);
+    const dmgOf = (e: Unit, power = 1) =>
+      Math.round(
+        (phys
+          ? physDamage(u.def.stats.atk, e.def.stats.def, multOf(e))
+          : specDamage(u.def.stats.spa, e.def.stats.spd, multOf(e))) *
+          u.pow * SUPER_POW * 4.5 * power * (e.boss ? 0.55 : 1),
+      );
     const targets = this.enemies.filter((e) => !e.dead);
-    targets.forEach((e, i) => {
-      this.later(0.1 + i * 0.09, () => {
-        if (e.dead) return;
-        this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.34, life: 0.34, color, w: 2 });
-        this.impact(e.x, e.y, color, 1.9);
-        this.screenFlash(color, 0.06);
-        const mult = typeMult(u.def.type, e.def) * weatherMult(this.weather, u.def.type);
-        const dmg = Math.round(
-          (phys
-            ? physDamage(u.def.stats.atk, e.def.stats.def, mult)
-            : specDamage(u.def.stats.spa, e.def.stats.spd, mult)) *
-            u.pow * SUPER_POW * 4.5 * (e.boss ? 0.55 : 1),
-        );
-        this.hurt(e, dmg, color, mult > 1 ? '!' : '');
-        this.addShake(7);
-        this.hitStop = Math.max(this.hitStop, 0.06);
-      });
-    });
+    const a = this.arena;
+    switch (u.def.type) {
+      case 'fire': {
+        // FLARE RAIN — a fireball streaks down onto each foe's head, craters
+        // the court, and leaves a short burn ticking
+        targets.forEach((e, i) => {
+          this.orbs.push({ x: e.x + (i % 2 ? 30 : -30), y: a.y - 40, target: e, dmg: dmgOf(e), t: 3, wob: i * 1.9, color });
+          this.later(0.2 + i * 0.09, () => {
+            if (e.dead) return;
+            this.scar(e.x, e.y, 22);
+            e.dotTicks = Math.min(e.dotTicks + 2, 6);
+            e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.05));
+          });
+        });
+        break;
+      }
+      case 'water': {
+        // TIDAL WAVE — the front sweeps in off the left wall and shoves every
+        // foe into a pile on the right; the next shot cashes the pileup
+        this.waves.push({
+          x: a.x - 30, y: a.y + a.h / 2, r: 0, maxR: a.w + 160, t: 0.7, life: 0.7,
+          color, hits: new Set(),
+          onHit: (e) => {
+            e.vx += 560;
+            e.vy += (a.y + a.h / 2 - e.y) * 1.2;
+            this.hurt(e, dmgOf(e, 0.7), color);
+          },
+        });
+        this.addShake(10);
+        break;
+      }
+      case 'grass': {
+        // FRENZY PLANT — vines root every foe (their countdown slips) and
+        // siphon a third of the damage back to the team
+        let dealt = 0;
+        targets.forEach((e, i) => {
+          this.later(0.08 + i * 0.08, () => {
+            if (e.dead) return;
+            this.beams.push({ x1: e.x, y1: e.y, x2: e.x, y2: Math.min(e.y + e.r + 26, a.y + a.h - 6), t: 0.4, life: 0.4, color, w: 3 });
+            e.timer += 1.5;
+            const d = dmgOf(e, 0.7);
+            dealt += d;
+            this.hurt(e, d, color);
+          });
+        });
+        this.later(0.12 + targets.length * 0.08, () => {
+          if (dealt > 0) this.tryHeal(this.players, () => Math.max(Math.round(dealt * 0.35), 4));
+        });
+        break;
+      }
+      case 'electric': {
+        // VOLT SURGE — the bolt hops foe to foe, nearest first, each arc
+        // weaker than the last
+        const chain = [...targets].sort((x, y) => dist(u, x) - dist(u, y));
+        let from: Vec = u;
+        let pw = 1;
+        chain.forEach((e, i) => {
+          const a0 = from;
+          const p = pw;
+          from = e;
+          pw *= 0.65;
+          this.later(0.08 + i * 0.1, () => {
+            if (e.dead) return;
+            this.beams.push({ x1: a0.x, y1: a0.y, x2: e.x, y2: e.y, t: 0.3, life: 0.3 });
+            this.impact(e.x, e.y, color, 1.5);
+            this.hurt(e, dmgOf(e, p), color);
+            this.hitStop = Math.max(this.hitStop, 0.06);
+            sfx('zap');
+          });
+        });
+        break;
+      }
+      case 'psychic': {
+        // MIND GRIP — five pulses drag every foe to the court's centre, then
+        // the implosion pays out; the pile is a gift to the next ricochet
+        const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+        for (let k = 0; k < 5; k++) {
+          this.later(k * 0.11, () => {
+            for (const e of this.enemies) {
+              if (e.dead) continue;
+              e.vx += (cx - e.x) * 1.1;
+              e.vy += (cy - e.y) * 1.1;
+            }
+            this.waves.push({ x: cx, y: cy, r: 0, maxR: 90 + k * 30, t: 0.3, life: 0.3, color, hits: new Set() });
+          });
+        }
+        this.later(0.62, () => {
+          this.impact(cx, cy, color, 2.4);
+          this.addShake(12);
+          for (const e of this.enemies) if (!e.dead) this.hurt(e, dmgOf(e, 0.75), color);
+        });
+        break;
+      }
+      case 'rock': {
+        // ROCK SLIDE — one boulder per foe, dead centre, no RNG; the court
+        // keeps the craters
+        targets.forEach((e, i) => {
+          this.later(0.1 + i * 0.12, () => {
+            this.scar(e.x, e.y, 24);
+            this.screenFlash(color, 0.1);
+            this.addShake(11);
+            if (e.dead) return;
+            this.impact(e.x, e.y, color, 1.8);
+            this.hurt(e, dmgOf(e), color);
+          });
+        });
+        break;
+      }
+      case 'poison': {
+        // VENOM BURST — the whole court takes the hit and every survivor
+        // keeps paying it off — the DoT toxic already ticks on
+        this.waves.push({
+          x: u.x, y: u.y, r: 0, maxR: Math.max(a.w, a.h), t: 0.55, life: 0.55,
+          color, hits: new Set(),
+          onHit: (e) => {
+            this.hurt(e, dmgOf(e, 0.5), color);
+            e.dotTicks = Math.min(e.dotTicks + 3, 6);
+            e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
+          },
+        });
+        break;
+      }
+      case 'flying': {
+        // SKY DIVE — one sweeping orbit: a clip per foe in angular order,
+        // each knocked a step toward the middle
+        const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+        [...targets]
+          .sort((x, y) => Math.atan2(x.y - u.y, x.x - u.x) - Math.atan2(y.y - u.y, y.x - u.x))
+          .forEach((e, i) => {
+            this.later(0.08 + i * 0.11, () => {
+              if (e.dead) return;
+              this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.26, life: 0.26, color, w: 3 });
+              e.vx += (cx - e.x) * 0.6;
+              e.vy += (cy - e.y) * 0.6;
+              this.hurt(e, dmgOf(e, 0.8), color);
+              this.addShake(5);
+            });
+          });
+        break;
+      }
+      case 'fighting': {
+        // FINAL RUSH — real dashes, foe to foe, finishing on the bulkhead
+        const order = [...targets].sort((x, y) => dist(u, x) - dist(u, y));
+        order.forEach((e, i) => {
+          this.later(0.1 + i * 0.3, () => {
+            if (e.dead) return;
+            const last = i === order.length - 1;
+            this.dashes.push({ u, e, done: false, dmg: dmgOf(e, last ? 1.9 : 0.7) });
+            if (last) this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'FINISHER!', t: 1, color: '#f08030', big: true });
+          });
+        });
+        break;
+      }
+      case 'ghost': {
+        // OMINOUS WIND — wisps converge on every foe; above half HP they
+        // pay extra — a culler's ult, best early in the wave
+        this.screenFlash('#201830', 0.3);
+        targets.forEach((e, i) => {
+          this.orbs.push({ x: u.x, y: u.y, target: e, dmg: dmgOf(e, e.hp > e.maxHp * 0.5 ? 1.4 : 0.7), t: 3, wob: i * 2.6 + 1.3, color });
+        });
+        break;
+      }
+      case 'normal': {
+        // GIGA ROMP — giant mode: the mon swells until its next launch, when
+        // the bigger hitbox and ×2 contact do the squashing themselves.
+        // re-ulting an already-giant mon must not compound the swell
+        if (!u.giant) {
+          u.r *= 1.7;
+          u.giant = true;
+        }
+        this.texts.push({ x: u.x, y: u.y - u.r - 20, text: 'GIANT MODE!', t: 1.2, color: '#ffd84d', big: true });
+        this.addShake(12);
+        break;
+      }
+      default: {
+        // beam fan — the classic: one staggered beam per foe
+        targets.forEach((e, i) => {
+          this.later(0.1 + i * 0.09, () => {
+            if (e.dead) return;
+            this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.34, life: 0.34, color, w: 2 });
+            this.impact(e.x, e.y, color, 1.9);
+            this.screenFlash(color, 0.06);
+            this.hurt(e, dmgOf(e), color, multOf(e) > 1 ? '!' : '');
+            this.addShake(7);
+            this.hitStop = Math.max(this.hitStop, 0.06);
+          });
+        });
+      }
+    }
     this.award('ult');
     // hurt() marks kills but doesn't chain the wave check — close it out
     // after the last beam lands
@@ -3532,6 +3722,10 @@ export class Battle {
 
   private endShot() {
     const u = this.active;
+    if (u.giant) {
+      u.giant = false; // giant mode lives exactly one shot — shrink back
+      u.r /= 1.7;
+    }
     u.vx = 0;
     u.vy = 0;
     this.trail = []; // smear dies with the shot
@@ -4715,10 +4909,19 @@ export class Battle {
     ctx.fill();
     if (e.shiny) drawShiny(ctx, e.def.id, cx + 26, cy + 28, 36);
     else drawMon(ctx, e.def.id, cx + 26, cy + 28, 36);
+    // the type tag owns the right edge — measure it first so a long name
+    // shrinks into what's left instead of colliding off the card
+    const typeStr = e.def.type2 ? `${e.def.type}/${e.def.type2}`.toUpperCase() : e.def.type.toUpperCase();
+    ctx.font = fontB(8);
+    const typeW = ctx.measureText(typeStr).width;
+    ctx.fillStyle = TYPE_COLOR[e.def.type];
+    ctx.textAlign = 'right';
+    ctx.fillText(typeStr, cx + w - 10, cy + 16);
     ctx.textAlign = 'left';
-    ctx.font = font(9);
     ctx.fillStyle = '#f0e6c8';
-    ctx.fillText(`${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}  Lv${e.lvl}`, cx + 50, cy + 16);
+    const nameStr = `${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}  LV${e.lvl}`;
+    fitFont(ctx, nameStr, 9, w - 60 - typeW - 8);
+    ctx.fillText(nameStr, cx + 50, cy + 16);
     // hp bar — the number players actually scout for
     ctx.fillStyle = '#2a3050';
     ctx.fillRect(cx + 50, cy + 24, w - 62, 7);
@@ -4727,9 +4930,6 @@ export class Battle {
     ctx.font = fontB(8);
     ctx.fillStyle = '#8890b8';
     ctx.fillText(`${Math.ceil(e.hp)}/${e.maxHp}`, cx + 50, cy + 42);
-    ctx.fillStyle = TYPE_COLOR[e.def.type];
-    ctx.textAlign = 'right';
-    ctx.fillText(e.def.type2 ? `${e.def.type}/${e.def.type2}`.toUpperCase() : e.def.type.toUpperCase(), cx + w - 10, cy + 16);
     // the readout — foes show their attack clock; teammates show their super
     ctx.textAlign = 'left';
     ctx.font = fontB(8);
@@ -4746,6 +4946,7 @@ export class Battle {
               : e.link
                 ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
+      fitFont(ctx, tag, 8, w - 60);
       ctx.fillText(tag, cx + 50, cy + 58);
       ctx.fillStyle = '#6a7498';
       ctx.font = fontB(7);
@@ -4754,12 +4955,9 @@ export class Battle {
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
       ctx.fillStyle = e.cd <= 0 ? '#6fdc6f' : '#8890b8';
-      ctx.font = fontB(7);
-      ctx.fillText(
-        e.cd <= 0 ? `super ready — launch ${e.def.name} to fire it` : `super ready in ${e.cd} shot${e.cd === 1 ? '' : 's'}`,
-        cx + 50,
-        cy + 70,
-      );
+      const ready = e.cd <= 0 ? `super ready — launch ${e.def.name} to fire it` : `super ready in ${e.cd} shot${e.cd === 1 ? '' : 's'}`;
+      fitFont(ctx, ready, 7, w - 60);
+      ctx.fillText(ready, cx + 50, cy + 70);
       ctx.fillStyle = '#6a7498';
       wrap2(ctx, superDesc(e.def.id, e.def.type), w - 60).forEach((l, li) =>
         ctx.fillText(l, cx + 50, cy + 80 + li * 9));
@@ -5862,8 +6060,8 @@ export class Battle {
         ctx.fillStyle = '#ffd84d';
         ctx.fillText(u.def.name.toUpperCase(), u.x, ty - 17);
       }
-      // charged ultimate — the mon carries a pulsing halo + a tap hint
-      if (u === this.active && this.phase === 'aim' && this.ultIn <= 0) {
+      // charged ultimate — the whole team glows, any of them can spend it
+      if (u.side === 'player' && !u.dead && this.phase === 'aim' && this.ultIn <= 0) {
         const pulse = 0.5 + Math.sin(this.time * 6) * 0.5;
         ctx.globalAlpha = 0.35 + pulse * 0.45;
         ctx.strokeStyle = '#ffd84d';

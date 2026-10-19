@@ -9,6 +9,7 @@ body {
   height: 100%;
   background: #0b0e1a;
   overflow: hidden;
+  overscroll-behavior: none;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;

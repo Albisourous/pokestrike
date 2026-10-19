@@ -9,6 +9,7 @@ let mFilter: BiquadFilterNode | null = null; // music-bus lowpass — softens sq
 let mWet: GainNode | null = null; // echo send level — per-track depth
 let gBus: WaveShaperNode | null = null; // guitar drive bus — tanh soft-clip dirt
 let muted = localStorage.getItem('pk-mute') === '1';
+const MASTER_VOL = 0.3; // the one loudness knob — 0.5 was hot
 
 export function isMuted() {
   return muted;
@@ -17,7 +18,7 @@ export function isMuted() {
 export function toggleMute() {
   muted = !muted;
   localStorage.setItem('pk-mute', muted ? '1' : '0');
-  if (master) master.gain.value = muted ? 0 : 0.5;
+  if (master) master.gain.value = muted ? 0 : MASTER_VOL;
 }
 
 export function unlockAudio() {
@@ -40,7 +41,7 @@ export function unlockAudio() {
     }
     ac = new AudioContext();
     master = ac.createGain();
-    master.gain.value = muted ? 0 : 0.5;
+    master.gain.value = muted ? 0 : MASTER_VOL;
     master.connect(ac.destination);
     mGain = ac.createGain();
     mGain.gain.value = 0.3; // music sits under the sfx

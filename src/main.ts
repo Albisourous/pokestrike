@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump } from './game/meta';
 import {
   W,
   H,
@@ -29,6 +29,7 @@ import {
   SHARE_BTN,
   TITLE_BTN,
   FREE_BTN,
+  DAILY_BTN,
   HELP_BTN,
   HELP_CHIP,
   MUTE_CHIP,
@@ -41,6 +42,8 @@ import {
   drawPerkPick,
   CHARM_SKIP,
   REWARD_SKIP,
+  REWARD_TEAM,
+  REWARD_CATCH,
   HELP_PANEL,
   HELP_PREV,
   HELP_NEXT,
@@ -61,6 +64,7 @@ import {
   drawTeamMenu,
   inRect,
   font,
+  fontB,
   titlePointerDown,
   titlePointerMove,
   titlePointerUp,
@@ -80,7 +84,10 @@ const ctx = canvas.getContext('2d')!;
 let viewPad = 0;
 const arenaRect = () => ({ x: 24, y: 72 - viewPad, w: W - 48, h: H - 92 + viewPad * 2 });
 
-const randSeed = () => (Math.random() * 2 ** 31) | 0;
+// seeds stay in 1..2^31 so they survive the ?seed= round-trip in a share link
+const randSeed = () => ((Math.random() * 2 ** 31) >>> 0) || 1;
+// the daily climb: one UTC date seed — same climb for everyone, everywhere
+const dailySeed = () => Number(new Date().toISOString().slice(0, 10).replaceAll('-', ''));
 
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
@@ -100,8 +107,10 @@ let draft: {
 // the run's draft pool — roster plus captured-dex species not already in it
 let draftPool: SpeciesDef[] = [];
 let stage = makeStage(randSeed());
-// the run's roll source — Math.random normally, seeded under ?seed=NNN;
-// draft deals and the Battle both draw from it so a forced seed reproduces
+// the run's roll source — always seeded: draft deals and the Battle both
+// draw from it, so every run reproduces from its seed (shares carry it)
+let runSeed = 0;
+let runIsDaily = false; // a shared-date climb — the share card says so
 let runRng: () => number = Math.random;
 let helpOpen = false;
 let menuOpen = false; // overworld TEAM · ITEMS panel
@@ -157,10 +166,11 @@ window.visualViewport?.addEventListener('resize', resize);
 resize();
 // ?dev also exposes the scene machine + coordinate transform for playtest probes
 if (new URLSearchParams(location.search).has('dev'))
-  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number } } }).__dbg = {
+  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump } }).__dbg = {
     scene: () => scene,
     battle: () => battle,
     xy: (x, y) => { const p = toLogical({ clientX: x, clientY: y } as PointerEvent); return { x: p.x, y: p.y }; },
+    stats: statsDump, // the on-device metric server — pick rates + stage deaths
   };
 
 function toLogical(e: PointerEvent) {
@@ -225,17 +235,15 @@ function draftOffers(): number[] {
 // isn't already in it — catching mons is how new faces join future drafts.
 // draftOrder only deals roster indices, so the extras get shuffled into the
 // deal here or they'd never be offered.
-// one run setup shared by START CLIMB and REMATCH — ?seed=NNN
-// always wins (debug/sharing), else fresh
-function newRun() {
+// one run setup shared by START CLIMB, DAILY and REMATCH — ?seed=NNN
+// always wins (debug/sharing), else the daily date seed or a fresh roll
+function newRun(daily = false) {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
-  if (Number.isFinite(forced) && forced > 0) {
-    runRng = mulberry32(forced);
-    stage = makeStage(forced);
-  } else {
-    runRng = Math.random;
-    stage = makeStage(randSeed());
-  }
+  const hasForced = Number.isFinite(forced) && forced > 0;
+  runSeed = hasForced ? forced : daily ? dailySeed() : randSeed();
+  runIsDaily = daily && !hasForced;
+  runRng = mulberry32(runSeed);
+  stage = makeStage(runSeed);
 }
 
 function startDraft() {
@@ -404,6 +412,15 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
+    if (inRect(p.x, p.y, DAILY_BTN)) {
+      // same date seed for everyone — the climb itself is the share
+      sfx('ui');
+      newRun(true);
+      startDraft();
+      scene = 'draft';
+      sceneMusic();
+      return;
+    }
     // the pitch is playable — a drag on the grass grabs the demo ball
     if (titlePointerDown(p)) return;
   } else if (scene === 'draft') {
@@ -422,6 +439,7 @@ canvas.addEventListener('pointerdown', (e) => {
       if (!inRect(p.x, p.y, draftCardRect(i))) continue;
       sfx('ui');
       cry(draftPool[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
+      statOffer('draft', offers.map((o) => draftPool[o].id), draftPool[offers[i]].id);
       draft.picked.push(offers[i]);
       offerCache = null;
       respinDraft(); // next round spins a fresh board
@@ -454,6 +472,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (inRect(p.x, p.y, CHARM_SKIP)) {
       // declining the charm pays score instead — dead offers have a price
       sfx('ui');
+      statOffer('perks', startOffers.map((p) => p.id), null);
       if (battle) battle.score += 200;
       startOffers = [];
       scene = 'battle';
@@ -465,6 +484,7 @@ canvas.addEventListener('pointerdown', (e) => {
       const perk = startOffers[i];
       sfx('ui');
       if (battle) {
+        statOffer('perks', startOffers.map((p) => p.id), perk.id);
         perk.apply(battle);
         battle.heldItems.push(perk.item);
         battle.perksTaken++;
@@ -492,31 +512,32 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
-    if (battle?.phase === 'map') {
-      if (menuOpen) {
-        // modal panel — CLOSE or a tap outside dismisses; inside, roster ops only
-        if (inRect(p.x, p.y, MENU_CLOSE) || !inRect(p.x, p.y, TEAM_PANEL)) {
-          menuOpen = false;
-          battle.boxSel = -1;
-          battle.teamSel = -1;
+    // the team panel is modal over the map AND the reward screen — CLOSE
+    // or a tap outside dismisses; inside, roster ops only
+    if (battle && menuOpen && (battle.phase === 'map' || battle.phase === 'reward')) {
+      if (inRect(p.x, p.y, MENU_CLOSE) || !inRect(p.x, p.y, TEAM_PANEL)) {
+        menuOpen = false;
+        battle.boxSel = -1;
+        battle.teamSel = -1;
+        sfx('ui');
+        return;
+      }
+      if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
+        boxDrag = { x0: p.x, s0: boxScroll, moved: false };
+        return;
+      }
+      for (let i = 0; i < battle.players.length; i++) {
+        if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
+        if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
+        else if (battle.box.length > 0) {
+          battle.teamSel = battle.teamSel === i ? -1 : i;
           sfx('ui');
-          return;
-        }
-        if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
-          boxDrag = { x0: p.x, s0: boxScroll, moved: false };
-          return;
-        }
-        for (let i = 0; i < battle.players.length; i++) {
-          if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
-          if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
-          else if (battle.box.length > 0) {
-            battle.teamSel = battle.teamSel === i ? -1 : i;
-            sfx('ui');
-          }
-          return;
         }
         return;
       }
+      return;
+    }
+    if (battle?.phase === 'map') {
       if (!battle.mapModal && inRect(p.x, p.y, MAP_MENU)) {
         sfx('ui');
         menuOpen = true;
@@ -534,6 +555,15 @@ canvas.addEventListener('pointerdown', (e) => {
         }
         return;
       }
+      // the catch card or the TEAM · ITEMS button opens the box mid-pick —
+      // same modal the map carries, the relic pick waits
+      if (inRect(p.x, p.y, REWARD_TEAM) || (battle.boxGain && inRect(p.x, p.y, REWARD_CATCH))) {
+        sfx('ui');
+        menuOpen = true;
+        battle.boxPing = false;
+        battle.boxSel = battle.teamSel = -1;
+        return;
+      }
       // the relic pick. Reels still rolling — a tap fast-forwards,
       // never picks blind
       if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
@@ -541,9 +571,15 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
-        if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
+        if (inRect(p.x, p.y, perkCardRect(i))) {
+          statOffer('perks', battle.rewardOffers.map((p) => p.id), battle.rewardOffers[i].id);
+          battle.pickPerk(i);
+        }
       }
-      if (inRect(p.x, p.y, REWARD_SKIP)) battle.declineReward();
+      if (inRect(p.x, p.y, REWARD_SKIP)) {
+        statOffer('perks', battle.rewardOffers.map((p) => p.id), null);
+        battle.declineReward();
+      }
       return;
     } else {
       battle?.pointerDown(p);
@@ -632,7 +668,7 @@ canvas.addEventListener('pointerup', (e) => {
     const { moved } = boxDrag;
     boxDrag = null;
     // a drag that never moved is a tap: pick a catch, then a teammate to swap into
-    if (!moved && scene === 'battle' && battle && battle.phase === 'map' && menuOpen) {
+    if (!moved && scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward') && menuOpen) {
       const p = toLogical(e);
       if (inRect(p.x, p.y, BOX_STRIP)) {
         for (let i = 0; i < battle.box.length; i++) {
@@ -701,7 +737,7 @@ canvas.addEventListener(
       achScroll = Math.min(Math.max(achScroll + e.deltaY, 0), achScrollMax());
       return;
     }
-    if (scene !== 'battle' || !battle || !(battle.phase === 'map' && menuOpen)) return;
+    if (scene !== 'battle' || !battle || !((battle.phase === 'map' || battle.phase === 'reward') && menuOpen)) return;
     const max = boxScrollMax(battle.box.length);
     if (max <= 0) return;
     e.preventDefault();
@@ -722,8 +758,34 @@ function hud(name: string) {
   ctx.restore();
 }
 
+// phones auto-lock mid-run — hold a screen wake lock while a run is live.
+// The OS drops it when the tab hides, so visibilitychange re-acquires.
+let wakeLock: { release(): Promise<void> } | null = null;
+let wakeReq = false;
+function syncWake() {
+  const want = !!battle && scene !== 'result' && scene !== 'title';
+  if (want && !wakeLock && !wakeReq && 'wakeLock' in navigator) {
+    wakeReq = true;
+    navigator.wakeLock
+      .request('screen')
+      .then((l) => (wakeLock = l))
+      .catch(() => {})
+      .finally(() => (wakeReq = false));
+  } else if (!want && wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    wakeLock = null; // the OS already released it while hidden
+    syncWake();
+  }
+});
+
 function update(dt: number) {
   t += dt;
+  syncWake();
   if (scene === 'title') updateTitle(dt);
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
@@ -736,7 +798,7 @@ function update(dt: number) {
     }
     wasReward = itemStep;
     if (battle.phase !== 'reward' && !(battle.phase === 'map' && menuOpen)) boxScroll = 0;
-    if (battle.phase !== 'map') menuOpen = false;
+    if (battle.phase !== 'map' && battle.phase !== 'reward') menuOpen = false;
     // metagame polls — same spot the battle→scene transitions already live
     while (battle.gymsBeaten > lastGyms) {
       recordGymWin();
@@ -754,6 +816,7 @@ function update(dt: number) {
     if (battle.phase === 'won' || battle.phase === 'lost') {
       const won = battle.phase === 'won';
       const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
+      statRunEnd(stageReached, won);
       const dexBefore = dexIds().length;
       const prevBest = best().score;
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
@@ -785,6 +848,7 @@ function update(dt: number) {
         newAch: [],
         rating: { delta: rr.delta, tier: rr.tier.name, color: rr.tier.color, up: rr.promoted },
         place,
+        seed: runSeed,
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
       const trophy = (id: string) => {
@@ -835,7 +899,9 @@ function update(dt: number) {
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       shareText = [
-        `⚾ POKÉSTRIKE: sling & ricochet Pokémon roguelike`,
+        runIsDaily
+          ? `⚾ POKÉSTRIKE DAILY ${new Date().toISOString().slice(0, 10)} — same climb for everyone`
+          : `⚾ POKÉSTRIKE: sling & ricochet Pokémon roguelike`,
         `🗺️ ${stage.name}: ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}${battle.asc ? ` · ASC ${battle.asc}` : ''}`,
         share.waves,
         `✨ ${teamNames}`,
@@ -843,7 +909,8 @@ function update(dt: number) {
         `⭐ ${result.score.toLocaleString('en-US')} pts · ⚡ ${result.shots} shots${result.caught ? ` · 📦 ${result.caught} caught` : ''}`,
         `🏅 ${result.badges.slice(0, 4).map((b) => b.name).join(' · ')}`,
         share.team,
-        'https://albisourous.github.io/pokestrike/',
+        // the seed rides the link — opening it replays this exact climb
+        `${location.origin}${location.pathname}?seed=${runSeed}`,
       ].join('\n');
       scene = 'result';
       music(won ? 'win' : null); // clear fanfare, or cut to silence on a loss
@@ -931,7 +998,7 @@ function render() {
             battle.teamLuck(),
             t - rewardT0,
           );
-        if (menuOpen && battle.phase === 'map')
+        if (menuOpen && (battle.phase === 'map' || battle.phase === 'reward'))
           drawTeamMenu(
             ctx,
             battle.box,
@@ -964,8 +1031,38 @@ function render() {
     drawMuteChip(ctx);
   }
   if (helpOpen) drawHelp(ctx, helpPage);
+  // playtester lifeline: you can't see their console — a crash paints
+  // itself with the run's seed and build, so one screenshot is the report
+  if (crash) {
+    ctx.fillStyle = 'rgba(11,14,26,0.94)';
+    ctx.fillRect(16, H / 2 - 110, W - 32, 220);
+    ctx.strokeStyle = '#ff6b6b';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(16, H / 2 - 110, W - 32, 220);
+    ctx.textAlign = 'center';
+    ctx.font = font(11);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText('CRASHED — SCREENSHOT THIS', W / 2, H / 2 - 76);
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#f8d030';
+    ctx.fillText(`seed ${runSeed} · ${__BUILD__}`, W / 2, H / 2 - 48);
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#fff';
+    // crude mid-word wrap — detail beats pretty on a crash card
+    const msg = crash.slice(0, 150);
+    for (let i = 0; i < Math.ceil(msg.length / 50); i++)
+      ctx.fillText(msg.slice(i * 50, (i + 1) * 50), W / 2, H / 2 - 22 + i * 14);
+  }
   ctx.restore();
 }
+
+// first error wins — the root cause, not the cascade behind it
+let crash: string | null = null;
+addEventListener('error', (e) => (crash ??= String(e.message || e.error || 'unknown')));
+addEventListener('unhandledrejection', (e) => (crash ??= String(e.reason)));
+
+// upgrade any legacy pk_* saves before the game reads them
+migrateSaves();
 
 Promise.all([
   loadAll(ALL_SPRITE_IDS),

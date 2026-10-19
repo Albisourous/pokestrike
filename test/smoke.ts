@@ -9,7 +9,7 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump } from '../src/game/meta';
 import { PERKS } from '../src/game/perks';
 
 let fails = 0;
@@ -284,6 +284,15 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.ultIn = 3; // a part-banked charge...
   (b as any).spawnWave(0);
   ok(b.ultIn === ULT_SHOTS, 'ult charge never carries into the next fight');
+  // the charge is the team's — a benched teammate can spend it too
+  b.phase = 'aim';
+  b.ultIn = 0;
+  const bench = (b as any).players.find((p: any) => p !== (b as any).active && !p.dead);
+  if (bench) {
+    b.pointerDown({ x: bench.x, y: bench.y });
+    b.pointerUp();
+    ok(b.ultIn === ULT_SHOTS, 'a teammate can spend the shared ult charge');
+  }
 }
 
 // --- ranked ladder: depth pays, early wipes bleed ----------------------------
@@ -314,6 +323,34 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   localStorage.setItem('pk_board', '{broken');
   ok(Array.isArray(board()), 'malformed pk_board falls back to memory copy');
   localStorage.removeItem('pk_board');
+}
+
+// --- save migration: a legacy best seeds the board exactly once -----------
+{
+  localStorage.removeItem('pk_board');
+  localStorage.setItem('pk_ver', '0');
+  localStorage.setItem('pk_best', JSON.stringify({ score: 777, stage: 4, wins: 0, runs: 3 }));
+  migrateSaves();
+  ok(board()[0]?.s === 777, 'legacy pk_best seeds the hall of fame');
+  migrateSaves(); // pk_ver is stamped now — a second boot must not re-seed
+  ok(board().length === 1, 'migration runs once');
+  localStorage.setItem('pk_board', '[]');
+  localStorage.removeItem('pk_best');
+  localStorage.setItem('pk_ver', '1');
+}
+
+// --- decision telemetry: offers count taken-vs-shown, deaths key by stage ---
+{
+  localStorage.removeItem('pk_stats');
+  statOffer('draft', [1, 4, 7], 4);
+  statOffer('draft', [1, 4, 7], null);
+  let s = statsDump();
+  ok(s.draft['4']?.[0] === 1 && s.draft['4']?.[1] === 2, 'pick rates count taken vs offered');
+  statRunEnd(5, false);
+  statRunEnd(9, true);
+  s = statsDump();
+  ok(s.deaths['5'] === 1 && s.wins === 1 && s.runs === 2, 'deaths key by stage, wins count');
+  localStorage.removeItem('pk_stats');
 }
 
 // --- shiny roll + guaranteed catch ----------------------------------------

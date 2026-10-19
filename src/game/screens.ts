@@ -34,6 +34,7 @@ export interface RunResult {
   newAch: string[]; // trophy names this run just unlocked
   rating: { delta: number; tier: string; color: string; up: boolean }; // ladder movement this run
   place: number; // hall-of-fame slot earned (0-based), -1 = off the board
+  seed: number; // the run's roll — a shared seed replays this climb
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -55,7 +56,8 @@ export const REEL_STOPS = [0.7, 1.0, 1.3];
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
-export const FREE_BTN = { x: W / 2 - 150, y: 704, w: 300, h: 68 };
+export const FREE_BTN = { x: W / 2 - 200, y: 704, w: 195, h: 68 };
+export const DAILY_BTN = { x: W / 2 + 5, y: 704, w: 195, h: 68 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -96,7 +98,10 @@ export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
-export const REWARD_SKIP = { x: W / 2 - 90, y: 872, w: 180, h: 40 };
+export const REWARD_SKIP = { x: W / 2 - 200, y: 872, w: 190, h: 40 };
+export const REWARD_TEAM = { x: W / 2 + 10, y: 872, w: 190, h: 40 };
+// the NEW CATCH card doubles as a button — it opens the team panel
+export const REWARD_CATCH = { x: W / 2 - 190, y: 158, w: 380, h: 78 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 500, w: W - 48, h: 56 };
@@ -320,51 +325,63 @@ export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXE
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
 export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
 
-// The hero beat teaches the bump combo on one loop: pikachu pulls back,
-// slings through the squad — every pass fires that teammate's super — clips
-// a foe on the way out, then cruises home. Straight legs: the scripted shot
-// banks, never curves, and runs the same checks the live sandbox does.
-const ATTRACT = {
-  windup: 0.85,
-  rest: 0.9,
-  speed: 300,
-  legs: [
-    { x: 400, y: 560 }, // pad — pikachu's mark
-    { x: 118, y: 335 }, // through bulbasaur
-    { x: 150, y: 585 }, // through squirtle
-    { x: 200, y: 620 }, // through charmander
-    { x: 430, y: 395 }, // clips machop on the way out
-  ],
-};
-// leg start times, windup first; the last leg lands back on the pad
-const ATTRACT_T = (() => {
+// The attract loop isn't one shot — it's a rotation of scripted skeletons,
+// each a different lesson: the pass chain, the bank off two walls, the
+// full-court sweep of every foe, the tight ricochet squeeze. Straight legs
+// the scripted ball walks; the shared checks fire bumps and score hits the
+// same as a real pull.
+const ATTRACT = { windup: 0.7, rest: 0.6, speed: 300 };
+const PAD = { x: 400, y: 560 }; // pikachu's mark — every script opens here
+const SCRIPTS: { aim: { x: number; y: number }; legs: { x: number; y: number }[] }[] = [
+  {
+    aim: { x: 430, y: 395 }, // THE PASS — bump the whole squad, clip machop
+    legs: [PAD, { x: 118, y: 335 }, { x: 150, y: 585 }, { x: 200, y: 620 }, { x: 430, y: 395 }],
+  },
+  {
+    aim: { x: 470, y: 288 }, // THE BANK — wall, wall, gastly
+    legs: [PAD, { x: 486, y: 320 }, { x: 60, y: 300 }, { x: 470, y: 288 }],
+  },
+  {
+    aim: { x: 95, y: 260 }, // THE SWEEP — touch all three foes, end on spearow
+    legs: [PAD, { x: 430, y: 395 }, { x: 470, y: 288 }, { x: 95, y: 260 }],
+  },
+  {
+    aim: { x: 150, y: 585 }, // THE SQUEEZE — hug the rail through the squad to squirtle
+    legs: [PAD, { x: 200, y: 620 }, { x: 60, y: 630 }, { x: 118, y: 335 }, { x: 150, y: 585 }],
+  },
+];
+// leg start times per script, windup first — the last leg lands on the aim
+const SCRIPT_T = SCRIPTS.map((s) => {
   const t = [ATTRACT.windup];
-  for (let i = 1; i < ATTRACT.legs.length; i++) {
-    const p = ATTRACT.legs[i], q = ATTRACT.legs[i - 1];
+  for (let i = 1; i < s.legs.length; i++) {
+    const p = s.legs[i], q = s.legs[i - 1];
     t.push(t[i - 1] + Math.hypot(p.x - q.x, p.y - q.y) / ATTRACT.speed);
   }
   return t;
-})();
-const ATTRACT_CYCLE = ATTRACT_T[ATTRACT_T.length - 1] + ATTRACT.rest;
+});
+const SCRIPT_CYCLE = SCRIPT_T.map((t) => t[t.length - 1] + ATTRACT.rest);
 const attractPos = (tc: number) => {
-  for (let i = 1; i < ATTRACT_T.length; i++) {
-    if (tc <= ATTRACT_T[i]) {
-      const u = Math.min(1, (tc - ATTRACT_T[i - 1]) / (ATTRACT_T[i] - ATTRACT_T[i - 1]));
-      const p = ATTRACT.legs[i - 1];
-      const q = i === ATTRACT.legs.length - 1 ? play.aim : ATTRACT.legs[i];
+  const s = SCRIPTS[play.script];
+  const T = SCRIPT_T[play.script];
+  for (let i = 1; i < T.length; i++) {
+    if (tc <= T[i]) {
+      const u = Math.min(1, (tc - T[i - 1]) / (T[i] - T[i - 1]));
+      const p = s.legs[i - 1];
+      const q = i === s.legs.length - 1 ? play.aim : s.legs[i];
       return { x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u };
     }
   }
-  return ATTRACT.legs[0];
+  return s.legs[0];
 };
 const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
-  [92, 470, 288, 50],
-  [66, 430, 395, 54],
+  [92, 470, 288, 50], // gastly
+  [66, 430, 395, 54], // machop
+  [21, 95, 260, 46], // spearow — gives the left rail something to hit
 ];
 // your squad fields like a real wave — pikachu leads off and the other
 // three's homes ARE the scripted legs, so the loop bumps all of them
 const TITLE_TEAM: [number, number, number][] = [ // id, home x, home y
-  [25, ATTRACT.legs[0].x, ATTRACT.legs[0].y], // pikachu starts on the pad
+  [25, PAD.x, PAD.y], // pikachu starts on the pad
   [1, 118, 335], // bulbasaur
   [7, 150, 585], // squirtle
   [4, 200, 620], // charmander
@@ -412,6 +429,7 @@ const play = {
   dragT: 0,
   wasGold: false,
   launched: false, // once you've slung one the drag prompt has done its job
+  script: 0, // which attract skeleton the scripted ball is riding
   turn: 0, // squad index riding the sling — a settled shot hands it on
   t: 0, // attract clock — drives the scripted rider until live flips
   ball: { x: TITLE_TEAM[0][1], y: TITLE_TEAM[0][2], vx: 0, vy: 0, live: false, trail: [] as { x: number; y: number }[] },
@@ -625,26 +643,32 @@ export function updateTitle(dt: number) {
     // attract loop: pikachu rides scripted legs — the shared checks below
     // fire the bumps and score the hits, same as a real pull
     play.t += dt;
-    const tc = play.t % ATTRACT_CYCLE;
-    if (tc < play.lastTc) for (const f of play.foes) f.timer = f.timer <= 1 ? 3 : f.timer - 1;
+    const cyc = SCRIPT_CYCLE[play.script];
+    const lastT = SCRIPT_T[play.script][SCRIPT_T[play.script].length - 1];
+    const tc = play.t % cyc;
+    if (tc < play.lastTc) {
+      for (const f of play.foes) f.timer = f.timer <= 1 ? 3 : f.timer - 1;
+      play.script = (play.script + 1) % SCRIPTS.length; // next skeleton up
+    }
     play.lastTc = tc;
-    const pos = attractPos(Math.min(tc, ATTRACT_T[ATTRACT_T.length - 1]));
-    if (tc < ATTRACT.windup || tc >= ATTRACT_T[ATTRACT_T.length - 1]) {
+    const pos = attractPos(Math.min(tc, lastT));
+    if (tc < ATTRACT.windup || tc >= lastT) {
       b.live = false;
       b.vx = b.vy = 0;
-      b.x = ATTRACT.legs[0].x;
-      b.y = ATTRACT.legs[0].y;
+      b.x = PAD.x;
+      b.y = PAD.y;
       if (tc < ATTRACT.windup) {
         play.hitSet.clear();
         for (const m of play.team) m.fired = false;
         // the way-out leg clips whichever foe has drifted nearest the lane
+        const anchor = SCRIPTS[play.script].aim;
         const nf = play.foes
           .slice()
-          .sort((a, c) => Math.hypot(a.x - 430, a.y - 395) - Math.hypot(c.x - 430, c.y - 395))[0];
+          .sort((a, c) => Math.hypot(a.x - anchor.x, a.y - anchor.y) - Math.hypot(c.x - anchor.x, c.y - anchor.y))[0];
         if (nf) { play.aim.x = nf.x; play.aim.y = nf.y; }
       }
     } else {
-      const ahead = attractPos(Math.min(tc + 0.03, ATTRACT_T[ATTRACT_T.length - 1]));
+      const ahead = attractPos(Math.min(tc + 0.03, lastT));
       b.vx = (ahead.x - pos.x) / 0.03;
       b.vy = (ahead.y - pos.y) / 0.03;
       b.x = pos.x;
@@ -1253,6 +1277,7 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   ctx.fillStyle = PARCH;
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
   button(ctx, FREE_BTN, 'START CLIMB', true);
+  button(ctx, DAILY_BTN, 'DAILY', true);
 
   // ? badge, top corner — the how-to-play overlay
   ctx.fillStyle = '#12152b';
@@ -1302,6 +1327,12 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
     W / 2,
     ry + 19,
   );
+
+  // build tag — bug reports should name their build
+  ctx.font = fontB(7);
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ffffff30';
+  ctx.fillText(__BUILD__, W - 10, H - 8);
 }
 
 // --- help overlay: scrollable sections, each a mini diagram + a caption ---
@@ -1648,8 +1679,8 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'ULTIMATE',
     lines: [
-      'every shot arms the ult — 10 shots and your active mon glows gold · charge resets each fight',
-      'tap the glowing mon (don\'t pull) to unleash a map-wide strike',
+      'every shot arms the ult — 10 shots and the whole team glows gold · charge resets each fight',
+      'tap any glowing mon (don\'t pull) — that mon\'s move is the one that fires',
       'all foes take the hit · bosses shrug off most of it',
       'on keys: ? help · P pause · M mute · arrows turn pages',
     ],
@@ -2289,10 +2320,9 @@ export function drawReward(
 
   ctx.textAlign = 'center';
   // a fresh catch gets the hero slot: a gold-framed card with a breathing
-  // sprite — and a pointer to where the swap lives, since the team step
-  // was cut from this screen
+  // sprite — and it IS the swap button now, tapping opens the team panel
   if (recruit) {
-    const r = { x: W / 2 - 190, y: 188, w: 380, h: 80 };
+    const r = REWARD_CATCH;
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 12);
     ctx.fill();
@@ -2313,7 +2343,7 @@ export function drawReward(
     ctx.fillText(recruit.name.toUpperCase() + (recruit.lvl && recruit.lvl > 1 ? ` LV${recruit.lvl}` : ''), r.x + 98, r.y + 46);
     ctx.font = fontB(8);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('in your box — swap it in from TEAM · ITEMS', r.x + 98, r.y + 64);
+    ctx.fillText('in your box — tap to open TEAM · ITEMS', r.x + 98, r.y + 64);
     ctx.textAlign = 'center';
   }
 
@@ -2373,8 +2403,11 @@ export function drawReward(
     ctx.fillStyle = '#8890b8';
     ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
   }
-  // StS lets you decline a reward — here it cashes out as score instead
+  // StS lets you decline a reward — here it cashes out as score instead —
+  // and lets you check the deck mid-pick: TEAM · ITEMS is the same panel
+  // the map carries
   button(ctx, REWARD_SKIP, 'DECLINE +150', true);
+  button(ctx, REWARD_TEAM, 'TEAM · ITEMS', true);
 
   // a split evolution blocks the reward pick until its form is chosen
   if (evo) {
@@ -2805,6 +2838,14 @@ export function drawResult(
   button(ctx, RETRY_BTN, 'REMATCH', true);
   button(ctx, SHARE_BTN, share?.copied ? 'COPIED!' : 'SHARE RESULT', true);
   button(ctx, TITLE_BTN, 'TITLE', true);
+
+  // receipt stub — one screenshot carries the replay and the build
+  ctx.save();
+  ctx.font = fontB(8);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffffff42';
+  ctx.fillText(`SEED ${res.seed} · ${__BUILD__}`, 14, 22);
+  ctx.restore();
 }
 
 export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1) {
@@ -2842,18 +2883,11 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   ctx.font = font(8);
   ctx.fillStyle = '#ffd84d';
   ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W - 30, 60);
-  if (streak > 1) {
-    ctx.fillStyle = '#f08030';
-    ctx.fillText(`PERFECT ×${streak}`, W - 30, 76);
-  }
-  // the ultimate's charge rides the HUD — pulses gold once it's armed
+  // streak + ult share a second row under the stage name — a third right
+  // row would land inside the arena rim and get drawn over
   ctx.font = fontB(8);
-  ctx.textAlign = 'right';
-  if (ultIn <= 0) {
-    ctx.fillStyle = '#ffd84d';
-    ctx.fillText('★ ULT READY', W - 30, 92);
-  } else {
-    ctx.fillStyle = '#5a6284';
-    ctx.fillText(`ULT ${ULT_SHOTS - ultIn}/${ULT_SHOTS}`, W - 30, 92);
-  }
+  ctx.textAlign = 'left';
+  const bits = streak > 1 ? [`PERFECT ×${streak}`, ultIn <= 0 ? '★ ULT READY' : `ULT ${ULT_SHOTS - ultIn}/${ULT_SHOTS}`] : [ultIn <= 0 ? '★ ULT READY' : `ULT ${ULT_SHOTS - ultIn}/${ULT_SHOTS}`];
+  ctx.fillStyle = ultIn <= 0 ? '#ffd84d' : streak > 1 ? '#f08030' : '#5a6284';
+  ctx.fillText(bits.join(' · '), 52, 60);
 }

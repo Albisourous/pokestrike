@@ -13,6 +13,22 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - Anti-goals: no monetization mechanics, no non-Pokémon content.
 - Replayability, in order: run variety → ascension modifiers → unlockables. Keep it simple until the core is solid.
 
+## Field lessons (from the RiftAtlas + MegaCrit postmortems)
+
+- Feel before features: judge the sling on real touch hardware, not a mouse.
+- Version the save: `pk_ver` + `migrateSaves()` at boot; never write inside
+  readers. Bump `SAVE_VER` and add a step when a `pk_*` shape changes.
+- Ship early; put `?seed=` links in front of players. Every run is seeded, so
+  a shared link or a result-screen `SEED · build` receipt replays the climb.
+- Log decisions, not vibes: `statOffer` records taken-vs-shown per board,
+  `statRunEnd` records stage-keyed deaths (late pools are pre-filtered —
+  condition on stage). `__dbg.stats()` under `?dev` dumps `pk_stats`.
+- DAILY = one UTC `YYYYMMDD` seed for everyone; the share link is the replay.
+- Profile only jank you feel; no preemptive perf tooling.
+- Nintendo has no fan-content policy — public distribution is the open legal
+  risk. The content layer is data-driven (`data.ts` + vendored sprites) so a
+  reskin is a data swap, not a rewrite.
+
 ## Commands
 
 - `npm run dev` — dev server (default port 5173)
@@ -65,6 +81,10 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `skills/*` from obra/superpowers — brainstorming, TDD, debugging, etc.
 - `skills/design-taste-frontend`, `image-to-code`, `web-design-guidelines`, `playwright-cli` — installed via `npx skills add … -a devin`; design packs `retro`/`sega`/`dithered` from bergside/awesome-design-skills
 - `skills/reverse-engineer-anything` + `mcp_config.json` — REA MCP server
+- `uxskill` CLI — design-intelligence engine (pip/uv tool: `ux lint`,
+  `ux recommend`, `ux design-md`, `ux-mcp` MCP server). `uxskill init` writes
+  IDE artifacts (`.windsurfrules`); it once clobbered this file — restore from
+  git if it rewrites `AGENTS.md` wholesale.
 - `hooks.v1.json` — SessionStart hook injecting the superpowers bootstrap
 
 ---

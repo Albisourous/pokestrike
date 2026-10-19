@@ -143,15 +143,6 @@ let memBoard: BoardEntry[] = [];
 
 export function board(): BoardEntry[] {
   const raw = load<unknown>('pk_board');
-  if (raw == null && !memBoard.length) {
-    // the board shipped after pk_best existed — seed a returning player's
-    // best as the bar to beat (team and date weren't logged back then)
-    const b = best();
-    if (b.score > 0) {
-      memBoard = [{ s: b.score, st: b.stage, w: false, asc: 0, team: [], when: Date.now() }];
-      store('pk_board', memBoard);
-    }
-  }
   const list = Array.isArray(raw) ? raw : memBoard;
   return list.filter(
     (e): e is BoardEntry =>
@@ -319,3 +310,67 @@ export function earnBadge(bossId: number): GymBadge | null {
   store('pk_badges', [...gymBadges()]);
   return b;
 }
+
+// --- save versioning: migrate once at boot so readers stay dumb ------------
+// pk_ver stamps the save schema — bump SAVE_VER and add a step whenever a
+// pk_* shape changes, instead of coercing old data on every read.
+const SAVE_VER = 1;
+
+export function migrateSaves() {
+  const v = load<number>('pk_ver') ?? 0;
+  // pk_ver is the once-only gate — this runs at boot, before play can
+  // populate the memory copies, so an absent pk_board means "no board"
+  if (v < 1 && load<unknown>('pk_board') == null) {
+    // v1: the board shipped after pk_best existed — seed a returning
+    // player's best as the bar to beat (team and date weren't logged then)
+    const b = best();
+    if (b.score > 0) {
+      memBoard = [{ s: b.score, st: b.stage, w: false, asc: 0, team: [], when: Date.now() }];
+      store('pk_board', memBoard);
+    }
+  }
+  if (v !== SAVE_VER) store('pk_ver', SAVE_VER);
+}
+
+// --- decision telemetry ------------------------------------------------------
+// MegaCrit balanced StS off pick rates and where runs die, logged per
+// decision — no backend here, so pk_stats keeps the same data on-device
+// (__dbg.stats() dumps it under ?dev). Deaths key by stage, never global:
+// a late-run pool is already filtered for strength (their survivorship-
+// bias lesson), so "died on 5" means something "died" alone can't.
+interface Stats {
+  draft: Record<string, [number, number]>; // species id -> [taken, offered]
+  perks: Record<string, [number, number]>; // perk id -> [taken, offered]
+  deaths: Record<string, number>; // stage -> runs that ended there
+  wins: number;
+  runs: number;
+}
+let memStats: Stats = { draft: {}, perks: {}, deaths: {}, wins: 0, runs: 0 };
+
+const stats = (): Stats => {
+  const raw = load<Stats>('pk_stats');
+  return raw && typeof raw === 'object' && raw.draft ? raw : memStats;
+};
+
+// one call per offer board shown — taken=null when the player skips it
+export function statOffer(kind: 'draft' | 'perks', offered: (string | number)[], taken: string | number | null) {
+  const s = stats();
+  for (const id of offered) {
+    const e = (s[kind][id] ??= [0, 0]);
+    e[1]++;
+    if (id === taken) e[0]++;
+  }
+  memStats = s;
+  store('pk_stats', s);
+}
+
+export function statRunEnd(stage: number, won: boolean) {
+  const s = stats();
+  s.runs++;
+  if (won) s.wins++;
+  else s.deaths[stage] = (s.deaths[stage] ?? 0) + 1;
+  memStats = s;
+  store('pk_stats', s);
+}
+
+export const statsDump = () => stats();
