@@ -153,6 +153,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok((b as any).boxLvl[0] === best + 3, `a lvl-90 catch joins at team pace (box lvl ${(b as any).boxLvl[0]} vs team best ${best})`);
 }
 
+// --- gym stops sign their leader's type -------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(8, 'T'), mulberry32(3));
+  const gyms = (b as any).region.nodes.filter((n: any) => n.kind === 'gym');
+  ok(gyms.length === 3 && gyms.every((n: any) => !!n.ttype), `every gym stop wears a leader type (${gyms.map((n: any) => n.ttype).join(', ')})`);
+  const stagedBoss = (b as any).stage.waves[2].find((s: any) => s.boss);
+  ok(gyms.find((n: any) => n.row === 2)?.ttype === stagedBoss.def.type, 'staged gym sign matches the rolled boss');
+  const w = rollWave(mulberry32(1), 3, undefined, 'rock');
+  ok(w.find((s: any) => s.boss)?.def.type === 'rock', 'a rolled gym wave honors the signed type');
+}
+
 // --- dual-typing: multiplied matchups, better-type strikes ---------------
 {
   ok(typeMult('rock', speciesById(6)!) === 4, 'charizard (fire/flying) takes 4x rock');
@@ -628,13 +639,12 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   }
 }
 
-// --- map guarantees: a rest each half + real ? variety (pokelike's rule) ---
+// --- map guarantees: rests are rare, but ? and mart stay in each half ---
 {
   for (const s of [1, 7, 13, 42, 99, 777, 2024, 5150, 31337, 555]) {
     const r = genRegion(s);
-    const rests1 = r.nodes.filter((n) => n.kind === 'rest' && n.row >= 1 && n.row <= 4).length;
-    const rests2 = r.nodes.filter((n) => n.kind === 'rest' && n.row >= 5 && n.row <= 7).length;
-    ok(rests1 >= 1 && rests2 >= 1, `seed ${s}: a rest is offered in each half (${rests1}+${rests2})`);
+    const rests = r.nodes.filter((n) => n.kind === 'rest').length;
+    ok(rests >= 1 && rests <= 3, `seed ${s}: rests are rare — one guaranteed somewhere (${rests} total)`);
     const ev1 = r.nodes.some((n) => n.kind === 'event' && n.row >= 1 && n.row <= 4);
     const ev2 = r.nodes.some((n) => n.kind === 'event' && n.row >= 5 && n.row <= 7);
     ok(ev1 && ev2, `seed ${s}: a ? stop is offered in each half`);

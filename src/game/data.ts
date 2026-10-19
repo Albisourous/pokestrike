@@ -1067,7 +1067,7 @@ export function makeStage(seed: number, name?: string): StageDef {
 // Roll the next stage (depth 1..6 = stages 4..9). Bigger packs each depth,
 // a gym boss every 3rd.
 // `theme` picks the biome pool for fodder; omit it to fall back to the flat pool.
-export function rollWave(rng: () => number, depth: number, theme?: Theme): WaveSpawn[] {
+export function rollWave(rng: () => number, depth: number, theme?: Theme, bossType?: PokeType): WaveSpawn[] {
   const fodder = fodderPool(theme, depth);
   const slots = [...SLOTS];
   const slot = () => {
@@ -1081,7 +1081,11 @@ export function rollWave(rng: () => number, depth: number, theme?: Theme): WaveS
       : fodder[Math.floor(rng() * fodder.length)],
     ...slot(),
   });
-  const boss = depth % 3 === 0 ? BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)] : null;
+  // a gym stop's sign calls the leader's type — honor it when the wave
+  // rolls; an uncovered type (shouldn't happen) falls back to the pool
+  const typed = bossType ? BOSS_POOL.filter((d) => d.type === bossType) : BOSS_POOL;
+  const pool = typed.length ? typed : BOSS_POOL;
+  const boss = depth % 3 === 0 ? pool[Math.floor(rng() * pool.length)] : null;
   const n = Math.min(3 + Math.floor(depth / 2), 6);
   const wave: WaveSpawn[] = boss ? gymPack(boss, n, rng, slot, fodder, depth) : Array.from({ length: n }, add);
   if (boss) wave.push({ def: boss, nx: 0.5, ny: 0.3, boss: true });

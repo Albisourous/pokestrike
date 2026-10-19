@@ -9,10 +9,10 @@ import { TOTAL_STAGES, TRAINER_TYPES } from './data';
 import type { PokeType } from './types';
 
 export const MAP_W = 16;
-// 6-tile row gaps + generous margins — the climb scrolls through a
+// 5-tile row gaps + generous margins — the climb scrolls through a
 // ~20-row viewport instead of showing the whole island at once
 export const MAP_H = 58;
-const ROW_GAP = 6;
+const ROW_GAP = 5;
 
 export const T_WATER = 0;
 export const T_SAND = 1;
@@ -25,7 +25,7 @@ export interface MapNode {
   kind: NodeKind;
   row: number; // climb depth 0..8 = stages; -1 = the home start marker
   links: number[]; // indices into nodes[] — the stops you can pick next
-  ttype?: PokeType; // trainer stops: the mono-type squad waiting there
+  ttype?: PokeType; // trainer stops: the mono-type squad waiting there; gyms: the leader's type on the sign
 }
 export interface RegionMap {
   tiles: Uint8Array; // MAP_W*MAP_H — T_*
@@ -134,18 +134,22 @@ export function genRegion(seed: number): RegionMap {
   stop(Math.round(cx), MAP_H - 2, 'start', -1);
   for (let r = 0; r < TOTAL_STAGES; r++) {
     const ty = MAP_H - 2 - (r + 1) * ROW_GAP;
-    // utility rows field 3 of the 4 kinds — a half's rest/?/mart
-    // guarantees below need three donors on the back nine's lone row
+    // utility rows field 3 stops — mostly services, but ~45% of the time a
+    // fight slips into the pool and a service stays home; rest is the
+    // rarest kind now (one is guaranteed across the whole climb, not halves)
     const kinds: NodeKind[] =
       r % 3 === 2 ? ['gym']
-      : r % 3 === 1 ? shuffle<NodeKind>(['chest', 'rest', 'mart', 'event']).slice(0, 3)
-      : shuffle<NodeKind>(rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
+      : r % 3 === 1
+        ? shuffle<NodeKind>(
+            rng() < 0.55 ? ['chest', 'rest', 'mart', 'event'] : ['chest', 'mart', 'event', rng() < 0.5 ? 'wild' : 'trainer'],
+          ).slice(0, 3)
+        : shuffle<NodeKind>(rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
     const xs = kinds.length === 1 ? [0.5] : kinds.length === 3 ? [0.16, 0.5, 0.84] : [0.28, 0.72];
     kinds.forEach((kind, k) => stop(Math.round(xs[k] * (MAP_W - 1)), ty, kind, r));
   }
 
   // StS-style facility guarantees (pokelike's rule): each half of the
-  // climb always offers a rest and a ? stop. Donors are utility-row
+  // climb always offers a ? stop and a mart. Donors are utility-row
   // stops only — battle rows keep their fight, gyms are untouchable.
   const convert = (lo: number, hi: number, kind: NodeKind) => {
     const band = nodes.filter((n) => n.row >= lo && n.row <= hi && n.row % 3 === 1);
@@ -159,10 +163,11 @@ export function genRegion(seed: number): RegionMap {
     if (pool.length) pool[Math.floor(rng() * pool.length)].kind = kind;
   };
   for (const [lo, hi] of [[1, 4], [5, 7]] as const) {
-    convert(lo, hi, 'rest');
     convert(lo, hi, 'event');
     convert(lo, hi, 'mart');
   }
+  // healing is precious, not routine — one rest across the whole climb
+  convert(1, 7, 'rest');
 
   // StS tree edges — lane order is fixed, so the graph is deterministic:
   // each battle door opens its own side of the fan + center (2→3), every

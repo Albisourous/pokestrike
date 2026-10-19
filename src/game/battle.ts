@@ -1,8 +1,9 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
+import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS } from './data';
 import { Perk, rollPerks } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -12,7 +13,7 @@ import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadg
 import { drawBackdrop, drawWall, THEMES, hash } from './bg';
 import type { Theme } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT } from './types';
-import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND } from './map';
+import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND, T_GRASS } from './map';
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
@@ -580,7 +581,18 @@ export class Battle {
         boostT: -9,
       });
     });
-    this.region = genRegion(Math.floor(this.rng() * 2 ** 31));
+    const mapSeed = Math.floor(this.rng() * 2 ** 31);
+    this.region = genRegion(mapSeed);
+    // gym stops wear their leader's type on the sign, like trainer doors —
+    // a staged gym reads the boss it already rolled; a rolled gym picks a
+    // boss type now so the wave honors the sign when it's dealt. The pick
+    // runs on a map-seeded stream so the run's roll order never shifts.
+    const gymRng = mulberry32(mapSeed);
+    for (const n of this.region.nodes) {
+      if (n.kind !== 'gym') continue;
+      const staged = this.stage.waves[n.row]?.find((s) => s.boss);
+      n.ttype = staged?.def.type ?? BOSS_POOL[Math.floor(gymRng() * BOSS_POOL.length)].type;
+    }
     this.mapCam = this.mapCamTarget();
     // no staged wave: HOME (row -1) is just the starter pick — the first
     // fight is whichever stage-1 fork you walk to
@@ -641,7 +653,8 @@ export class Battle {
     } else {
       if (i >= this.stage.waves.length) {
         this.depth++;
-        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+        // a gym's rolled wave fields the leader its sign announced
+        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme, node?.kind === 'gym' ? node.ttype : undefined));
       }
       // elite doors field the same mono-type squad but one depth tier hotter
       spawns = ttype ? trainerWave(this.rng, this.depth + (elite ? 1 : 0), ttype) : this.stage.waves[i];
@@ -4845,50 +4858,18 @@ export class Battle {
 
   // The climb as a town-map region: a seeded island of grass ringed by
   // beach and sea, 9 stops south→north on a carved route — gyms every
-  // 3rd, trainer squads, chests, Poké Center rests — with the next wave's
-  // wilds previewed up top like a Monster Strike quest banner.
+  // 3rd, trainer squads, chests, Poké Center rests.
   private drawRegion(ctx: CanvasRenderingContext2D) {
     ctx.fillStyle = '#0a0e1c';
     ctx.fillRect(0, 0, 540, 960);
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#f8d030';
-    // long region names shrink instead of running under the corner chips
-    fitFont(ctx, this.stage.name.toUpperCase(), 22, 320);
-    ctx.fillText(this.stage.name.toUpperCase(), 270, 64);
-    ctx.font = font(12);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 88);
-
-    // who's waiting at the next stop — gyms show their boss
-    const seen = new Set<number>();
-    const preview = (this.stage.waves[this.pendingNext] ?? [])
-      .filter((s) => !seen.has(s.def.id) && seen.add(s.def.id))
-      .slice(0, 4);
-    preview.forEach((s, i) => {
-      const x = 270 - preview.length * 17 + i * 34 + 17;
-      try {
-        drawMon(ctx, s.def.id, x, 104, 24); // unspawned waves may not be loaded yet
-      } catch {
-        return;
-      }
-      if (s.boss) {
-        ctx.strokeStyle = '#f0b02f';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(x, 104, 13, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    });
-    if (!preview.length && this.pendingNext > this.waveIndex) {
-      // rolled rows deal their wave when the stop is picked — unknowns for now
-      ctx.font = font(12);
-      ctx.fillStyle = '#3a4370';
-      ctx.fillText('?  ?  ?', 270, 110);
-    }
 
     const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
     const cam = Math.round(this.mapCam * cell) / cell; // pixel-snap keeps the baked tiles crisp
     const view = MAP_VIEW;
+    // the island overhangs the frame's top edge so rooftops slide in under
+    // the fade instead of being sliced flat by the clip
+    const over = Math.min(2.2, Math.max(cam, 0));
     const y0 = Math.max(0, Math.floor(cam));
     const y1 = Math.min(MAP_H, Math.ceil(cam + view));
     const img = gracidea();
@@ -4906,6 +4887,36 @@ export class Battle {
           const t = this.region.tiles[i];
           const tile = this.region.route.has(i) ? MT.TILE_PATH : t === T_WATER ? MT.TILE_WATER : t === T_SAND ? MT.TILE_SAND : MT.TILE_GRASS;
           drawTile(g, tile, x * cell, y * cell, cell, cell);
+        }
+      }
+      // carved dirt edges where a route meets open land — the trail reads
+      // as cut ground, not painted sand
+      g.fillStyle = 'rgba(44,28,12,0.32)';
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const i = y * MAP_W + x;
+          if (!this.region.route.has(i)) continue;
+          const px = x * cell, py = y * cell;
+          const open = (dx: number, dy: number) => {
+            const nx = x + dx, ny = y + dy;
+            return nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H || !this.region.route.has(ny * MAP_W + nx);
+          };
+          if (open(-1, 0)) g.fillRect(px, py, 3, cell);
+          if (open(1, 0)) g.fillRect(px + cell - 3, py, 3, cell);
+          if (open(0, -1)) g.fillRect(px, py, cell, 3);
+          if (open(0, 1)) g.fillRect(px, py + cell - 3, cell, 3);
+        }
+      }
+      // faint dapples break up the big flat grass fill — deterministic
+      // hash so the bake is identical every frame
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const i = y * MAP_W + x;
+          if (this.region.tiles[i] !== T_GRASS || this.region.route.has(i)) continue;
+          if ((x * 31 + y * 17) % 19 < 2) {
+            g.fillStyle = 'rgba(24,64,24,0.13)';
+            g.fillRect(x * cell + 6 + ((x * 13 + y * 7) % 14), y * cell + 6 + ((x * 11 + y * 5) % 14), 7, 5);
+          }
         }
       }
       for (const [i, kind] of this.region.decor) {
@@ -4926,8 +4937,9 @@ export class Battle {
     const sparkle = Math.floor(this.time * 4);
     if (this.regionBase) {
       // a slice of the island — the camera tracks the climb so only the
-      // current triplet (battle → utility → gym) is ever on screen
-      ctx.drawImage(this.regionBase, 0, cam * cell, MAP_W * cell, view * cell, ox, oy, MAP_W * cell, view * cell);
+      // current triplet (battle → utility → gym) is ever on screen; `over`
+      // rows above the frame stay drawn so building tops have land to sit on
+      ctx.drawImage(this.regionBase, 0, (cam - over) * cell, MAP_W * cell, (view + over) * cell, ox, oy - over * cell, MAP_W * cell, (view + over) * cell);
       // only the water glints stay live
       for (let y = y0; y < y1; y++) {
         for (let x = 0; x < MAP_W; x++) {
@@ -4964,7 +4976,7 @@ export class Battle {
     // and offscreen stops clip at the frame instead of bleeding over the HUD
     ctx.save();
     ctx.beginPath();
-    ctx.rect(ox - 6, oy - 6, MAP_W * cell + 12, view * cell + 12);
+    ctx.rect(ox - 6, oy - over * cell - 6, MAP_W * cell + 12, view * cell + 12 + over * cell);
     ctx.clip();
     // the trainer waits at the current stop, or walks the carved route
     // to the one you tapped — overworld style
@@ -5008,7 +5020,7 @@ export class Battle {
       }
     }
     this.region.nodes.forEach((n, i) => {
-      if (n.ty - cam < -3 || n.ty - cam > view + 1) return; // offscreen row
+      if (n.ty - cam < -2.4 || n.ty - cam > view + 1) return; // offscreen row
       const nx = ox + n.tx * cell + cell / 2;
       const ny = oy + (n.ty - cam) * cell + cell / 2;
       const cleared = n.row < this.pendingNext;
@@ -5039,6 +5051,11 @@ export class Battle {
         ctx.fillText('?', nx + 3, ny + 8);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN; // start + rest are towns
+        // ground shadow first — the building stands on the island, not on it floats
+        ctx.fillStyle = 'rgba(8,14,24,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(nx, ny + cell * 0.55, cell * 0.85, cell * 0.26, 0, 0, Math.PI * 2);
+        ctx.fill();
         drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
         if (n.kind === 'rest' || n.kind === 'mart') {
           const potion = itemSprite(n.kind === 'rest' ? 'max-potion' : 'potion');
@@ -5062,7 +5079,7 @@ export class Battle {
     });
     // labels in a second pass so buildings can't paint over a neighbor's name
     this.region.nodes.forEach((n, i) => {
-      if (n.row < this.pendingNext || n.ty - cam < -3 || n.ty - cam > view + 1) return;
+      if (n.row < this.pendingNext || n.ty - cam < -2.4 || n.ty - cam > view + 1) return;
       const nx = ox + n.tx * cell + cell / 2;
       const ny = oy + (n.ty - cam) * cell + cell / 2;
       const reachable = links.includes(i);
@@ -5087,8 +5104,9 @@ export class Battle {
         : current ? '#6fdc6f' : '#8a94b8';
       ctx.fillText(label, nx, ny - cell * 1.55);
       // trainer squads are mono-type — name it so routing around a bad
-      // matchup is a choice, not a coin flip
-      if (n.kind === 'trainer' || n.kind === 'elite') {
+      // matchup is a choice, not a coin flip; gyms sign their leader's
+      // type the same way
+      if (n.kind === 'trainer' || n.kind === 'elite' || n.kind === 'gym') {
         const ty = (n.ttype ?? 'normal').toUpperCase();
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
@@ -5102,20 +5120,35 @@ export class Battle {
     ctx.strokeStyle = '#2a3560';
     ctx.lineWidth = 3;
     ctx.strokeRect(ox - 8, oy - 8, MAP_W * cell + 16, view * cell + 16);
-    // sheers at both edges sell the scroll — the island keeps going
-    for (const [fy, up] of [[oy, 0], [oy + view * cell, 1]] as const) {
-      const g2 = ctx.createLinearGradient(0, fy, 0, up ? fy - cell * 1.6 : fy + cell * 1.6);
-      g2.addColorStop(0, 'rgba(10,14,28,0.7)');
-      g2.addColorStop(1, 'rgba(10,14,28,0)');
-      ctx.fillStyle = g2;
-      ctx.fillRect(ox - 4, up ? fy - cell * 1.6 : fy, MAP_W * cell + 8, cell * 1.6);
-    }
+    // sheers at both edges sell the scroll — the island keeps going; the
+    // top one runs deep over the overhang so rooftops slide out of shadow
+    const topG = ctx.createLinearGradient(0, oy - over * cell - 6, 0, oy + cell * 1.4);
+    topG.addColorStop(0, 'rgba(10,14,28,0.97)');
+    topG.addColorStop(1, 'rgba(10,14,28,0)');
+    ctx.fillStyle = topG;
+    ctx.fillRect(ox - 8, oy - over * cell - 6, MAP_W * cell + 16, over * cell + cell * 1.4 + 6);
+    const botG = ctx.createLinearGradient(0, oy + view * cell, 0, oy + view * cell - cell * 1.6);
+    botG.addColorStop(0, 'rgba(10,14,28,0.7)');
+    botG.addColorStop(1, 'rgba(10,14,28,0)');
+    ctx.fillStyle = botG;
+    ctx.fillRect(ox - 4, oy + view * cell - cell * 1.6, MAP_W * cell + 8, cell * 1.6);
     // soft vignette keeps the eye on the island
     const vg = ctx.createRadialGradient(270, oy + view * cell / 2, 200, 270, oy + view * cell / 2, 520);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
     vg.addColorStop(1, 'rgba(0,0,0,0.45)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, 540, 960);
+
+    // header rides over the faded island edge — text stays crisp while
+    // rooftops scroll beneath it
+    ctx.fillStyle = '#f8d030';
+    // long region names shrink instead of running under the corner chips
+    fitFont(ctx, this.stage.name.toUpperCase(), 22, 320);
+    ctx.fillText(this.stage.name.toUpperCase(), 270, 64);
+    ctx.font = font(12);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 88);
+
     ctx.font = font(9);
     ctx.fillStyle = '#aab4d8';
     ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
