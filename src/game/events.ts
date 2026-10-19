@@ -179,8 +179,7 @@ const EVENTS: GameEvent[] = [
               bb.score -= 300;
               const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
               if (!p) return { note: 'THE BOX WAS EMPTY. HE VANISHED.', skip: true };
-              p.apply(bb);
-              bb.heldItems.push(p.item);
+              bb.grantPerk(p);
               return { note: `THE BOX HELD ${p.name.toUpperCase()}!`, skip: true };
             },
           },
@@ -328,8 +327,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
         if (bb.score < 300) return reprompt(bb, 'NOT ENOUGH SCORE.');
         bb.score -= 300;
         sold.add('mystery');
-        p.apply(bb);
-        bb.heldItems.push(p.item);
+        bb.grantPerk(p);
         return reprompt(bb, `IT WAS ${p.name.toUpperCase()}!`);
       },
     }],

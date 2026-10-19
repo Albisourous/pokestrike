@@ -364,6 +364,59 @@ export function statOffer(kind: 'draft' | 'perks', offered: (string | number)[],
   store('pk_stats', s);
 }
 
+// --- mid-run save: one climb can pause between stops and come back ---
+
+export interface RunSave {
+  seed: number;
+  daily: boolean;
+  asc: number;
+  mapSeed: number;
+  mapNode: number;
+  waveIndex: number;
+  depth: number;
+  pendingNext: number;
+  mapNote: string;
+  team: { id: number; lvl: number; shiny?: boolean; hp: number }[];
+  box: { id: number; lvl?: number; shiny?: boolean; luck?: number }[];
+  boxHp: number[];
+  boxLvl: number[];
+  perks: string[]; // perk ids — re-applied on resume
+  heldItems: string[];
+  score: number;
+  perksTaken: number;
+  gymsBeaten: number;
+  shiniesCaught: number;
+  maxCombo: number;
+  maxKos: number;
+  totalKos: number;
+  caughtBoss: boolean;
+  coachDone: boolean;
+  echoCleared: boolean;
+  savedAt: number;
+}
+
+let memRun: RunSave | null = null;
+
+export function saveRun(s: RunSave) {
+  memRun = s;
+  store('pk_run', s);
+}
+
+export function runSave(): RunSave | null {
+  const s = load<RunSave>('pk_run') ?? memRun;
+  // shape-check: a stale/corrupt run save is a missing CONTINUE, not a crash
+  return s && Number.isFinite(s.seed) && Array.isArray(s.team) && s.team.length ? s : null;
+}
+
+export function clearRun() {
+  memRun = null;
+  try {
+    localStorage.removeItem('pk_run');
+  } catch {
+    /* nothing to clear */
+  }
+}
+
 export function statRunEnd(stage: number, won: boolean) {
   const s = stats();
   s.runs++;

@@ -3,13 +3,13 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS } from './data';
-import { Perk, rollPerks } from './perks';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById } from './data';
+import { Perk, rollPerks, PERKS } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
 import type { EventChoice, EventArt } from './events';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, type RunSave } from './meta';
 import { drawBackdrop, drawWall, THEMES, hash } from './bg';
 import type { Theme } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT } from './types';
@@ -409,6 +409,7 @@ export class Battle {
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
   private inRival = false; // this wave is the rival echo fight
   private inTrainer = false; // this wave is a trainer squad — their mons can't be caught
+  mapSeed = 0; // region's seed — saved so a resumed run regens the same island
   private region: RegionMap; // the climb's world map — drawn between stages
   private regionBase: HTMLCanvasElement | null = null; // baked terrain — region never changes
   private pendingNext = 0; // wave the map interstitial leads into
@@ -470,6 +471,7 @@ export class Battle {
   caughtBoss = false;
   shiniesCaught = 0; // gold KOs this run — shiny KOs always land in the box
   perksTaken = 0;
+  perkIds: string[] = []; // every granted perk — the save re-applies them in order on resume
   boxSel = -1; // box index picked for swapping
   teamSel = -1; // team index picked — a swap starts from either side
   depth = 0; // rolled stages survived past the opening trio
@@ -583,21 +585,115 @@ export class Battle {
       });
     });
     const mapSeed = Math.floor(this.rng() * 2 ** 31);
+    this.mapSeed = mapSeed;
     this.region = genRegion(mapSeed);
-    // gym stops wear their leader's type on the sign, like trainer doors —
-    // a staged gym reads the boss it already rolled; a rolled gym picks a
-    // boss type now so the wave honors the sign when it's dealt. The pick
-    // runs on a map-seeded stream so the run's roll order never shifts.
+    this.assignGymSigns(mapSeed);
+    this.mapCam = this.mapCamTarget();
+    // no staged wave: HOME (row -1) is just the starter pick — the first
+    // fight is whichever stage-1 fork you walk to
+    this.phase = 'map';
+  }
+
+  // gym stops wear their leader's type on the sign, like trainer doors —
+  // a staged gym reads the boss it already rolled; a rolled gym picks a
+  // boss type now so the wave honors the sign when it's dealt. The pick
+  // runs on a map-seeded stream so the run's roll order never shifts.
+  private assignGymSigns(mapSeed: number) {
     const gymRng = mulberry32(mapSeed);
     for (const n of this.region.nodes) {
       if (n.kind !== 'gym') continue;
       const staged = this.stage.waves[n.row]?.find((s) => s.boss);
       n.ttype = staged?.def.type ?? BOSS_POOL[Math.floor(gymRng() * BOSS_POOL.length)].type;
     }
-    this.mapCam = this.mapCamTarget();
-    // no staged wave: HOME (row -1) is just the starter pick — the first
-    // fight is whichever stage-1 fork you walk to
+  }
+
+  // Perks come through one door so the save can replay the same list:
+  // apply + record id + bank the item icon.
+  grantPerk(p: Perk) {
+    p.apply(this);
+    this.perkIds.push(p.id);
+    this.heldItems.push(p.item);
+  }
+
+  // The run is only safe to bank on the map — mid-fight, mid-walk or
+  // mid-choice frames have half-resolved state. Callers get null there.
+  snapshot(): RunSave | null {
+    if (this.phase !== 'map' || this.mapWalk || this.eventChoice || this.evoChoice) return null;
+    return {
+      seed: 0, // caller stamps the run seed — battle only knows mapSeed
+      daily: false,
+      asc: this.asc,
+      mapSeed: this.mapSeed,
+      mapNode: this.mapNode,
+      waveIndex: this.waveIndex,
+      depth: this.depth,
+      pendingNext: this.pendingNext,
+      mapNote: this.mapNote,
+      team: this.players.map((p) => ({ id: p.def.id, lvl: p.lvl, shiny: p.shiny || undefined, hp: p.hp })),
+      box: this.box.map((d) => ({ id: d.id, lvl: d.lvl, shiny: d.shiny || undefined, luck: d.luck })),
+      boxHp: [...this.boxHp],
+      boxLvl: [...this.boxLvl],
+      perks: [...this.perkIds],
+      heldItems: [...this.heldItems],
+      score: this.score,
+      perksTaken: this.perksTaken,
+      gymsBeaten: this.gymsBeaten,
+      shiniesCaught: this.shiniesCaught,
+      maxCombo: this.maxCombo,
+      maxKos: this.maxKos,
+      totalKos: this.totalKos,
+      caughtBoss: this.caughtBoss,
+      coachDone: this.coachDone,
+      echoCleared: this.echoCleared,
+      savedAt: Date.now(),
+    };
+  }
+
+  // Rebuild run state on a fresh Battle (same team defs, fresh rng): region
+  // regens from mapSeed so the island is identical; perks re-apply so every
+  // multiplier/flag comes through the same code path it was picked through.
+  applySnapshot(s: RunSave) {
+    this.mapSeed = s.mapSeed;
+    this.region = genRegion(s.mapSeed);
+    this.assignGymSigns(s.mapSeed);
+    this.regionBase = null; // terrain canvas rebakes
+    this.mapNode = Math.min(s.mapNode, this.region.nodes.length - 1);
+    this.waveIndex = s.waveIndex;
+    this.depth = s.depth;
+    this.pendingNext = s.pendingNext;
+    this.mapNote = s.mapNote;
+    this.asc = s.asc;
+    this.perkIds = [...s.perks];
+    for (const id of s.perks) PERKS.find((p) => p.id === id)?.apply(this);
+    // stamp saved hp last so perk heals/maxHp growth don't double-count
+    this.players.forEach((p, i) => {
+      const t = s.team[i];
+      if (!t) return;
+      p.hp = Math.max(0, Math.min(t.hp, p.maxHp));
+      p.dead = p.hp <= 0;
+    });
+    this.box = s.box
+      .map((e): SpeciesDef | null => {
+        const base = speciesById(e.id);
+        return base ? { ...base, lvl: e.lvl, shiny: e.shiny || undefined, luck: e.luck } : null;
+      })
+      .filter((d): d is SpeciesDef => !!d);
+    this.boxHp = [...s.boxHp];
+    this.boxLvl = [...s.boxLvl];
+    this.heldItems = [...s.heldItems];
+    this.score = s.score;
+    this.perksTaken = s.perksTaken;
+    this.gymsBeaten = s.gymsBeaten;
+    this.shiniesCaught = s.shiniesCaught;
+    this.maxCombo = s.maxCombo;
+    this.maxKos = s.maxKos;
+    this.totalKos = s.totalKos;
+    this.caughtBoss = s.caughtBoss;
+    this.coachDone = s.coachDone;
+    this.echoCleared = s.echoCleared;
     this.phase = 'map';
+    this.mapCam = this.mapCamTarget();
+    this.refreshTraits();
   }
 
   get active(): Unit {
@@ -3522,9 +3618,8 @@ export class Battle {
     const perk = this.rewardOffers[i];
     if (!perk || this.phase !== 'reward') return;
     sfx('ui');
-    perk.apply(this);
+    this.grantPerk(perk);
     this.perksTaken++;
-    this.heldItems.push(perk.item);
     this.rewardOffers = [];
     this.advanceReward(); // relic banked — the map's TEAM · ITEMS handles swaps now
   }
@@ -3707,8 +3802,7 @@ export class Battle {
     } else if (n.kind === 'chest') {
       const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
       if (p) {
-        p.apply(this);
-        this.heldItems.push(p.item);
+        this.grantPerk(p);
         this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;
       }
       sfx('ready');

@@ -1268,6 +1268,29 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(coachDone(), 'coaching flag persists once the first wave clears');
 }
 
+// --- mid-run save round-trips through JSON ----------------------------------
+{
+  const a = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(3));
+  a.grantPerk(PERKS.find((p) => p.id === 'hpup')!); // measurable: maxHp growth
+  (a as any).players[1].hp = 7;
+  (a as any).mapNode = 1;
+  (a as any).waveIndex = 0;
+  (a as any).pendingNext = 1;
+  a.score = 1234;
+  const s = JSON.parse(JSON.stringify(a.snapshot()!)); // real serialization
+  ok(s.perks.join() === 'hpup', 'snapshot records granted perks');
+
+  const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(99));
+  b.applySnapshot(s);
+  const shape = (bb: Battle) => JSON.stringify((bb as any).region.nodes.map((n: any) => [n.tx, n.ty, n.kind]));
+  ok((b as any).mapSeed === s.mapSeed && shape(b) === shape(a), 'island regens from the saved seed');
+  ok(b.players[1].hp === 7, 'battled hp restores');
+  ok(b.players[0].maxHp === a.players[0].maxHp, 'perk re-applies maxHp growth');
+  ok(b.score === 1234 && (b as any).mapNode === 1 && (b as any).pendingNext === 1, 'run position restores');
+  ok((b as any).perkIds.join() === 'hpup', 'perk ids survive the resume');
+  ok(b.snapshot()!.mapSeed === s.mapSeed, 're-snapshot keeps the original island seed');
+}
+
 // --- roster integrity -------------------------------------------------------
 ok(ROSTER.length >= 29, `roster expanded (${ROSTER.length})`);
 ok(ROSTER.every((r) => speciesById(r.id)), 'every roster id resolves');

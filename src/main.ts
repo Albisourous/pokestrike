@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -29,6 +29,7 @@ import {
   SHARE_BTN,
   TITLE_BTN,
   FREE_BTN,
+  NEW_BTN,
   DAILY_BTN,
   HELP_BTN,
   HELP_CHIP,
@@ -132,6 +133,7 @@ let shareText = '';
 let t = 0;
 // gyms already banked this battle — the delta feeds recordGymWin
 let lastGyms = 0;
+let lastPhase = ''; // battle phase last frame — map-entry edges bank the run
 // box strip scroll: offset in px + an in-progress drag (tap = drag that never moved)
 let boxScroll = 0;
 let boxDrag: { x0: number; s0: number; moved: boolean } | null = null;
@@ -237,6 +239,8 @@ function draftOffers(): number[] {
 // deal here or they'd never be offered.
 // one run setup shared by START CLIMB, DAILY and REMATCH — ?seed=NNN
 // always wins (debug/sharing), else the daily date seed or a fresh roll
+let titleSave: RunSave | null = null; // pk_run peek for the title's CONTINUE button
+
 function newRun(daily = false) {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
   const hasForced = Number.isFinite(forced) && forced > 0;
@@ -244,6 +248,51 @@ function newRun(daily = false) {
   runIsDaily = daily && !hasForced;
   runRng = mulberry32(runSeed);
   stage = makeStage(runSeed);
+  clearRun(); // a fresh climb drops the old one
+}
+
+// bank the climb whenever the team is parked on the map — mid-fight tabs
+// resume at the last stop, not mid-wave
+function bankRun() {
+  const s = battle?.snapshot();
+  if (s) {
+    s.seed = runSeed;
+    s.daily = runIsDaily;
+    saveRun(s);
+  }
+}
+window.addEventListener('pagehide', bankRun);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) bankRun();
+});
+
+// A saved climb skips the draft/charm entirely — same seed, same island
+// (region regens from mapSeed), perks replayed through grantPerk.
+function resumeRun(s: RunSave) {
+  runSeed = s.seed;
+  runIsDaily = s.daily;
+  runRng = mulberry32(runSeed);
+  stage = makeStage(runSeed);
+  const team = s.team
+    .map((e): SpeciesDef | null => {
+      const base = speciesById(e.id);
+      return base ? { ...base, lvl: e.lvl, shiny: e.shiny || undefined } : null;
+    })
+    .filter((d): d is SpeciesDef => !!d);
+  if (!team.length) return; // a team-less save can't fight — fall through to title
+  clearRun();
+  battle = new Battle(arenaRect(), team, stage, runRng);
+  battle.rank = rank();
+  battle.asc = s.asc;
+  battle.bestScore = best().score;
+  battle.shinyRate = shinyCharm() ? 2 : 1;
+  const echo = echoIds()
+    ?.map((e) => ({ def: speciesById(e.id), lvl: e.lvl }))
+    .filter((e): e is { def: SpeciesDef; lvl: number } => !!e.def);
+  battle.echo = echo?.length ? echo : null;
+  battle.applySnapshot(s);
+  scene = 'battle';
+  sceneMusic();
 }
 
 function startDraft() {
@@ -404,11 +453,27 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui'); // plays only when unmuting
       return;
     }
-    if (inRect(p.x, p.y, FREE_BTN)) {
+    if (titleSave && inRect(p.x, p.y, NEW_BTN)) {
+      // start over — the parked climb is dropped for a fresh seed
       sfx('ui');
       newRun();
+      titleSave = null;
       startDraft();
       scene = 'draft';
+      sceneMusic();
+      return;
+    }
+    if (inRect(p.x, p.y, FREE_BTN)) {
+      sfx('ui');
+      if (titleSave) {
+        const s = titleSave;
+        titleSave = null;
+        resumeRun(s);
+      } else {
+        newRun();
+        startDraft();
+        scene = 'draft';
+      }
       sceneMusic();
       return;
     }
@@ -485,8 +550,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       if (battle) {
         statOffer('perks', startOffers.map((p) => p.id), perk.id);
-        perk.apply(battle);
-        battle.heldItems.push(perk.item);
+        battle.grantPerk(perk);
         battle.perksTaken++;
       }
       startOffers.splice(i, 1);
@@ -608,6 +672,7 @@ canvas.addEventListener('pointerdown', (e) => {
       resultExtra = null;
       share = null;
       scene = 'title';
+      titleSave = runSave();
       sceneMusic();
     }
   }
@@ -799,6 +864,9 @@ function update(dt: number) {
     wasReward = itemStep;
     if (battle.phase !== 'reward' && !(battle.phase === 'map' && menuOpen)) boxScroll = 0;
     if (battle.phase !== 'map' && battle.phase !== 'reward') menuOpen = false;
+    // a resolved stop banks the run — the climb survives a closed tab
+    if (battle.phase === 'map' && lastPhase !== 'map') bankRun();
+    lastPhase = battle.phase;
     // metagame polls — same spot the battle→scene transitions already live
     while (battle.gymsBeaten > lastGyms) {
       recordGymWin();
@@ -912,6 +980,7 @@ function update(dt: number) {
         // the seed rides the link — opening it replays this exact climb
         `${location.origin}${location.pathname}?seed=${runSeed}`,
       ].join('\n');
+      clearRun(); // the climb is over — nothing to continue into
       scene = 'result';
       music(won ? 'win' : null); // clear fanfare, or cut to silence on a loss
     }
@@ -952,7 +1021,7 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t);
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
@@ -1080,6 +1149,7 @@ Promise.all([
 ])
   .then(() => {
     scene = 'title';
+    titleSave = runSave();
     // no forced manual: first-run coaching lives in the battle itself —
     // the ? chip is there for anyone who wants the reference
     startLoop(update, render);

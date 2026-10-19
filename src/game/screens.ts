@@ -58,6 +58,8 @@ export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
 export const FREE_BTN = { x: W / 2 - 200, y: 704, w: 195, h: 68 };
 export const DAILY_BTN = { x: W / 2 + 5, y: 704, w: 195, h: 68 };
+// only visible while a saved run waits — slips between the big buttons and the DEX row
+export const NEW_BTN = { x: W / 2 - 80, y: FREE_BTN.y + FREE_BTN.h + 1, w: 160, h: 13 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -1079,7 +1081,7 @@ function drawActors(ctx: CanvasRenderingContext2D, t: number) {
   ctx.globalAlpha = 1;
 }
 
-export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
+export function drawTitle(ctx: CanvasRenderingContext2D, t: number, cont: { stage: number; score: number } | null = null) {
   drawField(ctx);
   drawWildMons(ctx);
 
@@ -1276,8 +1278,15 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number) {
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2 + 1, FREE_BTN.y - 15);
   ctx.fillStyle = PARCH;
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
-  button(ctx, FREE_BTN, 'START CLIMB', true);
+  button(ctx, FREE_BTN, cont ? `CONTINUE — STAGE ${Math.max(1, cont.stage)}` : 'START CLIMB', true);
   button(ctx, DAILY_BTN, 'DAILY', true);
+  if (cont) {
+    // a parked climb still needs the escape hatch — dim link under the pair
+    ctx.font = fontB(10);
+    ctx.fillStyle = '#8890b8';
+    ctx.textAlign = 'center';
+    ctx.fillText(`or start a new climb · saved at ${cont.score.toLocaleString('en-US')} pts`, W / 2, NEW_BTN.y + NEW_BTN.h - 2);
+  }
 
   // ? badge, top corner — the how-to-play overlay
   ctx.fillStyle = '#12152b';
