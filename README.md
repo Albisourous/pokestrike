@@ -16,6 +16,10 @@ climbing today.
 | --- | --- | --- |
 | ![region map](docs/map.png) | ![aiming](docs/aim.png) | ![relic reward](docs/reward.png) |
 
+| Ult armed | Team ultimate | Help manual |
+| --- | --- | --- |
+| ![charged gauge, tap a teammate](docs/ult-ready.png) | ![FLARE RAIN team ultimate](docs/ult.png) | ![how to play manual](docs/help.png) |
+
 | Charm pick | Trainer battle | ? Event |
 | --- | --- | --- |
 | ![starting charm](docs/charm.png) | ![trainer battle](docs/trainer.png) | ![event stop](docs/event.png) |
