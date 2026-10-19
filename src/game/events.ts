@@ -47,10 +47,7 @@ const healAll = (b: Battle, frac: number) => {
 // a boxed catch at wave-appropriate level — wounded mons arrive hurt,
 // and no catch may outlevel the team it lands on
 const boxCatch = (b: Battle, def: SpeciesDef, lvl: number, hpFrac: number) => {
-  const cl = b.catchLvl(lvl);
-  b.box.push({ ...def, lvl: cl });
-  b.boxHp.push(hpFrac);
-  b.boxLvl.push(cl);
+  b.boxAdd({ ...def, lvl: b.catchLvl(lvl) }, hpFrac);
   recordCapture([def.id]); // a mid-run tab close keeps the dex honest
 };
 

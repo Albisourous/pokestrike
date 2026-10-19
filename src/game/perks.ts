@@ -279,9 +279,9 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'bband', name: 'Binding Band', item: 'muscle-band',
-    desc: '+40% hit damage on ally chains',
+    desc: '+40% hit damage on ricochet hits',
     rarity: 'uncommon',
-    apply: (b) => { b.pinchMult += 0.4; },
+    apply: (b) => { b.ricoMult += 0.4; },
   },
   {
     id: 'luckyegg', name: 'Lucky Egg', item: 'lucky-egg',
@@ -360,9 +360,9 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'ether', name: 'Ether', item: 'elixir',
-    desc: "PINCH hits charge the launcher's super",
+    desc: "RICOCHET hits charge the launcher's super",
     rarity: 'rare',
-    apply: (b) => { b.pinchPip += 1; },
+    apply: (b) => { b.ricoPip += 1; },
   },
   {
     id: 'soothebell', name: 'Soothe Bell', item: 'shell-bell',

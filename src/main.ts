@@ -41,7 +41,6 @@ import {
   drawPerkPick,
   CHARM_SKIP,
   REWARD_SKIP,
-  REWARD_NEXT,
   HELP_PANEL,
   HELP_PREV,
   HELP_NEXT,
@@ -519,6 +518,7 @@ canvas.addEventListener('pointerdown', (e) => {
       if (!battle.mapModal && inRect(p.x, p.y, MAP_MENU)) {
         sfx('ui');
         menuOpen = true;
+        battle.boxPing = false; // looked — the bouncing ball did its job
         battle.boxSel = battle.teamSel = -1; // no stale pick from the reward break
         return;
       }
@@ -532,37 +532,17 @@ canvas.addEventListener('pointerdown', (e) => {
         }
         return;
       }
-      if (battle.rewardStep === 'item') {
-        // step one: the relic pick. Reels still rolling — a tap fast-forwards,
-        // never picks blind
-        if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
-          rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
-          return;
-        }
-        for (let i = 0; i < battle.rewardOffers.length; i++) {
-          if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
-        }
-        if (inRect(p.x, p.y, REWARD_SKIP)) battle.declineReward();
+      // the relic pick. Reels still rolling — a tap fast-forwards,
+      // never picks blind
+      if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
+        rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
         return;
       }
-      // step two: the roster — the way out to the map is CONTINUE
-      if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
-        boxDrag = { x0: p.x, s0: boxScroll, moved: false };
-        return;
+      for (let i = 0; i < battle.rewardOffers.length; i++) {
+        if (inRect(p.x, p.y, perkCardRect(i))) battle.pickPerk(i);
       }
-      for (let i = 0; i < battle.players.length; i++) {
-        if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
-        if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
-        else if (battle.box.length > 0) {
-          battle.teamSel = battle.teamSel === i ? -1 : i;
-          sfx('ui');
-        }
-        return;
-      }
-      if (inRect(p.x, p.y, REWARD_NEXT)) {
-        sfx('ui');
-        battle.advanceReward();
-      }
+      if (inRect(p.x, p.y, REWARD_SKIP)) battle.declineReward();
+      return;
     } else {
       battle?.pointerDown(p);
     }
@@ -650,11 +630,7 @@ canvas.addEventListener('pointerup', (e) => {
     const { moved } = boxDrag;
     boxDrag = null;
     // a drag that never moved is a tap: pick a catch, then a teammate to swap into
-    if (
-      !moved && scene === 'battle' && battle &&
-      ((battle.phase === 'reward' && battle.rewardStep === 'team') ||
-        (battle.phase === 'map' && menuOpen))
-    ) {
+    if (!moved && scene === 'battle' && battle && battle.phase === 'map' && menuOpen) {
       const p = toLogical(e);
       if (inRect(p.x, p.y, BOX_STRIP)) {
         for (let i = 0; i < battle.box.length; i++) {
@@ -723,13 +699,7 @@ canvas.addEventListener(
       achScroll = Math.min(Math.max(achScroll + e.deltaY, 0), achScrollMax());
       return;
     }
-    if (
-      scene !== 'battle' ||
-      !battle ||
-      !((battle.phase === 'reward' && battle.rewardStep === 'team') ||
-        (battle.phase === 'map' && menuOpen))
-    )
-      return;
+    if (scene !== 'battle' || !battle || !(battle.phase === 'map' && menuOpen)) return;
     const max = boxScrollMax(battle.box.length);
     if (max <= 0) return;
     e.preventDefault();
@@ -756,9 +726,8 @@ function update(dt: number) {
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
-    // the item reels deal when the item step opens — the team step is
-    // roster-only, so the spin keys off rewardStep flipping, not the phase
-    const itemStep = battle.phase === 'reward' && battle.rewardStep === 'item';
+    // the item reels deal when the reward screen opens
+    const itemStep = battle.phase === 'reward';
     if (itemStep && !wasReward) {
       rewardT0 = t;
       rewardLanded = 0;
@@ -948,17 +917,7 @@ function render() {
           drawReward(
             ctx,
             battle.rewardOffers,
-            battle.box,
-            battle.boxHp,
-            battle.boxLvl,
-            battle.players.map((p) => p.def),
-            battle.players.map((p) => (p.maxHp ? p.hp / p.maxHp : 0)),
-            battle.players.map((p) => p.lvl),
-            battle.boxSel,
-            battle.teamSel,
-            boxScroll,
-            battle.captureChance,
-            battle.lastRecruit,
+            battle.boxGain,
             {
               stage: battle.waveIndex + 2,
               gym: battle.nextIsGym,
@@ -969,7 +928,6 @@ function render() {
             battle.evoChoice,
             battle.teamLuck(),
             t - rewardT0,
-            battle.rewardStep,
           );
         if (menuOpen && battle.phase === 'map')
           drawTeamMenu(

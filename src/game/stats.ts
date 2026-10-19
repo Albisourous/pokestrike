@@ -83,6 +83,8 @@ export const blastPower = 0.2;
 // Glass-cannon bosses: half the HP, so each hit has to land harder to keep
 // the fight tense over the shorter clock.
 export const bossPow = 1.5;
+// Everything hostile hits harder — the general difficulty knob.
+export const foePow = 1.25;
 
 // --- Roles, derived from real stats ---
 // Fast mons are combo triggers, defensive mons are tanks, high-SpA frail mons

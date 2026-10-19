@@ -96,9 +96,7 @@ export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
-export const REWARD_SKIP = { x: W - 152, y: 872, w: 134, h: 40 };
-// the reward break runs two steps: the relic pick, then roster management
-export const REWARD_NEXT = { x: W / 2 - 90, y: 872, w: 180, h: 40 };
+export const REWARD_SKIP = { x: W / 2 - 90, y: 872, w: 180, h: 40 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 500, w: W - 48, h: 56 };
@@ -285,7 +283,7 @@ export function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number)
 }
 
 // arcade cabinet button: hard corners, solid offset block the face presses into
-export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string, on: boolean, icon?: string) {
+export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string, on: boolean, icon?: string, iconDy = 0) {
   ctx.fillStyle = '#0a0d18';
   ctx.fillRect(r.x + 4, r.y + 4, r.w, r.h);
   ctx.fillStyle = on ? '#1b2140' : '#12152b';
@@ -306,7 +304,7 @@ export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number;
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       ctx.globalAlpha = on ? 1 : 0.35;
-      ctx.drawImage(img, r.x + 10, r.y + (r.h - 32) / 2, 32, 32);
+      ctx.drawImage(img, r.x + 10, r.y + (r.h - 32) / 2 + iconDy, 32, 32);
       ctx.restore();
     }
   }
@@ -1582,9 +1580,9 @@ const HELP_SECTIONS: HelpSection[] = [
     demo: demoBump,
   },
   {
-    title: 'PINCH SHOTS',
+    title: 'RICOCHET',
     lines: [
-      'two different touches — foe, ally, wall, stone — in 0.35s flash PINCH!',
+      'two different touches — foe, ally, wall, stone — in 0.35s flash RICOCHET!',
       "hitting the same thing twice doesn't count",
       'relics cash it in: Binding Band +40% hits, Ether feeds a pip',
     ],
@@ -1704,7 +1702,7 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'ULTIMATE',
     lines: [
-      'every shot arms the ult — 10 shots and your active mon glows gold',
+      'every shot arms the ult — 10 shots and your active mon glows gold · charge resets each fight',
       'tap the glowing mon (don\'t pull) to unleash a map-wide strike',
       'all foes take the hit · bosses shrug off most of it',
       'on keys: ? help · P pause · M mute · arrows turn pages',
@@ -2332,16 +2330,6 @@ export function drawPerkCard(
 export function drawReward(
   ctx: CanvasRenderingContext2D,
   offers: { name: string; item: string; desc: string; rarity: Rarity }[],
-  box: SpeciesDef[],
-  boxHp: number[],
-  boxLvl: number[],
-  team: SpeciesDef[],
-  teamHp: number[],
-  teamLvl: number[],
-  selBox: number,
-  selTeam: number,
-  boxScroll: number,
-  catchPct: number,
   recruit: SpeciesDef | null,
   next: { stage: number; gym: boolean; rolled: boolean },
   score: number,
@@ -2349,7 +2337,6 @@ export function drawReward(
   evo: { from: SpeciesDef; options: SpeciesDef[] } | null,
   luck: number,
   spin: number, // reel age in seconds — counts up from the deal
-  step: 'team' | 'item',
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -2369,15 +2356,11 @@ export function drawReward(
 
   ctx.font = font(20);
   ctx.fillStyle = '#f8d030';
-  ctx.fillText(step === 'team' ? 'MANAGE YOUR TEAM' : 'CHOOSE AN ITEM', W / 2, 300);
+  ctx.fillText('CHOOSE AN ITEM', W / 2, 300);
   ctx.font = font(10);
   ctx.fillStyle = '#e8ecf8';
   ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 356);
-  if (step === 'team') {
-    ctx.font = fontB(8);
-    ctx.fillStyle = '#5a6284';
-    ctx.fillText('set the lineup — then pick the route', W / 2, 372);
-  } else if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
+  if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
     ctx.fillText('reels rolling — tap to skip', W / 2, 372);
@@ -2388,7 +2371,7 @@ export function drawReward(
   } else {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
-    ctx.fillText('pick a relic — the lineup comes next', W / 2, 372);
+    ctx.fillText('pick a relic — your box waits on the map', W / 2, 372);
   }
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
@@ -2400,11 +2383,11 @@ export function drawReward(
     335,
   );
 
-  if (step === 'item') offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }));
+  offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }));
 
   // held items — the run's build so far, a strip of icons under the
   // offer cards so you can read your loadout at a glance
-  if (step === 'item' && heldItems.length) {
+  if (heldItems.length) {
     const iw = 22, gap = 6, n = Math.min(heldItems.length, 14);
     let ix = W / 2 - (n * (iw + gap) - gap) / 2;
     heldItems.slice(0, 14).forEach((item) => {
@@ -2415,9 +2398,6 @@ export function drawReward(
     });
     ctx.globalAlpha = 1;
   }
-
-  if (step === 'team')
-    drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct);
 
   // next row on the map — gyms announce themselves; wild rows stay quiet
   // since the actual choice happens on the map now
@@ -2430,12 +2410,8 @@ export function drawReward(
     ctx.fillStyle = '#8890b8';
     ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
   }
-  if (step === 'team') {
-    button(ctx, REWARD_NEXT, 'CONTINUE ▸', true);
-  } else {
-    // StS lets you decline a reward — here it cashes out as score instead
-    button(ctx, REWARD_SKIP, 'DECLINE +150', true);
-  }
+  // StS lets you decline a reward — here it cashes out as score instead
+  button(ctx, REWARD_SKIP, 'DECLINE +150', true);
 
   // a split evolution blocks the reward pick until its form is chosen
   if (evo) {
@@ -2475,9 +2451,9 @@ export function drawReward(
   }
 }
 
-// The roster manager — box strip + team slots with tap-to-swap. Shared by
-// the reward break's team step and the overworld TEAM · ITEMS panel (same
-// rects → same hit tests).
+// The roster manager — box strip + team slots with tap-to-swap. The
+// overworld TEAM · ITEMS panel is its only home now (same rects → same
+// hit tests).
 function drawRoster(
   ctx: CanvasRenderingContext2D,
   box: SpeciesDef[],

@@ -31,6 +31,7 @@ import {
   zapPower,
   blastPower,
   bossPow,
+  foePow,
   bumpCooldown,
   roleOf,
   ROLE_MODS,
@@ -126,6 +127,7 @@ interface Orb {
   wob: number; // spiral phase — each orb corkscrews on its own beat
   color: string;
   hostile?: boolean; // boss orbs hunt players instead of enemies
+  src?: Unit; // hostile orbs carry their caster so damage knobs still apply
   drain?: boolean; // the hit feeds the team — grass seed flares
 }
 // Expanding shockwave: the front sweeps outward and hits each enemy once
@@ -398,10 +400,9 @@ export class Battle {
   ultIn = ULT_SHOTS; // shots until the map-wide ultimate — tap the charged active mon to fire
   private gaugeJit = 0; // per-pull variance: shifts the gold band and sweep pace
   private gaugeStart = 0; // per-pull variance: where on the cycle the needle starts
-  rewardStep: 'team' | 'item' = 'item'; // reward screen order — the pick first, then the roster
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
   scoreMult = 1; // lucky egg: score amplifies
-  private lastContact = { t: -9, id: -1 }; // pinch window: last thing touched
+  private lastContact = { t: -9, id: -1 }; // ricochet window: last thing touched
   private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
   private inRival = false; // this wave is the rival echo fight
@@ -438,9 +439,9 @@ export class Battle {
   lifeDrain = 0; // life orb: team pays this fraction of maxHP per shot
   bossSlayer = 0; // power bracer: bonus damage vs bosses
   wallRamp = 0.08; // banking off walls pays a little contact damage per bounce — grip claw triples it
-  // keyword relics — COMBO SHOT (two contacts in one window) / VOLLEY (ally bumps)
-  pinchPip = 0; // pips granted to the launcher on each pinch
-  pinchMult = 0; // extra contact damage on pinch hits
+  // keyword relics — RICOCHET (two contacts in one window) / VOLLEY (ally bumps)
+  ricoPip = 0; // pips granted to the launcher on each ricochet
+  ricoMult = 0; // extra contact damage on ricochet hits
   volleyNth = 0; // every Nth volley: all cooldowns -1
   volleyBoost = 0; // per-volley contact bonus for the rest of the shot
   // metagame — set by main.ts from the persistent record
@@ -457,6 +458,8 @@ export class Battle {
   box: SpeciesDef[] = []; // captured mons — swap in between stages
   boxHp: number[] = []; // each boxed mon's hp fraction — benching never heals
   boxLvl: number[] = []; // each boxed mon's level — benching keeps earned levels
+  boxPing = false; // a fresh catch waits in the box — the map's TEAM · ITEMS ball bounces until you look
+  boxGain: SpeciesDef | null = null; // newest box member — the reward banner names it
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
   score = 0; // run score — total damage dealt to enemies
   maxCombo = 0; // best pass-chain in a single shot
@@ -620,6 +623,8 @@ export class Battle {
     this.eliteWave = elite;
     this.inEvent = false;
     this.waveShots = 0;
+    this.ultIn = ULT_SHOTS; // the ult is per-fight — no banking a charge into the next stop
+    this.boxGain = null;
     this.refreshTraits();
     let spawns: WaveSpawn[];
     if (this.pendingEventWave) {
@@ -1586,7 +1591,7 @@ export class Battle {
       // bubble trail
       if (dist(o, o.target) < o.target.r + 6) {
         if (o.hostile) {
-          this.damagePlayer(o.target, o.dmg);
+          this.damagePlayer(o.target, o.dmg, o.src);
         } else {
           this.hurt(o.target, o.dmg, '#9df0ff');
           if (o.drain) this.tryHeal(this.players, () => Math.max(1, Math.round(o.dmg * 0.35)));
@@ -1714,12 +1719,12 @@ export class Battle {
     if (bounced && fast) {
       u.wallN++;
       if (u.side === 'player') this.onBounceFx(u);
-      if (this.pinch(-2) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
+      if (this.ricochet(-2) && !this.inStatic(u.x, u.y)) this.onRicochet(u.x, u.y);
     }
   }
 
   // Stone blocks bank the ball like walls — same restitution, same wall-
-  // bounce credit, own contact id so a wall→block squeeze still combos.
+  // bounce credit, own contact id so a wall→block squeeze still counts.
   private hitBlocks(u: Unit) {
     const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
     let bounced = false;
@@ -1727,7 +1732,7 @@ export class Battle {
     if (bounced && fast && u.side === 'player') {
       u.wallN++;
       this.onBounceFx(u);
-      if (this.pinch(-3) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
+      if (this.ricochet(-3) && !this.inStatic(u.x, u.y)) this.onRicochet(u.x, u.y);
     }
   }
 
@@ -1741,7 +1746,7 @@ export class Battle {
     if (kind && fast && u.side === 'player') {
       u.wallN++;
       this.onBounceFx(u);
-      if (this.pinch(kind === 'spikes' ? -5 : -4) && !this.inStatic(u.x, u.y)) this.onPinch(u.x, u.y);
+      if (this.ricochet(kind === 'spikes' ? -5 : -4) && !this.inStatic(u.x, u.y)) this.onRicochet(u.x, u.y);
     }
   }
 
@@ -1793,20 +1798,20 @@ export class Battle {
     return { x, y };
   }
 
-  // PINCH: two distinct contacts (enemy, ally, wall, stone) inside
-  // one 0.35s window — the squeeze shot is the engine's fuel. Records every
+  // RICOCHET: two distinct contacts (enemy, ally, wall, stone) inside
+  // one 0.35s window — the deflection shot is the engine's fuel. Records every
   // contact; callers gate the payoff on static fields so silence absorbs
   // chains.
-  private pinch(id: number) {
-    const pinched = this.time - this.lastContact.t <= 0.35 && this.lastContact.id !== id;
+  private ricochet(id: number) {
+    const chained = this.time - this.lastContact.t <= 0.35 && this.lastContact.id !== id;
     this.lastContact = { t: this.time, id };
-    return pinched;
+    return chained;
   }
 
-  private onPinch(x: number, y: number) {
-    this.texts.push({ x, y: y - 30, text: 'PINCH!', t: 0.8, color: '#9df0ff', big: true });
+  private onRicochet(x: number, y: number) {
+    this.texts.push({ x, y: y - 30, text: 'RICOCHET!', t: 0.8, color: '#9df0ff', big: true });
     this.impact(x, y, '#9df0ff', 0.9);
-    for (let k = 0; k < this.pinchPip; k++) this.chargeUp(this.active);
+    for (let k = 0; k < this.ricoPip; k++) this.chargeUp(this.active);
   }
 
   // Static fields silence keyword triggers and bump supers inside them.
@@ -2084,9 +2089,7 @@ export class Battle {
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
           const cl = this.catchLvl(e.lvl); // it keeps its level — up to the team's pace
-          this.box.push(e.shiny ? { ...e.def, shiny: true, lvl: cl } : { ...e.def, lvl: cl });
-          this.boxHp.push(1);
-          this.boxLvl.push(Math.max(1, cl));
+          this.boxAdd(e.shiny ? { ...e.def, shiny: true, lvl: cl } : { ...e.def, lvl: cl });
         }
         // record at capture time — a mid-run tab close keeps the dex honest
         recordCapture([e.def.id]);
@@ -2150,7 +2153,7 @@ export class Battle {
     // dual-typed strikers lead with whichever type hits this target harder
     const at = strikeType(shooter.def, e.def);
     this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 1.7, t: 0.2, life: 0.2, color: TYPE_COLOR[at] ?? '#ffffff', hits: new Set() });
-    const pinched = this.pinch(e.uid);
+    const rico = this.ricochet(e.uid);
     // taunt toll-booth: while a magnet mon lives, contact damage routes
     // through it — pierce still passes, it just can't hurt anything else
     const taunter = this.enemies.find((x) => !x.dead && x.def.taunt);
@@ -2161,7 +2164,7 @@ export class Battle {
     // engine cap: repeat hits on the same target decay — variety chains
     const hitN = this.shotHitN.get(e.uid) ?? 0;
     this.shotHitN.set(e.uid, hitN + 1);
-    if (pinched && !this.inStatic(shooter.x, shooter.y)) this.onPinch(e.x, e.y);
+    if (rico && !this.inStatic(shooter.x, shooter.y)) this.onRicochet(e.x, e.y);
     const mult = typeMult(at, e.def) * weatherMult(this.weather, at);
     // weak point: the boss's rotating gold face takes triple contact
     // damage — MS's signature precision check. Drifts, so read it first.
@@ -2187,7 +2190,7 @@ export class Battle {
         this.shotStreak *
         (this.shotGold ? 1.2 : 1) *
         (1 + this.shotVolleyBoost) *
-        (pinched ? 1 + this.pinchMult : 1) *
+        (rico ? 1 + this.ricoMult : 1) *
         (weak ? 3 : 1) *
         // power zone: hits landed while the ball's inside the ATK field
         // carry the field's charge
@@ -2403,7 +2406,7 @@ export class Battle {
     p.lastBump = this.time;
     p.sq = 1; // the bumped ally pops — the pass reads as a bump, not a phase
     const silenced = this.inStatic(u.x, u.y);
-    if (this.pinch(p.uid) && !silenced) this.onPinch(p.x, p.y);
+    if (this.ricochet(p.uid) && !silenced) this.onRicochet(p.x, p.y);
     // VOLLEY: the bump itself is the resource — static fields silence it
     if (!silenced) {
       this.volleys++;
@@ -2824,6 +2827,16 @@ export class Battle {
     return Math.min(lvl, best + 3);
   }
 
+  // Every NEW face in the box lands here — names the recruit on the reward
+  // banner and pings the map's TEAM · ITEMS button until you look.
+  boxAdd(def: SpeciesDef, hpFrac = 1) {
+    this.box.push(def);
+    this.boxHp.push(hpFrac);
+    this.boxLvl.push(Math.max(1, def.lvl ?? 1));
+    this.boxGain = def;
+    this.boxPing = true;
+  }
+
   gainLevels(p: Unit, n: number) {
     if (p.dead || p.lvl >= LV_CAP) return;
     const l0 = p.lvl;
@@ -2997,13 +3010,12 @@ export class Battle {
     this.refreshTraits(); // a new face can break or make a type pair
   }
 
-  // Swap a boxed mon onto the team — unlimited during a reward break. HP
-  // belongs to the mon, not the slot: a hurt mon stays hurt in the box and a
-  // fainted one stays fainted, so benching is never a free heal or revive.
+  // Swap a boxed mon onto the team — the map's TEAM · ITEMS panel is the
+  // only place. HP belongs to the mon, not the slot: a hurt mon stays hurt
+  // in the box and a fainted one stays fainted, so benching is never a free
+  // heal or revive.
   swapFromBox(bi: number, ti: number) {
-    // free roster management — the reward break and the map's team menu
-    // both allow it; mid-fight and mid-walk it stays locked
-    if (this.phase !== 'reward' && this.phase !== 'map') return;
+    if (this.phase !== 'map') return;
     const def = this.box[bi];
     const frac = this.boxHp[bi] ?? 1;
     const lvl = this.boxLvl[bi] ?? 1;
@@ -3060,7 +3072,6 @@ export class Battle {
   private enterReward() {
     this.boxSel = -1;
     this.teamSel = -1;
-    this.rewardStep = 'item'; // the relic pick comes first — roster after
     // hard stops pay out uncommon-or-better relics — the risk has a price;
     // elites go further: rare-or-better only
     this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 1 : this.hardWave ? 2 : 3, this.rank, this.teamTypes());
@@ -3071,9 +3082,7 @@ export class Battle {
     this.lastRecruit = this.inTrainer || !this.waveHadGym ? null : this.rollRecruit();
     if (this.lastRecruit) {
       if (!this.absorbDupe(this.lastRecruit)) {
-        this.box.push(this.lastRecruit);
-        this.boxHp.push(1);
-        this.boxLvl.push(this.lastRecruit.lvl ?? 1);
+        this.boxAdd(this.lastRecruit);
         recordCapture([this.lastRecruit.id]); // the dex logs it now, not at run end
       }
       sfx('caught');
@@ -3271,34 +3280,32 @@ export class Battle {
 
   pickPerk(i: number) {
     const perk = this.rewardOffers[i];
-    if (!perk || this.phase !== 'reward' || this.rewardStep !== 'item') return;
+    if (!perk || this.phase !== 'reward') return;
     sfx('ui');
     perk.apply(this);
     this.perksTaken++;
     this.heldItems.push(perk.item);
     this.rewardOffers = [];
-    this.rewardStep = 'team'; // relic banked — now set the lineup
+    this.advanceReward(); // relic banked — the map's TEAM · ITEMS handles swaps now
   }
 
-  // The reward break shows one job at a time: the relic pick first, then
-  // roster management — this button is the way out to the region map.
+  // The reward break is one job — take or skip the relic — then straight to
+  // the region map. Callers already played the pick sound.
   advanceReward() {
-    if (this.phase !== 'reward' || this.rewardStep !== 'team') return;
-    this.rewardStep = 'item';
+    if (this.phase !== 'reward' || this.evoChoice) return;
     this.boxSel = -1;
     this.teamSel = -1;
     this.pendingNext = this.waveIndex + 1;
     this.phase = 'map'; // pick the next stop on the region map
-    sfx('ui');
   }
 
   // Declining pays score instead — StS reward skips keep dead offers honest.
   declineReward() {
-    if (this.phase !== 'reward' || this.rewardStep !== 'item') return;
+    if (this.phase !== 'reward') return;
     sfx('ui');
     this.score += Math.round(150 * (1 + 0.2 * this.asc));
     this.rewardOffers = [];
-    this.rewardStep = 'team'; // no relic — the lineup still wants a look
+    this.advanceReward();
   }
 
   // Map camera: the viewport trails the walker's tile row — while you're
@@ -3403,9 +3410,7 @@ export class Battle {
     }
     const def = pickWild(this.rng, this.depth);
     const lvl = this.catchLvl(Math.min(LV_CAP, 5 + this.waveIndex * 10 + Math.floor(this.rng() * 5)));
-    this.box.push({ ...def, lvl });
-    this.boxHp.push(1);
-    this.boxLvl.push(lvl);
+    this.boxAdd({ ...def, lvl });
     recordCapture([def.id]);
     this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
     this.mapMsgT = 3;
@@ -3719,8 +3724,8 @@ export class Battle {
           .forEach((p, i) => {
             this.orbs.push({
               x: e.x, y: e.y, target: p,
-              dmg: Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower) * bossPow), // orbs carry no src — bake the boss bonus in
-              t: 2.5, wob: i * 2.1, color, hostile: true,
+              dmg: Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+              t: 2.5, wob: i * 2.1, color, hostile: true, src: e,
             });
           });
         break;
@@ -3832,7 +3837,7 @@ export class Battle {
     // rock trait shaves every hit; the waveShots ramp is the anti-stall —
     // after 10 unanswered shots a wave fights back harder each turn
     const pressure = 1 + Math.max(0, this.waveShots - 10) * 0.12;
-    dmg = Math.max(1, Math.round(dmg * (src?.boss ? bossPow : 1) * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
+    dmg = Math.max(1, Math.round(dmg * (src?.side === 'enemy' ? foePow : 1) * (src?.boss ? bossPow : 1) * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
     if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
@@ -5145,8 +5150,9 @@ export class Battle {
       ctx.textAlign = 'center';
     }
     // roster lives behind the menu button — the map stays clean; items, hp
-    // and box swaps are one tap away
-    button(ctx, MAP_MENU, 'TEAM · ITEMS', true, 'poke-ball');
+    // and box swaps are one tap away. A fresh catch bounces the ball until
+    // the panel's been opened.
+    button(ctx, MAP_MENU, 'TEAM · ITEMS', true, 'poke-ball', this.boxPing ? -Math.abs(Math.sin(this.time * 6)) * 7 : 0);
     // ?-stop theatre: a resolved event or an open question pops a cabinet
     // card center-screen — art window up top, the words beneath, chunky
     // buttons or a blinking ▼

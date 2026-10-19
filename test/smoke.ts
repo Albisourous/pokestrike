@@ -232,7 +232,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.box.push(ROSTER[5]);
   b.boxHp.push(1);
   b.boxLvl.push(3);
-  b.phase = 'reward';
+  b.phase = 'map'; // roster swaps live on the map's team panel now
   b.teamSel = 1; // a swap started from the team side resolves the same way
   b.swapFromBox(0, 1); // bench the Lv7, bring in the box Lv3
   ok(b.teamSel === -1 && b.boxSel === -1, 'swap clears both selections');
@@ -242,23 +242,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   void swappedPow;
 }
 
-// --- reward flow: the item pick first, roster management last --------------
+// --- reward flow: the pick (or decline) goes straight to the map -----------
 {
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
   (b as any).spawnWave(0);
   (b as any).enterReward();
-  ok(b.phase === 'reward' && b.rewardStep === 'item', 'reward opens on the item step');
+  ok(b.phase === 'reward', 'reward opens on the item pick');
   b.declineReward();
-  ok(b.phase === 'reward' && b.rewardStep === 'team', 'decline moves on to the team step');
-  b.advanceReward();
-  ok(b.phase !== 'reward', 'continue exits the reward screen');
+  ok(b.phase === 'map', 'decline exits straight to the map');
   (b as any).enterReward();
   const n = b.rewardOffers.length;
   b.pickPerk(0);
-  ok(b.phase === 'reward' && b.rewardStep === 'team' && b.rewardOffers.length === 0, 'a pick banks the relic and moves to team');
-  ok(n > 0, 'offers existed to pick');
-  b.advanceReward();
-  ok(b.phase === 'map', 'team step continue lands on the map');
+  ok(n > 0 && b.rewardOffers.length === 0, 'a pick banks the relic');
+  ok(b.phase === 'map', 'the pick exits straight to the map');
 }
 
 // --- ultimate: a tap on the charged mon detonates the court -----------------
@@ -274,6 +270,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(b.ultIn === ULT_SHOTS, 'firing the ult re-arms the counter');
   for (let i = 0; i < 60; i++) b.update(0.05); // the beams land on a stagger
   ok((b as any).enemies.every((e: any, i: number) => e.dead || e.hp < hp0[i]), 'the ult hits every foe on the court');
+  b.ultIn = 3; // a part-banked charge...
+  (b as any).spawnWave(0);
+  ok(b.ultIn === ULT_SHOTS, 'ult charge never carries into the next fight');
 }
 
 // --- ranked ladder: depth pays, early wipes bleed ----------------------------
@@ -559,8 +558,8 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       step(240); // the lead mon walks the route over ~6 tiles/sec
     } else if (b.phase === 'reward') {
       if (b.evoChoice) b.pickEvo(Math.floor(rng() * b.evoChoice.options.length)); // a split evo asks first
-      else if (b.rewardStep === 'item') b.pickPerk(Math.floor(rng() * Math.max(1, b.rewardOffers.length)) || 0);
-      else b.advanceReward(); // team step — straight through, no box juggling
+      else if (b.rewardOffers.length) b.pickPerk(Math.floor(rng() * b.rewardOffers.length));
+      else b.declineReward(); // empty board — take the score and go
     } else if (b.phase === 'aim') {
       const u = (b as any).active;
       if (!u || u.dead) { step(30); continue; }
