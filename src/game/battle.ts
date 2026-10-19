@@ -4803,7 +4803,10 @@ export class Battle {
       ctx.lineWidth = t.big ? 4 : 3;
       const dy = 52 * (1 - (1 - age) ** 3); // launch up fast, drift to a stop
       ctx.save();
-      ctx.translate(t.x, t.y - dy);
+      // a wall-hugging mon's banner must not spill off-canvas — clamp the
+      // anchor so the measured text stays inside the playfield
+      const half = ctx.measureText(t.text).width / 2;
+      ctx.translate(Math.min(Math.max(t.x, half + 8), W - half - 8), t.y - dy);
       ctx.rotate(t.tilt ?? 0);
       ctx.strokeText(t.text, 0, 0);
       ctx.fillText(t.text, 0, 0);

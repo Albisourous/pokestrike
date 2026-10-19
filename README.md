@@ -320,6 +320,10 @@ worker (`public/sw.js`) registered only in production builds.
   achievements, rating, hall of fame, and rival echo in localStorage,
   behind a `pk_ver` schema stamp — `migrateSaves()` upgrades old saves at
   boot instead of breaking them.
+- **Mid-run save**: `pk_run` banks the climb at every map safe point (and
+  on tab-close) — team HP/levels, box, perks, score, and the island's
+  `mapSeed`. The title screen shows **CONTINUE — STAGE N**; winning or
+  losing clears it.
 - **Decision telemetry**: `pk_stats` logs every offer board (shown vs
   taken) and which stage each run died on — the on-device version of
   MegaCrit's metric server. `?dev` exposes `__dbg` (scene, live battle,

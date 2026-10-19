@@ -49,7 +49,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/events.ts` — the `?`-stop event pool (heals, catches, ambush scripted waves, egg)
 - `src/game/traits.ts` — tiered type traits from fielded mons (shiny counts double)
 - `src/game/maptiles.ts` — `TILE_*` source rects into `tileset.webp` for the map
-- `src/game/meta.ts` — localStorage persistence: dex catches, rank, rival echo
+- `src/game/meta.ts` — localStorage persistence: dex catches, rank, rival echo, mid-run save (`pk_run` banked at map safe points, CONTINUE on title), decision telemetry (`pk_stats`)
 - `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/gracidea/` — scenery canon (see Direction): `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
