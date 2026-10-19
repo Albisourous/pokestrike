@@ -5186,6 +5186,21 @@ export class Battle {
     // and box swaps are one tap away. A fresh catch bounces the ball until
     // the panel's been opened.
     button(ctx, MAP_MENU, 'TEAM · ITEMS', true, 'poke-ball', this.boxPing ? -Math.abs(Math.sin(this.time * 6)) * 7 : 0);
+    if (this.boxPing) {
+      // new-catch alert: a breathing gold frame + a ! pip on the corner
+      const glow = 0.5 + Math.sin(this.time * 6) * 0.35;
+      ctx.strokeStyle = `rgba(255,216,77,${glow})`;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(MAP_MENU.x - 3, MAP_MENU.y - 3, MAP_MENU.w + 6, MAP_MENU.h + 6);
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath();
+      ctx.arc(MAP_MENU.x + MAP_MENU.w - 4, MAP_MENU.y - 2, 11, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1b2140';
+      ctx.font = font(11);
+      ctx.textAlign = 'center';
+      ctx.fillText('!', MAP_MENU.x + MAP_MENU.w - 4, MAP_MENU.y + 7);
+    }
     // ?-stop theatre: a resolved event or an open question pops a cabinet
     // card center-screen — art window up top, the words beneath, chunky
     // buttons or a blinking ▼

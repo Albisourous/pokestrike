@@ -2288,16 +2288,33 @@ export function drawReward(
   ctx.fillRect(0, 0, W, H);
 
   ctx.textAlign = 'center';
-  // a fallen gym's prize announces itself — beat a leader, take the ace
+  // a fresh catch gets the hero slot: a gold-framed card with a breathing
+  // sprite — and a pointer to where the swap lives, since the team step
+  // was cut from this screen
   if (recruit) {
-    drawMon(ctx, recruit.id, W / 2 - 120, 250, 44);
-    ctx.font = fontB(10);
+    const r = { x: W / 2 - 190, y: 188, w: 380, h: 80 };
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 12);
+    ctx.fill();
+    roundRect(ctx, r.x, r.y, r.w, r.h, 12);
+    ctx.fillStyle = '#171d36';
+    ctx.fill();
+    ctx.strokeStyle = '#ffd84d';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    const pulse = 1 + Math.sin(spin * 5) * 0.05;
+    drawMon(ctx, recruit.id, r.x + 52, r.y + r.h / 2, 56 * pulse);
+    ctx.textAlign = 'left';
+    ctx.font = font(9);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(
-      `${recruit.name.toUpperCase()}${recruit.lvl && recruit.lvl > 1 ? ` Lv${recruit.lvl}` : ''} JOINS YOUR BOX!`,
-      W / 2 + 40,
-      258,
-    );
+    ctx.fillText('NEW CATCH!', r.x + 98, r.y + 24);
+    fitFont(ctx, recruit.name.toUpperCase() + (recruit.lvl && recruit.lvl > 1 ? ` LV${recruit.lvl}` : ''), 12, r.w - 112);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(recruit.name.toUpperCase() + (recruit.lvl && recruit.lvl > 1 ? ` LV${recruit.lvl}` : ''), r.x + 98, r.y + 46);
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('in your box — swap it in from TEAM · ITEMS', r.x + 98, r.y + 64);
+    ctx.textAlign = 'center';
   }
 
   ctx.font = font(20);
