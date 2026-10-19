@@ -36,14 +36,14 @@ plug in *after* this beat, replacing the current `targets.forEach` beam fan.
 | fire | Meteor shower | Fireballs arc in from the arena roof onto every foe, staggered; each leaves a `scar` + brief burn | Heavy AoE, small residual DoT |
 | water | Wave / push | A tidal front sweeps left→right across the court, dragging every foe to the right wall | Mid damage + forced wall pileup for the next shot |
 | grass | Delay + drain | Frenzy vines erupt under each foe — `e.timer += 1`, dealt damage siphons ~35% back to the team | Soft damage, heal, and a bought turn |
-| electric | Bounce chain | The caster becomes a bolt that zigzags between foes — up to 5 hops, nearest unhit each time | Focused hits; best on few foes, still chains walls |
+| electric | Bounce chain | The bolt hops foe to foe, nearest first — each arc decays ×0.8 (floor ×0.4) | Focused hits; best on few foes, still chains walls |
 | psychic | Gravity well | Inward rings pull all foes to the arena centre over 0.6s, then an implosion burst | Low-ish damage, perfect bump setup |
-| rock | Targeted meteors | One named boulder per foe drops on its head with a scar decal — no RNG | Reliable AoE, walls crack decals |
+| rock | Targeted meteors | One named boulder per foe drops on its head with a scar decal — ×1.1 raw plus a 1s flinch per survivor | Reliable AoE + stall; heavier than fire, no DoT |
 | poison | Status storm | Venom cloud blankets the court: every foe takes a hit and gains `dotTicks` poison | Front-loads DoT instead of burst |
 | flying | Comet orbit | The caster launches on a tightening spiral, clipping every foe once with piercing | Mid damage, big motion sell |
 | fighting | Rush-down | The caster dashes enemy→enemy rapid-fire (reuse `dashes`), ending with a haymaker on the highest-HP foe | Single-target-leaning AoE |
 | ghost | Night slash | Court dims; wisps strike each foe once — bonus damage to foes still above half HP | Execute flavour, good opener |
-| normal | Giant mode | The caster triples in size and bounces around the court as a live ball for ~1.6s, squashing what it touches | The iconic MS giant SS — chaotic contact damage |
+| normal | Giant mode | The caster swells ×1.7 with a landing quake (×0.35 all foes + toss), then the next launch hits ×2 contact | The iconic MS giant SS — setup ult with a guaranteed floor |
 
 ### Beat-by-beat sketches
 

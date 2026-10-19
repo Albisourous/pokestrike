@@ -2933,7 +2933,7 @@ export class Battle {
           const a0 = from;
           const p = pw;
           from = e;
-          pw *= 0.65;
+          pw = Math.max(pw * 0.8, 0.4); // the far end of a pack still eats a real hit
           this.later(0.08 + i * 0.1, () => {
             if (e.dead) return;
             this.beams.push({ x1: a0.x, y1: a0.y, x2: e.x, y2: e.y, t: 0.3, life: 0.3, color, w: 3 });
@@ -2981,14 +2981,17 @@ export class Battle {
       }
       case 'rock': {
         // ROCK SLIDE — boulders tear out of the sky, one per foe; the orb
-        // carries the hit, the court keeps the crater and the rubble
+        // carries the hit, the court keeps the crater and the rubble. The
+        // landslide hits harder than fire's rain and every survivor eats a
+        // flinch — their countdown stalls while they dig out.
         targets.forEach((e, i) => {
-          this.orbs.push({ x: e.x + (i % 2 ? 26 : -26), y: a.y - 40, target: e, dmg: dmgOf(e), t: 3, wob: i * 1.3, color });
+          this.orbs.push({ x: e.x + (i % 2 ? 26 : -26), y: a.y - 40, target: e, dmg: dmgOf(e, 1.1), t: 3, wob: i * 1.3, color });
           this.later(0.55 + i * 0.1, () => {
             this.scar(e.x, e.y, 26);
             this.screenFlash(color, 0.12);
             this.flavor(e.x, e.y, 'rock');
             this.addShake(11);
+            if (!e.dead) e.timer += 1; // flinched — a beat behind schedule
           });
         });
         break;
@@ -3076,6 +3079,19 @@ export class Battle {
         this.flavor(u.x, u.y, 'normal');
         this.addPunch(0.15);
         this.addShake(14);
+        // the landing quake — GIGA ROMP always does something, even if the
+        // follow-up launch whiffs: every foe eats the stomp and staggers
+        this.later(0.35, () => {
+          this.addShake(18);
+          this.addPunch(0.15);
+          for (const e of this.enemies) {
+            if (e.dead) continue;
+            const d = Math.atan2(e.y - u.y, e.x - u.x);
+            e.vx += Math.cos(d) * 160;
+            e.vy += Math.sin(d) * 160;
+            this.hurt(e, dmgOf(e, 0.35), color);
+          }
+        });
         break;
       }
       default: {
