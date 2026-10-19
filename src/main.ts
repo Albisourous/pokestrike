@@ -176,7 +176,9 @@ const TYPE_SQ: Record<PokeType, string> = {
 };
 
 function buildShare(b: Battle, won: boolean) {
-  const cleared = won ? TOTAL_STAGES : b.waveIndex;
+  // waveIndex is -1 at HOME — a run that ends there cleared nothing, and a
+  // throw here reruns the whole record block every frame
+  const cleared = Math.max(0, won ? TOTAL_STAGES : b.waveIndex);
   const waves =
     '🟩'.repeat(cleared) + (won ? '' : '🟥') + '⬛'.repeat(TOTAL_STAGES - cleared - (won ? 0 : 1));
   const team = draft.picked.map((i) => TYPE_SQ[draftPool[i].type]).join('');

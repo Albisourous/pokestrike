@@ -143,6 +143,15 @@ let memBoard: BoardEntry[] = [];
 
 export function board(): BoardEntry[] {
   const raw = load<unknown>('pk_board');
+  if (raw == null && !memBoard.length) {
+    // the board shipped after pk_best existed — seed a returning player's
+    // best as the bar to beat (team and date weren't logged back then)
+    const b = best();
+    if (b.score > 0) {
+      memBoard = [{ s: b.score, st: b.stage, w: false, asc: 0, team: [], when: Date.now() }];
+      store('pk_board', memBoard);
+    }
+  }
   const list = Array.isArray(raw) ? raw : memBoard;
   return list.filter(
     (e): e is BoardEntry =>
