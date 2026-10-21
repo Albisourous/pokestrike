@@ -4508,6 +4508,9 @@ export class Battle {
     }
     p.hp -= dmg;
     this.texts.push({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
+    // the map early-returns before texts draw — a stray orb hit there
+    // would be invisible, so it goes on the field log instead
+    if (this.phase === 'map') this.log(`${p.def.name.toUpperCase()} TOOK A STRAY HIT — ${dmg}`);
     // survived on fumes — the clutch beat deserves a callout
     if (p.hp > 0 && p.hp <= p.maxHp * 0.15) {
       this.texts.push({ x: p.x, y: p.y - p.r - 34, text: 'BARELY!', t: 0.9, color: '#ffd84d', big: false });
