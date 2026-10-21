@@ -137,13 +137,13 @@ export function sfx(name: Sfx, pitch = 1) {
       tone(500, 180, 0.15, 'sawtooth', 0.12);
       break;
     case 'perfect': // jackpot: rising sparkle run over a thump + shimmer tail, lone bell on top
-      tone(190, 95, 0.16, 'sine', 0.18);
-      [660, 880, 1108, 1760].forEach((f, i) => tone(f, f, 0.14, 'square', 0.09, i * 0.045));
-      tone(2217, 2217, 0.26, 'sine', 0.06, 0.2); // C#7 crowns the A-major run
-      noise(0.3, 2600, 0.08, 0.06, 2400);
+      tone(190 * pitch, 95 * pitch, 0.16, 'sine', 0.18);
+      [660, 880, 1108, 1760].forEach((f, i) => tone(f * pitch, f * pitch, 0.14, 'square', 0.09, i * 0.045));
+      tone(2217 * pitch, 2217 * pitch, 0.26, 'sine', 0.06, 0.2); // C#7 crowns the A-major run
+      noise(0.3, 2600 * pitch, 0.08, 0.06, 2400 * pitch);
       break;
     case 'tick': // timing cue — the fill just crossed into the gold zone
-      tone(1760, 1760, 0.035, 'square', 0.045);
+      tone(1760 * pitch, 1760 * pitch, 0.035, 'square', 0.045);
       break;
     case 'warn': // a foe's countdown hit 1 — two low blips, it swings next
       tone(340, 220, 0.1, 'triangle', 0.10);
@@ -174,21 +174,21 @@ export function sfx(name: Sfx, pitch = 1) {
       tone(220, 110, 0.12, 'sawtooth', 0.12);
       break;
     case 'zap':
-      tone(1400, 300, 0.12, 'sawtooth', 0.14);
-      noise(0.1, 3000, 0.12);
+      tone(1400 * pitch, 300 * pitch, 0.12, 'sawtooth', 0.14);
+      noise(0.1, 3000 * pitch, 0.12);
       break;
     case 'boom':
-      noise(0.35, 300, 0.35, 0, -180);
-      tone(120, 40, 0.35, 'sine', 0.32);
+      noise(0.35, 300 * pitch, 0.35, 0, -180 * pitch);
+      tone(120 * pitch, 40 * pitch, 0.35, 'sine', 0.32);
       break;
     case 'splash':
-      noise(0.25, 1200, 0.2, 0, 800);
+      noise(0.25, 1200 * pitch, 0.2, 0, 800 * pitch);
       break;
     case 'heal':
-      [520, 660, 780].forEach((f, i) => tone(f, f * 1.2, 0.15, 'sine', 0.1, i * 0.06));
+      [520, 660, 780].forEach((f, i) => tone(f * pitch, f * 1.2 * pitch, 0.15, 'sine', 0.1, i * 0.06));
       break;
     case 'ui':
-      tone(700, 900, 0.06, 'square', 0.08);
+      tone(700 * pitch, 900 * pitch, 0.06, 'square', 0.08);
       break;
     case 'wave':
       [440, 550, 660].forEach((f, i) => tone(f, f, 0.12, 'triangle', 0.12, i * 0.07));
@@ -230,7 +230,7 @@ interface JNote {
   w?: OscillatorType; // default square — the bright chiptune voice
 }
 
-const JINGLES: Record<'win' | 'lose' | 'catch' | 'task' | 'gym', JNote[]> = {
+const JINGLES: Record<'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item', JNote[]> = {
   win: [ // rising fanfare in C — five-note run, full-chord bloom on top
     { m: 67, t: 0,    d: 0.1,  v: 0.1 },
     { m: 72, t: 0.1,  d: 0.1,  v: 0.1 },
@@ -260,6 +260,11 @@ const JINGLES: Record<'win' | 'lose' | 'catch' | 'task' | 'gym', JNote[]> = {
     { m: 83, t: 0,    d: 0.07, v: 0.09 },
     { m: 88, t: 0.07, d: 0.3,  v: 0.09 },
   ],
+  item: [ // bag-item pickup — a bright G5→C6→E6 arpeggio ending on a hold
+    { m: 79, t: 0,    d: 0.07, v: 0.1 },
+    { m: 84, t: 0.07, d: 0.07, v: 0.1 },
+    { m: 88, t: 0.14, d: 0.3,  v: 0.11 },
+  ],
   gym: [ // badge stab — V hit then the home chord lands heavy
     { m: 55, t: 0,    d: 0.13, v: 0.08 },
     { m: 59, t: 0,    d: 0.13, v: 0.08 },
@@ -274,7 +279,7 @@ const JINGLES: Record<'win' | 'lose' | 'catch' | 'task' | 'gym', JNote[]> = {
   ],
 };
 
-export function playJingle(kind: 'win' | 'lose' | 'catch' | 'task' | 'gym') {
+export function playJingle(kind: 'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item') {
   if (!ac || ac.state !== 'running' || muted) return;
   for (const n of JINGLES[kind]) tone(M2F(n.m), M2F(n.m), n.d, n.w ?? 'square', n.v, n.t);
 }

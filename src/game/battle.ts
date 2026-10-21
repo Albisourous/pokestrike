@@ -12,7 +12,7 @@ import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
 import type { Theme, PropSpec } from './bg';
-import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT } from './types';
+import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
 import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND, T_GRASS } from './map';
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
@@ -387,6 +387,7 @@ export class Battle {
   shots = 0;
   time = 0;
   waveBanner = 0;
+  private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   endT = 0; // win/lose beat — the field report waits for the celebration to land
   weather: Weather | null = null; // this wave's sky — null is a clear court
 
@@ -1079,6 +1080,9 @@ export class Battle {
         u.y = at.y;
       }
     this.waveBanner = 1.4;
+    // the classic "!" tell as control lands — a challenger spots you
+    this.waveIntroT = this.time;
+    sfx('warn');
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
       sfx('wave');
@@ -2344,6 +2348,7 @@ export class Battle {
           // for a future run's opening picks
           const item = BAG_ITEMS[Math.floor(this.rng() * BAG_ITEMS.length)];
           bankBag(item.id);
+          playJingle('item');
           this.texts.push({
             x: e.x, y: e.y - e.r - 92,
             text: `BAG +1 ${item.name.toUpperCase()}`,
@@ -2783,7 +2788,7 @@ export class Battle {
     this.addPunch(0.11);
     this.addShake(10);
     this.screenFlash(color, 0.18);
-    sfx(SUPER_SFX[src.def.type]);
+    sfx(SUPER_SFX[src.def.type], superPitch(src.def.type));
     cry(p.def.id, 0.35);
     buzz(20);
 
@@ -3028,7 +3033,7 @@ export class Battle {
     this.addPunch(0.2);
     this.addShake(16);
     this.flavor(u.x, u.y, u.def.type);
-    sfx(SUPER_SFX[u.def.type]);
+    sfx(SUPER_SFX[u.def.type], superPitch(u.def.type));
     cry(u.def.id, 0.4);
     buzz([50, 40, 90]);
     const phys = bumpIsPhysical(u.def.type);
@@ -5351,6 +5356,17 @@ export class Battle {
       }
     }
 
+    // the arrival tell — a gold ! pops at arena top as control lands
+    const intro = this.time - this.waveIntroT;
+    if (this.phase === 'aim' && intro < 0.6) {
+      ctx.globalAlpha = Math.min(1, (0.6 - intro) * 5);
+      ctx.font = font(Math.round(24 * (1 + Math.sin(intro * 16) * 0.15)));
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd76a';
+      ctx.fillText('!', a.x + a.w / 2, a.y + 56);
+      ctx.globalAlpha = 1;
+    }
+
     if (this.waveBanner > 0) {
       const pop = Math.min(this.waveBanner, 1);
       const scaleIn = 1 + Math.max(0, this.waveBanner - 1.1) * 2.4;
@@ -6995,5 +7011,9 @@ const SUPER_SFX: Record<PokeType, Sfx> = {
   psychic: 'zap', flying: 'splash', poison: 'boom', rock: 'boom',
   fighting: 'boom', ghost: 'zap', normal: 'hit',
 };
+
+// several types share a blip — the type's index pitches it (normal low,
+// ghost high) so every element still reads distinct
+const superPitch = (t: PokeType) => 0.9 + TYPES.indexOf(t) * 0.05;
 
 

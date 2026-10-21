@@ -1,15 +1,19 @@
-export type PokeType =
-  | 'normal'
-  | 'fire'
-  | 'water'
-  | 'grass'
-  | 'electric'
-  | 'psychic'
-  | 'rock'
-  | 'poison'
-  | 'flying'
-  | 'fighting'
-  | 'ghost';
+// the canonical type order — super SFX pitch rides the index, so an
+// element keeps its own sound from one run to the next
+export const TYPES = [
+  'normal',
+  'fire',
+  'water',
+  'grass',
+  'electric',
+  'psychic',
+  'rock',
+  'poison',
+  'flying',
+  'fighting',
+  'ghost',
+] as const;
+export type PokeType = (typeof TYPES)[number];
 
 // attacker -> { defenderType: multiplier }; unlisted pairs are 1x
 const CHART: Record<PokeType, Partial<Record<PokeType, number>>> = {

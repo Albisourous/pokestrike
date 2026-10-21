@@ -8,6 +8,7 @@ import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
 import { rollPerks } from './perks';
 import { recordCapture, recordShiny } from './meta';
+import { sfx } from '../core/audio';
 
 export interface EventChoice {
   label: string;
@@ -42,6 +43,7 @@ interface GameEvent {
 
 const healAll = (b: Battle, frac: number) => {
   for (const p of b.players) if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * frac));
+  sfx('heal'); // the mend chime — every team heal lands on the ear
 };
 
 // a boxed catch at wave-appropriate level — wounded mons arrive hurt,
@@ -56,6 +58,7 @@ const EVENTS: GameEvent[] = [
     w: 3,
     run: (b) => {
       for (const p of b.players) { p.dead = false; p.hp = p.maxHp; }
+      sfx('heal'); // the spring revives too — healAll can't reach dead mons
       return { note: 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!', art: { item: 'mystic-water' }, skip: true };
     },
   },
