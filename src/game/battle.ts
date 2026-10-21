@@ -4149,6 +4149,12 @@ export class Battle {
     }
     // dots cleared the wave mid-check: fresh wave keeps full timers
     if (this.phase === 'won') return;
+    // the kill shot can still lose its last mon to mine/lava chip — a wiped
+    // team never walks the loot lap; nextTurn owns the ash revive + 'lost'
+    if (this.players.every((p) => p.dead)) {
+      this.nextTurn();
+      return;
+    }
     if (this.rewardPending) {
       this.rewardPending = false;
       // a fallen gym leader pays out in style — coin shower first, relic after

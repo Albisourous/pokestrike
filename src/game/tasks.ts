@@ -123,8 +123,9 @@ interface LivePeriod {
 }
 
 // The board a period is currently playing. A key mismatch — or a stored
-// selection that resolves to nothing — rolls the fresh seeded board and
-// wipes the books INSIDE the passed state: writers persist it with
+// selection that doesn't fully resolve (the pool shrank between versions,
+// leaving dead ids) — rolls the fresh seeded board and wipes the books
+// INSIDE the passed state: writers persist it with
 // saveTaskState, readers just drop their copy. Since the roll is seeded
 // off the period key, re-rolling always yields the same board anyway.
 const livePeriod = (s: TaskState, period: TaskPeriod, now: number): LivePeriod => {
@@ -134,7 +135,7 @@ const livePeriod = (s: TaskState, period: TaskPeriod, now: number): LivePeriod =
   const claim = period === 'daily' ? s.dclaim : s.wclaim;
   const key = period === 'daily' ? s.day : s.week;
   let defs = sel.map((id) => pool.find((d) => d.id === id)).filter((d): d is TaskDef => !!d);
-  if (key === periodKey(period, now) && defs.length) return { defs, prog, claim, rolled: false };
+  if (key === periodKey(period, now) && defs.length && defs.length === sel.length) return { defs, prog, claim, rolled: false };
   defs = rollTasks(pool, COUNT[period], periodSeed(period, now));
   const ids = defs.map((d) => d.id);
   if (period === 'daily') {
