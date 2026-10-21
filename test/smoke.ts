@@ -107,7 +107,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   rest.asc = 4;
   const p = (rest as any).players[0];
   p.hp = 10;
-  (rest as any).arriveAtNode({ kind: 'rest' });
+  (rest as any).arriveAtNode({ kind: 'rest', row: 0 });
+  ok((rest as any).eventChoice?.options.length === 2, 'rest stop asks: heal or train');
+  (rest as any).phase = 'map';
+  (rest as any).pickEventChoice(0); // POKÉ CENTER — heal + revive
   ok(p.hp === Math.round(p.maxHp * 0.75), `ASC 4 rests heal to 75% (${p.hp}/${p.maxHp})`);
 
   const gym = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
@@ -721,8 +724,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   p1.hp = 0;
   const items0 = b.heldItems.length;
   (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'rest', row: 0, links: [] });
+  (b as any).phase = 'map';
+  (b as any).pickEventChoice(0); // POKÉ CENTER — heal + revive
   ok(p0.hp === p0.maxHp, `rest heals to full (${p0.hp}/${p0.maxHp})`);
   ok(!p1.dead && p1.hp === p1.maxHp, 'rest revives a fainted mon');
+  // TRAIN HARD: the other rest pick trades the heal for +3 levels
+  const bt = new Battle(arena, team(), makeStage(21, 'T'), mulberry32(9));
+  const tp = (bt as any).players[0];
+  const lvl0 = tp.lvl;
+  tp.hp = Math.floor(tp.maxHp / 2);
+  (bt as any).arriveAtNode({ tx: 0, ty: 0, kind: 'rest', row: 0, links: [] });
+  (bt as any).phase = 'map';
+  (bt as any).pickEventChoice(1); // TRAIN HARD — +3 levels, no heal
+  ok(tp.lvl === lvl0 + 3 && tp.hp < tp.maxHp, `train hard: +3 levels, no heal (Lv${lvl0}→${tp.lvl})`);
   (b as any).arriveAtNode({ tx: 0, ty: 0, kind: 'chest', row: 0, links: [] });
   ok(b.heldItems.length === items0 + 1, 'chest stop grants a relic');
   // the mart boards a shop shelf — buys re-prompt until LEAVE
@@ -1222,12 +1236,16 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
 
   // wave mutators: enough seeds roll affixes on non-boss waves
   let mods = 0;
-  for (let s = 1; s <= 40; s++) {
+  let newMods = 0;
+  for (let s = 1; s <= 60; s++) {
     const bm = new Battle(arena, team(), makeStage(s), mulberry32(s * 7));
     (bm as any).spawnWave(1);
-    if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY|CLERIC|GUARDIAN|STAY DOWN/.test((bm as any).waveSpecial ?? '')) mods++;
+    const banner = (bm as any).waveSpecial ?? '';
+    if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY|CLERIC|GUARDIAN|STAY DOWN/.test(banner)) mods++;
+    if (/WARDED|TAKE WING|SKITTER|HEXED|TAILWIND/.test(banner)) newMods++;
   }
-  ok(mods > 3, `${mods}/40 seeds rolled a wave mutator`);
+  ok(mods > 3, `${mods}/60 seeds rolled a wave mutator`);
+  ok(newMods > 0, `${newMods}/60 seeds rolled a new affix (warded/sky/skitter/hexed/tailwind)`);
 
   // warp: riding one pad spits the ball out its twin, velocity kept
   const b6 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
@@ -1633,6 +1651,30 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   eb.players.forEach((q) => { q.cd = 2; });
   perkTick(eb, 30);
   ok(eb.players.every((q) => q.cd === 1), 'ether shaves a charge on the 25s clock');
+
+  // soothe bell: a slow mend every 4s on top of the flat volley boost
+  const so = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  so.grantPerk(PERKS.find((p) => p.id === 'soothebell')!);
+  const sq = so.players[0];
+  sq.hp = Math.floor(sq.maxHp / 2);
+  const sq0 = sq.hp;
+  perkTick(so, 4.1);
+  ok(sq.hp > sq0, `soothe bell mends 2% on the 4s clock (${sq0} → ${Math.round(sq.hp)})`);
+
+  // lucky egg: a 25-score trickle every 30s
+  const le = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  le.grantPerk(PERKS.find((p) => p.id === 'luckyegg')!);
+  const sc0 = le.score;
+  perkTick(le, 30.1);
+  ok(le.score === sc0 + 25, `lucky egg trickles +25 score on the 30s clock (${sc0} → ${le.score})`);
+
+  // exp. share: the lowest living ally levels on the 60s clock
+  const xs = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  xs.grantPerk(PERKS.find((p) => p.id === 'expshare')!);
+  const xw = xs.players.reduce((a, z) => (a.lvl <= z.lvl ? a : z));
+  const xl = xw.lvl;
+  perkTick(xs, 60.1);
+  ok(xw.lvl === xl + 1, `exp. share drips a level to the weakest ally (Lv${xl} → Lv${xw.lvl})`);
 }
 
 // --- a cancelled gesture never launches -------------------------------------

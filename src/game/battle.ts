@@ -105,6 +105,7 @@ interface Unit {
   skull?: boolean; // skull-marked — the KO pays a bounty (MS skull icon)
   gravR: number; // gravity aura radius — the ball crawls inside the bubble
   shieldN: number; // aegis wards — each stack negates one incoming hit
+  airborne?: boolean; // SKY wave mod — the pack takes wing: creeps cross moats/boulders
   warpT: number; // last warp ride — cooldown stops portal ping-pong
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
 }
@@ -433,6 +434,7 @@ export class Battle {
   private hazards: Hazard[] = []; // this wave's court gimmicks
   private beams: Beam[] = []; // boss hyper-beam afterglow
   private waveSpecial: string | null = null; // banner override (invade)
+  private curMod: string | null = null; // this wave's rolled affix — hexed/tailwind ride it
   private gustSounded = false; // wind whoosh once per entry
   private shotPhys = 1; // protein pickup: contact damage this shot
   private healCd = 0; // shots until another in-battle mend can land
@@ -874,6 +876,7 @@ export class Battle {
     // a legendary can crash any non-boss wave past the first — MS invades;
     // a dead run's team can return as a rival fight — fail-forward echo
     this.waveSpecial = null;
+    this.curMod = null; // mutators live and die with the wave they rolled on
     this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent;
     // gym leaders own their sky — every gym court runs weather
     if (this.waveHadGym) this.weather = WEATHER_FOR[this.theme];
@@ -972,7 +975,7 @@ export class Battle {
     // same stop, different fight (StS hallway affixes)
     let powerZoneSpawn = false; // 'power' mutator pushes its zone once hazards land
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < 0.35) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -1041,8 +1044,21 @@ export class Battle {
         case 'power': // an ATK field — hits landed from inside hit harder
           powerZoneSpawn = true;
           break;
+        case 'warded': // every foe carries a one-hit ward — the aegis bubble soak
+          for (const e of this.enemies) e.shieldN = 1;
+          break;
+        case 'sky': // the pack takes wing — airborne creeps cross moats/boulders
+          for (const e of this.enemies) e.airborne = true;
+          break;
+        case 'skitter': // +40% approach speed — the pack never stops moving
+          for (const e of this.enemies) e.drift *= 1.4;
+          break;
+        case 'hexed': // your contacts envenom — rides curMod in strikeEnemy
+        case 'tailwind': // +15% launch speed this wave — rides curMod on the sling
+          break;
       }
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!' }[mod] ?? 'MUTATED!';
+      this.curMod = mod;
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -1086,7 +1102,7 @@ export class Battle {
     // them standing inside the prop
     for (const u of [...this.players, ...this.enemies])
       if (!u.dead) {
-        for (const hz of this.hazards) if (isSolid(hz, u.def)) resolveZone(u, hz);
+        for (const hz of this.hazards) if (!u.airborne && isSolid(hz, u.def)) resolveZone(u, hz);
         const at = this.unstick(u.x, u.y, u.r + 2); // wading out can land on a slab
         u.x = at.x;
         u.y = at.y;
@@ -1337,7 +1353,7 @@ export class Battle {
     this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
     this.shotGold = gold;
-    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
+    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : 1) * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.sq = 1; // launch pop — the ball stretches off the sling
@@ -2030,7 +2046,7 @@ export class Battle {
   private hitSolid(u: Unit) {
     const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
     let kind: Hazard['kind'] | null = null;
-    for (const hz of this.hazards) if (isSolid(hz, u.def) && resolveZone(u, hz)) kind = hz.kind;
+    for (const hz of this.hazards) if (!u.airborne && isSolid(hz, u.def) && resolveZone(u, hz)) kind = hz.kind;
     if (kind && fast && u.side === 'player') {
       u.wallN++;
       this.onBounceFx(u);
@@ -2534,6 +2550,11 @@ export class Battle {
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+    // HEXED FIELD mutator: contacts envenom — the same doT poison supers stack
+    if (this.curMod === 'hexed' && !e.dead) {
+      e.dotTicks = Math.min(e.dotTicks + 2, 6);
+      e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
+    }
     // contact sparks in the attacker's type color — every hit showers
     if (!e.dead || !weak) this.impact(e.x, e.y, TYPE_COLOR[at] ?? '#ffffff', (weak ? 1.3 : mult > 1 ? 1.1 : 0.8) * Math.min(1.5, 0.7 + spd / 1800));
     // gacha hit-stop: a frame of slowdown on EVERY hit, heavier on SE —
@@ -4182,21 +4203,47 @@ export class Battle {
       return;
     }
     if (n.kind === 'rest') {
-      // a real Poké Center: living mons healed, fainted ones revived —
-      // ASC 4+ centers run on fumes (75% heal)
+      // a real StS rest-site call: mend at the Poké Center, or skip the heal
+      // and drill the team instead — the ?-choice board holds the row until
+      // the pick lands. ASC 4+ centers run on fumes (75% heal)
       const healTo = this.asc >= 4 ? 0.75 : 1;
-      let revived = 0;
-      for (const p of this.players) {
-        if (p.dead) {
-          p.dead = false;
-          revived++;
-        }
-        p.hp = Math.round(p.maxHp * healTo);
-      }
-      this.mapNote = (revived
-        ? `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}, ${revived} REVIVED`
-        : `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}`);
-      sfx('heal');
+      this.eventChoice = {
+        prompt: 'A POKÉ CENTER — REST THE TEAM, OR TRAIN THROUGH?',
+        art: { mon: 113 }, // Chansey keeps the counter
+        options: [
+          {
+            label: `POKÉ CENTER — HEAL${healTo < 1 ? ' 75%' : ''} + REVIVE`,
+            icon: 'potion',
+            run: (b) => {
+              let revived = 0;
+              for (const p of b.players) {
+                if (p.dead) {
+                  p.dead = false;
+                  revived++;
+                }
+                p.hp = Math.round(p.maxHp * healTo);
+              }
+              sfx('heal');
+              return {
+                note: revived
+                  ? `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}, ${revived} REVIVED`
+                  : `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}`,
+                skip: true,
+              };
+            },
+          },
+          {
+            label: 'TRAIN HARD — +3 LEVELS, NO HEAL',
+            icon: 'macho-brace',
+            run: (b) => {
+              for (const p of b.players) if (!p.dead) b.gainLevels(p, 3);
+              return { note: 'A HARD WORKOUT — EVERYONE +3 LEVELS!', skip: true };
+            },
+          },
+        ],
+        node: n,
+      };
+      this.cardT = 0;
     } else if (n.kind === 'mart') {
       // Poké Mart: the ?-choice box doubles as a shop board — buys re-prompt
       // the shelf until LEAVE, score is the wallet
@@ -6934,7 +6981,7 @@ export class Battle {
     if (sig !== this.aimCache.sig) {
       this.aimCache.sig = sig;
       const speed =
-        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * u.launch * (0.4 + 0.6 * (maxed ? 1 : frac));
+        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : 1) * u.launch * (0.4 + 0.6 * (maxed ? 1 : frac));
       let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
       const dots: Vec[] = [];
       let hit: Unit | null = null;
@@ -6960,7 +7007,7 @@ export class Battle {
           if (resolveBlock(sb, b)) { sx = sb.x; sy = sb.y; svx = sb.vx; svy = sb.vy; bounced = true; }
         }
         for (const hz of this.hazards) {
-          if (!isSolid(hz, u.def)) continue;
+          if (u.airborne || !isSolid(hz, u.def)) continue;
           sb.x = sx; sb.y = sy; sb.vx = svx; sb.vy = svy;
           if (resolveZone(sb, hz)) { sx = sb.x; sy = sb.y; svx = sb.vx; svy = sb.vy; bounced = true; }
         }

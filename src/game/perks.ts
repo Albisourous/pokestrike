@@ -194,9 +194,18 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'expshare', name: 'Exp. Share', item: 'exp-share',
-    desc: 'team heals 8% on every KO',
+    desc: 'team heals 8% on every KO; every 60s: weakest ally +1 level',
     rarity: 'uncommon',
     apply: (b) => { b.koHeal += 0.08; },
+    tick: (b, dt) => {
+      const st = tSt(b);
+      st.expshare = (st.expshare || 0) + dt;
+      if (st.expshare < 60) return;
+      st.expshare -= 60;
+      // canon Exp. Share: experience trickles to the mon falling behind
+      const weak = b.players.filter((p) => !p.dead).sort((a, z) => a.lvl - z.lvl)[0];
+      if (weak) b.gainLevels(weak, 1);
+    },
   },
   {
     id: 'ultraball', name: 'Ultra Ball', item: 'ultra-ball',
@@ -302,9 +311,16 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'luckyegg', name: 'Lucky Egg', item: 'lucky-egg',
-    desc: '+30% score from damage',
+    desc: '+30% score from damage; every 30s: +25 score',
     rarity: 'uncommon',
     apply: (b) => { b.scoreMult += 0.3; },
+    tick: (b, dt) => {
+      const st = tSt(b);
+      st.luckyegg = (st.luckyegg || 0) + dt;
+      if (st.luckyegg < 30) return;
+      st.luckyegg -= 30;
+      b.score += 25;
+    },
   },
   {
     id: 'timerball', name: 'Timer Ball', item: 'poke-ball',
@@ -417,10 +433,17 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'soothebell', name: 'Soothe Bell', item: 'shell-bell',
-    desc: 'ally bumps add +15% hit damage this shot',
+    desc: 'ally bumps add +15% hit damage this shot; every 4s: team mends 2%',
     rarity: 'rare',
     minRank: 1,
     apply: (b) => { b.volleyBoost += 0.15; },
+    tick: (b, dt) => {
+      const st = tSt(b);
+      st.soothe = (st.soothe || 0) + dt;
+      if (st.soothe < 4) return;
+      st.soothe -= 4;
+      heal(0.02)(b); // the bell's calm knits the team — a slow leftovers
+    },
   },
   {
     id: 'wpolicy', name: 'Weakness Policy', item: 'weakness-policy',
