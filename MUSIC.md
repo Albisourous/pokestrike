@@ -101,8 +101,8 @@ Mood families for typed content (default call, adjust by ear):
 
 ## Later (only when the backlog is dry)
 
-- Draft/reward variant of the title loop so menus don't share one tune.
-- Weather rain/sand noise bed — needs a looping noise source (the one
+- [x] Draft/reward variant of the title loop so menus don't share one tune.
+- [x] Weather rain/sand noise bed — needs a looping noise source (the one
   allowed sequencer addition); weather already rolls per wave.
 - Intensity layers (kit drops during aim, returns on launch) — real
   machinery, only with a written design.

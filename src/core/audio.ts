@@ -81,6 +81,7 @@ export function unlockAudio() {
     gBus.oversample = '2x';
     gBus.connect(mGain);
     restart();
+    weatherBed(bedWant); // a bed requested before the first gesture arms here
   } catch {
     ac = null;
   }
@@ -411,7 +412,7 @@ export interface Track {
 }
 export type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win'
   | 'battle_grove' | 'battle_cavern' | 'battle_volcano' | 'battle_sky'
-  | 'trainer_forge';
+  | 'trainer_forge' | 'draft_theme' | 'reward_theme';
 
 function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0, vib = 0, dest?: AudioNode) {
   if (!ac || !mGain) return;
@@ -440,15 +441,20 @@ function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: nu
 }
 
 let nbuf: AudioBuffer | null = null;
-function mnoise(t0: number, dur: number, freq: number, vol: number) {
-  if (!ac || !mGain) return;
-  if (!nbuf) {
+// the shared 1s white-noise buffer — hats/snares slice it, the weather
+// bed loops it. Built lazily on first use (needs a live context).
+function noiseBuf() {
+  if (!nbuf && ac) {
     nbuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = nbuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
+  return nbuf;
+}
+function mnoise(t0: number, dur: number, freq: number, vol: number) {
+  if (!ac || !mGain) return;
   const s = ac.createBufferSource();
-  s.buffer = nbuf;
+  s.buffer = noiseBuf();
   const f = ac.createBiquadFilter();
   f.type = 'bandpass';
   f.frequency.value = freq;
@@ -742,6 +748,35 @@ const skyAlt = [
   81, 0, 83, 0, 84, 0, 0, 0,
 ];
 
+// Menu pair (MUSIC.md 'Later'): the title loop's calmer sisters for the
+// non-combat screens. Same triangle whistle and home-key C, but sparse,
+// slow, and lydian-colored — the F# / D-major II bar is the tell. harm
+// reuses the CLYD pool like grove does.
+const draftLead = [
+  76, 0, 0, 0, 79, 0, 0, 0, // E5 G5 — the title's first two notes, calmer
+  78, 0, 0, 0, 81, 0, 0, 0, // F#5 A5 — the lydian wink
+  79, 0, 0, 0, 76, 0, 0, 0, // G5 E5 — settle
+  74, 0, 0, 0, 72, 0, 0, 0, // D5 C5 — home
+];
+const draftAlt = [ // A': reaches up to C6, then drifts back down the scale
+  76, 0, 0, 0, 79, 0, 0, 0,
+  81, 0, 0, 0, 84, 0, 0, 0,
+  83, 0, 0, 0, 81, 0, 0, 0, // B5 A5 — the maj7 hangs warm over C
+  79, 0, 0, 0, 74, 0, 0, 0,
+];
+const rewardLead = [ // a touch brighter — the run the win fanfare would take at rest
+  72, 0, 76, 0, 79, 0, 84, 0, // C5 E5 G5 C6 — a soft fanfare shape
+  81, 0, 79, 0, 76, 0, 74, 0, // tumble down over G
+  76, 0, 0, 0, 81, 0, 79, 0, // E5, then A5 G5 over Am
+  78, 0, 81, 0, 83, 0, 0, 0, // F#5 A5 B5 over D — climbs into the loop
+];
+const rewardAlt = [ // A': the run inverted, cresting on D6 before letting go
+  76, 0, 79, 0, 81, 0, 84, 0,
+  83, 0, 81, 0, 79, 0, 76, 0,
+  79, 0, 0, 0, 84, 0, 81, 0,
+  86, 0, 84, 0, 81, 0, 0, 0,
+];
+
 // Partial: TrackName lists every planned song, but unwritten names have
 // no data yet — the selector falls back to 'battle' before music() ever
 // sees them, and restart() refuses to arm a missing track.
@@ -775,6 +810,70 @@ export const TRACKS: Partial<Record<TrackName, Track>> = {
     kick: 'k.......'.repeat(7) + 'k.......',
     snare: '.'.repeat(64), // no snare in the menu theme — rests, not a short string
     hat: '..h...h.'.repeat(8),
+    loop: true,
+  },
+  draft_theme: {
+    // title palette for the pick screen — same triangle whistle, slower,
+    // C-lydian (the D-major II bar + F# in the line are the tell).
+    // Staggered arp tones ring ~2.6s and blur into a soft pad; the kit is
+    // a half-time heartbeat and one hat tick per bar, snare stays home.
+    bpm: 92,
+    leadWave: 'triangle',
+    vib: 2,
+    leadGate: 1.6, // notes ring past the beat — soft, not chiptune-tight
+    arpGate: 8, // chord tones sustain — a pad, not plucks (the map trick)
+    swing: 0.05,
+    echo: 0.28,
+    lead: draftLead,
+    harm: draftLead.map((n) => (n ? clyd3(n) : 0)),
+    alt: draftAlt,
+    altHarm: draftAlt.map((n) => (n ? clyd3(n) : 0)),
+    arp: [
+      60, 0, 0, 64, 0, 0, 67, 0, // C
+      62, 0, 0, 66, 0, 0, 69, 0, // D — the lydian II
+      60, 0, 0, 64, 0, 0, 67, 0, // C home
+      55, 0, 0, 59, 0, 0, 62, 0, // G — falls open
+    ],
+    bass: [
+      36, 0, 0, 0, 0, 0, 0, 0, // C2 pedal
+      38, 0, 0, 0, 0, 0, 0, 0, // D2 — the lydian II root
+      36, 0, 0, 0, 0, 0, 0, 0, // home
+      43, 0, 0, 0, 45, 0, 47, 0, // G, then A-B walks the loop back to C
+    ],
+    kick: 'k.......' + '........' + 'k.......' + '........', // half-time heartbeat
+    snare: '.'.repeat(32),
+    hat: '....h...'.repeat(4), // one tick on beat 3, nothing more
+    loop: true,
+  },
+  reward_theme: {
+    // the result-screen sister — same calm, a touch brighter and faster.
+    // C G Am D, so the last bar's D-major II cadences the loop back to C.
+    bpm: 100,
+    leadWave: 'triangle',
+    vib: 2,
+    leadGate: 1.4,
+    arpGate: 7,
+    swing: 0.04,
+    echo: 0.24,
+    lead: rewardLead,
+    harm: rewardLead.map((n) => (n ? clyd3(n) : 0)),
+    alt: rewardAlt,
+    altHarm: rewardAlt.map((n) => (n ? clyd3(n) : 0)),
+    arp: [
+      60, 0, 64, 0, 67, 0, 72, 0, // C
+      55, 0, 59, 0, 62, 0, 67, 0, // G
+      57, 0, 60, 0, 64, 0, 69, 0, // Am
+      62, 0, 66, 0, 69, 0, 74, 0, // D — the lydian II cadence back home
+    ],
+    bass: [
+      36, 0, 0, 0, 48, 0, 0, 0, // C, octave lift on beat 3
+      43, 0, 0, 0, 50, 0, 0, 0, // G w/ fifth
+      45, 0, 0, 0, 52, 0, 0, 0, // A w/ fifth
+      38, 0, 0, 0, 42, 0, 45, 47, // D, then F#-A-B stairs up to the loop's C
+    ],
+    kick: 'k.......' + '........' + 'k.......' + '........', // half-time
+    snare: '.'.repeat(32),
+    hat: '..h...h.'.repeat(4), // the title's own pattern — the family tell
     loop: true,
   },
   battle: {
@@ -1250,6 +1349,50 @@ function pump() {
       tr = TRACKS[curTrack]!; // a looping track can't unwrite itself
     }
   }
+}
+
+// --- weather bed (MUSIC.md 'Later'): one looping filtered-noise layer ---
+// Hung on mGain — pre-lowpass, same as the voices — so the music slider
+// and master mute govern it; it never touches the sfx path. Rain is a
+// gentle hiss; hail retunes the same layer brighter and a touch louder,
+// the patter reading harder. null fades the bed out over ~0.4s.
+export type BedKind = 'rain' | 'hail' | 'sand' | 'wind';
+const BED_TUNE: Record<BedKind, { freq: number; gain: number }> = {
+  rain: { freq: 1200, gain: 0.05 },
+  hail: { freq: 4200, gain: 0.06 },
+  // the game's weather enum is sand/sun/wind — sand grinds low, wind whistles
+  sand: { freq: 800, gain: 0.06 },
+  wind: { freq: 2600, gain: 0.04 },
+};
+let bedNodes: { src: AudioBufferSourceNode; f: BiquadFilterNode; g: GainNode; kind: BedKind } | null = null;
+let bedWant: BedKind | null = null; // desired state — a pre-unlock call arms lazily like curTrack
+
+export function weatherBed(kind: BedKind | null) {
+  bedWant = kind;
+  if (!ac || !mGain || bedNodes?.kind === kind) return;
+  const t0 = ac.currentTime;
+  if (bedNodes) { // old layer out — 0.4s fade, then stop() frees the node
+    bedNodes.g.gain.cancelScheduledValues(t0);
+    bedNodes.g.gain.setValueAtTime(bedNodes.g.gain.value, t0);
+    bedNodes.g.gain.linearRampToValueAtTime(0, t0 + 0.4);
+    bedNodes.src.stop(t0 + 0.45);
+    bedNodes = null;
+  }
+  if (!kind) return;
+  const p = BED_TUNE[kind];
+  const src = ac.createBufferSource();
+  src.buffer = noiseBuf();
+  src.loop = true;
+  const f = ac.createBiquadFilter();
+  f.type = 'lowpass';
+  f.frequency.value = p.freq;
+  f.Q.value = 0.7;
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0, t0);
+  g.gain.linearRampToValueAtTime(p.gain, t0 + 0.6); // swells in under the song
+  src.connect(f).connect(g).connect(mGain);
+  src.start(t0, Math.random());
+  bedNodes = { src, f, g, kind };
 }
 
 // Mobile haptics; silently absent where unsupported (iOS Safari).

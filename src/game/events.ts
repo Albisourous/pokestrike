@@ -3,6 +3,7 @@
 // ambushes (alpha, thief) swap the row's wave for a scripted one that
 // still pays normal battle rewards.
 import type { Battle } from './battle';
+import type { RegionMap } from './map';
 import { pickWild } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
@@ -61,6 +62,14 @@ const gridWave = (b: Battle, ids: number[]): WaveSpawn[] =>
     const def = speciesById(id);
     return def ? [{ def, nx, ny: 0.2 + Math.floor(i / 2) * 0.3 }] : [];
   });
+
+// the climb map is battle-private — the seer reads it like smoke does,
+// never touching the roll stream
+const nextGym = (b: Battle) => {
+  const nodes = (b as unknown as { region: RegionMap }).region.nodes;
+  const row = nodes[b.mapNode]?.row ?? -1;
+  return nodes.find((n) => n.kind === 'gym' && n.row > row);
+};
 
 const EVENTS: GameEvent[] = [
   {
@@ -552,6 +561,33 @@ const EVENTS: GameEvent[] = [
         skip: true,
       };
     },
+  },
+  {
+    // the fortune teller — StS's scout: sell the next gym's sign so the
+    // player can route around it. Leaves the pool once the last gym is behind.
+    w: 2,
+    skip: (b) => !nextGym(b),
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A SEER MISTS HER CRYSTAL — A READING IS 50 SCORE.',
+        art: { npc: 'elder_f_down_0' }, // the channeler — Gen 3's hooded mystic
+        options: [
+          {
+            label: 'PAY 50 SCORE',
+            cost: 50,
+            run: (bb) => {
+              const g = nextGym(bb);
+              if (!g?.ttype) return { note: 'THE SEER SEES ONLY THE LEAGUE CROWN.', skip: true };
+              if (bb.score < 50) return { note: '"COIN BUYS SIGHT," SHE MURMURS.', skip: true };
+              bb.score -= 50;
+              return { note: `THE SEER WHISPERS — A ${g.ttype.toUpperCase()} GYM WAITS AHEAD.`, skip: true };
+            },
+          },
+          { label: 'WALK AWAY', run: () => ({ note: 'THE CRYSTAL DIMMED.', skip: true }) },
+        ],
+      },
+    }),
   },
 ];
 

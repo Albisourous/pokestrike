@@ -1,7 +1,7 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
-import { sfx, buzz, cry, music, playJingle, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
+import { sfx, buzz, cry, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById, ASC_MODS } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
@@ -132,6 +132,7 @@ interface Orb {
   hostile?: boolean; // boss orbs hunt players instead of enemies
   src?: Unit; // hostile orbs carry their caster so damage knobs still apply
   drain?: boolean; // the hit feeds the team — grass seed flares
+  spd?: number; // override the 620 u/s cruise — aura lock-ons fly faster
 }
 // Expanding shockwave: the front sweeps outward and hits each enemy once
 // when it reaches them — fire blast, psychic ring.
@@ -1506,13 +1507,22 @@ export class Battle {
       }
       return;
     }
-    // scene music follows the phase: ambient on the map, the gym-leader
-    // theme under any boss (aces, alphas, invaders, rivals), the march
-    // under trainers, the wild loop everywhere else
+    // scene music follows the phase: ambient on the map, the calm theme over
+    // the offer board, the gym-leader theme under any boss (aces, alphas,
+    // invaders, rivals), the march under trainers, the wild loop everywhere else
     if (this.phase === 'map') music('map');
+    else if (this.phase === 'reward') music('reward_theme');
     else if (this.phase !== 'won' && this.phase !== 'lost') {
       music(this.enemies.some((e) => e.boss) || this.inRival ? 'gym' : this.inTrainer ? TRAINER_TRACK[this.waveType ?? ''] ?? 'trainer' : BIOME_TRACK[this.theme] ?? 'battle');
     }
+    // the weather bed rides the same phases the fight does — silence on the map
+    weatherBed(
+      this.phase !== 'map' && this.phase !== 'won' && this.phase !== 'lost'
+        ? this.weather === 'sand' || this.weather === 'wind'
+          ? this.weather
+          : null
+        : null,
+    );
     // hit-stop: freeze-frame feel on big combos
     const hit = this.hitStop > 0;
     if (hit) this.hitStop -= dt0;
@@ -1927,8 +1937,9 @@ export class Battle {
       // corkscrew in — each orb wobbles off-axis so the trio reads as
       // three separate swimmers, not a blob
       const perp = Math.sin(this.time * 14 + o.wob) * 0.45;
-      o.x += (dir.x - dir.y * perp) * 620 * dt;
-      o.y += (dir.y + dir.x * perp) * 620 * dt;
+      const v = o.spd ?? 620;
+      o.x += (dir.x - dir.y * perp) * v * dt;
+      o.y += (dir.y + dir.x * perp) * v * dt;
       // bubble trail
       if (dist(o, o.target) < o.target.r + 6) {
         if (o.hostile) {
@@ -2950,6 +2961,60 @@ export class Battle {
         this.hurt(t, need > 0 ? need : bumpDmg(t, 0.5), '#f8f8d8'); // under it already — chip, never whiff
         this.impact(t.x, t.y, '#f8f8f8', 1.5);
         sfx('hit');
+        return true;
+      }
+      case 'AURA SPHERE': { // canon never misses — the orb homes on the
+        // nearest mark, phases through every rock and retargets on a kill,
+        // so the lock-on literally cannot whiff
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        this.orbs.push({ x: p.x, y: p.y, target: t, dmg: bumpDmg(t, 2.2), t: 3, wob: 0, color: '#30c8f0', spd: 1150 });
+        this.texts.push({ x: t.x, y: t.y - t.r - 40, text: 'LOCKED ON!', t: 0.9, color: '#9df0ff', big: false });
+        this.screenFlash('#30c8f0', 0.14);
+        sfx('beam');
+        return true;
+      }
+      case 'SACRED SWORD': { // canon ignores the target's stat changes —
+        // the honest port is true damage: the blade pays no heed to defense
+        const t =
+          foes.filter((e) => dist(p, e) <= 340).sort((a, b) => b.maxHp - a.maxHp)[0] ?? // toughest in reach
+          foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0]; // none close — it still cuts the nearest
+        const d = norm({ x: t.x - p.x, y: t.y - p.y });
+        for (let i = -1; i <= 1; i++) // one swing, a fan of three cut-lines
+          this.beams.push({
+            x1: t.x - d.x * 60 + d.y * i * 18, y1: t.y - d.y * 60 - d.x * i * 18,
+            x2: t.x + d.x * 60 + d.y * i * 18, y2: t.y + d.y * 60 - d.x * i * 18,
+            t: 0.35, life: 0.35, color: '#e8e8f8', w: 3,
+          });
+        // true damage: back the defender's mit term out of the super's own
+        // roll — type, combo and pow still ride along (mit = 60/(60+stat))
+        const mitStat = bumpIsPhysical(src.def.type) ? t.def.stats.def : t.def.stats.spd;
+        this.hurt(t, Math.round((bumpDmg(t, 1.9) * (60 + mitStat)) / 60), '#e8e8f8');
+        this.impact(t.x, t.y, '#e8e8f8', 1.8);
+        this.texts.push({ x: t.x, y: t.y - t.r - 40, text: 'CUTS THROUGH!', t: 0.9, color: '#e8e8f8', big: false });
+        this.hitStop = Math.max(this.hitStop, 0.2);
+        this.addShake(11);
+        sfx('hit');
+        return true;
+      }
+      case 'DARK VOID': { // the void opens on a beat — everything it
+        // swallows oversleeps. `timer` (the attack clock) is the engine's
+        // sleep: +2 turns beats any flinch in the table
+        const tx = fattest.x, ty = fattest.y; // the dark pulls at the biggest threat
+        this.waves.push({ x: tx, y: ty, r: 0, maxR: 250, t: 0.9, life: 0.9, color: '#705898', hits: new Set() });
+        this.texts.push({ x: tx, y: ty - 130, text: 'THE AIR GOES DARK', t: 1.2, color: '#b098e8', big: true });
+        sfx('warn');
+        this.later(0.9, () => {
+          this.screenFlash('#403050', 0.3);
+          this.impact(tx, ty, '#705898', 2);
+          this.addShake(12);
+          for (const e of this.enemies) {
+            if (e.dead || Math.hypot(e.x - tx, e.y - ty) > 250 + e.r) continue;
+            e.timer += 2; // asleep — its attack clock slips two turns
+            this.hurt(e, bumpDmg(e, 0.7), '#b098e8');
+            this.texts.push({ x: e.x, y: e.y - e.r - 30, text: 'Z Z Z', t: 1.1, color: '#b098e8', big: false });
+          }
+          sfx('wave');
+        });
         return true;
       }
     }

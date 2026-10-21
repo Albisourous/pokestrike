@@ -74,6 +74,7 @@ import {
   MAP_MENU,
   TEAM_PANEL,
   MENU_CLOSE,
+  MENU_QUIT,
   drawTeamMenu,
   SETTINGS_PANEL,
   SETTINGS_CLOSE,
@@ -607,12 +608,13 @@ async function shareResult() {
 
 // --- input routing ---
 
-// title+draft share the title loop; result keeps whatever the battle queued.
+// title keeps the title loop; the pick screens get the calmer draft theme;
+// result keeps whatever the battle queued.
 // battle picks its own track every frame (map/gym/trainer/wild) — stepping in
 // here would flip-flop and restart the song on every drag
 function sceneMusic() {
   if (scene === 'result' || scene === 'battle') return;
-  music('title');
+  music(scene === 'draft' || scene === 'charm' ? 'draft_theme' : 'title');
 }
 
 // the ? chip's one gate, read by both the hit-test and the draw: the dealt
@@ -917,6 +919,19 @@ canvas.addEventListener('pointerdown', (e) => {
     // the team panel is modal over the map AND the reward screen — CLOSE
     // or a tap outside dismisses; inside, roster ops only
     if (battle && menuOpen && (battle.phase === 'map' || battle.phase === 'reward')) {
+      // QUIT leaves the run to its parked pk_run — CONTINUE picks it back up;
+      // bankRun catches panel-made swaps on the map, and mid-reward
+      // snapshot() is null anyway so the map-entry bank stands
+      if (inRect(p.x, p.y, MENU_QUIT)) {
+        sfx('ui');
+        bankRun();
+        menuOpen = false;
+        battle = null;
+        scene = 'title';
+        titleSave = runSave();
+        sceneMusic();
+        return;
+      }
       if (inRect(p.x, p.y, MENU_CLOSE) || !inRect(p.x, p.y, TEAM_PANEL)) {
         menuOpen = false;
         battle.boxSel = -1;
