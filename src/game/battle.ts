@@ -565,7 +565,7 @@ export class Battle {
     public arena: Rect,
     team: SpeciesDef[],
     public stage: StageDef,
-    private rng: () => number = Math.random,
+    private rng: () => number,
     bag: string[] = [], // run-start bag picks (pk_bag ids) — applied below
   ) {
     this.theme = stage.theme;
@@ -1325,6 +1325,18 @@ export class Battle {
     this.shots++;
     if (this.ultIn > 0) this.ultIn--; // every shot banks charge toward the ultimate
     this.waveShots++; // anti-stall pressure counts shots inside the wave
+    if (this.waveShots === 11) {
+      // the pressure ramp just went live — say so once, or the heavier
+      // volleys read as a bug (waveShots past 10 is what feeds it)
+      this.texts.push({
+        x: this.arena.x + this.arena.w / 2,
+        y: this.arena.y + this.arena.h / 2,
+        text: 'THE PACK FIGHTS BACK HARDER!',
+        t: 1.4, color: '#ff6b6b', big: true,
+      });
+      this.screenFlash('#ff6b6b', 0.15);
+      sfx('invade');
+    }
     this.addShake(5);
     this.addPunch(0.03);
     this.burst(u.x, u.y, TYPE_COLOR[u.def.type], 14, 400);
@@ -4335,9 +4347,7 @@ export class Battle {
     this.later(Math.max(0, attacks.length - 1) * 0.28 + 0.35, () => {
       if (this.phase !== 'enemy') return;
       if (this.players.every((p) => p.dead) && !this.ashRevive()) {
-        this.phase = 'lost';
-        this.screenFlash('#ff6b6b', 0.3);
-        sfx('lose');
+        this.wipe();
         return;
       }
       this.nextTurn();
@@ -4487,7 +4497,15 @@ export class Battle {
     }
     // nobody left standing — a stocked sacred ash burns to undo the wipe
     if (this.ashRevive()) return this.nextTurn();
+    this.wipe();
+  }
+
+  // the wipe lands the same wherever it's routed from — the red flash and
+  // the sting are how a run says it's over
+  private wipe() {
     this.phase = 'lost';
+    this.screenFlash('#ff6b6b', 0.3);
+    sfx('lose');
   }
 
   // sacred ash: a full team wipe consumes the charm instead — everyone

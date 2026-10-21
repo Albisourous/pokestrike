@@ -1099,7 +1099,15 @@ addEventListener('keydown', (e) => {
       return;
     }
   }
-  if (e.key === 'Escape' || e.key === '?') {
+  // Esc pops the topmost overlay first — board paints over ach over dex —
+  // and only reaches the manual once the screen is bare; '?' still opens
+  // help over anything, same as tapping the chip
+  if (e.key === 'Escape' && (boardOpen || achOpen || dexOpen)) {
+    if (boardOpen) boardOpen = false;
+    else if (achOpen) achOpen = false;
+    else dexOpen = false;
+    sfx('ui');
+  } else if (e.key === 'Escape' || e.key === '?') {
     helpOpen = true;
     helpPage = 0;
   } else if ((e.key === 'p' || e.key === 'P') && battle && (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy')) {
