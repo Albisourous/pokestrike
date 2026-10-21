@@ -990,6 +990,51 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // twin moats — two liquid bands with offset bridges; non-swimmers snake
+  // the flank crossings while mines fence the detours
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '14S0S0S41',
+    '130333031',
+    '10S0S0S01',
+    '1S00000S1',
+    '133303331',
+    '1040S0401',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // funnel — mirrored slabs converge off the door corners; banked shots
+  // drop through the spout into the pack
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '1220S0221',
+    '1022S2201',
+    '1S02S20S1',
+    '10S0S0S01',
+    '100S0S001',
+    '100000001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // minefield — five mines seeded mid-court between pocketed corners;
+  // anchors thread the rows straight through the field
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '1220S0221',
+    '120S0S021',
+    '10S4S4S01',
+    '100040001',
+    '10S4S4S01',
+    '120S0S021',
+    '122000221',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 // Gym arenas stay open — the leader fight is the spectacle, so no
 // furniture; the entourage still enters on the anchor ring.
