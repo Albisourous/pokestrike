@@ -429,6 +429,58 @@ export const PERKS: Perk[] = [
   },
 ];
 
+// --- bag items: persistent consumables -----------------------------------
+// Banked on gym wins (pk_bag in meta.ts), ≤2 picked at run start, applied
+// when the Battle constructs — same apply() shape as perks but no rarity:
+// they never appear on the offer boards.
+export interface BagItem {
+  id: string;
+  name: string;
+  item: string; // sprite name in public/sprites/items/
+  desc: string;
+  apply: (b: Battle) => void;
+  // durable items bake their effect into already-saved state (levels ride in
+  // team[].lvl), so a resume must skip re-applying them or they'd double
+  durable?: boolean;
+}
+
+export const BAG_ITEMS: BagItem[] = [
+  {
+    id: 'exp-share', name: 'Exp Share', item: 'exp-share',
+    desc: 'team starts 2 levels up',
+    apply: (b) => b.players.forEach((p) => b.gainLevels(p, 2)),
+    durable: true, // the +2 lives in team[].lvl — re-applying on resume would double it
+  },
+  {
+    id: 'master-ball', name: 'Master Ball', item: 'master-ball',
+    desc: 'first catch of the run is guaranteed',
+    apply: (b) => { b.masterArmed = true; },
+  },
+  {
+    id: 'friend-ball', name: 'Friend Ball', item: 'friend-ball',
+    desc: '+8% catch chance all run',
+    apply: (b) => { b.captureChance += 0.08; },
+  },
+  {
+    id: 'macho-brace', name: 'Macho Brace', item: 'macho-brace',
+    desc: '+20% score, -8% launch speed',
+    apply: (b) => {
+      b.scoreMult += 0.2;
+      b.launchBoost *= 0.92;
+    },
+  },
+  {
+    id: 'scope-lens', name: 'Scope Lens', item: 'scope-lens',
+    desc: '15% chance hits crit x2',
+    apply: (b) => { b.critCh += 0.15; },
+  },
+  {
+    id: 'sacred-ash', name: 'Sacred Ash', item: 'sacred-ash',
+    desc: 'a wipe revives the team at 30% once',
+    apply: (b) => { b.ashArmed = true; },
+  },
+];
+
 // Roll a rarity tier, then pick within it — an empty tier trickles down to
 // the next lower one (StS-style), so commons stay common but no slot ever
 // comes up blank. Legendary 4% / rare 12% / uncommon 34% / common 50%.
@@ -436,11 +488,12 @@ export const PERKS: Perk[] = [
 const TIERS: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
 // `types` filters type charms to types the team actually fields — a charm
 // for a type you don't run is a dead offer
-export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>): Perk[] {
+export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>, ban?: Set<string>): Perk[] {
   const pool = PERKS.filter(
     (p) =>
       (p.minRank == null || p.minRank <= rank) &&
-      (!p.id.startsWith('type-') || !types || types.has(p.id.slice(5))),
+      (!p.id.startsWith('type-') || !types || types.has(p.id.slice(5))) &&
+      !ban?.has(p.id), // banished ids stay out of every board for the rest of the run
   );
   const out: Perk[] = [];
   for (let i = 0; i < 3 && pool.length; i++) {

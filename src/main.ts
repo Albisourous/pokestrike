@@ -1,6 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, cry, music, toggleMute } from './core/audio';
+import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -33,16 +33,24 @@ import {
   DAILY_BTN,
   HELP_BTN,
   HELP_CHIP,
+  GEAR_BTN,
   MUTE_CHIP,
   drawHelpChip,
   drawMuteChip,
   MUTE_BTN,
   DRAFT_REROLL,
   REEL_STOPS,
+  BAG_ROW,
+  BAG_MAX,
+  bagChipRect,
+  bagRowItems,
   drawHelp,
   drawPerkPick,
   CHARM_SKIP,
-  REWARD_SKIP,
+  TOOL_ROLL,
+  TOOL_SKIP,
+  TOOL_BAN,
+  drawToolRow,
   REWARD_TEAM,
   REWARD_CATCH,
   HELP_PANEL,
@@ -63,6 +71,18 @@ import {
   TEAM_PANEL,
   MENU_CLOSE,
   drawTeamMenu,
+  SETTINGS_PANEL,
+  SETTINGS_CLOSE,
+  SETTINGS_CATS,
+  drawSettings,
+  settingsRowHit,
+  settingsSliderSet,
+  settingsToggleFlip,
+  TASKS_BTN,
+  TASKS_TABS,
+  drawTasks,
+  taskRowHit,
+  settingsSegSet,
   inRect,
   font,
   fontB,
@@ -72,7 +92,8 @@ import {
   titlePointerCancel,
   updateTitle,
 } from './game/screens';
-import type { RunResult, ShareGrid } from './game/screens';
+import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey } from './game/screens';
+import { taskViews, claimTask, taskTick, type TaskPeriod } from './game/tasks';
 import type { PokeType } from './game/types';
 
 type Scene = 'loading' | 'title' | 'draft' | 'charm' | 'battle' | 'result';
@@ -107,6 +128,10 @@ let draft: {
 };
 // the run's draft pool — roster plus captured-dex species not already in it
 let draftPool: SpeciesDef[] = [];
+// the run's bag picks — ≤2 pk_bag consumables toggled on the draft board,
+// spent the moment the last pick constructs the Battle (never earlier)
+let bagPick = new Set<string>();
+let bagLast: string | null = null; // last tapped chip — its desc rides the row
 let stage = makeStage(randSeed());
 // the run's roll source — always seeded: draft deals and the Battle both
 // draw from it, so every run reproduces from its seed (shares carry it)
@@ -115,6 +140,11 @@ let runIsDaily = false; // a shared-date climb — the share card says so
 let runRng: () => number = Math.random;
 let helpOpen = false;
 let menuOpen = false; // overworld TEAM · ITEMS panel
+let settingsOpen = false;
+let tasksOpen = false;
+let tasksTab: TaskPeriod = 'daily';
+let settingsCat: SettingsCat = 'sound';
+let settingsDrag: { key: SettingsSliderKey } | null = null;
 let helpPage = 0;
 let dexOpen = false;
 let dexScroll = 0;
@@ -131,6 +161,7 @@ let resultExtra: string | null = null;
 let share: ShareGrid | null = null;
 let shareText = '';
 let t = 0;
+let fpsEma = 0; // SHOW FPS counter — smoothed over ~12 live frames
 // gyms already banked this battle — the delta feeds recordGymWin
 let lastGyms = 0;
 let lastPhase = ''; // battle phase last frame — map-entry edges bank the run
@@ -150,8 +181,9 @@ function resize() {
   canvas.style.width = `${vw}px`;
   canvas.style.height = `${vh}px`;
   // dpr 3 phone screens would rasterize a 540x960 game at 3x — 2x is the
-  // point where extra pixels stop being visible but still cost fill-rate
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // point where extra pixels stop being visible but still cost fill-rate.
+  // battery saver halves both the frame rate (loop.ts) and the fill-rate.
+  const dpr = settings().battery ? 1 : Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = vw * dpr;
   canvas.height = vh * dpr;
   scale = Math.min(vw / W, vh / H);
@@ -232,6 +264,97 @@ function draftOffers(): number[] {
   offerCache = offers;
   return offers;
 }
+
+// --- reward-board actions shared by pointer and keys ---------------------
+// pickPerk/declineReward play their own sfx inside battle; the tools don't,
+// so the input layer owns their click.
+
+const rewardPick = (i: number) => {
+  if (!battle || i >= battle.rewardOffers.length) return;
+  const ids = battle.rewardOffers.map((p) => p.id);
+  // an armed banish turns the card tap into a pool kill instead of a pick
+  if (battle.banArmed) {
+    const id = battle.banishPerk(i);
+    if (id != null) {
+      statOffer('perkban', ids, id);
+      sfx('ui');
+    }
+    return;
+  }
+  statOffer('perks', ids, battle.rewardOffers[i].id);
+  battle.pickPerk(i);
+};
+
+const rewardReroll = () => {
+  if (!battle) return;
+  const ids = battle.rewardOffers.map((p) => p.id);
+  if (!battle.rerollOffers()) return;
+  statOffer('perks', ids, null); // rejected board — nobody took it
+  rewardT0 = t; // the reels deal again for the new offers
+  rewardLanded = 0;
+  sfx('ui');
+};
+
+const rewardSkip = () => {
+  if (!battle || battle.phase !== 'reward') return;
+  statOffer('perks', battle.rewardOffers.map((p) => p.id), null);
+  battle.declineReward();
+};
+
+const charmPick = (i: number) => {
+  const perk = startOffers[i];
+  if (!perk) return;
+  sfx('ui');
+  if (battle) {
+    statOffer('perks', startOffers.map((p) => p.id), perk.id);
+    battle.grantPerk(perk);
+    battle.perksTaken++;
+  }
+  startOffers.splice(i, 1);
+  if (charmPicks - 1 > 0 && startOffers.length) {
+    charmPicks--;
+    return; // ascension bonus: take a second
+  }
+  startOffers = [];
+  scene = 'battle';
+  sceneMusic();
+};
+
+// the draft pick shared by pointer and keys — the last pick builds the run
+const draftPick = (i: number) => {
+  if (draft.picked.length >= DRAFT_ROUNDS) return;
+  const offers = draftOffers();
+  if (i >= offers.length) return;
+  sfx('ui');
+  cry(draftPool[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
+  statOffer('draft', offers.map((o) => draftPool[o].id), draftPool[offers[i]].id);
+  draft.picked.push(offers[i]);
+  offerCache = null;
+  respinDraft(); // next round spins a fresh board
+  if (draft.picked.length !== DRAFT_ROUNDS) return;
+  battle = new Battle(arenaRect(), draft.picked.map(draftDef), stage, runRng, [...bagPick]);
+  if (bagPick.size) spendBag([...bagPick]); // run locked — the picks leave the bag
+  menuOpen = false;
+  battle.coach = !coachDone(); // first-ever run teaches by doing
+  battle.rank = rank();
+  battle.asc = Math.min(best().wins, 9); // every clear raises the heat
+  battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
+  battle.shinyRate = shinyCharm() ? 2 : 1; // dex milestone doubles the gold
+  // the last losing team returns as a rival wave — battle eats it
+  const echo = echoIds()
+    ?.map((e) => ({ def: speciesById(e.id), lvl: e.lvl }))
+    .filter((e): e is { def: SpeciesDef; lvl: number } => !!e.def);
+  battle.echo = echo?.length ? echo : null;
+  lastGyms = 0;
+  // ?dev exposes the live battle for poking around during playtests
+  if (new URLSearchParams(location.search).has('dev'))
+    (window as unknown as { __battle: Battle }).__battle = battle;
+  // the charm pick gates the climb — ASC 3+ pays out a second charm
+  startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes());
+  charmBonus = battle.asc >= 3;
+  charmPicks = charmBonus ? 2 : 1;
+  scene = 'charm';
+};
 
 // A run's draft pool is the roster plus everything the dex has caught that
 // isn't already in it — catching mons is how new faces join future drafts.
@@ -335,6 +458,8 @@ function startDraft() {
     const lvl = 5 + Math.floor(Math.pow(runRng(), 1.8) * 10);
     draft.lvls.set(i, lvl);
   });
+  bagPick.clear();
+  bagLast = null;
   offerCache = null;
   respinDraft();
 }
@@ -420,6 +545,62 @@ canvas.addEventListener('pointerdown', (e) => {
     helpDrag = { x0: p.x, y0: p.y, moved: false };
     return;
   }
+  // the settings modal too — tabs switch, sliders grab, toggles flip on
+  // pointerdown; CLOSE or a tap outside dismisses
+  if (settingsOpen) {
+    if (inRect(p.x, p.y, SETTINGS_CLOSE) || !inRect(p.x, p.y, SETTINGS_PANEL)) {
+      settingsOpen = false;
+      settingsDrag = null;
+      sfx('ui');
+      return;
+    }
+    const hit = settingsRowHit(p, settingsCat);
+    if (hit?.kind === 'tab') {
+      const next = SETTINGS_CATS[hit.i].id;
+      if (next !== settingsCat) {
+        settingsCat = next;
+        sfx('ui');
+      }
+      return;
+    }
+    if (hit?.kind === 'slider') {
+      settingsDrag = { key: hit.key };
+      settingsSliderSet(hit.key, p.x); // a tap on the track jumps to x
+      return;
+    }
+    if (hit?.kind === 'toggle') {
+      settingsToggleFlip(hit.key);
+      if (hit.key === 'battery') resize(); // the dpr cap applies now, not on next resize
+      sfx('ui');
+      return;
+    }
+    if (hit?.kind === 'seg') {
+      settingsSegSet(hit.key, hit.i);
+      sfx('ui');
+      return;
+    }
+    return; // dead panel space is still modal
+  }
+  // the tasks board swallows taps while it's up — claim, tab, or close
+  if (tasksOpen) {
+    const hit = taskRowHit(p, tasksTab);
+    if (hit?.kind === 'close') {
+      tasksOpen = false;
+      sfx('ui');
+      return;
+    }
+    if (hit?.kind === 'tab') {
+      tasksTab = TASKS_TABS[hit.i];
+      sfx('ui');
+      return;
+    }
+    if (hit?.kind === 'claim' && hit.i != null) {
+      const v = taskViews(tasksTab)[hit.i];
+      if (v && claimTask(v.id)) sfx('caught'); // the bag pays out
+      return;
+    }
+    return;
+  }
   if (scene === 'title') {
     if (dexOpen || achOpen || boardOpen) {
       dexDrag = { y0: p.y, s0: dexOpen ? dexScroll : achScroll, moved: false };
@@ -442,10 +623,22 @@ canvas.addEventListener('pointerdown', (e) => {
       boardOpen = true;
       return;
     }
+    if (inRect(p.x, p.y, TASKS_BTN)) {
+      sfx('ui');
+      tasksOpen = true;
+      tasksTab = 'daily';
+      return;
+    }
     if (inRect(p.x, p.y, HELP_BTN)) {
       sfx('ui');
       helpOpen = true;
       helpPage = 0;
+      return;
+    }
+    if (inRect(p.x, p.y, GEAR_BTN)) {
+      sfx('ui');
+      settingsOpen = true;
+      settingsCat = 'sound';
       return;
     }
     if (inRect(p.x, p.y, MUTE_BTN)) {
@@ -490,6 +683,26 @@ canvas.addEventListener('pointerdown', (e) => {
     if (titlePointerDown(p)) return;
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
+    // bag chips are their own control — a tap toggles the pick and never
+    // fast-forwards the reels (and the row sits clear of the offer cards)
+    if (inRect(p.x, p.y, BAG_ROW)) {
+      const items = bagRowItems();
+      for (let i = 0; i < items.length; i++) {
+        if (!inRect(p.x, p.y, bagChipRect(i, items.length))) continue;
+        const id = items[i].id;
+        bagLast = id; // even a denied tap shows what the item does
+        if (bagPick.has(id)) {
+          bagPick.delete(id);
+          sfx('ui');
+        } else if (bagPick.size < BAG_MAX) {
+          bagPick.add(id);
+          sfx('ui');
+        } else {
+          sfx('ui', 0.6); // third pick denied — a low thud, no shake
+        }
+        return;
+      }
+    }
     if (draft.rerolls > 0 && inRect(p.x, p.y, DRAFT_REROLL)) {
       rerollDraft();
       return;
@@ -501,37 +714,10 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     const offers = draftOffers();
     for (let i = 0; i < offers.length; i++) {
-      if (!inRect(p.x, p.y, draftCardRect(i))) continue;
-      sfx('ui');
-      cry(draftPool[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
-      statOffer('draft', offers.map((o) => draftPool[o].id), draftPool[offers[i]].id);
-      draft.picked.push(offers[i]);
-      offerCache = null;
-      respinDraft(); // next round spins a fresh board
-      if (draft.picked.length === DRAFT_ROUNDS) {
-        battle = new Battle(arenaRect(), draft.picked.map(draftDef), stage, runRng);
-        menuOpen = false;
-        battle.coach = !coachDone(); // first-ever run teaches by doing
-        battle.rank = rank();
-        battle.asc = Math.min(best().wins, 9); // every clear raises the heat
-        battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
-        battle.shinyRate = shinyCharm() ? 2 : 1; // dex milestone doubles the gold
-        // the last losing team returns as a rival wave — battle eats it
-        const echo = echoIds()
-          ?.map((e) => ({ def: speciesById(e.id), lvl: e.lvl }))
-          .filter((e): e is { def: SpeciesDef; lvl: number } => !!e.def);
-        battle.echo = echo?.length ? echo : null;
-        lastGyms = 0;
-        // ?dev exposes the live battle for poking around during playtests
-        if (new URLSearchParams(location.search).has('dev'))
-          (window as unknown as { __battle: Battle }).__battle = battle;
-        // the charm pick gates the climb — ASC 3+ pays out a second charm
-        startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes());
-        charmBonus = battle.asc >= 3;
-        charmPicks = charmBonus ? 2 : 1;
-        scene = 'charm';
+      if (inRect(p.x, p.y, draftCardRect(i))) {
+        draftPick(i);
+        return;
       }
-      return;
     }
   } else if (scene === 'charm') {
     if (inRect(p.x, p.y, CHARM_SKIP)) {
@@ -545,20 +731,10 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     for (let i = 0; i < startOffers.length; i++) {
-      if (!inRect(p.x, p.y, perkCardRect(i))) continue;
-      const perk = startOffers[i];
-      sfx('ui');
-      if (battle) {
-        statOffer('perks', startOffers.map((p) => p.id), perk.id);
-        battle.grantPerk(perk);
-        battle.perksTaken++;
+      if (inRect(p.x, p.y, perkCardRect(i))) {
+        charmPick(i);
+        return;
       }
-      startOffers.splice(i, 1);
-      if (--charmPicks > 0 && startOffers.length) return; // ascension bonus: take a second
-      startOffers = [];
-      scene = 'battle';
-      sceneMusic();
-      return;
     }
     return;
   } else if (scene === 'battle') {
@@ -634,15 +810,24 @@ canvas.addEventListener('pointerdown', (e) => {
         rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
         return;
       }
+      // the tool row: reroll re-deals, skip cashes out, banish arms a card tap
+      if (inRect(p.x, p.y, TOOL_ROLL)) {
+        rewardReroll();
+        return;
+      }
+      if (inRect(p.x, p.y, TOOL_SKIP)) {
+        rewardSkip();
+        return;
+      }
+      if (inRect(p.x, p.y, TOOL_BAN)) {
+        if (battle.toggleBanish()) sfx('ui');
+        return;
+      }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
         if (inRect(p.x, p.y, perkCardRect(i))) {
-          statOffer('perks', battle.rewardOffers.map((p) => p.id), battle.rewardOffers[i].id);
-          battle.pickPerk(i);
+          rewardPick(i);
+          return;
         }
-      }
-      if (inRect(p.x, p.y, REWARD_SKIP)) {
-        statOffer('perks', battle.rewardOffers.map((p) => p.id), null);
-        battle.declineReward();
       }
       return;
     } else {
@@ -680,6 +865,12 @@ canvas.addEventListener('pointerdown', (e) => {
 
 canvas.addEventListener('pointermove', (e) => {
   const p = toLogical(e);
+  if (settingsDrag) {
+    settingsSliderSet(settingsDrag.key, p.x); // write-through, no click spam
+    syncVolumes(); // master/music are node params — poke them live
+    return;
+  }
+  if (settingsOpen) return;
   if (helpDrag) {
     if (Math.abs(p.x - helpDrag.x0) > 6 || Math.abs(p.y - helpDrag.y0) > 6) helpDrag.moved = true;
     return;
@@ -704,6 +895,12 @@ canvas.addEventListener('pointermove', (e) => {
 });
 
 canvas.addEventListener('pointerup', (e) => {
+  if (settingsDrag) {
+    settingsDrag = null;
+    sfx('ui'); // one click on release, not a stream while dragging
+    return;
+  }
+  if (settingsOpen) return;
   if (helpDrag) {
     const { x0, moved } = helpDrag;
     helpDrag = null;
@@ -762,6 +959,72 @@ addEventListener('keydown', (e) => {
     else if (e.key === 'ArrowLeft') helpPage = Math.max(0, helpPage - 1);
     return;
   }
+  if (tasksOpen) {
+    if (e.key === 'Escape') {
+      tasksOpen = false;
+      sfx('ui');
+    }
+    return;
+  }
+  // Esc dismisses settings — swallowed here so it can't fall through to help
+  if (settingsOpen) {
+    if (e.key === 'Escape') {
+      settingsOpen = false;
+      settingsDrag = null;
+      sfx('ui');
+    }
+    return;
+  }
+  // the dealt boards take keys too — [1..3] picks (or banishes when armed),
+  // R rerolls, Z arms banish, X cashes out; Escape disarms before help opens
+  if (scene === 'draft' && draftLanded >= REEL_STOPS.length) {
+    const i = ['1', '2', '3'].indexOf(e.key);
+    if (i >= 0) {
+      draftPick(i);
+      return;
+    }
+    if ((e.key === 'r' || e.key === 'R') && draft.rerolls > 0) {
+      rerollDraft();
+      return;
+    }
+  }
+  if (scene === 'charm') {
+    const i = ['1', '2', '3'].indexOf(e.key);
+    if (i >= 0 && i < startOffers.length) {
+      charmPick(i);
+      return;
+    }
+  }
+  if (
+    scene === 'battle' &&
+    battle?.phase === 'reward' &&
+    !menuOpen &&
+    !battle.evoChoice &&
+    rewardLanded >= REEL_STOPS.length
+  ) {
+    if (e.key === 'Escape' && battle.banArmed) {
+      battle.toggleBanish();
+      sfx('ui');
+      return;
+    }
+    const i = ['1', '2', '3'].indexOf(e.key);
+    if (i >= 0 && i < battle.rewardOffers.length) {
+      rewardPick(i);
+      return;
+    }
+    if (e.key === 'r' || e.key === 'R') {
+      rewardReroll();
+      return;
+    }
+    if (e.key === 'z' || e.key === 'Z') {
+      if (battle.toggleBanish()) sfx('ui');
+      return;
+    }
+    if (e.key === 'x' || e.key === 'X') {
+      rewardSkip();
+      return;
+    }
+  }
   if (e.key === 'Escape' || e.key === '?') {
     helpOpen = true;
     helpPage = 0;
@@ -778,6 +1041,7 @@ canvas.addEventListener('pointercancel', () => {
   helpDrag = null;
   dexDrag = null;
   boxDrag = null;
+  settingsDrag = null;
   // an interrupt isn't a release — drop the drag, don't fire the shot
   if (scene === 'title') titlePointerCancel();
   if (scene === 'battle') battle?.pointerCancel();
@@ -850,6 +1114,7 @@ document.addEventListener('visibilitychange', () => {
 
 function update(dt: number) {
   t += dt;
+  if (dt > 0) fpsEma = fpsEma ? fpsEma + (1 / dt - fpsEma) * 0.08 : 1 / dt;
   syncWake();
   if (scene === 'title') updateTitle(dt);
   if (scene === 'battle' && battle && !helpOpen) {
@@ -885,6 +1150,19 @@ function update(dt: number) {
       const won = battle.phase === 'won';
       const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
       statRunEnd(stageReached, won);
+      // tasks accrue at run end — abandoned climbs bank nothing
+      taskTick({
+        kos: battle.totalKos,
+        catches: battle.box.length,
+        stages: stageReached,
+        gyms: battle.gymsBeaten,
+        perks: battle.perksTaken,
+        score: battle.score,
+        shinies: battle.shiniesCaught,
+        runs: 1,
+        wins: won ? 1 : 0,
+        maxstage: stageReached,
+      });
       const dexBefore = dexIds().length;
       const prevBest = best().score;
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
@@ -903,6 +1181,8 @@ function update(dt: number) {
       });
       result = {
         won,
+        runNo: best().runs,
+        depth: stageReached,
         shots: battle.shots,
         time: battle.time,
         caught: battle.box.length,
@@ -1042,6 +1322,7 @@ function render() {
         t,
         draft.rerolls,
         { age: t - draftT0, pool: draftPool, idx },
+        { sel: bagPick, last: bagLast },
       );
       break;
     }
@@ -1051,7 +1332,7 @@ function render() {
         ctx.fillRect(0, 0, W, H);
         hud(battle.hardWave ? `${battle.stage.name} · TRAINER` : battle.stage.name);
         battle.render(ctx);
-        if (battle.phase === 'reward')
+        if (battle.phase === 'reward') {
           drawReward(
             ctx,
             battle.rewardOffers,
@@ -1066,7 +1347,10 @@ function render() {
             battle.evoChoice,
             battle.teamLuck(),
             t - rewardT0,
+            battle.perkIds,
           );
+          if (!menuOpen && !battle.evoChoice) drawToolRow(ctx, battle.tools, battle.banArmed, t);
+        }
         if (menuOpen && (battle.phase === 'map' || battle.phase === 'reward'))
           drawTeamMenu(
             ctx,
@@ -1100,6 +1384,8 @@ function render() {
     drawMuteChip(ctx);
   }
   if (helpOpen) drawHelp(ctx, helpPage);
+  if (settingsOpen) drawSettings(ctx, settingsCat, settings());
+  if (tasksOpen) drawTasks(ctx, taskViews(tasksTab), tasksTab, t);
   // playtester lifeline: you can't see their console — a crash paints
   // itself with the run's seed and build, so one screenshot is the report
   if (crash) {
@@ -1121,6 +1407,14 @@ function render() {
     const msg = crash.slice(0, 150);
     for (let i = 0; i < Math.ceil(msg.length / 50); i++)
       ctx.fillText(msg.slice(i * 50, (i + 1) * 50), W / 2, H / 2 - 22 + i * 14);
+  }
+  // SHOW FPS: dim counter in the bottom-right corner — letterbox on tall
+  // screens, the box's bottom edge otherwise; clear of the chips up top
+  if (settings().fps) {
+    ctx.textAlign = 'right';
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#ffffff60';
+    ctx.fillText(`${Math.round(fpsEma)} FPS`, W - 10, H + viewPad - 10);
   }
   ctx.restore();
 }

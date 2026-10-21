@@ -87,18 +87,22 @@ export const bossPow = 1.5;
 export const foePow = 1.25;
 
 // --- Roles, derived from real stats ---
-// Fast mons are combo triggers, defensive mons are tanks, high-SpA frail mons
-// are snipers, high-Atk mons are bruisers, flagged species are healers.
-export type Role = 'speedster' | 'tank' | 'sniper' | 'bruiser' | 'healer' | 'wild';
+// A mon's specialty is its dominant base stat; flagged species are medics.
+// Ties pay out to the first stat in the order below. 'wild' stays in the
+// union for filler enemies — every real species lands a specialty.
+export type Role = 'MEDIC' | 'BULWARK' | 'STRIKER' | 'WARDEN' | 'SNIPER' | 'GUARDIAN' | 'SCOUT' | 'wild';
 
-export const roleOf = (s: Stats, healer = false): Role => {
-  if (healer) return 'healer';
-  if (s.spe >= 90) return 'speedster';
-  if (s.spa >= 100 && s.hp <= 80) return 'sniper';
-  if (s.hp + s.def + s.spd >= 250) return 'tank';
-  if (s.atk >= 100) return 'bruiser';
-  return 'wild';
-};
+// the signature is the species-shaped {stats, healer}; a bare Stats arg keeps
+// older callers passing (def.stats, def.healer) working
+export function roleOf(d: { stats: Stats; healer?: boolean } | Stats, healer = false): Role {
+  const s = 'stats' in d ? d.stats : d;
+  if ('healer' in d ? d.healer : healer) return 'MEDIC';
+  const keys = ['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const;
+  const roles = ['BULWARK', 'STRIKER', 'WARDEN', 'SNIPER', 'GUARDIAN', 'SCOUT'] as const;
+  let best = 0;
+  for (let i = 1; i < keys.length; i++) if (s[keys[i]] > s[keys[best]]) best = i;
+  return roles[best];
+}
 
 export interface RoleMods {
   launch: number; // launch speed multiplier on top of the speed formula
@@ -108,11 +112,14 @@ export interface RoleMods {
   cdMod: number; // shots off the super cooldown
 }
 export const ROLE_MODS: Record<Role, RoleMods> = {
-  speedster: { launch: 1.3, hp: 1, pow: 0.9, range: 1, cdMod: 1 },
-  tank: { launch: 0.8, hp: 1.4, pow: 0.9, range: 1, cdMod: 0 },
-  sniper: { launch: 1, hp: 0.8, pow: 1.35, range: 1.5, cdMod: 0 },
-  bruiser: { launch: 0.95, hp: 1.15, pow: 1.3, range: 1, cdMod: 0 },
-  healer: { launch: 1, hp: 1, pow: 0.8, range: 1, cdMod: 0 },
+  MEDIC: { launch: 1, hp: 1, pow: 0.8, range: 1, cdMod: 0 },
+  // the defensive trio share the old tank kit — bulk is bulk
+  BULWARK: { launch: 0.8, hp: 1.4, pow: 0.9, range: 1, cdMod: 0 },
+  STRIKER: { launch: 0.95, hp: 1.15, pow: 1.3, range: 1, cdMod: 0 },
+  WARDEN: { launch: 0.8, hp: 1.4, pow: 0.9, range: 1, cdMod: 0 },
+  SNIPER: { launch: 1, hp: 0.8, pow: 1.35, range: 1.5, cdMod: 0 },
+  GUARDIAN: { launch: 0.8, hp: 1.4, pow: 0.9, range: 1, cdMod: 0 },
+  SCOUT: { launch: 1.3, hp: 1, pow: 0.9, range: 1, cdMod: 1 },
   wild: { launch: 1, hp: 1.05, pow: 1.05, range: 1, cdMod: 0 },
 };
 

@@ -9,8 +9,9 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump } from '../src/game/meta';
-import { PERKS } from '../src/game/perks';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState } from '../src/game/meta';
+import { PERKS, rollPerks, BAG_ITEMS } from '../src/game/perks';
+import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn } from '../src/game/tasks';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -23,6 +24,60 @@ const ok = (cond: boolean, msg: string) => {
 
 const arena = { x: 30, y: 160, w: 480, h: 620 };
 const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
+
+// --- bag items: pk_bag stock, constructor applies the run-start picks ------
+// NB: must run before any block that KOs a gym boss — a badge earn banks a
+// bag item into pk_bag, so the stock is only pristine here.
+{
+  const seed = bagStock(); // pk_bag never written → the starter kit
+  ok(seed['exp-share'] === 1 && seed['friend-ball'] === 1, `first read seeds the starter kit (${JSON.stringify(seed)})`);
+  ok(localStorage.getItem('pk_bag') === null, 'readers stay read-only — the seed stays virtual');
+  bankBag('scope-lens');
+  let s = bagStock();
+  ok(s['scope-lens'] === 1 && s['exp-share'] === 1 && s['friend-ball'] === 1, 'bankBag +1s onto the virtual seed');
+  bankBag('scope-lens');
+  ok(bagStock()['scope-lens'] === 2, 'bankBag stacks');
+  spendBag(['exp-share', 'friend-ball', 'friend-ball']); // the dupe clamps
+  s = bagStock();
+  ok(!s['exp-share'] && !s['friend-ball'] && s['scope-lens'] === 2, `spendBag decrements and clamps at 0 (${JSON.stringify(s)})`);
+  ok(JSON.parse(localStorage.getItem('pk_bag')!)['friend-ball'] === 0, 'spendBag persists the clamp in one write');
+
+  // every catalog entry: unique ids, real sprites, terse one-line descs
+  ok(BAG_ITEMS.length === 6 && new Set(BAG_ITEMS.map((i) => i.id)).size === 6, 'six bag items, unique ids');
+  ok(BAG_ITEMS.every((i) => existsSync(`public/sprites/items/${i.item}.png`)), 'every bag item has a vendored sprite');
+
+  // the constructor applies each pick's apply() with the team fielded
+  const mb = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['master-ball', 'friend-ball']);
+  ok(mb.masterArmed === true, 'master ball arms the guaranteed first catch');
+  ok(Math.abs(mb.captureChance - 0.14) < 1e-9, `friend ball adds catch chance (${mb.captureChance.toFixed(2)})`);
+  const sc = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['scope-lens', 'bogus-id']);
+  ok(Math.abs(sc.critCh - 0.15) < 1e-9, `scope lens adds crit (${sc.critCh}) — unknown ids skip clean`);
+  const br = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['macho-brace']);
+  ok(Math.abs(br.scoreMult - 1.2) < 1e-9 && Math.abs(br.launchBoost - 0.92) < 1e-9,
+    `macho brace: score x${br.scoreMult.toFixed(2)}, launch x${br.launchBoost.toFixed(2)}`);
+
+  // exp share: the fielded team starts +2 levels over a same-seed baseline
+  const base = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  const xp = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['exp-share']);
+  ok(
+    xp.players.every((p, i) => p.lvl === base.players[i].lvl + 2 && p.maxHp > base.players[i].maxHp),
+    `exp share fields the team +2 levels (${xp.players.map((p) => p.lvl).join(',')})`,
+  );
+
+  // sacred ash: a wipe revives once at 30%, the second wipe ends the run
+  const sa = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['sacred-ash']);
+  ok((sa as any).ashArmed === true, 'sacred ash arms on construct');
+  (sa as any).spawnWave(0);
+  sa.phase = 'aim';
+  for (const p of sa.players) { p.hp = 0; p.dead = true; }
+  (sa as any).nextTurn();
+  ok(sa.phase === 'aim' && sa.players.every((p) => !p.dead && p.hp === Math.round(p.maxHp * 0.3)),
+    'sacred ash revives a wipe at 30%');
+  ok((sa as any).ashArmed === false, 'the ash is consumed on the revive');
+  for (const p of sa.players) { p.hp = 0; p.dead = true; }
+  (sa as any).nextTurn();
+  ok(sa.phase === 'lost', 'one ash per run — the second wipe ends it');
+}
 
 // --- ascension scales enemy bulk ----------------------------------------
 {
@@ -124,6 +179,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.pickEvo(1); // Jolteon
   ok(p.def.id === 135 && b.evoChoice === null, `picked branch becomes ${p.def.name}`);
   ok(p.def.luck === 1, 'the absorbed dupe banked a luck point through evolution');
+}
+
+// --- roleOf: specialty reads the dominant base stat -----------------------
+{
+  ok(
+    roleOf(ROSTER.find((r) => r.id === 1)!) === 'MEDIC' && // Bulbasaur is healer-flagged
+      roleOf(ROSTER.find((r) => r.id === 25)!) === 'SCOUT' && // Pikachu: spe 90 leads
+      roleOf(ROSTER.find((r) => r.id === 95)!) === 'WARDEN' && // Onix: def 160 leads
+      roleOf(speciesById(143)!) === 'BULWARK', // Snorlax: hp 160 leads
+    'roleOf: healer flag → MEDIC, else dominant base stat names the specialty',
+  );
 }
 
 // --- fusion luck pays out as bonus gym loot ------------------------------
@@ -253,6 +319,31 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   void swappedPow;
 }
 
+// --- the same swap works on the reward break's TEAM · ITEMS panel ---------
+{
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  (b as any).enterReward();
+  ok(b.phase === 'reward', 'reward opens on the item pick');
+  const boxed = ROSTER[5];
+  b.box.push(boxed);
+  b.boxHp.push(1);
+  b.boxLvl.push(3);
+  const benched = (b as any).players[1].def;
+  b.swapFromBox(0, 1); // the catch break carries the same roster modal
+  ok((b as any).players[1].def === boxed, 'reward-phase swap fields the box mon');
+  ok(b.box[0] === benched && b.boxHp[0] > 0 && b.boxLvl[0] >= 1, 'reward-phase swap benches the teammate');
+  ok(b.boxSel === -1 && b.teamSel === -1, 'reward-phase swap clears both selections');
+  // mid-fight the panel is shut — a stray call still can't reorder the team
+  b.phase = 'aim';
+  const stray = ROSTER[6];
+  b.box.push(stray);
+  b.boxHp.push(1);
+  b.boxLvl.push(1);
+  b.swapFromBox(1, 0);
+  ok(b.box.length === 2 && b.box[1] === stray && (b as any).players[0].def === ROSTER[0], 'mid-fight swap stays refused');
+}
+
 // --- reward flow: the pick (or decline) goes straight to the map -----------
 {
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
@@ -266,6 +357,90 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.pickPerk(0);
   ok(n > 0 && b.rewardOffers.length === 0, 'a pick banks the relic');
   ok(b.phase === 'map', 'the pick exits straight to the map');
+}
+
+// --- offer tools: REROLL re-deals the board, BANISH culls the run -----------
+{
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  ok(b.rerollOffers() === false && b.toggleBanish() === false, 'tools stay shut off the reward board');
+  (b as any).enterReward();
+  const dealt = b.rewardOffers;
+  ok(dealt.length === 3 && b.tools.roll === 1 && b.tools.ban === 1, 'fresh board, both charges stocked');
+  ok(b.rerollOffers() === true && b.rewardOffers !== dealt, 'reroll re-deals the offers');
+  ok(b.rewardOffers.length === 3 && b.tools.roll === 0, 'reroll spends the roll charge (1 → 0)');
+  ok(b.rerollOffers() === false && b.rewardOffers.length === 3, 'out of charges — reroll refuses, board kept');
+  ok(b.toggleBanish() === true && b.banArmed === true, 'banish arms the next card tap');
+  const culled = b.rewardOffers[0].id;
+  ok(b.banishPerk(0) === culled && b.perkBan.has(culled), `banish culls ${culled} from the run's pool`);
+  ok(b.rewardOffers.length === 2 && b.rewardOffers.every((p) => p.id !== culled), 'the card leaves, the rest stay');
+  ok(b.tools.ban === 0 && b.banArmed === false, 'banish spends the charge and disarms');
+  ok(b.toggleBanish() === false, 'out of charges — banish refuses to arm');
+  // emptying the board resolves the reward — they leave empty-handed
+  b.tools.ban = 2;
+  b.toggleBanish();
+  b.banishPerk(0);
+  b.toggleBanish();
+  b.banishPerk(0);
+  ok(b.rewardOffers.length === 0 && b.phase === 'map', 'banishing the whole board exits to the map');
+}
+
+// --- banished perks stay gone: rolls, fresh boards, the save file -----------
+{
+  // rollPerks honors the ban set directly
+  const ban = new Set(['hpup', 'potion', 'moomoo', 'sash', 'mball']);
+  let rolled = 0,
+    leaked = 0;
+  for (let s = 1; s <= 20; s++) {
+    for (const p of rollPerks(mulberry32(s), 3, 9, undefined, ban)) {
+      rolled++;
+      if (ban.has(p.id)) leaked++;
+    }
+  }
+  ok(rolled > 0 && leaked === 0, `${rolled} rolled cards, ${leaked} banished ids`);
+
+  // enterReward routes through the same filter — a seeded ban survives re-deals
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(8));
+  for (const id of ban) b.perkBan.add(id);
+  const seen: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    (b as any).spawnWave(0);
+    (b as any).enterReward();
+    seen.push(...b.rewardOffers.map((p) => p.id));
+    b.declineReward(); // back to the map — the next wave pays a fresh board
+  }
+  ok(seen.length > 0 && seen.every((id) => !ban.has(id)), `5 re-dealt boards honor the ban list (${seen.length} cards)`);
+
+  // charges + bans ride the mid-run save (v2); v1 saves re-stock the tools
+  const a = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(3));
+  a.tools.roll = 0;
+  a.perkBan.add('sash');
+  const s = JSON.parse(JSON.stringify(a.snapshot()!)); // real serialization
+  ok(s.tools.roll === 0 && s.tools.ban === 1 && s.perkBan.join() === 'sash', 'snapshot banks spent charges + the ban list');
+  const c = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(99));
+  c.applySnapshot(s);
+  ok(c.tools.roll === 0 && c.tools.ban === 1 && c.perkBan.has('sash'), 'tools + bans survive the resume');
+  delete s.tools;
+  delete s.perkBan;
+  const v1 = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(7));
+  v1.applySnapshot(s);
+  ok(v1.tools.roll === 1 && v1.tools.ban === 1 && v1.perkBan.size === 0, 'a v1 save re-stocks the tools');
+
+  // bag effects ride the same resume: field deltas replay, armed flags keep
+  // their exact spent/armed state, and durable items don't double-apply
+  const g = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(5), ['master-ball', 'scope-lens', 'exp-share']);
+  ok(g.captureChance > 0.06 || (g as any).critCh > 0, 'bag picks land at construct');
+  g.masterArmed = false; // spent mid-run before the save
+  const sg = JSON.parse(JSON.stringify(g.snapshot()!));
+  ok(sg.bag.join() === 'master-ball,scope-lens' && sg.masterArmed === false, 'save drops durable bag ids, keeps spent flags');
+  // the real resume path maps saved lvl into the defs before constructing —
+  // a durable exp-share must not add a second +2 on top of the saved level
+  const rTeam = sg.team.map((e: any) => ({ ...speciesById(e.id)!, lvl: e.lvl, shiny: e.shiny || undefined }));
+  const r = new Battle(arena, rTeam, makeStage(7, 'T'), mulberry32(9));
+  r.applySnapshot(sg);
+  ok((r as any).critCh === (g as any).critCh, 'bag deltas replay on resume');
+  ok(r.masterArmed === false, 'a spent master ball stays spent across saves');
+  ok(r.players[0].lvl === sg.team[0].lvl, 'exp-share levels come through the save once, not twice');
 }
 
 // --- ultimate: a tap on the charged mon detonates the court -----------------
@@ -351,6 +526,41 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   s = statsDump();
   ok(s.deaths['5'] === 1 && s.wins === 1 && s.runs === 2, 'deaths key by stage, wins count');
   localStorage.removeItem('pk_stats');
+}
+
+// --- settings: defaults cover garbage, writes persist immediately ----------
+{
+  localStorage.setItem('pk_settings', '{broken');
+  const d = settings();
+  ok(
+    d.master === 0.8 && d.music === 0.5 && d.sfx === 0.7 && d.cries === 0.6 && d.haptics && d.shake === 1 && d.flash &&
+      d.quality === 'high' && d.pickupFx === 'complete' && !d.battery && !d.fps,
+    'garbage pk_settings falls back to defaults',
+  );
+  localStorage.setItem('pk_settings', JSON.stringify({ cries: 0.1, junk: 'x' }));
+  const p = settings();
+  ok(p.cries === 0.1 && p.master === 0.8 && p.flash === true, 'a partial blob merges over defaults');
+  // v1 stored shake as a bool — it migrates to the 0..1 intensity on read
+  localStorage.setItem('pk_settings', JSON.stringify({ shake: true }));
+  ok(settings().shake === 1, 'stored shake:true migrates to intensity 1');
+  localStorage.setItem('pk_settings', JSON.stringify({ shake: false }));
+  ok(settings().shake === 0, 'stored shake:false migrates to intensity 0');
+  // enum fields merge only members of their allowed set
+  localStorage.setItem('pk_settings', JSON.stringify({ quality: 'ultra', pickupFx: 'simple' }));
+  const q = settings();
+  ok(q.quality === 'high' && q.pickupFx === 'simple', 'enums merge valid members, reject strangers');
+  setSetting('master', 0.3);
+  setSetting('shake', 0);
+  ok(settings().master === 0.3 && settings().shake === 0, 'setSetting lands on the merged read');
+  const raw = JSON.parse(localStorage.getItem('pk_settings')!);
+  ok(raw.master === 0.3 && raw.shake === 0, 'setSetting persists pk_settings immediately');
+  setSetting('quality', 'medium');
+  ok(settings().quality === 'medium', 'setSetting invalidates the parse cache — no reload needed');
+  setSetting('master', 0.8);
+  setSetting('shake', 1);
+  setSetting('quality', 'high');
+  setSetting('pickupFx', 'complete');
+  setSetting('cries', 0.6); // leave the store at defaults
 }
 
 // --- shiny roll + guaranteed catch ----------------------------------------
@@ -1291,6 +1501,28 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(b.snapshot()!.mapSeed === s.mapSeed, 're-snapshot keeps the original island seed');
 }
 
+// --- resume late in the climb keeps waves indexed by row --------------------
+{
+  // stage.waves only ships the seeded 3; a save parked at row 4+ used to
+  // resume with pendingNext past the array — the next node tap crashed
+  // reading spawns off waves[5]
+  const a = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(3));
+  (a as any).mapNode = 4;
+  (a as any).waveIndex = 4;
+  (a as any).pendingNext = 5;
+  const s = JSON.parse(JSON.stringify(a.snapshot()!));
+  const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(99));
+  b.applySnapshot(s);
+  ok((b as any).stage.waves.length > 5, 'resume refills rolled waves');
+  let threw = false;
+  try {
+    (b as any).spawnWave(5);
+  } catch {
+    threw = true;
+  }
+  ok(!threw, 'first node tap after a late resume fights, not crashes');
+}
+
 // --- roster integrity -------------------------------------------------------
 ok(ROSTER.length >= 29, `roster expanded (${ROSTER.length})`);
 ok(ROSTER.every((r) => speciesById(r.id)), 'every roster id resolves');
@@ -1301,6 +1533,77 @@ ok(evo, 'every evolvesTo resolves');
 ok(moveOf(25, 'electric') === 'THUNDERBOLT', 'pikachu override');
 ok(moveOf(129, 'water') === 'SPLASH', 'magikarp signature');
 ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move');
+
+// --- daily/weekly task board: seeded picks, rollover, one-claim payout ------
+{
+  localStorage.removeItem('pk_tasks');
+  const DAY = 86400000;
+  const t0 = Date.UTC(2024, 5, 10, 12); // Monday 2024-06-10, noon UTC
+  const t1 = t0 + DAY; // Tuesday — a new day, the same ISO week
+
+  // the seeded roll is deterministic: same key, same board, for everyone
+  const ids = rollTasks(DAILY_POOL, 3, daySeed(t0)).map((d) => d.id);
+  ok(
+    ids.length === 3 && ids.join() === rollTasks(DAILY_POOL, 3, daySeed(t0)).map((d) => d.id).join(),
+    `a fixed day rolls the same 3 tasks (${ids.join('/')})`,
+  );
+  ok(new Set(ids).size === ids.length, 'no duplicate tasks on the daily board');
+  ok(rollTasks(WEEKLY_POOL, 4, weekSeed(t0)).length === 4, 'a fixed week rolls 4 tasks');
+  const catalogue = [...DAILY_POOL, ...WEEKLY_POOL];
+  ok(new Set(catalogue.map((d) => d.id)).size === catalogue.length, 'task ids unique across pools');
+  ok(catalogue.every((d) => BAG_ITEMS.some((i) => i.id === d.reward)), 'every reward is a real bag item');
+  ok(dayKey(t0) === '2024-06-10' && weekKey(t0) === '2024-W24', `period keys (${dayKey(t0)} / ${weekKey(t0)})`);
+  ok(taskViews('daily', t0).length === 3 && localStorage.getItem('pk_tasks') === null, 'taskViews stays read-only — the roll waits for a writer');
+
+  // a full-kind beat lands on both periods — but only the kinds on offer
+  taskTick({ kos: 10, catches: 2, stages: 1, gyms: 1, perks: 2, score: 500, shinies: 1, runs: 1, wins: 1, maxstage: 4 }, t0);
+  const dv0 = taskViews('daily', t0);
+  const wv0 = taskViews('weekly', t0);
+  ok(dv0.length === 3 && wv0.length === 4, 'selections show through the views');
+  ok(dv0.every((v) => v.have > 0) && wv0.every((v) => v.have > 0), 'tick accumulates into both periods');
+  const s0 = taskState();
+  ok(Object.keys(s0.dp).length <= 3 && Object.keys(s0.wp).length <= 4, 'the blob only tracks offered kinds');
+  ok(s0.day === dayKey(t0) && s0.dsel.join() === ids.join(), 'tick persisted the seeded board under the day key');
+
+  // overshoot is fine — have runs past n, done is the gate
+  taskTick({ kos: 500, catches: 50, stages: 50, gyms: 9, perks: 50, score: 99999, shinies: 5, runs: 5, wins: 2, maxstage: 9 }, t0);
+  const dv = taskViews('daily', t0);
+  ok(dv.every((v) => v.done) && dv.some((v) => v.have > v.n), 'over-ticking overshoots the target — done flags hold');
+  const wv = taskViews('weekly', t0);
+  const ready = dv.concat(wv).filter((v) => v.done && !v.claimed).length;
+  ok(ready === 7 && tasksReady(t0) === ready, `tasksReady counts unclaimed done across both periods (${ready})`);
+
+  // the claim banks the reward once — a second tap reads null, stock unmoved
+  const target = dv.find((v) => v.done)!;
+  const reward = DAILY_POOL.find((d) => d.id === target.id)!.reward;
+  const stock0 = bagStock()[reward] ?? 0;
+  ok(claimTask(target.id, t0) === reward, 'claimTask returns the paid item id');
+  ok((bagStock()[reward] ?? 0) === stock0 + 1, `the reward banks into pk_bag (${reward})`);
+  ok(claimTask(target.id, t0) === null && (bagStock()[reward] ?? 0) === stock0 + 1, 'the same task pays once');
+  ok(taskViews('daily', t0).find((v) => v.id === target.id)!.claimed === true, 'the claimed flag shows on the view');
+  ok(tasksReady(t0) === ready - 1, 'a claim drops the ready count');
+
+  // next day, same ISO week: the daily view re-rolls fresh, the week keeps on
+  const dv1 = taskViews('daily', t1);
+  ok(dv1.length === 3 && dv1.every((v) => v.have === 0 && !v.done && !v.claimed), 'a new day reads a fresh board — progress wiped');
+  ok(taskViews('weekly', t1).every((v) => v.done), 'the weekly board survives the day boundary');
+  taskTick({ kos: 1 }, t1); // the first tick of the new day banks the roll
+  const s1 = taskState();
+  ok(s1.day === dayKey(t1) && s1.dsel.length === 3 && s1.week === weekKey(t0) && Object.keys(s1.wp).length > 0,
+    'tick persists the rolled-over day, the week keeps its books');
+
+  // a stale stored key re-rolls through the writer — same seeded board, empty books
+  saveTaskState({ day: '1999-01-01', dp: { kos: 99 }, dsel: ['gone'], dclaim: ['gone'], week: '1999-W01', wp: { kos: 5 }, wsel: ['gone2'], wclaim: [] });
+  taskTick({}, t0);
+  const s2 = taskState();
+  ok(s2.day === dayKey(t0) && s2.dsel.join() === ids.join() && Object.keys(s2.dp).length === 0, 'an out-of-period day re-rolls with empty progress');
+  ok(s2.week === weekKey(t0) && s2.wsel.length === 4 && Object.keys(s2.wp).length === 0, 'an out-of-period week re-rolls too');
+
+  // countdown strings: a Monday noon is 12h from the daily flip, ~6.5d from the weekly
+  ok(taskResetsIn('daily', t0) === 'IN 12H', `daily reset reads as hours (${taskResetsIn('daily', t0)})`);
+  ok(taskResetsIn('weekly', t0) === 'IN 7D', `weekly reset reads as days (${taskResetsIn('weekly', t0)})`);
+  localStorage.removeItem('pk_tasks'); // leave the store clean for the next run
+}
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
 process.exit(fails ? 1 : 0);

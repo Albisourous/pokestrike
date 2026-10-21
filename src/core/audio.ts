@@ -1,5 +1,6 @@
 // Tiny synthesized SFX — no audio assets, just WebAudio oscillators/noise.
 // Browsers require a user gesture first, so call unlock() from pointerdown.
+import { settings } from '../game/meta';
 
 let ac: AudioContext | null = null;
 let visBound = false;
@@ -18,7 +19,14 @@ export function isMuted() {
 export function toggleMute() {
   muted = !muted;
   localStorage.setItem('pk-mute', muted ? '1' : '0');
-  if (master) master.gain.value = muted ? 0 : MASTER_VOL;
+  if (master) master.gain.value = muted ? 0 : MASTER_VOL * settings().master;
+}
+
+// push the persisted sliders into the live nodes — master/music are gain
+// params set once at init, so the settings panel pokes this on every drag
+export function syncVolumes() {
+  if (master) master.gain.value = muted ? 0 : MASTER_VOL * settings().master;
+  if (mGain) mGain.gain.value = 0.3 * settings().music;
 }
 
 export function unlockAudio() {
@@ -41,10 +49,10 @@ export function unlockAudio() {
     }
     ac = new AudioContext();
     master = ac.createGain();
-    master.gain.value = muted ? 0 : MASTER_VOL;
+    master.gain.value = muted ? 0 : MASTER_VOL * settings().master;
     master.connect(ac.destination);
     mGain = ac.createGain();
-    mGain.gain.value = 0.3; // music sits under the sfx
+    mGain.gain.value = 0.3 * settings().music; // music sits under the sfx
     // a gentle lowpass on the music bus takes the rasp off square leads —
     // the single biggest "this sounds grating" fix
     mFilter = ac.createBiquadFilter();
@@ -81,6 +89,7 @@ export function unlockAudio() {
 // One-shot oscillator blip with a pitch slide and decay envelope.
 function tone(f0: number, f1: number, dur: number, type: OscillatorType, vol: number, delay = 0) {
   if (!ac || !master || ac.state !== 'running') return;
+  vol *= settings().sfx;
   const t0 = ac.currentTime + delay;
   const o = ac.createOscillator();
   const g = ac.createGain();
@@ -97,6 +106,7 @@ function tone(f0: number, f1: number, dur: number, type: OscillatorType, vol: nu
 // Filtered noise burst — impacts, explosions, whooshes.
 function noise(dur: number, freq: number, vol: number, delay = 0, slide = 0) {
   if (!ac || !master || ac.state !== 'running') return;
+  vol *= settings().sfx;
   const t0 = ac.currentTime + delay;
   const len = Math.max(1, Math.round(ac.sampleRate * dur));
   const buf = ac.createBuffer(1, len, ac.sampleRate);
@@ -696,6 +706,7 @@ function pump() {
 
 // Mobile haptics; silently absent where unsupported (iOS Safari).
 export function buzz(pattern: number | number[]) {
+  if (!settings().haptics) return;
   navigator.vibrate?.(pattern);
 }
 
@@ -712,7 +723,7 @@ export function cry(id: number, vol = 0.2) {
       a = new Audio(`sprites/cries/${id}.ogg`);
       cries.set(id, a);
     }
-    a.volume = vol * CRY_VOL;
+    a.volume = vol * CRY_VOL * settings().cries;
     a.currentTime = 0;
     a.play().catch(() => {});
   } catch {

@@ -1,16 +1,24 @@
 import { itemSprite, loadItem, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted, sfx } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, bst, LEADER_NPC } from './data';
-import { PERKS, RARITY_COLOR } from './perks';
-import type { Perk, Rarity } from './perks';
+import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
+import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
 import { TYPE_COLOR, typeMult, type PokeType } from './types';
 import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
 import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED, ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, board } from './meta';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, board, settings, setSetting, bagStock, type Settings } from './meta';
+import { taskViews, tasksReady, taskResetsIn } from './tasks';
+import type { TaskView } from './tasks';
+import type { Vec } from '../core/vec';
 
 export const W = 540;
 export const H = 960;
+
+// mobile-first: key affordances only render when a keyboard is likely —
+// a coarse-primary pointer (phone/tablet) never sees [1] or [R]. The keys
+// stay wired regardless; this decides chrome, not input.
+const HAS_KEYS = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
 
 // species that can ever drop a ball — the dex completion denominator
 // (roster mons count too: a rival echo can field them and they can be caught)
@@ -35,6 +43,8 @@ export interface RunResult {
   rating: { delta: number; tier: string; color: string; up: boolean }; // ladder movement this run
   place: number; // hall-of-fame slot earned (0-based), -1 = off the board
   seed: number; // the run's roll — a shared seed replays this climb
+  runNo?: number; // lifetime run count — the report's CASE no; the seed stands in till main.ts fills it
+  depth?: number; // stages reached — the DEPTH finding; a wipe without one parses it back out of `extra`
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -52,6 +62,24 @@ export const DRAFT_REROLL = { x: W / 2 - 85, y: CARDS_Y + CARD_H + 12, w: 170, h
 // slot-reel reveal: each offer card spins a strip of pool faces that brakes
 // onto the deal — staggered left to right. Spin age counts seconds.
 export const REEL_STOPS = [0.7, 1.0, 1.3];
+
+// --- bag row: pk_bag consumables ride the dead band between the draft ---
+// --- subtitle (~y180) and the offer cards (y300). ≤2 picked into the run.
+export const BAG_MAX = 2;
+const BAG_CHIP_W = 74;
+const BAG_CHIP_H = 60;
+const BAG_CHIP_GAP = 8;
+export const BAG_ROW = { x: 0, y: 196, w: W, h: 98 };
+export function bagChipRect(i: number, n: number) {
+  const rowW = n * BAG_CHIP_W + (n - 1) * BAG_CHIP_GAP;
+  return { x: W / 2 - rowW / 2 + i * (BAG_CHIP_W + BAG_CHIP_GAP), y: BAG_ROW.y + 26, w: BAG_CHIP_W, h: BAG_CHIP_H };
+}
+// stocked bag items in chip order — chip i ↔ items[i], so hit tests and the
+// draw both walk this one list
+export function bagRowItems(): BagItem[] {
+  const stock = bagStock();
+  return BAG_ITEMS.filter((it) => (stock[it.id] ?? 0) > 0);
+}
 
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
@@ -91,6 +119,8 @@ export function drawMuteChip(ctx: CanvasRenderingContext2D) {
   speakerGlyph(ctx, cx, cy, 0.72);
 }
 export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
+// gear badge, left of the ? — the settings modal
+export const GEAR_BTN = { x: HELP_BTN.x - 54, y: 22, w: 44, h: 44 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
@@ -101,13 +131,19 @@ export function perkCardRect(i: number) {
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
 export const REWARD_SKIP = { x: W / 2 - 200, y: 872, w: 190, h: 40 };
-export const REWARD_TEAM = { x: W / 2 + 10, y: 872, w: 190, h: 40 };
+export const REWARD_TEAM = { x: W / 2 - 95, y: 872, w: 190, h: 40 };
 // the NEW CATCH card doubles as a button — it opens the team panel
 export const REWARD_CATCH = { x: W / 2 - 190, y: 158, w: 380, h: 78 };
+// offer-tool row under the perk cards — reroll / skip / banish pills.
+// perkCardRect ends at 580; the held-items strip yields to just below these.
+// the tool row is a thumb target first — 46px tall, hugged under the cards
+export const TOOL_ROLL = { x: 33, y: 588, w: 150, h: 46 };
+export const TOOL_SKIP = { x: W / 2 - 75, y: 588, w: 150, h: 46 };
+export const TOOL_BAN = { x: W - 33 - 150, y: 588, w: 150, h: 46 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
-export const BOX_STRIP = { x: 24, y: 500, w: W - 48, h: 56 };
-const BOX_SLOT = 56;
+export const BOX_STRIP = { x: 24, y: 536, w: W - 48, h: 64 };
+const BOX_SLOT = 64;
 const BOX_GAP = 10;
 export function boxScrollMax(n: number) {
   return Math.max(0, n * (BOX_SLOT + BOX_GAP) - BOX_GAP - BOX_STRIP.w);
@@ -118,8 +154,8 @@ export function boxSlotRect(i: number, n: number, scroll = 0) {
   return { x: BOX_STRIP.x + off + i * (BOX_SLOT + BOX_GAP) - scroll, y: BOX_STRIP.y, w: BOX_SLOT, h: BOX_SLOT };
 }
 export function teamSlotRect(i: number) {
-  const w = 100, gap = 14;
-  return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 652, w, h: 70 };
+  const w = 108, gap = 12;
+  return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 632, w, h: 92 };
 }
 
 // split-evolution option cards — centered row over the dimmed reward screen
@@ -143,9 +179,10 @@ export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
 const GOLD = '#c8a44d';
 const PARCH = '#f0e6c8';
 
-// speaker glyph + slash — shared by the title badge and the mid-run chip
-function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number) {
-  ctx.fillStyle = PARCH;
+// speaker glyph + slash — shared by the title badge and the mid-run chip.
+// color/muted default to the live mute state; the settings tab overrides both.
+function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, muted = isMuted(), color = PARCH) {
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(cx - 8 * s, cy - 3 * s);
   ctx.lineTo(cx - 3 * s, cy - 3 * s);
@@ -155,7 +192,7 @@ function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: 
   ctx.lineTo(cx - 8 * s, cy + 3 * s);
   ctx.closePath();
   ctx.fill();
-  if (isMuted()) {
+  if (muted) {
     ctx.strokeStyle = '#ff6b6b';
     ctx.lineWidth = 3 * s;
     ctx.beginPath();
@@ -165,7 +202,7 @@ function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: 
     ctx.lineTo(cx - 4 * s, cy + 7 * s);
     ctx.stroke();
   } else {
-    ctx.strokeStyle = PARCH;
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2 * s;
     for (const rr of [6, 10]) {
       ctx.beginPath();
@@ -173,6 +210,42 @@ function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: 
       ctx.stroke();
     }
   }
+}
+
+// cog glyph — settings chrome: tooth ring + hub (title badge + feel tab)
+function gearGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.fillStyle = color;
+  for (let i = 0; i < 8; i++) {
+    ctx.save();
+    ctx.rotate((i * Math.PI) / 4);
+    ctx.fillRect(-1.5 * s, -9.5 * s, 3 * s, 3.8 * s);
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.4 * s;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5.8 * s, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 1.8 * s, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// monitor glyph — the graphics tab's icon: a screen with quality bars inside
+function monitorGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 * s;
+  ctx.strokeRect(cx - 8.5 * s, cy - 7 * s, 17 * s, 11 * s);
+  ctx.fillStyle = color;
+  ctx.fillRect(cx - 1.5 * s, cy + 4 * s, 3 * s, 3.5 * s); // neck
+  ctx.fillRect(cx - 5.5 * s, cy + 7.5 * s, 11 * s, 2 * s); // foot
+  ctx.fillRect(cx - 5.5 * s, cy - 0.5 * s, 3 * s, 3 * s); // rising bars
+  ctx.fillRect(cx - 1.5 * s, cy - 2.5 * s, 3 * s, 5 * s);
+  ctx.fillRect(cx + 2.5 * s, cy - 4.5 * s, 3 * s, 7 * s);
 }
 
 
@@ -275,6 +348,13 @@ export function fitFont(ctx: CanvasRenderingContext2D, label: string, px: number
   return size;
 }
 
+// the stat-derived role as a tag — 'wild' reads BALANCED, the draft cards'
+// word; a flagged medic earns its star wherever the tag shows
+const roleTag = (def: SpeciesDef) => {
+  const r = roleOf(def);
+  return `${def.healer ? '★ ' : ''}${r === 'wild' ? 'BALANCED' : r}`;
+};
+
 // greedy word-wrap into at most two lines at the current font — descs are
 // short enough that a third line never earns its keep
 export function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
@@ -314,6 +394,143 @@ export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number;
       ctx.drawImage(img, r.x + 10, r.y + (r.h - 32) / 2 + iconDy, 32, 32);
       ctx.restore();
     }
+  }
+}
+
+// lerp two #rrggbb colors — t=0 keeps `a`, t=1 lands on `b`
+const mixHex = (a: string, b: string, t: number) => {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  let out = '#';
+  for (const s of [16, 8, 0]) {
+    const ca = (pa >> s) & 255;
+    out += Math.round(ca + (((pb >> s) & 255) - ca) * t)
+      .toString(16)
+      .padStart(2, '0');
+  }
+  return out;
+};
+
+// candy stripes — the pokebonk texture: -45° white bands, 10 on / 10 off.
+// expects a clip already on the context; covers the rect's rotated bounds.
+function stripes(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }) {
+  const s = Math.hypot(r.w, r.h);
+  ctx.save();
+  ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+  ctx.rotate(-Math.PI / 4);
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  for (let x = -s / 2 - 20; x < s / 2 + 20; x += 20) ctx.fillRect(x, -s / 2, 10, s);
+  ctx.restore();
+}
+
+// rarity header band: vertical gradient color → dark blend, striped. The
+// clip overshoots 9px below the band so only the TOP corners round — the
+// bottom edge stays a straight cut against the card body.
+export function stripeBand(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, color: string) {
+  ctx.save();
+  roundRect(ctx, r.x, r.y, r.w, r.h + 9, 9);
+  ctx.clip();
+  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+  g.addColorStop(0, color);
+  g.addColorStop(1, mixHex(color, '#12162b', 0.55));
+  ctx.fillStyle = g;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  stripes(ctx, r);
+  ctx.restore();
+}
+
+// fully-rounded text tag — rarity/kind/key-hint counters. Returns its width
+// so a caller can right-anchor by measuring first (same font).
+export function chip(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  text: string,
+  o: { bg: string; fg: string; fontPx?: number },
+) {
+  ctx.font = fontB(o.fontPx ?? 7);
+  const w = ctx.measureText(text).width + 14;
+  roundRect(ctx, x, y, w, 16, 8);
+  ctx.fillStyle = o.bg;
+  ctx.fill();
+  ctx.fillStyle = o.fg;
+  ctx.textAlign = 'left';
+  ctx.fillText(text, x + 7, y + 11.5);
+  return w;
+}
+
+// '[1]'-style key affordance, tucked bottom-right inside a card — same dark
+// chip style as the kind pill
+export function keyHint(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string) {
+  ctx.font = fontB(7);
+  const w = ctx.measureText(label).width + 14;
+  chip(ctx, r.x + r.w - w - 8, r.y + r.h - 24, label, { bg: 'rgba(42,36,64,0.8)', fg: '#e8ecf8' });
+}
+
+// candy pill button: light→base→dark gradient face with full-radius ends
+// over a darker "press edge", stripes on top, centered ink. `pressed`
+// flattens the edge to a sliver and sinks the ink; `disabled` drops the
+// whole ramp to grays. `badge` is a small dark counter at the right end.
+export function pill(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  o: {
+    c: string;
+    cd: string;
+    tc: string;
+    label: string;
+    sub?: string;
+    badge?: string;
+    pressed?: boolean;
+    disabled?: boolean;
+  },
+) {
+  const c = o.disabled ? '#8a90a4' : o.c;
+  const cd = o.disabled ? '#5c6276' : o.cd;
+  const tc = o.disabled ? '#d8dcea' : o.tc;
+  const rimH = o.pressed ? 1 : 4;
+  // the press edge is a whole pill a shade past the face's dark stop — the
+  // face sits on it and covers all but the bottom lip
+  roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
+  ctx.fillStyle = mixHex(cd, '#12162b', 0.4);
+  ctx.fill();
+  ctx.save();
+  roundRect(ctx, r.x, r.y, r.w, r.h - rimH, (r.h - rimH) / 2);
+  ctx.clip();
+  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h - rimH);
+  g.addColorStop(0, mixHex(c, '#ffffff', 0.4));
+  g.addColorStop(0.55, c);
+  g.addColorStop(1, cd);
+  ctx.fillStyle = g;
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  stripes(ctx, { x: r.x, y: r.y, w: r.w, h: r.h - rimH });
+  ctx.restore();
+
+  let bw = 0;
+  if (o.badge) {
+    ctx.font = fontB(7);
+    bw = ctx.measureText(o.badge).width + 10;
+  }
+  const cy = r.y + (r.h - rimH) / 2 + (o.pressed ? 2 : 0);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = tc;
+  fitFont(ctx, o.label, o.sub ? 9 : 10, r.w - 24 - bw);
+  ctx.fillText(o.label, r.x + r.w / 2 - bw / 2, cy + (o.sub ? -1 : 5));
+  if (o.sub) {
+    ctx.font = fontB(6);
+    ctx.globalAlpha = 0.7;
+    ctx.fillText(o.sub, r.x + r.w / 2 - bw / 2, cy + 12);
+    ctx.globalAlpha = 1;
+  }
+  if (o.badge) {
+    const bx = r.x + r.w - bw - 8;
+    roundRect(ctx, bx, cy - 7, bw, 14, 7);
+    ctx.fillStyle = 'rgba(42,36,64,0.4)';
+    ctx.fill();
+    ctx.font = fontB(7);
+    ctx.fillStyle = tc;
+    ctx.textAlign = 'left';
+    ctx.fillText(o.badge, bx + 5, cy + 3.5);
   }
 }
 
@@ -1308,10 +1525,37 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, cont: { stag
   ctx.lineWidth = 2;
   ctx.strokeRect(MUTE_BTN.x, MUTE_BTN.y, MUTE_BTN.w, MUTE_BTN.h);
   speakerGlyph(ctx, mcx, mcy, 1);
-  // the dex and the trophy shelf share one row — same chrome as the menus
+
+  // gear badge beside the ? — opens the settings modal
+  ctx.fillStyle = '#12152b';
+  ctx.fillRect(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h);
+  dither(ctx, GEAR_BTN, 0.09);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h);
+  gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
+  // dex, trophies, ladder, tasks — one row of equal menu chips
   button(ctx, DEX_BTN, `DEX ${dexIds().length}/${CATCHABLE}`, true);
   button(ctx, ACH_BTN, `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, true);
   button(ctx, BOARD_BTN, 'TOP RUNS', true);
+  button(ctx, TASKS_BTN, 'TASKS', true);
+  // a claimable task pins a red count pip on the chip corner — the same
+  // notification pull the dex count works, shrunk to a badge
+  const taskN = tasksReady();
+  if (taskN > 0) {
+    const bx = TASKS_BTN.x + TASKS_BTN.w - 4, by = TASKS_BTN.y + 4;
+    ctx.beginPath();
+    ctx.arc(bx, by, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#e03c34';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0d18';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.font = fontB(7);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f8f8f0';
+    ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
+  }
   // the records line is the one-more-run hook — ranked ladder, best score
   const b = best();
   const ld = tier();
@@ -1791,9 +2035,13 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
 
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
 // --- haven't caught; the count is the only hint at what's out there -------
-export const DEX_BTN = { x: W / 2 - 205, y: FREE_BTN.y + FREE_BTN.h + 14, w: 130, h: 48 };
-export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 10, y: DEX_BTN.y, w: 140, h: 48 };
-export const BOARD_BTN = { x: ACH_BTN.x + ACH_BTN.w + 10, y: DEX_BTN.y, w: 110, h: 48 };
+// the menu chip row — four equal chips on 8px gutters, spanning the old
+// row's left edge to W-27 so TASKS slots in without moving the records line
+const MENU_CHIP_W = (W - 27 - (W / 2 - 205) - 3 * 8) / 4; // 106
+export const DEX_BTN = { x: W / 2 - 205, y: FREE_BTN.y + FREE_BTN.h + 26, w: MENU_CHIP_W, h: 48 };
+export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
+export const BOARD_BTN = { x: ACH_BTN.x + ACH_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
+export const TASKS_BTN = { x: BOARD_BTN.x + BOARD_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
@@ -2030,6 +2278,71 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText('trophies persist across runs · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
+// the BAG row — card-lite chips of stocked consumables; ≤2 ride into the
+// run (gold rim + lift, the shiny-card selection language). `last` is the
+// last tapped chip — its desc sits on one dim line under the row. Empty
+// stock hides the whole thing — no dead UI.
+function drawBagRow(
+  ctx: CanvasRenderingContext2D,
+  sel: ReadonlySet<string>,
+  last: string | null,
+) {
+  const items = bagRowItems();
+  if (!items.length) return;
+  const stock = bagStock();
+  ctx.textAlign = 'center';
+  ctx.font = font(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(`BAG — TAKE UP TO ${BAG_MAX}${sel.size ? ` · ${Math.min(sel.size, BAG_MAX)}/${BAG_MAX}` : ''}`, W / 2, BAG_ROW.y + 13);
+  items.forEach((it, i) => {
+    const on = sel.has(it.id);
+    const r = bagChipRect(i, items.length);
+    const cr = { x: r.x, y: r.y + (on ? -4 : 0), w: r.w, h: r.h };
+    // same anatomy as the offer cards, pocket size: drop shadow, dark face,
+    // frame — gold inner rim when it's riding along
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(ctx, cr.x + 2, cr.y + 4, cr.w, cr.h, 8);
+    ctx.fill();
+    roundRect(ctx, cr.x, cr.y, cr.w, cr.h, 8);
+    ctx.fillStyle = '#12162b';
+    ctx.fill();
+    cardFrame(ctx, cr, 8);
+    if (on) rim(ctx, cr, 8, '#ffd84d', 2);
+    void loadItem(it.item);
+    const img = itemSprite(it.item);
+    if (img) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 5;
+      ctx.shadowOffsetY = 2;
+      ctx.drawImage(img, cr.x + cr.w / 2 - 13, cr.y + 7, 26, 26);
+      ctx.restore();
+    }
+    ctx.font = fontB(7);
+    ctx.fillStyle = on ? PARCH : '#a8b0d0';
+    ctx.textAlign = 'center';
+    ctx.fillText(it.name.toUpperCase(), cr.x + cr.w / 2, cr.y + 49);
+    // ×n stock badge top-right — gold-lit when the chip is picked
+    const n = `×${stock[it.id] ?? 0}`;
+    ctx.font = fontB(7);
+    const bw = ctx.measureText(n).width + 10;
+    roundRect(ctx, cr.x + cr.w - bw - 5, cr.y + 5, bw, 13, 6.5);
+    ctx.fillStyle = on ? '#ffd84d' : 'rgba(42,36,64,0.9)';
+    ctx.fill();
+    ctx.fillStyle = on ? '#2a2440' : '#e8ecf8';
+    ctx.fillText(n, cr.x + cr.w - bw / 2 - 5, cr.y + 14.5);
+  });
+  // last tap answers "what does this one do?" — one dim line, order-free
+  const li = items.findIndex((it) => it.id === last);
+  if (li >= 0) {
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#6a7498';
+    ctx.textAlign = 'center';
+    ctx.fillText(items[li].desc.toUpperCase(), W / 2, BAG_ROW.y + 92);
+  }
+}
+
 export function drawDraft(
   ctx: CanvasRenderingContext2D,
   offers: SpeciesDef[],
@@ -2038,6 +2351,7 @@ export function drawDraft(
   t: number,
   rerolls: number,
   spin: { age: number; pool: SpeciesDef[]; idx: number[] },
+  bag: { sel: ReadonlySet<string>; last: string | null },
 ) {
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
 
@@ -2060,6 +2374,9 @@ export function drawDraft(
     180,
   );
 
+  drawBagRow(ctx, bag.sel, bag.last);
+
+  const dex = new Set(dexIds()); // kind chips read dex membership per card — parse once a frame
   offers.forEach((def, i) => {
     const r = draftCardRect(i);
     // lifted-card shadow, then the face
@@ -2070,51 +2387,69 @@ export function drawDraft(
     cardFrame(ctx, r, 10);
     if (def.shiny) rim(ctx, r, 10, '#ffd84d', 2);
 
+    // same anatomy as the relic cards: a type-tinted header band carries
+    // the sprite — the reel plays inside it
+    const band = { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: 106 };
+
     // slot reel: pool faces scroll past until the reel brakes onto the offer
     const stopAt = REEL_STOPS[i] ?? REEL_STOPS[REEL_STOPS.length - 1];
     const spinP = Math.min(spin.age / stopAt, 1);
     if (spinP < 1) {
-      const win = { x: r.x + 10, y: r.y + 20, w: r.w - 20, h: 148 };
       ctx.save();
-      roundRect(ctx, win.x, win.y, win.w, win.h, 8);
+      roundRect(ctx, band.x, band.y, band.w, band.h + 9, 9);
       ctx.clip();
       ctx.fillStyle = '#0a0e1e';
-      ctx.fillRect(win.x, win.y, win.w, win.h);
+      ctx.fillRect(band.x, band.y, band.w, band.h);
       // ease-out quart — a fast blur of faces that settles hard on the deal
       const steps = 9 + i * 3;
       const pos = steps * (1 - Math.pow(1 - spinP, 4));
       const L = spin.pool.length;
       for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
         const d = spin.pool[(((spin.idx[i] + j - steps) % L) + L) % L];
-        drawMon(ctx, d.id, r.x + r.w / 2, win.y + win.h / 2 + (j - pos) * 88, 80);
+        drawMon(ctx, d.id, band.x + band.w / 2, band.y + band.h / 2 + (j - pos) * 80, 72);
       }
-      // fade the window edges so faces slide out of the dark
-      const g = ctx.createLinearGradient(0, win.y, 0, win.y + win.h);
+      // fade the band edges so faces slide out of the dark
+      const g = ctx.createLinearGradient(0, band.y, 0, band.y + band.h);
       g.addColorStop(0, 'rgba(10,14,30,0.9)');
-      g.addColorStop(0.3, 'rgba(10,14,30,0)');
-      g.addColorStop(0.7, 'rgba(10,14,30,0)');
+      g.addColorStop(0.35, 'rgba(10,14,30,0)');
+      g.addColorStop(0.65, 'rgba(10,14,30,0)');
       g.addColorStop(1, 'rgba(10,14,30,0.9)');
       ctx.fillStyle = g;
-      ctx.fillRect(win.x, win.y, win.w, win.h);
+      ctx.fillRect(band.x, band.y, band.w, band.h);
       ctx.restore();
       ctx.font = font(9);
       ctx.fillStyle = '#3a4468';
+      ctx.textAlign = 'center';
       ctx.fillText('· · ·', r.x + r.w / 2, r.y + 184);
       return;
     }
     // landing pop: the sprite overshoots for a beat as the reel stops
     const pop = 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15);
 
-    // a shiny draft card glows gold — the rarest pick on the board
-    if (def.shiny) {
-      ctx.textAlign = 'center';
-      ctx.font = font(9);
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillText('✦ SHINY ✦', r.x + r.w / 2, r.y + 34);
-    }
-    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 100, 96 * pop);
+    stripeBand(ctx, band, TYPE_COLOR[def.type]);
+    // type chip top-left: light pill, type ink darkened so pale types
+    // (electric, ice) still read on it
+    chip(ctx, r.x + 9, r.y + 9, def.type.toUpperCase(), {
+      bg: '#e8ecf8',
+      fg: mixHex(TYPE_COLOR[def.type], '#2a2440', 0.45),
+    });
+    // kind pill top-right — SHINY trumps the dex tag
+    const kind = def.shiny ? 'SHINY' : dex.has(def.id) ? 'OWNED' : 'NEW';
+    ctx.font = fontB(7);
+    chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, def.shiny
+      ? { bg: '#ffd84d', fg: '#2a2440' }
+      : { bg: 'rgba(42,36,64,0.8)', fg: '#e8ecf8' });
 
-    // evolution hint rides the top-left — Magikarp is secretly Gyarados
+    // the sprite gets the band center with the same soft drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 4;
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, band.x + band.w / 2, band.y + band.h / 2 + 2, 84 * pop);
+    ctx.restore();
+
+    // evolution hint + trait tag ride the strip under the band — Magikarp
+    // is secretly Gyarados
     if (def.evolvesTo != null) {
       const nx = Array.isArray(def.evolvesTo)
         ? `${def.evolvesTo.length} FORMS`
@@ -2123,48 +2458,54 @@ export function drawDraft(
         ctx.textAlign = 'left';
         ctx.font = fontB(9);
         ctx.fillStyle = '#9df0ff';
-        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 17);
+        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 126);
       }
     }
-
-    // trait tag rides the top-right corner
     if (def.pierce || def.copy) {
       ctx.textAlign = 'right';
       ctx.font = font(8);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 20);
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 127);
       ctx.fillStyle = '#ffd84d';
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 19);
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 126);
     }
 
     ctx.textAlign = 'center';
     fitFont(ctx, def.name, 14, r.w - 20);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 179);
+    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 165);
     ctx.fillStyle = PARCH;
-    ctx.fillText(def.name, r.x + r.w / 2, r.y + 178);
+    ctx.fillText(def.name, r.x + r.w / 2, r.y + 164);
 
     ctx.font = fontB(10);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 200);
+    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 186);
 
-    const role = roleOf(def.stats, def.healer);
     ctx.font = fontB(10);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${role === 'wild' ? 'BALANCED' : role.toUpperCase()}`, r.x + r.w / 2, r.y + 220);
+    ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 206);
 
     // the bump super this mon fires — a draft decision you can taste
     ctx.font = fontB(11);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 244);
+    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 226);
     ctx.font = fontB(9);
     ctx.fillStyle = '#a8b0d0';
     const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 16);
-    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 258 + li * 11));
+    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 238 + li * 11));
+
+    if (HAS_KEYS) keyHint(ctx, r, `[${i + 1}]`); // [1]/[2]/[3] — desktop keys pick cards
   });
 
-  // one board reshuffle per draft — dimmed once spent
-  button(ctx, DRAFT_REROLL, rerolls > 0 ? `REROLL (${rerolls})` : 'REROLL USED', rerolls > 0);
+  // one board reshuffle per draft — spent charges gray out
+  pill(ctx, DRAFT_REROLL, {
+    c: '#3a8cff',
+    cd: '#2563d8',
+    tc: '#fff',
+    label: 'REROLL',
+    badge: `×${rerolls}`,
+    disabled: rerolls <= 0,
+  });
 
   // picked team strip
   ctx.font = font(9);
@@ -2234,11 +2575,13 @@ const ITEM_REEL = [...new Set(PERKS.map((p) => p.item))];
 
 // One held-item offer card — shared by the post-stage reward and the
 // pre-run charm pick. `spin` runs the same reel reveal the draft uses.
+// opts.owned marks repeat picks (DUPE pill); opts.idx feeds the [n] key hint.
 export function drawPerkCard(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
   perk: { name: string; item: string; desc: string; rarity: Rarity },
   spin?: { age: number; i: number },
+  opts?: { owned?: boolean; idx?: number },
 ) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
@@ -2248,16 +2591,18 @@ export function drawPerkCard(
   ctx.fill();
   cardFrame(ctx, r, 10);
 
+  // pokebonk anatomy: a rarity header band carries the icon — the reel
+  // plays inside it too
+  const band = { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: 72 };
   const stopAt = spin ? (REEL_STOPS[spin.i] ?? REEL_STOPS[REEL_STOPS.length - 1]) : 0;
   if (spin && spin.age < stopAt) {
-    // slot reel: item icons scroll past until the reel brakes onto the deal —
-    // name/rarity stay hidden or the spin would spoil itself
-    const win = { x: r.x + 10, y: r.y + 18, w: r.w - 20, h: r.h - 40 };
+    // slot reel: item icons scroll past inside the band until it brakes
+    // onto the deal — band/chips stay hidden or the spin would spoil itself
     ctx.save();
-    roundRect(ctx, win.x, win.y, win.w, win.h, 8);
+    roundRect(ctx, band.x, band.y, band.w, band.h + 9, 9);
     ctx.clip();
     ctx.fillStyle = '#0a0e1e';
-    ctx.fillRect(win.x, win.y, win.w, win.h);
+    ctx.fillRect(band.x, band.y, band.w, band.h);
     // ease-out quart — a fast blur of icons that settles hard on the deal
     const spinP = Math.min(spin.age / stopAt, 1);
     const steps = 9 + spin.i * 3;
@@ -2267,16 +2612,16 @@ export function drawPerkCard(
     ctx.imageSmoothingEnabled = false;
     for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
       const img = itemSprite(ITEM_REEL[(((idx + j - steps) % L) + L) % L]);
-      if (img) ctx.drawImage(img, r.x + r.w / 2 - 24, win.y + win.h / 2 - 24 + (j - pos) * 60, 48, 48);
+      if (img) ctx.drawImage(img, band.x + band.w / 2 - 20, band.y + band.h / 2 - 20 + (j - pos) * 48, 40, 40);
     }
-    // fade the window edges so icons slide out of the dark
-    const g = ctx.createLinearGradient(0, win.y, 0, win.y + win.h);
+    // fade the band edges so icons slide out of the dark
+    const g = ctx.createLinearGradient(0, band.y, 0, band.y + band.h);
     g.addColorStop(0, 'rgba(10,14,30,0.9)');
-    g.addColorStop(0.3, 'rgba(10,14,30,0)');
-    g.addColorStop(0.7, 'rgba(10,14,30,0)');
+    g.addColorStop(0.35, 'rgba(10,14,30,0)');
+    g.addColorStop(0.65, 'rgba(10,14,30,0)');
     g.addColorStop(1, 'rgba(10,14,30,0.9)');
     ctx.fillStyle = g;
-    ctx.fillRect(win.x, win.y, win.w, win.h);
+    ctx.fillRect(band.x, band.y, band.w, band.h);
     ctx.restore();
     ctx.textAlign = 'center';
     ctx.font = font(9);
@@ -2287,39 +2632,52 @@ export function drawPerkCard(
   // landing pop: the icon overshoots for a beat as the reel stops
   const pop = spin ? 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15) : 1;
 
-  ctx.fillStyle = RARITY_COLOR[perk.rarity];
-  ctx.fillRect(r.x + 6, r.y + 6, r.w - 12, 5);
+  stripeBand(ctx, band, RARITY_COLOR[perk.rarity]);
+  // rarity pill top-left (light), kind pill top-right (dark) — our perks
+  // re-apply/stack, so a repeat is DUPE not UPGRADE
+  chip(ctx, r.x + 9, r.y + 9, perk.rarity.toUpperCase(), { bg: '#e8ecf8', fg: '#2a2440' });
+  const kind = opts?.owned ? 'DUPE' : 'NEW';
+  ctx.font = fontB(7);
+  chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, {
+    bg: 'rgba(42,36,64,0.8)',
+    fg: '#e8ecf8',
+  });
 
   const img = itemSprite(perk.item);
   if (img) {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(img, r.x + r.w / 2 - 21 * pop, r.y + 66 - 21 * pop, 42 * pop, 42 * pop);
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 3;
+    ctx.drawImage(img, band.x + band.w / 2 - 22 * pop, band.y + band.h / 2 - 22 * pop, 44 * pop, 44 * pop);
     ctx.restore();
   } else {
+    ctx.textAlign = 'center';
     ctx.font = font(16);
     ctx.fillStyle = PARCH;
-    ctx.fillText('?', r.x + r.w / 2 + 3, r.y + 80);
+    ctx.fillText('?', band.x + band.w / 2 + 3, band.y + band.h / 2 + 12);
   }
   ctx.textAlign = 'center';
   fitFont(ctx, perk.name, 9, r.w - 12);
   ctx.fillStyle = PARCH;
-  ctx.fillText(perk.name, r.x + r.w / 2, r.y + 118);
-  ctx.font = fontB(8);
-  ctx.fillStyle = RARITY_COLOR[perk.rarity];
-  ctx.fillText(perk.rarity.toUpperCase(), r.x + r.w / 2, r.y + 135);
+  ctx.fillText(perk.name, r.x + r.w / 2, r.y + 104);
   ctx.font = fontB(8);
   ctx.fillStyle = '#a8b0d8';
   // two-line desc
   const words = perk.desc.split(' ');
   const mid = Math.ceil(words.length / 2);
-  ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 150);
-  ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 168);
+  ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 128);
+  ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 146);
+
+  // [1]/[2]/[3] — desktop keys pick cards off the board
+  const idx = opts?.idx ?? spin?.i;
+  if (idx != null && HAS_KEYS) keyHint(ctx, r, `[${idx + 1}]`);
 }
 
 export function drawReward(
   ctx: CanvasRenderingContext2D,
-  offers: { name: string; item: string; desc: string; rarity: Rarity }[],
+  offers: { id?: string; name: string; item: string; desc: string; rarity: Rarity }[],
   recruit: SpeciesDef | null,
   next: { stage: number; gym: boolean; rolled: boolean },
   score: number,
@@ -2327,6 +2685,7 @@ export function drawReward(
   evo: { from: SpeciesDef; options: SpeciesDef[] } | null,
   luck: number,
   spin: number, // reel age in seconds — counts up from the deal
+  perkIds?: string[], // the run's granted perks — repeat offers tag as DUPE
 ) {
   ctx.fillStyle = '#0b0e1ad8';
   ctx.fillRect(0, 0, W, H);
@@ -2389,17 +2748,19 @@ export function drawReward(
     335,
   );
 
-  offers.forEach((perk, i) => drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }));
+  offers.forEach((perk, i) =>
+    drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }, { owned: !!perk.id && !!perkIds?.includes(perk.id) }),
+  );
 
   // held items — the run's build so far, a strip of icons under the
-  // offer cards so you can read your loadout at a glance
+  // tool row so you can read your loadout at a glance
   if (heldItems.length) {
     const iw = 22, gap = 6, n = Math.min(heldItems.length, 14);
     let ix = W / 2 - (n * (iw + gap) - gap) / 2;
     heldItems.slice(0, 14).forEach((item) => {
       const img = itemSprite(item);
       ctx.globalAlpha = 0.9;
-      if (img) ctx.drawImage(img, ix, 592, iw, iw);
+      if (img) ctx.drawImage(img, ix, 644, iw, iw);
       ix += iw + gap;
     });
     ctx.globalAlpha = 1;
@@ -2416,11 +2777,10 @@ export function drawReward(
     ctx.fillStyle = '#8890b8';
     ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
   }
-  // StS lets you decline a reward — here it cashes out as score instead —
-  // and lets you check the deck mid-pick: TEAM · ITEMS is the same panel
-  // the map carries
-  button(ctx, REWARD_SKIP, 'DECLINE +150', true);
-  button(ctx, REWARD_TEAM, 'TEAM · ITEMS', true);
+  // StS lets you decline a reward — cashes out as score via the tool row's
+  // SKIP pill now — and lets you check the deck mid-pick: TEAM · ITEMS is
+  // the same panel the map carries
+  pill(ctx, REWARD_TEAM, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TEAM · ITEMS' });
 
   // a split evolution blocks the reward pick until its form is chosen
   if (evo) {
@@ -2460,9 +2820,44 @@ export function drawReward(
   }
 }
 
+// The offer-board tool row: REROLL re-deals the offers, SKIP cashes the
+// board out as +150 score, BANISH arms then culls the next card tapped.
+// Charges are per-run — main.ts hit-tests TOOL_* and owns the tools state.
+export function drawToolRow(
+  ctx: CanvasRenderingContext2D,
+  tools: { roll: number; ban: number },
+  banArmed: boolean,
+  t: number, // frame time in seconds — drives the armed pulse
+) {
+  pill(ctx, TOOL_ROLL, {
+    c: '#3a8cff',
+    cd: '#2563d8',
+    tc: '#fff',
+    label: 'REROLL',
+    badge: `×${tools.roll}`,
+    sub: HAS_KEYS ? '[R]' : undefined,
+    disabled: tools.roll <= 0,
+  });
+  pill(ctx, TOOL_SKIP, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SKIP +150', sub: HAS_KEYS ? '[X]' : undefined });
+  ctx.save();
+  // armed reads as their .armed state — a pulsing red waiting on a card tap
+  if (banArmed) ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 8);
+  pill(ctx, TOOL_BAN, {
+    c: '#ff5a5f',
+    cd: '#e0303e',
+    tc: '#fff',
+    label: 'BANISH',
+    badge: `×${tools.ban}`,
+    sub: HAS_KEYS ? '[Z]' : undefined,
+    disabled: tools.ban <= 0,
+  });
+  ctx.restore();
+}
+
 // The roster manager — box strip + team slots with tap-to-swap. The
 // overworld TEAM · ITEMS panel is its only home now (same rects → same
 // hit tests).
+
 function drawRoster(
   ctx: CanvasRenderingContext2D,
   box: SpeciesDef[],
@@ -2479,11 +2874,11 @@ function drawRoster(
   // captured box — tap a catch and a teammate, in either order, to swap
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(`BOX: beaten foes join at ${Math.round(catchPct * 100)}%`, W / 2, 480);
+  ctx.fillText(`BOX: beaten foes join at ${Math.round(catchPct * 100)}%`, W / 2, 526);
   if (box.length === 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
-    ctx.fillText('nothing caught yet: beaten foes sometimes join', W / 2, BOX_STRIP.y + 32);
+    ctx.fillText('nothing caught yet: beaten foes sometimes join', W / 2, BOX_STRIP.y + BOX_STRIP.h / 2 + 4);
   }
   ctx.save();
   ctx.beginPath();
@@ -2491,118 +2886,147 @@ function drawRoster(
   ctx.clip();
   box.forEach((def, i) => {
     const r = boxSlotRect(i, box.length, boxScroll);
-    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+    const sel = i === selBox;
+    const dy = sel ? -3 : 0; // the pick lifts its card off the strip
+    const card = { x: r.x, y: r.y + dy, w: r.w, h: r.h };
+    if (sel) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      roundRect(ctx, r.x + 2, r.y + 6, r.w, r.h, 10);
+      ctx.fill();
+    }
+    roundRect(ctx, card.x, card.y, card.w, card.h, 10);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    rim(ctx, r, 8, i === selBox ? '#ffd84d' : '#2a3560', i === selBox ? 2 : 1);
-    edge(ctx, r, 8);
+    rim(ctx, card, 10, sel ? '#ffd84d' : '#2a3560', sel ? 2.5 : 1);
+    edge(ctx, card, 10);
     const ko = (boxHp[i] ?? 1) <= 0;
     ctx.globalAlpha = ko ? 0.3 : 1;
-    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 23, 38);
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, card.y + 25, 36);
     ctx.globalAlpha = 1;
     if (ko) {
       ctx.font = font(9);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillText('KO', r.x + r.w / 2 + 1, r.y + 27);
+      ctx.fillText('KO', r.x + r.w / 2 + 1, card.y + 29);
       ctx.fillStyle = '#ff6b6b';
-      ctx.fillText('KO', r.x + r.w / 2, r.y + 26);
+      ctx.fillText('KO', r.x + r.w / 2, card.y + 28);
     } else if (def.shiny) {
       ctx.font = font(7);
       ctx.fillStyle = '#ffd84d';
-      ctx.fillText('✦', r.x + r.w - 8, r.y + 11);
+      ctx.fillText('✦', r.x + r.w - 8, card.y + 11);
     }
-    hpBar(ctx, r.x + 6, r.y + 42, r.w - 12, boxHp[i] ?? 1);
-    ctx.font = fontB(8);
+    hpBar(ctx, r.x + 6, card.y + 46, r.w - 12, boxHp[i] ?? 1);
+    ctx.font = fontB(7);
     ctx.fillStyle = ko ? '#5a6284' : TYPE_COLOR[def.type];
-    ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, r.y + 54);
+    ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, card.y + 58);
     const lvl = boxLvl[i] ?? 1;
     if (lvl > 1) {
-      ctx.font = fontB(7);
-      const lw = ctx.measureText(`Lv${lvl}`).width + 8;
-      roundRect(ctx, r.x + 3, r.y + 3, lw, 11, 4);
-      ctx.fillStyle = '#0c1020dd';
-      ctx.fill();
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#9df0ff';
-      ctx.fillText(`Lv${lvl}`, r.x + 7, r.y + 11);
+      chip(ctx, r.x + 3, card.y + 3, `Lv${lvl}`, { bg: 'rgba(12,16,32,0.85)', fg: '#9df0ff' });
       ctx.textAlign = 'center';
     }
   });
   ctx.restore();
   const maxScroll = boxScrollMax(box.length);
   if (maxScroll > 0) {
+    // scroll affordances — tucked inside the strip so they stay on the panel
     ctx.font = font(9);
-    ctx.fillStyle = '#8890b8';
-    if (boxScroll > 0) ctx.fillText('◀', BOX_STRIP.x - 14, BOX_STRIP.y + 34);
-    if (boxScroll < maxScroll) ctx.fillText('▶', BOX_STRIP.x + BOX_STRIP.w + 14, BOX_STRIP.y + 34);
+    if (boxScroll > 0) {
+      ctx.fillStyle = 'rgba(10,14,30,0.7)';
+      ctx.beginPath();
+      ctx.arc(BOX_STRIP.x + 12, BOX_STRIP.y + BOX_STRIP.h / 2, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#aab0c8';
+      ctx.fillText('◀', BOX_STRIP.x + 12, BOX_STRIP.y + BOX_STRIP.h / 2 + 5);
+    }
+    if (boxScroll < maxScroll) {
+      ctx.fillStyle = 'rgba(10,14,30,0.7)';
+      ctx.beginPath();
+      ctx.arc(BOX_STRIP.x + BOX_STRIP.w - 12, BOX_STRIP.y + BOX_STRIP.h / 2, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#aab0c8';
+      ctx.fillText('▶', BOX_STRIP.x + BOX_STRIP.w - 12, BOX_STRIP.y + BOX_STRIP.h / 2 + 5);
+    }
   }
 
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('YOUR TEAM', W / 2, 630);
+  ctx.fillText('YOUR TEAM', W / 2, 622);
   team.forEach((def, i) => {
     const r = teamSlotRect(i);
-    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+    const sel = i === selTeam;
+    const dy = sel ? -3 : 0; // same lift as the box strip — the armed card raises
+    const card = { x: r.x, y: r.y + dy, w: r.w, h: r.h };
+    if (sel) {
+      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      roundRect(ctx, r.x + 2, r.y + 6, r.w, r.h, 10);
+      ctx.fill();
+    }
+    roundRect(ctx, card.x, card.y, card.w, card.h, 10);
     ctx.fillStyle = '#12162b';
     ctx.fill();
-    rim(ctx, r, 8, i === selTeam ? '#ffd84d' : selBox >= 0 ? GOLD : '#2a3560', i === selTeam ? 2 : 1);
-    edge(ctx, r, 8);
+    rim(ctx, card, 10, sel ? '#ffd84d' : selBox >= 0 ? GOLD : '#2a3560', sel ? 2.5 : selBox >= 0 ? 1.5 : 1);
+    edge(ctx, card, 10);
+    // type hairline + draft-card chips: type tag left, level tag right —
+    // a shiny's level rides in gold
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillRect(r.x + 5, r.y + 5, def.type2 ? (r.w - 10) / 2 : r.w - 10, 3);
+    ctx.fillRect(card.x + 6, card.y + 5, def.type2 ? (card.w - 12) / 2 : card.w - 12, 3);
     if (def.type2) {
       ctx.fillStyle = TYPE_COLOR[def.type2];
-      ctx.fillRect(r.x + 5 + (r.w - 10) / 2, r.y + 5, (r.w - 10) / 2, 3);
+      ctx.fillRect(card.x + 6 + (card.w - 12) / 2, card.y + 5, (card.w - 12) / 2, 3);
     }
+    chip(ctx, card.x + 6, card.y + 12, def.type.toUpperCase(), {
+      bg: '#e8ecf8',
+      fg: mixHex(TYPE_COLOR[def.type], '#2a2440', 0.45),
+      fontPx: 6,
+    });
+    const lvl = teamLvl[i] ?? 1;
+    const lt = def.shiny ? `✦${lvl}` : `Lv${lvl}`;
+    ctx.font = fontB(7);
+    const lw = ctx.measureText(lt).width + 14;
+    chip(
+      ctx,
+      card.x + card.w - 6 - lw,
+      card.y + 12,
+      lt,
+      def.shiny ? { bg: '#ffd84d', fg: '#2a2440' } : { bg: 'rgba(12,16,32,0.85)', fg: '#9df0ff' },
+    );
+    ctx.textAlign = 'center';
     const ko = (teamHp[i] ?? 1) <= 0;
     ctx.globalAlpha = ko ? 0.3 : 1;
-    (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, r.y + 30, 40);
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, card.x + card.w / 2, card.y + 50, 44);
     ctx.globalAlpha = 1;
     if (ko) {
       ctx.font = font(10);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillText('KO', r.x + r.w / 2 + 1, r.y + 34);
+      ctx.fillText('KO', card.x + card.w / 2 + 1, card.y + 54);
       ctx.fillStyle = '#ff6b6b';
-      ctx.fillText('KO', r.x + r.w / 2, r.y + 33);
-    } else if (def.shiny) {
-      ctx.font = font(7);
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillText('✦', r.x + r.w - 9, r.y + 13);
+      ctx.fillText('KO', card.x + card.w / 2, card.y + 53);
     }
-    hpBar(ctx, r.x + 8, r.y + 54, r.w - 16, teamHp[i] ?? 1);
+    hpBar(ctx, card.x + 8, card.y + 74, card.w - 16, teamHp[i] ?? 1);
     ctx.font = fontB(8);
     ctx.fillStyle = ko ? '#5a6284' : PARCH;
-    ctx.fillText(def.name.slice(0, 12), r.x + r.w / 2, r.y + 67);
-    const lvl = teamLvl[i] ?? 1;
-    if (lvl > 1) {
-      ctx.font = fontB(7);
-      const lw = ctx.measureText(`Lv${lvl}`).width + 8;
-      roundRect(ctx, r.x + 3, r.y + 3, lw, 11, 4);
-      ctx.fillStyle = '#0c1020dd';
-      ctx.fill();
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#9df0ff';
-      ctx.fillText(`Lv${lvl}`, r.x + 7, r.y + 11);
-      ctx.textAlign = 'center';
-    }
+    ctx.fillText(def.name.slice(0, 12), card.x + card.w / 2, card.y + 87);
+    // the role rides as a caption under the card — the 92px face is full
+    ctx.font = fontB(6);
+    ctx.fillStyle = ko ? '#464e6e' : '#8890b8';
+    ctx.fillText(roleTag(def), card.x + card.w / 2, card.y + card.h + 10);
   });
   // the selected mon's super reads here — swapping is a move pick too
   const selDef = selBox >= 0 ? box[selBox] : selTeam >= 0 ? team[selTeam] : null;
   if (selDef) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}`, W / 2, 744);
+    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}`, W / 2, 748); // under the role captions
   }
-  ctx.font = fontB(8);
-  ctx.fillStyle = '#5a6284';
-  ctx.fillText(
+  const hint =
     selTeam >= 0
       ? 'tap a box mon to swap in'
       : selBox >= 0
         ? 'tap a teammate to swap in'
-        : 'tap a team mon and a box mon to swap them',
-    W / 2,
-    764,
-  );
+        : 'tap a team mon and a box mon to swap them';
+  ctx.font = fontB(7);
+  const hw = ctx.measureText(hint).width + 14;
+  chip(ctx, W / 2 - hw / 2, 752, hint, { bg: 'rgba(42,36,64,0.8)', fg: '#a8b0d0' });
+  ctx.textAlign = 'center';
 }
 
 // Overworld roster drawer — the map keeps a single TEAM · ITEMS button where
@@ -2610,7 +3034,7 @@ function drawRoster(
 // box/team management the reward break uses.
 export const MAP_MENU = { x: W / 2 - 120, y: 872, w: 240, h: 46 };
 export const TEAM_PANEL = { x: 24, y: 258, w: W - 48, h: 586 };
-export const MENU_CLOSE = { x: W / 2 - 90, y: 788, w: 180, h: 40 };
+export const MENU_CLOSE = { x: W / 2 - 90, y: 788, w: 180, h: 44 };
 
 export function drawTeamMenu(
   ctx: CanvasRenderingContext2D,
@@ -2632,49 +3056,71 @@ export function drawTeamMenu(
   ctx.fillStyle = '#0d1122';
   ctx.fill();
   rim(ctx, TEAM_PANEL, 10, GOLD, 2);
+  edge(ctx, TEAM_PANEL, 10);
   ctx.textAlign = 'center';
-  ctx.font = font(16);
-  ctx.fillStyle = '#f8d030';
-  ctx.fillText('TEAM & ITEMS', W / 2, 300);
+  // the same striped band the offer cards wear — gold for the run's loadout
+  const band = { x: TEAM_PANEL.x + 4, y: TEAM_PANEL.y + 4, w: TEAM_PANEL.w - 8, h: 42 };
+  stripeBand(ctx, band, GOLD);
+  ctx.font = font(15);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText('TEAM & ITEMS', W / 2, band.y + band.h / 2 + 6);
 
-  // held items — the run's build, each named with what it does
+  // held items — the run's build, card rows like the bag list: rarity notch,
+  // icon, name and what it does
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText('HELD ITEMS', W / 2, 330);
+  ctx.fillText('HELD ITEMS', W / 2, 326);
   const shown = heldItems.slice(0, 5);
+  if (heldItems.length > shown.length) {
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#5a6284';
+    ctx.textAlign = 'right';
+    ctx.fillText(`+${heldItems.length - shown.length} more`, TEAM_PANEL.x + TEAM_PANEL.w - 16, 326);
+    ctx.textAlign = 'center';
+  }
   if (!shown.length) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
-    ctx.fillText('none yet — relic picks and chests stock it', W / 2, 356);
+    ctx.fillText('none yet — relic picks and chests stock it', W / 2, 366);
   }
   shown.forEach((item, i) => {
-    const y = 342 + i * 24;
+    const r = { x: TEAM_PANEL.x + 16, y: 336 + i * 34, w: TEAM_PANEL.w - 32, h: 30 };
+    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+    ctx.fillStyle = '#12162b';
+    ctx.fill();
+    rim(ctx, r, 8, '#2a3560', 1);
+    edge(ctx, r, 8);
+    const perk = PERKS.find((p) => p.item === item);
+    ctx.fillStyle = perk ? RARITY_COLOR[perk.rarity] : '#2a3560';
+    ctx.fillRect(r.x + 4, r.y + 5, 3, r.h - 10);
     const img = itemSprite(item);
     if (img) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, 48, y - 6, 20, 20);
+      ctx.drawImage(img, r.x + 12, r.y + 4, 22, 22);
       ctx.restore();
     }
-    const perk = PERKS.find((p) => p.item === item);
-    ctx.font = fontB(9);
-    ctx.fillStyle = '#e8ecf8';
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(r.x + 40, r.y, r.w - 50, r.h);
+    ctx.clip();
     ctx.textAlign = 'left';
-    ctx.fillText(
-      `${(perk ? perk.name : item).toUpperCase()}${perk ? `  —  ${perk.desc}` : ''}`,
-      78,
-      y + 8,
-    );
+    ctx.font = fontB(9);
+    const name = (perk ? perk.name : item).toUpperCase();
+    const nw = ctx.measureText(name).width;
+    ctx.fillStyle = '#e8ecf8';
+    ctx.fillText(name, r.x + 42, r.y + 19);
+    if (perk) {
+      ctx.font = fontB(8);
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText(`— ${perk.desc}`, r.x + 48 + nw, r.y + 19);
+    }
+    ctx.restore();
     ctx.textAlign = 'center';
   });
-  if (heldItems.length > shown.length) {
-    ctx.font = fontB(8);
-    ctx.fillStyle = '#5a6284';
-    ctx.fillText(`+${heldItems.length - shown.length} more`, W / 2, 342 + shown.length * 24 + 8);
-  }
 
   drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct);
-  button(ctx, MENU_CLOSE, 'CLOSE', true);
+  pill(ctx, MENU_CLOSE, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'CLOSE' });
 }
 
 // Starter-charm pick before stage 1 — same card look, standalone screen.
@@ -2694,9 +3140,9 @@ export function drawPerkPick(
   ctx.font = fontB(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(sub, W / 2, 315);
-  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i), p));
+  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i), p, undefined, { idx: i }));
   // declining pays score instead — a dead offer still has a price
-  button(ctx, CHARM_SKIP, 'SKIP +200 PTS', true);
+  pill(ctx, CHARM_SKIP, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SKIP +200 PTS' });
   // the drafted squad rides under the offers — pick the item for THESE mons
   if (team.length) {
     ctx.font = font(9);
@@ -2734,6 +3180,11 @@ function confetti(ctx: CanvasRenderingContext2D, t: number) {
   ctx.globalAlpha = 1;
 }
 
+// The run debrief, filed as a FIELD REPORT: a centred card carries the
+// banded header, a numbered FINDINGS list and the FIELD NOTE; the verdict
+// is rubber-stamped across its top edge and the squad rides below as the
+// report's attachment. The button hit rects keep their posts — only the
+// ink inside them changed hands.
 export function drawResult(
   ctx: CanvasRenderingContext2D,
   res: RunResult,
@@ -2745,73 +3196,188 @@ export function drawResult(
   ctx.fillRect(0, 0, W, H);
   if (res.won) confetti(ctx, t);
 
-  ctx.textAlign = 'center';
-  const headline = res.won ? 'CLIMB COMPLETE!' : 'WIPED OUT';
-  fitFont(ctx, headline, 26, W - 60);
-  ctx.fillStyle = res.won ? '#6fdc6f' : '#ff6b6b';
-  ctx.fillText(headline, W / 2, 300);
-
-  ctx.font = font(16);
-  ctx.fillStyle = '#f8d030';
-  ctx.fillText(`SCORE ${res.score.toLocaleString('en-US')}`, W / 2, 334);
-  if (res.newBest) {
-    ctx.font = font(10);
-    ctx.fillStyle = '#ffe76a';
-    ctx.fillText('★ NEW RECORD ★', W / 2, 352);
-  } else if (res.shortOfBest > 0) {
-    // so-close framing — the near-record loss is the strongest rematch pull
-    ctx.font = font(9);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(`${res.shortOfBest.toLocaleString('en-US')} PTS SHORT OF YOUR BEST`, W / 2, 352);
-  }
-
-  ctx.font = font(10);
-  ctx.fillStyle = '#fff';
-  ctx.fillText(
-    `${res.shots} shots · ${res.time.toFixed(1)}s${res.caught ? ` · ${res.caught} caught` : ''}`,
-    W / 2,
-    res.newBest ? 368 : 355,
-  );
-  if (res.newDex > 0) {
-    ctx.font = font(9);
-    ctx.fillStyle = '#9df0ff';
-    ctx.fillText(`+${res.newDex} NEW DEX ENTR${res.newDex === 1 ? 'Y' : 'IES'}`, W / 2, res.newBest ? 384 : 371);
-  }
-  if (extra) {
-    ctx.fillStyle = '#f8d030';
-    fitFont(ctx, extra, 11, W - 60);
-    ctx.fillText(extra, W / 2, res.newDex > 0 ? 400 : 395);
-  }
-  // fresh trophies get their own gold line under the score block
-  if (res.newAch.length) {
-    ctx.font = fontB(9);
-    ctx.fillStyle = '#ffd84d';
-    ctx.fillText(`★ ${res.newAch.join(' · ')} ★`, W / 2, extra ? 414 : 408);
-  }
-
-  // ranked movement — the ladder grades every run, wins or wipes
-  if (res.rating) {
-    const r = res.rating;
-    const line = `RATING ${r.delta >= 0 ? '+' : ''}${r.delta} — ${r.tier}${r.up ? ' ★ RANK UP' : ''}${res.place >= 0 ? ` · HOF #${res.place + 1}` : ''}`;
-    fitFont(ctx, line, 9, W - 60);
-    ctx.fillStyle = r.color;
-    ctx.fillText(line, W / 2, 424);
-  }
-
-  // run badges — rarity-colored chips, up to two rows
+  // badge chips wrap four to a row — counted up front, they size the card
   const badgeRows: { name: string; rarity: Rarity }[][] = [[]];
   for (const b of res.badges) {
     const row = badgeRows[badgeRows.length - 1];
     if (row.length >= 4) badgeRows.push([b]);
     else row.push(b);
   }
+
+  // the numbered findings — one row per logged stat. DEPTH is won=9 or the
+  // field main.ts filed; a wipe without it is parsed back out of `extra`.
+  const depthN = res.depth ?? (res.won ? TOTAL_STAGES : Number(extra?.match(/stage (\d+) of/)?.[1] ?? 0));
+  const findings: [label: string, value: string, color: string][] = [
+    ['SCORE', res.score.toLocaleString('en-US'), '#f8d030'],
+    ['DEPTH', `${depthN || '—'}/${TOTAL_STAGES}`, '#e8ecf8'],
+    ['SHOTS', `${res.shots}`, '#e8ecf8'],
+    ['TIME', `${res.time.toFixed(1)}s`, '#e8ecf8'],
+    ['CAUGHT', `${res.caught}`, '#e8ecf8'],
+  ];
+  if (res.rating) {
+    const r = res.rating;
+    findings.push([
+      'RATING',
+      `${r.delta >= 0 ? '+' : ''}${r.delta} ${r.tier}${r.up ? ' ★ RANK UP' : ''}${res.place >= 0 ? ` · HOF #${res.place + 1}` : ''}`,
+      r.color,
+    ]);
+  }
+  if (res.newDex > 0) findings.push(['NEW DEX', `+${res.newDex}`, '#9df0ff']);
+
+  ctx.font = fontB(9);
+  const noteLines = extra ? wrap2(ctx, extra, W - 92) : []; // interior width of the report card
+
+  // sized to content — the card tallies each block before it draws, and the
+  // whole stack (report + attachment + echo) centres above the buttons
+  const ROW = 24;
+  const findingsY = 122; // band + CASE kicker + FINDINGS head
+  const noteH = extra ? 18 + noteLines.length * 13 + 6 : 0;
+  const recH = res.newBest || res.shortOfBest > 0 ? 22 : 0;
+  const achH = res.newAch.length ? 20 : 0;
+  const badgeH = res.badges.length ? badgeRows.length * 28 + 4 : 0;
+  const panelH = findingsY + findings.length * ROW + recH + noteH + achH + badgeH + 12;
+  const shareH = share ? 116 : 0;
+  const echoH = !res.won ? 22 : 0;
+  const panel = {
+    x: 30,
+    y: Math.max(46, Math.round((RETRY_BTN.y - 8 - (panelH + shareH + echoH)) / 2)),
+    w: W - 60,
+    h: panelH,
+  };
+  const ix = panel.x + 16; // interior left edge (index gutter)
+  const vx = panel.x + panel.w - 16; // findings values right-align here
+
+  roundRect(ctx, panel.x, panel.y, panel.w, panel.h, 10);
+  ctx.fillStyle = '#0d1122';
+  ctx.fill();
+  rim(ctx, panel, 10, GOLD, 2);
+  edge(ctx, panel, 10);
+
+  // registration marks — the manual's crop ticks on every corner
+  ctx.save();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1.5;
+  ctx.globalAlpha = 0.55;
+  for (const [cx, cy] of [
+    [panel.x, panel.y],
+    [panel.x + panel.w, panel.y],
+    [panel.x, panel.y + panel.h],
+    [panel.x + panel.w, panel.y + panel.h],
+  ]) {
+    ctx.beginPath();
+    ctx.moveTo(cx - 6, cy);
+    ctx.lineTo(cx + 6, cy);
+    ctx.moveTo(cx, cy - 6);
+    ctx.lineTo(cx, cy + 6);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const band = { x: panel.x + 4, y: panel.y + 4, w: panel.w - 8, h: 44 };
+  stripeBand(ctx, band, GOLD);
+  ctx.textAlign = 'left';
+  ctx.font = font(13);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText('FIELD REPORT', band.x + 14, band.y + 25);
+  ctx.font = fontB(7);
+  ctx.globalAlpha = 0.75;
+  ctx.fillText('post-climb debrief — filed for the record', band.x + 14, band.y + 38);
+  ctx.globalAlpha = 1;
+
+  // the CASE line is the file's index card — run number when main files
+  // one, otherwise the seed carries the reference
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(`CASE ${res.runNo ?? res.seed}${res.runNo != null ? ` · SEED ${res.seed}` : ''}`, ix, panel.y + 66);
+
+  // the verdict is stamped, not printed — tilted ink across the card's
+  // top-right edge, the only colour the report allows itself
+  ctx.save();
+  ctx.translate(panel.x + panel.w - 100, panel.y + 16);
+  ctx.rotate(-0.14);
+  ctx.globalAlpha = 0.92;
+  const stampC = res.won ? '#6fdc6f' : '#ff6b6b';
+  const stamp = res.won ? 'CLIMB COMPLETE' : 'WIPED OUT';
+  ctx.strokeStyle = stampC;
+  ctx.lineWidth = 2.5;
+  ctx.strokeRect(-88, -19, 176, 38);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-84, -15, 168, 30);
+  fitFont(ctx, stamp, 12, 156);
+  ctx.fillStyle = stampC;
+  ctx.textAlign = 'center';
+  ctx.fillText(stamp, 0, 5);
+  ctx.restore();
+
+  ctx.textAlign = 'left';
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#5a6284';
+  ctx.fillText('FINDINGS', ix, panel.y + 96);
+
+  findings.forEach(([label, value, color], i) => {
+    const fy = panel.y + findingsY + i * ROW;
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#464e6e';
+    ctx.fillText(String(i + 1).padStart(2, '0'), ix, fy);
+    ctx.font = font(8);
+    ctx.fillStyle = '#aab4dd';
+    ctx.fillText(label, ix + 36, fy);
+    ctx.font = fontB(10);
+    ctx.fillStyle = color;
+    ctx.textAlign = 'right';
+    ctx.fillText(value, vx, fy);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1a2040';
+    ctx.fillRect(ix, fy + 9, panel.w - 32, 1);
+  });
+  let yy = panel.y + findingsY + findings.length * ROW;
+
+  // so-close framing — the near-record loss is the strongest rematch pull
+  if (res.newBest) {
+    ctx.textAlign = 'center';
+    ctx.font = font(9);
+    ctx.fillStyle = '#ffe76a';
+    ctx.fillText('★ NEW RECORD ★', W / 2, yy + 14);
+    yy += 22;
+  } else if (res.shortOfBest > 0) {
+    ctx.textAlign = 'center';
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`${res.shortOfBest.toLocaleString('en-US')} PTS SHORT OF YOUR BEST`, W / 2, yy + 14);
+    yy += 22;
+  }
+
+  // the free-text margin: loss detail or ascension unlock, filed verbatim
+  if (extra) {
+    ctx.textAlign = 'left';
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('FIELD NOTE', ix, yy + 12);
+    ctx.fillStyle = '#1a2040';
+    ctx.fillRect(ix + ctx.measureText('FIELD NOTE').width + 8, yy + 9, vx - ix - ctx.measureText('FIELD NOTE').width - 8, 1);
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#f8d030';
+    noteLines.forEach((l, li) => ctx.fillText(l, ix, yy + 24 + li * 13));
+    yy += 18 + noteLines.length * 13 + 6;
+  }
+
+  // fresh trophies get their own gold line under the findings block
+  if (res.newAch.length) {
+    ctx.textAlign = 'center';
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`★ ${res.newAch.join(' · ')} ★`, W / 2, yy + 14);
+    yy += 20;
+  }
+
+  // run badges — rarity-colored chips, up to two rows
   badgeRows.forEach((row, ri) => {
-    const y = 440 + ri * 28;
+    const by = yy + 4 + ri * 28;
     ctx.font = fontB(8);
     const ws = row.map((b) => ctx.measureText(b.name).width + 20);
     let bx = W / 2 - (ws.reduce((a, c) => a + c, 0) + (row.length - 1) * 8) / 2;
     row.forEach((b, i) => {
-      const br = { x: bx, y, w: ws[i], h: 20 };
+      const br = { x: bx, y: by, w: ws[i], h: 20 };
       roundRect(ctx, br.x, br.y, br.w, br.h, 5);
       ctx.fillStyle = '#12162b';
       ctx.fill();
@@ -2819,25 +3385,34 @@ export function drawResult(
       edge(ctx, br, 5);
       ctx.font = fontB(8);
       ctx.fillStyle = RARITY_COLOR[b.rarity];
-      ctx.fillText(b.name, bx + ws[i] / 2, y + 14);
+      ctx.fillText(b.name, bx + ws[i] / 2, by + 14);
       bx += ws[i] + 8;
     });
   });
 
+  // the attachment — squad + wave grid ride below the report itself
+  const ay = panel.y + panel.h;
+  ctx.textAlign = 'center';
   if (share) {
-    const sy = 472 + badgeRows.length * 28;
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('— SQUAD ATTACHMENT —', W / 2, ay + 14);
+    const sy = ay + 44;
     ctx.font = '30px system-ui';
     ctx.fillText(share.waves, W / 2, sy);
     // the squad as real sprites — reads as Pokémon at a glance
     const n = res.team.length;
     res.team.forEach((def, i) => {
       const mx = W / 2 + (i - (n - 1) / 2) * 52;
-      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, sy + 34, 42);
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, sy + 36, 42);
       if (i === res.mvpIdx) {
         ctx.font = font(10);
         ctx.fillStyle = '#ffd84d';
-        ctx.fillText('★', mx, sy + 4);
+        ctx.fillText('★', mx, sy + 13); // crowns the sprite, below the wave row
       }
+      ctx.font = fontB(6);
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText(roleTag(def), mx, sy + 68);
     });
   }
 
@@ -2845,12 +3420,12 @@ export function drawResult(
   if (!res.won) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('this fallen team may return as a RIVAL next run', W / 2, share ? 472 + badgeRows.length * 28 + 64 : 560);
+    ctx.fillText('this fallen team may return as a RIVAL next run', W / 2, share ? ay + 126 : ay + 34);
   }
 
-  button(ctx, RETRY_BTN, 'REMATCH', true);
-  button(ctx, SHARE_BTN, share?.copied ? 'COPIED!' : 'SHARE RESULT', true);
-  button(ctx, TITLE_BTN, 'TITLE', true);
+  pill(ctx, RETRY_BTN, { c: '#ffd84d', cd: '#c8a44d', tc: '#2a2440', label: 'REMATCH' });
+  pill(ctx, SHARE_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: share?.copied ? 'COPIED!' : 'SHARE RESULT' });
+  pill(ctx, TITLE_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TITLE' });
 
   // receipt stub — one screenshot carries the replay and the build
   ctx.save();
@@ -2930,4 +3505,555 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
     ctx.fillText('TAP A TEAMMATE!', ux + ULT_SHOTS * (pipW + 3) + 8, 60);
     ctx.globalAlpha = 1;
   }
+}
+
+// --- settings modal: pokebonk anatomy, our palette — a left rail of ------
+// --- category pills over a right panel: striped header, then slider or ---
+// --- toggle rows. Geometry is the single source for draw + hit tests. ----
+
+export type SettingsCat = 'sound' | 'graphics' | 'feel';
+export type SettingsSliderKey = 'master' | 'music' | 'sfx' | 'cries' | 'shake';
+export type SettingsToggleKey = 'haptics' | 'flash' | 'battery' | 'fps';
+export type SettingsSegKey = 'quality' | 'pickupFx';
+export type SettingsHit =
+  | { kind: 'tab'; i: number }
+  | { kind: 'slider'; key: SettingsSliderKey }
+  | { kind: 'toggle'; key: SettingsToggleKey }
+  | { kind: 'seg'; key: SettingsSegKey; i: number };
+
+// a settings row — the draw pass and the hit test read the same list. The
+// `invert` toggle lamp reads !stored (REDUCE FLASHES on = flash off); the
+// flip itself is still !stored — toggling an inverted bool is the same op.
+type SettingsRow =
+  | { kind: 'slider'; key: SettingsSliderKey; label: string; sub?: string }
+  | { kind: 'toggle'; key: SettingsToggleKey; label: string; sub?: string; invert?: boolean }
+  | { kind: 'seg'; key: SettingsSegKey; label: string; sub?: string };
+
+export const SETTINGS_PANEL = { x: 24, y: 258, w: W - 48, h: 480 };
+export const SETTINGS_CLOSE = { x: W / 2 - 90, y: SETTINGS_PANEL.y + SETTINGS_PANEL.h - 58, w: 180, h: 44 };
+
+export const SETTINGS_CATS: { id: SettingsCat; name: string; tab: string; sub: string }[] = [
+  { id: 'sound', name: 'SOUND', tab: 'volume & cries', sub: 'volume, music and cries' },
+  { id: 'graphics', name: 'GRAPHICS', tab: 'res & effects', sub: 'quality, battery and effects' },
+  { id: 'feel', name: 'FEEL', tab: 'rumble', sub: 'haptics and feedback' },
+];
+
+// segment order is the store order — hit index and drawn pill share this
+export const SETTINGS_SEG_OPTIONS: Record<SettingsSegKey, readonly string[]> = {
+  quality: ['high', 'medium', 'low'],
+  pickupFx: ['complete', 'simple'],
+};
+
+const SET_ROWS: Record<SettingsCat, SettingsRow[]> = {
+  sound: [
+    { kind: 'slider', key: 'master', label: 'MASTER VOLUME' },
+    { kind: 'slider', key: 'music', label: 'MUSIC' },
+    { kind: 'slider', key: 'sfx', label: 'EFFECTS' },
+    { kind: 'slider', key: 'cries', label: 'POKÉMON CRIES' },
+  ],
+  graphics: [
+    { kind: 'seg', key: 'quality', label: 'QUALITY', sub: 'low performs better' },
+    { kind: 'toggle', key: 'battery', label: 'BATTERY SAVER', sub: 'caps at 30 fps and lowers the resolution' },
+    { kind: 'slider', key: 'shake', label: 'SHAKE INTENSITY', sub: 'hit feedback strength' },
+    { kind: 'toggle', key: 'flash', label: 'REDUCE FLASHES', sub: 'caps full-screen flash intensity', invert: true },
+    { kind: 'seg', key: 'pickupFx', label: 'PICKUP EFFECTS', sub: 'fewer sparkles under pickups' },
+    { kind: 'toggle', key: 'fps', label: 'SHOW FPS', sub: 'frame counter in the corner' },
+  ],
+  feel: [{ kind: 'toggle', key: 'haptics', label: 'HAPTICS' }],
+};
+
+const SET_RAIL = { x: SETTINGS_PANEL.x + 14, y: SETTINGS_PANEL.y + 36, w: 160 };
+const SET_TAB_H = 64;
+const SET_TAB_GAP = 10;
+const SET_PANEL = {
+  x: SET_RAIL.x + SET_RAIL.w + 12,
+  y: SETTINGS_PANEL.y + 14,
+  w: SETTINGS_PANEL.x + SETTINGS_PANEL.w - 14 - (SET_RAIL.x + SET_RAIL.w + 12),
+  h: 390,
+};
+const SET_BAND = { x: SET_PANEL.x + 4, y: SET_PANEL.y + 4, w: SET_PANEL.w - 8, h: 44 };
+const SET_ROW = { x: SET_PANEL.x + 4, w: SET_PANEL.w - 8 };
+const SET_ROWS_Y = SET_BAND.y + SET_BAND.h + 14;
+const SET_SLIDER_H = 70;
+const SET_TOGGLE_H = 66;
+const SET_SEG_H = 62;
+const SET_TRACK = { x: SET_ROW.x + 14, w: SET_ROW.w - 28, h: 10 };
+const SET_SEG_TRACK = { x: SET_TRACK.x, w: SET_TRACK.w, h: 22 };
+
+// rows carrying a sub line pack tighter — the sub eats the label's bottom pad
+const setRowPitch = (r: SettingsRow) =>
+  r.kind === 'seg' ? SET_SEG_H : r.sub ? (r.kind === 'slider' ? 58 : 42) : r.kind === 'slider' ? SET_SLIDER_H : SET_TOGGLE_H;
+
+export function settingsTabRect(i: number) {
+  return { x: SET_RAIL.x, y: SET_RAIL.y + i * (SET_TAB_H + SET_TAB_GAP), w: SET_RAIL.w, h: SET_TAB_H };
+}
+
+function settingsRowRect(i: number, cat: SettingsCat) {
+  const rows = SET_ROWS[cat];
+  let y = SET_ROWS_Y;
+  for (let k = 0; k < i; k++) y += setRowPitch(rows[k]);
+  return { x: SET_ROW.x, y, w: SET_ROW.w, h: setRowPitch(rows[i]) - 4 };
+}
+
+// the inset track a segmented row's pills ride in — shared by hit and draw
+const segTrackRect = (r: { y: number }) => ({ x: SET_SEG_TRACK.x, y: r.y + 36, w: SET_SEG_TRACK.w, h: SET_SEG_TRACK.h });
+
+const segIndex = (key: SettingsSegKey, tr: { x: number; w: number }, x: number) => {
+  const n = SETTINGS_SEG_OPTIONS[key].length;
+  return Math.min(n - 1, Math.max(0, Math.floor((x - tr.x) / (tr.w / n))));
+};
+
+// what a point inside the panel touches: a rail pill, a slider's drag slab
+// (the track ±23px — a thumb hit gets >=22px of grace), or a toggle's row
+export function settingsRowHit(p: { x: number; y: number }, cat: SettingsCat): SettingsHit | null {
+  for (let i = 0; i < SETTINGS_CATS.length; i++) {
+    if (inRect(p.x, p.y, settingsTabRect(i))) return { kind: 'tab', i };
+  }
+  const rows = SET_ROWS[cat];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const r = settingsRowRect(i, cat);
+    if (row.kind === 'slider') {
+      // the drag slab is the track ±17px — a thumb hit gets >=22px of grace
+      if (inRect(p.x, p.y, { x: r.x, y: r.y + (row.sub ? 21 : 16), w: r.w, h: 46 }))
+        return { kind: 'slider', key: row.key };
+    } else if (row.kind === 'toggle') {
+      if (inRect(p.x, p.y, r)) return { kind: 'toggle', key: row.key };
+    } else {
+      // seg hits live on the track (+pad) — a label tap doesn't pick options
+      const tr = segTrackRect(r);
+      if (inRect(p.x, p.y, { x: tr.x - 6, y: tr.y - 8, w: tr.w + 12, h: tr.h + 16 }))
+        return { kind: 'seg', key: row.key, i: segIndex(row.key, tr, p.x) };
+    }
+  }
+  return null;
+}
+
+// x → 0..1 across the shared track span — pointerdown sets immediately,
+// pointermove while dragging keeps calling this
+export function settingsSliderSet(key: SettingsSliderKey, x: number) {
+  setSetting(key, Math.min(1, Math.max(0, (x - SET_TRACK.x) / SET_TRACK.w)));
+}
+
+export function settingsToggleFlip(key: SettingsToggleKey) {
+  setSetting(key, !settings()[key]);
+}
+
+export function settingsSegSet(key: SettingsSegKey, i: number) {
+  const opts = SETTINGS_SEG_OPTIONS[key];
+  setSetting(key, opts[Math.min(opts.length - 1, Math.max(0, i))] as Settings[typeof key]);
+}
+
+export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, vals: Settings) {
+  ctx.fillStyle = 'rgba(4,6,16,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, SETTINGS_PANEL.x, SETTINGS_PANEL.y, SETTINGS_PANEL.w, SETTINGS_PANEL.h, 10);
+  ctx.fillStyle = '#0d1122';
+  ctx.fill();
+  rim(ctx, SETTINGS_PANEL, 10, GOLD, 2);
+  edge(ctx, SETTINGS_PANEL, 10);
+
+  ctx.textAlign = 'center';
+  ctx.font = font(10);
+  ctx.fillStyle = GOLD;
+  ctx.fillText('SETTINGS', SET_RAIL.x + SET_RAIL.w / 2, SETTINGS_PANEL.y + 24);
+
+  // category pills: icon circle + bold name + dim sub — the live category
+  // fills gold-tinted, the rest stay ink
+  SETTINGS_CATS.forEach((c, i) => {
+    const r = settingsTabRect(i);
+    const on = c.id === cat;
+    roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+    ctx.fillStyle = on ? '#2a2440' : '#12162b';
+    ctx.fill();
+    rim(ctx, r, 14, on ? GOLD : '#2a3560', on ? 2 : 1);
+    edge(ctx, r, 14);
+    const cx = r.x + 30;
+    const cy = r.y + r.h / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 17, 0, Math.PI * 2);
+    ctx.fillStyle = on ? '#ffd84d' : '#1a2040';
+    ctx.fill();
+    const ink = on ? '#2a2440' : '#8890b8';
+    if (c.id === 'sound') speakerGlyph(ctx, cx, cy, 0.85, false, ink);
+    else if (c.id === 'graphics') monitorGlyph(ctx, cx, cy, 1, ink);
+    else gearGlyph(ctx, cx, cy, 1, ink);
+    ctx.textAlign = 'left';
+    ctx.font = font(9);
+    ctx.fillStyle = on ? PARCH : '#aab4dd';
+    ctx.fillText(c.name, r.x + 56, r.y + 28);
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText(c.tab, r.x + 56, r.y + 44);
+  });
+
+  // the content panel — striped band names the live category
+  const P = SET_PANEL;
+  roundRect(ctx, P.x, P.y, P.w, P.h, 10);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  rim(ctx, P, 10, '#2a3560', 1);
+  edge(ctx, P, 10);
+  stripeBand(ctx, SET_BAND, GOLD);
+  const cdef = SETTINGS_CATS.find((c) => c.id === cat)!;
+  ctx.textAlign = 'left';
+  ctx.font = font(13);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText(cdef.name, SET_BAND.x + 14, SET_BAND.y + 25);
+  ctx.font = fontB(7);
+  ctx.globalAlpha = 0.75;
+  ctx.fillText(cdef.sub, SET_BAND.x + 14, SET_BAND.y + 38);
+  ctx.globalAlpha = 1;
+
+  SET_ROWS[cat].forEach((row, i) => {
+    const r = settingsRowRect(i, cat);
+    ctx.textAlign = 'left';
+    ctx.font = font(9);
+    ctx.fillStyle = '#e8ecf8';
+    ctx.fillText(row.label, r.x + 2, r.y + (row.sub || row.kind !== 'toggle' ? 15 : r.h / 2 + 4));
+    if (row.sub) {
+      ctx.font = fontB(7);
+      ctx.fillStyle = '#5a6284';
+      ctx.fillText(row.sub, r.x + 2, r.y + 27);
+    }
+    if (row.kind === 'slider') {
+      const v = vals[row.key];
+      ctx.font = fontB(10);
+      ctx.fillStyle = '#ffd84d';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${Math.round(v * 100)}%`, r.x + r.w - 2, r.y + 15);
+      const ty = r.y + (row.sub ? 38 : 33);
+      roundRect(ctx, SET_TRACK.x, ty, SET_TRACK.w, SET_TRACK.h, 5);
+      ctx.fillStyle = '#0a0d18';
+      ctx.fill();
+      // the fill wears the same light→base→dark ramp as the pills
+      ctx.save();
+      roundRect(ctx, SET_TRACK.x, ty, SET_TRACK.w, SET_TRACK.h, 5);
+      ctx.clip();
+      const g = ctx.createLinearGradient(0, ty, 0, ty + SET_TRACK.h);
+      g.addColorStop(0, '#ffe76a');
+      g.addColorStop(0.55, '#ffd84d');
+      g.addColorStop(1, '#c8a44d');
+      ctx.fillStyle = g;
+      ctx.fillRect(SET_TRACK.x, ty, Math.max(SET_TRACK.h, SET_TRACK.w * v), SET_TRACK.h);
+      ctx.restore();
+      roundRect(ctx, SET_TRACK.x, ty, SET_TRACK.w, SET_TRACK.h, 5);
+      ctx.strokeStyle = '#2a3560';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // ball thumb — red cap, white belly, dark seam + button
+      const bx = SET_TRACK.x + SET_TRACK.w * v;
+      const by = ty + SET_TRACK.h / 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(bx, by, 12, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = '#f8f8f0';
+      ctx.fillRect(bx - 12, by - 12, 24, 24);
+      ctx.fillStyle = '#f04038';
+      ctx.fillRect(bx - 12, by - 12, 24, 12);
+      ctx.fillStyle = '#0a0d18';
+      ctx.fillRect(bx - 12, by - 2, 24, 4);
+      ctx.restore();
+      ctx.beginPath();
+      ctx.arc(bx, by, 12, 0, Math.PI * 2);
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bx, by, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#f8f8f0';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else if (row.kind === 'toggle') {
+      const on = row.invert ? !vals[row.key] : vals[row.key];
+      const tr = { x: r.x + r.w - 64, y: r.y + r.h / 2 - 13, w: 54, h: 26 };
+      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 13);
+      ctx.fillStyle = on ? '#ffd84d' : '#232840';
+      ctx.fill();
+      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 13);
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      const kx = on ? tr.x + tr.w - 14 : tr.x + 14;
+      ctx.beginPath();
+      ctx.arc(kx, tr.y + 13, 10, 0, Math.PI * 2);
+      ctx.fillStyle = on ? '#f8f8f0' : '#5a6284';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else {
+      // segmented control — an inset track, the live option a filled pill
+      const opts = SETTINGS_SEG_OPTIONS[row.key];
+      const sel = Math.max(0, opts.indexOf(vals[row.key]));
+      const tr = segTrackRect(r);
+      const sw = tr.w / opts.length;
+      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, tr.h / 2);
+      ctx.fillStyle = '#0a0d18';
+      ctx.fill();
+      const pr = { x: tr.x + 2 + sel * sw, y: tr.y + 2, w: sw - 4, h: tr.h - 4 };
+      roundRect(ctx, pr.x, pr.y, pr.w, pr.h, pr.h / 2);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, tr.h / 2);
+      ctx.strokeStyle = '#2a3560';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      opts.forEach((o, oi) => {
+        ctx.font = fontB(8);
+        ctx.fillStyle = oi === sel ? '#2a2440' : '#8890b8';
+        ctx.fillText(o.toUpperCase(), tr.x + sw * (oi + 0.5), tr.y + tr.h / 2 + 3);
+      });
+    }
+  });
+
+  ctx.textAlign = 'center';
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#5a6284';
+  ctx.fillText('saved when you leave', P.x + P.w / 2, P.y + P.h - 12);
+
+  pill(ctx, SETTINGS_CLOSE, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'CLOSE' });
+  if (HAS_KEYS) keyHint(ctx, SETTINGS_CLOSE, '[esc]');
+}
+
+// --- tasks modal: daily/weekly missions — the settings anatomy (dim -----
+// --- screen, gold-rimmed panel, striped band, close pill) but the rail ---
+// --- becomes a top row of two period tabs and each mission is a 56px -----
+// --- row card with a reward icon and a claim slot on the right. ----------
+
+export const TASKS_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
+export const TASKS_CLOSE = { x: W / 2 - 90, y: TASKS_PANEL.y + TASKS_PANEL.h - 58, w: 180, h: 44 };
+// hit-test order — {kind:'tab', i} maps back through this list (SETTINGS_CATS trick)
+export const TASKS_TABS = ['daily', 'weekly'] as const;
+
+export type TasksHit = { kind: 'tab'; i: number } | { kind: 'claim'; i: number } | { kind: 'close' };
+
+const TASKS_TAB_H = 44;
+const TASKS_TAB_GAP = 8;
+const TASKS_BAND = { x: TASKS_PANEL.x + 4, y: TASKS_PANEL.y + 14 + TASKS_TAB_H + 10, w: TASKS_PANEL.w - 8, h: 44 };
+const TASKS_ROWS_Y = TASKS_BAND.y + TASKS_BAND.h + 12;
+const TASKS_ROW_H = 62; // 56px card + gutter — a thumb never aims smaller
+const TASKS_CLAIM_W = 96;
+const TASKS_CLAIM_H = 44;
+
+// two equal pills across the panel top — the rail, squashed into a row
+export function tasksTabRect(i: number) {
+  const w = (TASKS_PANEL.w - 28 - TASKS_TAB_GAP) / 2;
+  return { x: TASKS_PANEL.x + 14 + i * (w + TASKS_TAB_GAP), y: TASKS_PANEL.y + 14, w, h: TASKS_TAB_H };
+}
+
+function taskRowRect(i: number) {
+  return { x: TASKS_PANEL.x + 14, y: TASKS_ROWS_Y + i * TASKS_ROW_H, w: TASKS_PANEL.w - 28, h: 56 };
+}
+
+// the reward icon + claim control share the row's right edge — the claim
+// slab stays ≥44px so the live hitbox is already thumb-sized
+function taskClaimRect(row: { x: number; y: number; w: number; h: number }) {
+  return { x: row.x + row.w - TASKS_CLAIM_W - 10, y: row.y + (row.h - TASKS_CLAIM_H) / 2, w: TASKS_CLAIM_W, h: TASKS_CLAIM_H };
+}
+
+// what a point inside the panel touches — tabs and CLOSE always answer;
+// a claim slab only goes live while its task is done and unclaimed
+export function taskRowHit(p: Vec, tab: 'daily' | 'weekly'): TasksHit | null {
+  if (inRect(p.x, p.y, TASKS_CLOSE) || !inRect(p.x, p.y, TASKS_PANEL)) return { kind: 'close' };
+  for (let i = 0; i < TASKS_TABS.length; i++) {
+    if (inRect(p.x, p.y, tasksTabRect(i))) return { kind: 'tab', i };
+  }
+  const views = taskViews(tab);
+  for (let i = 0; i < views.length; i++) {
+    const v = views[i];
+    if (!v.done || v.claimed) continue;
+    if (inRect(p.x, p.y, taskClaimRect(taskRowRect(i)))) return { kind: 'claim', i };
+  }
+  return null; // dead panel space is still modal
+}
+
+export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab: 'daily' | 'weekly', t: number) {
+  ctx.fillStyle = 'rgba(6,10,22,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, TASKS_PANEL.x, TASKS_PANEL.y, TASKS_PANEL.w, TASKS_PANEL.h, 10);
+  ctx.fillStyle = '#0d1122';
+  ctx.fill();
+  rim(ctx, TASKS_PANEL, 10, GOLD, 2);
+  edge(ctx, TASKS_PANEL, 10);
+
+  // period tabs — the live one fills dark with a gold rim, the rail's look
+  TASKS_TABS.forEach((id, i) => {
+    const r = tasksTabRect(i);
+    const on = id === tab;
+    roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+    ctx.fillStyle = on ? '#2a2440' : '#12162b';
+    ctx.fill();
+    rim(ctx, r, 14, on ? GOLD : '#2a3560', on ? 2 : 1);
+    edge(ctx, r, 14);
+    ctx.font = font(10);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = on ? PARCH : '#aab4dd';
+    ctx.fillText(id.toUpperCase(), r.x + r.w / 2, r.y + r.h / 2 + 6);
+  });
+
+  stripeBand(ctx, TASKS_BAND, GOLD);
+  ctx.textAlign = 'left';
+  ctx.font = font(13);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText('TASKS', TASKS_BAND.x + 14, TASKS_BAND.y + 25);
+  ctx.font = fontB(7);
+  ctx.globalAlpha = 0.75;
+  ctx.fillText('rewards land in your bag', TASKS_BAND.x + 14, TASKS_BAND.y + 38);
+  ctx.globalAlpha = 1;
+
+  if (!views.length) {
+    ctx.textAlign = 'center';
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('ALL CLEAR — CHECK BACK AFTER THE RESET', TASKS_PANEL.x + TASKS_PANEL.w / 2, TASKS_ROWS_Y + 60);
+  }
+
+  views.forEach((v, i) => {
+    const r = taskRowRect(i);
+    const ready = v.done && !v.claimed;
+    // a claimable row lights like the board's leader row — the rest stay ink
+    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+    ctx.fillStyle = ready ? '#1d2545' : '#0d1126';
+    ctx.fill();
+    ctx.strokeStyle = ready ? GOLD : '#2a3560';
+    ctx.lineWidth = ready ? 2 : 1;
+    ctx.stroke();
+
+    const cr = taskClaimRect(r);
+    const ix = cr.x - 12 - 28; // the reward icon rides just left of the slot
+    const textW = ix - 16 - (r.x + 12); // label + bar share this width
+
+    ctx.textAlign = 'left';
+    fitFont(ctx, v.label, 9, textW - (v.done ? 56 : 0));
+    ctx.fillStyle = v.claimed ? '#5a6284' : '#e8ecf8';
+    ctx.fillText(v.label, r.x + 12, r.y + 17);
+    ctx.font = fontB(7);
+    ctx.fillStyle = v.claimed ? '#464e6e' : '#8890b8';
+    ctx.fillText(v.desc.toUpperCase(), r.x + 12, r.y + 28);
+    if (v.done) {
+      // the counter rides the label line once the slot holds CLAIM/CLAIMED;
+      // unfinished rows wear it in the slot instead (the dimmed '0/15' state)
+      ctx.font = fontB(9);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = v.claimed ? '#5a6284' : '#ffd84d';
+      ctx.fillText(`${v.have}/${v.n}`, r.x + 12 + textW, r.y + 17);
+      ctx.textAlign = 'left';
+    }
+
+    // the progress track is the settings slider's groove + gold ramp
+    const br = { x: r.x + 12, y: r.y + 36, w: textW, h: 9 };
+    roundRect(ctx, br.x, br.y, br.w, br.h, 5);
+    ctx.fillStyle = '#0a0d18';
+    ctx.fill();
+    const frac = Math.min(1, v.have / v.n);
+    if (frac > 0) {
+      ctx.save();
+      roundRect(ctx, br.x, br.y, br.w, br.h, 5);
+      ctx.clip();
+      const g = ctx.createLinearGradient(0, br.y, 0, br.y + br.h);
+      g.addColorStop(0, '#ffe76a');
+      g.addColorStop(0.55, '#ffd84d');
+      g.addColorStop(1, '#c8a44d');
+      ctx.fillStyle = g;
+      ctx.fillRect(br.x, br.y, Math.max(br.h, br.w * frac), br.h);
+      ctx.restore();
+    }
+    roundRect(ctx, br.x, br.y, br.w, br.h, 5);
+    ctx.strokeStyle = '#2a3560';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // reward icon — ghosted until earned, spent grey once claimed
+    const spr = BAG_ITEMS.find((it) => it.id === v.reward)?.item ?? v.reward;
+    void loadItem(spr);
+    const img = itemSprite(spr);
+    if (img) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = v.claimed ? 0.3 : v.done ? 1 : 0.6;
+      ctx.shadowColor = 'rgba(0,0,0,0.5)';
+      ctx.shadowBlur = 5;
+      ctx.shadowOffsetY = 2;
+      ctx.drawImage(img, ix, r.y + (r.h - 28) / 2, 28, 28);
+      ctx.restore();
+    }
+
+    if (ready) {
+      // the armed claim pulses — the pull that this modal exists for
+      ctx.save();
+      ctx.shadowColor = '#ffd84d';
+      ctx.shadowBlur = 6 + (Math.sin(t * 4) * 0.5 + 0.5) * 8;
+      pill(ctx, cr, { c: '#ffd84d', cd: '#c8a44d', tc: '#2a2440', label: 'CLAIM' });
+      ctx.restore();
+    } else if (v.claimed) {
+      ctx.font = fontB(7);
+      const cw = ctx.measureText('CLAIMED').width + 14;
+      chip(ctx, cr.x + (cr.w - cw) / 2, cr.y + (cr.h - 16) / 2, 'CLAIMED', { bg: '#232840', fg: '#8890b8' });
+    } else {
+      // not done — the slot holds the dimmed target where a button would be
+      ctx.font = fontB(9);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#5a6284';
+      ctx.fillText(`${v.have}/${v.n}`, cr.x + cr.w / 2, cr.y + cr.h / 2 + 4);
+    }
+  });
+
+  // the bag preview — the screen's other half; claims land here
+  const stock = bagStock();
+  const stocked = BAG_ITEMS.filter((it) => (stock[it.id] ?? 0) > 0);
+  const bagY = TASKS_CLOSE.y - 116;
+  ctx.textAlign = 'left';
+  ctx.font = font(8);
+  ctx.fillStyle = '#aab4dd';
+  ctx.fillText('YOUR BAG', TASKS_PANEL.x + 16, bagY);
+  ctx.font = fontB(6);
+  ctx.fillStyle = '#5a6284';
+  ctx.fillText('TAKE 2 INTO A RUN', TASKS_PANEL.x + 16, bagY + 11);
+  if (!stocked.length) {
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('EMPTY — CLAIM TASKS TO STOCK IT', TASKS_PANEL.x + 16, bagY + 42);
+  }
+  stocked.slice(0, 6).forEach((it, i) => {
+    const cw = 74;
+    const cx = TASKS_PANEL.x + 16 + (i % 3) * (cw + 8);
+    const cy = bagY + 18 + Math.floor(i / 3) * 44;
+    const r = { x: cx, y: cy, w: cw, h: 38 };
+    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+    ctx.fillStyle = '#0d1126';
+    ctx.fill();
+    ctx.strokeStyle = '#2a3560';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    const img = itemSprite(it.item);
+    void loadItem(it.item);
+    if (img) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(img, r.x + 4, r.y + 8, 22, 22);
+      ctx.restore();
+    }
+    ctx.font = fontB(6);
+    ctx.fillStyle = '#aab4dd';
+    ctx.textAlign = 'left';
+    ctx.fillText(it.name.split(' ')[0], r.x + 30, r.y + 16);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`×${stock[it.id]}`, r.x + 30, r.y + 27);
+  });
+
+  ctx.textAlign = 'center';
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(`NEW TASKS ${taskResetsIn(tab)}`, TASKS_PANEL.x + TASKS_PANEL.w / 2, TASKS_CLOSE.y - 10);
+
+  pill(ctx, TASKS_CLOSE, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'CLOSE' });
+  if (HAS_KEYS) keyHint(ctx, TASKS_CLOSE, '[esc]');
 }

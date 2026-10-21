@@ -4,14 +4,14 @@ import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '
 import { sfx, buzz, cry, music } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById } from './data';
-import { Perk, rollPerks, PERKS } from './perks';
+import { Perk, rollPerks, PERKS, BAG_ITEMS } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
 import type { EventChoice, EventArt } from './events';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, type RunSave } from './meta';
-import { drawBackdrop, drawWall, THEMES, hash } from './bg';
-import type { Theme } from './bg';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, type RunSave, type Settings } from './meta';
+import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
+import type { Theme, PropSpec } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT } from './types';
 import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND, T_GRASS } from './map';
 import * as MT from './maptiles';
@@ -262,9 +262,27 @@ const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
   power: MT.TILE_PATH,
 };
 
+// Floor scatter — a wave-seeded handful of small atlas bits stamped between
+// the wall ring and the hazards; deterministic by waveIndex, so each court
+// gets its own dressing with no extra state. Sizes stay in the 12-30px
+// dressing band and everything draws under the units.
+const DECOR: Record<Theme, { n: number; s: [number, number]; alpha?: number; props: PropSpec[] }> = {
+  grove: { n: 12, s: [13, 22], props: [{ r: MT.TILE_FLOWER }, { r: MT.FLOWER_YB }, { r: MT.FLOWER_PK }] },
+  cavern: { n: 10, s: [14, 24], props: [{ r: MT.TILE_ROCK }, { r: MT.ROCK_SMALL }, { r: MT.ROCK_SMALL, t: 'rgba(40,40,90,0.30)' }] },
+  volcano: {
+    n: 9, s: [14, 26],
+    props: [{ r: MT.TILE_ROCK, t: 'rgba(70,20,8,0.45)' }, { r: MT.ROCK_SMALL, t: 'rgba(70,20,8,0.45)' }],
+  },
+  sky: { n: 7, s: [26, 44], alpha: 0.5, props: [{ r: MT.TILE_DRIFT }] },
+};
+
 // theme → its sky: groves rain, caverns swirl sand, the volcano bakes
 // under sun, the heights blow. ~Half of rolled courts get weather.
 const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
+
+// graphics quality → ambient/weather particle density multiplier — low
+// trims to a quarter but never to zero; a still court shouldn't read dead
+const QUALITY_FX: Record<Settings['quality'], number> = { high: 1, medium: 0.55, low: 0.25 };
 
 export const STOP_SPEED = 55; // trims the dribble tail — shots carry ~1.5x energy now
 const SHOT_MAX = 14; // seconds — gimmick courts can hold the ball above settle speed forever
@@ -435,6 +453,8 @@ export class Battle {
   captureChance = 0.06; // odds a defeated enemy joins your box
   bossCatch = 0; // heavy ball: extra catch chance vs bosses
   masterArmed = false; // master ball relic: next KO is a guaranteed catch
+  ashArmed = false; // sacred ash bag charm: the first team wipe revives instead
+  private bagIds: string[] = []; // this run's bag picks — the save replays them
   takenMult = 1; // zinc/eviolite: incoming damage multiplier
   foeCdMult = 1; // bright powder: enemy attack-timer multiplier
   slowImmune = false; // air balloon perk flag — kept for perks.ts; no pads remain to slow the ball
@@ -476,6 +496,10 @@ export class Battle {
   teamSel = -1; // team index picked — a swap starts from either side
   depth = 0; // rolled stages survived past the opening trio
   rewardOffers: Perk[] = [];
+  tools = { roll: 1, ban: 1 }; // offer-tool charges, per-run — REROLL re-deals, BANISH culls
+  perkBan = new Set<string>(); // perk ids banished this run — filtered out of future boards
+  banArmed = false; // armed: the next card tap banishes instead of picks
+  private rewardCap = 3; // tier cap the board was dealt at — reroll re-deals the same quality
   mapNode = 0; // index into region.nodes — the stop the team stands on
   hardWave = false; // the wave just cleared was a hard stop — bigger payout (trainers)
   eliteWave = false; // elite stops pay out rare-or-better relics only
@@ -505,6 +529,8 @@ export class Battle {
   private cardT = 0; // event-card pop timer — the card scales in when it opens
   private choiceHit: { x: number; y: number; w: number; h: number }[] = []; // last-drawn option rects
   private mapMsgT = 0;
+  // the run's visible trail — session flavour, capped, not saved in the snapshot
+  fieldLog: string[] = [];
   // victory loot — a gym boss bursts into PokéCoins; drag the lead mon to
   // scoop them before the lap ends
   private lootCoins: { x: number; y: number; vx: number; vy: number; r: number; spin: number; kind: 'coin' | 'gem' | 'heart' | 'candy'; val: number }[] = [];
@@ -525,11 +551,12 @@ export class Battle {
     team: SpeciesDef[],
     public stage: StageDef,
     private rng: () => number = Math.random,
+    bag: string[] = [], // run-start bag picks (pk_bag ids) — applied below
   ) {
     this.theme = stage.theme;
     const n = team.length;
     team.forEach((def, i) => {
-      const role = roleOf(def.stats, def.healer);
+      const role = roleOf(def);
       const m = ROLE_MODS[role];
       // draft picks roll lvl 5-14: same scaling curve as mid-run KOs
       const lvl = Math.max(1, Math.min(LV_CAP, def.lvl ?? 1));
@@ -584,6 +611,10 @@ export class Battle {
         boostT: -9,
       });
     });
+    // bag items field after the team does — persistent consumables earned
+    // on gym wins, picked on the draft screen (≤2)
+    this.bagIds = bag;
+    for (const id of bag) BAG_ITEMS.find((i) => i.id === id)?.apply(this);
     const mapSeed = Math.floor(this.rng() * 2 ** 31);
     this.mapSeed = mapSeed;
     this.region = genRegion(mapSeed);
@@ -607,12 +638,19 @@ export class Battle {
     }
   }
 
+  // the trail feed — newest at the tail, 24-deep before old lines shift out
+  private log(line: string) {
+    this.fieldLog.push(line);
+    if (this.fieldLog.length > 24) this.fieldLog.shift();
+  }
+
   // Perks come through one door so the save can replay the same list:
   // apply + record id + bank the item icon.
   grantPerk(p: Perk) {
     p.apply(this);
     this.perkIds.push(p.id);
     this.heldItems.push(p.item);
+    this.log(`RELIC — ${p.name.toUpperCase()}`);
   }
 
   // The run is only safe to bank on the map — mid-fight, mid-walk or
@@ -635,6 +673,13 @@ export class Battle {
       boxLvl: [...this.boxLvl],
       perks: [...this.perkIds],
       heldItems: [...this.heldItems],
+      tools: { ...this.tools },
+      perkBan: [...this.perkBan],
+      // durable items' effects already live in team[].lvl — re-applying on
+      // resume would double them; the rest replay like perks
+      bag: this.bagIds.filter((id) => !BAG_ITEMS.find((i) => i.id === id)?.durable),
+      masterArmed: this.masterArmed,
+      ashArmed: this.ashArmed,
       score: this.score,
       perksTaken: this.perksTaken,
       gymsBeaten: this.gymsBeaten,
@@ -661,10 +706,24 @@ export class Battle {
     this.waveIndex = s.waveIndex;
     this.depth = s.depth;
     this.pendingNext = s.pendingNext;
+    // stage.waves restarts at the seeded 3 — refill the rows this run already
+    // passed or the next spawnWave reads waves[i] past the array end. Each
+    // row re-rolls at the depth it originally pushed with, gym leaders baked
+    while (this.stage.waves.length <= Math.max(s.pendingNext, s.waveIndex)) {
+      const r = this.stage.waves.length;
+      const gym = this.region.nodes.find((n) => n.row === r && n.kind === 'gym');
+      this.stage.waves.push(rollWave(this.rng, r - 2, this.stage.theme, gym?.ttype));
+    }
     this.mapNote = s.mapNote;
     this.asc = s.asc;
     this.perkIds = [...s.perks];
     for (const id of s.perks) PERKS.find((p) => p.id === id)?.apply(this);
+    // bag items replay the same door as perks; armed flags come back
+    // verbatim so a spent ball/ash stays spent
+    this.bagIds = [...(s.bag ?? [])];
+    for (const id of this.bagIds) BAG_ITEMS.find((i) => i.id === id)?.apply(this);
+    if (s.masterArmed != null) this.masterArmed = s.masterArmed;
+    if (s.ashArmed != null) this.ashArmed = s.ashArmed;
     // stamp saved hp last so perk heals/maxHp growth don't double-count
     this.players.forEach((p, i) => {
       const t = s.team[i];
@@ -681,6 +740,9 @@ export class Battle {
     this.boxHp = [...s.boxHp];
     this.boxLvl = [...s.boxLvl];
     this.heldItems = [...s.heldItems];
+    // v1 run saves predate offer tools — default them rather than coerce
+    this.tools = { ...(s.tools ?? { roll: 1, ban: 1 }) };
+    this.perkBan = new Set(s.perkBan ?? []);
     this.score = s.score;
     this.perksTaken = s.perksTaken;
     this.gymsBeaten = s.gymsBeaten;
@@ -694,6 +756,8 @@ export class Battle {
     this.phase = 'map';
     this.mapCam = this.mapCamTarget();
     this.refreshTraits();
+    // a resumed run starts a fresh trail — but not a silent one
+    this.log('CONTINUED THE CLIMB');
   }
 
   get active(): Unit {
@@ -748,7 +812,7 @@ export class Battle {
         this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
       }
     } else {
-      if (i >= this.stage.waves.length) {
+      while (i >= this.stage.waves.length) {
         this.depth++;
         // a gym's rolled wave fields the leader its sign announced
         this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme, node?.kind === 'gym' ? node.ttype : undefined));
@@ -795,6 +859,8 @@ export class Battle {
     }
     this.curSpawns = spawns; // rival/invade overrides still feed the recruit roll
     if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
+    // whatever the banner says — trainer, rival, invade or event note — is the trail line
+    if (this.waveSpecial) this.log(this.waveSpecial);
     // Archero room pull: the wave's court is one hand-authored template —
     // slabs, moats, mines and spawn anchors all come with the room. Boss
     // waves take the open gym arena; openers stay gentle; trainer battles
@@ -2182,11 +2248,13 @@ export class Battle {
         // the badge case: each leader pays out its themed badge, once ever
         const badge = earnBadge(e.def.id);
         if (badge) {
+          const badgeLine = `★ EARNED THE ${badge.name}! ★`;
           this.texts.push({
             x: e.x, y: e.y - e.r - 74,
-            text: `★ EARNED THE ${badge.name}! ★`,
+            text: badgeLine,
             t: 2.1, color: badge.color, big: true,
           });
+          this.log(badgeLine);
           this.burst(e.x, e.y, badge.color, 26, 520, 1.4);
           this.impact(e.x, e.y, badge.color, 2);
           this.screenFlash(badge.color, 0.22);
@@ -2194,6 +2262,15 @@ export class Battle {
           this.addPunch(0.12);
           sfx('perfect');
           if (gymBadges().size >= BADGES.length) this.award('league');
+          // every first-time badge stocks the bag — a random consumable
+          // for a future run's opening picks
+          const item = BAG_ITEMS[Math.floor(this.rng() * BAG_ITEMS.length)];
+          bankBag(item.id);
+          this.texts.push({
+            x: e.x, y: e.y - e.r - 92,
+            text: `BAG +1 ${item.name.toUpperCase()}`,
+            t: 1.8, color: '#9df0ff', big: true,
+          });
         }
       }
       if (caught) {
@@ -2204,6 +2281,7 @@ export class Battle {
         }
         // record at capture time — a mid-run tab close keeps the dex honest
         recordCapture([e.def.id]);
+        this.log(`${e.shiny ? '★ SHINY ' : ''}${e.def.name.toUpperCase()} CAUGHT`);
         if (INVADERS.some((i) => i.id === e.def.id)) this.award('myth');
         if (e.boss) this.caughtBoss = true;
         if (e.shiny) {
@@ -2344,28 +2422,30 @@ export class Battle {
     bumpDmg: (e: Unit, power: number) => number,
   ) {
     switch (p.role) {
-      case 'speedster': { // lightning-fast jab at the closest enemy
+      case 'SCOUT': { // lightning-fast jab at the closest enemy
         const t = near(140).sort((a, b) => dist(p, a) - dist(p, b))[0];
         if (t) {
           this.hurt(t, bumpDmg(t, 0.3), '#9df0ff');
         }
         break;
       }
-      case 'bruiser': { // point-blank shockwave
+      case 'STRIKER': { // point-blank shockwave
         const ts = near(95);
         if (ts.length) {
           for (const e of ts) this.hurt(e, bumpDmg(e, 0.25), '#9df0ff');
         }
         break;
       }
-      case 'sniper': { // long-range poke at the farthest target
+      case 'SNIPER': { // long-range poke at the farthest target
         const t = near(280).sort((a, b) => dist(p, b) - dist(p, a))[0];
         if (t) {
           this.hurt(t, bumpDmg(t, 0.35), '#9df0ff');
         }
         break;
       }
-      case 'tank': // brace: small self-mend on every pass
+      case 'BULWARK': // brace: small self-mend on every pass
+      case 'WARDEN':
+      case 'GUARDIAN':
         this.tryHeal([p], (x) => Math.ceil(x.maxHp * 0.03));
         break;
       default: { // wild: opportunistic nip at the closest enemy
@@ -2811,8 +2891,8 @@ export class Battle {
         }
       }
     }
-    // healer role: every super also mends the team
-    if (p.role === 'healer') {
+    // medic role: every super also mends the team
+    if (p.role === 'MEDIC') {
       this.tryHeal(this.players, (pl) => Math.max(1, Math.round(pl.maxHp * 0.15)));
     }
     this.enemies = this.enemies.filter((e) => !e.dead);
@@ -3245,12 +3325,14 @@ export class Battle {
       if (owned) this.evolveUnit(owned, next); // the flicker cinematic owns the payoff
       else this.box[bi] = this.evoMerge(this.box[bi], next, shiny); // markers survive a boxed evolution
       recordCapture([next.id]); // evo-only species only ever enter the dex here
+      const evoLine = `${def.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`;
       this.texts.push({
         x: owned ? owned.x : this.arena.x + this.arena.w / 2,
         y: owned ? owned.y - owned.r - 40 : this.arena.y + 70,
-        text: `${def.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`,
+        text: evoLine,
         t: 1.4, color: '#ffd84d', big: true,
       });
+      this.log(evoLine);
       // boxed merges get the instant fanfare — no sprite on the field to flicker
       if (!owned) {
         this.impact(this.arena.x + this.arena.w / 2, this.arena.y + 90, '#ffd84d', 1.4);
@@ -3303,12 +3385,14 @@ export class Battle {
       }
     }
     recordCapture([next.id]);
+    const evoLine = `${c.from.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`;
     this.texts.push({
       x: this.arena.x + this.arena.w / 2,
       y: this.arena.y + 120,
-      text: `${c.from.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`,
+      text: evoLine,
       t: 1.4, color: '#ffd84d', big: true,
     });
+    this.log(evoLine);
     // a fielded pick plays out in the cinematic — boxed picks need the cue here
     if (!c.unit) {
       sfx('caught');
@@ -3322,7 +3406,7 @@ export class Battle {
   private evolveUnit(p: Unit, nd: SpeciesDef) {
     const fromId = p.def.id; // the cinematic flickers from this sprite
     const frac = p.maxHp > 0 ? p.hp / p.maxHp : 1;
-    const role = roleOf(nd.stats, nd.healer);
+    const role = roleOf(nd);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(nd.stats) * m.hp);
     p.def = p.shiny || p.def.luck ? { ...nd, shiny: p.shiny || undefined, luck: p.def.luck } : nd; // markers ride the def into the box
@@ -3343,7 +3427,7 @@ export class Battle {
   // Reseat a unit on a new species: role/stats recomputed, hp carried as a
   // fraction. Box swaps and wonder-trade both ride this one path.
   applyDef(p: Unit, def: SpeciesDef, lvl: number, frac = 1) {
-    const role = roleOf(def.stats, def.healer);
+    const role = roleOf(def);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl));
     p.def = def;
@@ -3362,12 +3446,13 @@ export class Battle {
     this.refreshTraits(); // a new face can break or make a type pair
   }
 
-  // Swap a boxed mon onto the team — the map's TEAM · ITEMS panel is the
-  // only place. HP belongs to the mon, not the slot: a hurt mon stays hurt
-  // in the box and a fainted one stays fainted, so benching is never a free
-  // heal or revive.
+  // Swap a boxed mon onto the team — the TEAM · ITEMS panel is the only
+  // place, and it's modal over the map AND the reward break. Both phases
+  // park the units, so the same applyDef path serves either. HP belongs to
+  // the mon, not the slot: a hurt mon stays hurt in the box and a fainted
+  // one stays fainted, so benching is never a free heal or revive.
   swapFromBox(bi: number, ti: number) {
-    if (this.phase !== 'map') return;
+    if (this.phase !== 'map' && this.phase !== 'reward') return;
     const def = this.box[bi];
     const frac = this.boxHp[bi] ?? 1;
     const lvl = this.boxLvl[bi] ?? 1;
@@ -3426,7 +3511,9 @@ export class Battle {
     this.teamSel = -1;
     // hard stops pay out uncommon-or-better relics — the risk has a price;
     // elites go further: rare-or-better only
-    this.rewardOffers = rollPerks(this.rng, this.eliteWave ? 1 : this.hardWave ? 2 : 3, this.rank, this.teamTypes());
+    this.rewardCap = this.eliteWave ? 1 : this.hardWave ? 2 : 3;
+    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan);
+    this.banArmed = false; // a fresh board can't inherit a leftover armed tap
     this.hardWave = false;
     this.eliteWave = false;
     // trainer mons stay with their owner; only a fallen gym pays its ace —
@@ -3437,6 +3524,7 @@ export class Battle {
         this.boxAdd(this.lastRecruit);
         recordCapture([this.lastRecruit.id]); // the dex logs it now, not at run end
       }
+      this.log(`${this.lastRecruit.name.toUpperCase()} RECRUITED`);
       sfx('caught');
     }
     for (const p of this.players) {
@@ -3659,6 +3747,36 @@ export class Battle {
     this.advanceReward();
   }
 
+  // REROLL spends a charge to re-deal the board at the same tier cap —
+  // banished ids stay out of the fresh deal.
+  rerollOffers(): boolean {
+    if (this.phase !== 'reward' || this.tools.roll <= 0) return false;
+    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan);
+    this.tools.roll--;
+    return true;
+  }
+
+  // BANISH arms instead of firing — the next card tap culls that perk from
+  // the run's pool. Tap again to stand down. Returns the armed state.
+  toggleBanish(): boolean {
+    if (this.phase !== 'reward' || this.tools.ban <= 0) return false;
+    this.banArmed = !this.banArmed;
+    return this.banArmed;
+  }
+
+  // The armed tap: charge paid, the card leaves the board and its id is
+  // gone for the run. Returns the banished id for telemetry.
+  banishPerk(i: number): string | null {
+    const perk = this.rewardOffers[i];
+    if (!perk || this.phase !== 'reward' || !this.banArmed || this.tools.ban <= 0) return null;
+    this.perkBan.add(perk.id);
+    this.rewardOffers.splice(i, 1);
+    this.tools.ban--;
+    this.banArmed = false;
+    if (!this.rewardOffers.length) this.advanceReward(); // emptied the board — they leave empty-handed
+    return perk.id;
+  }
+
   // Map camera: the viewport trails the walker's tile row — while you're
   // standing on a stop it holds that row near the bottom third so the
   // next couple of rows are what's on screen
@@ -3742,6 +3860,7 @@ export class Battle {
     this.pendingNext = c.node.row + 1;
     // the result card keeps the event's face when the pick brings none
     this.eventBox = { note: out.note, art: out.art ?? c.art };
+    if (out.note) this.log(out.note);
     this.cardT = 0;
   }
 
@@ -3764,6 +3883,7 @@ export class Battle {
     this.boxAdd({ ...def, lvl });
     recordCapture([def.id]);
     this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
+    this.log(this.mapMsg);
     this.mapMsgT = 3;
     sfx('caught');
     cry(def.id, 0.4);
@@ -3790,6 +3910,7 @@ export class Battle {
       } else {
         this.skipWave = out.skip === true;
         this.eventBox = { note: out.note, art: out.art };
+        if (out.note) this.log(out.note);
         this.cardT = 0;
       }
       return;
@@ -4106,7 +4227,7 @@ export class Battle {
     attacks.forEach((e, i) => this.later(i * 0.28, () => this.fireEnemy(e)));
     this.later(Math.max(0, attacks.length - 1) * 0.28 + 0.35, () => {
       if (this.phase !== 'enemy') return;
-      if (this.players.every((p) => p.dead)) {
+      if (this.players.every((p) => p.dead) && !this.ashRevive()) {
         this.phase = 'lost';
         this.screenFlash('#ff6b6b', 0.3);
         sfx('lose');
@@ -4192,7 +4313,7 @@ export class Battle {
     // after 10 unanswered shots a wave fights back harder each turn
     const pressure = 1 + Math.max(0, this.waveShots - 10) * 0.12;
     dmg = Math.max(1, Math.round(dmg * (src?.side === 'enemy' ? foePow : 1) * (src?.boss ? bossPow : 1) * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
-    if (p.role === 'tank') dmg = Math.max(1, Math.round(dmg * 0.75));
+    if (p.role === 'BULWARK' || p.role === 'WARDEN' || p.role === 'GUARDIAN') dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
       p.sash = false;
@@ -4240,7 +4361,7 @@ export class Battle {
     }
   }
 
-  private nextTurn() {
+  private nextTurn(): void {
     if (this.phase === 'won' || this.phase === 'lost') return;
     for (let i = 1; i <= this.players.length; i++) {
       const idx = (this.activeIdx + i) % this.players.length;
@@ -4257,7 +4378,31 @@ export class Battle {
         return;
       }
     }
+    // nobody left standing — a stocked sacred ash burns to undo the wipe
+    if (this.ashRevive()) return this.nextTurn();
     this.phase = 'lost';
+  }
+
+  // sacred ash: a full team wipe consumes the charm instead — everyone
+  // stands back up at 30% and the fight goes on. Once per run.
+  private ashRevive(): boolean {
+    if (!this.ashArmed || !this.players.every((p) => p.dead)) return false;
+    this.ashArmed = false;
+    for (const p of this.players) {
+      p.dead = false;
+      p.hp = Math.round(p.maxHp * 0.3);
+    }
+    this.refreshTraits(); // the revive fields the whole team again
+    this.texts.push({
+      x: this.arena.x + this.arena.w / 2,
+      y: this.arena.y + this.arena.h / 2,
+      text: 'SACRED ASH!',
+      t: 1.6, color: '#ffd84d', big: true,
+    });
+    this.log('SACRED ASH — TEAM REVIVED');
+    this.screenFlash('#ffd84d', 0.3);
+    sfx('heal');
+    return true;
   }
 
   // --- vfx helpers ---
@@ -4267,7 +4412,7 @@ export class Battle {
   }
 
   private addShake(amt: number) {
-    this.shake = Math.min(this.shake + amt, 36);
+    this.shake = Math.min(this.shake + amt * settings().shake, 36);
   }
 
   private addPunch(amt: number) {
@@ -4376,9 +4521,43 @@ export class Battle {
       ctx.translate(-cx, -cy);
     }
 
-    // arena: theme-tinted backdrop + rim
+    // arena: theme-tinted backdrop + prop-lined rim
     drawBackdrop(ctx, a, 18, this.theme, this.time);
     drawWall(ctx, a, this.theme);
+
+    // grove courts get 1-2 squashed dirt patches under the dressing —
+    // wave-seeded like the scatter, so each fight's court varies
+    if (this.theme === 'grove') {
+      const pn = 1 + Math.floor(hash(this.waveIndex * 3.3 + 7) * 2);
+      for (let i = 0; i < pn; i++) {
+        const pw = 62 + hash(this.waveIndex * 5.9 + i * 9.1 + 1) * 38; // 62-100
+        const ph = pw * (0.42 + hash(this.waveIndex * 4.3 + i * 7.7 + 2) * 0.22);
+        const px = a.x + 70 + pw / 2 + hash(this.waveIndex * 11.1 + i * 5.7 + 20) * (a.w - 140 - pw);
+        const py = a.y + 110 + ph / 2 + hash(this.waveIndex * 7.7 + i * 3.3 + 31) * (a.h - 240 - ph);
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.ellipse(px, py, pw / 2, ph / 2, 0, 0, Math.PI * 2);
+        ctx.clip();
+        drawSlice(ctx, MT.TILE_PATH, px - pw / 2, py - ph / 2, pw, ph);
+        ctx.restore();
+      }
+    }
+
+    // floor scatter — hash-seeded per wave so the court's dressing is
+    // stable for the whole fight; props stay small and under everything
+    {
+      const d = DECOR[this.theme];
+      if (d.alpha) ctx.globalAlpha = d.alpha;
+      for (let i = 0; i < d.n; i++) {
+        const p = d.props[Math.floor(hash(this.waveIndex * 13.1 + i * 3.7) * d.props.length)];
+        const px = a.x + 40 + hash(this.waveIndex * 7.9 + i * 17.3 + 1) * (a.w - 80);
+        const py = a.y + 44 + hash(this.waveIndex * 5.3 + i * 11.7 + 2) * (a.h - 100);
+        const w = d.s[0] + hash(this.waveIndex * 3.1 + i * 7.1 + 3) * (d.s[1] - d.s[0]);
+        drawSlice(ctx, p.r, px - w / 2, py - w / 2, w, w * (p.r[3] / p.r[2]), p.t);
+      }
+      ctx.globalAlpha = 1;
+    }
 
     // scars left by heavy hits — dark scorches fading on the floor
     for (const s of this.scars) {
@@ -4407,8 +4586,9 @@ export class Battle {
         sky: { n: 16, col: '#ffffff', vx: -16, vy: 24, r: 1.9, tw: 0.12, wob: 20 }, // snow slants downwind
       };
       const amb = AMBIENT[this.theme];
+      const ambN = Math.max(1, Math.round(amb.n * QUALITY_FX[settings().quality]));
       ctx.fillStyle = amb.col;
-      for (let k = 0; k < amb.n; k++) {
+      for (let k = 0; k < ambN; k++) {
         const mx = a.x + (((k * 97.31 + this.time * amb.vx + Math.sin(this.time * 1.1 + k * 2.3) * amb.wob) % a.w) + a.w) % a.w;
         const my = a.y + (((k * 61.7 - this.time * amb.vy) % a.h) + a.h) % a.h;
         ctx.globalAlpha = 0.1 + amb.tw * (1 + Math.sin(this.time * 2.4 + k * 1.7));
@@ -4427,18 +4607,21 @@ export class Battle {
     for (const pk of this.pickups) {
       const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
       const meta = PICKUP_META[pk.kind];
-      ctx.globalAlpha = 0.22 + Math.sin(this.time * 3 + pk.t) * 0.06;
-      ctx.fillStyle = '#fff8dc';
-      ctx.beginPath();
-      ctx.ellipse(pk.x, pk.y + 9, 12, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 0.45 + Math.sin(this.time * 4 + pk.t) * 0.18;
-      ctx.strokeStyle = meta.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(pk.x, pk.y + 9, 16, 7.5, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+      // pickupFx 'simple' drops the glow pool + kind ring — icon + tag only
+      if (settings().pickupFx === 'complete') {
+        ctx.globalAlpha = 0.22 + Math.sin(this.time * 3 + pk.t) * 0.06;
+        ctx.fillStyle = '#fff8dc';
+        ctx.beginPath();
+        ctx.ellipse(pk.x, pk.y + 9, 12, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.45 + Math.sin(this.time * 4 + pk.t) * 0.18;
+        ctx.strokeStyle = meta.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(pk.x, pk.y + 9, 16, 7.5, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       const img = itemSprite(pk.kind);
       if (img) ctx.drawImage(img, pk.x - 13, pk.y - 13 + bob, 26, 26);
       ctx.font = fontB(7);
@@ -4803,10 +4986,18 @@ export class Battle {
       ctx.lineWidth = t.big ? 4 : 3;
       const dy = 52 * (1 - (1 - age) ** 3); // launch up fast, drift to a stop
       ctx.save();
-      // a wall-hugging mon's banner must not spill off-canvas — clamp the
-      // anchor so the measured text stays inside the playfield
-      const half = ctx.measureText(t.text).width / 2;
-      ctx.translate(Math.min(Math.max(t.x, half + 8), W - half - 8), t.y - dy);
+      // a wall-hugging mon's banner must not spill off-canvas — shrink
+      // oversized callouts, then clamp the anchor inside the playfield
+      let half = ctx.measureText(t.text).width / 2;
+      let tx = t.x;
+      if (half * 2 > W_CANVAS_FALLBACK - 16) {
+        fitFont(ctx, t.text, 16 * pop * (t.size ?? 1), W_CANVAS_FALLBACK - 16);
+        half = ctx.measureText(t.text).width / 2;
+        tx = W_CANVAS_FALLBACK / 2;
+      } else {
+        tx = Math.min(Math.max(t.x, half + 8), W_CANVAS_FALLBACK - half - 8);
+      }
+      ctx.translate(tx, t.y - dy);
       ctx.rotate(t.tilt ?? 0);
       ctx.strokeText(t.text, 0, 0);
       ctx.fillText(t.text, 0, 0);
@@ -4833,9 +5024,10 @@ export class Battle {
       ctx.fillText(label, this.arena.x + this.arena.w / 2, this.arena.y - 18);
     }
 
-    // screen flashes render unshaken, on top
+    // screen flashes render unshaken, on top — the accessibility toggle
+    // keeps the telegraph but caps how hard it hits
     for (const f of this.flashes) {
-      ctx.globalAlpha = Math.max(f.t / f.life, 0) * 0.42;
+      ctx.globalAlpha = Math.max(f.t / f.life, 0) * (settings().flash ? 0.42 : 0.25);
       ctx.fillStyle = f.color;
       ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
     }
@@ -5487,6 +5679,30 @@ export class Battle {
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, 540, 960);
 
+    // the field log docks along the viewport's bottom edge — cleared island
+    // rows are dead space (taps only ever reach linked stops)
+    if (this.fieldLog.length) {
+      const lx = ox - 4, ly = oy + view * cell - 52, lw = MAP_W * cell + 8;
+      ctx.fillStyle = 'rgba(10,14,28,0.78)';
+      ctx.fillRect(lx, ly, lw, 48);
+      ctx.strokeStyle = '#2a3560';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(lx + 1, ly + 1, lw - 2, 46);
+      ctx.textAlign = 'left';
+      ctx.font = fontB(7);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText('FIELD LOG', lx + 10, ly + 10);
+      ctx.font = fontB(8);
+      const tail = this.fieldLog.slice(-3);
+      tail.forEach((line, i) => {
+        ctx.globalAlpha = i === tail.length - 1 ? 1 : i === tail.length - 2 ? 0.6 : 0.35;
+        ctx.fillStyle = '#e8ecf8';
+        ctx.fillText(line, lx + 10, ly + 22 + i * 11);
+      });
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center';
+    }
+
     // header rides over the faded island edge — text stays crisp while
     // rooftops scroll beneath it
     ctx.fillStyle = '#f8d030';
@@ -5710,7 +5926,8 @@ export class Battle {
     ctx.globalAlpha = 0.06;
     ctx.fillRect(a.x, a.y, a.w, a.h);
     const t = this.time;
-    for (let i = 0; i < 24; i++) {
+    const motes = Math.max(1, Math.round(24 * QUALITY_FX[settings().quality]));
+    for (let i = 0; i < motes; i++) {
       const h1 = hash(i * 7.3 + 1), h2 = hash(i * 3.7 + 5), h3 = hash(i * 9.1 + 2);
       ctx.globalAlpha = 0.16 + h3 * 0.2;
       if (w === 'rain') {

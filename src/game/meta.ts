@@ -311,10 +311,49 @@ export function earnBadge(bossId: number): GymBadge | null {
   return b;
 }
 
+// --- the bag: persistent consumables — banked on gym wins, ≤2 spent at ---
+// --- run start. Plain pk_bag stock {itemId: count}, unversioned ---------
+// (like pk_settings, not the run save).
+let memBag: Record<string, number> | null = null;
+// First launch gets a starter kit — it stays virtual (readers never write)
+// until the first bank/spend lands it in storage.
+const BAG_SEED: Record<string, number> = { 'exp-share': 1, 'friend-ball': 1 };
+
+export function bagStock(): Record<string, number> {
+  const raw = load<unknown>('pk_bag');
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const stock: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) stock[k] = Math.floor(v);
+    }
+    return stock;
+  }
+  // pk_bag never written (null, not {}) — the starter kit, or the session
+  // copy once a bank/spend has touched it in private mode
+  return { ...(memBag ?? BAG_SEED) };
+}
+
+export function bankBag(id: string): void {
+  const s = bagStock();
+  s[id] = (s[id] ?? 0) + 1;
+  memBag = s;
+  store('pk_bag', s);
+}
+
+// The run-start picks leave together — decrement each, clamp at 0, one write.
+export function spendBag(ids: string[]): void {
+  const s = bagStock();
+  for (const id of ids) s[id] = Math.max(0, (s[id] ?? 0) - 1);
+  memBag = s;
+  store('pk_bag', s);
+}
+
 // --- save versioning: migrate once at boot so readers stay dumb ------------
 // pk_ver stamps the save schema — bump SAVE_VER and add a step whenever a
 // pk_* shape changes, instead of coercing old data on every read.
-const SAVE_VER = 1;
+// v2: RunSave gains tools/perkBan — reader defaults cover v1 saves,
+// no data transform needed below
+const SAVE_VER = 2;
 
 export function migrateSaves() {
   const v = load<number>('pk_ver') ?? 0;
@@ -341,11 +380,12 @@ export function migrateSaves() {
 interface Stats {
   draft: Record<string, [number, number]>; // species id -> [taken, offered]
   perks: Record<string, [number, number]>; // perk id -> [taken, offered]
+  perkban: Record<string, [number, number]>; // perk id -> [banished, offered] — kept apart so perk pick rates stay clean
   deaths: Record<string, number>; // stage -> runs that ended there
   wins: number;
   runs: number;
 }
-let memStats: Stats = { draft: {}, perks: {}, deaths: {}, wins: 0, runs: 0 };
+let memStats: Stats = { draft: {}, perks: {}, perkban: {}, deaths: {}, wins: 0, runs: 0 };
 
 const stats = (): Stats => {
   const raw = load<Stats>('pk_stats');
@@ -353,8 +393,9 @@ const stats = (): Stats => {
 };
 
 // one call per offer board shown — taken=null when the player skips it
-export function statOffer(kind: 'draft' | 'perks', offered: (string | number)[], taken: string | number | null) {
+export function statOffer(kind: 'draft' | 'perks' | 'perkban', offered: (string | number)[], taken: string | number | null) {
   const s = stats();
+  s.perkban ??= {}; // stored v1 blobs predate the banish ledger — don't crash on the missing key
   for (const id of offered) {
     const e = (s[kind][id] ??= [0, 0]);
     e[1]++;
@@ -382,6 +423,11 @@ export interface RunSave {
   boxLvl: number[];
   perks: string[]; // perk ids — re-applied on resume
   heldItems: string[];
+  tools: { roll: number; ban: number }; // offer-tool charges left this run
+  perkBan: string[]; // perk ids banished this run — stay out of every board
+  bag?: string[]; // bag item ids replayed on resume (durable ones filtered out)
+  masterArmed?: boolean; // armed one-shot flags save verbatim — a spent ball stays spent
+  ashArmed?: boolean;
   score: number;
   perksTaken: number;
   gymsBeaten: number;
@@ -427,3 +473,153 @@ export function statRunEnd(stage: number, won: boolean) {
 }
 
 export const statsDump = () => stats();
+
+// --- settings: the options screen's store — volume trims + feel toggles ----
+// Plain pk_settings blob, unversioned (not part of the run save): defaults
+// merge field-by-field over whatever's stored, so old/partial/garbage blobs
+// can't NaN the mix — same read pattern as best().
+
+export interface Settings {
+  master: number; // every sound, 0..1
+  music: number; // sequencer bus, 0..1
+  sfx: number; // synth one-shots, 0..1
+  cries: number; // species .ogg cries, 0..1
+  haptics: boolean; // vibration
+  shake: number; // screen shake intensity, 0..1 (v1 stored a bool: true→1, false→0)
+  flash: boolean; // full-screen flash frames
+  quality: 'high' | 'medium' | 'low'; // particle density trim
+  battery: boolean; // render every other rAF
+  fps: boolean; // fps counter overlay
+  pickupFx: 'complete' | 'simple'; // pickup ring+glow vs bare icon+label
+}
+
+const SETTING_DEFAULTS: Settings = {
+  master: 0.8,
+  music: 0.5,
+  sfx: 0.7,
+  cries: 0.6,
+  haptics: true,
+  shake: 1,
+  flash: true,
+  quality: 'high',
+  battery: false,
+  fps: false,
+  pickupFx: 'complete',
+};
+let memSettings: Settings = { ...SETTING_DEFAULTS };
+
+// settings() runs per-frame (the loop's battery check) — JSON.parse every
+// call would be the hot spot, so the parsed blob caches by raw string and
+// only re-parses when the stored text changes; setSetting invalidates.
+let settingsRaw: string | null | undefined; // undefined = not read yet
+let settingsParsed: Partial<Settings> | null = null;
+
+const settingsBlob = (): Partial<Settings> | null => {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem('pk_settings');
+  } catch {
+    /* private mode — memory copy covers it */
+  }
+  if (raw !== settingsRaw) {
+    settingsRaw = raw;
+    settingsParsed = null;
+    if (raw != null) {
+      try {
+        settingsParsed = JSON.parse(raw) as Partial<Settings>;
+      } catch {
+        /* corrupt blob — defaults cover it */
+      }
+    }
+  }
+  return settingsParsed;
+};
+
+export function settings(): Settings {
+  const s = { ...memSettings };
+  const raw = settingsBlob();
+  if (raw && typeof raw === 'object') {
+    for (const k of ['master', 'music', 'sfx', 'cries'] as const) {
+      const v = raw[k];
+      if (typeof v === 'number' && Number.isFinite(v)) s[k] = Math.min(1, Math.max(0, v));
+    }
+    for (const k of ['haptics', 'flash', 'battery', 'fps'] as const) {
+      const v = raw[k];
+      if (typeof v === 'boolean') s[k] = v;
+    }
+    // shake moved bool→number: a stored v1 toggle migrates true→1, false→0
+    const sh = raw.shake;
+    if (typeof sh === 'boolean') s.shake = sh ? 1 : 0;
+    else if (typeof sh === 'number' && Number.isFinite(sh)) s.shake = Math.min(1, Math.max(0, sh));
+    // enums merge only on a member of the allowed set
+    if (raw.quality === 'high' || raw.quality === 'medium' || raw.quality === 'low') s.quality = raw.quality;
+    if (raw.pickupFx === 'complete' || raw.pickupFx === 'simple') s.pickupFx = raw.pickupFx;
+  }
+  return s;
+}
+
+export function setSetting<K extends keyof Settings>(k: K, v: Settings[K]): void {
+  const s = settings();
+  s[k] = v;
+  memSettings = s;
+  store('pk_settings', s);
+  settingsRaw = undefined; // force the next read to re-parse the fresh blob
+}
+
+// --- daily/weekly tasks: rotating seeded chores that pay bag items ---------
+// One pk_tasks blob carries both periods: the key each board was rolled
+// under, progress by kind, the selected ids and the claimed ones. tasks.ts
+// resolves the board — a stale key means a new day/week and a fresh seeded
+// roll. Plain unversioned blob like pk_bag/pk_settings; memTasks covers
+// private mode, and readers merge field-by-field so a partial blob can't
+// wedge a period.
+
+export interface TaskState {
+  day: string; // UTC YYYY-MM-DD the daily board belongs to
+  dp: Record<string, number>; // daily progress by kind
+  dsel: string[]; // selected daily task ids
+  dclaim: string[]; // claimed daily task ids
+  week: string; // ISO YYYY-Wnn the weekly board belongs to
+  wp: Record<string, number>;
+  wsel: string[];
+  wclaim: string[];
+}
+
+const TASK_DEFAULTS: TaskState = { day: '', dp: {}, dsel: [], dclaim: [], week: '', wp: {}, wsel: [], wclaim: [] };
+let memTasks: TaskState = { ...TASK_DEFAULTS };
+
+const numMap = (v: unknown): Record<string, number> => {
+  const out: Record<string, number> = {};
+  if (v && typeof v === 'object')
+    for (const [k, n] of Object.entries(v as Record<string, unknown>))
+      if (typeof n === 'number' && Number.isFinite(n)) out[k] = n;
+  return out;
+};
+
+const strList = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+
+export function taskState(): TaskState {
+  // merge over the session copy (defaults on first boot) — same pattern as
+  // best(): corrupt fields fall back, absent fields keep the memory copy
+  const s: TaskState = {
+    day: memTasks.day, dp: { ...memTasks.dp }, dsel: [...memTasks.dsel], dclaim: [...memTasks.dclaim],
+    week: memTasks.week, wp: { ...memTasks.wp }, wsel: [...memTasks.wsel], wclaim: [...memTasks.wclaim],
+  };
+  const raw = load<Partial<TaskState>>('pk_tasks');
+  if (raw && typeof raw === 'object') {
+    if (typeof raw.day === 'string') s.day = raw.day;
+    if (raw.dp != null) s.dp = numMap(raw.dp);
+    if (raw.dsel != null) s.dsel = strList(raw.dsel);
+    if (raw.dclaim != null) s.dclaim = strList(raw.dclaim);
+    if (typeof raw.week === 'string') s.week = raw.week;
+    if (raw.wp != null) s.wp = numMap(raw.wp);
+    if (raw.wsel != null) s.wsel = strList(raw.wsel);
+    if (raw.wclaim != null) s.wclaim = strList(raw.wclaim);
+  }
+  return s;
+}
+
+export function saveTaskState(s: TaskState): void {
+  memTasks = s;
+  store('pk_tasks', s);
+}
