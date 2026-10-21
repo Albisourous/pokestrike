@@ -538,3 +538,14 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   card width replaces the width-blind midpoint split (Grip Claw/Ether
   compound descs bled into the next card). Verified live on the same
   three-perk board.
+- d0cea15 pushed: FORTUNE TELLER seer event (w2, cost-50 reveal of the
+  next gym's type — reads region.nodes, zero roll draws); QUIT TO
+  TITLE pill in TEAM·ITEMS (pk_run already parked — CONTINUE resumes);
+  draft_theme/reward_theme tracks (title palette calmed, 92/100bpm) —
+  draft+charm scenes and the offer board now have their own loop;
+  weatherBed() looping noise bed on the music bus (sand/wind rows
+  added — game enum is sand/sun/wind, not rain/hail); AURA SPHERE
+  (homing orb, retargets mid-flight, phases through rock), SACRED
+  SWORD (mit-backing true damage on the toughest near foe), DARK VOID
+  (0.9s telegraph → 250r sleep via e.timer +=2). Orb.spd field added
+  for the lock-on's 1150u/s flight.
