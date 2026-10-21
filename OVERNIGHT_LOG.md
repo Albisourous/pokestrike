@@ -528,3 +528,9 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   fountain tap-skips, ult arm expiry → STOOD DOWN, master-ball spend
   banners + ball glyph on the box line. audio: sky-track lydian/mixo
   harmonisation fix (semitone rub on tonic thirds).
+- pending push: DAILY_MODS 6→9 (SAFARI DAY catch×1.25, HEAVYWEIGHTS
+  foeHp+0.25, RICOCHET +1 pip); task defs ROADWORK→quick-claw,
+  VICTORY ROAD→dusk-ball, BULK UP→protein (orphan items now have
+  deterministic earn paths); FISHING (w3, 25% gyarados fight) +
+  HEADBUTT TREE (w2, 40% swarm) choice events; foe() throws at boot on
+  unknown theme ids; smoke daily-count assert → unique-ids shape.
