@@ -43,7 +43,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(JSON.parse(localStorage.getItem('pk_bag')!)['friend-ball'] === 0, 'spendBag persists the clamp in one write');
 
   // every catalog entry: unique ids, real sprites, terse one-line descs
-  ok(BAG_ITEMS.length === 6 && new Set(BAG_ITEMS.map((i) => i.id)).size === 6, 'six bag items, unique ids');
+  ok(BAG_ITEMS.length === 10 && new Set(BAG_ITEMS.map((i) => i.id)).size === 10, 'ten bag items, unique ids');
   ok(BAG_ITEMS.every((i) => existsSync(`public/sprites/items/${i.item}.png`)), 'every bag item has a vendored sprite');
 
   // the constructor applies each pick's apply() with the team fielded
@@ -446,6 +446,92 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok((r as any).critCh === (g as any).critCh, 'bag deltas replay on resume');
   ok(r.masterArmed === false, 'a spent master ball stays spent across saves');
   ok(r.players[0].lvl === sg.team[0].lvl, 'exp-share levels come through the save once, not twice');
+}
+
+// --- type relics: bumpAlly riders fire only under their perk id -------------
+{
+  const mk = (leadId: number, ...relics: string[]) => {
+    const b = new Battle(arena, [speciesById(leadId)!, ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+    (b as any).spawnWave(0);
+    (b as any).hazards = []; // static fields silence the cast
+    for (const id of relics) b.grantPerk(PERKS.find((p) => p.id === id)!);
+    const p = (b as any).players[0];
+    p.cd = 0;
+    return { b, p };
+  };
+  // clones give chains enough hops — fresh uids keep the hit-dedupe honest
+  const clone = (b: any, n: number) => {
+    for (let i = 0; i < n; i++)
+      b.enemies.push({ ...b.enemies[i % b.enemies.length], uid: 9000 + i, dead: false });
+  };
+  const drain = (b: any) => {
+    for (let i = 0; i < 8 && b.delays.length; i++)
+      for (const d of b.delays.splice(0)) d.fn();
+  };
+  // park the pack in one tight row so every chain hop is in range
+  const park = (b: any, p: any) =>
+    b.enemies.forEach((e: any, i: number) => { e.x = 300 + i * 30; e.y = 300; p.x = 300; p.y = 360; });
+
+  // magnet: THUNDER hops +2 further (cap still 6)
+  {
+    const a = mk(25);
+    clone(a.b, 4);
+    park(a.b, a.p);
+    (a.b as any).bumpAlly(a.p, a.p);
+    drain(a.b);
+    const arcs0 = (a.b as any).beams.length;
+    const m = mk(25, 'magnet');
+    clone(m.b, 4);
+    park(m.b, m.p);
+    (m.b as any).bumpAlly(m.p, m.p);
+    drain(m.b);
+    ok(arcs0 === 3 && (m.b as any).beams.length === arcs0 + 2, `magnet chains +2 links (${arcs0} -> ${(m.b as any).beams.length})`);
+  }
+
+  // silk scarf: EXTREMESPEED retargets a second time — a 3rd dash
+  {
+    const s = mk(133, 'silk-scarf');
+    clone(s.b, 2);
+    (s.b as any).bumpAlly(s.p, s.p);
+    drain(s.b);
+    const dash3 = (s.b as any).dashes.length;
+    const n = mk(133);
+    clone(n.b, 2);
+    (n.b as any).bumpAlly(n.p, n.p);
+    drain(n.b);
+    ok(dash3 === 3 && (n.b as any).dashes.length === 2, `silk scarf links a 3rd dash (${(n.b as any).dashes.length} -> ${dash3})`);
+  }
+
+  // black belt: CLOSE COMBAT queues a 4th jab before the uppercut
+  {
+    const f = mk(66, 'black-belt');
+    (f.b as any).bumpAlly(f.p, f.p);
+    const jabs = (f.b as any).delays.length;
+    const g = mk(66);
+    (g.b as any).bumpAlly(g.p, g.p);
+    ok(jabs === (g.b as any).delays.length + 1, `black belt adds a jab (${(g.b as any).delays.length} -> ${jabs})`);
+  }
+
+  // charcoal: the ring burns without sun, the volley lobs a 4th fireball
+  {
+    const c = mk(4, 'charcoal');
+    clone(c.b, 2);
+    (c.b as any).weather = null; // clear sky — the burn must come from the relic
+    (c.b as any).bumpAlly(c.p, c.p);
+    ok((c.b as any).orbs.length === 4, `charcoal volley lobs a 4th fireball (${(c.b as any).orbs.length})`);
+    const w = (c.b as any).waves.find((w: any) => w.onHit);
+    const e = (c.b as any).enemies[0];
+    w.onHit(e);
+    ok(e.dotTicks > 0, 'charcoal ring burns under a clear sky');
+  }
+
+  // spell tag: HEX sends 8 wisps over the usual 6
+  {
+    const t = mk(92, 'spell-tag');
+    clone(t.b, 5); // 8 targets — enough for the whole pack
+    (t.b as any).bumpAlly(t.p, t.p);
+    ok((t.b as any).orbs.length === 8, `spell tag sends +2 wisps (${(t.b as any).orbs.length})`);
+  }
 }
 
 // --- ultimate: a tap on the charged mon detonates the court -----------------

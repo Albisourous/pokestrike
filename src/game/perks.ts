@@ -330,6 +330,26 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.typePow[ty] = (b.typePow[ty] ?? 1) * 1.5; },
   })),
 
+  // type relics — the same held items as build-around supers: each adds a
+  // rider to its type's bumpAlly case, gated on perkIds, so apply is flat
+  ...(Object.entries({
+    charcoal: ['Charcoal+', 'charcoal', 'FIRE supers burn +1 orb'],
+    'mystic-water': ['Mystic Water+', 'mystic-water', 'WATER jet chills foes'],
+    magnet: ['Magnet+', 'magnet', 'SPARK hops +2 further'],
+    'miracle-seed': ['Miracle Seed+', 'miracle-seed', 'GRASS drain feeds x2'],
+    'hard-stone': ['Hard Stone+', 'hard-stone', 'ROCK rubble +2 chunks'],
+    'poison-barb': ['Poison Barb+', 'poison-barb', 'VENOM detonates x3'],
+    'sharp-beak': ['Sharp Beak+', 'sharp-beak', 'GALE grabs wider'],
+    'spell-tag': ['Spell Tag+', 'spell-tag', 'HEX sends +2 wisps'],
+    'twisted-spoon': ['Twisted Spoon+', 'twisted-spoon', 'PSI slam reaches 60px'],
+    'black-belt': ['Black Belt+', 'black-belt', 'CLOSE COMBAT adds a jab'],
+    'silk-scarf': ['Silk Scarf+', 'silk-scarf', 'EXTREMESPEED links 3rd'],
+  }) as [string, [string, string, string]][]).map(([id, [name, item, desc]]): Perk => ({
+    id, name, item, desc,
+    rarity: 'uncommon',
+    apply: () => {},
+  })),
+
   // --- rare: strong single effects ---
   {
     id: 'restore', name: 'Max Potion', item: 'max-potion',
@@ -540,6 +560,27 @@ export const BAG_ITEMS: BagItem[] = [
     desc: 'a wipe revives the team at 30% once',
     apply: (b) => { b.ashArmed = true; },
   },
+  {
+    id: 'quick-claw', name: 'Quick Claw', item: 'quick-claw',
+    desc: '+12% launch speed',
+    apply: (b) => { b.launchBoost *= 1.12; },
+  },
+  {
+    id: 'dusk-ball', name: 'Dusk Ball', item: 'dusk-ball',
+    desc: '+12% catch chance',
+    apply: (b) => { b.captureChance += 0.12; },
+  },
+  {
+    id: 'protein', name: 'Protein', item: 'protein',
+    desc: '+8% bump damage',
+    // dmgMult is hurt()'s single multiplier — covers phys + spec bumps
+    apply: (b) => { b.dmgMult *= 1.08; },
+  },
+  {
+    id: 'razor-claw', name: 'Razor Claw', item: 'razor-claw',
+    desc: '+10% crit chance',
+    apply: (b) => { b.critCh += 0.1; },
+  },
 ];
 
 // Roll a rarity tier, then pick within it — an empty tier trickles down to
@@ -547,13 +588,20 @@ export const BAG_ITEMS: BagItem[] = [
 // comes up blank. Legendary 4% / rare 12% / uncommon 34% / common 50%.
 // `cap` clamps the worst tier offered — elite stages pay out uncommon+.
 const TIERS: Rarity[] = ['legendary', 'rare', 'uncommon', 'common'];
-// `types` filters type charms to types the team actually fields — a charm
-// for a type you don't run is a dead offer
+// `types` filters type charms and relics to types the team actually fields —
+// a charm or super rider for a type you don't run is a dead offer
+const RELIC_TYPE: Record<string, PokeType> = {
+  charcoal: 'fire', 'mystic-water': 'water', magnet: 'electric',
+  'miracle-seed': 'grass', 'hard-stone': 'rock', 'poison-barb': 'poison',
+  'sharp-beak': 'flying', 'spell-tag': 'ghost', 'twisted-spoon': 'psychic',
+  'black-belt': 'fighting', 'silk-scarf': 'normal',
+};
 export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>, ban?: Set<string>): Perk[] {
   const pool = PERKS.filter(
     (p) =>
       (p.minRank == null || p.minRank <= rank) &&
       (!p.id.startsWith('type-') || !types || types.has(p.id.slice(5))) &&
+      (!(p.id in RELIC_TYPE) || !types || types.has(RELIC_TYPE[p.id])) &&
       !ban?.has(p.id), // banished ids stay out of every board for the rest of the run
   );
   const out: Perk[] = [];
