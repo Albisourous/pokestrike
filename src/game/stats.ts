@@ -25,17 +25,17 @@ export const bumpCooldown = (t: PokeType) => BUMP_CD[t];
 // What the bump super actually does — surfaced on scout cards and the
 // help index. Keep synced with the bumpAlly switch in battle.ts.
 export const SUPER_DESC: Record<PokeType, string> = {
-  normal: 'dashes to the nearest target and slams it',
-  fighting: 'jabs up close, then meteors rain on the farthest',
+  normal: 'an unmissable dash slams the nearest, then chains to the next',
+  fighting: 'dashes in for a jab chain — the uppercut flinches',
   rock: 'jabs up close, then meteors rain on the farthest',
-  flying: 'a vortex drags every nearby enemy into a pile',
-  water: 'homing orbs corkscrew into the nearest enemies',
-  electric: 'lightning chains through up to 3 enemies',
-  grass: 'drains the pack to heal the team, spores chase too',
-  poison: 'gas cloud now, venom ticks at the end of each shot',
-  fire: 'flame ring, then fireballs hunt the farthest',
-  ghost: 'a hex strikes every enemy on the court at once',
-  psychic: 'shockwave flings enemies, psy-orbs chase stragglers',
+  flying: 'a vortex piles foes up, then pops them skyward, scrambled',
+  water: 'a firehose jet pierces the court; rain widens the lane',
+  electric: 'lightning chains wider the longer your combo runs',
+  grass: 'drains and roots the pack, spores chase too',
+  poison: 'gas cloud now; the already-poisoned detonate their venom',
+  fire: 'flame ring, then fireballs hunt the farthest; sun ignites burns',
+  ghost: 'wisps converge on every foe; feasts on the poisoned',
+  psychic: 'shockwave flings enemies — walls pay a slam bonus',
 };
 
 // Signature supers that replace the type default — keep synced with the
@@ -149,7 +149,7 @@ export const MOVE_NAME: Record<PokeType, string> = {
   rock: 'STONE EDGE',
   fighting: 'CLOSE COMBAT',
   ghost: 'SHADOW BALL',
-  normal: 'QUICK ATTACK',
+  normal: 'EXTREMESPEED',
 };
 
 // Per-species signature moves — canon movepool picks, so Pikachu fires

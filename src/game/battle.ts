@@ -2834,6 +2834,11 @@ export class Battle {
             const dir = norm({ x: e.x - p.x, y: e.y - p.y });
             e.vx += dir.x * 170;
             e.vy += dir.y * 170;
+            // under sun the ring ignites — a burn tick, same cap as toxic
+            if (this.weather === 'sun') {
+              e.dotTicks = Math.min(e.dotTicks + 1, 6);
+              e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
+            }
             this.hurt(e, bumpDmg(e, 1.6), '#9df0ff');
           },
         });
@@ -2853,7 +2858,9 @@ export class Battle {
         const chain: { a: Vec; e: Unit; mult: number }[] = [];
         const hit = new Set<number>();
         let mult = 1.3;
-        for (let i = 0; i < 3; i++) {
+        // the chain grows with the combo it's riding — a hot shot arcs wider
+        const links = Math.min(3 + Math.floor(this.shotCombo / 3), 6);
+        for (let i = 0; i < links; i++) {
           const next = this.enemies
             .filter((e) => !e.dead && !hit.has(e.uid) && dist(from, e) <= 340 * p.rngMul)
             .sort((a, b) => dist(from, a) - dist(from, b))[0];
@@ -2888,6 +2895,7 @@ export class Battle {
           const dmg = bumpDmg(e, 1.1);
           dealt += dmg;
           this.hurt(e, dmg, '#9df0ff');
+          e.timer += 0.5; // the tendrils root the drained a beat
         }
         if (dealt > 0) this.tryHeal(this.players, () => Math.max(Math.round(dealt * 0.35), 4));
         this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 210 * p.rngMul, t: 0.4, life: 0.4, color, hits: new Set() });
@@ -2915,7 +2923,7 @@ export class Battle {
           const dx = t.x - p.x, dy = t.y - p.y;
           const along = dx * dir.x + dy * dir.y; // how far down the jet
           const off = Math.abs(dx * dir.y - dy * dir.x); // how far off the lane
-          if (along < 0 || off > t.r + 24) continue;
+          if (along < 0 || off > t.r + (this.weather === 'rain' ? 48 : 24)) continue; // rain swells the lane
           t.vx += dir.x * 640;
           t.vy += dir.y * 640;
           this.hurt(t, bumpDmg(t, 1.9), '#9df0ff');
@@ -2936,12 +2944,27 @@ export class Battle {
           color, hits: new Set(),
         });
         this.addShake(7);
-        for (const e of near(radius)) {
+        const shoved = near(radius);
+        for (const e of shoved) {
           const dir = norm({ x: e.x - p.x, y: e.y - p.y });
           e.vx += dir.x * 720;
           e.vy += dir.y * 720;
           this.hurt(e, bumpDmg(e, 1.2), '#9df0ff');
         }
+        // wall-slam payoff: whoever the shove pins to an arena wall a beat
+        // later eats a bonus hit — fling them somewhere hard
+        this.later(0.15, () => {
+          const a = this.arena;
+          for (const e of shoved) {
+            if (e.dead) continue;
+            const wall =
+              e.x - e.r < a.x + 40 || e.x + e.r > a.x + a.w - 40 ||
+              e.y - e.r < a.y + 40 || e.y + e.r > a.y + a.h - 40;
+            if (!wall) continue;
+            this.impact(e.x, e.y, color, 1.5);
+            this.hurt(e, bumpDmg(e, 0.8), '#9df0ff');
+          }
+        });
         // + twin psy-orbs hunt the farthest stragglers the shove misses
         near(Infinity)
           .sort((a, b) => dist(p, b) - dist(p, a))
@@ -2959,12 +2982,23 @@ export class Battle {
         this.addShake(5);
         // the vortex ring — sells the drag-in, since the pull alone is invisible
         this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 240 * p.rngMul, t: 0.45, life: 0.45, color, hits: new Set() });
-        for (const e of near(radius)) {
+        const dragged = near(radius);
+        for (const e of dragged) {
           const dir = norm({ x: p.x - e.x, y: p.y - e.y });
           e.vx += dir.x * 640;
           e.vy += dir.y * 640;
           this.hurt(e, bumpDmg(e, 0.7), '#9df0ff');
         }
+        // second beat: the vortex pops skyward — the gathered pile gets
+        // launched and their attack clocks scramble (gather → scatter)
+        this.later(0.25, () => {
+          for (const e of dragged) {
+            if (e.dead) continue;
+            e.vy -= 400;
+            e.timer += 0.5;
+          }
+          this.addShake(7);
+        });
         break;
       }
       case 'poison':
@@ -2974,13 +3008,14 @@ export class Battle {
         // the gas ring rolling out — toxic had no visible front before
         this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 220 * p.rngMul, t: 0.4, life: 0.4, color, hits: new Set() });
         for (const e of near(140)) {
+          // venom detonation: anyone already ticking pops the payload now
+          if (e.dotTicks > 0) this.hurt(e, e.dotDmg * 2, '#a040a0');
           e.dotTicks = Math.min(e.dotTicks + 2, 6);
           e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
           this.hurt(e, bumpDmg(e, 1.0), '#9df0ff');
         }
         break;
-      case 'rock':
-      case 'fighting': {
+      case 'rock': {
         // meteor shower: jab the nearest, then rocks rain down on the 3
         // farthest enemies — anywhere on the court is inside the kill box
         const e = nearest(p, 200);
@@ -3000,22 +3035,53 @@ export class Battle {
           });
         break;
       }
+      case 'fighting': {
+        // aura storm: dash to the nearest foe, then a 3-hit jab chain —
+        // jab, jab, and an uppercut that staggers its attack clock
+        const e = nearest(p, Infinity);
+        if (!e) break;
+        this.dashes.push({ u: p, e, done: false, dmg: bumpDmg(e, 0.8) });
+        // the chain lands as the lunge arrives (dashes run at 1100 u/s)
+        const eta = dist(p, e) / 1100;
+        [0.5, 0.5, 0.9].forEach((pow, i) => {
+          this.later(eta + i * 0.12, () => {
+            if (e.dead) return;
+            this.impact(e.x, e.y, color, 1.3);
+            this.hurt(e, bumpDmg(e, pow), '#9df0ff');
+            if (i === 2) e.timer += 1; // the uppercut flinches
+          });
+        });
+        break;
+      }
       case 'ghost': {
-        // hex: wisps converge on every enemy from the dark
+        // hex: wisps converge on every foe from the dark — the pack closing
+        // in is the scare; hex feasts on the poisoned (×1.5 on venom ticks)
         this.screenFlash('#705898', 0.18);
         // whole-court shadow ring — hex hits everything, so the ring does too
         this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 430, t: 0.5, life: 0.5, color, hits: new Set() });
-        for (const e of near(Infinity)) {
-          this.hurt(e, bumpDmg(e, 1.1), '#9df0ff');
-        }
+        near(Infinity)
+          .sort((a, b) => dist(p, a) - dist(p, b))
+          .slice(0, 6)
+          .forEach((e, i) => {
+            this.orbs.push({ x: e.x + (i % 2 ? 30 : -30), y: this.arena.y - 40, target: e, dmg: bumpDmg(e, e.dotTicks > 0 ? 1.95 : 1.3), t: 2.5, wob: i * 2.6 + 1.3, color });
+          });
         break;
       }
       default: {
-        // quick attack: the ally physically dashes to the nearest enemy,
-        // slams it, and stays put beside it — pure speed
-        const e = nearest(p, 240);
+        // extremespeed: the ally physically dashes to the nearest enemy —
+        // anywhere on the court — slams it, then chains into the
+        // next-nearest for a 2-link hit. Pure speed, never whiffs.
+        const e = nearest(p, Infinity);
         if (e) {
           this.dashes.push({ u: p, e, done: false, dmg: bumpDmg(e, 1.5) });
+          // Dash has no land callback — re-push once the lunge should have
+          // landed (dashes run at 1100 u/s)
+          this.later(dist(p, e) / 1100 + 0.05, () => {
+            const e2 = this.enemies
+              .filter((t) => !t.dead && t !== e)
+              .sort((a, b) => dist(p, a) - dist(p, b))[0];
+            if (e2) this.dashes.push({ u: p, e: e2, done: false, dmg: bumpDmg(e2, 1.5) });
+          });
         }
       }
     }
