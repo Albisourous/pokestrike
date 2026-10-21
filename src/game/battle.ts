@@ -1233,8 +1233,8 @@ export class Battle {
     this.wasGold = false;
     // every pull re-rolls the gauge's rhythm — the band and sweep don't sit
     // where muscle memory left them
-    this.gaugeJit = Math.random() * 2 - 1;
-    this.gaugeStart = Math.random();
+    this.gaugeJit = this.rng() * 2 - 1;
+    this.gaugeStart = this.rng();
 
     this.dragStart = { ...p };
     this.dragNow = { ...p };
