@@ -534,3 +534,7 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   deterministic earn paths); FISHING (w3, 25% gyarados fight) +
   HEADBUTT TREE (w2, 40% swarm) choice events; foe() throws at boot on
   unknown theme ids; smoke daily-count assert → unique-ids shape.
+- pushed: reward offer-card desc wrap — greedy fontB wrap ≤3 lines at
+  card width replaces the width-blind midpoint split (Grip Claw/Ether
+  compound descs bled into the next card). Verified live on the same
+  three-perk board.
