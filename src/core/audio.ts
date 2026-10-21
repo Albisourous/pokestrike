@@ -412,7 +412,8 @@ export interface Track {
 }
 export type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win'
   | 'battle_grove' | 'battle_cavern' | 'battle_volcano' | 'battle_sky'
-  | 'trainer_forge' | 'draft_theme' | 'reward_theme';
+  | 'trainer_forge' | 'trainer_shade' | 'trainer_earth' | 'trainer_gale'
+  | 'draft_theme' | 'reward_theme';
 
 function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0, vib = 0, dest?: AudioNode) {
   if (!ac || !mGain) return;
@@ -1166,6 +1167,56 @@ export const TRACKS: Partial<Record<TrackName, Track>> = {
     hat: 'hhhhhhhh'.repeat(8) + 'h.h.h.h.'.repeat(8),
     loop: true,
   },
+  trainer_shade: {
+    // ghost/poison/psychic — the march dragged down a minor third, slowed
+    // to a procession, warbling through more echo. Sinister, not heroic.
+    bpm: 132,
+    lead: trainerLead.map((n) => (n ? n - 3 : 0)),
+    harm: trainerHarm.map((n) => (n ? n - 3 : 0)),
+    arp: trainerArp.map((n) => (n ? n - 3 : 0)),
+    bass: trainerBass.map((n) => (n ? n - 3 : 0)),
+    leadWave: 'triangle',
+    swing: 0.06,
+    vib: 4,
+    echo: 0.22,
+    kick: 'k...k.k.'.repeat(15) + 'k.k.k.k.',
+    snare: '..s...s.'.repeat(15) + '..s..ss.',
+    hat: 'hhhhhhhh'.repeat(8) + 'h.h.h.h.'.repeat(8),
+    loop: true,
+  },
+  trainer_earth: {
+    // rock/normal/grass — the march lifted a fifth into G major, square
+    // lead kept, slap bass for bedrock weight. Bold and grounded.
+    bpm: 140,
+    lead: trainerLead.map((n) => (n ? n + 7 : 0)),
+    harm: trainerHarm.map((n) => (n ? n + 7 : 0)),
+    arp: trainerArp.map((n) => (n ? n + 7 : 0)),
+    bass: trainerBass.map((n) => (n ? n + 7 : 0)),
+    slap: true,
+    swing: 0.05,
+    vib: 1,
+    echo: 0.12,
+    kick: 'k...k.k.'.repeat(15) + 'k.k.k.k.',
+    snare: '..s...s.'.repeat(15) + '..s..ss.',
+    hat: 'hhhhhhhh'.repeat(8) + 'h.h.h.h.'.repeat(8),
+    loop: true,
+  },
+  trainer_gale: {
+    // flying/water — the march pushed a full octave up: same tune, thin
+    // air. Swing stays loose, echo opens up, vibrato keeps it floating.
+    bpm: 148,
+    lead: trainerLead.map((n) => (n ? n + 12 : 0)),
+    harm: trainerHarm.map((n) => (n ? n + 12 : 0)),
+    arp: trainerArp.map((n) => (n ? n + 12 : 0)),
+    bass: trainerBass.map((n) => (n ? n + 12 : 0)),
+    swing: 0.08,
+    vib: 3,
+    echo: 0.2,
+    kick: 'k...k.k.'.repeat(15) + 'k.k.k.k.',
+    snare: '..s...s.'.repeat(15) + '..s..ss.',
+    hat: 'hhhhhhhh'.repeat(8) + 'h.h.h.h.'.repeat(8),
+    loop: true,
+  },
   gym: {
     // gym leader — the fastest theme: chromatic tension, urgent pedal
     // bass, stabs that never sit still. Minor, menacing, final.
@@ -1263,13 +1314,22 @@ export const BIOME_TRACK: Record<string, TrackName> = {
   sky: 'battle_sky',
 };
 
-// trainer type → song. S6 scoped down to one hand-tint: the forge
-// family (fire/electric/fighting) gets the march transposed +4 into E
-// major on a saw lead; every other type keeps 'trainer'.
+// trainer type → song. One march, four tints — each family transposes
+// and re-voices the same data (forge +4 saw, shade −3 triangle, earth
+// +7 slap, gale +12 airy). The march stays the march; the element
+// changes the weather.
 export const TRAINER_TRACK: Record<string, TrackName> = {
   fire: 'trainer_forge',
   electric: 'trainer_forge',
   fighting: 'trainer_forge',
+  ghost: 'trainer_shade',
+  poison: 'trainer_shade',
+  psychic: 'trainer_shade',
+  rock: 'trainer_earth',
+  normal: 'trainer_earth',
+  grass: 'trainer_earth',
+  flying: 'trainer_gale',
+  water: 'trainer_gale',
 };
 
 let curTrack: TrackName | null = null;
