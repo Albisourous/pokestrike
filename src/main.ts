@@ -1238,7 +1238,9 @@ function update(dt: number) {
       battle.coachDone = false;
       battle.coach = false;
     }
-    if (battle.phase === 'won' || battle.phase === 'lost') {
+    // the win/lose beat plays out in the arena first — the report (and its
+    // jingle) lands only once battle's endT freeze finishes
+    if ((battle.phase === 'won' || battle.phase === 'lost') && battle.endT <= 0) {
       const won = battle.phase === 'won';
       const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
       statRunEnd(stageReached, won);

@@ -384,6 +384,7 @@ export class Battle {
   shots = 0;
   time = 0;
   waveBanner = 0;
+  endT = 0; // win/lose beat — the field report waits for the celebration to land
   weather: Weather | null = null; // this wave's sky — null is a clear court
 
   private dragging = false;
@@ -1491,6 +1492,7 @@ export class Battle {
     this.shake *= Math.exp(-6 * dt);
     this.punch *= Math.exp(-9 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
+    if (this.endT > 0) this.endT -= dt;
     if (this.mapMsgT > 0) this.mapMsgT -= dt;
     if (this.inspect) {
       this.inspect.t -= dt;
@@ -2232,12 +2234,17 @@ export class Battle {
       size: Math.min(1.7, 0.85 + d / 90),
       tilt: (Math.random() - 0.5) * 0.16,
     });
+    // every landed hit reads on the sprite — orbs, dots and ults squash too
+    if (d > 0 && !e.dead) e.sq = Math.max(e.sq, 0.5);
     // a chunk of the health bar at once gets the anime flash frame —
     // bumps, orbs and dot ticks all deserve it, not just contact
     if (!immune && d >= Math.max(30, e.maxHp * 0.25)) this.impact(e.x, e.y, color, 0.8);
     if (crit) {
       this.addShake(4);
       this.burst(e.x, e.y, '#ffd84d', 10, 380);
+      this.screenFlash('#ffd84d', 0.08);
+      this.hitStop = Math.max(this.hitStop, 0.08);
+      sfx('perfect', 0.7);
     }
     // styler loop wraps the target — every hit is another circle
     if (e.hp <= 0) {
@@ -3276,6 +3283,10 @@ export class Battle {
   }
 
   private waveCleared() {
+    // a wave's clear registers once — the aim failsafe and the kill paths
+    // both reach here while the reward's still pending; ceremony and
+    // gymsBeaten must never replay
+    if (this.rewardPending || this.phase === 'won') return;
     if (this.coach) this.coachDone = true; // survived a wave — teaching's over
     if (this.inRival) {
       this.echoCleared = true; // the echo is beaten — reclaim it
@@ -3287,8 +3298,13 @@ export class Battle {
     this.addPunch(0.08);
     this.addShake(9);
     this.burst(this.arena.x + this.arena.w / 2, this.arena.y + this.arena.h / 2, '#ffd84d', 26, 540, 1.2);
+    // the clear calls itself out — same ribbon the wave intro rides in on
+    this.waveSpecial = this.waveIndex + 1 >= this.waveCount ? 'STAGE CLEAR!' : 'WAVE CLEAR!';
+    this.waveBanner = 1.1;
+    sfx('wave');
     if (this.waveIndex + 1 >= this.waveCount && this.depth >= FINAL_DEPTH) {
       this.phase = 'won';
+      this.endT = 1.6; // let the star shower play out before the report lands
       this.award('first-clear');
       if (this.asc > 0) this.award('ascended');
       this.screenFlash('#ffd84d', 0.35);
@@ -4509,6 +4525,7 @@ export class Battle {
   // the sting are how a run says it's over
   private wipe() {
     this.phase = 'lost';
+    this.endT = 1.6; // the sting lands before the field report covers it
     this.screenFlash('#ff6b6b', 0.3);
     sfx('lose');
   }
