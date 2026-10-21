@@ -486,3 +486,45 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   (seed derivation covers resume).
 - QUEUED: S3 battle_grove, S4 battle_cavern, S5 battle_sky, S6 trainer
   tint, S7 gym stab, S9 invade sting; scout refill for game backlog.
+- ae880d8 pushed: S3-S7/S9 — battle_grove (C lydian pastoral bounce),
+  battle_cavern (D dorian drips, echo 0.3), battle_sky (F lydian hat-
+  driven), trainer_forge (march +4 semitones, saw voices) via
+  TRAINER_TRACK; GYM_STAB family stabs at boss spawn; invade jingle
+  layers the legendary crash-in. All 11 tracks pass the validator.
+- eba6c4e pushed: content-scout batch — ENEMY_THEME completed (every
+  non-boss ENEMY_DB id themed; volcano 20→27 w/ fossils, cavern→45,
+  grove→64, sky→44); colliery room (ROOM_LAYOUTS[11], mine pairs, pass
+  validator); eevee evolvesTo gains 196 Espeon; MOVE_OF +55 ids for
+  gen4-5 (27 inherit real castSignature behaviour, 28 name-only canon +
+  24 MOVE_DESC); 3 new rares (loaded dice/metal coat/wise glasses);
+  FAKE ITEM BALL mimic event (w2, voltorb/foongus lines); perkBan now
+  honoured at all 4 blind draw sites; undef-species guards on scripted
+  event waves + rollEvent empty-pool tail.
+- ef5be6c/78ace78 (committed+pushed by B32 sweep, verified): daily
+  rule cards via daily.ts, 9 named ASC tiers all wired (roam/hair-
+  trigger/fortunate/thin-centers/inflation/enraged/frenzy/storm/tag-
+  team), streak trophies, S1/S2/S8 music, 3 broken 'dailies' task
+  asserts repaired.
+- ae880d8 + eba6c4e (concurrent session, not mine): S3-S7/S9 music +
+  C1-C6 content (themed species +180, colliery room, Espeon branch,
+  55 signature mappings, mimic event).
+- 07576ba pushed: M2's real fix — FLYD pool split; mixo borrowings
+  hand-voiced (third-down harmonizer was emitting seconds).
+- NOTE: a second session/loop writes this tree concurrently. Its
+  in-flight diffs stay uncommitted by me; verify-before-commit now
+  includes "is this diff mine".
+- [~] R6 (22c4ba9d): regression hunt over the ability/variance batch.
+- 76859be pushed: scout-backlog batch — STABILITY: uid is per-battle
+  (orb wobble is seed-pure again; the seed-777 divergence class dead),
+  applySnapshot + both row-skip backfills draw THEMES like the live
+  path, migrateSaves primitive guard, runSave element checks
+  (team/box lvl finite, boxHp/boxLvl paired+finite, tools finite),
+  row bound < TOTAL_STAGES, smoke aimTries resets per wave.
+  POLISH: slider tap syncs volume, visibilitychange clears touch
+  deadlock, denied reroll/banish play ui 0.6, Esc closes TEAM·ITEMS,
+  task rows deny, share.failed → COPY FAILED, buildShare reads the
+  battle not stale draft, MAP_GEAR chip opens settings on map/reward,
+  EVO_KEEP chip + declineEvo(), NEW_HIT 36px, ASC_BTN 44px, loot
+  fountain tap-skips, ult arm expiry → STOOD DOWN, master-ball spend
+  banners + ball glyph on the box line. audio: sky-track lydian/mixo
+  harmonisation fix (semitone rub on tonic thirds).
