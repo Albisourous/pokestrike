@@ -549,3 +549,10 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   SWORD (mit-backing true damage on the toughest near foe), DARK VOID
   (0.9s telegraph → 250r sleep via e.timer +=2). Orb.spd field added
   for the lock-on's 1150u/s flight.
+- pushed: V-CREATE (2-link dash through nearest foes, 2.4 each),
+  JUDGMENT (staggered sky-beams on every foe, 1.6), ROAR OF TIME
+  (1.2s telegraph → 230r blast at 3.0, re-arms the caster's own cd —
+  the recharge cost); ambush-alley ROOM_LAYOUTS[12] (twin wall
+  corridors, 3 lanes, 12 anchors at lane mouths); catch ritual now
+  draws over the reward board (drawCatchBalls replay + [690,830] band
+  clamp via narrow internals cast — upgrade path: public drawBalls).
