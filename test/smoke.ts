@@ -475,15 +475,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const park = (b: any, p: any) =>
     b.enemies.forEach((e: any, i: number) => { e.x = 300 + i * 30; e.y = 300; p.x = 300; p.y = 360; });
 
-  // magnet: THUNDER hops +2 further (cap still 6)
+  // magnet: THUNDER hops +2 further (cap still 6) — Mareep keeps the generic
+  // chain (Pikachu's THUNDERBOLT signature wouldn't take relic riders)
   {
-    const a = mk(25);
+    const a = mk(179);
     clone(a.b, 4);
     park(a.b, a.p);
     (a.b as any).bumpAlly(a.p, a.p);
     drain(a.b);
     const arcs0 = (a.b as any).beams.length;
-    const m = mk(25, 'magnet');
+    const m = mk(179, 'magnet');
     clone(m.b, 4);
     park(m.b, m.p);
     (m.b as any).bumpAlly(m.p, m.p);
@@ -515,9 +516,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     ok(jabs === (g.b as any).delays.length + 1, `black belt adds a jab (${(g.b as any).delays.length} -> ${jabs})`);
   }
 
-  // charcoal: the ring burns without sun, the volley lobs a 4th fireball
+  // charcoal: the ring burns without sun, the volley lobs a 4th fireball —
+  // Vulpix keeps the generic fire super (Charmander has FLAMETHROWER now)
   {
-    const c = mk(4, 'charcoal');
+    const c = mk(37, 'charcoal');
     clone(c.b, 2);
     (c.b as any).weather = null; // clear sky — the burn must come from the relic
     (c.b as any).bumpAlly(c.p, c.p);
@@ -1154,9 +1156,10 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(u3.cd > 0, `strike shot spends the super on launch (cd ${u3.cd})`);
 
   // long-range supers: fire lobs homing fireballs at the far pack, and
-  // electric's chain leaves visible arcs
+  // electric's chain leaves visible arcs (Vulpix/Mareep — signature-free, so
+  // they fire the generic type supers these asserts read)
   {
-    const bf = new Battle(arena, [ROSTER[1], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+    const bf = new Battle(arena, [speciesById(37)!, ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
     (bf as any).spawnWave(0);
     const fp = bf.players[0];
     fp.cd = 0;
@@ -1166,7 +1169,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     // fire rise against gravity
     ok((bf as any).fx.some((f: any) => f.grav < 0), 'fire cast scatters rising embers');
 
-    const be = new Battle(arena, [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+    const be = new Battle(arena, [speciesById(179)!, ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
     (be as any).spawnWave(0);
     const ep = be.players[0];
     ep.cd = 0;
@@ -1576,7 +1579,7 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
 
 // --- orbs die with their wave, perks retune the fielded team ----------------
 {
-  const bf = new Battle(arena, [ROSTER[1], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
+  const bf = new Battle(arena, [speciesById(37)!, ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3));
   (bf as any).spawnWave(0);
   const fp = bf.players[0];
   fp.cd = 0;
@@ -1806,6 +1809,65 @@ ok(evo, 'every evolvesTo resolves');
 ok(moveOf(25, 'electric') === 'THUNDERBOLT', 'pikachu override');
 ok(moveOf(129, 'water') === 'SPLASH', 'magikarp signature');
 ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move');
+
+// --- signature moves: metronome rolls, future sight waits, ice beam locks ---
+{
+  const mk = (id: number) => {
+    const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+    (b as any).spawnWave(0);
+    (b as any).hazards = []; // static fields silence casts
+    const p = b.players[0];
+    p.def = { ...p.def, id }; // masquerade — moveOf keys the dex id
+    p.cd = 0;
+    return { b, p };
+  };
+  const drain = (b: any) => {
+    for (let i = 0; i < 8 && b.delays.length; i++)
+      for (const d of b.delays.splice(0)) d.fn();
+  };
+
+  // METRONOME: the wag lands SOME signature — the trail names the roll
+  {
+    const { b, p } = mk(35); // Clefairy
+    (b as any).bumpAlly(p, p);
+    const rolled = b.fieldLog.find((l) => l.startsWith('METRONOME →'));
+    const fx = (b as any).beams.length + (b as any).waves.length + (b as any).orbs.length + (b as any).delays.length;
+    ok(!!rolled && fx > 0, `metronome wags into a real signature (${rolled})`);
+  }
+
+  // FUTURE SIGHT: the telegraph ring goes up first, the nuke lands on the queue
+  {
+    const { b, p } = mk(65); // Alakazam
+    p.x = 500; p.y = 300;
+    b.enemies.forEach((e: any, i: number) => { e.x = 100 + i * 20; e.y = 300; e.vx = e.vy = 0; });
+    const e = b.enemies[0]; // farthest from p — the mark lands under it
+    (b as any).bumpAlly(p, p);
+    ok((b as any).delays.length > 0 && (b as any).waves.some((w: any) => w.life === 1.8), 'future sight telegraphs before it hits');
+    const hp1 = e.hp; // a role passive may already have nicked it
+    drain(b);
+    ok(e.dead || e.hp < hp1, `future sight's delayed nuke lands (${hp1} → ${e.dead ? 'KO' : e.hp})`);
+  }
+
+  // ICE BEAM: every foe on the ray freezes stiff — timers slip
+  {
+    const { b, p } = mk(350); // Milotic
+    p.x = 60; p.y = 400;
+    b.enemies.forEach((e: any, i: number) => { e.x = 220 + i * 50; e.y = 400; e.vx = e.vy = 0; e.timer = 3; });
+    (b as any).bumpAlly(p, p);
+    ok(b.enemies.every((e: any) => e.dead || e.timer > 3), 'ice beam freezes every foe it spears');
+  }
+
+  // SPLASH: the dud still counts — it logs the joke and never falls through
+  // to the type super (a fallthrough would queue chain links / push beams)
+  {
+    const { b, p } = mk(129); // Magikarp
+    (b as any).bumpAlly(p, p);
+    ok(
+      b.fieldLog.some((l) => l.includes('SPLASH')) && (b as any).beams.length === 0 && (b as any).delays.length === 0,
+      'splash is a dud — logged, no type-super fallthrough',
+    );
+  }
+}
 
 // --- daily/weekly task board: seeded picks, rollover, one-claim payout ------
 {

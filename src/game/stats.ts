@@ -52,6 +52,14 @@ export const MOVE_DESC: Record<string, string> = {
   'FRENZY PLANT': 'drain orbs swarm the four farthest enemies',
   'OUTRAGE': 'three staggered smashes on the nearest enemy',
   'SHEER COLD': 'a flash-freeze bursts around the nearest enemy',
+  'METRONOME': 'wags a finger and casts a rolled signature nuke',
+  'FUTURE SIGHT': 'marks a spot — a huge burst lands there moments later',
+  'CRUNCH': 'a heavy bite on the nearest enemy that flinches it',
+  'ICE BEAM': 'an icy beam pierces the court and freezes every enemy hit',
+  'HYPER VOICE': 'a sound ring rattles every enemy around the caster',
+  'THUNDERBOLT': 'one fat bolt on the farthest foe, then two chain hops',
+  'FLAMETHROWER': 'a flame cone pierces the court and burns every enemy hit',
+  'SPLASH': '…nothing happens',
 };
 
 // Move-aware super description: signature nukes override the type line.

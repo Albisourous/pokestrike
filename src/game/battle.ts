@@ -2622,13 +2622,24 @@ export class Battle {
     p: Unit,
     bumpDmg: (e: Unit, power: number) => number,
   ): boolean {
+    return this.castSignature(moveOf(src.def.id, src.def.type), src, p, bumpDmg);
+  }
+
+  // The money-shot table itself, keyed by move name so METRONOME can
+  // re-enter here with a rolled pick instead of the caster's own.
+  private castSignature(
+    name: string,
+    src: Unit,
+    p: Unit,
+    bumpDmg: (e: Unit, power: number) => number,
+  ): boolean {
     const foes = this.enemies.filter((e) => !e.dead);
     if (!foes.length) return false;
     const farthest = foes.slice().sort((a, b) => dist(p, b) - dist(p, a))[0];
     const fattest = foes.slice().sort((a, b) => b.maxHp - a.maxHp)[0];
     // a piercing beam from the caster THROUGH the anchor enemy to the far
     // wall — every enemy within `halfW` of the ray eats it
-    const lineBlast = (to: Unit, color: string, halfW: number, power: number, w: number) => {
+    const lineBlast = (to: Unit, color: string, halfW: number, power: number, w: number, onHit?: (e: Unit) => void) => {
       const d = norm({ x: to.x - p.x, y: to.y - p.y });
       halfW *= 1.4; // hit corridor tracks the fatter drawn beam
       this.beams.push({ x1: p.x, y1: p.y, x2: p.x + d.x * 1400, y2: p.y + d.y * 1400, t: 0.6, life: 0.6, color, w });
@@ -2636,7 +2647,10 @@ export class Battle {
         const t = (e.x - p.x) * d.x + (e.y - p.y) * d.y;
         if (t < 0) continue; // behind the caster
         const dx = e.x - (p.x + d.x * t), dy = e.y - (p.y + d.y * t);
-        if (Math.hypot(dx, dy) < halfW + e.r) this.hurt(e, bumpDmg(e, power), '#ffffff');
+        if (Math.hypot(dx, dy) < halfW + e.r) {
+          this.hurt(e, bumpDmg(e, power), '#ffffff');
+          onHit?.(e);
+        }
       }
       this.screenFlash(color, 0.3);
       this.hitStop = Math.max(this.hitStop, 0.42);
@@ -2645,7 +2659,7 @@ export class Battle {
       sfx('beam');
       buzz([40, 30, 60]);
     };
-    switch (moveOf(src.def.id, src.def.type)) {
+    switch (name) {
       case 'HYPER BEAM': // the golden wall of light — fattest beam in the game
         lineBlast(farthest, '#ffd84d', 38, 2.6, 2.4);
         return true;
@@ -2743,6 +2757,114 @@ export class Battle {
         this.hitStop = Math.max(this.hitStop, 0.32);
         this.addShake(13);
         sfx('splash');
+        return true;
+      }
+      case 'METRONOME': { // the finger wag — casts a rolled signature
+        // the pool: the flashy half of this table — no METRONOME (no
+        // recursion), no SPLASH (the wag deserves a real payoff)
+        const pool = [
+          'HYPER BEAM', 'SOLARBEAM', 'HYDRO CANNON', 'ZAP CANNON',
+          'PSYCHO BOOST', 'ERUPTION', 'EXPLOSION', 'BLAST BURN',
+          'FRENZY PLANT', 'OUTRAGE', 'SHEER COLD', 'THUNDERBOLT',
+          'ICE BEAM', 'FUTURE SIGHT',
+        ];
+        const picked = pool[Math.floor(this.rng() * pool.length)];
+        this.log(`METRONOME → ${picked}`);
+        this.texts.push({ x: p.x, y: p.y - p.r - 64, text: `→ ${picked}!`, t: 1.2, color: '#ffd84d', big: true });
+        sfx('ready');
+        return this.castSignature(picked, src, p, bumpDmg);
+      }
+      case 'FUTURE SIGHT': { // a hole in time opens where the farthest foe
+        // STANDS — the ring swells over the windup; move and it missed you
+        const tx = farthest.x, ty = farthest.y;
+        this.waves.push({ x: tx, y: ty, r: 0, maxR: 160, t: 1.8, life: 1.8, color: '#f85888', hits: new Set() });
+        this.later(1.8, () => {
+          this.screenFlash('#f85888', 0.3);
+          this.impact(tx, ty, '#f85888', 2.2);
+          this.scar(tx, ty, 42);
+          this.hitStop = Math.max(this.hitStop, 0.36);
+          this.addPunch(0.18);
+          this.addShake(16);
+          for (const e of this.enemies) {
+            if (e.dead || Math.hypot(e.x - tx, e.y - ty) > 160 + e.r) continue;
+            this.hurt(e, bumpDmg(e, 2.2), '#f8b8d0');
+          }
+          sfx('boom');
+        });
+        sfx('warn');
+        return true;
+      }
+      case 'CRUNCH': { // the heavy bite — nearest foe eats fang and flinches
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        this.impact(t.x, t.y, '#705898', 1.9);
+        this.hurt(t, bumpDmg(t, 1.9), '#d8c8f0');
+        t.timer += 0.8; // flinched — its attack clock slips a beat
+        this.hitStop = Math.max(this.hitStop, 0.2);
+        this.addShake(11);
+        sfx('hit');
+        return true;
+      }
+      case 'ICE BEAM': // a frozen lance down the ray — everything it spears
+        // locks up stiff (no def-down status exists; the chill rides the clock)
+        lineBlast(farthest, '#98d8d8', 30, 2.0, 1.6, (e) => {
+          if (!e.dead) e.timer += 0.6;
+        });
+        return true;
+      case 'HYPER VOICE': { // the sound ring rattles the whole court
+        this.screenFlash('#f0b6bc', 0.16);
+        this.waves.push({
+          x: p.x, y: p.y, r: 0, maxR: 260, t: 0.5, life: 0.5,
+          color: '#f0b6bc', hits: new Set(),
+          onHit: (e) => this.hurt(e, bumpDmg(e, 1.4), '#f8dce0'),
+        });
+        this.addShake(10);
+        sfx('wave');
+        return true;
+      }
+      case 'THUNDERBOLT': { // the mascot bolt — one fat arc on the farthest
+        // foe, then the discharge hops to the two nearest leftovers
+        this.beams.push({ x1: p.x, y1: p.y, x2: farthest.x, y2: farthest.y, t: 0.32, life: 0.32, color: '#f8d030', w: 7 });
+        this.impact(farthest.x, farthest.y, '#f8d030', 1.9);
+        this.hurt(farthest, bumpDmg(farthest, 2.2), '#f8e88a');
+        farthest.timer += 0.5; // stunned stiff
+        this.screenFlash('#f8d030', 0.16);
+        this.hitStop = Math.max(this.hitStop, 0.3);
+        const hit = new Set([farthest.uid]);
+        let from = farthest;
+        for (let i = 0; i < 2; i++) {
+          const next = foes.filter((e) => !hit.has(e.uid)).sort((a, b) => dist(from, a) - dist(from, b))[0];
+          if (!next) break;
+          hit.add(next.uid);
+          const a = { x: from.x, y: from.y };
+          this.later(0.14 + i * 0.1, () => {
+            if (next.dead) return;
+            this.beams.push({ x1: a.x, y1: a.y, x2: next.x, y2: next.y, t: 0.26, life: 0.26 });
+            this.impact(next.x, next.y, '#f8d030', 1.3);
+            this.hurt(next, bumpDmg(next, 0.9), '#f8e88a');
+            sfx('zap');
+          });
+          from = next;
+        }
+        this.addShake(11);
+        sfx('zap');
+        return true;
+      }
+      case 'FLAMETHROWER': // the cone of flame — everything on the ray burns
+        lineBlast(farthest, '#f08030', 30, 2.1, 1.8, (e) => {
+          if (!e.dead) {
+            e.dotTicks = Math.min(e.dotTicks + 3, 6);
+            e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
+          }
+        });
+        return true;
+      case 'SPLASH': { // the dud, played straight — a hop, a ripple, nothing
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        p.sq = 1; // the little hop — up it goes, down it comes
+        this.addShake(4);
+        this.hurt(t, bumpDmg(t, 0.1), '#bfe8ff'); // the ripple still stings a little
+        this.texts.push({ x: p.x, y: p.y - p.r - 64, text: '…but nothing happened!', t: 1.1, color: '#9db8d8', big: false });
+        this.log(`${src.def.name.toUpperCase()} used SPLASH — nothing happened`);
+        sfx('splash', 0.7);
         return true;
       }
     }
