@@ -2867,6 +2867,48 @@ export class Battle {
         sfx('splash', 0.7);
         return true;
       }
+      case 'WATER SPOUT': // Kyogre's geyser — the caster's own HP is the
+        // reservoir: full HP floods at beam-nuke power, near-faint sputters
+        lineBlast(farthest, '#6890f0', 30, 0.9 + 1.7 * (src.hp / src.maxHp), 2.4);
+        sfx('splash');
+        return true;
+      case 'FISSURE': { // canon OHKO — but the crack only finds GROUNDED prey
+        const g = foes
+          .filter((e) => !e.airborne && !flies(e.def))
+          .sort((a, b) => dist(p, b) - dist(p, a))[0];
+        // no grounded mark: the crack still lands, but as plain heavy damage
+        lineBlast(g ?? farthest, '#b8a038', 18, 2.8, 1.3, g ? (e) => {
+          if (!e.dead && e.hp < e.maxHp * 0.35) e.timer += 1.2; // left dazed in the crack
+        } : undefined);
+        this.addShake(12);
+        return true;
+      }
+      case 'SEISMIC TOSS': { // canon fixed damage — the throw pays per level
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        t.y -= 60; // heaved skyward — the same pop the vortex uses
+        t.vy -= 400;
+        t.sq = 1;
+        this.later(0.5, () => { // the landing is what hurts
+          if (t.dead) return;
+          this.impact(t.x, t.y, '#c03028', 1.8);
+          this.hurt(t, Math.round(src.lvl * t.maxHp * 0.012), '#f0b8a8'); // ~1.2%/lv — Lv50 ≈ 60% maxHp
+          this.addShake(12);
+          sfx('boom');
+        });
+        return true;
+      }
+      case 'ENDEAVOR': { // canon — drags the target to the caster's HP fraction
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        const d = norm({ x: t.x - p.x, y: t.y - p.y });
+        for (let i = -1; i <= 1; i++) // a speed-line fan — the dive reads fast
+          this.beams.push({ x1: p.x, y1: p.y, x2: t.x - d.y * i * 14, y2: t.y + d.x * i * 14, t: 0.3, life: 0.3, color: '#f8f8f8', w: 2 });
+        const want = Math.max(1, Math.round(t.maxHp * (src.hp / src.maxHp))); // canon can't KO
+        const need = t.hp - want;
+        this.hurt(t, need > 0 ? need : bumpDmg(t, 0.5), '#f8f8d8'); // under it already — chip, never whiff
+        this.impact(t.x, t.y, '#f8f8f8', 1.5);
+        sfx('hit');
+        return true;
+      }
     }
     return false;
   }

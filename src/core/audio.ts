@@ -290,7 +290,7 @@ export function playJingle(kind: 'win' | 'lose' | 'catch' | 'task' | 'gym' | 'it
 
 const M2F = (m: number) => 440 * 2 ** ((m - 69) / 12);
 
-interface Track {
+export interface Track {
   bpm: number;
   lead: number[];
   harm?: number[]; // quiet second voice, a scale-third under the lead
@@ -315,7 +315,7 @@ interface Track {
   slap?: boolean; // bass gets a pitch-snap + pick click per note — slap feel
   stab?: number[][]; // synth-brass chord stabs — midi arrays per step, [] = rest
 }
-type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win';
+export type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win';
 
 function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0, vib = 0, dest?: AudioNode) {
   if (!ac || !mGain) return;
@@ -415,7 +415,7 @@ const battleLeadAlt = [
   ...battleLeadB,
 ];
 
-const TRACKS: Record<TrackName, Track> = {
+export const TRACKS: Record<TrackName, Track> = {
   title: {
     bpm: 96,
     leadWave: 'triangle', // whistle-warm menu theme
@@ -443,7 +443,7 @@ const TRACKS: Record<TrackName, Track> = {
       ...rep([41, 0, 48, 0], 2), 48, 0, 0, 0, 0, 0, 0, 0,
     ],
     kick: 'k.......'.repeat(7) + 'k.......',
-    snare: '',
+    snare: '.'.repeat(64), // no snare in the menu theme — rests, not a short string
     hat: '..h...h.'.repeat(8),
     loop: true,
   },
@@ -549,9 +549,9 @@ const TRACKS: Record<TrackName, Track> = {
       36, 0, 0, 0, 0, 0, 0, 0, 43, 0, 0, 0, 0, 0, 0, 0,
       45, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 0, 0, 0,
     ],
-    kick: '',
-    snare: '',
-    hat: '',
+    kick: '.'.repeat(64), // no drums in the ambient map theme — rests, not a short string
+    snare: '.'.repeat(64),
+    hat: '.'.repeat(64),
     loop: true,
   },
   trainer: {

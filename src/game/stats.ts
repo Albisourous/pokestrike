@@ -60,6 +60,10 @@ export const MOVE_DESC: Record<string, string> = {
   'THUNDERBOLT': 'one fat bolt on the farthest foe, then two chain hops',
   'FLAMETHROWER': 'a flame cone pierces the court and burns every enemy hit',
   'SPLASH': '…nothing happens',
+  'WATER SPOUT': 'a spout that floods harder the healthier the caster is',
+  'FISSURE': 'a crack rips to the farthest grounded foe — survivors sit dazed',
+  'SEISMIC TOSS': 'hurls the nearest foe skyward — the slam scales with level',
+  'ENDEAVOR': "drags the nearest foe down to the caster's own HP fraction",
 };
 
 // Move-aware super description: signature nukes override the type line.

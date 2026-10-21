@@ -4,6 +4,7 @@ import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle'
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES } from '../src/game/data';
 import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
+import { TRACKS } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
 import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
@@ -1867,6 +1868,83 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
       'splash is a dud — logged, no type-super fallthrough',
     );
   }
+
+  // WATER SPOUT: the geyser pours on the caster's own HP — full floods, faint sputters
+  {
+    const spout = (frac: number) => {
+      const { b, p } = mk(382); // Kyogre
+      p.x = 60; p.y = 400;
+      b.enemies.forEach((e: any, i: number) => {
+        e.x = 260 + i * 60; e.y = 400; e.vx = e.vy = 0; e.shieldN = 0;
+      });
+      const hp0 = b.enemies.map((e: any) => e.hp);
+      p.hp = Math.max(1, Math.round(p.maxHp * frac));
+      (b as any).bumpAlly(p, p);
+      return b.enemies.reduce((s: number, e: any, i: number) => s + hp0[i] - e.hp, 0);
+    };
+    ok(spout(1) > spout(0.05), 'water spout pours harder at full HP than near-faint');
+  }
+
+  // SEISMIC TOSS: fixed damage — the landing pays out per caster level
+  {
+    const slam = (lvl: number) => {
+      const { b, p } = mk(67); // Machoke
+      p.lvl = lvl;
+      p.x = 270; p.y = 760;
+      b.enemies.forEach((e: any, i: number) => {
+        e.vx = e.vy = 0; e.shieldN = 0;
+        e.x = i === 0 ? 270 : 80 + i * 100;
+        e.y = i === 0 ? 300 : 200;
+      });
+      const e = b.enemies[0];
+      const hp0 = e.hp;
+      (b as any).bumpAlly(p, p);
+      drain(b); // the 0.5s landing is where the damage lives
+      return hp0 - e.hp;
+    };
+    ok(slam(40) > slam(20), 'seismic toss lands harder the higher the level');
+  }
+
+  // ENDEAVOR: a full-HP foe gets dragged down to a hurting caster's fraction
+  {
+    const { b, p } = mk(277); // Swellow
+    p.hp = Math.max(1, Math.round(p.maxHp * 0.1));
+    p.x = 270; p.y = 760;
+    b.enemies.forEach((e: any, i: number) => {
+      e.x = 270; e.y = 300 - i * 50; e.vx = e.vy = 0; e.shieldN = 0;
+    });
+    const e = b.enemies[0];
+    const want = Math.max(1, Math.round(e.maxHp * (p.hp / p.maxHp)));
+    (b as any).bumpAlly(p, p);
+    ok(!e.dead && e.hp <= want, `endeavor pulls the foe to the caster's fraction (${e.hp}/${e.maxHp} → ≤${want})`);
+  }
+
+  // FISSURE: the crack skips winged foes — only grounded prey is in its path
+  {
+    const { b, p } = mk(383); // Groudon
+    p.x = 270; p.y = 760;
+    const g = b.enemies[0];
+    b.enemies.forEach((e: any, i: number) => {
+      e.vx = e.vy = 0; e.shieldN = 0; e.timer = 3;
+      if (i === 0) {
+        e.x = 270; e.y = 500; e.airborne = false; // nearest, grounded — the mark
+        e.def = { ...e.def, type: 'normal', type2: undefined };
+        e.hp = 1; // canon OHKO: the crack KOs what it catches
+      } else {
+        e.x = i % 2 ? 80 : 460; e.y = 230 + i * 15; // farther — and winged
+        if (i === 1) e.def = { ...e.def, type: 'flying', type2: undefined };
+        else e.airborne = true;
+      }
+    });
+    const flyers = b.enemies.slice(1); // hold refs — the dead drop out of enemies[]
+    const fly0 = flyers.map((e: any) => e.hp);
+    (b as any).bumpAlly(p, p);
+    ok(g.dead, 'fissure KOs the grounded mark');
+    ok(
+      flyers.length > 0 && flyers.every((e: any, i: number) => !e.dead && e.hp === fly0[i]),
+      'fissure skips the airborne pack for grounded prey',
+    );
+  }
 }
 
 // --- daily/weekly task board: seeded picks, rollover, one-claim payout ------
@@ -1975,6 +2053,37 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   localStorage.setItem('pk_streak', '{broken');
   ok(streakDaily(t0 + 4 * DAY) === 2 && streakWins() === 3, 'a corrupt blob falls back to the memory copy');
   localStorage.removeItem('pk_streak');
+}
+
+// --- songbook validator (MUSIC.md S0): lead.length IS the loop length — a
+// short lane is silent dead air, a long one is dead notes nobody hears ------
+{
+  const midiOk = (m: number) => m === 0 || (m >= 21 && m <= 108); // 0 = rest, else piano range
+  const lanes = ['lead', 'harm', 'alt', 'altHarm', 'arp', 'bass'] as const;
+  const drums = ['kick', 'snare', 'hat'] as const;
+  for (const [name, t] of Object.entries(TRACKS)) {
+    const n = t.lead.length;
+    for (const f of lanes) {
+      const a = t[f];
+      if (a === undefined) continue;
+      ok(a.length === n, `${name}.${f}: ${a.length} steps vs lead's ${n}`);
+      const bad = a.find((m) => !midiOk(m));
+      ok(bad === undefined, `${name}.${f}: midi 0 or 21-108 (found ${bad})`);
+    }
+    for (const f of drums) {
+      ok(t[f].length === n, `${name}.${f}: ${t[f].length} steps vs lead's ${n}`);
+      const bad = t[f].match(/[^kshc.]/)?.[0];
+      ok(bad === undefined, `${name}.${f}: drum chars are k/s/h/c/. (found '${bad}')`);
+    }
+    if (t.stab !== undefined) {
+      ok(t.stab.length === n, `${name}.stab: ${t.stab.length} rows vs lead's ${n}`);
+      const badRow = t.stab.findIndex((r) => !Array.isArray(r) || r.some((m) => !midiOk(m)));
+      ok(badRow === -1, `${name}.stab: every row is a midi chord array (row ${badRow})`);
+    }
+    ok(t.next === undefined || t.next in TRACKS, `${name}.next -> '${t.next}' is a real track`);
+    ok(!(t.loop === true && t.next !== undefined), `${name}: a loop never hands off to next`);
+  }
+  ok(true, `${Object.keys(TRACKS).length} tracks validated`);
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
