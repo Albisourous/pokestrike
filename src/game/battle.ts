@@ -1,10 +1,10 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
-import { sfx, buzz, cry, music } from '../core/audio';
+import { sfx, buzz, cry, music, playJingle } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById } from './data';
-import { Perk, rollPerks, PERKS, BAG_ITEMS } from './perks';
+import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
 import type { EventChoice, EventArt } from './events';
@@ -180,12 +180,22 @@ interface ScreenFlash {
   life: number;
   color: string;
 }
+// One capture ritual: the mon sucks into the ball, it rocks side to side,
+// then clicks shut (ok) or bursts open — theatre over an already-banked
+// result; `resolve` fires the site's deferred payoff once at the verdict.
 interface BallDrop {
   x: number;
   y: number;
   item: string; // poke-ball / master-ball sprite
   t: number;
   life: number;
+  ok: boolean; // click shut (catch) vs break out (the roll refused)
+  rocks: number; // swings to play before the verdict — 3 catch / 2 escape
+  rocked: number; // ticks already sounded
+  at: number; // elapsed time of the click/burst
+  id?: number; // the caught mon — drawn shrinking into the ball on the drop
+  r?: number; // its draw radius for the suck-in
+  resolve?: () => void; // payoff at the click/burst — fires once
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
@@ -300,6 +310,11 @@ const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
 const SHINY_RATE = 1 / 48; // ~2% of wild spawns roll the gold palette
+// the catch ritual's clock — a fast drop-in, ±0.5rad rocks, then the
+// verdict. Worst case runs 1.75s so a volley of catches stays snappy.
+const BALL_ROCK0 = 0.3; // drop-in seconds before the first swing
+const BALL_ROCK_T = 0.4; // one full side-to-side swing
+const BALL_TAIL = 0.25; // linger after the click/burst before fading
 const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
 // every pickup gets a color + one-word tag so the drop reads before the
 // ball reaches it
@@ -402,7 +417,7 @@ export class Battle {
   private dashes: Dash[] = [];
   private delays: { t: number; fn: () => void }[] = []; // staggered super hits
   private flashes: ScreenFlash[] = [];
-  private balls: BallDrop[] = []; // caught mons: ball drops in and wiggles
+  private balls: BallDrop[] = []; // live capture rituals — ball drops, rocks, clicks or bursts
   private pickups: Pickup[] = []; // touch to collect while the ball flies
   private scars: Scar[] = []; // impact craters scarring the court
   private hazards: Hazard[] = []; // this wave's court gimmicks
@@ -1386,6 +1401,9 @@ export class Battle {
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
     this.cardT += dt;
+    // periodic perk triggers only tick in the fight — idling on the map
+    // shouldn't be a free rest for clocked heals
+    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') perkTick(this, dt);
     if (this.dragging) {
       this.dragT += dt;
       // a soft tick each time the fill crosses into the gold — the
@@ -1400,7 +1418,21 @@ export class Battle {
     if (this.texts.length > 40) this.texts.splice(0, this.texts.length - 40); // a huge burst shouldn't stack 100 labels
     for (const f of this.flashes) f.t -= dt;
     this.flashes = this.flashes.filter((f) => f.t > 0);
-    for (const b of this.balls) b.t -= dt;
+    // capture rituals tick in any phase — a tick lands on each swing's far
+    // tilt, then the click/burst fires the site's deferred payoff once
+    for (const b of this.balls) {
+      b.t -= dt;
+      const el = b.life - b.t;
+      while (b.rocked < b.rocks && el >= BALL_ROCK0 + (b.rocked + 0.25) * BALL_ROCK_T) {
+        b.rocked++;
+        sfx('tick');
+      }
+      if (b.resolve && el >= b.at) {
+        const r = b.resolve;
+        b.resolve = undefined;
+        r();
+      }
+    }
     this.balls = this.balls.filter((b) => b.t > 0);
     // evolution cinematics tick with the fight — the payoff (burst, cry)
     // lands the moment the flicker resolves, not when the dupe was absorbed
@@ -2234,14 +2266,15 @@ export class Battle {
       if (master) this.masterArmed = false;
       sfx('ko');
       buzz(e.boss ? [50, 60, 90] : 30);
-      // capture complete: stacked loops + release sparkle
-      this.texts.push({
+      // the verdict card — held back for the ball's click/burst whenever a
+      // capture was attempted so the rocks land before the reveal
+      const verdict: FloatText = {
         x: e.x, y: e.y - e.r - 22,
         text: `${e.shiny ? 'SHINY ' : ''}${e.def.name.toUpperCase()} ${caught ? 'CAUGHT!' : 'FAINTED!'}`,
         t: caught ? 1.5 : 1.1,
         color: caught ? '#ffd84d' : '#9df0ff',
         big: true,
-      });
+      };
       if (e.boss && this.waveHadGym) {
         this.award('badge'); // leader down, caught or not
         this.award(`gym-${e.def.id}`); // the leader's own trophy
@@ -2273,11 +2306,39 @@ export class Battle {
           });
         }
       }
+      // the ball comes out whenever a capture was rolled — trainer mons
+      // stay with their owner, so their KOs still faint on the spot
+      if (caught || !this.inTrainer) {
+        this.catchSeq(e.x, e.y, caught, master ? 'master-ball' : 'poke-ball', () => {
+          this.texts.push(verdict);
+          if (caught) {
+            // click shut: the gotcha flash then the same payoff as always
+            this.impact(e.x, e.y, '#ffd84d', 1);
+            this.screenFlash('#ffd84d', 0.2);
+            this.burst(e.x, e.y, '#ffd84d', 18, 420, 1.2);
+            if (e.shiny) {
+              this.texts.push({ x: e.x, y: e.y - e.r - 56, text: 'SHINY BONUS +250', t: 1.4, color: '#ffd84d', big: true });
+            }
+            playJingle('catch');
+            cry(e.def.id, 0.45);
+            buzz([30, 50, 30, 50, 60]);
+          } else {
+            // broke out — the escape plays the same faint it always was
+            this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
+            this.burst(e.x, e.y, '#ffffff', 8, 300, 0.9);
+            sfx('bounce', 0.6);
+          }
+        }, e.def.id, e.r);
+      } else {
+        this.texts.push(verdict);
+        // a faint flashes the sprite out — the ghost drifts up and gone
+        this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
+      }
       if (caught) {
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
           const cl = this.catchLvl(e.lvl); // it keeps its level — up to the team's pace
-          this.boxAdd(e.shiny ? { ...e.def, shiny: true, lvl: cl } : { ...e.def, lvl: cl });
+          this.boxAdd(e.shiny ? { ...e.def, shiny: true, lvl: cl } : { ...e.def, lvl: cl }, 1, false); // the KO spot already runs the ritual
         }
         // record at capture time — a mid-run tab close keeps the dex honest
         recordCapture([e.def.id]);
@@ -2289,23 +2350,12 @@ export class Battle {
           this.award('shiny');
           this.shiniesCaught++;
           this.score += 250;
-          this.texts.push({ x: e.x, y: e.y - e.r - 56, text: 'SHINY BONUS +250', t: 1.4, color: '#ffd84d', big: true });
         }
-        this.screenFlash('#ffd84d', 0.2);
-        this.burst(e.x, e.y, '#ffd84d', 18, 420, 1.2);
-        // real poké ball drops in and does the triple-wiggle
-        this.balls.push({ x: e.x, y: e.y, item: master ? 'master-ball' : 'poke-ball', t: 1.15, life: 1.15 });
         // the ball breaks a soul-link — the partner fights on alone
         if (e.link) {
           e.link.link = undefined;
           e.link = undefined;
         }
-        sfx('caught');
-        cry(e.def.id, 0.45);
-        buzz([30, 50, 30, 50, 60]);
-      } else {
-        // a faint flashes the sprite out — the ghost drifts up and gone
-        this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
       }
       // skull mark: the bounty pops on the KO — team heal + score
       if (e.skull) {
@@ -3259,14 +3309,52 @@ export class Battle {
     return Math.min(lvl, best + 3);
   }
 
+  // Queue the capture ritual: ball drops in, rocks `rocks` times over the
+  // tick loop, then clicks shut (ok) or bursts open. Pure theatre — the
+  // catch result is already banked; `resolve` fires the site's payoff at
+  // the verdict so the suspense reads before the celebration. `id`/`r`
+  // draw the mon shrinking into the ball when a KO'd foe is caught.
+  private catchSeq(x: number, y: number, ok: boolean, item = 'poke-ball', resolve?: () => void, id?: number, r?: number) {
+    const rocks = ok ? 3 : 2;
+    const at = BALL_ROCK0 + rocks * BALL_ROCK_T;
+    this.balls.push({ x, y, item, ok, rocks, rocked: 0, at, life: at + BALL_TAIL, t: at + BALL_TAIL, id, r, resolve });
+  }
+
+  // Where a box-bound catch performs when there's no KO spot to own — on
+  // the map the ball lands by the trainer, anywhere else mid-court.
+  private catchAnchor() {
+    if (this.phase === 'map') {
+      const n = this.region.nodes[this.mapNode];
+      if (n) {
+        return { x: MAP_OX + n.tx * MAP_CELL + MAP_CELL / 2, y: MAP_OY + (n.ty - this.mapCam) * MAP_CELL - MAP_CELL };
+      }
+    }
+    return { x: this.arena.x + this.arena.w / 2, y: this.arena.y + 120 };
+  }
+
+  // The generic click payoff for catches without their own fanfare.
+  private catchPayoff(x: number, y: number, def: SpeciesDef) {
+    return () => {
+      this.impact(x, y, '#ffd84d', 0.9);
+      playJingle('catch');
+      cry(def.id, 0.45);
+    };
+  }
+
   // Every NEW face in the box lands here — names the recruit on the reward
   // banner and pings the map's TEAM · ITEMS button until you look.
-  boxAdd(def: SpeciesDef, hpFrac = 1) {
+  boxAdd(def: SpeciesDef, hpFrac = 1, theatre = true) {
     this.box.push(def);
     this.boxHp.push(hpFrac);
     this.boxLvl.push(Math.max(1, def.lvl ?? 1));
     this.boxGain = def;
     this.boxPing = true;
+    // every new box face earns the ritual — the KO catch passes theatre:
+    // false because it runs its own sequence on the KO spot instead
+    if (theatre) {
+      const a = this.catchAnchor();
+      this.catchSeq(a.x, a.y, true, 'poke-ball', this.catchPayoff(a.x, a.y, def));
+    }
   }
 
   gainLevels(p: Unit, n: number) {
@@ -3520,12 +3608,17 @@ export class Battle {
     // ordinary stages earn no free catch
     this.lastRecruit = this.inTrainer || !this.waveHadGym ? null : this.rollRecruit();
     if (this.lastRecruit) {
-      if (!this.absorbDupe(this.lastRecruit)) {
-        this.boxAdd(this.lastRecruit);
-        recordCapture([this.lastRecruit.id]); // the dex logs it now, not at run end
+      const rec = this.lastRecruit;
+      if (!this.absorbDupe(rec)) {
+        this.boxAdd(rec); // boxAdd runs the ball ritual itself
+        recordCapture([rec.id]); // the dex logs it now, not at run end
+      } else {
+        // a prize dupe never reaches boxAdd — run the ritual anyway so the
+        // catch chime still waits on the click
+        const a = this.catchAnchor();
+        this.catchSeq(a.x, a.y, true, 'poke-ball', this.catchPayoff(a.x, a.y, rec));
       }
-      this.log(`${this.lastRecruit.name.toUpperCase()} RECRUITED`);
-      sfx('caught');
+      this.log(`${rec.name.toUpperCase()} RECRUITED`);
     }
     for (const p of this.players) {
       p.vx = 0;
@@ -3880,13 +3973,11 @@ export class Battle {
     }
     const def = pickWild(this.rng, this.depth);
     const lvl = this.catchLvl(Math.min(LV_CAP, 5 + this.waveIndex * 10 + Math.floor(this.rng() * 5)));
-    this.boxAdd({ ...def, lvl });
+    this.boxAdd({ ...def, lvl }); // the ritual's click plays the chime + cry
     recordCapture([def.id]);
     this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
     this.log(this.mapMsg);
     this.mapMsgT = 3;
-    sfx('caught');
-    cry(def.id, 0.4);
   }
 
   // StS map-stop effects resolve on arrival: Poké Center rests heal, chests
@@ -4860,18 +4951,7 @@ export class Battle {
       }
     }
 
-    // caught mons: real poké ball drops in and does the triple-wiggle
-    for (const b of this.balls) {
-      const img = itemSprite(b.item);
-      if (!img) continue;
-      const prog = 1 - b.t / b.life;
-      const drop = Math.min(prog * 3.2, 1); // fast drop-in
-      ctx.save();
-      ctx.translate(b.x, b.y - (1 - drop) * 70);
-      if (prog > 0.32) ctx.rotate(Math.sin(prog * 40) * 0.4 * Math.min((prog - 0.3) * 5, 1));
-      ctx.drawImage(img, -15, -15, 30, 30);
-      ctx.restore();
-    }
+    this.drawCatchBalls(ctx);
 
 
     for (const o of this.orbs) {
@@ -5219,6 +5299,56 @@ export class Battle {
       ctx.fillStyle = '#8890b8';
       ctx.fillText('tap anywhere to resume', 270, 492);
       ctx.globalAlpha = 1;
+    }
+  }
+
+  // The capture ritual: the mon sucks into the ball as it drops in, the
+  // ball rocks on each tick, then a catch holds shut under a gotcha star
+  // while a break-out tips the spent ball off. Runs over the fight and —
+  // for map-phase catches like the egg or a ?-stop find — over the map.
+  private drawCatchBalls(ctx: CanvasRenderingContext2D) {
+    for (const b of this.balls) {
+      const img = itemSprite(b.item);
+      if (!img) continue;
+      const el = b.life - b.t;
+      const tail = el - b.at; // >0 once the click/burst has landed
+      ctx.save();
+      // the mon shrinks into the ball's landing spot — first 0.3s only
+      if (b.id !== undefined && el < BALL_ROCK0) {
+        const k = Math.max(0, 1 - el / BALL_ROCK0);
+        ctx.globalAlpha = k;
+        try {
+          drawMon(ctx, b.id, b.x, b.y - el * 50, (b.r ?? 16) * 2.6 * k);
+        } catch { /* sprite still loading */ }
+        ctx.globalAlpha = 1;
+      }
+      const drop = Math.min(el / 0.24, 1); // fast drop-in
+      ctx.translate(b.x, b.y - (1 - drop) * 70);
+      if (el > BALL_ROCK0) {
+        const rt = Math.min(el - BALL_ROCK0, b.rocks * BALL_ROCK_T);
+        ctx.rotate(Math.sin((rt / BALL_ROCK_T) * Math.PI * 2) * 0.5 * Math.min((el - BALL_ROCK0) * 8, 1));
+      }
+      if (tail >= 0 && !b.ok) {
+        // burst: the spent ball tips off and fades
+        const k = Math.min(tail / BALL_TAIL, 1);
+        ctx.globalAlpha = 1 - k;
+        ctx.translate(0, k * 30);
+        ctx.rotate(k * 0.9);
+      }
+      ctx.drawImage(img, -15, -15, 30, 30);
+      ctx.restore();
+      // the gotcha — a quick four-point star flares on the click shut
+      if (tail >= 0 && b.ok) {
+        const k = Math.min(tail / BALL_TAIL, 1);
+        ctx.save();
+        ctx.globalAlpha = 1 - k;
+        ctx.translate(b.x, b.y);
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = '#ffffff';
+        const s = 10 + k * 26;
+        ctx.fillRect(-s / 2, -s / 2, s, s);
+        ctx.restore();
+      }
     }
   }
 
@@ -5778,6 +5908,7 @@ export class Battle {
       ctx.fillRect(0, 0, 540, 960);
       this.drawEventCard(ctx, this.eventChoice.art, this.eventChoice.prompt, this.eventChoice.options);
     }
+    this.drawCatchBalls(ctx); // map-phase catches rock on top of the card
   }
 
   // The pop-up event card: hard-cornered, gold-framed, offset shadow — same

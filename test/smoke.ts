@@ -9,8 +9,8 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState } from '../src/game/meta';
-import { PERKS, rollPerks, BAG_ITEMS } from '../src/game/perks';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks } from '../src/game/meta';
+import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn } from '../src/game/tasks';
 
 let fails = 0;
@@ -217,6 +217,11 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   // the KO's punch-up EXP lands before the catch — measure the cap after
   const best = Math.max(...(b as any).players.map((p: any) => p.lvl));
   ok((b as any).boxLvl[0] === best + 3, `a lvl-90 catch joins at team pace (box lvl ${(b as any).boxLvl[0]} vs team best ${best})`);
+  // the capture ritual: the ball sequence exists mid-rock, then resolves
+  // and drains on the update clock alone — the sim never waits for theatre
+  ok((b as any).balls.length === 1, 'a forced catch queues its ball ritual');
+  for (let i = 0; i < 40; i++) b.update(0.05); // 2s > the ritual's 1.8s bound
+  ok((b as any).balls.length === 0, 'the ritual resolves and drains inside its span');
 }
 
 // --- gym stops sign their leader's type -------------------------------------
@@ -1354,11 +1359,82 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(shrine !== null, 'shrine choice surfaced');
   if (shrine) {
     const p = b.players[0];
+    // pin mid-level — the level-up heal scales ~1/lvl, so a low-lvl mon
+    // would net-gain hp and the trade reads backwards
+    p.lvl = 40;
+    p.hp = p.maxHp;
     const hp0 = p.hp;
     const lv0 = p.lvl;
     shrine.run(b);
     ok(p.hp < hp0 && p.lvl === lv0 + 2, `shrine trades hp for levels (lv${lv0} → ${p.lvl})`);
   }
+}
+
+// --- gamble events: the slots take real score, the boulder is a coin flip ---
+{
+  // game corner: across seeds the wager busts, pays out, and refuses a broke wallet
+  let bust = false, paid = false;
+  for (let s = 0; s < 60 && !(bust && paid); s++) {
+    const bb = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(300 + s));
+    bb.score = 500;
+    const spin = rollEventChoices(bb, 'SPIN THE REELS');
+    if (!spin) continue;
+    const s0 = bb.score;
+    spin.run(bb);
+    if (bb.score === s0 - 200) bust = true;
+    if (bb.score > s0 - 200 || bb.heldItems.length) paid = true;
+  }
+  ok(bust, 'the slots can eat the 200 stake');
+  ok(paid, 'the slots can pay out (score or relic)');
+  const broke = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(9));
+  broke.score = 100;
+  rollEventChoices(broke, 'SPIN THE REELS')?.run(broke);
+  ok(broke.score === 100, 'the slots refuse a wallet under 200');
+
+  // fossil smash: the boulder hides a boxed fossil or a rocky squatter
+  const FOSSILS = new Set([138, 140, 142, 345, 347, 369, 408, 410]);
+  let dug = false, woke = false, poolOk = true;
+  for (let s = 0; s < 60 && !(dug && woke); s++) {
+    const bb = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(400 + s));
+    (bb as any).spawnWave(0); // waveIndex feeds the fossil's level
+    const smash = rollEventChoices(bb, 'SMASH THE BOULDER');
+    if (!smash) continue;
+    const box0 = bb.box.length;
+    const out = smash.run(bb);
+    if (out.wave) { woke = true; continue; }
+    if (bb.box.length === box0 + 1) {
+      dug = true;
+      if (!FOSSILS.has(bb.box[bb.box.length - 1].id)) poolOk = false;
+    }
+  }
+  ok(dug, 'the boulder can hide a fossil mon in the box');
+  ok(woke, 'the boulder can wake a rocky squatter');
+  ok(poolOk, 'boxed fossils come from the fossil pool');
+
+  // macho-brace drills: the ace bleeds, the whole team levels
+  const tb = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(77));
+  const drills = rollEventChoices(tb, 'TRAIN — ACE -25% HP, ALL +1 LV');
+  ok(drills !== null, 'boot-camp drills surfaced in the pool');
+  if (drills) {
+    const ace = tb.players.filter((p) => !p.dead).sort((a, z) => z.lvl - a.lvl)[0];
+    const hp0 = ace.hp;
+    const lv0 = tb.players.map((p) => p.lvl);
+    drills.run(tb);
+    ok(ace.hp < hp0, `the ace pays in sweat (hp ${hp0} → ${ace.hp})`);
+    ok(tb.players.every((p, i) => p.lvl === lv0[i] + 1), 'everyone +1 level');
+  }
+  // the gate: nobody standing, no drills — re-kill each roll since the
+  // hidden spring event revives the team mid-loop
+  const corpses = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(42));
+  const kill = () => { for (const p of corpses.players) { p.dead = true; p.hp = 0; } };
+  kill();
+  let gated = true;
+  for (let i = 0; i < 150 && gated; i++) {
+    const out = rollEvent(corpses);
+    if (out.choices?.options.some((o) => o.label === 'TRAIN — ACE -25% HP, ALL +1 LV')) gated = false;
+    kill();
+  }
+  ok(gated, 'drills stay out of the pool when nobody can train');
 }
 function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   for (let i = 0; i < 200; i++) {
@@ -1402,6 +1478,61 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   const cd1 = p.cdMax;
   PERKS.find((x) => x.id === 'pherb')!.apply(bp);
   ok(p.cdMax === Math.max(1, cd1 - 1), `power herb shaves a shot (${cd1} → ${p.cdMax})`);
+}
+
+// --- perk ticks: periodic clauses fire off battle-owned ids -------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  perkTick(b, 100); // zero perks: the loop is a silent no-op
+  ok(b.players.every((p) => p.hp === p.maxHp), 'perkTick with zero perks stays silent');
+
+  b.grantPerk(PERKS.find((p) => p.id === 'leftovers')!);
+  const p = b.players[0];
+  p.hp = Math.floor(p.maxHp / 2);
+  const hp0 = p.hp;
+  perkTick(b, 10); // under the 18s clock — nothing yet
+  ok(p.hp === hp0, 'leftovers waits out its 18s clock');
+  perkTick(b, 9); // 19s banked → one mend
+  ok(p.hp > hp0, `leftovers mends on the clock (${hp0} → ${Math.round(p.hp)})`);
+
+  // trigger conditions met, but the perks were never granted — nothing fires
+  const sash0 = b.players.map((q) => q.sash).join();
+  const crit0 = b.critCh;
+  b.shots = 10;
+  b.waveIndex = 4;
+  b.players[1].cd = 3;
+  perkTick(b, 30);
+  ok(b.critCh === crit0 && b.players[1].cd === 3 && b.players.map((q) => q.sash).join() === sash0,
+    "an un-owned perk's tick never fires");
+
+  // focus sash re-weaves two stages after it armed
+  const sb = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  sb.grantPerk(PERKS.find((p) => p.id === 'sash')!);
+  sb.players.forEach((q) => { q.sash = false; }); // spent in a fight
+  sb.waveIndex = 1;
+  perkTick(sb, 1); // first tick only learns the stage it armed on
+  ok(sb.players.every((q) => !q.sash), 'sash stays spent inside the re-arm window');
+  sb.waveIndex = 3;
+  perkTick(sb, 1);
+  ok(sb.players.every((q) => q.sash), 'two stages on: sashes re-arm');
+
+  // dire hit: crit surges through the 5th shot, hands it back on the 6th
+  const db = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  db.grantPerk(PERKS.find((p) => p.id === 'direhit')!);
+  const c0 = db.critCh;
+  db.shots = 5;
+  perkTick(db, 1);
+  ok(db.critCh > c0, `5th shot rides a crit surge (${c0.toFixed(2)} → ${db.critCh.toFixed(2)})`);
+  db.shots = 6;
+  perkTick(db, 1);
+  ok(Math.abs(db.critCh - c0) < 1e-9, 'the surge returns the crit after the shot');
+
+  // ether: supers shave a charge every 25s
+  const eb = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  eb.grantPerk(PERKS.find((p) => p.id === 'ether')!);
+  eb.players.forEach((q) => { q.cd = 2; });
+  perkTick(eb, 30);
+  ok(eb.players.every((q) => q.cd === 1), 'ether shaves a charge on the 25s clock');
 }
 
 // --- a cancelled gesture never launches -------------------------------------
@@ -1603,6 +1734,43 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(taskResetsIn('daily', t0) === 'IN 12H', `daily reset reads as hours (${taskResetsIn('daily', t0)})`);
   ok(taskResetsIn('weekly', t0) === 'IN 7D', `weekly reset reads as days (${taskResetsIn('weekly', t0)})`);
   localStorage.removeItem('pk_tasks'); // leave the store clean for the next run
+}
+
+// --- streaks: the daily chain counts fresh UTC days, wins count finishes ---
+{
+  localStorage.removeItem('pk_streak');
+  const DAY = 86400000;
+  const t0 = Date.UTC(2024, 5, 10, 12); // Monday 2024-06-10, noon UTC
+  ok(streakDaily(t0) === 0 && streakWins() === 0, 'streaks start empty');
+  ok(localStorage.getItem('pk_streak') === null, 'streak readers stay read-only');
+
+  bumpStreaks(true, true, t0);
+  ok(streakDaily(t0) === 1 && streakWins() === 1, 'a first daily win lights both chains');
+  bumpStreaks(true, true, t0 + 3600000); // a second daily, same UTC day
+  ok(streakDaily(t0) === 1, 'a same-day second daily never double-counts');
+  ok(streakWins() === 2, 'every finished run still feeds the win chain');
+
+  bumpStreaks(false, false, t0); // a non-daily loss the same day
+  ok(streakDaily(t0) === 1, 'non-daily runs leave the daily chain alone');
+  ok(streakWins() === 0, 'a loss snaps the win chain');
+
+  bumpStreaks(false, true, t0 + DAY); // Tuesday's daily — finishing counts, win or lose
+  ok(streakDaily(t0 + DAY) === 2, 'consecutive days chain even on a lost daily');
+  ok(streakWins() === 0, 'the loss held wins at 0');
+
+  ok(streakDaily(t0 + 2 * DAY) === 2, 'the badge holds while the chain is still live');
+  ok(streakDaily(t0 + 3 * DAY) === 0, 'a gap morning reads broken on the badge');
+  bumpStreaks(true, true, t0 + 3 * DAY); // Thursday daily after a missed Wednesday
+  ok(streakDaily(t0 + 3 * DAY) === 1, 'the next daily restarts the chain at 1');
+  ok(JSON.parse(localStorage.getItem('pk_streak')!).lastDaily === '2024-06-13', 'bumpStreaks persists immediately');
+
+  bumpStreaks(true, false, t0 + 3 * DAY);
+  bumpStreaks(true, true, t0 + 4 * DAY); // Friday's daily win
+  ok(streakWins() === 3 && streakDaily(t0 + 4 * DAY) === 2, 'wins chain across modes while the daily chain keeps going');
+
+  localStorage.setItem('pk_streak', '{broken');
+  ok(streakDaily(t0 + 4 * DAY) === 2 && streakWins() === 3, 'a corrupt blob falls back to the memory copy');
+  localStorage.removeItem('pk_streak');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

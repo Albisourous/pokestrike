@@ -136,9 +136,10 @@ export function sfx(name: Sfx, pitch = 1) {
       noise(0.18, 900, 0.25, 0, -600);
       tone(500, 180, 0.15, 'sawtooth', 0.12);
       break;
-    case 'perfect': // jackpot: rising sparkle run over a thump + shimmer tail
+    case 'perfect': // jackpot: rising sparkle run over a thump + shimmer tail, lone bell on top
       tone(190, 95, 0.16, 'sine', 0.18);
       [660, 880, 1108, 1760].forEach((f, i) => tone(f, f, 0.14, 'square', 0.09, i * 0.045));
+      tone(2217, 2217, 0.26, 'sine', 0.06, 0.2); // C#7 crowns the A-major run
       noise(0.3, 2600, 0.08, 0.06, 2400);
       break;
     case 'tick': // timing cue — the fill just crossed into the gold zone
@@ -156,14 +157,18 @@ export function sfx(name: Sfx, pitch = 1) {
       tone(280 * pitch, 140 * pitch, 0.08, 'square', 0.16);
       noise(0.05, 2200, 0.1);
       break;
-    case 'ko':
+    case 'ko': // deeper body — knock transient up front, sub drop under the thud
+      tone(220, 95, 0.07, 'triangle', 0.14);
       noise(0.3, 400, 0.3, 0, -250);
       tone(160, 50, 0.3, 'sine', 0.3);
+      tone(85, 36, 0.34, 'sine', 0.2);
       break;
-    case 'caught': // pokeball: ding-ding-DING
+    case 'caught': // pokeball: ding-ding-DING with a glassy tail on the hold
       tone(880, 880, 0.09, 'sine', 0.18);
       tone(880, 880, 0.09, 'sine', 0.18, 0.14);
       tone(1320, 1320, 0.3, 'sine', 0.22, 0.3);
+      noise(0.32, 4600, 0.045, 0.3, 2000); // sparkle under the ding
+      tone(2640, 2640, 0.14, 'sine', 0.04, 0.44); // octave ghost
       break;
     case 'hurt':
       tone(220, 110, 0.12, 'sawtooth', 0.12);
@@ -212,6 +217,66 @@ export function sfx(name: Sfx, pitch = 1) {
       noise(0.3, 900, 0.24, 0.2, -500);
       break;
   }
+}
+
+// --- jingles: short sequenced motifs for one-off moments ---
+// Midi notes + second offsets fired through the sfx voice (tone), so they
+// honour the sfx slider and the master mute gate like any other blip.
+interface JNote {
+  m: number; // midi pitch
+  t: number; // offset in seconds
+  d: number; // ring-out length
+  v: number;
+  w?: OscillatorType; // default square — the bright chiptune voice
+}
+
+const JINGLES: Record<'win' | 'lose' | 'catch' | 'task' | 'gym', JNote[]> = {
+  win: [ // rising fanfare in C — five-note run, full-chord bloom on top
+    { m: 67, t: 0,    d: 0.1,  v: 0.1 },
+    { m: 72, t: 0.1,  d: 0.1,  v: 0.1 },
+    { m: 76, t: 0.2,  d: 0.1,  v: 0.1 },
+    { m: 79, t: 0.3,  d: 0.1,  v: 0.11 },
+    { m: 81, t: 0.4,  d: 0.09, v: 0.11 },
+    { m: 84, t: 0.52, d: 0.6,  v: 0.13 },
+    { m: 79, t: 0.52, d: 0.55, v: 0.05, w: 'triangle' }, // G+E pad under the C6
+    { m: 76, t: 0.52, d: 0.55, v: 0.05, w: 'triangle' },
+  ],
+  lose: [ // somber Am descent — settles on low E under its own octave
+    { m: 64, t: 0,   d: 0.2,  v: 0.12, w: 'triangle' },
+    { m: 60, t: 0.2, d: 0.2,  v: 0.12, w: 'triangle' },
+    { m: 57, t: 0.4, d: 0.22, v: 0.12, w: 'triangle' },
+    { m: 52, t: 0.6, d: 0.45, v: 0.12, w: 'triangle' },
+    { m: 40, t: 0.6, d: 0.45, v: 0.07, w: 'sine' },
+  ],
+  catch: [ // three ball-wobble beats, then the resolve leaps home — captured
+    { m: 79, t: 0,    d: 0.08, v: 0.1 },
+    { m: 79, t: 0.11, d: 0.08, v: 0.1 },
+    { m: 79, t: 0.22, d: 0.08, v: 0.1 },
+    { m: 81, t: 0.36, d: 0.1,  v: 0.11 },
+    { m: 84, t: 0.5,  d: 0.5,  v: 0.12 },
+    { m: 88, t: 0.5,  d: 0.4,  v: 0.045, w: 'sine' }, // third shimmer on the hold
+  ],
+  task: [ // claim ping — a fifth up, gone inside half a second
+    { m: 83, t: 0,    d: 0.07, v: 0.09 },
+    { m: 88, t: 0.07, d: 0.3,  v: 0.09 },
+  ],
+  gym: [ // badge stab — V hit then the home chord lands heavy
+    { m: 55, t: 0,    d: 0.13, v: 0.08 },
+    { m: 59, t: 0,    d: 0.13, v: 0.08 },
+    { m: 62, t: 0,    d: 0.13, v: 0.08 },
+    { m: 67, t: 0,    d: 0.13, v: 0.08 },
+    { m: 48, t: 0.17, d: 0.6,  v: 0.09 },
+    { m: 60, t: 0.17, d: 0.6,  v: 0.09 },
+    { m: 64, t: 0.17, d: 0.6,  v: 0.09 },
+    { m: 67, t: 0.17, d: 0.6,  v: 0.09 },
+    { m: 72, t: 0.17, d: 0.6,  v: 0.11 },
+    { m: 36, t: 0.17, d: 0.5,  v: 0.09, w: 'sine' }, // sub root for weight
+  ],
+};
+
+export function playJingle(kind: 'win' | 'lose' | 'catch' | 'task' | 'gym') {
+  if (!ac || ac.state !== 'running' || muted) return;
+  for (const n of JINGLES[kind]) tone(M2F(n.m), M2F(n.m), n.d, n.w ?? 'square', n.v, n.t);
 }
 
 // --- chiptune sequencer: original loops, NES-flavored voices ---

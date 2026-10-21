@@ -12,6 +12,9 @@ export interface Perk {
   rarity: Rarity;
   minRank?: number; // only offered once run rank reaches this
   apply: (b: Battle) => void;
+  // PokéBonk-style periodic clause — dt is seconds; timer state lives in the
+  // tickState WeakMap below so apply stays the flat half and tick the trigger
+  tick?: (b: Battle, dt: number) => void;
 }
 
 export const RARITY_COLOR: Record<Rarity, string> = {
@@ -82,9 +85,16 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'direhit', name: 'Dire Hit', item: 'dire-hit',
-    desc: '+10% chance hits crit x2',
+    desc: '+10% chance hits crit x2; every 5th shot: +50% crit',
     rarity: 'common',
     apply: (b) => { b.critCh += 0.1; },
+    tick: (b) => {
+      const st = tSt(b);
+      const on = b.shots > 0 && b.shots % 5 === 0; // the surge rides the whole 5th shot
+      if (on === (st.direhit === 1)) return;
+      st.direhit = on ? 1 : 0;
+      b.critCh += on ? 0.5 : -0.5; // hands the borrowed crit back on the next shot
+    },
   },
   {
     id: 'razorclaw', name: 'Razor Claw', item: 'razor-claw',
@@ -171,9 +181,16 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'leftovers', name: 'Leftovers', item: 'leftovers',
-    desc: 'team heals 6% after every shot',
+    desc: 'team heals 6% after every shot; every 18s: mends 4%',
     rarity: 'uncommon',
     apply: (b) => { b.regen += 0.06; },
+    tick: (b, dt) => {
+      const st = tSt(b);
+      st.leftovers = (st.leftovers || 0) + dt;
+      if (st.leftovers < 18) return;
+      st.leftovers -= 18;
+      heal(0.04)(b);
+    },
   },
   {
     id: 'expshare', name: 'Exp. Share', item: 'exp-share',
@@ -322,9 +339,16 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'sash', name: 'Focus Sash', item: 'focus-sash',
-    desc: 'each ally survives one KO at 1 HP',
+    desc: 'each ally survives one KO at 1 HP; every 2nd stage: sashes re-arm',
     rarity: 'rare',
     apply: (b) => b.players.forEach((p) => { p.sash = true; }),
+    tick: (b) => {
+      const st = tSt(b);
+      if (st.sash == null) { st.sash = b.waveIndex; return; } // learn the stage it armed on
+      if (b.waveIndex - st.sash < 2) return;
+      st.sash = b.waveIndex;
+      b.players.forEach((p) => { p.sash = true; });
+    },
   },
   {
     id: 'pherb', name: 'Power Herb', item: 'power-herb',
@@ -360,9 +384,16 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'ether', name: 'Ether', item: 'elixir',
-    desc: "RICOCHET hits charge the launcher's super",
+    desc: "RICOCHET hits charge the launcher's super; every 25s: all supers -1",
     rarity: 'rare',
     apply: (b) => { b.ricoPip += 1; },
+    tick: (b, dt) => {
+      const st = tSt(b);
+      st.ether = (st.ether || 0) + dt;
+      if (st.ether < 25) return;
+      st.ether -= 25;
+      b.players.forEach((p) => { if (!p.dead) p.cd = Math.max(0, p.cd - 1); });
+    },
   },
   {
     id: 'soothebell', name: 'Soothe Bell', item: 'shell-bell',
@@ -428,6 +459,27 @@ export const PERKS: Perk[] = [
     },
   },
 ];
+
+// --- periodic triggers -----------------------------------------------------
+// The PokéBonk second half: a perk's tick() fires its triggered clause off a
+// clock, a stage count or a shot count — never re-applying the flat bonus.
+// Per-perk timer state lives in this WeakMap (one number per perk id), so the
+// only surface Battle needs is one perkTick(this, dt) in its update loop;
+// a battle's state dies with the battle.
+const tickState = new WeakMap<Battle, Record<string, number>>();
+const tSt = (b: Battle) => {
+  let s = tickState.get(b);
+  if (!s) tickState.set(b, (s = {}));
+  return s;
+};
+
+const PERK_TICK = new Map<string, NonNullable<Perk['tick']>>();
+for (const p of PERKS) if (p.tick) PERK_TICK.set(p.id, p.tick);
+
+export function perkTick(b: Battle, dt: number) {
+  // dedupe: a DUPE grant shares one state key — two entries would double-fire
+  for (const id of new Set(b.perkIds)) PERK_TICK.get(id)?.(b, dt);
+}
 
 // --- bag items: persistent consumables -----------------------------------
 // Banked on gym wins (pk_bag in meta.ts), ≤2 picked at run start, applied

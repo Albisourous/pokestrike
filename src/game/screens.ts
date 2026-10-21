@@ -7,7 +7,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, typeMult, type PokeType } from './types';
 import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
 import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED, ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, board, settings, setSetting, bagStock, type Settings } from './meta';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, board, settings, setSetting, bagStock, streakDaily, streakWins, type Settings } from './meta';
 import { taskViews, tasksReady, taskResetsIn } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -1495,14 +1495,48 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, cont: { stag
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2 + 1, FREE_BTN.y - 15);
   ctx.fillStyle = PARCH;
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
-  button(ctx, FREE_BTN, cont ? `CONTINUE — STAGE ${Math.max(1, cont.stage)}` : 'START CLIMB', true);
-  button(ctx, DAILY_BTN, 'DAILY', true);
-  if (cont) {
-    // a parked climb still needs the escape hatch — dim link under the pair
-    ctx.font = fontB(10);
-    ctx.fillStyle = '#8890b8';
+  // the front door rides the press-edge pills — gold for the climb,
+  // parchment for the daily, same ramp the rest of the UI moved to
+  pill(ctx, FREE_BTN, {
+    c: '#ffd84d',
+    cd: '#c8a44d',
+    tc: '#2a2440',
+    label: cont ? 'CONTINUE' : 'START CLIMB',
+    sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : undefined,
+  });
+  pill(ctx, DAILY_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY' });
+  // a live daily streak pins a gold pip on the corner — the tasksReady
+  // red pip's family, flipped to gold for a kept-up habit
+  const dStreak = streakDaily();
+  if (dStreak > 0) {
+    const bx = DAILY_BTN.x + DAILY_BTN.w - 4, by = DAILY_BTN.y + 4;
+    ctx.beginPath();
+    ctx.arc(bx, by, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0d18';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.font = fontB(7);
     ctx.textAlign = 'center';
-    ctx.fillText(`or start a new climb · saved at ${cont.score.toLocaleString('en-US')} pts`, W / 2, NEW_BTN.y + NEW_BTN.h - 2);
+    ctx.fillStyle = '#2a2440';
+    ctx.fillText(dStreak > 9 ? '9+' : `${dStreak}`, bx, by + 3.5);
+  }
+  if (cont) {
+    // a parked climb still needs the escape hatch — text link under the
+    // pair; the hairline underline is the press affordance
+    const msg = `or start a new climb · saved at ${cont.score.toLocaleString('en-US')} pts`;
+    ctx.font = fontB(10);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#aab4dd';
+    ctx.fillText(msg, W / 2, NEW_BTN.y + NEW_BTN.h - 2);
+    const tw = ctx.measureText(msg).width;
+    ctx.strokeStyle = '#aab4dd';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(W / 2 - tw / 2, NEW_BTN.y + NEW_BTN.h);
+    ctx.lineTo(W / 2 + tw / 2, NEW_BTN.y + NEW_BTN.h);
+    ctx.stroke();
   }
 
   // ? badge, top corner — the how-to-play overlay
@@ -1534,11 +1568,11 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, cont: { stag
   ctx.lineWidth = 2;
   ctx.strokeRect(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h);
   gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
-  // dex, trophies, ladder, tasks — one row of equal menu chips
-  button(ctx, DEX_BTN, `DEX ${dexIds().length}/${CATCHABLE}`, true);
-  button(ctx, ACH_BTN, `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, true);
-  button(ctx, BOARD_BTN, 'TOP RUNS', true);
-  button(ctx, TASKS_BTN, 'TASKS', true);
+  // dex, trophies, ladder, tasks — one row of equal parchment pills
+  pill(ctx, DEX_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `DEX ${dexIds().length}/${CATCHABLE}` });
+  pill(ctx, ACH_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}` });
+  pill(ctx, BOARD_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TOP RUNS' });
+  pill(ctx, TASKS_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TASKS' });
   // a claimable task pins a red count pip on the chip corner — the same
   // notification pull the dex count works, shrunk to a badge
   const taskN = tasksReady();
@@ -1561,6 +1595,8 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, cont: { stag
   const ld = tier();
   const bits = [`RANK ${ld.name}`, `BEST ${b.score.toLocaleString('en-US')}`];
   if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
+  const wStreak = streakWins();
+  if (wStreak > 1) bits.push(`STREAK ${wStreak}`);
   fitFont(ctx, bits.join(' · '), 8, W - 40);
   ctx.fillStyle = '#aab4dd';
   ctx.fillText(bits.join(' · '), W / 2, DEX_BTN.y + DEX_BTN.h + 22);

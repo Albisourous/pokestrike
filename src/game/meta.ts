@@ -623,3 +623,63 @@ export function saveTaskState(s: TaskState): void {
   memTasks = s;
   store('pk_tasks', s);
 }
+
+// --- streaks: the retention counters behind the STREAK badge -----------------
+// One plain unversioned pk_streak blob (like pk_bag/pk_tasks): lastDaily is
+// the UTC day the chain last counted, daily is consecutive days with ≥1
+// daily run finished, wins is consecutive wins across finished runs in any
+// mode. memStreak covers private mode; the reader merges field-by-field so
+// a partial blob can't wedge a counter.
+
+export interface Streak {
+  lastDaily: string; // UTC YYYY-MM-DD
+  daily: number;
+  wins: number;
+}
+
+const STREAK_DEFAULTS: Streak = { lastDaily: '', daily: 0, wins: 0 };
+let memStreak: Streak = { ...STREAK_DEFAULTS };
+
+// meta is the base layer (tasks.ts imports from here), so the UTC day key
+// is re-derived rather than imported — same math as tasks.ts dayKey
+const dayKey = (now: number): string => new Date(now).toISOString().slice(0, 10);
+
+const streak = (): Streak => {
+  // merge over the session copy — same pattern as best(): corrupt fields
+  // fall back, absent fields keep the memory copy
+  const s = { ...memStreak };
+  const raw = load<Partial<Streak>>('pk_streak');
+  if (raw && typeof raw === 'object') {
+    if (typeof raw.lastDaily === 'string') s.lastDaily = raw.lastDaily;
+    if (typeof raw.daily === 'number' && Number.isFinite(raw.daily)) s.daily = raw.daily;
+    if (typeof raw.wins === 'number' && Number.isFinite(raw.wins)) s.wins = raw.wins;
+  }
+  return s;
+};
+
+// The badge holds while the chain is still live — lastDaily today means it
+// counted, yesterday means today hasn't been missed yet. A gap morning
+// reads 0: the stored count is only ever moved by bumpStreaks, never here.
+export function streakDaily(now = Date.now()): number {
+  const s = streak();
+  return s.lastDaily === dayKey(now) || s.lastDaily === dayKey(now - 86400000) ? s.daily : 0;
+}
+
+export function streakWins(): number {
+  return streak().wins;
+}
+
+// Call once per finished run. A loss always snaps the win chain; the daily
+// chain only moves when a daily run lands on a fresh UTC day — a second
+// same-day daily already counted, and a gap restarts the count at 1.
+export function bumpStreaks(won: boolean, isDaily: boolean, now = Date.now()): void {
+  const s = streak();
+  s.wins = won ? s.wins + 1 : 0;
+  const today = dayKey(now);
+  if (isDaily && s.lastDaily !== today) {
+    s.daily = s.lastDaily === dayKey(now - 86400000) ? s.daily + 1 : 1;
+    s.lastDaily = today;
+  }
+  memStreak = s;
+  store('pk_streak', s);
+}

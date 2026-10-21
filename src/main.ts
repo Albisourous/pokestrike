@@ -1,6 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes } from './core/audio';
+import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes, playJingle } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -596,7 +596,7 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (hit?.kind === 'claim' && hit.i != null) {
       const v = taskViews(tasksTab)[hit.i];
-      if (v && claimTask(v.id)) sfx('caught'); // the bag pays out
+      if (v && claimTask(v.id)) playJingle('task'); // the bag pays out
       return;
     }
     return;
@@ -1135,6 +1135,7 @@ function update(dt: number) {
     // metagame polls — same spot the battle→scene transitions already live
     while (battle.gymsBeaten > lastGyms) {
       recordGymWin();
+      playJingle('gym'); // V→I stab under the badge toast
       lastGyms++;
     }
     if (battle.echoCleared) {
@@ -1163,6 +1164,8 @@ function update(dt: number) {
         wins: won ? 1 : 0,
         maxstage: stageReached,
       });
+      // streaks bump once per finished run — a lost daily still counts the day
+      bumpStreaks(won, runIsDaily);
       const dexBefore = dexIds().length;
       const prevBest = best().score;
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
@@ -1263,6 +1266,7 @@ function update(dt: number) {
       clearRun(); // the climb is over — nothing to continue into
       scene = 'result';
       music(won ? 'win' : null); // clear fanfare, or cut to silence on a loss
+      if (!won) playJingle('lose'); // the descent fills the silence
     }
   }
   // draft reels land one by one — a rising thunk per stop
