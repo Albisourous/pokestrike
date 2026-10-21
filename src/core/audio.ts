@@ -532,10 +532,16 @@ const ddor3 = (m: number) => {
   const i = DDOR.indexOf(m);
   return i > 1 ? DDOR[i - 2] : m;
 };
-const FLYD = [65, 67, 69, 70, 71, 72, 74, 75, 76, 77, 79, 81, 82, 83, 84, 86, 87, 88];
+// FLYD stays strict lydian — a merged lydian+mixo pool makes the
+// index-minus-2 math land on seconds, not thirds (F5 harmonized by Eb5
+// is a semitone rub on the tonic). The two borrowed mixo tones the lead
+// actually plays get their thirds by hand.
+const FLYD = [65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84, 86, 88];
+const FMIXO3: Record<number, number> = { 82: 79, 87: 84 }; // Bb→G, Eb→C
 const flyd3 = (m: number) => {
   const i = FLYD.indexOf(m);
-  return i > 1 ? FLYD[i - 2] : m;
+  if (i > 1) return FLYD[i - 2];
+  return FMIXO3[m] ?? m;
 };
 
 // Volcano A: the riff — staccato E5 hits that keep pulling on F5 (the
