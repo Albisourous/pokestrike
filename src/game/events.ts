@@ -437,11 +437,11 @@ const EVENTS: GameEvent[] = [
         art: { npc: 'elder_m_down_0' },
         options: [
           {
-            label: 'OFFER 200 — TEAM LUCK +2',
-            cost: 200,
+            label: 'OFFER 100 — TEAM LUCK +2',
+            cost: 100,
             run: (bb) => {
-              if (bb.score < 200) return { note: 'THE ELDER SHOOK HIS HEAD — "LUCK FOLLOWS COIN."', skip: true };
-              bb.score -= 200;
+              if (bb.score < 100) return { note: 'THE ELDER SHOOK HIS HEAD — "LUCK FOLLOWS COIN."', skip: true };
+              bb.score -= 100;
               for (const p of bb.players) p.def = { ...p.def, luck: Math.min(99, (p.def.luck ?? 0) + 2) };
               return { note: 'THE SHRINE GLIMMERS — EVERYONE +2 LUCK!', skip: true };
             },
@@ -461,7 +461,7 @@ const EVENTS: GameEvent[] = [
   {
     // day-care twin: the couple clones your ace straight into the box —
     // fusion fodder or a second body for the climb
-    w: 2,
+    w: 1,
     skip: (b) => !b.players.some((p) => !p.dead),
     run: (b) => {
       const ace = b.players.filter((p) => !p.dead).sort((a, z) => z.lvl - a.lvl)[0];

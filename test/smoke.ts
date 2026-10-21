@@ -1518,7 +1518,10 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(sb.players.every((q) => !q.sash), 'sash stays spent inside the re-arm window');
   sb.waveIndex = 3;
   perkTick(sb, 1);
-  ok(sb.players.every((q) => q.sash), 'two stages on: sashes re-arm');
+  ok(sb.players.every((q) => !q.sash), 'two stages on: still inside the window');
+  sb.waveIndex = 4;
+  perkTick(sb, 1);
+  ok(sb.players.every((q) => q.sash), 'three stages on: sashes re-arm');
 
   // dire hit: crit surges through the 5th shot, hands it back on the 6th
   const db = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));

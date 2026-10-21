@@ -1020,7 +1020,7 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
-  // minefield — five mines seeded mid-court between pocketed corners;
+  // minefield — three mines seeded mid-court between pocketed corners;
   // anchors thread the rows straight through the field
   [
     '1111E1111',
@@ -1029,7 +1029,7 @@ export const ROOM_LAYOUTS: string[][] = [
     '120S0S021',
     '10S4S4S01',
     '100040001',
-    '10S4S4S01',
+    '10S0S0S01',
     '120S0S021',
     '122000221',
     '1000P0001',

@@ -60,8 +60,8 @@ export const DAILY_POOL: TaskDef[] = [
 export const WEEKLY_POOL: TaskDef[] = [
   { id: 'w-kos', label: 'HORDE BATTLE', kind: 'kos', n: 60, reward: 'exp-share' },
   { id: 'w-catch', label: 'SAFARI', kind: 'catches', n: 6, reward: 'scope-lens' },
-  { id: 'w-gyms', label: 'GYM LEADER', kind: 'gyms', n: 2, reward: 'master-ball' },
-  { id: 'w-score', label: 'BIG LEAGUE', kind: 'score', n: 2000, reward: 'exp-share' },
+  { id: 'w-gyms', label: 'GYM LEADER', kind: 'gyms', n: 3, reward: 'master-ball' },
+  { id: 'w-score', label: 'BIG LEAGUE', kind: 'score', n: 8000, reward: 'exp-share' },
   { id: 'w-stage', label: 'DEEP CLIMB', kind: 'maxstage', n: 6, reward: 'macho-brace' },
   { id: 'w-shiny', label: 'SHINY HUNTER', kind: 'shinies', n: 1, reward: 'sacred-ash' },
   { id: 'w-win', label: 'CHAMPION', kind: 'wins', n: 1, reward: 'sacred-ash' },

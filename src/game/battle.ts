@@ -1434,9 +1434,9 @@ export class Battle {
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
     this.cardT += dt;
-    // periodic perk triggers only tick in the fight — idling on the map
-    // shouldn't be a free rest for clocked heals
-    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') perkTick(this, dt);
+    // periodic perk triggers only tick while the ball/enemies move — parking
+    // in aim shouldn't be a free rest for clocked heals either
+    if (this.phase === 'shot' || this.phase === 'enemy') perkTick(this, dt);
     if (this.dragging) {
       this.dragT += dt;
       // a soft tick each time the fill crosses into the gold — the

@@ -85,9 +85,9 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'direhit', name: 'Dire Hit', item: 'dire-hit',
-    desc: '+10% chance hits crit x2; every 5th shot: +50% crit',
+    desc: '+5% chance hits crit x2; every 5th shot: +50% crit',
     rarity: 'common',
-    apply: (b) => { b.critCh += 0.1; },
+    apply: (b) => { b.critCh += 0.05; },
     tick: (b) => {
       const st = tSt(b);
       const on = b.shots > 0 && b.shots % 5 === 0; // the surge rides the whole 5th shot
@@ -339,13 +339,13 @@ export const PERKS: Perk[] = [
   },
   {
     id: 'sash', name: 'Focus Sash', item: 'focus-sash',
-    desc: 'each ally survives one KO at 1 HP; every 2nd stage: sashes re-arm',
+    desc: 'each ally survives one KO at 1 HP; every 3rd stage: sashes re-arm',
     rarity: 'rare',
     apply: (b) => b.players.forEach((p) => { p.sash = true; }),
     tick: (b) => {
       const st = tSt(b);
       if (st.sash == null) { st.sash = b.waveIndex; return; } // learn the stage it armed on
-      if (b.waveIndex - st.sash < 2) return;
+      if (b.waveIndex - st.sash < 3) return;
       st.sash = b.waveIndex;
       b.players.forEach((p) => { p.sash = true; });
     },
