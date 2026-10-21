@@ -1596,6 +1596,22 @@ function render() {
             battle.perkIds,
           );
           if (!menuOpen && !battle.evoChoice) drawToolRow(ctx, battle.tools, battle.banArmed, t);
+          // the capture ritual renders inside battle's own pass, so the
+          // reward dim swallows it — replay the ball layer on top. Its
+          // anchor sits under the cards (catchAnchor = arena.y+120), so
+          // clamp each ball into the open band under the tool row for this
+          // pass only. shortcut: reaches the private pass structurally —
+          // upgrade = battle exports a public drawBalls(ctx).
+          {
+            const rit = battle as unknown as {
+              balls: { y: number }[];
+              drawCatchBalls(c: CanvasRenderingContext2D): void;
+            };
+            const ys = rit.balls.map((b) => b.y);
+            for (const b of rit.balls) b.y = Math.min(Math.max(b.y, 690), 830);
+            rit.drawCatchBalls(ctx);
+            rit.balls.forEach((b, i) => (b.y = ys[i]));
+          }
         }
         if (menuOpen && (battle.phase === 'map' || battle.phase === 'reward'))
           drawTeamMenu(

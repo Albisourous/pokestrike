@@ -1071,6 +1071,21 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // ambush alley — twin rock walls split the court into three lanes; guards
+  // stack the mouths and the mid crossing, a mine pair chokes the junction
+  [
+    '1111E1111',
+    '10S0S0S01',
+    '100202001',
+    '1S02S20S1',
+    '100202001',
+    '1S40S04S1',
+    '100202001',
+    '1S02S20S1',
+    '100202001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 // Gym arenas stay open — the leader fight is the spectacle, so no
 // furniture; the entourage still enters on the anchor ring.

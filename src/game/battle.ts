@@ -3017,6 +3017,72 @@ export class Battle {
         });
         return true;
       }
+      case 'V-CREATE': { // canon: the hottest flame + a defense drop. The
+        // ally rockets through the pack — a two-link dash at nuke power that
+        // ends parked on the far mark. No per-unit def-down field exists
+        // (takenMult is a run-wide perk knob), so the self-cost stays on the
+        // card text — the honest read is the bigger hit.
+        const t = foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
+        this.screenFlash('#f08030', 0.2);
+        this.burst(p.x, p.y, '#f08030', 20, 640); // takeoff — the V ignites
+        this.dashes.push({ u: p, e: t, done: false, dmg: bumpDmg(t, 2.4) });
+        // Dash has no land callback — re-push once the lunge should have
+        // landed (dashes run at 1100 u/s), the same chain EXTREMESPEED uses
+        this.later(dist(p, t) / 1100 + 0.05, () => {
+          const t2 = this.enemies
+            .filter((e) => !e.dead && e !== t)
+            .sort((a, b) => dist(p, a) - dist(p, b))[0];
+          if (!t2) return;
+          this.burst(p.x, p.y, '#f08030', 14, 540);
+          this.dashes.push({ u: p, e: t2, done: false, dmg: bumpDmg(t2, 2.4) });
+        });
+        this.addShake(10);
+        sfx('sizzle');
+        return true;
+      }
+      case 'JUDGMENT': { // countless pellets of light rain on the whole
+        // pack — one sky-beam per foe, staggered so the volley reads as rain
+        this.texts.push({
+          x: this.arena.x + this.arena.w / 2, y: this.arena.y + 90,
+          text: 'JUDGMENT IS DEALT', t: 1.3, color: '#fff0a8', big: true,
+        });
+        this.screenFlash('#fff0a8', 0.22);
+        this.addShake(10);
+        sfx('warn');
+        foes.forEach((e, i) => {
+          this.later(0.15 + i * 0.09, () => {
+            if (e.dead) return;
+            this.beams.push({ x1: e.x + 40, y1: e.y - 300, x2: e.x, y2: e.y, t: 0.28, life: 0.28, color: '#fff0a8', w: 4 });
+            this.impact(e.x, e.y, '#fff0a8', 1.4);
+            this.hurt(e, bumpDmg(e, 1.6), '#fff8d0');
+            sfx('beam');
+          });
+        });
+        return true;
+      }
+      case 'ROAR OF TIME': { // the roar takes a beat to cross time — a
+        // telegraph ring swells where the fattest foe stands, then the blast
+        // lands huge. Canon recharge: the caster's super clock restarts full.
+        const tx = fattest.x, ty = fattest.y;
+        this.waves.push({ x: tx, y: ty, r: 0, maxR: 230, t: 1.2, life: 1.2, color: '#a8c8f0', hits: new Set() });
+        this.texts.push({ x: tx, y: ty - 130, text: 'TIME DISTORTS', t: 1.2, color: '#a8c8f0', big: true });
+        sfx('warn');
+        this.later(1.2, () => {
+          this.screenFlash('#a8c8f0', 0.32);
+          this.impact(tx, ty, '#a8c8f0', 2.2);
+          this.scar(tx, ty, 48);
+          this.hitStop = Math.max(this.hitStop, 0.36);
+          this.addPunch(0.18);
+          this.addShake(17);
+          for (const e of this.enemies) {
+            if (e.dead || Math.hypot(e.x - tx, e.y - ty) > 230 + e.r) continue;
+            this.hurt(e, bumpDmg(e, 3.0), '#d8e8ff');
+          }
+          src.cd = src.cdMax; // spent — the next super earns from zero
+          sfx('boom');
+        });
+        return true;
+      }
     }
     return false;
   }
