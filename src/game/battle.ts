@@ -1518,6 +1518,10 @@ export class Battle {
       this.enemyPhaseT -= dt;
       if (this.enemyPhaseT <= 0) this.resolveEnemyTurn();
     }
+    // a wave can strand mid-aim when the last kill lands through a delayed
+    // path whose own close-out check missed (ult beams gated on 'aim', chip
+    // kills between phases) — field's clear, so the wave's over
+    if (this.phase === 'aim' && this.enemies.every((e) => e.dead)) this.waveCleared();
     // orbs and delayed supers can clear a wave while you're just aiming —
     // pay out on the spot instead of making the player shoot at nothing
     if (this.rewardPending && this.phase === 'aim') {

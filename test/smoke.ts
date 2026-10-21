@@ -850,6 +850,10 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       step(30);
     }
   }
+  if (b.phase === 'aim') {
+    const left = (b as any).enemies.filter((e: any) => !e.dead).map((e: any) => `${e.def.name}#${e.def.id} ${Math.round(e.hp)}/${e.maxHp}`).join(' | ');
+    console.log(`DBG seed ${seed}: aim stall depth=${(b as any).depth} wave=${(b as any).waveIndex} tries=${aimTries} — left: ${left}`);
+  }
   ok(b.phase === 'won' || b.phase === 'lost', `seed ${seed}${asc ? ` asc${asc}` : ''}: ${b.phase} (depth ${(b as any).depth}, score ${b.score}, kos ${(b as any).totalKos})`);
   ok(b.score > 0, 'score accumulates');
 }
