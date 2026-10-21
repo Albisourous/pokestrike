@@ -402,6 +402,15 @@ export const PERKS: Perk[] = [
     minRank: 1,
     apply: (b) => { b.volleyBoost += 0.15; },
   },
+  {
+    id: 'wpolicy', name: 'Weakness Policy', item: 'weakness-policy',
+    desc: '+25% damage, +10% damage taken',
+    rarity: 'rare',
+    apply: (b) => {
+      b.dmgMult *= 1.25;
+      b.takenMult *= 1.1;
+    },
+  },
 
   // --- legendary: run-defining items ---
   {
