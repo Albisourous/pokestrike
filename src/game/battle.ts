@@ -1190,11 +1190,11 @@ export class Battle {
       sfx('ui');
       return;
     }
-    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') {
+    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy' || this.phase === 'loot') {
       const c = this.pauseChip();
       if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
         this.paused = true;
-        this.dragging = false; // a frozen game shouldn't hold a half-pull
+        this.pointerCancel(); // a frozen game drops the half-pull (or the leash)
         sfx('ui');
         return;
       }
@@ -5175,7 +5175,10 @@ export class Battle {
       ctx.textAlign = 'right';
       ctx.fillStyle = '#8890b8';
       ctx.fillText(`${left} LEFT`, a.x + a.w - 8, a.y + 16);
-      // pause chip, opposite corner — a quiet brake during the action
+    }
+    // pause chip, opposite corner — a quiet brake during the action and the
+    // loot lap; the phase list mirrors the pointerDown hit-test
+    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy' || this.phase === 'loot') {
       const c = this.pauseChip();
       ctx.globalAlpha = 0.6;
       ctx.fillStyle = '#101430';

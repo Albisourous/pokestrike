@@ -1,6 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes, playJingle } from './core/audio';
+import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes, playJingle, buzz } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
@@ -601,6 +601,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (hit?.kind === 'toggle') {
       settingsToggleFlip(hit.key);
       if (hit.key === 'battery') resize(); // the dpr cap applies now, not on next resize
+      if (hit.key === 'haptics') buzz(30); // the toggle you feel — buzz() self-gates on the new setting
       sfx('ui');
       return;
     }
@@ -765,6 +766,7 @@ canvas.addEventListener('pointerdown', (e) => {
     // reels still rolling — any tap fast-forwards to the dealt board
     if (t - draftT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
       draftT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
+      sfx('ui', 0.8); // the skip still clicks — low pitch, it cut the show short
       return;
     }
     const offers = draftOffers();
@@ -877,6 +879,7 @@ canvas.addEventListener('pointerdown', (e) => {
       // never picks blind
       if (t - rewardT0 < REEL_STOPS[REEL_STOPS.length - 1]) {
         rewardT0 = t - REEL_STOPS[REEL_STOPS.length - 1];
+        sfx('ui', 0.8); // the skip still clicks — low pitch, it cut the show short
         return;
       }
       // the tool row: reroll re-deals, skip cashes out, banish arms a card tap
@@ -889,7 +892,8 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
       if (inRect(p.x, p.y, TOOL_BAN)) {
-        if (battle.toggleBanish()) sfx('ui');
+        const wasArmed = battle.banArmed;
+        if (battle.toggleBanish() !== wasArmed) sfx('ui'); // arming and standing down both click
         return;
       }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
@@ -965,8 +969,11 @@ canvas.addEventListener('pointermove', (e) => {
 
 canvas.addEventListener('pointerup', (e) => {
   if (settingsDrag) {
+    const key = settingsDrag.key;
     settingsDrag = null;
-    sfx('ui'); // one click on release, not a stream while dragging
+    // the cries slider auditions itself — a real cry stands in for the click
+    if (key === 'cries') cry(25, 0.4);
+    else sfx('ui'); // one click on release, not a stream while dragging
     return;
   }
   if (settingsOpen) return;
@@ -995,6 +1002,7 @@ canvas.addEventListener('pointerup', (e) => {
       dexOpen = false;
       achOpen = false;
       boardOpen = false;
+      sfx('ui'); // tap-to-close clicks like every sibling modal
     }
     return;
   }
@@ -1091,7 +1099,8 @@ addEventListener('keydown', (e) => {
       return;
     }
     if (e.key === 'z' || e.key === 'Z') {
-      if (battle.toggleBanish()) sfx('ui');
+      const wasArmed = battle.banArmed;
+      if (battle.toggleBanish() !== wasArmed) sfx('ui'); // arming and standing down both click
       return;
     }
     if (e.key === 'x' || e.key === 'X') {
@@ -1110,7 +1119,7 @@ addEventListener('keydown', (e) => {
   } else if (e.key === 'Escape' || e.key === '?') {
     helpOpen = true;
     helpPage = 0;
-  } else if ((e.key === 'p' || e.key === 'P') && battle && (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy')) {
+  } else if ((e.key === 'p' || e.key === 'P') && battle && (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy' || battle.phase === 'loot')) {
     battle.paused = !battle.paused;
     if (battle.paused) battle.pointerCancel(); // a frozen game drops the half-pull
     sfx('ui');
