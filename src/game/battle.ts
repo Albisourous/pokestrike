@@ -754,6 +754,10 @@ export class Battle {
       const gym = this.region.nodes.find((n) => n.row === r && n.kind === 'gym');
       this.stage.waves.push(rollWave(this.rng, r - 2, THEMES[Math.floor(this.rng() * THEMES.length)], gym?.ttype));
     }
+    // backfilled rows are rolled waves too — depth must count them or a
+    // resumed climb can clear the last gym short of FINAL_DEPTH and stall
+    // on the map at "STAGE 10 OF 9" instead of winning
+    this.depth = Math.max(this.depth, this.stage.waves.length - 3);
     this.mapNote = s.mapNote;
     this.eggIn = s.eggIn ?? 0; // v2 saves predate the egg timer — no egg
     this.eggJustLaid = s.eggJustLaid ?? false;

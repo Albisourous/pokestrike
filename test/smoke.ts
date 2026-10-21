@@ -1859,6 +1859,25 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(!threw, 'first node tap after a late resume fights, not crashes');
 }
 
+// --- resume before the final gym still reaches 'won' ------------------------
+{
+  // regression: backfilled waves must count toward depth — a run parked then
+  // resumed used to clear the last gym at depth 5 < FINAL_DEPTH and stall on
+  // the map at "STAGE 10 OF 9" instead of winning
+  const a = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(3));
+  (a as any).mapNode = 7;
+  (a as any).waveIndex = 7;
+  (a as any).pendingNext = 8;
+  (a as any).depth = 5; // what a live climb banks standing at the last row
+  const s = JSON.parse(JSON.stringify(a.snapshot()!));
+  const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(99));
+  b.applySnapshot(s);
+  ok((b as any).depth === 6, 'backfilled waves count toward depth');
+  (b as any).waveIndex = 8;
+  (b as any).waveCleared();
+  ok(b.phase === 'won', 'clearing the last row after a resume wins the run');
+}
+
 // --- roster integrity -------------------------------------------------------
 ok(ROSTER.length >= 29, `roster expanded (${ROSTER.length})`);
 ok(ROSTER.every((r) => speciesById(r.id)), 'every roster id resolves');
