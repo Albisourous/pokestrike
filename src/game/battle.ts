@@ -843,13 +843,16 @@ export class Battle {
         this.depth++;
         // keep waves[i] indexed by row even though the event replaced it —
         // the next row reads stage.waves[i+1] off this slot
-        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+        this.stage.waves.push(rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)]));
       }
     } else {
       while (i >= this.stage.waves.length) {
         this.depth++;
-        // a gym's rolled wave fields the leader its sign announced
-        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme, node?.kind === 'gym' ? node.ttype : undefined));
+        // a gym's rolled wave fields the leader its sign announced; deep
+        // waves roll their biome per row — the climb isn't one species pool
+        this.stage.waves.push(
+          rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)], node?.kind === 'gym' ? node.ttype : undefined),
+        );
       }
       // elite doors field the same mono-type squad but one depth tier hotter
       spawns = ttype ? trainerWave(this.rng, this.depth + (elite ? 1 : 0), ttype) : this.stage.waves[i];
@@ -900,12 +903,17 @@ export class Battle {
     // waves take the open gym arena; openers stay gentle; trainer battles
     // are always furnished.
     const bossWave = spawns.some((s) => s.boss);
+    const gymFurnished = bossWave && this.rng() < 0.3; // ~1 gym in 3 fights in a furnished court
     let li = 0;
     if (!bossWave) {
       if (i === 0) li = Math.floor(this.rng() * 3); // gentle openers
       else if (this.inTrainer || this.rng() < 0.8) li = 1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1));
     }
-    const room = buildRoom(bossWave ? ROOM_BOSS : ROOM_LAYOUTS[li], this.theme, this.rng);
+    const room = buildRoom(
+      gymFurnished ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))] : bossWave ? ROOM_BOSS : ROOM_LAYOUTS[li],
+      this.theme,
+      this.rng,
+    );
     this.blocks = room.blocks.map((b) => ({
       x: this.arena.x + this.arena.w * b.nx,
       y: this.arena.y + this.arena.h * b.ny,
