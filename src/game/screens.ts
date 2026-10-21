@@ -1559,7 +1559,7 @@ export function drawTitle(
     ctx.font = fontB(7);
     ctx.textAlign = 'center';
     ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('A RIVAL TEAM HAUNTS THE CLIMB', W / 2, NEW_BTN.y + NEW_BTN.h + 9);
+    ctx.fillText('A RIVAL TEAM HAUNTS THE CLIMB', W / 2, FREE_BTN.y - 7);
   }
 
   // ? badge, top corner — the how-to-play overlay
