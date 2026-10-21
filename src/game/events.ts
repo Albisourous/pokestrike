@@ -376,6 +376,72 @@ const EVENTS: GameEvent[] = [
     }),
   },
   {
+    // old rod: the sure nibble vs the one huge bite that fights back —
+    // the wave pays like any ambush, the catch lands hurt from the hook
+    w: 3,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'AN OLD ROD LIES BY A QUIET POOL — CAST A LINE?',
+        art: { npc: 'fisher_down_0' },
+        options: [
+          {
+            label: 'CAST A LINE',
+            run: (bb) => {
+              if (bb.roll() < 0.25)
+                return { note: 'SOMETHING HUGE BITES!', wave: gridWave(bb, [130, 129, 118, 90]) };
+              // magikarp, poliwag, goldeen, shellder, remoraid, luvdisc
+              const ids = [129, 60, 118, 90, 223, 370];
+              const def = speciesById(ids[Math.floor(bb.roll() * ids.length)]);
+              if (!def) return { note: 'THE LINE CAME BACK EMPTY.', skip: true };
+              const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
+              boxCatch(bb, def, lvl, 0.4);
+              return {
+                note: `A ${def.name.toUpperCase()} TOOK THE HOOK — IT JOINED YOUR BOX!`,
+                art: { mon: def.id },
+                skip: true,
+              };
+            },
+          },
+          { label: 'WALK ON', run: () => ({ note: 'THE POOL RIPPLED ON WITHOUT YOU.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    // headbutt tree: GSC's bark-knock gamble — a sleeper drops, or the
+    // hive answers with the dwellers plus the route's bugs
+    w: 2,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A PECULIAR TREE SHAKES ITS BRANCHES — HEADBUTT IT?',
+        art: { mon: 214 },
+        options: [
+          {
+            label: 'HEADBUTT IT',
+            run: (bb) => {
+              // pineco, combee, aipom, heracross + weedle, venonat
+              if (bb.roll() < 0.4)
+                return { note: 'THE SWARM IS FURIOUS!', wave: gridWave(bb, [204, 415, 190, 214, 13, 48]) };
+              const ids = [204, 415, 190, 214];
+              const def = speciesById(ids[Math.floor(bb.roll() * ids.length)]);
+              if (!def) return { note: 'ONLY LEAVES SHOOK LOOSE.', skip: true };
+              const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
+              boxCatch(bb, def, lvl, 0.4);
+              return {
+                note: `${def.name.toUpperCase()} DROPPED OUT — IT JOINED YOUR BOX!`,
+                art: { mon: def.id },
+                skip: true,
+              };
+            },
+          },
+          { label: 'LEAVE IT', run: () => ({ note: 'THE TREE SETTLED BACK TO STILLNESS.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
     // macho-brace drills: same sweat-for-levels trade as the shrine, but the
     // bill lands on the ace alone — concentrated pain, spread gain
     w: 2,

@@ -818,7 +818,12 @@ const eliteAt = (rng: () => number, depth: number) => {
 // Biome pools: waves draw fodder from their stage's theme so each stretch
 // feels like a place — grass/bug-ish in the grove, rock/poison/ghost in the
 // cavern, fire/rock at the volcano, flying/electric/water in the sky.
-const foe = (id: number): SpeciesDef => ENEMY_DB.find((d) => d.id === id)!;
+// a missing id throws here at module load — loud at boot, not mid-run
+const foe = (id: number): SpeciesDef => {
+  const d = ENEMY_DB.find((x) => x.id === id);
+  if (!d) throw new Error(`ENEMY_THEME references unknown ENEMY_DB id ${id}`);
+  return d;
+};
 export const ENEMY_THEME: Record<Theme, SpeciesDef[]> = {
   grove: [19, 16, 43, 21, 163, 46, 48, 69, 102, 216, 263, 270, 273, 276, 331, 108, 10, 13, 165, 167, 187, 193, 206, 265, 283, 313, 314, 315, 357, 511, 531, 556, 588, 597, 626, 632, 114, 455, 272, 162, 203, 204, 234, 264, 268, 269, 275, 287, 288, 291, 311, 312, 327, 352, 400, 401, 402, 412, 413, 414, 415, 416, 420, 421].map(foe),
   cavern: [41, 74, 92, 66, 50, 104, 56, 88, 109, 63, 198, 200, 261, 140, 231, 353, 355, 27, 29, 299, 302, 337, 338, 343, 345, 347, 517, 524, 527, 538, 539, 564, 566, 618, 201, 290, 215, 97, 137, 213, 292, 296, 316, 317, 434].map(foe),

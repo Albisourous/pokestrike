@@ -2149,7 +2149,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
 {
   const t0 = Date.UTC(2025, 5, 15);
   ok(dailyMod(t0) === dailyMod(t0), 'same day picks the same rule card');
-  ok(DAILY_MODS.length === 6 && new Set(DAILY_MODS.map((m) => m.id)).size === 6, 'six daily mods, unique ids');
+  ok(DAILY_MODS.length >= 6 && new Set(DAILY_MODS.map((m) => m.id)).size === DAILY_MODS.length, `${DAILY_MODS.length} daily mods, unique ids`);
   const seen = new Set(Array.from({ length: 14 }, (_, i) => dailyMod(t0 + i * 86400000).id));
   ok(seen.size > 1, `the card rotates across days (${seen.size} ids in a fortnight)`);
   const fields = ['scoreMult', 'shinyRate', 'captureChance', 'launchBoost', 'critCh', 'regen', 'koHeal', 'dmgMult', 'takenMult', 'cdMult', 'ricoPip', 'volleyBoost', 'comboDmg', 'physMult', 'specMult', 'allAffix', 'dailyWeather', 'martMult', 'foeHpBonus'] as const;

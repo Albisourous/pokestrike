@@ -27,6 +27,9 @@ export const DAILY_MODS: DailyMod[] = [
   { id: 'rough', name: 'ROUGH ROAD', desc: 'every rolled wave gains an affix', apply: (b) => { b.allAffix = true; } },
   { id: 'stormy', name: 'STORM CHASER', desc: 'every wave rolls weather', apply: (b) => { b.dailyWeather = true; } },
   { id: 'glass', name: 'GLASS CANNON', desc: 'team +30% dmg, foes +20% HP', apply: (b) => { b.dmgMult *= 1.3; b.foeHpBonus += 0.2; } },
+  { id: 'safari', name: 'SAFARI DAY', desc: 'catches come 25% easier', apply: (b) => { b.captureChance *= 1.25; } },
+  { id: 'heavy', name: 'HEAVYWEIGHTS', desc: 'foes carry +25% HP', apply: (b) => { b.foeHpBonus += 0.25; } },
+  { id: 'ricochet', name: 'RICOCHET', desc: 'ricochets bank +1 super pip', apply: (b) => { b.ricoPip += 1; } },
 ];
 
 // hashed off the UTC date key — the same 'YYYY-MM-DD' the daily seed rides

@@ -56,6 +56,7 @@ export const DAILY_POOL: TaskDef[] = [
   { id: 'd-score', label: 'CONTEST STAR', kind: 'score', n: 400, reward: 'macho-brace' },
   { id: 'd-perks', label: 'ITEMFINDER', kind: 'perks', n: 2, reward: 'scope-lens' },
   { id: 'd-gyms', label: 'GYM RAID', kind: 'gyms', n: 1, reward: 'friend-ball' },
+  { id: 'd-maxstage', label: 'ROADWORK', kind: 'maxstage', n: 4, reward: 'quick-claw' },
 ];
 
 export const WEEKLY_POOL: TaskDef[] = [
@@ -70,6 +71,8 @@ export const WEEKLY_POOL: TaskDef[] = [
   { id: 'w-dailies', label: 'COMMUTER', kind: 'dailies', n: 2, reward: 'friend-ball' },
   { id: 'w-perks', label: 'RELIC HOARDER', kind: 'perks', n: 10, reward: 'scope-lens' },
   { id: 'w-stages', label: 'TRAILBLAZER', kind: 'stages', n: 15, reward: 'exp-share' },
+  { id: 'w-win2', label: 'VICTORY ROAD', kind: 'wins', n: 1, reward: 'dusk-ball' },
+  { id: 'w-runs2', label: 'BULK UP', kind: 'runs', n: 5, reward: 'protein' },
 ];
 
 const POOL: Record<TaskPeriod, TaskDef[]> = { daily: DAILY_POOL, weekly: WEEKLY_POOL };
