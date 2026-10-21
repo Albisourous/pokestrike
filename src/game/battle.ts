@@ -1434,7 +1434,7 @@ export class Battle {
       // rhythm cue that makes the release a timing game, not a guess
       const z = this.sweetSpot();
       const inGold = Math.abs(this.charge() - z.c) <= z.hw;
-      if (inGold && !this.wasGold) sfx('tick');
+      if (inGold && !this.wasGold) { sfx('tick'); buzz(8); } // haptic nod on the gold edge
       this.wasGold = inGold;
     }
     for (const t of this.texts) t.t -= dt;
@@ -4902,6 +4902,30 @@ export class Battle {
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
+    // sling tether — while a pull's on, a rubber band runs fingertip →
+    // ball, sagging ~8px under its own tension. Under the units so the
+    // band reads pinned behind the mon, not taped on top of it.
+    if (this.dragging) {
+      const u = this.active;
+      const pl = len({ x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y });
+      if (u && !u.dead && pl >= 12) {
+        ctx.strokeStyle = TYPE_COLOR[u.def.type];
+        ctx.lineWidth = 3;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(this.dragNow.x, this.dragNow.y);
+        // control point sits 2× the sag below the chord — a quadratic's
+        // midpoint reaches only halfway to it
+        ctx.quadraticCurveTo(
+          (this.dragNow.x + u.x) / 2,
+          (this.dragNow.y + u.y) / 2 + 16,
+          u.x, u.y,
+        );
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);
 
@@ -6688,6 +6712,12 @@ export class Battle {
     const color = TYPE_COLOR[u.def.type];
     const a = this.arena;
 
+    // sling anticipation — the pull strains the sprite, squash riding the
+    // same frac that scales launch speed (power is release timing, not
+    // pull distance, so a "full pull" is the needle topping out). max()
+    // keeps it from fighting contact squashes mid-flight.
+    u.sq = Math.max(u.sq, frac * 0.45);
+
     // predicted path: one bounce worth — banking off walls, stopping at the
     // first contact. Any further is noise. Cached on a quantized signature;
     // the ping-pong frac churns it while held, but it still skips
@@ -6752,7 +6782,7 @@ export class Battle {
       this.aimCache.bounced = bounced;
     }
     {
-      const { dots, hit, bounced } = this.aimCache;
+      const { dots, hit, bounced, hx, hy } = this.aimCache;
       ctx.globalAlpha = 0.5;
       // pierce reads as hollow rings — the path has no mass, it sails through;
       // bounce mons get solid dots that dead-end on first contact
@@ -6787,6 +6817,45 @@ export class Battle {
         ctx.closePath();
         ctx.stroke();
         ctx.globalAlpha = 1;
+      }
+      // payoff preview — the first catch rings its contact point, tinted
+      // by the launcher's effectiveness into it: gold = super effective,
+      // gray = resisted, pale = a neutral trade
+      if (hit) {
+        const at = strikeType(u.def, hit.def);
+        const eff = typeMult(at, hit.def) * weatherMult(this.weather, at);
+        ctx.strokeStyle = eff >= 2 ? '#ffd84d' : eff <= 0.5 ? '#8a90a8' : '#e8ecf8';
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.arc(hx, hy, 9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        // weak read — contact inside the boss's ±0.62 rad gold face pays
+        // triple (same cone test as strikeEnemy); a small star marks it
+        if (hit.boss) {
+          const wa = Math.atan2(hy - hit.y, hx - hit.x);
+          let dd = Math.abs(wa - hit.weakA) % (Math.PI * 2);
+          if (dd > Math.PI) dd = Math.PI * 2 - dd;
+          if (dd < 0.62) {
+            const s = 6;
+            ctx.fillStyle = '#ffd84d';
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(hx, hy - s);
+            ctx.lineTo(hx + s * 0.4, hy - s * 0.4);
+            ctx.lineTo(hx + s, hy);
+            ctx.lineTo(hx + s * 0.4, hy + s * 0.4);
+            ctx.lineTo(hx, hy + s);
+            ctx.lineTo(hx - s * 0.4, hy + s * 0.4);
+            ctx.lineTo(hx - s, hy);
+            ctx.lineTo(hx - s * 0.4, hy - s * 0.4);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
       }
     }
 
