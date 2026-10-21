@@ -1438,6 +1438,17 @@ export class Battle {
       // pause eats the shot clock and the scoop-chain window
       this.shotT += dt0;
       this.lootChainT += dt0;
+      // same for every stamp on this clock — pad/hazard cooldowns, the
+      // bump throttle, ricochet + per-shooter hit windows, the ult arm
+      this.lastContact.t += dt0;
+      this.ultArmT += dt0;
+      for (const u of [...this.players, ...this.enemies]) {
+        u.warpT += dt0;
+        u.boostT += dt0;
+        u.hzT += dt0;
+        u.lastBump += dt0;
+        for (const [k, v] of u.lastHit) u.lastHit.set(k, v + dt0);
+      }
       return;
     }
     // scene music follows the phase: ambient on the map, the gym-leader
@@ -1868,7 +1879,7 @@ export class Battle {
         }
         this.waves.push({
           x: o.x, y: o.y, r: 0, maxR: 52, t: 0.3, life: 0.3,
-          color: '#9df0ff', hits: new Set(),
+          color: o.hostile ? '#ff6b6b' : '#9df0ff', hits: new Set(),
         });
         this.burst(o.x, o.y, o.color, 10, 320);
         sfx('splash');
