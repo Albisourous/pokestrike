@@ -54,12 +54,13 @@ export function genRegion(seed: number): RegionMap {
   const rng = mulberry32(seed);
   const tiles = new Uint8Array(MAP_W * MAP_H);
   const cx = (MAP_W - 1) / 2, cy = (MAP_H - 1) / 2;
+  const ns = seed % 977; // the coastline bites differently every climb
   // main island — two noise octaves make the coastline bite into bays
   // and capes instead of a smooth blob
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
       const dx = (x - cx) / (MAP_W / 2), dy = (y - cy) / (MAP_H / 2);
-      const wobble = (vn(x / 3.2, y / 3.2, 0) - 0.5) * 0.55 + (vn(x / 1.6, y / 1.6, 1) - 0.5) * 0.15;
+      const wobble = (vn(x / 3.2, y / 3.2, ns) - 0.5) * 0.55 + (vn(x / 1.6, y / 1.6, ns + 1) - 0.5) * 0.15;
       tiles[y * MAP_W + x] = dx * dx + dy * dy < 0.76 + wobble ? T_GRASS : T_WATER;
     }
   }
@@ -145,7 +146,7 @@ export function genRegion(seed: number): RegionMap {
           ).slice(0, 3)
         : shuffle<NodeKind>(rng() < 0.35 ? ['wild', 'elite'] : ['wild', 'trainer']);
     const xs = kinds.length === 1 ? [0.5] : kinds.length === 3 ? [0.16, 0.5, 0.84] : [0.28, 0.72];
-    kinds.forEach((kind, k) => stop(Math.round(xs[k] * (MAP_W - 1)), ty, kind, r));
+    kinds.forEach((kind, k) => stop(Math.round((xs[k] + (rng() - 0.5) * 0.12) * (MAP_W - 1)), ty, kind, r));
   }
 
   // StS-style facility guarantees (pokelike's rule): each half of the
@@ -178,9 +179,15 @@ export function genRegion(seed: number): RegionMap {
   for (let r = 0; r < TOTAL_STAGES - 1; r++) {
     const from = nodes.filter((n) => n.row === r);
     const to = nodes.filter((n) => n.row === r + 1);
-    for (const [i, a] of from.entries())
+    for (const [i, a] of from.entries()) {
       for (const b of from.length === 1 || to.length === 1 ? to : to.slice(i, i + 2))
         a.links.push(idxOf(b));
+      // a stray cross-route ~1 in 5 — most climbs share the lattice, some zig
+      if (from.length > 1 && to.length > 1 && rng() < 0.2) {
+        const cross = idxOf(to[to.length - 1 - i]);
+        if (!a.links.includes(cross)) a.links.push(cross);
+      }
+    }
   }
   // HOME feeds stage 1's whole fork — the first step is the only free one
   nodes[0].links = nodes.filter((n) => n.row === 0).map(idxOf);
