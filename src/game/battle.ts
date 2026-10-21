@@ -1,9 +1,9 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
-import { sfx, buzz, cry, music, playJingle } from '../core/audio';
+import { sfx, buzz, cry, music, playJingle, BIOME_TRACK } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById, ASC_MODS } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -449,10 +449,16 @@ export class Battle {
   private gaugeStart = 0; // per-pull variance: where on the cycle the needle starts
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
   scoreMult = 1; // lucky egg: score amplifies
+  // daily-climb rule switches — a DAILY_MODS card flips them at run start
+  allAffix = false; // every eligible rolled wave draws a mutator
+  dailyWeather = false; // every wave rolls a sky, not just half of them
+  martMult = 1; // poké mart price multiplier — BIG SPENDER pays less
+  foeHpBonus = 0; // flat foe bulk folded into hpScale on every wave
   private lastContact = { t: -9, id: -1 }; // ricochet window: last thing touched
   private shotHitN = new Map<number, number>(); // per-enemy hits this shot (decay)
   private waveHadGym = false; // scheduled boss wave — gymsBeaten accounting
   private inRival = false; // this wave is the rival echo fight
+  private tagEchoDone = false; // ASC 9 TAG TEAM — the echo's one owed visit is spent
   private inTrainer = false; // this wave is a trainer squad — their mons can't be caught
   mapSeed = 0; // region's seed — saved so a resumed run regens the same island
   private region: RegionMap; // the climb's world map — drawn between stages
@@ -666,7 +672,7 @@ export class Battle {
   }
 
   // the trail feed — newest at the tail, 24-deep before old lines shift out
-  private log(line: string) {
+  log(line: string) {
     this.fieldLog.push(line);
     if (this.fieldLog.length > 24) this.fieldLog.shift();
   }
@@ -861,12 +867,12 @@ export class Battle {
     }
     this.hardWave = this.inTrainer || this.inEvent;
     this.curSpawns = spawns;
-    this.hpScale = 1 + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
+    this.hpScale = 1 + this.foeHpBonus + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
     // each wave is a new scene — rotate the flat theme; about half roll
     // weather, which tilts the type table until the wave ends
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
-    this.weather = this.rng() < 0.5 ? WEATHER_FOR[this.theme] : null;
+    this.weather = this.rng() < (this.dailyWeather ? 1 : 0.5) ? WEATHER_FOR[this.theme] : null;
     // stale super timers mustn't carry hits into the fresh wave — orbs
     // included, or a flight of homers retargets onto the next pack
     this.delays = [];
@@ -878,20 +884,27 @@ export class Battle {
     this.waveSpecial = null;
     this.curMod = null; // mutators live and die with the wave they rolled on
     this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent;
-    // gym leaders own their sky — every gym court runs weather
+    // gym leaders own their sky — every gym court runs weather. ASC 8
+    // STORM: the sky never clears — every other wave rolls the pool too.
     if (this.waveHadGym) this.weather = WEATHER_FOR[this.theme];
+    else if (this.asc >= 8) this.weather = WEATHER_FOR[THEMES[Math.floor(this.rng() * THEMES.length)]];
     this.inRival = false;
+    // ASC 1 ROAMERS: echoes and invades hunt twice as hard. ASC 9 TAG
+    // TEAM: the echo is owed one guaranteed visit this climb.
+    const roam = this.asc >= 1 ? 2 : 1;
+    const tagTeam = this.asc >= 9 && !this.tagEchoDone;
     if (ttype) {
       this.waveSpecial = elite
         ? `ACE TRAINER — RARE LOOT ON THE LINE!`
         : `${TRAINER_CLASS[ttype]?.title ?? 'TRAINER'} WANTS TO BATTLE!`;
       sfx('invade');
-    } else if (!this.inEvent && this.echo?.length && i > 0 && !this.waveHadGym && this.rng() < 0.15) {
+    } else if (!this.inEvent && this.echo?.length && i > 0 && !this.waveHadGym && (tagTeam || this.rng() < 0.15 * roam)) {
       spawns = this.curSpawns = rivalWave(this.echo.map((e) => e.def), this.rng);
       this.waveSpecial = 'RIVAL BATTLE — YOUR FALLEN TEAM RETURNS!';
       this.inRival = true;
+      this.tagEchoDone = true; // echo fought — the owed visit is spent
       sfx('invade');
-    } else if (!this.inEvent && i > 0 && !this.waveHadGym && this.rng() < 0.09 + this.rank * 0.03) {
+    } else if (!this.inEvent && i > 0 && !this.waveHadGym && this.rng() < (0.09 + this.rank * 0.03) * roam) {
       const inv = INVADERS[Math.floor(this.rng() * INVADERS.length)];
       spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
       this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
@@ -974,7 +987,7 @@ export class Battle {
     // wave mutators: a third of rolled non-boss waves get an affix —
     // same stop, different fight (StS hallway affixes)
     let powerZoneSpawn = false; // 'power' mutator pushes its zone once hazards land
-    if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < 0.35) {
+    if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < (this.allAffix ? 1 : 0.35)) {
       const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
@@ -1149,7 +1162,8 @@ export class Battle {
       hp: ehp,
       maxHp: ehp,
       timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() + (wi === 0 ? 1 : 0),
-      drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1),
+      // ASC 7 FRENZY: foes press harder — approach speed ×1.25
+      drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1) * (this.asc >= 7 ? 1.25 : 1),
       wx: 0,
       wy: 0,
       wT: this.rng() * 0.8,
@@ -1483,7 +1497,7 @@ export class Battle {
     // under trainers, the wild loop everywhere else
     if (this.phase === 'map') music('map');
     else if (this.phase !== 'won' && this.phase !== 'lost') {
-      music(this.enemies.some((e) => e.boss) || this.inRival ? 'gym' : this.inTrainer ? 'trainer' : 'battle');
+      music(this.enemies.some((e) => e.boss) || this.inRival ? 'gym' : this.inTrainer ? 'trainer' : BIOME_TRACK[this.theme] ?? 'battle');
     }
     // hit-stop: freeze-frame feel on big combos
     const hit = this.hitStop > 0;
@@ -2266,7 +2280,8 @@ export class Battle {
       this.screenFlash('#ff6b6b', 0.15);
       sfx('invade');
     }
-    const gain = Math.round(d * (1 + this.asc * 0.2) * this.scoreMult); // ascension pays a score premium; lucky egg stacks on
+    const ascPremium = this.asc >= 5 ? 0.3 : 0.2; // ASC 5 INFLATION: the score premium deepens
+    const gain = Math.round(d * (1 + this.asc * ascPremium) * this.scoreMult); // ascension pays a score premium; lucky egg stacks on
     this.score += gain;
     // action→reward, on screen: every hit feeds its score under the mon
     this.texts.push({ x: e.x, y: e.y + e.r + 10, text: `+${gain}`, t: 0.9, color: '#ffe76a', big: false, size: 0.8 });
@@ -2430,6 +2445,7 @@ export class Battle {
             this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
             this.burst(e.x, e.y, '#ffffff', 8, 300, 0.9);
             sfx('bounce', 0.6);
+            playJingle('fail'); // the wha-wha — broke free
           }
         }, e.def.id, e.r);
       } else {
@@ -3985,6 +4001,7 @@ export class Battle {
       p.vy = 0;
     }
     this.phase = 'reward';
+    if (!this.waveHadGym) playJingle('clear'); // gyms already played their badge stab
     // a queued split evolution asks its question on the reward screen
     if (!this.evoChoice) this.evoChoice = this.evoPending.shift() ?? null;
   }
@@ -4195,7 +4212,8 @@ export class Battle {
   declineReward() {
     if (this.phase !== 'reward') return;
     sfx('ui');
-    this.score += Math.round(150 * (1 + 0.2 * this.asc));
+    const ascPremium = this.asc >= 5 ? 0.3 : 0.2; // ASC 5 INFLATION — same deeper premium on skips
+    this.score += Math.round(150 * (1 + ascPremium * this.asc));
     this.rewardOffers = [];
     this.advanceReward();
   }
@@ -4333,7 +4351,13 @@ export class Battle {
     }
     const def = pickWild(this.rng, this.depth);
     const lvl = this.catchLvl(Math.min(LV_CAP, 5 + this.waveIndex * 10 + Math.floor(this.rng() * 5)));
-    this.boxAdd({ ...def, lvl }); // the ritual's click plays the chime + cry
+    this.boxAdd({ ...def, lvl }, 1, false); // the hatch runs its own seq, not boxAdd's
+    const a = this.catchAnchor();
+    this.catchSeq(a.x, a.y, true, 'poke-ball', () => {
+      this.impact(a.x, a.y, '#ffd84d', 0.9);
+      playJingle('hatch'); // curious arp — a new face, not a fought catch
+      cry(def.id, 0.45);
+    });
     recordCapture([def.id]);
     this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
     this.log(this.mapMsg);
@@ -4387,7 +4411,7 @@ export class Battle {
                 }
                 p.hp = Math.round(p.maxHp * healTo);
               }
-              sfx('heal');
+              playJingle('rest'); // the center motif — gentle triad, homage not the tune
               return {
                 note: revived
                   ? `POKÉ CENTER: TEAM HEALED${healTo < 1 ? ' TO 75%' : ''}, ${revived} REVIVED`
@@ -5655,13 +5679,15 @@ export class Battle {
     // named modifiers are stacked on
     if (this.asc > 0) {
       const mods = [`ASC ${this.asc}`];
-      if (this.asc >= 2) mods.push('FOES WIND UP FAST');
-      if (this.asc >= 4) mods.push('RESTS WEAKENED');
-      if (this.asc >= 6) mods.push('BOSSES ENRAGED');
-      ctx.font = fontB(9);
+      for (let i = 0; i < Math.min(this.asc, ASC_MODS.length); i++) mods.push(ASC_MODS[i].name);
+      const tag = mods.join(' · ');
+      // the full stack runs wide at high heat — shrink fontB until it fits
+      let px = 9;
+      ctx.font = fontB(px);
+      while (px > 6 && ctx.measureText(tag).width > a.w - 16) ctx.font = fontB(--px);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#f0b02f';
-      ctx.fillText(mods.join(' · '), a.x + 8, a.y + 16);
+      ctx.fillText(tag, a.x + 8, a.y + 16);
     }
 
     // tapped-foe scout card — floats while aiming, a pull dismisses it

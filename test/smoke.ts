@@ -9,10 +9,11 @@ import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '.
 import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
-import { rollEvent } from '../src/game/events';
+import { rollEvent, martStock } from '../src/game/events';
 import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn } from '../src/game/tasks';
+import { dailyMod, DAILY_MODS } from '../src/game/daily';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -1969,7 +1970,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(taskViews('daily', t0).length === 3 && localStorage.getItem('pk_tasks') === null, 'taskViews stays read-only — the roll waits for a writer');
 
   // a full-kind beat lands on both periods — but only the kinds on offer
-  taskTick({ kos: 10, catches: 2, stages: 1, gyms: 1, perks: 2, score: 500, shinies: 1, runs: 1, wins: 1, maxstage: 4 }, t0);
+  taskTick({ kos: 10, catches: 2, stages: 1, gyms: 1, perks: 2, score: 500, shinies: 1, runs: 1, wins: 1, maxstage: 4, dailies: 1 }, t0);
   const dv0 = taskViews('daily', t0);
   const wv0 = taskViews('weekly', t0);
   ok(dv0.length === 3 && wv0.length === 4, 'selections show through the views');
@@ -1979,7 +1980,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(s0.day === dayKey(t0) && s0.dsel.join() === ids.join(), 'tick persisted the seeded board under the day key');
 
   // overshoot is fine — have runs past n, done is the gate
-  taskTick({ kos: 500, catches: 50, stages: 50, gyms: 9, perks: 50, score: 99999, shinies: 5, runs: 5, wins: 2, maxstage: 9 }, t0);
+  taskTick({ kos: 500, catches: 50, stages: 50, gyms: 9, perks: 50, score: 99999, shinies: 5, runs: 5, wins: 2, maxstage: 9, dailies: 2 }, t0);
   const dv = taskViews('daily', t0);
   ok(dv.every((v) => v.done) && dv.some((v) => v.have > v.n), 'over-ticking overshoots the target — done flags hold');
   const wv = taskViews('weekly', t0);
@@ -2084,6 +2085,86 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     ok(!(t.loop === true && t.next !== undefined), `${name}: a loop never hands off to next`);
   }
   ok(true, `${Object.keys(TRACKS).length} tracks validated`);
+}
+
+// --- daily rule card (B32): one seeded mod per UTC day, same for all ------
+{
+  const t0 = Date.UTC(2025, 5, 15);
+  ok(dailyMod(t0) === dailyMod(t0), 'same day picks the same rule card');
+  ok(DAILY_MODS.length === 6 && new Set(DAILY_MODS.map((m) => m.id)).size === 6, 'six daily mods, unique ids');
+  const seen = new Set(Array.from({ length: 14 }, (_, i) => dailyMod(t0 + i * 86400000).id));
+  ok(seen.size > 1, `the card rotates across days (${seen.size} ids in a fortnight)`);
+  const fields = ['scoreMult', 'shinyRate', 'captureChance', 'launchBoost', 'critCh', 'regen', 'koHeal', 'dmgMult', 'takenMult', 'cdMult', 'ricoPip', 'volleyBoost', 'comboDmg', 'physMult', 'specMult', 'allAffix', 'dailyWeather', 'martMult', 'foeHpBonus'] as const;
+  for (const m of DAILY_MODS) {
+    const b = new Battle(arena, [speciesById(1)!], makeStage(5, 'T'), mulberry32(1));
+    const before = fields.map((f) => b[f]);
+    m.apply(b);
+    ok(fields.some((f, i) => b[f] !== before[i]), `${m.id} apply() moves a battle field`);
+  }
+
+  // the flag paths move real mechanics, not just fields
+  const mod = (id: string) => DAILY_MODS.find((m) => m.id === id)!;
+  const fb = new Battle(arena, team(), makeStage(5, 'T'), mulberry32(1));
+  mod('fever').apply(fb);
+  ok(fb.shinyRate === 3, `gold fever: shinyRate x${fb.shinyRate}`);
+  const hb = new Battle(arena, team(), makeStage(5, 'T'), mulberry32(1));
+  const hp0 = hb.players.map((p) => p.maxHp);
+  mod('hearty').apply(hb);
+  ok(hb.players.every((p, i) => p.maxHp === Math.round(hp0[i] * 1.25) && p.hp === p.maxHp) && hb.foeHpBonus === 0.1,
+    'hearty: team maxHp +25% and topped up, foes +10%');
+  const rb = new Battle(arena, team(), makeStage(5, 'T'), mulberry32(1));
+  mod('rich').apply(rb);
+  const potion = martStock(rb).options.find((o) => o.label.startsWith('POTION'))!;
+  ok(rb.scoreMult === 1.2 && potion.cost === 150, `big spender: +20% score, mart potion ${potion.cost} (was 200)`);
+  const gb = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(4));
+  const gb0 = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(4));
+  mod('glass').apply(gb);
+  (gb as any).spawnWave(0);
+  (gb0 as any).spawnWave(0);
+  const hpRatio = gb.enemies[0].maxHp / gb0.enemies[0].maxHp;
+  ok(gb.dmgMult === 1.3 && Math.abs(hpRatio - 1.2) < 0.01, `glass cannon: dmg x${gb.dmgMult}, foes x${hpRatio.toFixed(3)} hp`);
+
+  // storm chaser: every rolled wave has a sky; rough road: every eligible
+  // rolled wave mutates. Boss/trainer/invade waves skip the affix roll.
+  for (const s of [3, 11]) {
+    const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(s));
+    mod('stormy').apply(b);
+    let skies = true;
+    for (let i = 0; i <= 4; i++) {
+      (b as any).spawnWave(i);
+      if (!b.weather) skies = false;
+    }
+    ok(skies, `storm chaser: weather on every wave (seed ${s})`);
+    const c = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(s));
+    let clear = 0;
+    for (let i = 0; i <= 4; i++) {
+      (c as any).spawnWave(i);
+      if (!c.weather) clear++;
+    }
+    ok(clear > 0, `control seed ${s}: ${clear} clear courts without the card`);
+
+    const r = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(s));
+    mod('rough').apply(r);
+    let eligible = 0, affixed = 0;
+    for (let i = 1; i <= 4; i++) {
+      (r as any).spawnWave(i);
+      // bosses (gyms + invades) skip the affix roll — a landed affix also
+      // sets waveSpecial, so it can't be the discriminator
+      if (r.enemies.some((e) => e.boss)) continue;
+      eligible++;
+      if ((r as any).curMod) affixed++;
+    }
+    ok(eligible > 0 && affixed === eligible, `rough road: ${affixed}/${eligible} eligible waves mutated (seed ${s})`);
+    const rc = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(s));
+    let cElig = 0, cAff = 0;
+    for (let i = 1; i <= 4; i++) {
+      (rc as any).spawnWave(i);
+      if (rc.enemies.some((e) => e.boss)) continue;
+      cElig++;
+      if ((rc as any).curMod) cAff++;
+    }
+    ok(cAff < cElig, `control seed ${s}: affixes stay a minority (${cAff}/${cElig})`);
+  }
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

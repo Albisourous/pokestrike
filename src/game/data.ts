@@ -830,6 +830,22 @@ export const ENEMY_THEME: Record<Theme, SpeciesDef[]> = {
 // stage, 4-9 are rolled as depth 1..6.
 export const TOTAL_STAGES = 9;
 
+// Ascension heat, StS-style: battle.asc runs 1-9 and every tier's modifier
+// STACKS with the ones below it (index 0 = asc 1). On top of the named
+// effect, each level also scales enemy bulk (+15%), enemy damage (+8%) and
+// the score premium — `name` is what the in-court tag reads out.
+export const ASC_MODS: { id: string; name: string; desc: string }[] = [
+  { id: 'roamers', name: 'ROAMERS', desc: 'legendary invades + rival echoes roll twice as often' },
+  { id: 'hair-trigger', name: 'HAIR TRIGGER', desc: 'foes wind up 15% faster' },
+  { id: 'fortunate', name: 'FORTUNATE', desc: '+1 charm pick' },
+  { id: 'thin-centers', name: 'THIN CENTERS', desc: 'poké center rests heal only 75%' },
+  { id: 'inflation', name: 'INFLATION', desc: 'score premium deepens to +30%/tier' },
+  { id: 'enraged-leaders', name: 'ENRAGED LEADERS', desc: 'gym leaders walk in enraged' },
+  { id: 'frenzy', name: 'FRENZY', desc: 'foes press 25% harder on approach' },
+  { id: 'storm', name: 'STORM', desc: 'every wave rolls weather' },
+  { id: 'tag-team', name: 'TAG TEAM', desc: 'the rival echo is owed one visit' },
+];
+
 // Enemy placement is normalized arena coords (0..1), so stages are
 // resolution-independent.
 export interface WaveSpawn {
@@ -1307,3 +1323,4 @@ for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
       if (ch === 'S' && !seen.has(`${c},${r}`)) throw new Error('room anchor is walled in');
     }
 }
+

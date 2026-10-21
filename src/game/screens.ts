@@ -1,6 +1,7 @@
 import { itemSprite, loadItem, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted, sfx } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, bst, LEADER_NPC } from './data';
+import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, bst, LEADER_NPC, ASC_MODS } from './data';
+import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
@@ -1532,6 +1533,19 @@ export function drawTitle(
     ctx.fillStyle = '#2a2440';
     ctx.fillText(dStreak > 9 ? '9+' : `${dStreak}`, bx, by + 3.5);
   }
+  // today's seeded rule card hugs the DAILY pill's bottom-right — it only
+  // shows on a clean title; a parked run's new-climb link owns that band
+  if (!cont) {
+    const dm = todaysMod();
+    ctx.save();
+    ctx.font = fontB(7);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = PARCH;
+    ctx.fillText(`TODAY: ${dm.name}`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 11);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(dm.desc, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 21);
+    ctx.restore();
+  }
   if (cont) {
     // a parked climb still needs the escape hatch — text link under the
     // pair; the hairline underline is the press affordance. Armed by a
@@ -1653,6 +1667,14 @@ export function drawTitle(
     label: `ASC ${pick}`,
     disabled: ascCap === 0,
   });
+  // the picked tier's name under the dial — ASC 0 leaves the band empty
+  const ascModName = pick > 0 ? ASC_MODS[pick - 1]?.name : undefined;
+  if (ascModName) {
+    ctx.font = fontB(7);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(ascModName, ASC_BTN.x + ASC_BTN.w / 2, ASC_BTN.y + ASC_BTN.h + 10);
+  }
 
   // build tag — bug reports should name their build
   ctx.font = fontB(7);

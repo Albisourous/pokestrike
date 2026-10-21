@@ -65,17 +65,17 @@ Mood families for typed content (default call, adjust by ear):
 
 ## Backlog — one item per iteration, in order
 
-- [ ] S0 Songbook validator. Export `TRACKS`/`TrackName` from audio.ts;
+- [x] S0 Songbook validator. Export `TRACKS`/`TrackName` from audio.ts;
   smoke asserts every track: all arrays+drum strings == `lead.length`,
   midi in 21–108 or 0, `next` is a real TrackName, `stab` rows are
   arrays. Protects everything below — off-by-one arrays are silent bugs.
-- [ ] S1 Biome battle selector + first song. `TrackName` += biome names;
+- [x] S1 Biome battle selector + first song. `TrackName` += biome names;
   wild arm of the `update()` selector becomes
   `BIOME_TRACK[this.theme] ?? 'battle'` (gym/trainer overrides unchanged).
   Write `battle_volcano` first (most distinct): E phrygian, ~170bpm,
   `guitar`+`slap`, double-kick chug — metal to battle's J-rock.
   Unwritten biomes fall back to `'battle'`.
-- [ ] S2 Audition hook: `__dbg.song(name)` in the `?dev` block
+- [x] S2 Audition hook: `__dbg.song(name)` in the `?dev` block
   (main.ts:211) — `unlockAudio()` + `music(name)`, prints TrackNames on
   bad input. Builders can't hear; this is the human's taste-check tool.
 - [ ] S3 `battle_grove`: C lydian, ~140bpm, triangle lead, swing ~0.08,
@@ -93,7 +93,7 @@ Mood families for typed content (default call, adjust by ear):
 - [ ] S7 Gym type stab: `JINGLES` entries `gym_forge|gym_shade|gym_earth|gym_gale`
   (one dark V-stab each, family-colored) fired at boss-wave spawn —
   layers over the gym theme, no conflict.
-- [ ] S8 Jingle batch: `clear` (stage-clear riff), `fail` (catch-fail
+- [x] S8 Jingle batch: `clear` (stage-clear riff), `fail` (catch-fail
   wha-wha two-note drop), `hatch` (egg), `rest` (Poké Center heal motif).
   Wire at their call sites.
 - [ ] S9 `invade` sting → jingle: the legendary crash-in deserves a

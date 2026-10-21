@@ -490,14 +490,15 @@ const EVENTS: GameEvent[] = [
 export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[]; art?: EventArt } {
   const reprompt = (bb: Battle, note: string): EventOutcome => ({ note, choices: martStock(bb, note, sold) });
   // cost renders as a tag on the button's right edge — the label stays short
-  // enough to read at full pixel size
+  // enough to read at full pixel size. martMult is the daily card's discount
+  const price = (n: number) => Math.round(n * b.martMult);
   const shelf = (key: string, cost: number, label: string, icon: string, buy: (bb: Battle) => string): EventChoice => ({
     label,
-    cost,
+    cost: price(cost),
     icon,
     run: (bb) => {
-      if (bb.score < cost) return reprompt(bb, 'NOT ENOUGH SCORE.');
-      bb.score -= cost;
+      if (bb.score < price(cost)) return reprompt(bb, 'NOT ENOUGH SCORE.');
+      bb.score -= price(cost);
       sold.add(key);
       return reprompt(bb, buy(bb));
     },
@@ -510,15 +511,15 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
     })],
     ['mystery', {
       label: 'MYSTERY ITEM',
-      cost: 300,
+      cost: price(300),
       icon: 'lucky-egg',
       run: (bb) => {
         // roll the goods before charging — a blind shelf shouldn't take
         // score when there's nothing in the bag
         const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
         if (!p) return reprompt(bb, 'SOLD OUT. THE CLERK SHRUGGED.');
-        if (bb.score < 300) return reprompt(bb, 'NOT ENOUGH SCORE.');
-        bb.score -= 300;
+        if (bb.score < price(300)) return reprompt(bb, 'NOT ENOUGH SCORE.');
+        bb.score -= price(300);
         sold.add('mystery');
         bb.grantPerk(p);
         return reprompt(bb, `IT WAS ${p.name.toUpperCase()}!`);

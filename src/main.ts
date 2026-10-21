@@ -1,6 +1,7 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes, playJingle, buzz } from './core/audio';
+import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes, playJingle, buzz, TRACKS } from './core/audio';
+import type { TrackName } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
@@ -9,7 +10,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, ascPick, setAsc, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -95,6 +96,7 @@ import {
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey } from './game/screens';
 import { taskViews, claimTask, taskTick, type TaskPeriod } from './game/tasks';
+import { dailyMod, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
 
 type Scene = 'loading' | 'title' | 'draft' | 'charm' | 'battle' | 'result';
@@ -138,6 +140,14 @@ let stage = makeStage(randSeed());
 // draw from it, so every run reproduces from its seed (shares carry it)
 let runSeed = 0;
 let runIsDaily = false; // a shared-date climb — the share card says so
+// the live run's rule card — null off the daily. Re-derived from the seed
+// (YYYYMMDD → the same UTC day dailyMod() hashes), so a parked daily resumed
+// on a later date keeps the card it started under
+let runMod: DailyMod | null = null;
+const modForSeed = (s: number) => {
+  const d = `${s}`;
+  return dailyMod(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)));
+};
 let runRng: () => number = mulberry32(runSeed);
 let helpOpen = false;
 let menuOpen = false; // overworld TEAM · ITEMS panel
@@ -208,11 +218,21 @@ window.visualViewport?.addEventListener('resize', resize);
 resize();
 // ?dev also exposes the scene machine + coordinate transform for playtest probes
 if (new URLSearchParams(location.search).has('dev'))
-  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump } }).__dbg = {
+  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void } }).__dbg = {
     scene: () => scene,
     battle: () => battle,
     xy: (x, y) => { const p = toLogical({ clientX: x, clientY: y } as PointerEvent); return { x: p.x, y: p.y }; },
     stats: statsDump, // the on-device metric server — pick rates + stage deaths
+    // audition any track straight from the console — builders can't hear
+    song: (name: string) => {
+      if (!(name in TRACKS)) {
+        console.log(`no track '${name}' — try: ${Object.keys(TRACKS).join(', ')}`);
+        return;
+      }
+      unlockAudio();
+      music(name as TrackName);
+      console.log(`♪ ${name}`);
+    },
   };
 
 function toLogical(e: PointerEvent) {
@@ -352,6 +372,12 @@ const draftPick = (i: number) => {
   battle.asc = Math.min(ascPick(), best().wins, 9); // the title's heat dial, capped by clears
   battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
   battle.shinyRate = shinyCharm() ? 2 : 1; // dex milestone doubles the gold
+  // the daily's rule card applies like a bag item — after the metagame sets
+  // so its multipliers stack on top, and it names itself on the field log
+  if (runMod) {
+    runMod.apply(battle);
+    battle.log(`DAILY MOD: ${runMod.name}`);
+  }
   // the last losing team returns as a rival wave — battle eats it
   const echo = echoIds()
     ?.map((e) => ({ def: speciesById(e.id), lvl: e.lvl }))
@@ -389,6 +415,7 @@ function newRun(daily = false) {
   const hasForced = Number.isFinite(forced) && forced > 0;
   runSeed = hasForced ? forced : daily ? dailySeed() : randSeed();
   runIsDaily = daily && !hasForced;
+  runMod = runIsDaily ? modForSeed(runSeed) : null;
   runRng = mulberry32(runSeed);
   stage = makeStage(runSeed);
   clearRun(); // a fresh climb drops the old one
@@ -414,6 +441,7 @@ document.addEventListener('visibilitychange', () => {
 function resumeRun(s: RunSave) {
   runSeed = s.seed;
   runIsDaily = s.daily;
+  runMod = s.daily ? modForSeed(s.seed) : null;
   runRng = mulberry32(runSeed);
   stage = makeStage(runSeed);
   // entries keep their save row attached — applySnapshot stamps hp by index,
@@ -433,6 +461,12 @@ function resumeRun(s: RunSave) {
   battle.asc = s.asc;
   battle.bestScore = best().score;
   battle.shinyRate = shinyCharm() ? 2 : 1;
+  // the daily card re-applies before the snapshot stamps saved hp — a maxHp
+  // bump can't stomp the banked values that way
+  if (runMod) {
+    runMod.apply(battle);
+    battle.log(`DAILY MOD: ${runMod.name}`);
+  }
   const echo = echoIds()
     ?.map((e) => ({ def: speciesById(e.id), lvl: e.lvl }))
     .filter((e): e is { def: SpeciesDef; lvl: number } => !!e.def);
@@ -1310,6 +1344,7 @@ function update(dt: number) {
         runs: 1,
         wins: won ? 1 : 0,
         maxstage: stageReached,
+        dailies: runIsDaily ? 1 : 0, // a finished daily feeds the COMMUTER task
       });
       // streaks bump once per finished run — a lost daily still counts the day
       bumpStreaks(won, runIsDaily);
@@ -1356,6 +1391,9 @@ function update(dt: number) {
       if (won && battle.asc >= 1) trophy('ascended');
       if (won && best().wins >= 3) trophy('triple');
       if (battle.totalKos >= 40) trophy('rampage');
+      // streak trophies — bumpStreaks just banked this run's chain
+      if (streakWins() >= 3) trophy('hot-streak');
+      if (streakDaily() >= 7) trophy('daily-devotion');
       share = buildShare(battle, won);
       // catches join the dex either way; a loss leaves the team behind as
       // the next run's rival "echo"
@@ -1398,7 +1436,7 @@ function update(dt: number) {
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       shareText = [
         runIsDaily
-          ? `⚾ POKÉSTRIKE DAILY ${new Date().toISOString().slice(0, 10)} — same climb for everyone`
+          ? `⚾ POKÉSTRIKE DAILY ${new Date().toISOString().slice(0, 10)} — same climb for everyone${runMod ? ` — ${runMod.name}` : ''}`
           : `⚾ POKÉSTRIKE: sling & ricochet Pokémon roguelike`,
         `🗺️ ${stage.name}: ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}${battle.asc ? ` · ASC ${battle.asc}` : ''}`,
         share.waves,

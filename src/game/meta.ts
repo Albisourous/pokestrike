@@ -291,6 +291,8 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'collector', name: 'COLLECTOR', desc: 'Fill 50 dex entries' },
   { id: 'living', name: 'LIVING DEX', desc: 'Catch every species' },
   { id: 'rampage', name: 'RAMPAGE', desc: 'Score 40+ KOs in one run' },
+  { id: 'hot-streak', name: 'VICTORY STAR', desc: 'Win 3 climbs in a row' },
+  { id: 'daily-devotion', name: 'WEEK SIBLING', desc: 'Finish daily climbs 7 days running' },
   // one trophy per leader — generated off the badge case so they stay in sync
   ...BADGES.map((b) => {
     const d = speciesById(b.boss);
@@ -447,6 +449,7 @@ export interface RunSave {
   mapNote: string;
   eggIn?: number; // ?-pool egg: stops until it hatches (v3+)
   eggJustLaid?: boolean; // the laying arrival doesn't consume a tick
+  modId?: string; // the daily rule card applied to this run (v4+)
   team: { id: number; lvl: number; shiny?: boolean; hp: number }[];
   box: { id: number; lvl?: number; shiny?: boolean; luck?: number }[];
   boxHp: number[];

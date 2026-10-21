@@ -7,7 +7,7 @@ import { bankBag, taskState, saveTaskState, type TaskState } from './meta';
 // meta.ts. Readers never write: a stale period re-rolls in memory and the
 // next tick/claim is what banks it.
 
-export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage';
+export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage' | 'dailies';
 export type TaskPeriod = 'daily' | 'weekly';
 
 export interface TaskDef {
@@ -41,6 +41,7 @@ const kindDesc = (kind: TaskKind, n: number): string =>
     runs: `finish ${n} runs`,
     wins: `win ${n === 1 ? 'a climb' : `${n} climbs`}`,
     maxstage: `reach stage ${n}`,
+    dailies: `finish ${n === 1 ? 'a daily climb' : `${n} daily climbs`}`,
   })[kind];
 
 // --- the catalogue ----------------------------------------------------------
@@ -66,6 +67,7 @@ export const WEEKLY_POOL: TaskDef[] = [
   { id: 'w-shiny', label: 'SHINY HUNTER', kind: 'shinies', n: 1, reward: 'sacred-ash' },
   { id: 'w-win', label: 'CHAMPION', kind: 'wins', n: 1, reward: 'sacred-ash' },
   { id: 'w-runs', label: 'MARATHON', kind: 'runs', n: 3, reward: 'macho-brace' },
+  { id: 'w-dailies', label: 'COMMUTER', kind: 'dailies', n: 2, reward: 'friend-ball' },
   { id: 'w-perks', label: 'RELIC HOARDER', kind: 'perks', n: 10, reward: 'scope-lens' },
   { id: 'w-stages', label: 'TRAILBLAZER', kind: 'stages', n: 15, reward: 'exp-share' },
 ];

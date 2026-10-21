@@ -230,7 +230,10 @@ interface JNote {
   w?: OscillatorType; // default square — the bright chiptune voice
 }
 
-const JINGLES: Record<'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item', JNote[]> = {
+type JingleKind = 'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item'
+  | 'clear' | 'fail' | 'hatch' | 'rest';
+
+const JINGLES: Record<JingleKind, JNote[]> = {
   win: [ // rising fanfare in C — five-note run, full-chord bloom on top
     { m: 67, t: 0,    d: 0.1,  v: 0.1 },
     { m: 72, t: 0.1,  d: 0.1,  v: 0.1 },
@@ -277,9 +280,36 @@ const JINGLES: Record<'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item', JNote[
     { m: 72, t: 0.17, d: 0.6,  v: 0.11 },
     { m: 36, t: 0.17, d: 0.5,  v: 0.09, w: 'sine' }, // sub root for weight
   ],
+  clear: [ // stage clear — a quick G-pentatonic flick that blooms on held D6
+    { m: 76, t: 0,    d: 0.08, v: 0.09 },
+    { m: 79, t: 0.08, d: 0.08, v: 0.09 },
+    { m: 81, t: 0.16, d: 0.08, v: 0.1 },
+    { m: 84, t: 0.24, d: 0.09, v: 0.11 },
+    { m: 86, t: 0.36, d: 0.55, v: 0.12 }, // D6 — the resolve rings out
+    { m: 79, t: 0.36, d: 0.5,  v: 0.05, w: 'triangle' }, // G+B pad — major bloom
+    { m: 83, t: 0.36, d: 0.5,  v: 0.05, w: 'triangle' },
+  ],
+  fail: [ // catch fail — the two-note wha-wha deflate, a half-step down
+    { m: 64, t: 0,   d: 0.16, v: 0.11, w: 'sawtooth' },
+    { m: 63, t: 0.2, d: 0.34, v: 0.11, w: 'sawtooth' },
+  ],
+  hatch: [ // egg — a Cmaj7 flutter that ends on the 9th, asking not answering
+    { m: 72, t: 0,    d: 0.07, v: 0.09 },
+    { m: 76, t: 0.06, d: 0.07, v: 0.09 },
+    { m: 79, t: 0.12, d: 0.07, v: 0.09 },
+    { m: 83, t: 0.18, d: 0.09, v: 0.1 },
+    { m: 86, t: 0.27, d: 0.32, v: 0.09, w: 'sine' }, // the maj9 hangs — curious
+  ],
+  rest: [ // rest stop — a soft sine triad climbing home, lullaby-warm
+    { m: 72, t: 0,    d: 0.14, v: 0.09, w: 'sine' },
+    { m: 76, t: 0.14, d: 0.14, v: 0.09, w: 'sine' },
+    { m: 79, t: 0.28, d: 0.14, v: 0.09, w: 'sine' },
+    { m: 84, t: 0.42, d: 0.34, v: 0.1,  w: 'sine' },
+    { m: 88, t: 0.42, d: 0.3,  v: 0.04, w: 'triangle' }, // octave shimmer
+  ],
 };
 
-export function playJingle(kind: 'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item') {
+export function playJingle(kind: JingleKind) {
   if (!ac || ac.state !== 'running' || muted) return;
   for (const n of JINGLES[kind]) tone(M2F(n.m), M2F(n.m), n.d, n.w ?? 'square', n.v, n.t);
 }
@@ -315,7 +345,8 @@ export interface Track {
   slap?: boolean; // bass gets a pitch-snap + pick click per note — slap feel
   stab?: number[][]; // synth-brass chord stabs — midi arrays per step, [] = rest
 }
-export type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win';
+export type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win'
+  | 'battle_grove' | 'battle_cavern' | 'battle_volcano' | 'battle_sky';
 
 function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0, vib = 0, dest?: AudioNode) {
   if (!ac || !mGain) return;
@@ -415,7 +446,87 @@ const battleLeadAlt = [
   ...battleLeadB,
 ];
 
-export const TRACKS: Record<TrackName, Track> = {
+// E phrygian pool for battle_volcano — thirdDown only knows E natural
+// minor (F#), but the whole point of this track is the F-natural b2
+// grind, so its harmony is voiced off this pool instead.
+const EPHR = [64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84, 86, 88];
+const phr3 = (m: number) => {
+  const i = EPHR.indexOf(m);
+  return i > 1 ? EPHR[i - 2] : m;
+};
+
+// Volcano A: the riff — staccato E5 hits that keep pulling on F5 (the
+// phrygian b2), then a two-bar climb that crests on D6 and falls home.
+const volcanoLeadA = [
+  76, 76, 0, 77, 0, 76, 0, 74, // E E . F . E . D — the grind
+  76, 76, 0, 79, 0, 77, 0, 74, //           G    F    D
+  76, 76, 0, 77, 0, 76, 0, 74, // restate
+  71, 0, 72, 74, 0, 76, 0, 0, // B C-D . E — the climb starts
+  79, 0, 81, 83, 0, 84, 0, 86, // G A-B . C6 . D6 — the crest
+  86, 84, 0, 83, 81, 0, 79, 0, // fall off the peak
+  83, 0, 81, 0, 79, 0, 77, 0, // B A G F — pulled back to b2
+  76, 0, 74, 0, 76, 0, 0, 0, // land on E, breathe
+];
+
+// Volcano B: octave stabs over the power-chord root walk — E E C D |
+// E F G — then a cadence stepping down F→E into the loop crash.
+const volcanoLeadB = [
+  88, 0, 86, 84, 0, 86, 88, 0, // E6 stabs over the E chug
+  83, 0, 84, 86, 0, 88, 0, 0,
+  88, 0, 86, 0, 84, 0, 79, 0, // over C
+  86, 0, 81, 0, 77, 0, 81, 0, // over D — chord tones
+  88, 0, 86, 0, 84, 0, 83, 0, // back on E
+  77, 0, 81, 0, 84, 0, 81, 0, // over F — the bII power hit
+  86, 0, 84, 0, 83, 0, 81, 0, // over G
+  83, 0, 79, 77, 76, 0, 0, 0, // B G F-E — cadence into the crash
+];
+
+// Volcano A': the second eruption — the riff answers a beat late, then
+// climbs past the first peak to E6. New contour, same kit, >15s rule.
+const volcanoAltA = [
+  0, 0, 74, 0, 76, 0, 77, 0, // let the band hit, answer low
+  0, 0, 79, 0, 77, 0, 76, 0,
+  0, 0, 74, 0, 76, 0, 77, 0,
+  76, 0, 77, 79, 0, 81, 0, 0, // E F G A climb
+  83, 0, 84, 86, 0, 88, 0, 0, // crests higher than A — E6
+  88, 86, 0, 84, 83, 0, 81, 0,
+  79, 0, 81, 0, 83, 0, 84, 0,
+  83, 0, 81, 79, 77, 0, 0, 0,
+];
+
+const volcanoAltB = [
+  84, 0, 86, 88, 0, 86, 84, 0, // inverted peak figure
+  81, 0, 83, 84, 0, 86, 0, 0,
+  79, 0, 84, 0, 88, 0, 84, 0, // over C — G C6 E6 C6
+  81, 0, 77, 0, 86, 0, 81, 0, // over D
+  88, 0, 86, 0, 84, 0, 86, 0,
+  84, 0, 81, 0, 77, 0, 81, 0, // over F
+  83, 0, 86, 0, 84, 0, 83, 0, // over G
+  81, 0, 79, 77, 76, 0, 0, 0, // A G F E — home
+];
+
+const volcanoLeadAll = [...volcanoLeadA, ...volcanoLeadB];
+const volcanoAltAll = [...volcanoAltA, ...volcanoAltB];
+
+// Power-chord stabs — one hit on the loop downbeat, then one per B bar
+// tracking the root walk. The accent is rhythm guitar, not brass.
+const volcanoStabs: number[][] = (() => {
+  const rows = Array.from({ length: 128 }, () => [] as number[]);
+  const hits: Record<number, number[]> = {
+    0: [64, 71, 76],
+    64: [64, 71, 76], 72: [64, 71, 76],
+    80: [60, 67, 72], 88: [62, 69, 74],
+    96: [64, 71, 76], 104: [65, 72, 77],
+    112: [67, 74, 79], 120: [64, 71, 76],
+  };
+  for (const [i, c] of Object.entries(hits)) rows[+i] = c;
+  return rows;
+})();
+
+// Partial: TrackName lists every planned song, but unwritten names have
+// no data yet — the selector falls back to 'battle' before music() ever
+// sees them, and restart() refuses to arm a missing track.
+export const TRACKS: Partial<Record<TrackName, Track>> = {
   title: {
     bpm: 96,
     leadWave: 'triangle', // whistle-warm menu theme
@@ -512,6 +623,46 @@ export const TRACKS: Record<TrackName, Track> = {
       + '..s..ss.'.repeat(7) + '.ssssss.', // rapid fills close each section
     hat: 'c...h.h.'.repeat(7) + 'h.h.h.h.'
       + 'chhhhhhh' + 'hhhhhhhh'.repeat(7), // crash hits the B downbeat
+    loop: true,
+  },
+  battle_volcano: {
+    // metal to battle's J-rock — E phrygian over a double-kick chug.
+    // Distorted saw riff grinding the b2 (F), slap-flagged bass read as
+    // picked palm-mute 8ths, power-chord stabs on the B-section walk.
+    bpm: 170,
+    lead: volcanoLeadAll,
+    harm: volcanoLeadAll.map((n) => (n ? phr3(n) : 0)),
+    alt: volcanoAltAll,
+    altHarm: volcanoAltAll.map((n) => (n ? phr3(n) : 0)),
+    leadWave: 'sawtooth',
+    guitar: true,
+    slap: true,
+    bassGate: 0.45, // palm-muted — tighter than battle's pop
+    vib: 3,
+    echo: 0.1,
+    stab: volcanoStabs,
+    bass: [
+      // E pedal chug — the root refuses to move. It breathes only to
+      // walk: B C D under the lead climb, an F→E b2 grind, and a
+      // chromatic run into each section seam.
+      ...rep([40], 8), ...rep([40], 8), ...rep([40], 8),
+      47, 0, 48, 0, 50, 0, 40, 40,
+      ...rep([40], 8), ...rep([40], 8),
+      41, 41, 41, 41, 40, 40, 40, 40,
+      40, 40, 40, 40, 44, 45, 46, 47,
+      // B: the root walk — E E C D | E F G, then a chromatic climb that
+      // lands D#→E right on the loop crash
+      ...rep([40], 8), ...rep([40], 8),
+      ...rep([36], 8), ...rep([38], 8),
+      ...rep([40], 8), ...rep([41], 8),
+      ...rep([43], 8),
+      40, 40, 40, 40, 36, 37, 38, 39,
+    ],
+    kick: 'k.kkk.kk'.repeat(7) + 'kkkkkkkk' // A: the gallop, last bar rolls
+      + 'kkkkkkkk'.repeat(8), // B: straight double-bass, no mercy
+    snare: '..s...s.'.repeat(7) + '..s.sss.'
+      + '..s...s.'.repeat(7) + '.ssssss.', // fills roll into the crashes
+    hat: ('chhhhhhh' + 'hhhhhhhh'.repeat(7)).repeat(2), // crash per section head
     loop: true,
   },
   map: {
@@ -702,6 +853,13 @@ export const TRACKS: Record<TrackName, Track> = {
   },
 };
 
+// biome → wild-battle song. Only volcano is written so far — the
+// selector (battle.ts) does `BIOME_TRACK[theme] ?? 'battle'`, so
+// unwritten biomes fall back to the generic battle theme.
+export const BIOME_TRACK: Record<string, TrackName> = {
+  volcano: 'battle_volcano',
+};
+
 let curTrack: TrackName | null = null;
 let stepIdx = 0;
 let nextT = 0;
@@ -722,7 +880,12 @@ function restart() {
   stepIdx = 0;
   leadSel = 0;
   if (!curTrack || !ac || !mGain) return;
-  if (mWet) mWet.gain.value = TRACKS[curTrack].echo ?? 0.18; // per-track space
+  const tr = TRACKS[curTrack];
+  if (!tr) {
+    curTrack = null; // valid name, no song written yet — stay silent
+    return;
+  }
+  if (mWet) mWet.gain.value = tr.echo ?? 0.18; // per-track space
   nextT = ac.currentTime + 0.08;
   pumpTimer = setInterval(pump, 40);
 }
@@ -730,7 +893,9 @@ function restart() {
 function pump() {
   if (!ac || !curTrack || ac.state !== 'running') return;
   if (nextT < ac.currentTime - 0.25) nextT = ac.currentTime + 0.05; // tab was suspended
-  let tr = TRACKS[curTrack];
+  const armed = TRACKS[curTrack];
+  if (!armed) return; // unwritten name — restart() already refused to arm it
+  let tr = armed;
   while (nextT < ac.currentTime + 0.2) {
     const i = stepIdx;
     const stepDur = 30 / tr.bpm;
@@ -769,7 +934,7 @@ function pump() {
         music(tr.next ?? null); // jingle over — hand off or go quiet
         return;
       }
-      tr = TRACKS[curTrack];
+      tr = TRACKS[curTrack]!; // a looping track can't unwrite itself
     }
   }
 }
