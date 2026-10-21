@@ -324,6 +324,9 @@ const PICKUP_META: Record<PickupKind, { label: string; color: string }> = {
   elixir: { label: 'CD -1', color: '#9ecbff' },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
+// pass-through combo heat ramp — cyan→gold as the chain climbs; the bump
+// pops, the shot meter and the ball's wake all read the same ladder
+const COMBO_COLORS = ['#9df0ff', '#f8d030', '#f08030', '#f85888', '#ffd84d'];
 // every species a mon can evolve into must be resolvable here — includes
 // enemy/invader pools so catches like Magikarp→Gyarados actually work
 const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS, ...ENEMY_DB, ...INVADERS];
@@ -410,6 +413,7 @@ export class Battle {
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
   private shotCombo = 0; // pass-through links chained this shot
+  private shotDmg = 0; // running damage tally this shot — read under the COMBO meter
   private kosThisShot = 0; // enemies downed by the current shot
   private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false, hx: 0, hy: 0 };
   private texts: FloatText[] = [];
@@ -1310,6 +1314,7 @@ export class Battle {
     this.bumpsThisShot.clear();
     this.bumpNoted.clear();
     this.shotCombo = 0;
+    this.shotDmg = 0;
     this.kosThisShot = 0;
     u.wallN = 0;
     this.shotPhys = 1;
@@ -2236,6 +2241,8 @@ export class Battle {
     });
     // every landed hit reads on the sprite — orbs, dots and ults squash too
     if (d > 0 && !e.dead) e.sq = Math.max(e.sq, 0.5);
+    // the shot's damage tally climbs mid-flight, MS-style — every pop feeds it
+    if (d > 0 && e.side === 'enemy') this.shotDmg += d;
     // a chunk of the health bar at once gets the anime flash frame —
     // bumps, orbs and dot ticks all deserve it, not just contact
     if (!immune && d >= Math.max(30, e.maxHp * 0.25)) this.impact(e.x, e.y, color, 0.8);
@@ -2703,7 +2710,6 @@ export class Battle {
     const n = this.shotCombo;
     const c = TYPE_COLOR[p.def.type];
     // combo counter pops over the ally — every pass reads as a hit
-    const COMBO_COLORS = ['#9df0ff', '#f8d030', '#f08030', '#f85888', '#ffd84d'];
     this.texts.push({
       x: p.x,
       y: p.y - p.r - 26 - Math.min(n, 6) * 5,
@@ -4375,6 +4381,20 @@ export class Battle {
     });
   }
 
+  // Fodder artillery: the old instant zap is a hostile orb now — the bolt
+  // is visible, hunts its mark and lands when it connects, same as the
+  // boss kit. Damage matches the hit it replaces; thorns still prick the
+  // caster for committing to the attack.
+  private foeZap(e: Unit, target: Unit) {
+    sfx('zap');
+    this.orbs.push({
+      x: e.x, y: e.y, target,
+      dmg: Math.round(physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower)),
+      t: 2.5, wob: e.uid * 1.7, color: '#ff6b6b', hostile: true, src: e,
+    });
+    if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
+  }
+
   private fireEnemy(e: Unit) {
     if (e.dead) return; // killed during the windup — the corpse stays down
     {
@@ -4394,11 +4414,7 @@ export class Battle {
         } else {
           // nobody left to protect — the guardian fights like fodder
           const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
-          if (target) {
-            sfx('zap');
-            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower), e);
-            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
-          }
+          if (target) this.foeZap(e, target);
         }
       } else if (e.def.healer || e.supp === 'medic') {
         // clerics patch their most-wounded ally; an untouched squad still
@@ -4413,27 +4429,21 @@ export class Battle {
           sfx('heal');
         } else {
           const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
-          if (target) {
-            sfx('zap');
-            this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower), e);
-            if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
-          }
+          if (target) this.foeZap(e, target);
         }
       } else if (e.def.melee) {
         // melee enemies lunge instead of zapping — the dash plays out over
         // the next moments while you're lining up your shot
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
         if (target) {
-          e.lunging = 1.4;
+          // windup crouch first — fodder gets its tell like the bosses do
+          e.sq = 0.7;
           sfx('launch');
+          this.later(0.25, () => { if (!e.dead) e.lunging = 1.4; });
         }
       } else {
         const target = this.players.filter((p) => !p.dead).sort((a, b) => dist(e, a) - dist(e, b))[0];
-        if (target) {
-          sfx('zap');
-          this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower), e);
-          if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
-        }
+        if (target) this.foeZap(e, target);
       }
     }
   }
@@ -4862,6 +4872,14 @@ export class Battle {
         const al = Math.max(0, 0.4 - age * 0.65) * (0.3 + 0.7 * f);
         if (al <= 0.015) continue;
         ctx.globalAlpha = al;
+        // a live chain warms the wake — each ghost rides a halo off the
+        // combo ramp, so the smear heats cyan→gold as the links climb
+        if (this.shotCombo >= 2) {
+          ctx.fillStyle = COMBO_COLORS[this.shotCombo % COMBO_COLORS.length];
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, au.r * 1.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
         if (au.shiny) drawShiny(ctx, au.def.id, p.x, p.y, au.r * 2.3);
         else drawMon(ctx, au.def.id, p.x, p.y, au.r * 2.3);
       }
@@ -5182,6 +5200,15 @@ export class Battle {
       const label = `COMBO ×${this.shotCombo}`;
       ctx.strokeText(label, this.arena.x + this.arena.w / 2, this.arena.y - 18);
       ctx.fillText(label, this.arena.x + this.arena.w / 2, this.arena.y - 18);
+      // the shot's running damage tally rides under the meter — MS shows it
+      // accumulating mid-flight; small and muted so it supports, not headlines
+      if (this.shotDmg > 0) {
+        ctx.font = font(10);
+        ctx.fillStyle = '#8890b8';
+        ctx.lineWidth = 3;
+        ctx.strokeText(`DMG ${this.shotDmg}`, this.arena.x + this.arena.w / 2, this.arena.y - 5);
+        ctx.fillText(`DMG ${this.shotDmg}`, this.arena.x + this.arena.w / 2, this.arena.y - 5);
+      }
     }
 
     // screen flashes render unshaken, on top — the accessibility toggle
