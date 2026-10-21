@@ -458,6 +458,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const hp0 = (b as any).enemies.map((e: any) => e.hp);
   b.pointerDown({ x: u.x, y: u.y });
   b.pointerUp();
+  ok(b.ultIn === 0, 'the first ult tap only arms — no fire');
+  b.pointerDown({ x: u.x, y: u.y }); // the confirm tap inside the 2s window fires
+  b.pointerUp();
   ok(b.ultIn === ULT_SHOTS, 'firing the ult re-arms the counter');
   for (let i = 0; i < 60; i++) b.update(0.05); // the beams land on a stagger
   ok((b as any).enemies.every((e: any, i: number) => e.dead || e.hp < hp0[i]), 'the ult hits every foe on the court');
@@ -470,6 +473,8 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const bench = (b as any).players.find((p: any) => p !== (b as any).active && !p.dead);
   if (bench) {
     b.pointerDown({ x: bench.x, y: bench.y });
+    b.pointerUp();
+    b.pointerDown({ x: bench.x, y: bench.y }); // arm, then confirm
     b.pointerUp();
     ok(b.ultIn === ULT_SHOTS, 'a teammate can spend the shared ult charge');
   }

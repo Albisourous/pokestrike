@@ -169,6 +169,13 @@ let lastPhase = ''; // battle phase last frame — map-entry edges bank the run
 // box strip scroll: offset in px + an in-progress drag (tap = drag that never moved)
 let boxScroll = 0;
 let boxDrag: { x0: number; s0: number; moved: boolean } | null = null;
+// pointer-id gating: the first finger down owns the gesture — a second
+// finger's events stay dead until the owner lifts (a mid-aim second tap
+// used to teleport the sling; whichever finger lifted first fired it)
+let activeId: number | null = null;
+// scene/phase turnovers lock taps for a beat — a tap meant for the screen
+// that just left can't fire blind on the new one
+let inputLockT = 0;
 
 // --- canvas sizing: letterboxed 540x960 logical space ---
 let scale = 1;
@@ -279,11 +286,13 @@ const rewardPick = (i: number) => {
     if (id != null) {
       statOffer('perkban', ids, id);
       sfx('ui');
+      inputLockT = t + 0.25; // an emptied board advances — the next screen owns a beat
     }
     return;
   }
   statOffer('perks', ids, battle.rewardOffers[i].id);
   battle.pickPerk(i);
+  inputLockT = t + 0.25; // reward → map: the route taps shouldn't catch this tap's twin
 };
 
 const rewardReroll = () => {
@@ -300,6 +309,7 @@ const rewardSkip = () => {
   if (!battle || battle.phase !== 'reward') return;
   statOffer('perks', battle.rewardOffers.map((p) => p.id), null);
   battle.declineReward();
+  inputLockT = t + 0.25; // reward → map: the route taps shouldn't catch this tap's twin
 };
 
 const charmPick = (i: number) => {
@@ -318,6 +328,7 @@ const charmPick = (i: number) => {
   }
   startOffers = [];
   scene = 'battle';
+  inputLockT = t + 0.25; // the climb board is live — eat this tap's companion
   sceneMusic();
 };
 
@@ -355,6 +366,7 @@ const draftPick = (i: number) => {
   charmBonus = battle.asc >= 3;
   charmPicks = charmBonus ? 2 : 1;
   scene = 'charm';
+  inputLockT = t + 0.25; // the charm board is live — eat this tap's companion
 };
 
 // A run's draft pool is the roster plus everything the dex has caught that
@@ -429,6 +441,7 @@ function resumeRun(s: RunSave) {
   // restored gyms were banked the first time — only new wins feed pk_gyms
   lastGyms = battle.gymsBeaten;
   scene = 'battle';
+  inputLockT = t + 0.25; // a live board replaced the title — eat the tap's twin
   sceneMusic();
 }
 
@@ -476,6 +489,7 @@ function startDraft() {
   bagLast = null;
   offerCache = null;
   respinDraft();
+  inputLockT = t + 0.25; // the draft board just dealt — eat the tap's twin
 }
 
 // a shiny or leveled slot hands Battle a cloned def — the shared species
@@ -567,7 +581,14 @@ function helpFlip(d: number) {
   sfx('ui');
 }
 
+// long-press during an aim-hold pops Android's context menu — kill it
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
 canvas.addEventListener('pointerdown', (e) => {
+  if (activeId !== null) return; // a second finger mid-gesture is dead input
+  activeId = e.pointerId;
+  canvas.setPointerCapture(e.pointerId); // a release off-window still sends its up here
+  if (t < inputLockT) return; // this tap was aimed at the screen that just turned over
   unlockAudio(); // first gesture spins up the synth
   sceneMusic();
   const p = toLogical(e);
@@ -794,6 +815,7 @@ canvas.addEventListener('pointerdown', (e) => {
       if (battle) battle.score += 200;
       startOffers = [];
       scene = 'battle';
+      inputLockT = t + 0.25; // the climb board is live — eat this tap's companion
       sceneMusic();
       return;
     }
@@ -914,7 +936,12 @@ canvas.addEventListener('pointerdown', (e) => {
       }
       return;
     } else {
+      const ph = battle?.phase;
+      const modal = battle?.mapModal;
       battle?.pointerDown(p);
+      // a committed route (or a resolved map card) eats the tap's twin —
+      // the new screen owns the next beat
+      if (battle && (battle.phase !== ph || battle.mapModal !== modal)) inputLockT = t + 0.25;
     }
   } else if (scene === 'result') {
     if (inRect(p.x, p.y, SHARE_BTN)) {
@@ -947,6 +974,17 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 canvas.addEventListener('pointermove', (e) => {
+  if (e.pointerId !== activeId) return; // the gesture belongs to another finger
+  // a mouse released outside the window never sent its up — buttons:0 on
+  // the way back in means the gesture died silently; drop it or the
+  // claimed id locks every later tap out
+  if (e.pointerType === 'mouse' && !e.buttons) {
+    activeId = null;
+    helpDrag = dexDrag = boxDrag = settingsDrag = null;
+    if (scene === 'title') titlePointerCancel();
+    if (scene === 'battle') battle?.pointerCancel();
+    return;
+  }
   const p = toLogical(e);
   if (settingsDrag) {
     settingsSliderSet(settingsDrag.key, p.x); // write-through, no click spam
@@ -955,17 +993,17 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (settingsOpen) return;
   if (helpDrag) {
-    if (Math.abs(p.x - helpDrag.x0) > 6 || Math.abs(p.y - helpDrag.y0) > 6) helpDrag.moved = true;
+    if (Math.abs(p.x - helpDrag.x0) > 10 || Math.abs(p.y - helpDrag.y0) > 10) helpDrag.moved = true;
     return;
   }
   if (dexDrag) {
-    if (Math.abs(p.y - dexDrag.y0) > 6) dexDrag.moved = true;
+    if (Math.abs(p.y - dexDrag.y0) > 10) dexDrag.moved = true;
     const s = Math.min(Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0), achOpen ? achScrollMax() : dexScrollMax());
     if (achOpen) achScroll = s; else dexScroll = s;
     return;
   }
   if (boxDrag) {
-    if (Math.abs(p.x - boxDrag.x0) > 6) boxDrag.moved = true;
+    if (Math.abs(p.x - boxDrag.x0) > 10) boxDrag.moved = true;
     if (battle)
       boxScroll = Math.min(
         Math.max(boxDrag.s0 + boxDrag.x0 - p.x, 0),
@@ -973,11 +1011,14 @@ canvas.addEventListener('pointermove', (e) => {
       );
     return;
   }
+  if (helpOpen) return; // a key-opened manual owns input without a drag
   if (scene === 'title') titlePointerMove(p);
   if (scene === 'battle') battle?.pointerMove(p);
 });
 
 canvas.addEventListener('pointerup', (e) => {
+  if (e.pointerId !== activeId) return; // not the gesture's finger — its lift fires nothing
+  activeId = null;
   if (settingsDrag) {
     const key = settingsDrag.key;
     settingsDrag = null;
@@ -1036,6 +1077,7 @@ canvas.addEventListener('pointerup', (e) => {
     }
     return;
   }
+  if (helpOpen) return; // a key-opened manual owns input without a drag
   if (scene === 'title') titlePointerUp();
   if (scene === 'battle') battle?.pointerUp();
 });
@@ -1138,7 +1180,9 @@ addEventListener('keydown', (e) => {
   }
 });
 
-canvas.addEventListener('pointercancel', () => {
+canvas.addEventListener('pointercancel', (e) => {
+  if (e.pointerId !== activeId) return;
+  activeId = null;
   helpDrag = null;
   dexDrag = null;
   boxDrag = null;

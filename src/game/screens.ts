@@ -87,7 +87,7 @@ export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
 export const FREE_BTN = { x: W / 2 - 200, y: 704, w: 195, h: 68 };
 export const DAILY_BTN = { x: W / 2 + 5, y: 704, w: 195, h: 68 };
 // only visible while a saved run waits — slips between the big buttons and the DEX row
-export const NEW_BTN = { x: W / 2 - 80, y: FREE_BTN.y + FREE_BTN.h + 1, w: 160, h: 13 };
+export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260, h: 24 };
 // the ascension dial — parked in the dead band under the ladder readout;
 // a tap cycles the heat 0..wins, hit-tested ahead of the start pill
 export const ASC_BTN = { x: W / 2 - 70, y: 912, w: 140, h: 30 };
@@ -133,7 +133,6 @@ export function perkCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
-export const REWARD_SKIP = { x: W / 2 - 200, y: 872, w: 190, h: 40 };
 export const REWARD_TEAM = { x: W / 2 - 95, y: 872, w: 190, h: 40 };
 // the NEW CATCH card doubles as a button — it opens the team panel
 export const REWARD_CATCH = { x: W / 2 - 190, y: 158, w: 380, h: 78 };
@@ -702,7 +701,7 @@ export function titlePointerUp() {
   const zone = monZone(def);
   const gold = Math.abs(frac - zone.c) <= zone.hw;
   play.dragStart = play.dragNow = null;
-  if (d < 12 || b.live) return; // a tap isn't a pull
+  if (d < 18 || b.live) return; // a tap isn't a pull — same jitter floor as battle
   const speed = BASE_SHOT_SPEED * POWER * monLaunch(def) * (0.4 + 0.6 * (gold ? 1 : frac));
   b.vx = (pull.x / d) * speed;
   b.vy = (pull.y / d) * speed;
@@ -1560,7 +1559,7 @@ export function drawTitle(
     ctx.font = fontB(7);
     ctx.textAlign = 'center';
     ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('A RIVAL TEAM HAUNTS THE CLIMB', W / 2, FREE_BTN.y + FREE_BTN.h + 23);
+    ctx.fillText('A RIVAL TEAM HAUNTS THE CLIMB', W / 2, NEW_BTN.y + NEW_BTN.h + 9);
   }
 
   // ? badge, top corner — the how-to-play overlay
@@ -2114,7 +2113,9 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
 // the menu chip row — four equal chips on 8px gutters, spanning the old
 // row's left edge to W-27 so TASKS slots in without moving the records line
 const MENU_CHIP_W = (W - 27 - (W / 2 - 205) - 3 * 8) / 4; // 106
-export const DEX_BTN = { x: W / 2 - 205, y: FREE_BTN.y + FREE_BTN.h + 26, w: MENU_CHIP_W, h: 48 };
+// +36 over FREE's edge leaves the parked-run line (NEW_BTN, 24px + the
+// rival-echo note) its band — records and ladder key off this row and follow
+export const DEX_BTN = { x: W / 2 - 205, y: FREE_BTN.y + FREE_BTN.h + 36, w: MENU_CHIP_W, h: 48 };
 export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
 export const BOARD_BTN = { x: ACH_BTN.x + ACH_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
 export const TASKS_BTN = { x: BOARD_BTN.x + BOARD_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
@@ -2745,7 +2746,7 @@ export function drawPerkCard(
   fitFont(ctx, perk.name, 9, r.w - 12);
   ctx.fillStyle = PARCH;
   ctx.fillText(perk.name, r.x + r.w / 2, r.y + 104);
-  ctx.font = fontB(8);
+  ctx.font = fontB(9);
   ctx.fillStyle = '#a8b0d8';
   // two-line desc
   const words = perk.desc.split(' ');
@@ -3663,9 +3664,10 @@ const SET_SEG_H = 62;
 const SET_TRACK = { x: SET_ROW.x + 14, w: SET_ROW.w - 28, h: 10 };
 const SET_SEG_TRACK = { x: SET_TRACK.x, w: SET_TRACK.w, h: 22 };
 
-// rows carrying a sub line pack tighter — the sub eats the label's bottom pad
+// rows carrying a sub line pack tighter — the sub eats the label's bottom pad.
+// sub-toggle pitch is 48 so its hit row clears the 44px touch floor
 const setRowPitch = (r: SettingsRow) =>
-  r.kind === 'seg' ? SET_SEG_H : r.sub ? (r.kind === 'slider' ? 58 : 42) : r.kind === 'slider' ? SET_SLIDER_H : SET_TOGGLE_H;
+  r.kind === 'seg' ? SET_SEG_H : r.sub ? (r.kind === 'slider' ? 58 : 48) : r.kind === 'slider' ? SET_SLIDER_H : SET_TOGGLE_H;
 
 export function settingsTabRect(i: number) {
   return { x: SET_RAIL.x, y: SET_RAIL.y + i * (SET_TAB_H + SET_TAB_GAP), w: SET_RAIL.w, h: SET_TAB_H };
@@ -3703,9 +3705,10 @@ export function settingsRowHit(p: { x: number; y: number }, cat: SettingsCat): S
     } else if (row.kind === 'toggle') {
       if (inRect(p.x, p.y, r)) return { kind: 'toggle', key: row.key };
     } else {
-      // seg hits live on the track (+pad) — a label tap doesn't pick options
+      // seg hits live on the track — 44px deep, bottom-flush with the row so
+      // it never bleeds into the next; a label tap still doesn't pick options
       const tr = segTrackRect(r);
-      if (inRect(p.x, p.y, { x: tr.x - 6, y: tr.y - 8, w: tr.w + 12, h: tr.h + 16 }))
+      if (inRect(p.x, p.y, { x: tr.x - 6, y: tr.y - 18, w: tr.w + 12, h: 44 }))
         return { kind: 'seg', key: row.key, i: segIndex(row.key, tr, p.x) };
     }
   }

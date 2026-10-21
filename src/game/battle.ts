@@ -401,6 +401,10 @@ export class Battle {
   private shotT = 0; // launch timestamp — hard-caps a shot that never settles
   private enemyPhaseT = 0;
   private inspect: { uid: number; t: number } | null = null; // tapped-foe scout card
+  // the ult tap is a two-tap confirm: first tap arms that uid for 2s, a
+  // second tap inside the window fires — anything else stands it down
+  private ultArmUid = -1;
+  private ultArmT = -9;
   // branching evolution: a dupe-fed split waits on the reward screen's pick —
   // unit for a fielded mon, boxDef for a boxed one (re-found at pick time so
   // a mid-queue box swap can't evolve the wrong entry)
@@ -1282,23 +1286,34 @@ export class Battle {
     this.dragging = false;
     const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
     const pullLen = len(pull);
-    if (pullLen < 12) {
+    if (pullLen < 18) {
       // a tap, not a pull — on a mon it pops a scout card instead of a shot
       const hit = [...this.enemies, ...this.players].find(
         (e) => !e.dead && Math.hypot(e.x - this.dragStart.x, e.y - this.dragStart.y) < e.r + 14,
       );
       // the ult is a team charge — any living teammate can spend it, and
-      // the tapped mon's own signature is the one that detonates
+      // the tapped mon's own signature is the one that detonates. One tap
+      // arms it for 2s; the second tap on the same mon fires.
       if (hit && hit.side === 'player' && this.ultIn <= 0 && this.phase === 'aim') {
-        this.fireUlt(hit);
+        if (this.ultArmUid === hit.uid && this.time - this.ultArmT < 2) {
+          this.ultArmUid = -1;
+          this.fireUlt(hit);
+        } else {
+          this.ultArmUid = hit.uid;
+          this.ultArmT = this.time;
+          this.texts.push({ x: hit.x, y: hit.y - hit.r - 64, text: 'ULT? TAP AGAIN', t: 2, color: '#ffe76a', big: true });
+          sfx('ui', 0.8); // armed, not fired — a lower click than the confirm
+        }
         return;
       }
+      this.ultArmUid = -1; // a tap anywhere else stands the ult down
       if (hit) {
         this.inspect = { uid: hit.uid, t: 2.8 };
         sfx('ui');
       }
       return;
     }
+    this.ultArmUid = -1; // a real pull stands it down too
     this.inspect = null; // a real pull dismisses the scout card
     const dir = norm(pull);
     const u = this.active;
@@ -4586,7 +4601,7 @@ export class Battle {
   }
 
   private addPunch(amt: number) {
-    this.punch = Math.min(this.punch + amt, 0.22);
+    this.punch = Math.min(this.punch + amt * settings().shake, 0.22); // shake 0 kills the zoom kick too
   }
 
   // Anime shrapnel: velocity streaks, glow dots and a few stars exploding
@@ -5537,8 +5552,8 @@ export class Battle {
     ctx.fillRect(cx + 50, cy + 24, w - 62, 7);
     ctx.fillStyle = e.hp / e.maxHp > 0.3 ? '#6fdc6f' : '#ff6b6b';
     ctx.fillRect(cx + 50, cy + 24, (w - 62) * Math.max(0, e.hp / e.maxHp), 7);
-    ctx.font = fontB(8);
-    ctx.fillStyle = '#8890b8';
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#e8ecf8';
     ctx.fillText(`${Math.ceil(e.hp)}/${e.maxHp}`, cx + 50, cy + 42);
     // the readout — foes show their attack clock; teammates show their super
     ctx.textAlign = 'left';
@@ -5558,7 +5573,7 @@ export class Battle {
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
       fitFont(ctx, tag, 8, w - 60);
       ctx.fillText(tag, cx + 50, cy + 58);
-      ctx.fillStyle = '#6a7498';
+      ctx.fillStyle = '#8890b8';
       ctx.font = fontB(7);
       ctx.fillText(e.def.melee ? 'melee — lunges into your team' : 'ranged — fires a projectile', cx + 50, cy + 70);
     } else {
@@ -5985,7 +6000,7 @@ export class Battle {
     ctx.fillStyle = '#aab4d8';
     ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
     ctx.font = fontB(9);
-    ctx.fillStyle = '#6a7498';
+    ctx.fillStyle = '#8890b8';
     ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + view * cell + 48);
     ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
     // resolved events and egg ticks surface as a toast over the island
@@ -6637,7 +6652,7 @@ export class Battle {
         }
       }
       // attack countdown — ★ marks a signature attack, red when it fires next
-      ctx.font = font(10);
+      ctx.font = font(11);
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
@@ -6710,9 +6725,11 @@ export class Battle {
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText('ULT — TAP!', u.x, u.y - u.r - 52);
-        ctx.fillStyle = '#ffe76a';
-        ctx.fillText('ULT — TAP!', u.x, u.y - u.r - 52);
+        // an armed ult marks its own mon — second tap on it fires
+        const armed = this.ultArmUid === u.uid && this.time - this.ultArmT < 2;
+        ctx.strokeText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, u.y - u.r - 52);
+        ctx.fillStyle = armed ? '#ff9d4d' : '#ffe76a';
+        ctx.fillText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, u.y - u.r - 52);
       }
     }
   }
@@ -6755,7 +6772,7 @@ export class Battle {
     const u = this.active;
     const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
     const pullLen = len(pull);
-    if (pullLen < 12) return;
+    if (pullLen < 18) return; // same tap floor as pointerUp
     const dir = norm(pull);
     const frac = this.charge();
     const zone = this.sweetSpot();
@@ -6878,9 +6895,18 @@ export class Battle {
         ctx.strokeStyle = eff >= 2 ? '#ffd84d' : eff <= 0.5 ? '#8a90a8' : '#e8ecf8';
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.85;
+        // shape is the second channel: resisted reads dashed, super-effective
+        // a double ring — gold vs pale aren't distinguishable alone
+        if (eff <= 0.5) ctx.setLineDash([4, 4]);
         ctx.beginPath();
         ctx.arc(hx, hy, 9, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.setLineDash([]);
+        if (eff >= 2) {
+          ctx.beginPath();
+          ctx.arc(hx, hy, 12, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         ctx.globalAlpha = 1;
         // weak read — contact inside the boss's ±0.62 rad gold face pays
         // triple (same cone test as strikeEnemy); a small star marks it

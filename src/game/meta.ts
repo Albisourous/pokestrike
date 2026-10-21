@@ -604,9 +604,17 @@ const settingsBlob = (): Partial<Settings> | null => {
   return settingsParsed;
 };
 
+// no stored blob yet: the OS reduced-motion flag seeds shake/flash defaults —
+// once pk_settings exists it stays authoritative
+const OS_REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 export function settings(): Settings {
   const s = { ...memSettings };
   const raw = settingsBlob();
+  if (raw == null && OS_REDUCED) {
+    s.shake = 0;
+    s.flash = false;
+  }
   if (raw && typeof raw === 'object') {
     for (const k of ['master', 'music', 'sfx', 'cries'] as const) {
       const v = raw[k];
