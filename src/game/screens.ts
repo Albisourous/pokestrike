@@ -2790,11 +2790,20 @@ export function drawPerkCard(
   ctx.fillText(perk.name, r.x + r.w / 2, r.y + 104);
   ctx.font = fontB(9);
   ctx.fillStyle = '#a8b0d8';
-  // two-line desc
-  const words = perk.desc.split(' ');
-  const mid = Math.ceil(words.length / 2);
-  ctx.fillText(words.slice(0, mid).join(' '), r.x + r.w / 2, r.y + 128);
-  ctx.fillText(words.slice(mid).join(' '), r.x + r.w / 2, r.y + 146);
+  // greedy wrap inside the card — the old midpoint split overflowed long descs
+  // straight into the neighbour card
+  const dlines: string[] = [];
+  let cur = '';
+  for (const wd of perk.desc.split(' ')) {
+    const t = cur ? `${cur} ${wd}` : wd;
+    if (ctx.measureText(t).width <= r.w - 16) cur = t;
+    else {
+      dlines.push(cur);
+      cur = wd;
+    }
+  }
+  if (cur) dlines.push(cur);
+  dlines.slice(0, 3).forEach((l, i) => ctx.fillText(l, r.x + r.w / 2, r.y + 128 + i * 18));
 
   // [1]/[2]/[3] — desktop keys pick cards off the board
   const idx = opts?.idx ?? spin?.i;
@@ -3179,7 +3188,9 @@ function drawRoster(
 // box/team management the reward break uses.
 export const MAP_MENU = { x: W / 2 - 120, y: 872, w: 240, h: 46 };
 export const TEAM_PANEL = { x: 24, y: 258, w: W - 48, h: 586 };
-export const MENU_CLOSE = { x: W / 2 - 90, y: 788, w: 180, h: 44 };
+// bottom row is a centered pair — CLOSE keeps its look, QUIT rides beside it
+export const MENU_CLOSE = { x: W / 2 - 184, y: 788, w: 180, h: 44 };
+export const MENU_QUIT = { x: W / 2 + 12, y: 788, w: 172, h: 44 };
 
 export function drawTeamMenu(
   ctx: CanvasRenderingContext2D,
@@ -3267,6 +3278,8 @@ export function drawTeamMenu(
 
   drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct, masterArmed);
   pill(ctx, MENU_CLOSE, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'CLOSE' });
+  // the quiet out — dark like evo KEEP; the parked pk_run is what CONTINUE resumes
+  pill(ctx, MENU_QUIT, { c: '#2a3560', cd: '#1a2040', tc: '#aab4dd', label: 'QUIT TO TITLE' });
 }
 
 // Starter-charm pick before stage 1 — same card look, standalone screen.
