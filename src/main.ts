@@ -22,6 +22,7 @@ import {
   draftCardRect,
   perkCardRect,
   evoCardRect,
+  EVO_KEEP,
   boxSlotRect,
   boxScrollMax,
   BOX_STRIP,
@@ -30,13 +31,14 @@ import {
   SHARE_BTN,
   TITLE_BTN,
   FREE_BTN,
-  NEW_BTN,
+  NEW_HIT,
   DAILY_BTN,
   ASC_BTN,
   HELP_BTN,
   HELP_CHIP,
   GEAR_BTN,
   MUTE_CHIP,
+  MAP_GEAR,
   drawHelpChip,
   drawMuteChip,
   MUTE_BTN,
@@ -253,8 +255,8 @@ function buildShare(b: Battle, won: boolean) {
   const cleared = Math.max(0, won ? TOTAL_STAGES : b.waveIndex);
   const waves =
     '🟩'.repeat(cleared) + (won ? '' : '🟥') + '⬛'.repeat(TOTAL_STAGES - cleared - (won ? 0 : 1));
-  const team = draft.picked.map((i) => TYPE_SQ[draftPool[i].type]).join('');
-  return { waves, team, copied: false };
+  const team = b.players.map((p) => TYPE_SQ[p.def.type]).join('');
+  return { waves, team, copied: false, failed: false };
 }
 
 // Offers for the current round — never re-offer a species already on the
@@ -318,7 +320,10 @@ const rewardPick = (i: number) => {
 const rewardReroll = () => {
   if (!battle) return;
   const ids = battle.rewardOffers.map((p) => p.id);
-  if (!battle.rerollOffers()) return;
+  if (!battle.rerollOffers()) {
+    sfx('ui', 0.6); // out of rolls — a denied tap still answers
+    return;
+  }
   statOffer('perks', ids, null); // rejected board — nobody took it
   rewardT0 = t; // the reels deal again for the new offers
   rewardLanded = 0;
@@ -433,7 +438,13 @@ function bankRun() {
 }
 window.addEventListener('pagehide', bankRun);
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) bankRun();
+  if (!document.hidden) return;
+  bankRun();
+  // a hidden tab can drop the gesture's pointerup — a held id would lock
+  // every later tap out, so dump all drag state like a pointercancel
+  activeId = null;
+  helpDrag = dexDrag = boxDrag = settingsDrag = null;
+  battle?.pointerCancel();
 });
 
 // A saved climb skips the draft/charm entirely — same seed, same island
@@ -537,7 +548,10 @@ const draftDef = (i: number): SpeciesDef => {
 
 // one board reshuffle per draft — a bad first board isn't a run sentence
 function rerollDraft() {
-  if (draft.rerolls <= 0) return;
+  if (draft.rerolls <= 0) {
+    sfx('ui', 0.6); // out of reshuffles — a denied tap still answers
+    return;
+  }
   draft.rerolls--;
   const head = draft.order.slice(0, draft.picked.length * 3);
   const tail = draft.order.slice(draft.picked.length * 3);
@@ -572,6 +586,7 @@ async function copyText(): Promise<boolean> {
 }
 
 async function shareResult() {
+  if (share) share.failed = false; // a fresh attempt clears the last one's flag
   // native sheet first: on iOS it's the reliable path and has a Copy
   // action built in
   if (navigator.share) {
@@ -585,6 +600,8 @@ async function shareResult() {
   if ((await copyText()) && share) {
     share.copied = true;
     setTimeout(() => share && (share.copied = false), 1500);
+  } else if (share) {
+    share.failed = true; // sheet threw and the clipboard said no — the card says so
   }
 }
 
@@ -683,7 +700,9 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (hit?.kind === 'claim' && hit.i != null) {
       const v = taskViews(tasksTab)[hit.i];
-      if (v && claimTask(v.id)) playJingle('task'); // the bag pays out
+      // taskRowHit fires on any slap of the slab — done pays, the rest deny
+      if (v?.done && claimTask(v.id)) playJingle('task'); // the bag pays out
+      else sfx('ui', 0.6);
       return;
     }
     return;
@@ -741,7 +760,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui'); // plays only when unmuting
       return;
     }
-    if (titleSave && inRect(p.x, p.y, NEW_BTN)) {
+    if (titleSave && inRect(p.x, p.y, NEW_HIT)) {
       // start over — the parked climb is dropped for a fresh seed. Two-tap
       // confirm: a stray-low finger on CONTINUE lands in this sliver, so the
       // first tap only arms the warn label; the second inside 3s is the deed.
@@ -824,8 +843,8 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
-    if (draft.rerolls > 0 && inRect(p.x, p.y, DRAFT_REROLL)) {
-      rerollDraft();
+    if (inRect(p.x, p.y, DRAFT_REROLL)) {
+      rerollDraft(); // the helper denies when the reshuffles are spent
       return;
     }
     // reels still rolling — any tap fast-forwards to the dealt board
@@ -888,6 +907,12 @@ canvas.addEventListener('pointerdown', (e) => {
         sfx('ui');
         return;
       }
+      if (inRect(p.x, p.y, MAP_GEAR)) {
+        settingsOpen = true;
+        settingsCat = 'sound';
+        sfx('ui');
+        return;
+      }
     }
     // the team panel is modal over the map AND the reward screen — CLOSE
     // or a tap outside dismisses; inside, roster ops only
@@ -930,6 +955,11 @@ canvas.addEventListener('pointerdown', (e) => {
         for (let i = 0; i < opts.length; i++) {
           if (inRect(p.x, p.y, evoCardRect(i, opts.length))) battle.pickEvo(i);
         }
+        // KEEP bows out of the split — the mon stays in its current form
+        if (inRect(p.x, p.y, EVO_KEEP)) {
+          battle.declineEvo();
+          sfx('ui');
+        }
         return;
       }
       // the catch card or the TEAM · ITEMS button opens the box mid-pick —
@@ -960,6 +990,7 @@ canvas.addEventListener('pointerdown', (e) => {
       if (inRect(p.x, p.y, TOOL_BAN)) {
         const wasArmed = battle.banArmed;
         if (battle.toggleBanish() !== wasArmed) sfx('ui'); // arming and standing down both click
+        else sfx('ui', 0.6); // out of banishes — a denied tap still answers
         return;
       }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
@@ -1056,6 +1087,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (settingsDrag) {
     const key = settingsDrag.key;
     settingsDrag = null;
+    syncVolumes(); // a tap-set never saw a pointermove — flush the volume here
     // the cries slider auditions itself — a real cry stands in for the click
     if (key === 'cries') cry(25, 0.4);
     else sfx('ui'); // one click on release, not a stream while dragging
@@ -1151,8 +1183,8 @@ addEventListener('keydown', (e) => {
       draftPick(i);
       return;
     }
-    if ((e.key === 'r' || e.key === 'R') && draft.rerolls > 0) {
-      rerollDraft();
+    if (e.key === 'r' || e.key === 'R') {
+      rerollDraft(); // the helper denies when the reshuffles are spent
       return;
     }
   }
@@ -1187,12 +1219,22 @@ addEventListener('keydown', (e) => {
     if (e.key === 'z' || e.key === 'Z') {
       const wasArmed = battle.banArmed;
       if (battle.toggleBanish() !== wasArmed) sfx('ui'); // arming and standing down both click
+      else sfx('ui', 0.6); // out of banishes — a denied key still answers
       return;
     }
     if (e.key === 'x' || e.key === 'X') {
       rewardSkip();
       return;
     }
+  }
+  // the TEAM · ITEMS panel owns keys while it's up — Esc closes it instead
+  // of falling through to the manual
+  if (menuOpen) {
+    if (e.key === 'Escape') {
+      menuOpen = false;
+      sfx('ui');
+    }
+    return;
   }
   // Esc pops the topmost overlay first — board paints over ach over dex —
   // and only reaches the manual once the screen is bare; '?' still opens
@@ -1554,6 +1596,7 @@ function render() {
             boxScroll,
             battle.captureChance,
             battle.heldItems,
+            battle.masterArmed,
           );
       }
       break;

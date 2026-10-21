@@ -89,9 +89,12 @@ export const FREE_BTN = { x: W / 2 - 200, y: 704, w: 195, h: 68 };
 export const DAILY_BTN = { x: W / 2 + 5, y: 704, w: 195, h: 68 };
 // only visible while a saved run waits — slips between the big buttons and the DEX row
 export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260, h: 24 };
+// the drawn link stays a 24px sliver guarding CONTINUE, but the live target
+// is a 36px slab centered on it — main.ts hit-tests NEW_HIT, not NEW_BTN
+export const NEW_HIT = { x: NEW_BTN.x, y: NEW_BTN.y + NEW_BTN.h / 2 - 18, w: NEW_BTN.w, h: 36 };
 // the ascension dial — parked in the dead band under the ladder readout;
 // a tap cycles the heat 0..wins, hit-tested ahead of the start pill
-export const ASC_BTN = { x: W / 2 - 70, y: 912, w: 140, h: 30 };
+export const ASC_BTN = { x: W / 2 - 70, y: 904, w: 140, h: 44 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -121,6 +124,18 @@ export function drawMuteChip(ctx: CanvasRenderingContext2D) {
   ctx.lineWidth = 1.5;
   ctx.strokeRect(MUTE_CHIP.x, MUTE_CHIP.y, MUTE_CHIP.w, MUTE_CHIP.h);
   speakerGlyph(ctx, cx, cy, 0.72);
+}
+// settings cog, mid-run size — the next 42px slot left of MUTE_CHIP's grid
+export const MAP_GEAR = { x: W - 142, y: 54, w: 40, h: 40 };
+export function drawGearChip(ctx: CanvasRenderingContext2D) {
+  const cx = MAP_GEAR.x + MAP_GEAR.w / 2;
+  const cy = MAP_GEAR.y + MAP_GEAR.h / 2;
+  ctx.fillStyle = '#12152bcc';
+  ctx.fillRect(MAP_GEAR.x, MAP_GEAR.y, MAP_GEAR.w, MAP_GEAR.h);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(MAP_GEAR.x, MAP_GEAR.y, MAP_GEAR.w, MAP_GEAR.h);
+  gearGlyph(ctx, cx, cy, 1.3, PARCH);
 }
 export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
 // gear badge, left of the ? — the settings modal
@@ -163,9 +178,13 @@ export function teamSlotRect(i: number) {
 
 // split-evolution option cards — centered row over the dimmed reward screen
 export function evoCardRect(i: number, n: number) {
-  const w = 140, gap = 14;
+  // four branches (eevee's full spread) step down a size so the row still fits
+  const w = n >= 4 ? 120 : 140, gap = n >= 4 ? 10 : 14;
   return { x: W / 2 - (n * w + (n - 1) * gap) / 2 + i * (w + gap), y: 400, w, h: 184 };
 }
+// the quiet out — staying unevolved is a legal pick; centered under the card
+// row (cards end at 584, this leaves a 16px breath)
+export const EVO_KEEP = { x: W / 2 - 90, y: 600, w: 180, h: 34 };
 
 export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
@@ -1654,7 +1673,7 @@ export function drawTitle(
       ? `${rating()} PTS ${ld.name} — ${Math.round(ld.prog * 100)}% TO ${ld.next.name}`
       : `${rating()} PTS ${ld.name} — TOP OF THE LADDER`,
     W / 2,
-    ry + 19,
+    ry + 13, // ASC_BTN grew to a 44px touch target — keep the caption's ink clear of its rim
   );
   // the heat dial: gold while a pick is on, parchment at zero, grayed until
   // a first clear lifts the cap off the floor — a tap cycles 0..cap
@@ -2667,6 +2686,7 @@ export interface ShareGrid {
   waves: string; // emoji squares, one per wave
   team: string; // emoji squares, one per drafted mon
   copied: boolean;
+  failed?: boolean; // clipboard write rejected — the button says so
 }
 
 function hpBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, frac: number) {
@@ -2923,6 +2943,13 @@ export function drawReward(
       wrap2(ctx, superDesc(opt.id, opt.type), r.w - 14).forEach((l, li) =>
         ctx.fillText(l, r.x + r.w / 2, r.y + 167 + li * 9));
     });
+    // the quiet out — dark pill, no gold pull; staying put is a legal pick
+    pill(ctx, EVO_KEEP, {
+      c: '#2a3560',
+      cd: '#1a2040',
+      tc: '#aab4dd',
+      label: `KEEP ${evo.from.name.toUpperCase()}`,
+    });
   }
 }
 
@@ -2976,11 +3003,23 @@ function drawRoster(
   teamLvl: number[],
   selTeam: number,
   catchPct: number,
+  masterArmed: boolean,
 ) {
   // captured box — tap a catch and a teammate, in either order, to swap
   ctx.font = font(9);
   ctx.fillStyle = '#8890b8';
-  ctx.fillText(`BOX: beaten foes join at ${Math.round(catchPct * 100)}%`, W / 2, 526);
+  const capLine = `BOX: beaten foes join at ${Math.round(catchPct * 100)}%`;
+  ctx.fillText(capLine, W / 2, 526);
+  if (masterArmed) {
+    void loadItem('master-ball');
+    const ball = itemSprite('master-ball');
+    if (ball) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(ball, W / 2 + ctx.measureText(capLine).width / 2 + 8, 515, 18, 18);
+      ctx.restore();
+    }
+  }
   if (box.length === 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
@@ -3155,6 +3194,7 @@ export function drawTeamMenu(
   boxScroll: number,
   catchPct: number,
   heldItems: string[],
+  masterArmed: boolean,
 ) {
   ctx.fillStyle = 'rgba(4,6,16,0.82)';
   ctx.fillRect(0, 0, W, H);
@@ -3225,7 +3265,7 @@ export function drawTeamMenu(
     ctx.textAlign = 'center';
   });
 
-  drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct);
+  drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct, masterArmed);
   pill(ctx, MENU_CLOSE, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'CLOSE' });
 }
 
@@ -3530,7 +3570,12 @@ export function drawResult(
   }
 
   pill(ctx, RETRY_BTN, { c: '#ffd84d', cd: '#c8a44d', tc: '#2a2440', label: 'REMATCH' });
-  pill(ctx, SHARE_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: share?.copied ? 'COPIED!' : 'SHARE RESULT' });
+  pill(ctx, SHARE_BTN, {
+    c: '#e8ecf8',
+    cd: '#aab0c8',
+    tc: '#2a2440',
+    label: share?.failed ? 'COPY FAILED' : share?.copied ? 'COPIED!' : 'SHARE RESULT',
+  });
   pill(ctx, TITLE_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TITLE' });
 
   // receipt stub — one screenshot carries the replay and the build
@@ -3968,7 +4013,7 @@ function taskClaimRect(row: { x: number; y: number; w: number; h: number }) {
 }
 
 // what a point inside the panel touches — tabs and CLOSE always answer;
-// a claim slab only goes live while its task is done and unclaimed
+// a claim slab answers on every tap now — done-vs-deny is main.ts's call
 export function taskRowHit(p: Vec, tab: 'daily' | 'weekly'): TasksHit | null {
   if (inRect(p.x, p.y, TASKS_CLOSE) || !inRect(p.x, p.y, TASKS_PANEL)) return { kind: 'close' };
   for (let i = 0; i < TASKS_TABS.length; i++) {
@@ -3976,8 +4021,6 @@ export function taskRowHit(p: Vec, tab: 'daily' | 'weekly'): TasksHit | null {
   }
   const views = taskViews(tab);
   for (let i = 0; i < views.length; i++) {
-    const v = views[i];
-    if (!v.done || v.claimed) continue;
     if (inRect(p.x, p.y, taskClaimRect(taskRowRect(i)))) return { kind: 'claim', i };
   }
   return null; // dead panel space is still modal

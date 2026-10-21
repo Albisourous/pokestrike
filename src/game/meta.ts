@@ -392,7 +392,8 @@ export function migrateSaves() {
     // v3: the mid-run save gained the egg timer — fill defaults on a parked
     // climb so the stored blob matches the shape new saves write
     const s = load<RunSave>('pk_run');
-    if (s && s.eggIn == null) {
+    // a valid-JSON primitive (42, "x", true) can't take the property write
+    if (typeof s === 'object' && s !== null && s.eggIn == null) {
       s.eggIn = 0;
       s.eggJustLaid = false;
       store('pk_run', s);
@@ -487,7 +488,9 @@ export function runSave(): RunSave | null {
   // applySnapshot spreads/maps every array verbatim and refills rolled waves
   // up to max(pendingNext, waveIndex), so thin blobs — or a huge row counter
   // that would loop for minutes — must read as "no save" here.
-  const row = (v: number) => Number.isInteger(v) && v >= 0 && v <= TOTAL_STAGES;
+  // rows index stage.waves 0..TOTAL_STAGES-1 — pendingNext = TOTAL_STAGES
+  // backfills a phantom wave no map node links to
+  const row = (v: number) => Number.isInteger(v) && v >= 0 && v < TOTAL_STAGES;
   const ok =
     !!s &&
     (
@@ -512,16 +515,24 @@ export function runSave(): RunSave | null {
     row(s.pendingNext) &&
     Array.isArray(s.team) &&
     s.team.length > 0 &&
-    s.team.every((e) => !!e && Number.isFinite(e.id) && Number.isFinite(e.hp)) &&
+    s.team.every(
+      (e) => !!e && Number.isFinite(e.id) && Number.isFinite(e.hp) && (e.lvl == null || Number.isFinite(e.lvl)),
+    ) &&
     Array.isArray(s.box) &&
-    s.box.every((e) => !!e && Number.isFinite(e.id)) &&
+    s.box.every((e) => !!e && Number.isFinite(e.id) && (e.lvl == null || Number.isFinite(e.lvl))) &&
+    // hp/lvl ride parallel to the box — positional pairing, every slot a real number
     Array.isArray(s.boxHp) &&
+    s.boxHp.length === s.box.length &&
+    s.boxHp.every((v) => Number.isFinite(v)) &&
     Array.isArray(s.boxLvl) &&
+    s.boxLvl.length === s.box.length &&
+    s.boxLvl.every((v) => Number.isFinite(v)) &&
     Array.isArray(s.perks) &&
     Array.isArray(s.heldItems) &&
     (s.bag == null || Array.isArray(s.bag)) &&
     (s.perkBan == null || Array.isArray(s.perkBan)) &&
-    (s.tools == null || typeof s.tools === 'object') &&
+    (s.tools == null ||
+      (typeof s.tools === 'object' && Number.isFinite(s.tools.roll) && Number.isFinite(s.tools.ban))) &&
     (s.eggIn == null || Number.isFinite(s.eggIn));
   return ok ? s : null;
 }

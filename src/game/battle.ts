@@ -376,8 +376,6 @@ function resolveZone(u: Ball, hz: Hazard): boolean {
   return true;
 }
 
-let nextUid = 1;
-
 export class Battle {
   players: Unit[] = [];
   enemies: Unit[] = [];
@@ -401,6 +399,10 @@ export class Battle {
   private stopTimer = 0;
   private shotT = 0; // launch timestamp — hard-caps a shot that never settles
   private enemyPhaseT = 0;
+  // uids are per-battle on purpose: a session-global counter made orb wobble
+  // phases depend on how many mons the session had already fielded, so a
+  // ?seed= run diverged between a fresh load and a post-run retry
+  private uidCtr = 0;
   private inspect: { uid: number; t: number } | null = null; // tapped-foe scout card
   // the ult tap is a two-tap confirm: first tap arms that uid for 2s, a
   // second tap inside the window fires — anything else stands it down
@@ -570,6 +572,7 @@ export class Battle {
   private lootCoins: { x: number; y: number; vx: number; vy: number; r: number; spin: number; kind: 'coin' | 'gem' | 'heart' | 'candy'; val: number }[] = [];
   private lootT = 0;
   private lootDrag = false;
+  private lootDown: Vec | null = null; // where the leash was grabbed — an unmoved release is a tap, not a scoop
   private lootPos: Vec | null = null;
   private lootChain = 0; // consecutive scoops — pitch climbs with the streak
   private lootChainT = -9; // last scoop — the chain decays after ~0.6s
@@ -598,7 +601,7 @@ export class Battle {
       // supers start at zero charge — each shot banks a turn toward firing
       const cd = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - m.cdMod);
       this.players.push({
-        uid: nextUid++,
+        uid: this.uidCtr++,
         def,
         side: 'player',
         // staggered start in the bottom third — not a rigid row
@@ -748,7 +751,7 @@ export class Battle {
     while (this.stage.waves.length <= Math.max(s.pendingNext, s.waveIndex)) {
       const r = this.stage.waves.length;
       const gym = this.region.nodes.find((n) => n.row === r && n.kind === 'gym');
-      this.stage.waves.push(rollWave(this.rng, r - 2, this.stage.theme, gym?.ttype));
+      this.stage.waves.push(rollWave(this.rng, r - 2, THEMES[Math.floor(this.rng() * THEMES.length)], gym?.ttype));
     }
     this.mapNote = s.mapNote;
     this.eggIn = s.eggIn ?? 0; // v2 saves predate the egg timer — no egg
@@ -1156,7 +1159,7 @@ export class Battle {
       (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * lvlHp(s.def.stats.hp, el),
     );
     return {
-      uid: nextUid++,
+      uid: this.uidCtr++,
       def: s.def,
       side: 'enemy',
       x: at.x,
@@ -1258,6 +1261,7 @@ export class Battle {
     if (this.phase === 'loot') { // grab the leash — drag your mon through the coins
       this.lootDrag = true;
       this.lootPos = { ...p };
+      this.lootDown = { ...p };
       return;
     }
     if (this.phase === 'map') {
@@ -1318,12 +1322,17 @@ export class Battle {
     this.dragging = false;
     this.lootDrag = false;
     this.lootPos = null;
+    this.lootDown = null;
   }
 
   pointerUp() {
     if (this.lootDrag) {
+      // a release that never left the grab point is a tap — tap skips the
+      // victory lap; a real sweep doesn't
+      if (this.phase === 'loot' && this.lootPos && this.lootDown && dist(this.lootPos, this.lootDown) <= 6) this.lootT = 0;
       this.lootDrag = false;
       this.lootPos = null;
+      this.lootDown = null;
     }
     if (!this.dragging) return;
     this.dragging = false;
@@ -1583,6 +1592,15 @@ export class Battle {
       this.inspect.t -= dt;
       const alive = [...this.enemies, ...this.players].some((e) => e.uid === this.inspect!.uid && !e.dead);
       if (this.inspect.t <= 0 || !alive) this.inspect = null;
+    }
+    // an armed ult nobody confirms stands itself down — once, audibly
+    if (this.ultArmUid !== -1 && this.time - this.ultArmT >= 2) {
+      const u = this.players.find((p) => p.uid === this.ultArmUid);
+      this.ultArmUid = -1;
+      if (u) {
+        this.texts.push({ x: u.x, y: u.y - u.r - 52, text: 'STOOD DOWN', t: 0.8, color: '#8890b8', big: false });
+        sfx('ui', 0.4);
+      }
     }
     // squash impulses relax — sprites spring back after impacts
     for (const p of this.players) p.sq *= Math.exp(-9 * dt);
@@ -2385,7 +2403,11 @@ export class Battle {
       const master = this.masterArmed && !this.inTrainer;
       // shinies never break out — KO'ing one always lands it in the box
       const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0));
-      if (master) this.masterArmed = false;
+      if (master) {
+        this.masterArmed = false;
+        this.texts.push({ x: e.x, y: e.y - e.r - 58, text: '★ MASTER BALL!', t: 1.5, color: '#c96bff', big: true });
+        this.log('★ MASTER BALL!');
+      }
       sfx('ko');
       buzz(e.boss ? [50, 60, 90] : 30);
       // the verdict card — held back for the ball's click/burst whenever a
@@ -3870,6 +3892,15 @@ export class Battle {
     this.evoChoice = this.evoPending.shift() ?? null;
   }
 
+  // The modal's other honest answer: keep the current form — the next
+  // queued split steps up exactly like a resolved pick.
+  declineEvo() {
+    const c = this.evoChoice;
+    if (!c || this.phase !== 'reward') return;
+    this.log(`KEPT ${c.from.name.toUpperCase()}`);
+    this.evoChoice = this.evoPending.shift() ?? null;
+  }
+
   // Mid-run evolution: same slot, new species — hp fraction carries over
   // and a fainted mon stays fainted (evolving isn't a revive).
   private evolveUnit(p: Unit, nd: SpeciesDef) {
@@ -4018,6 +4049,7 @@ export class Battle {
     this.lootT = 6;
     this.lootDrag = false;
     this.lootPos = null;
+    this.lootDown = null;
     this.pickups = [];
     this.lootCoins = [];
     const ox = this.bossKilledAt?.x ?? this.arena.x + this.arena.w / 2;
@@ -4294,7 +4326,9 @@ export class Battle {
       this.waveIndex = n.row;
       if (n.row >= this.stage.waves.length) {
         this.depth++;
-        this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+        // same draw shape as the live roll — applySnapshot's backfill replays
+        // it draw-for-draw
+        this.stage.waves.push(rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)]));
       }
       this.pendingNext = n.row + 1;
       return;
@@ -4331,7 +4365,7 @@ export class Battle {
     this.waveIndex = c.node.row;
     if (c.node.row >= this.stage.waves.length) {
       this.depth++;
-      this.stage.waves.push(rollWave(this.rng, this.depth, this.stage.theme));
+      this.stage.waves.push(rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)]));
     }
     this.pendingNext = c.node.row + 1;
     // the result card keeps the event's face when the pick brings none
@@ -4443,7 +4477,7 @@ export class Battle {
       this.eventChoice = { ...martStock(this), node: n };
       this.cardT = 0;
     } else if (n.kind === 'chest') {
-      const p = rollPerks(this.rng, 1, this.rank, this.teamTypes())[0];
+      const p = rollPerks(this.rng, 1, this.rank, this.teamTypes(), this.perkBan)[0];
       if (p) {
         this.grantPerk(p);
         this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;

@@ -10,7 +10,7 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
@@ -180,7 +180,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).absorbDupe(eevee); // a dupe normally auto-evolves — a branch can't
   ok(p.def.id === 133 && (b as any).evoPending.length === 1, 'split evo waits for a pick');
   (b as any).enterReward();
-  ok(b.evoChoice?.options.length === 3, `eevee offers its three forms (${b.evoChoice?.options.map((o) => o.name).join('/')})`);
+  ok(b.evoChoice?.options.length === 4, `eevee offers its four forms (${b.evoChoice?.options.map((o) => o.name).join('/')})`);
   b.pickEvo(1); // Jolteon
   ok(p.def.id === 135 && b.evoChoice === null, `picked branch becomes ${p.def.name}`);
   ok(p.def.luck === 1, 'the absorbed dupe banked a luck point through evolution');
@@ -905,10 +905,15 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   b.asc = asc;
   let frames = 0;
   let aimTries = 0;
+  let lastWave = -1; // the aim budget is per-wave — a fresh fight refills it
   let shopPicks = 0;
   const step = (n: number) => { for (let i = 0; i < n; i++) b.update(1 / 60); };
   while (b.phase !== 'won' && b.phase !== 'lost' && frames < 200000) {
     frames++;
+    if ((b as any).waveIndex !== lastWave) {
+      lastWave = (b as any).waveIndex;
+      aimTries = 0; // new wave, new budget — the flail cycle restarts with it
+    }
     if (b.phase === 'aim' && aimTries++ > 600) break; // stall detector — bouncier physics makes a dumb bot's fights run longer
     if ((b as any).eventChoice) { // a ? is asking — buy once, then LEAVE (last option) if the board re-asks
       const opts = (b as any).eventChoice.options;
@@ -1748,6 +1753,59 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(Array.isArray(dexIds()), 'malformed pk_dex reads as an empty dex');
   localStorage.removeItem('pk_best');
   localStorage.removeItem('pk_dex');
+}
+
+// --- a corrupt pk_run reads as "no parked climb", never a NaN'd one ---------
+{
+  const a = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(3));
+  const clean = JSON.parse(JSON.stringify(a.snapshot()!)); // real serialization
+  const trySave = (mut: (s: any) => void) => {
+    const s = JSON.parse(JSON.stringify(clean));
+    mut(s);
+    localStorage.setItem('pk_run', JSON.stringify(s));
+    return runSave();
+  };
+  ok(trySave(() => {}) !== null, 'a clean snapshot passes the pk_run shape-check');
+  ok(trySave((s) => { s.team[1].lvl = 'x'; }) === null, 'a non-number team[].lvl rejects the save');
+  ok(
+    trySave((s) => {
+      s.box = [{ id: 1, lvl: 5 }, { id: 4, lvl: 5 }];
+      s.boxHp = [1, 'x'];
+      s.boxLvl = [5, 5];
+    }) === null,
+    'a non-number boxHp rejects the save',
+  );
+  ok(
+    trySave((s) => {
+      s.box = [{ id: 1, lvl: 5 }, { id: 4, lvl: 5 }];
+      s.boxHp = [1];
+      s.boxLvl = [5, 5];
+    }) === null,
+    'boxHp/boxLvl pair with the box slot-for-slot',
+  );
+  ok(
+    trySave((s) => {
+      s.box = [{ id: 1, lvl: 'x' }];
+      s.boxHp = [1];
+      s.boxLvl = [5];
+    }) === null,
+    'a non-number box[].lvl rejects the save',
+  );
+  ok(trySave((s) => { s.tools = { roll: 'x', ban: 1 }; }) === null, 'non-number tool charges reject the save');
+  ok(trySave((s) => { s.pendingNext = TOTAL_STAGES; }) === null, 'pendingNext past the last row rejects the save');
+  ok(trySave((s) => { s.pendingNext = TOTAL_STAGES - 1; }) !== null, `the last gym row (pendingNext ${TOTAL_STAGES - 1}) still resumes`);
+  // the v3 migration writes into pk_run — a valid-JSON primitive can't take a property
+  localStorage.setItem('pk_run', '42');
+  localStorage.setItem('pk_ver', '2');
+  let threw = false;
+  try {
+    migrateSaves();
+  } catch {
+    threw = true;
+  }
+  ok(!threw && runSave() === null, 'a primitive pk_run survives the v3 migration and reads as no save');
+  localStorage.removeItem('pk_run');
+  localStorage.setItem('pk_ver', '1'); // the resting state the migration block left
 }
 
 // --- first-run coaching flag -------------------------------------------------
