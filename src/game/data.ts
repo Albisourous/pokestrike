@@ -1098,13 +1098,17 @@ export function makeStage(seed: number, name?: string): StageDef {
     nx: Math.min(0.88, Math.max(0.12, cx + (rng() - 0.5) * 0.24)),
     ny: Math.min(0.68, Math.max(0.1, cy + (rng() - 0.5) * 0.2)),
   });
+  // the designed triplet keeps its shape language but varies its size —
+  // most climbs run 3/3+elite/2+boss, some pull a heavier pack or escort
+  const midCount = rng() < 0.3 ? 4 : 3;
+  const escort = rng() < 0.3 ? 3 : 2;
   return {
     name: name ?? THEME_NAME[theme],
     theme,
     waves: [
       [opener(), opener(), opener()],
-      [add(), add(), add(), elite()],
-      [...gymPack(boss, 2, rng, slot, fodder, 0), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
+      [...Array.from({ length: midCount }, add), elite()],
+      [...gymPack(boss, escort, rng, slot, fodder, 0), { def: boss, nx: 0.5, ny: 0.45, boss: true }],
     ],
   };
 }

@@ -1174,6 +1174,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   // landlocked balls bank off the surface instead
   const b8 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
   (b8 as any).spawnWave(0);
+  (b8 as any).enemies = []; // the well's pull is what this tests — no spawn bumps the ball
   (b8 as any).hazards = [{ kind: 'well', x: 400, y: 300, r: 80 }];
   const u8 = (b8 as any).active;
   u8.def = speciesById(7); // Squirtle swims into the pull
