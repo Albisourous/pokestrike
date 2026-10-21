@@ -64,6 +64,32 @@ export const MOVE_DESC: Record<string, string> = {
   'FISSURE': 'a crack rips to the farthest grounded foe — survivors sit dazed',
   'SEISMIC TOSS': 'hurls the nearest foe skyward — the slam scales with level',
   'ENDEAVOR': "drags the nearest foe down to the caster's own HP fraction",
+  // name-only canon picks — no castSignature case, so the card wears the
+  // name while the type super does the work underneath
+  'SEED BOMB': 'a hard-shelled seed barrage bursts on the mark',
+  'FLAME WHEEL': 'a rolling wheel of fire runs the nearest foe down',
+  'BUBBLEBEAM': 'a forceful jet of bubbles sprays the target',
+  'DRAGON RAGE': 'a shockwave of pure draconic fury',
+  'FORCE PALM': 'a point-blank palm blast that can leave the mark paralyzed',
+  'AURA SPHERE': 'an unmissable orb of aura homes in on the mark',
+  'ROAR OF TIME': 'a roar that warps time around the target',
+  'SPACIAL REND': 'tears the very space around the target',
+  'MAGMA STORM': 'a vortex of magma traps the pack and keeps burning',
+  'DARK VOID': 'a pitch-black void drags every foe into sleep',
+  'SEED FLARE': 'a burst of seeds blooms into a shockwave over the pack',
+  'JUDGMENT': 'countless pellets of light rain down on the pack',
+  'V-CREATE': 'a blazing V-shaped dive — the hottest flame there is',
+  'LEAF TORNADO': 'a cyclone of razor leaves whips through the pack',
+  'RAZOR SHELL': 'a scalchop slash peels the nearest foe',
+  'NIGHT DAZE': 'a wave of darkness swallows the court',
+  'WILL-O-WISP': 'ghostly blue flames flicker onto the mark and burn',
+  'FLAME CHARGE': 'the caster charges in cloaked in flame',
+  'FIERY DANCE': 'a flaming dance scorches the nearest foe',
+  'SACRED SWORD': 'a horn slash that cuts past any defense',
+  'BLUE FLARE': 'beautiful blue flames engulf the farthest foe',
+  'BOLT STRIKE': 'a giant bolt crashes down on the mark',
+  'GLACIATE': 'a freezing wind chills the whole court',
+  'TECHNO BLAST': 'a charged techno beam fires down the lane',
 };
 
 // Move-aware super description: signature nukes override the type line.
@@ -204,6 +230,23 @@ export const MOVE_OF: Record<number, string> = {
   286: 'MACH PUNCH', 294: 'HYPER VOICE', 297: 'ARM THRUST', 310: 'SPARK',
   319: 'CRUNCH', 329: 'DRAGONBREATH', 332: 'NEEDLE ARM', 342: 'CRABHAMMER',
   354: 'SHADOW SNEAK', 356: 'SHADOW PUNCH', 362: 'ICE BEAM', 364: 'ICE BALL',
+  // late gen 2-3 bosses
+  205: 'EXPLOSION', 248: 'OUTRAGE', 254: 'FRENZY PLANT', 295: 'HYPER VOICE',
+  321: 'WATER SPOUT', 340: 'FISSURE', 365: 'SHEER COLD',
+  // gen 4-5 — names with no castSignature case only brand the card, then
+  // fall through to the type super
+  387: 'SEED BOMB', 389: 'FRENZY PLANT', 390: 'FLAME WHEEL', 392: 'BLAST BURN',
+  393: 'BUBBLEBEAM', 395: 'HYDRO CANNON', 443: 'DRAGON RAGE', 445: 'OUTRAGE',
+  447: 'FORCE PALM', 448: 'AURA SPHERE', 462: 'THUNDERBOLT', 471: 'ICE BEAM',
+  483: 'ROAR OF TIME', 484: 'SPACIAL REND', 485: 'MAGMA STORM', 491: 'DARK VOID',
+  492: 'SEED FLARE', 493: 'JUDGMENT', 494: 'V-CREATE', 495: 'LEAF TORNADO',
+  497: 'FRENZY PLANT', 500: 'BLAST BURN', 501: 'RAZOR SHELL', 503: 'HYDRO CANNON',
+  523: 'THUNDERBOLT', 553: 'CRUNCH', 555: 'FLAMETHROWER', 570: 'NIGHT DAZE',
+  571: 'NIGHT DAZE', 584: 'ICE BEAM', 596: 'THUNDERBOLT', 604: 'THUNDERBOLT',
+  607: 'WILL-O-WISP', 609: 'FLAMETHROWER', 610: 'DRAGON RAGE', 612: 'OUTRAGE',
+  614: 'ICE BEAM', 615: 'ICE BEAM', 635: 'OUTRAGE', 636: 'FLAME CHARGE',
+  637: 'FIERY DANCE', 638: 'SACRED SWORD', 639: 'SACRED SWORD', 640: 'SACRED SWORD',
+  643: 'BLUE FLARE', 644: 'BOLT STRIKE', 646: 'GLACIATE', 649: 'TECHNO BLAST',
 };
 
 export const moveOf = (id: number, type: PokeType): string => MOVE_OF[id] ?? MOVE_NAME[type];

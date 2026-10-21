@@ -33,7 +33,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 4, name: 'Charmander', type: 'fire', stats: st(39, 52, 43, 60, 50, 65), evolvesTo: 5 },
   { id: 1, name: 'Bulbasaur', type: 'grass', type2: 'poison', stats: st(45, 49, 49, 65, 65, 45), healer: true, evolvesTo: 2 },
   { id: 7, name: 'Squirtle', type: 'water', stats: st(44, 48, 65, 50, 64, 43), evolvesTo: 8 },
-  { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55), evolvesTo: [134, 135, 136] },
+  { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55), evolvesTo: [134, 135, 136, 196] },
   { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20), healer: true, evolvesTo: 40 },
   { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90), pierce: true, evolvesTo: 53 },
   { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55), evolvesTo: 55 },
@@ -820,10 +820,10 @@ const eliteAt = (rng: () => number, depth: number) => {
 // cavern, fire/rock at the volcano, flying/electric/water in the sky.
 const foe = (id: number): SpeciesDef => ENEMY_DB.find((d) => d.id === id)!;
 export const ENEMY_THEME: Record<Theme, SpeciesDef[]> = {
-  grove: [19, 16, 43, 21, 163, 46, 48, 69, 102, 216, 263, 270, 273, 276, 331, 108, 10, 13, 165, 167, 187, 193, 206, 265, 283, 313, 314, 315, 357, 511, 531, 556, 588, 597, 626, 632, 114, 455, 272].map(foe),
-  cavern: [41, 74, 92, 66, 50, 104, 56, 88, 109, 63, 198, 200, 261, 140, 231, 353, 355, 27, 29, 299, 302, 337, 338, 343, 345, 347, 517, 524, 527, 538, 539, 564, 566, 618, 201, 290, 215].map(foe),
-  volcano: [37, 58, 77, 126, 218, 74, 50, 104, 111, 228, 128, 231, 240, 322, 324, 513, 631, 449, 185, 339].map(foe),
-  sky: [16, 21, 81, 100, 170, 72, 84, 278, 333, 177, 309, 147, 98, 118, 318, 341, 86, 90, 116, 207, 222, 225, 366, 370, 515, 522, 550, 582, 594, 615, 621, 320, 368, 441].map(foe),
+  grove: [19, 16, 43, 21, 163, 46, 48, 69, 102, 216, 263, 270, 273, 276, 331, 108, 10, 13, 165, 167, 187, 193, 206, 265, 283, 313, 314, 315, 357, 511, 531, 556, 588, 597, 626, 632, 114, 455, 272, 162, 203, 204, 234, 264, 268, 269, 275, 287, 288, 291, 311, 312, 327, 352, 400, 401, 402, 412, 413, 414, 415, 416, 420, 421].map(foe),
+  cavern: [41, 74, 92, 66, 50, 104, 56, 88, 109, 63, 198, 200, 261, 140, 231, 353, 355, 27, 29, 299, 302, 337, 338, 343, 345, 347, 517, 524, 527, 538, 539, 564, 566, 618, 201, 290, 215, 97, 137, 213, 292, 296, 316, 317, 434].map(foe),
+  volcano: [37, 58, 77, 126, 218, 74, 50, 104, 111, 228, 128, 231, 240, 322, 324, 513, 631, 449, 185, 339, 24, 138, 340, 345, 347, 564, 566].map(foe),
+  sky: [16, 21, 81, 100, 170, 72, 84, 278, 333, 177, 309, 147, 98, 118, 318, 341, 86, 90, 116, 207, 222, 225, 366, 370, 515, 522, 550, 582, 594, 615, 621, 320, 368, 441, 79, 124, 211, 221, 351, 358, 422, 423, 457, 561].map(foe),
 };
 
 // A run is 9 stages; every third is a gym boss. Stages 1-3 are the seeded
@@ -1048,6 +1048,21 @@ export const ROOM_LAYOUTS: string[][] = [
     '10S0S0S01',
     '120S0S021',
     '122000221',
+    '1000P0001',
+    '111111111',
+  ],
+  // colliery — a worked-out seam: mine pairs fence the flanks and the
+  // mid-court crossing, two lone rocks break the center lane
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '1040S0401',
+    '1S00S00S1',
+    '142000241',
+    '10S000S01',
+    '104040401',
+    '1S00000S1',
+    '100000001',
     '1000P0001',
     '111111111',
   ],

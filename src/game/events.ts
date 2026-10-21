@@ -53,6 +53,15 @@ const boxCatch = (b: Battle, def: SpeciesDef, lvl: number, hpFrac: number) => {
   recordCapture([def.id]); // a mid-run tab close keeps the dex honest
 };
 
+// 2×2 ambush grid — the rng draw happens per id before the def check so a
+// missing species drops out of the wave without shifting the stream
+const gridWave = (b: Battle, ids: number[]): WaveSpawn[] =>
+  ids.flatMap((id, i) => {
+    const nx = 0.25 + (i % 2) * 0.5 + (b.roll() - 0.5) * 0.1;
+    const def = speciesById(id);
+    return def ? [{ def, nx, ny: 0.2 + Math.floor(i / 2) * 0.3 }] : [];
+  });
+
 const EVENTS: GameEvent[] = [
   {
     w: 3,
@@ -156,13 +165,15 @@ const EVENTS: GameEvent[] = [
     w: 3,
     run: (b) => {
       // dark pack ambush — Mightyena and its cronies
-      const ids = [262, 198, 353, 261];
-      const wave: WaveSpawn[] = ids.map((id, i) => ({
-        def: speciesById(id)!,
-        nx: 0.25 + (i % 2) * 0.5 + (b.roll() - 0.5) * 0.1,
-        ny: 0.2 + Math.floor(i / 2) * 0.3,
-      }));
-      return { note: 'A WILD PACK AMBUSHES YOU!', wave };
+      return { note: 'A WILD PACK AMBUSHES YOU!', wave: gridWave(b, [262, 198, 353, 261]) };
+    },
+  },
+  {
+    w: 2,
+    run: (b) => {
+      // fake item ball — the roadside ball was a mimic all along
+      // voltorb, electrode, foongus, amoonguss
+      return { note: 'IT WAS A MIMIC!', art: { item: 'master-ball' }, wave: gridWave(b, [100, 101, 590, 591]) };
     },
   },
   {
@@ -180,7 +191,7 @@ const EVENTS: GameEvent[] = [
             run: (bb) => {
               if (bb.score < 300) return { note: 'HE SCOWLED — "COME BACK RICHER."', skip: true };
               bb.score -= 300;
-              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
               if (!p) return { note: 'THE BOX WAS EMPTY. HE VANISHED.', skip: true };
               bb.grantPerk(p);
               return { note: `THE BOX HELD ${p.name.toUpperCase()}!`, skip: true };
@@ -243,11 +254,11 @@ const EVENTS: GameEvent[] = [
             label: 'CLIMB DOWN — FIGHT',
             run: (bb) => ({
               note: 'SOMETHING MOVED IN THE DARK!',
-              wave: [92, 353, 355, 198, 302].map((id, i) => ({
-                def: speciesById(id)!,
-                nx: 0.2 + (i % 3) * 0.3 + (bb.roll() - 0.5) * 0.08,
-                ny: 0.18 + Math.floor(i / 3) * 0.32,
-              })),
+              wave: [92, 353, 355, 198, 302].flatMap((id, i) => {
+                const nx = 0.2 + (i % 3) * 0.3 + (bb.roll() - 0.5) * 0.08;
+                const def = speciesById(id);
+                return def ? [{ def, nx, ny: 0.18 + Math.floor(i / 3) * 0.32 }] : [];
+              }),
             }),
           },
           {
@@ -313,7 +324,7 @@ const EVENTS: GameEvent[] = [
                 bb.score += 400;
                 return { note: 'BARS LINE UP — THE SPIN PAID DOUBLE! +400 SCORE.', skip: true };
               }
-              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
               if (!p) {
                 bb.score += 600;
                 return { note: 'THE REELS JAMMED ON 777 — +600 SCORE.', skip: true };
@@ -341,19 +352,15 @@ const EVENTS: GameEvent[] = [
             label: 'SMASH THE BOULDER',
             run: (bb) => {
               if (bb.roll() < 0.3) {
-                const ids = [74, 95, 304, 213]; // geodude, onix, aron, shuckle — it was a nest
-                const wave: WaveSpawn[] = ids.map((id, i) => ({
-                  def: speciesById(id)!,
-                  nx: 0.25 + (i % 2) * 0.5 + (bb.roll() - 0.5) * 0.1,
-                  ny: 0.2 + Math.floor(i / 2) * 0.3,
-                }));
-                return { note: 'THE ROCK FIGHTS BACK — IT WAS A NEST!', wave };
+                // geodude, onix, aron, shuckle — it was a nest
+                return { note: 'THE ROCK FIGHTS BACK — IT WAS A NEST!', wave: gridWave(bb, [74, 95, 304, 213]) };
               }
               // helix/dome/root/claw/skull/armour fossils — old amber and the
               // living fossil ride the rare pull
               const rare = bb.roll() < 0.15;
               const ids = rare ? [142, 369] : [138, 140, 345, 347, 408, 410];
-              const def = speciesById(ids[Math.floor(bb.roll() * ids.length)])!;
+              const def = speciesById(ids[Math.floor(bb.roll() * ids.length)]);
+              if (!def) return { note: 'THE FOSSIL CRUMBLED TO DUST.', skip: true };
               const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
               boxCatch(bb, def, lvl, 0.4);
               return {
@@ -516,7 +523,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
       run: (bb) => {
         // roll the goods before charging — a blind shelf shouldn't take
         // score when there's nothing in the bag
-        const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
+        const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
         if (!p) return reprompt(bb, 'SOLD OUT. THE CLERK SHRUGGED.');
         if (bb.score < price(300)) return reprompt(bb, 'NOT ENOUGH SCORE.');
         bb.score -= price(300);
@@ -541,6 +548,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
 
 export function rollEvent(b: Battle): EventOutcome {
   const pool = EVENTS.filter((e) => !e.skip?.(b));
+  if (!pool.length) return { note: 'NOTHING HAPPENS.', skip: true };
   let r = b.roll() * pool.reduce((a, e) => a + e.w, 0);
   for (const e of pool) {
     r -= e.w;

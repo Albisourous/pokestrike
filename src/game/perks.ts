@@ -454,6 +454,24 @@ export const PERKS: Perk[] = [
       b.takenMult *= 1.1;
     },
   },
+  {
+    id: 'dice', name: 'Loaded Dice', item: 'metronome',
+    desc: '+25% damage per ally hit in a chain',
+    rarity: 'rare',
+    apply: (b) => { b.comboDmg += 0.25; },
+  },
+  {
+    id: 'coat', name: 'Metal Coat', item: 'iron',
+    desc: '+30% hit damage',
+    rarity: 'rare',
+    apply: (b) => { b.physMult *= 1.3; },
+  },
+  {
+    id: 'wglass', name: 'Wise Glasses', item: 'choice-specs',
+    desc: '+30% super damage',
+    rarity: 'rare',
+    apply: (b) => { b.specMult *= 1.3; },
+  },
 
   // --- legendary: run-defining items ---
   {
