@@ -1303,6 +1303,7 @@ export function drawTitle(
   t: number,
   cont: { stage: number; score: number } | null = null,
   newArmed = false, // new-climb link's two-tap confirm is lit — red warn label
+  dailyArmed = false, // DAILY's own two-tap — warn-red face while it's lit
 ) {
   drawField(ctx);
   drawWildMons(ctx);
@@ -1509,7 +1510,9 @@ export function drawTitle(
     label: cont ? 'CONTINUE' : 'START CLIMB',
     sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : undefined,
   });
-  pill(ctx, DAILY_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY' });
+  pill(ctx, DAILY_BTN, dailyArmed
+    ? { c: '#e03c34', cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
+    : { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY' });
   // a live daily streak pins a gold pip on the corner — the tasksReady
   // red pip's family, flipped to gold for a kept-up habit
   const dStreak = streakDaily();

@@ -367,6 +367,9 @@ let titleSave: RunSave | null = null; // pk_run peek for the title's CONTINUE bu
 // a 3s confirm window (link turns red), only a second tap inside it burns the
 // parked run. -10 keeps it cold at boot (t starts at 0).
 let newConfirmT0 = -10;
+// DAILY gets the same two-tap arm while a climb is parked — its control is a
+// full pill, so the armed state redraws the face warn-red instead
+let dailyConfirmT0 = -10;
 
 function newRun(daily = false) {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
@@ -689,9 +692,18 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     if (inRect(p.x, p.y, DAILY_BTN)) {
-      // same date seed for everyone — the climb itself is the share
+      // same date seed for everyone — the climb itself is the share.
+      // Two-tap like NEW: starting drops the parked run, so a live save arms
+      // the warn pill first; with no save there's nothing to lose — go.
+      if (titleSave && t - dailyConfirmT0 >= 3) {
+        dailyConfirmT0 = t;
+        sfx('ui', 0.6); // warn pitch — nothing was dropped yet
+        return;
+      }
+      dailyConfirmT0 = -10;
       sfx('ui');
       newRun(true);
+      titleSave = null;
       startDraft();
       scene = 'draft';
       sceneMusic();
@@ -1342,7 +1354,7 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - newConfirmT0 < 3);
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - newConfirmT0 < 3, t - dailyConfirmT0 < 3);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
