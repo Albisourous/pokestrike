@@ -53,7 +53,10 @@ Each iteration, in order:
   juice pass on one screen, one event. Split anything bigger.
 - NEVER change a `pk_*` save shape without bumping `SAVE_VER` and adding
   a `migrateSaves()` step.
-- NEVER add dependencies, delete tests, or weaken smoke to go green.
+- NEVER add dependencies, delete tests, or weaken smoke to go green —
+  but DO update smoke asserts when a tuning change intentionally moves
+  a boundary (e.g. a re-arm window 2→3 means the test must assert both
+  sides of the NEW boundary, not just bump the number).
 - Keep conventions: type supers stay in the `bumpAlly` switch with
   `MOVE_NAME`/`BUMP_CD` in sync; rooms are 9×11 mirror-symmetric char
   grids; arena coords are normalized 0..1.
@@ -87,7 +90,8 @@ file pointers. Verified findings only, no speculation.
   by the iteration), HALT and log — never churn on someone else's break.
 - Smoke flake allowance: exactly one retry; note `FLAKE` in the log.
 - Commit only files the iteration changed. Never commit probe scripts,
-  screenshots, zips, or `OVERNIGHT*` files.
+  screenshots, or zips. `OVERNIGHT*` docs get their own periodic docs
+  commit so the journal travels with the repo.
 - Never touch git config, never force-push, never rewrite history.
 - `OVERNIGHT_LOG.md` is the journal: iteration #, task, builder result,
   verify result, commit hash or FAILED reason, one-line note.
