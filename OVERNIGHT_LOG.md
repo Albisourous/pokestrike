@@ -381,3 +381,82 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   your thumbs are the final judge.
 - ~10 cosmetic pause-drift fields got swept; purely cosmetic ones
   (wave-intro fade, trail stamps) deliberately left.
+
+## Iteration — spinner reskin (user request)
+- Release meter redrawn: sweeping needle + glowing orb tip + fading
+  ghost trails, ruler notches, beveled track, gold zone bracket caps
+  that pulse while lit. Charge ring: notch ticks + orb tip riding
+  the sweep. Verified live mid-pull (2 screenshots, different phases).
+
+═══ RESUMED (user directive: ability variance + replayability) ═══
+- f93b4e3 spinner reskin shipped first (was still open from chat).
+- ABILITIES scout ✓ — only 11 types; fighting SHARES rock's super,
+  ghost flat/THIN, normal whiffs>240px, flying weakest; signatures
+  cover 13/460 species (Pikachu has none); type-keyed passives and
+  signature-keyed ults are untouched axes; combo-scaled payloads +
+  weather hooks are ~30 lines total.
+- [~] B22 running: all 10 spec'd type-super upgrades + SUPER_DESC sync
+- VARIANCE scout + RUN-VARIETY scout still auditing
+- RUN-VARIETY scout ✓ — big sameness levers found: island coastline
+  is UNSEEDED (identical silhouette every run); stage.theme fixed
+  once = ~90% of species mix per run (display themes already rotate);
+  wave shape fixed [3]/[3+elite]/[2+boss]; gyms all use ROOM_BOSS;
+  lanes never jitter; DAILY is a bare seed (no mutator); rest is
+  auto-heal (no heal-vs-smith); chest always rare+ (dominant pick);
+  ASC 1/5/7/8/9 unnamed; board[0] champ could become a rival echo.
+- QUEUED after B22 (battle.ts serialization):
+  B23 variety quicks: seeded coastline, per-row biome, wave shapes,
+    gym room pull, lane jitter+cross-link
+  B24 named ASC tiers 1/5/7/8/9 (roamers/inflation/frenzy/storm/tag)
+  B25 rest → choice card (heal / train / patch+tool)
+  B26 daily modifier rule card (~6 seeded twists + HUD + share)
+  B27 daily task kind + streak trophies
+  B28 champion echo ghost
+
+## Iteration — map variety (inline, variety scout items 1+8)
+- Island coastline now seeds off mapSeed (was literal seeds 0/1 —
+  every run shared the silhouette). Lane jitter ±0.06, ~20% cross
+  links in the tree. Two climbs now visibly differ at first glance.
+
+## Iterations — map/wave variety + all-type super upgrades
+- 6e8a586 seeded coastline, lane jitter, ~20% cross-links (inline).
+- 321bcf7 designed-triplet shape variance; gravity-well test isolated.
+- ~B22 all 10 spec'd supers landed: ghost=fee per foe (feasts on
+  poison), fighting=AURA STORM jab-chain (split from rock), normal=
+  EXTREMESPEED 2-link never whiffs, poison=detonate, flying=gather→
+  scramble, electric hops scale with combo, psychic wall-slam, grass
+  roots, water rain-lane, fire sun-burn. SUPER_DESC rewritten for
+  all 10 (water's old desc was stale). Judgment: EXTREMESPEED rename
+  canon-true; CLOSE COMBAT kept; BUMP_CD untouched.
+- VARIANCE scout ✓ — 12 spec'd new perks (traitForge/dampRock/
+  winRibbon/linkCable/backupCall/nestBall/tagOut/smokeBall/luckIncense/
+  secondWind/dittoGoo/ultCell), 4 bag items, 5 affixes (warded/sky/
+  skitter/hexed/tailwind), tick candidates for ~8 flat perks.
+- QUEUED: B23b biome rotation+gym room pull (battle.ts) → B29 perks
+  batch → B30 affixes+flat-ticks → B31 signature wave → B24-28.
+- 845bcea pushed: per-wave biome rotation + furnished gyms + test update.
+- [~] B29 (a567836a): 11 type-relic perks — canon sprites (charcoal,
+  mystic-water, magnet, miracle-seed, hard-stone, poison-barb,
+  sharp-beak, spell-tag, twisted-spoon, black-belt, silk-scarf), each a
+  rider on its upgraded super — + 4 bag items + smoke asserts.
+- QUEUED: B30 rest-choice eventChoice + 5 affixes + flat-perk ticks;
+  B31 signature wave (METRONOME via castSignature refactor, FUTURE
+  SIGHT, CRUNCH, ICE BEAM, HYPER VOICE, THUNDERBOLT, FLAMETHROWER,
+  SPLASH); B32 daily modifier card; B33 champion-echo wave.
+- 6bdf5a7 pushed: B29 — 11 type relics (team-type-filtered offers,
+  renamed 'Charcoal+' style to de-collide with flat charms) + quick-claw/
+  dusk-ball/protein(dmgMult)/razor-claw bag items + 6 rider asserts.
+- [~] B30 (8dfebf94): rest = 2-option eventChoice (heal vs train-hard),
+  5 affixes (warded/sky/skitter/hexed/tailwind), 3 flat-perk tick clauses.
+- 2c67c91 pushed: B30 — rest is a required heal/train eventChoice;
+  warded(shieldN)/sky(airborne flag)/skitter(drift×1.4)/hexed(contact
+  dotTicks)/tailwind(launch×1.15, aim-sim honest) affixes; soothe/lucky/
+  expshare ticks. Judgment: warded=aegis stack not supp; sky=unit flag
+  not def mutation; rest now resolves peacefully (event semantic).
+- CUT: champion-echo wave — rivalWave already fights the fallen team.
+- [~] B31 (2ae42a6f): signature wave — METRONOME (castSignature
+  refactor + curated pool), FUTURE SIGHT (delayed telegraph nuke),
+  CRUNCH, ICE BEAM, HYPER VOICE, THUNDERBOLT (Pikachu), FLAMETHROWER,
+  SPLASH (canon dud).
+- QUEUED: B32 daily modifier card; B34 HP-based signatures (WATER
+  SPOUT scales on caster HP, FISSURE, SEISMIC TOSS, ENDEAVOR).

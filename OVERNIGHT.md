@@ -72,6 +72,9 @@ Each iteration, in order:
 5. Small systems (ascension modifiers, unlockables) — only when 1–4 are
    dry
 
+Music has its own standing brief: `MUSIC.md` — one unchecked backlog
+item per iteration, filed under 3 (feel & polish).
+
 ## Scouts (parallel, read-only `subagent_explore`)
 
 - **Stability**: crash risks, save/resume/migration edges, unseeded
