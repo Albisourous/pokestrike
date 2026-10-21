@@ -400,15 +400,19 @@ function resumeRun(s: RunSave) {
   runIsDaily = s.daily;
   runRng = mulberry32(runSeed);
   stage = makeStage(runSeed);
-  const team = s.team
-    .map((e): SpeciesDef | null => {
-      const base = speciesById(e.id);
-      return base ? { ...base, lvl: e.lvl, shiny: e.shiny || undefined } : null;
-    })
-    .filter((d): d is SpeciesDef => !!d);
-  if (!team.length) return; // a team-less save can't fight — fall through to title
-  clearRun();
-  battle = new Battle(arenaRect(), team, stage, runRng);
+  // entries keep their save row attached — applySnapshot stamps hp by index,
+  // so a bare filter would slide every later mon's hp onto the wrong slot
+  const kept = s.team
+    .map((e) => ({ e, def: speciesById(e.id) }))
+    .filter((x): x is { e: RunSave['team'][number]; def: SpeciesDef } => !!x.def);
+  clearRun(); // drop the parked climb even on the fall-through — don't resurrect it next boot
+  if (!kept.length) return; // a team-less save can't fight — fall through to title
+  battle = new Battle(
+    arenaRect(),
+    kept.map((x) => ({ ...x.def, lvl: x.e.lvl, shiny: x.e.shiny || undefined })),
+    stage,
+    runRng,
+  );
   battle.rank = rank();
   battle.asc = s.asc;
   battle.bestScore = best().score;
@@ -417,7 +421,9 @@ function resumeRun(s: RunSave) {
     ?.map((e) => ({ def: speciesById(e.id), lvl: e.lvl }))
     .filter((e): e is { def: SpeciesDef; lvl: number } => !!e.def);
   battle.echo = echo?.length ? echo : null;
-  battle.applySnapshot(s);
+  battle.applySnapshot({ ...s, team: kept.map((x) => x.e) }); // pruned rows keep hp index-aligned
+  // restored gyms were banked the first time — only new wins feed pk_gyms
+  lastGyms = battle.gymsBeaten;
   scene = 'battle';
   sceneMusic();
 }

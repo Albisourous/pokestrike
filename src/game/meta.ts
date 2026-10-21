@@ -1,4 +1,4 @@
-import { speciesById } from './data';
+import { speciesById, TOTAL_STAGES } from './data';
 
 // Run-to-run persistence: the caught-dex, gym-win count (which sets rank),
 // and the last losing team saved as the next run's rival "echo".
@@ -353,7 +353,8 @@ export function spendBag(ids: string[]): void {
 // pk_* shape changes, instead of coercing old data on every read.
 // v2: RunSave gains tools/perkBan — reader defaults cover v1 saves,
 // no data transform needed below
-const SAVE_VER = 2;
+// v3: RunSave gains eggIn/eggJustLaid — parked runs get defaults below
+const SAVE_VER = 3;
 
 export function migrateSaves() {
   const v = load<number>('pk_ver') ?? 0;
@@ -366,6 +367,16 @@ export function migrateSaves() {
     if (b.score > 0) {
       memBoard = [{ s: b.score, st: b.stage, w: false, asc: 0, team: [], when: Date.now() }];
       store('pk_board', memBoard);
+    }
+  }
+  if (v < 3) {
+    // v3: the mid-run save gained the egg timer — fill defaults on a parked
+    // climb so the stored blob matches the shape new saves write
+    const s = load<RunSave>('pk_run');
+    if (s && s.eggIn == null) {
+      s.eggIn = 0;
+      s.eggJustLaid = false;
+      store('pk_run', s);
     }
   }
   if (v !== SAVE_VER) store('pk_ver', SAVE_VER);
@@ -417,6 +428,8 @@ export interface RunSave {
   depth: number;
   pendingNext: number;
   mapNote: string;
+  eggIn?: number; // ?-pool egg: stops until it hatches (v3+)
+  eggJustLaid?: boolean; // the laying arrival doesn't consume a tick
   team: { id: number; lvl: number; shiny?: boolean; hp: number }[];
   box: { id: number; lvl?: number; shiny?: boolean; luck?: number }[];
   boxHp: number[];
@@ -450,8 +463,47 @@ export function saveRun(s: RunSave) {
 
 export function runSave(): RunSave | null {
   const s = load<RunSave>('pk_run') ?? memRun;
-  // shape-check: a stale/corrupt run save is a missing CONTINUE, not a crash
-  return s && Number.isFinite(s.seed) && Array.isArray(s.team) && s.team.length ? s : null;
+  // shape-check: a stale/corrupt run save is a missing CONTINUE, not a crash.
+  // applySnapshot spreads/maps every array verbatim and refills rolled waves
+  // up to max(pendingNext, waveIndex), so thin blobs — or a huge row counter
+  // that would loop for minutes — must read as "no save" here.
+  const row = (v: number) => Number.isInteger(v) && v >= 0 && v <= TOTAL_STAGES;
+  const ok =
+    !!s &&
+    (
+      [
+        'seed',
+        'mapSeed',
+        'asc',
+        'depth',
+        'score',
+        'perksTaken',
+        'gymsBeaten',
+        'shiniesCaught',
+        'maxCombo',
+        'maxKos',
+        'totalKos',
+        'savedAt',
+      ] as const
+    ).every((k) => Number.isFinite(s[k])) &&
+    Number.isInteger(s.mapNode) &&
+    s.mapNode >= 0 && // index into region.nodes — applySnapshot clamps the top
+    row(s.waveIndex) &&
+    row(s.pendingNext) &&
+    Array.isArray(s.team) &&
+    s.team.length > 0 &&
+    s.team.every((e) => !!e && Number.isFinite(e.id) && Number.isFinite(e.hp)) &&
+    Array.isArray(s.box) &&
+    s.box.every((e) => !!e && Number.isFinite(e.id)) &&
+    Array.isArray(s.boxHp) &&
+    Array.isArray(s.boxLvl) &&
+    Array.isArray(s.perks) &&
+    Array.isArray(s.heldItems) &&
+    (s.bag == null || Array.isArray(s.bag)) &&
+    (s.perkBan == null || Array.isArray(s.perkBan)) &&
+    (s.tools == null || typeof s.tools === 'object') &&
+    (s.eggIn == null || Number.isFinite(s.eggIn));
+  return ok ? s : null;
 }
 
 export function clearRun() {

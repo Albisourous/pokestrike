@@ -682,6 +682,8 @@ export class Battle {
       depth: this.depth,
       pendingNext: this.pendingNext,
       mapNote: this.mapNote,
+      eggIn: this.eggIn,
+      eggJustLaid: this.eggJustLaid,
       team: this.players.map((p) => ({ id: p.def.id, lvl: p.lvl, shiny: p.shiny || undefined, hp: p.hp })),
       box: this.box.map((d) => ({ id: d.id, lvl: d.lvl, shiny: d.shiny || undefined, luck: d.luck })),
       boxHp: [...this.boxHp],
@@ -730,6 +732,8 @@ export class Battle {
       this.stage.waves.push(rollWave(this.rng, r - 2, this.stage.theme, gym?.ttype));
     }
     this.mapNote = s.mapNote;
+    this.eggIn = s.eggIn ?? 0; // v2 saves predate the egg timer — no egg
+    this.eggJustLaid = s.eggJustLaid ?? false;
     this.asc = s.asc;
     this.perkIds = [...s.perks];
     for (const id of s.perks) PERKS.find((p) => p.id === id)?.apply(this);
@@ -746,14 +750,19 @@ export class Battle {
       p.hp = Math.max(0, Math.min(t.hp, p.maxHp));
       p.dead = p.hp <= 0;
     });
-    this.box = s.box
-      .map((e): SpeciesDef | null => {
+    // hp/lvl ride parallel to the box — drop each dead species WITH its
+    // pair, or one filtered slot shifts every later mon's numbers
+    const boxed = s.box
+      .map((e, i): { def: SpeciesDef; hp: number; lvl: number } | null => {
         const base = speciesById(e.id);
-        return base ? { ...base, lvl: e.lvl, shiny: e.shiny || undefined, luck: e.luck } : null;
+        return base
+          ? { def: { ...base, lvl: e.lvl, shiny: e.shiny || undefined, luck: e.luck }, hp: s.boxHp[i], lvl: s.boxLvl[i] }
+          : null;
       })
-      .filter((d): d is SpeciesDef => !!d);
-    this.boxHp = [...s.boxHp];
-    this.boxLvl = [...s.boxLvl];
+      .filter((x): x is { def: SpeciesDef; hp: number; lvl: number } => !!x);
+    this.box = boxed.map((x) => x.def);
+    this.boxHp = boxed.map((x) => x.hp);
+    this.boxLvl = boxed.map((x) => x.lvl);
     this.heldItems = [...s.heldItems];
     // v1 run saves predate offer tools — default them rather than coerce
     this.tools = { ...(s.tools ?? { roll: 1, ban: 1 }) };
