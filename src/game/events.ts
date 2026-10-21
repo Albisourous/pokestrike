@@ -395,6 +395,85 @@ const EVENTS: GameEvent[] = [
       },
     }),
   },
+  {
+    w: 1,
+    run: (b) => {
+      // golden mon: a guaranteed shiny leads a two-mon escort — shiny KOs
+      // auto-catch, so the fight itself is the rare pull
+      const def = pickWild(b.roll, b.depth);
+      const escorts: WaveSpawn[] = [
+        { def: b.roll() < 0.5 ? def : pickWild(b.roll, b.depth), nx: 0.3, ny: 0.5 },
+        { def: b.roll() < 0.5 ? def : pickWild(b.roll, b.depth), nx: 0.7, ny: 0.5 },
+      ];
+      return {
+        note: `A GOLDEN ${def.name.toUpperCase()} SPARKLES IN THE BRUSH!`,
+        wave: [...escorts, { def: { ...def, shiny: true }, nx: 0.5, ny: 0.35 }],
+      };
+    },
+  },
+  {
+    w: 2,
+    run: (b) => {
+      // swarm: one species floods the upper court — the catch-farm inverse
+      // of the alpha's single threat
+      const def = pickWild(b.roll, b.depth);
+      const n = 5 + Math.floor(b.roll() * 2);
+      const wave: WaveSpawn[] = Array.from({ length: n }, (_, i) => ({
+        def,
+        nx: 0.15 + (i % 3) * 0.35 + (b.roll() - 0.5) * 0.08,
+        ny: 0.15 + Math.floor(i / 3) * 0.3,
+      }));
+      return { note: `A SWARM OF ${def.name.toUpperCase()} DESCENDS!`, wave };
+    },
+  },
+  {
+    // luck shrine: the only feeder for teamLuck outside fusion dupes — pay
+    // score like the game corner, or bow for a free smaller blessing
+    w: 2,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'AN ELDER TENDS A MOSSY SHRINE — OFFER SCORE FOR LUCK?',
+        art: { npc: 'elder_m_down_0' },
+        options: [
+          {
+            label: 'OFFER 200 — TEAM LUCK +2',
+            cost: 200,
+            run: (bb) => {
+              if (bb.score < 200) return { note: 'THE ELDER SHOOK HIS HEAD — "LUCK FOLLOWS COIN."', skip: true };
+              bb.score -= 200;
+              for (const p of bb.players) p.def = { ...p.def, luck: Math.min(99, (p.def.luck ?? 0) + 2) };
+              return { note: 'THE SHRINE GLIMMERS — EVERYONE +2 LUCK!', skip: true };
+            },
+          },
+          {
+            label: 'BOW AND PASS — +1 LUCK',
+            run: (bb) => {
+              for (const p of bb.players) p.def = { ...p.def, luck: Math.min(99, (p.def.luck ?? 0) + 1) };
+              return { note: 'A QUIET PRAYER — EVERYONE +1 LUCK.', skip: true };
+            },
+          },
+          { label: 'WALK AWAY', run: () => ({ note: 'THE ELDER WAVED YOU ON.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    // day-care twin: the couple clones your ace straight into the box —
+    // fusion fodder or a second body for the climb
+    w: 2,
+    skip: (b) => !b.players.some((p) => !p.dead),
+    run: (b) => {
+      const ace = b.players.filter((p) => !p.dead).sort((a, z) => z.lvl - a.lvl)[0];
+      if (!ace) return { note: 'THE DAY-CARE WAS EMPTY.', skip: true };
+      boxCatch(b, ace.def, ace.lvl, 1);
+      return {
+        note: `A DAY-CARE COUPLE HANDS YOU A TWIN OF ${ace.def.name.toUpperCase()}!`,
+        art: { npc: 'mom_down_0' },
+        skip: true,
+      };
+    },
+  },
 ];
 
 // Poké Mart: the ?-choice box doubles as a shop board — every buy re-prompts

@@ -1121,10 +1121,11 @@ export class Battle {
       boss: !!s.boss,
       // ASC 6+: gym leaders walk in furious — fast attack cycle from bell one
       enraged: !!s.boss && this.asc >= 6,
-      // shinies: wild fodder rolls gold; your rival echo keeps the palette
-      // it died with — including a shiny if you lost one. Trainer mons are
-      // owned already: never shiny, never catchable.
-      shiny: !s.boss && !this.inTrainer && (this.inRival ? !!s.def.shiny : this.rng() < SHINY_RATE * this.shinyRate),
+      // shinies: wild fodder rolls gold; a scripted spawn can force the
+      // palette via def.shiny (golden-mon event), and your rival echo keeps
+      // the palette it died with — including a shiny if you lost one.
+      // Trainer mons are owned already: never shiny, never catchable.
+      shiny: !s.boss && !this.inTrainer && (!!s.def.shiny || (!this.inRival && this.rng() < SHINY_RATE * this.shinyRate)),
       dead: false,
       dotTicks: 0,
       dotDmg: 0,
