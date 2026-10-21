@@ -1298,7 +1298,12 @@ function drawActors(ctx: CanvasRenderingContext2D, t: number) {
   ctx.globalAlpha = 1;
 }
 
-export function drawTitle(ctx: CanvasRenderingContext2D, t: number, cont: { stage: number; score: number } | null = null) {
+export function drawTitle(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  cont: { stage: number; score: number } | null = null,
+  newArmed = false, // new-climb link's two-tap confirm is lit — red warn label
+) {
   drawField(ctx);
   drawWildMons(ctx);
 
@@ -1524,14 +1529,18 @@ export function drawTitle(ctx: CanvasRenderingContext2D, t: number, cont: { stag
   }
   if (cont) {
     // a parked climb still needs the escape hatch — text link under the
-    // pair; the hairline underline is the press affordance
-    const msg = `or start a new climb · saved at ${cont.score.toLocaleString('en-US')} pts`;
+    // pair; the hairline underline is the press affordance. Armed by a
+    // first tap, it turns warn-red and asks for the second that burns it.
+    const msg = newArmed
+      ? 'ABANDON THE SAVED CLIMB? TAP AGAIN'
+      : `or start a new climb · saved at ${cont.score.toLocaleString('en-US')} pts`;
+    const col = newArmed ? '#e03c34' : '#aab4dd';
     ctx.font = fontB(10);
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#aab4dd';
+    ctx.fillStyle = col;
     ctx.fillText(msg, W / 2, NEW_BTN.y + NEW_BTN.h - 2);
     const tw = ctx.measureText(msg).width;
-    ctx.strokeStyle = '#aab4dd';
+    ctx.strokeStyle = col;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(W / 2 - tw / 2, NEW_BTN.y + NEW_BTN.h);

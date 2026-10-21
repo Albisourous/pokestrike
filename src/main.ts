@@ -363,6 +363,10 @@ const draftPick = (i: number) => {
 // one run setup shared by START CLIMB, DAILY and REMATCH — ?seed=NNN
 // always wins (debug/sharing), else the daily date seed or a fresh roll
 let titleSave: RunSave | null = null; // pk_run peek for the title's CONTINUE button
+// the new-climb link is a 13px sliver 1px under CONTINUE — the first tap arms
+// a 3s confirm window (link turns red), only a second tap inside it burns the
+// parked run. -10 keeps it cold at boot (t starts at 0).
+let newConfirmT0 = -10;
 
 function newRun(daily = false) {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
@@ -647,7 +651,15 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     if (titleSave && inRect(p.x, p.y, NEW_BTN)) {
-      // start over — the parked climb is dropped for a fresh seed
+      // start over — the parked climb is dropped for a fresh seed. Two-tap
+      // confirm: a stray-low finger on CONTINUE lands in this sliver, so the
+      // first tap only arms the warn label; the second inside 3s is the deed.
+      if (t - newConfirmT0 >= 3) {
+        newConfirmT0 = t;
+        sfx('ui', 0.6); // warn pitch — nothing was dropped yet
+        return;
+      }
+      newConfirmT0 = -10;
       sfx('ui');
       newRun();
       titleSave = null;
@@ -1305,7 +1317,7 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null);
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - newConfirmT0 < 3);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
