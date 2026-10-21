@@ -1284,6 +1284,9 @@ export class Battle {
     }
     if (!this.dragging) return;
     this.dragging = false;
+    // the wave resolved while the pull was held (loot/reward/wipe) — a
+    // release off-aim dissolves the drag, never starts a shot
+    if (this.phase !== 'aim') return;
     const pull = { x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y };
     const pullLen = len(pull);
     if (pullLen < 18) {
@@ -3327,7 +3330,7 @@ export class Battle {
     // a wave's clear registers once — the aim failsafe and the kill paths
     // both reach here while the reward's still pending; ceremony and
     // gymsBeaten must never replay
-    if (this.rewardPending || this.phase === 'won') return;
+    if (this.rewardPending || this.phase === 'won' || this.phase === 'lost') return;
     if (this.coach) this.coachDone = true; // survived a wave — teaching's over
     if (this.inRival) {
       this.echoCleared = true; // the echo is beaten — reclaim it
@@ -5222,7 +5225,7 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
-    if (this.dragging) this.drawAim(ctx);
+    if (this.dragging && this.phase === 'aim') this.drawAim(ctx);
 
     ctx.restore();
 
