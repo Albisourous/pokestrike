@@ -1415,6 +1415,10 @@ export class Battle {
   update(dt0: number) {
     if (this.paused) {
       this.time += dt0; // the overlay still breathes
+      // shotT and lootChainT stamp this.time — advance them too or the
+      // pause eats the shot clock and the scoop-chain window
+      this.shotT += dt0;
+      this.lootChainT += dt0;
       return;
     }
     // scene music follows the phase: ambient on the map, the gym-leader
@@ -4505,6 +4509,10 @@ export class Battle {
       if (p === this.active && this.phase === 'aim') {
         this.dragging = false;
         this.nextTurn();
+      } else if (this.players.every((q) => q.dead) && this.phase !== 'won' && this.phase !== 'lost') {
+        // orbs/waves still fly through loot, reward and map — a last-standing
+        // kill there has no nextTurn to catch it, so the wipe lands here
+        if (!this.ashRevive()) this.wipe();
       }
     }
   }

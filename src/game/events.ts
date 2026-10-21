@@ -7,7 +7,7 @@ import { pickWild } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
 import { rollPerks } from './perks';
-import { recordCapture } from './meta';
+import { recordCapture, recordShiny } from './meta';
 
 export interface EventChoice {
   label: string;
@@ -466,7 +466,10 @@ const EVENTS: GameEvent[] = [
     run: (b) => {
       const ace = b.players.filter((p) => !p.dead).sort((a, z) => z.lvl - a.lvl)[0];
       if (!ace) return { note: 'THE DAY-CARE WAS EMPTY.', skip: true };
-      boxCatch(b, ace.def, ace.lvl, 1);
+      // the twin is the same species fresh — luck doesn't photocopy (it's
+      // fusion-earned), and a shiny lands on the ledger like any catch
+      boxCatch(b, { ...ace.def, luck: undefined }, ace.lvl, 1);
+      if (ace.def.shiny) recordShiny(ace.def.id);
       return {
         note: `A DAY-CARE COUPLE HANDS YOU A TWIN OF ${ace.def.name.toUpperCase()}!`,
         art: { npc: 'mom_down_0' },

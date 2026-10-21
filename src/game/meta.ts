@@ -488,7 +488,7 @@ export function runSave(): RunSave | null {
     ).every((k) => Number.isFinite(s[k])) &&
     Number.isInteger(s.mapNode) &&
     s.mapNode >= 0 && // index into region.nodes — applySnapshot clamps the top
-    row(s.waveIndex) &&
+    (s.waveIndex === -1 || row(s.waveIndex)) && // -1 = parked at HOME pre-row-0
     row(s.pendingNext) &&
     Array.isArray(s.team) &&
     s.team.length > 0 &&
