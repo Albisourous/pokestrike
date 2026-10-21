@@ -4,7 +4,7 @@ import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes, playJingle } fro
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
-import { Battle } from './game/battle';
+import { Battle, PAUSE_QUIT, PAUSE_SETTINGS } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
@@ -756,6 +756,25 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     return;
   } else if (scene === 'battle') {
+    // the freeze's own buttons — SETTINGS opens the modal on top, QUIT bails
+    // to the last map-point bank (the parked pk_run survives → CONTINUE).
+    // Every other tap falls through to pointerDown, which thaws the fight.
+    if (battle?.paused) {
+      if (inRect(p.x, p.y, PAUSE_SETTINGS)) {
+        sfx('ui');
+        settingsOpen = true;
+        settingsCat = 'sound';
+        return;
+      }
+      if (inRect(p.x, p.y, PAUSE_QUIT)) {
+        sfx('ui');
+        battle = null; // snapshot() won't bank mid-fight — the parked save stands
+        scene = 'title';
+        titleSave = runSave();
+        sceneMusic();
+        return;
+      }
+    }
     // mid-run reference: the ? chip shows between fights
     if (battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
       if (inRect(p.x, p.y, HELP_CHIP)) {

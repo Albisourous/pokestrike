@@ -44,7 +44,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, roundRect, button, wrap2, MAP_MENU } from './screens';
+import { font, fontB, fitFont, roundRect, button, pill, wrap2, MAP_MENU } from './screens';
 
 export interface Rect {
   x: number;
@@ -1178,8 +1178,9 @@ export class Battle {
   // pause chip lives just inside the arena's top-left corner
   private pauseChip() {
     // header band, top-left — never inside the arena, or a ball resting in
-    // that corner gets caught under the chip and can't be pulled
-    return { x: 14, y: 30, w: 30, h: 30 };
+    // that corner gets caught under the chip and can't be pulled. 40px hit
+    // floor like every other chip; the drawn circle keeps the same center.
+    return { x: 9, y: 25, w: 40, h: 40 };
   }
 
   pointerDown(p: Vec) {
@@ -5154,8 +5155,8 @@ export class Battle {
       ctx.fill();
       ctx.globalAlpha = 1;
       ctx.fillStyle = '#8890b8';
-      ctx.fillRect(c.x + 10, c.y + 8, 4, 14);
-      ctx.fillRect(c.x + 17, c.y + 8, 4, 14);
+      ctx.fillRect(c.x + c.w / 2 - 5, c.y + c.h / 2 - 7, 4, 14);
+      ctx.fillRect(c.x + c.w / 2 + 2, c.y + c.h / 2 - 7, 4, 14);
     }
 
     // boss nameplate — the gym fight reads as a real boss encounter
@@ -5308,6 +5309,10 @@ export class Battle {
       ctx.fillStyle = '#8890b8';
       ctx.fillText('tap anywhere to resume', 270, 492);
       ctx.globalAlpha = 1;
+      // the way out — same pill idiom as the other modal buttons; main.ts
+      // hit-tests both rects before the freeze's any-tap thaw
+      pill(ctx, PAUSE_SETTINGS, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SETTINGS' });
+      pill(ctx, PAUSE_QUIT, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'QUIT TO TITLE' });
     }
   }
 
@@ -6824,6 +6829,12 @@ export class Battle {
 
 // flashes are drawn in logical coords; arena is at most this wide
 const W_CANVAS_FALLBACK = 540;
+
+// the freeze frame's escape rows, centered under PAUSED — drawn by the
+// overlay, hit-tested in main.ts where the paused tap is routed (any other
+// tap still thaws). 46px tall like the MAP_MENU/TOOL row buttons.
+export const PAUSE_SETTINGS = { x: W_CANVAS_FALLBACK / 2 - 120, y: 520, w: 240, h: 46 };
+export const PAUSE_QUIT = { x: W_CANVAS_FALLBACK / 2 - 120, y: 578, w: 240, h: 46 };
 
 // each element's super gets its own sound flavor
 const SUPER_SFX: Record<PokeType, Sfx> = {
