@@ -287,6 +287,114 @@ const EVENTS: GameEvent[] = [
       },
     }),
   },
+  {
+    // the game corner: the only ? priced to lose — the wallet tag dims on a
+    // broke run, the reels bust half the time, and 777 pays a relic
+    w: 2,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A GENTLEMAN FANS A COIN CASE — THE SLOTS ARE 200 A SPIN.',
+        // FRLG canon: the GAMBLER class wears a suit and answers to GENTLEMAN
+        art: { npc: 'gentleman_down_0' },
+        options: [
+          {
+            label: 'SPIN THE REELS',
+            cost: 200,
+            run: (bb) => {
+              if (bb.score < 200) return { note: 'HE SNAPPED THE CASE SHUT — "COME BACK RICHER."', skip: true };
+              bb.score -= 200;
+              const r = bb.roll();
+              if (r < 0.5) return { note: 'NOT EVEN A CHERRY — THE HOUSE ATE 200.', skip: true };
+              if (r < 0.9) {
+                bb.score += 400;
+                return { note: 'BARS LINE UP — THE SPIN PAID DOUBLE! +400 SCORE.', skip: true };
+              }
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
+              if (!p) {
+                bb.score += 600;
+                return { note: 'THE REELS JAMMED ON 777 — +600 SCORE.', skip: true };
+              }
+              bb.grantPerk(p);
+              return { note: `777 — JACKPOT! THE MACHINE DROPPED ${p.name.toUpperCase()}!`, skip: true };
+            },
+          },
+          { label: 'WALK AWAY', run: () => ({ note: 'THE REELS SPUN ON WITHOUT YOU.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    // rock-smash gamble: canon cracked boulders hide fossils or a very
+    // angry squatter — the fight still pays wave rewards like any ambush
+    w: 2,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A HIKER SQUATS BY A CRACKED BOULDER — SMASH IT OPEN?',
+        art: { npc: 'hiker_down_0' },
+        options: [
+          {
+            label: 'SMASH THE BOULDER',
+            run: (bb) => {
+              if (bb.roll() < 0.3) {
+                const ids = [74, 95, 304, 213]; // geodude, onix, aron, shuckle — it was a nest
+                const wave: WaveSpawn[] = ids.map((id, i) => ({
+                  def: speciesById(id)!,
+                  nx: 0.25 + (i % 2) * 0.5 + (bb.roll() - 0.5) * 0.1,
+                  ny: 0.2 + Math.floor(i / 2) * 0.3,
+                }));
+                return { note: 'THE ROCK FIGHTS BACK — IT WAS A NEST!', wave };
+              }
+              // helix/dome/root/claw/skull/armour fossils — old amber and the
+              // living fossil ride the rare pull
+              const rare = bb.roll() < 0.15;
+              const ids = rare ? [142, 369] : [138, 140, 345, 347, 408, 410];
+              const def = speciesById(ids[Math.floor(bb.roll() * ids.length)])!;
+              const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
+              boxCatch(bb, def, lvl, 0.4);
+              return {
+                note: `${rare ? 'AN OLD AMBER' : 'A FOSSIL'} CRACKED OPEN — ${def.name.toUpperCase()} JOINED YOUR BOX!`,
+                art: { mon: def.id },
+                skip: true,
+              };
+            },
+          },
+          { label: 'LEAVE IT', run: () => ({ note: 'THE BOULDER KEPT ITS SECRET.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    // macho-brace drills: same sweat-for-levels trade as the shrine, but the
+    // bill lands on the ace alone — concentrated pain, spread gain
+    w: 2,
+    skip: (b) => !b.players.some((p) => !p.dead),
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A BLACK BELT BARKS: MACHO-BRACE DRILLS — THE ACE PAYS IN SWEAT.',
+        art: { npc: 'black_belt_down_0' },
+        options: [
+          {
+            label: 'TRAIN — ACE -25% HP, ALL +1 LV',
+            run: (bb) => {
+              const ace = bb.players.filter((p) => !p.dead).sort((a, z) => z.lvl - a.lvl)[0];
+              if (!ace) return { note: 'NO ONE STOOD TO TRAIN.', skip: true };
+              ace.hp = Math.max(1, ace.hp - Math.round(ace.maxHp * 0.25));
+              for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
+              return {
+                note: `${ace.def.name.toUpperCase()} LED THE DRILLS — EVERYONE +1 LEVEL!`,
+                art: { item: 'macho-brace' },
+                skip: true,
+              };
+            },
+          },
+          { label: 'PASS', run: () => ({ note: 'HE BOWED AND WENT BACK TO PRESS-UPS.', skip: true }) },
+        ],
+      },
+    }),
+  },
 ];
 
 // Poké Mart: the ?-choice box doubles as a shop board — every buy re-prompts
