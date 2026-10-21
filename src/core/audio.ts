@@ -230,8 +230,9 @@ interface JNote {
   w?: OscillatorType; // default square — the bright chiptune voice
 }
 
-type JingleKind = 'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item'
-  | 'clear' | 'fail' | 'hatch' | 'rest';
+export type JingleKind = 'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item'
+  | 'clear' | 'fail' | 'hatch' | 'rest'
+  | 'gym_forge' | 'gym_shade' | 'gym_earth' | 'gym_gale' | 'invade';
 
 const JINGLES: Record<JingleKind, JNote[]> = {
   win: [ // rising fanfare in C — five-note run, full-chord bloom on top
@@ -307,6 +308,69 @@ const JINGLES: Record<JingleKind, JNote[]> = {
     { m: 84, t: 0.42, d: 0.34, v: 0.1,  w: 'sine' },
     { m: 88, t: 0.42, d: 0.3,  v: 0.04, w: 'triangle' }, // octave shimmer
   ],
+  // --- gym type stabs (S7): one dark V-hit each, ~0.5s, fired at boss-wave
+  // spawn — they layer over the gym theme, family-colored by GYM_STAB below
+  gym_forge: [ // G7 snaps up to a blazing C — hammer hitting hot steel
+    { m: 62, t: 0,    d: 0.12, v: 0.09 },
+    { m: 65, t: 0,    d: 0.12, v: 0.09 },
+    { m: 67, t: 0,    d: 0.12, v: 0.09 },
+    { m: 71, t: 0,    d: 0.12, v: 0.09 },
+    { m: 60, t: 0.15, d: 0.4,  v: 0.1 },
+    { m: 64, t: 0.15, d: 0.4,  v: 0.1 },
+    { m: 67, t: 0.15, d: 0.4,  v: 0.1 },
+    { m: 72, t: 0.15, d: 0.4,  v: 0.11 },
+  ],
+  gym_shade: [ // G+5b5 — a dominant that refuses to resolve cleanly, low and dark
+    { m: 55, t: 0,    d: 0.14, v: 0.09, w: 'sawtooth' },
+    { m: 61, t: 0,    d: 0.14, v: 0.09, w: 'sawtooth' },
+    { m: 65, t: 0,    d: 0.14, v: 0.09, w: 'sawtooth' },
+    { m: 59, t: 0.16, d: 0.4,  v: 0.09, w: 'sawtooth' },
+    { m: 62, t: 0.16, d: 0.4,  v: 0.09, w: 'sawtooth' },
+    { m: 65, t: 0.16, d: 0.4,  v: 0.09, w: 'sawtooth' },
+    { m: 43, t: 0.16, d: 0.45, v: 0.07, w: 'sine' }, // sub G — it never lands home
+  ],
+  gym_earth: [ // a low G7 that drops onto C — bedrock weight under the hit
+    { m: 55, t: 0,    d: 0.13, v: 0.09, w: 'triangle' },
+    { m: 59, t: 0,    d: 0.13, v: 0.09, w: 'triangle' },
+    { m: 62, t: 0,    d: 0.13, v: 0.09, w: 'triangle' },
+    { m: 65, t: 0,    d: 0.13, v: 0.09, w: 'triangle' },
+    { m: 48, t: 0.15, d: 0.42, v: 0.1,  w: 'triangle' },
+    { m: 55, t: 0.15, d: 0.42, v: 0.1,  w: 'triangle' },
+    { m: 60, t: 0.15, d: 0.42, v: 0.1,  w: 'triangle' },
+    { m: 64, t: 0.15, d: 0.42, v: 0.1,  w: 'triangle' },
+    { m: 36, t: 0.15, d: 0.4,  v: 0.08, w: 'sine' }, // sub C
+  ],
+  gym_gale: [ // open-fifth G — no third — blooming into an airy C6/9
+    { m: 55, t: 0,    d: 0.12, v: 0.08 },
+    { m: 62, t: 0,    d: 0.12, v: 0.08 },
+    { m: 67, t: 0,    d: 0.12, v: 0.08 },
+    { m: 60, t: 0.16, d: 0.42, v: 0.08, w: 'triangle' },
+    { m: 64, t: 0.16, d: 0.42, v: 0.08, w: 'triangle' },
+    { m: 69, t: 0.16, d: 0.42, v: 0.08, w: 'triangle' }, // the 9th — open air
+    { m: 72, t: 0.16, d: 0.42, v: 0.09, w: 'triangle' },
+    { m: 84, t: 0.3,  d: 0.25, v: 0.04, w: 'sine' }, // altitude shimmer
+  ],
+  invade: [ // S9 legendary crash-in — chromatic run-up, then a dark E
+    // minor hit with the b5 (Bb) snarling against the root
+    { m: 45, t: 0,    d: 0.06, v: 0.1,  w: 'sawtooth' },
+    { m: 46, t: 0.07, d: 0.06, v: 0.1,  w: 'sawtooth' },
+    { m: 47, t: 0.14, d: 0.06, v: 0.1,  w: 'sawtooth' },
+    { m: 48, t: 0.21, d: 0.07, v: 0.11, w: 'sawtooth' },
+    { m: 64, t: 0.3,  d: 0.32, v: 0.11, w: 'sawtooth' },
+    { m: 70, t: 0.3,  d: 0.32, v: 0.1,  w: 'sawtooth' }, // Bb — the legendary snarl
+    { m: 67, t: 0.3,  d: 0.32, v: 0.09, w: 'sawtooth' },
+    { m: 40, t: 0.3,  d: 0.35, v: 0.11, w: 'triangle' }, // E2 slams underneath
+    { m: 28, t: 0.3,  d: 0.35, v: 0.09, w: 'sine' }, // sub E
+  ],
+};
+
+// gym leader type → stab jingle. battle.ts stays dumb — it looks the
+// leader's type string up here and plays whatever comes back.
+export const GYM_STAB: Record<string, JingleKind> = {
+  fire: 'gym_forge', electric: 'gym_forge', fighting: 'gym_forge',
+  ghost: 'gym_shade', poison: 'gym_shade', psychic: 'gym_shade',
+  rock: 'gym_earth', normal: 'gym_earth', grass: 'gym_earth',
+  flying: 'gym_gale', water: 'gym_gale',
 };
 
 export function playJingle(kind: JingleKind) {
@@ -346,7 +410,8 @@ export interface Track {
   stab?: number[][]; // synth-brass chord stabs — midi arrays per step, [] = rest
 }
 export type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win'
-  | 'battle_grove' | 'battle_cavern' | 'battle_volcano' | 'battle_sky';
+  | 'battle_grove' | 'battle_cavern' | 'battle_volcano' | 'battle_sky'
+  | 'trainer_forge';
 
 function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0, vib = 0, dest?: AudioNode) {
   if (!ac || !mGain) return;
@@ -455,6 +520,24 @@ const phr3 = (m: number) => {
   return i > 1 ? EPHR[i - 2] : m;
 };
 
+// Same trick for the biome modes — every harm voice sits a scale-third
+// under its lead, pooled to the mode so no wrong notes slip in.
+const CLYD = [60, 62, 64, 66, 67, 69, 71, 72, 74, 76, 78, 79, 81, 83, 84, 86, 88];
+const clyd3 = (m: number) => {
+  const i = CLYD.indexOf(m);
+  return i > 1 ? CLYD[i - 2] : m;
+};
+const DDOR = [50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84, 86];
+const ddor3 = (m: number) => {
+  const i = DDOR.indexOf(m);
+  return i > 1 ? DDOR[i - 2] : m;
+};
+const FLYD = [65, 67, 69, 70, 71, 72, 74, 75, 76, 77, 79, 81, 82, 83, 84, 86, 87, 88];
+const flyd3 = (m: number) => {
+  const i = FLYD.indexOf(m);
+  return i > 1 ? FLYD[i - 2] : m;
+};
+
 // Volcano A: the riff — staccato E5 hits that keep pulling on F5 (the
 // phrygian b2), then a two-bar climb that crests on D6 and falls home.
 const volcanoLeadA = [
@@ -522,6 +605,136 @@ const volcanoStabs: number[][] = (() => {
   for (const [i, c] of Object.entries(hits)) rows[+i] = c;
   return rows;
 })();
+
+// Trainer march, C major — extracted as named data so family tints can
+// transpose it wholesale (trainer_forge below) instead of re-authoring.
+const trainerLead = [
+  72, 0, 76, 0, 79, 0, 76, 0, // C E G E — call
+  77, 0, 76, 0, 74, 0, 72, 0, // fall home
+  74, 0, 77, 0, 81, 0, 77, 0, // D F A F
+  79, 0, 77, 0, 76, 0, 74, 0, // resolve down
+  72, 0, 76, 0, 79, 0, 84, 0, // leap to C6
+  83, 0, 81, 0, 79, 0, 81, 0, // B A G A
+  83, 0, 84, 0, 83, 0, 81, 0, // B C B A
+  79, 0, 0, 0, 74, 0, 76, 0, // breathe, pick back up
+  76, 76, 0, 79, 0, 81, 0, 79, // B: stabs
+  77, 77, 0, 81, 0, 83, 0, 81,
+  76, 76, 0, 79, 0, 84, 0, 83,
+  81, 0, 79, 0, 76, 0, 74, 0,
+  72, 0, 76, 0, 79, 0, 81, 0,
+  83, 0, 81, 0, 79, 0, 81, 0,
+  84, 0, 83, 0, 81, 0, 79, 0,
+  76, 0, 74, 0, 72, 0, 0, 0,
+];
+const trainerHarm = [ // hand-voiced thirds — C major, not the E-minor pool
+  67, 0, 72, 0, 76, 0, 72, 0,
+  74, 0, 72, 0, 69, 0, 67, 0,
+  71, 0, 74, 0, 76, 0, 74, 0,
+  76, 0, 74, 0, 72, 0, 71, 0,
+  67, 0, 72, 0, 76, 0, 79, 0,
+  79, 0, 77, 0, 76, 0, 77, 0,
+  79, 0, 81, 0, 79, 0, 77, 0,
+  76, 0, 0, 0, 71, 0, 72, 0,
+  72, 72, 0, 76, 0, 79, 0, 76,
+  74, 74, 0, 77, 0, 79, 0, 77,
+  72, 72, 0, 76, 0, 81, 0, 79,
+  77, 0, 76, 0, 72, 0, 71, 0,
+  69, 0, 72, 0, 76, 0, 77, 0,
+  79, 0, 77, 0, 76, 0, 77, 0,
+  81, 0, 79, 0, 77, 0, 76, 0,
+  72, 0, 71, 0, 67, 0, 0, 0,
+];
+const trainerArp = [
+  // C C F G | C Am Dm G | then C F C G twice under the stabs
+  ...rep([60, 64, 67, 72], 4), ...rep([65, 69, 72, 77], 2), ...rep([67, 71, 74, 79], 2),
+  ...rep([60, 64, 67, 72], 2), ...rep([57, 60, 64, 69], 2), ...rep([62, 65, 69, 74], 2), ...rep([67, 71, 74, 79], 2),
+  ...rep([60, 64, 67, 72], 2), ...rep([65, 69, 72, 77], 2), ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2),
+  ...rep([60, 64, 67, 72], 2), ...rep([65, 69, 72, 77], 2), ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2),
+];
+const trainerBass = [
+  ...rep([36, 48], 8), ...rep([41, 53], 4), ...rep([43, 55], 4),
+  ...rep([36, 48], 4), ...rep([33, 45], 4), ...rep([38, 50], 4), ...rep([43, 55], 4),
+  ...rep([36, 48], 4), ...rep([41, 53], 4), ...rep([36, 48], 4), ...rep([43, 55], 4),
+  ...rep([36, 48], 4), ...rep([41, 53], 4), ...rep([36, 48], 4), ...rep([43, 55], 4),
+];
+
+// Grove A: the hook — up the C triad, bounces off A5 twice, then a
+// restate that reaches C6 and winks the lydian F# on the way down.
+const groveLead = [
+  72, 0, 74, 76, 0, 79, 0, 76, // C D-E . G . E
+  81, 0, 79, 0, 76, 0, 74, 0, // A5 peak, tumble down
+  72, 0, 74, 76, 0, 79, 0, 81, // restate, reach higher
+  84, 0, 81, 0, 79, 0, 78, 0, // C6 — then F#5, the lydian wink
+  // B: answers a third up over Am, cadences early so the fill breathes
+  76, 0, 79, 0, 84, 0, 83, 0, // E . G . C6 . B5
+  81, 0, 79, 0, 76, 0, 74, 0, // A5 falls home
+  79, 0, 81, 0, 84, 0, 83, 0, // climb back over G
+  84, 0, 81, 79, 76, 0, 0, 0, // cadence early — fill + bass walk stitch
+];
+// Grove A': bird-call answers from the canopy — sparse up top, then a
+// long fall off D6 and a G-A pickup into the loop crash.
+const groveAlt = [
+  0, 0, 0, 0, 84, 0, 83, 0, // C6 B5 — the canopy answers
+  0, 0, 81, 0, 84, 0, 0, 0,
+  0, 0, 0, 0, 86, 0, 84, 0, // D6 this time — higher perch
+  0, 0, 81, 0, 79, 0, 0, 0,
+  0, 0, 0, 0, 84, 0, 83, 0, // B': the call again over Am
+  0, 0, 81, 0, 84, 0, 0, 0,
+  86, 0, 84, 0, 81, 0, 79, 0, // long fall off the peak
+  76, 0, 79, 0, 81, 0, 0, 0, // G-A pickup into the loop
+];
+
+// Cavern: one drip motif, three-note droplets thrown into the dark and
+// answered by the delay line. Rests are the texture — the cave does
+// half the talking. Low D-dorian, everything within 60–72.
+const cavernLead = [
+  62, 0, 0, 64, 0, 0, 60, 0, // D...F...C — the drip, answered by echo
+  0, 0, 0, 0, 0, 0, 0, 0,
+  65, 0, 0, 67, 0, 0, 64, 0, // up a third — same drop, deeper water
+  0, 0, 0, 0, 0, 0, 0, 0,
+  62, 0, 0, 64, 0, 0, 69, 0, // B: calls again, ends on A — open
+  0, 0, 0, 67, 0, 0, 65, 0,
+  71, 0, 0, 69, 0, 0, 67, 0, // the high drip — B A G
+  0, 0, 62, 0, 0, 0, 0, 0, // one low answer, then nothing
+];
+// Cavern A': the cave answers the drips — every call comes a step
+// late, like the echo learned the song.
+const cavernAlt = [
+  0, 0, 62, 0, 0, 64, 0, 0, // the drip a step late — echo answers
+  0, 60, 0, 0, 0, 0, 0, 0,
+  0, 0, 65, 0, 0, 67, 0, 0,
+  0, 64, 0, 0, 0, 0, 0, 0,
+  0, 0, 62, 0, 0, 64, 0, 0, // B': same game over the new bass
+  0, 69, 0, 0, 0, 0, 0, 0,
+  0, 0, 71, 0, 0, 69, 0, 0,
+  0, 67, 0, 0, 0, 0, 0, 0,
+];
+
+// Sky: a soaring F-lydian line — leap to E6, then ride the air down.
+// B naturals keep it lydian; the alt slips an Eb6 in for the mixo
+// read. High tessitura on purpose — it lives above the other tracks.
+const skyLead = [
+  77, 0, 81, 84, 0, 88, 0, 86, // F5 . A5 C6 . E6 . D6 — the leap
+  84, 0, 81, 0, 83, 0, 81, 0, // ride the wind down, B5 lydian hang
+  77, 0, 81, 84, 0, 86, 0, 88, // restate, peak on the bar line
+  88, 0, 86, 0, 84, 0, 83, 0, // the glide home
+  81, 0, 84, 0, 86, 0, 88, 0, // B: climb to E6 again
+  88, 0, 86, 0, 84, 0, 81, 0, // fall back through the clouds
+  83, 0, 84, 0, 86, 0, 83, 0, // hover on B — the lydian 4th over G
+  84, 0, 81, 77, 81, 0, 0, 0, // cadence — last steps open for the loop
+];
+const skyAlt = [
+  // A': the updraft answers — same contour a breath late, one Eb6
+  // for the mixo read, then a stairway back to the loop.
+  0, 0, 0, 0, 88, 0, 86, 0,
+  0, 0, 84, 0, 83, 0, 0, 0,
+  0, 0, 0, 0, 88, 0, 87, 0, // E6 Eb6 — the dark feather
+  0, 0, 86, 0, 84, 0, 0, 0,
+  0, 0, 0, 0, 86, 0, 84, 0, // B': lower thermals
+  0, 0, 83, 0, 84, 0, 0, 0,
+  86, 0, 84, 0, 83, 0, 84, 0, // stairway down
+  81, 0, 83, 0, 84, 0, 0, 0,
+];
 
 // Partial: TrackName lists every planned song, but unwritten names have
 // no data yet — the selector falls back to 'battle' before music() ever
@@ -625,6 +838,37 @@ export const TRACKS: Partial<Record<TrackName, Track>> = {
       + 'chhhhhhh' + 'hhhhhhhh'.repeat(7), // crash hits the B downbeat
     loop: true,
   },
+  battle_grove: {
+    // S3 pastoral bounce — C lydian (F# is the tell), triangle lead over
+    // a root-5th bouncing bass, swung just enough to skip not march.
+    // No guitar: the grove fights clean. A/A' rotation, chromatic bass
+    // walk + kick/snare pickup into the loop crash.
+    bpm: 140,
+    lead: groveLead,
+    harm: groveLead.map((n) => (n ? clyd3(n) : 0)),
+    alt: groveAlt,
+    altHarm: groveAlt.map((n) => (n ? clyd3(n) : 0)),
+    bass: [
+      // root-5-octave bounce — the pastoral oom-pah without the pah
+      ...rep([48, 0, 55, 0, 60, 0, 55, 0], 1),
+      ...rep([45, 0, 52, 0, 57, 0, 52, 0], 1),
+      ...rep([50, 0, 57, 0, 62, 0, 57, 0], 1),
+      ...rep([43, 0, 50, 0, 55, 0, 50, 0], 1),
+      ...rep([48, 0, 55, 0, 60, 0, 55, 0], 1),
+      ...rep([45, 0, 52, 0, 57, 0, 52, 0], 1),
+      ...rep([50, 0, 57, 0, 62, 0, 57, 0], 1),
+      43, 0, 50, 0, 55, 0, 47, 48, // G, then B-C walks into the crash
+    ],
+    leadWave: 'triangle',
+    swing: 0.08,
+    leadGate: 0.8, // staccato bounce — notes hop, they don't flow
+    vib: 1,
+    echo: 0.12,
+    kick: 'k...k.k.'.repeat(7) + 'k.....kk', // last beat pushes into the loop
+    snare: '..s...s.'.repeat(7) + '....s..s', // fill answers the kick pickup
+    hat: ('chhhhhhh' + 'hhhhhhhh'.repeat(3)).repeat(2), // crash per half
+    loop: true,
+  },
   battle_volcano: {
     // metal to battle's J-rock — E phrygian over a double-kick chug.
     // Distorted saw riff grinding the b2 (F), slap-flagged bass read as
@@ -663,6 +907,82 @@ export const TRACKS: Partial<Record<TrackName, Track>> = {
     snare: '..s...s.'.repeat(7) + '..s.sss.'
       + '..s...s.'.repeat(7) + '.ssssss.', // fills roll into the crashes
     hat: ('chhhhhhh' + 'hhhhhhhh'.repeat(7)).repeat(2), // crash per section head
+    loop: true,
+  },
+  battle_cavern: {
+    // S4 drips in a cave — low D-dorian sine, most of the grid is rest.
+    // The 0.3 echo IS the arrangement: three-note droplets bounce off
+    // the walls long after the oscillator stops. alt answers every
+    // call a step late, like the cave learned the song.
+    bpm: 120,
+    leadWave: 'sine',
+    bassWave: 'sine',
+    leadGate: 0.7,
+    bassGate: 0.9,
+    echo: 0.3,
+    vib: 0.6,
+    lead: cavernLead,
+    harm: cavernLead.map((n) => (n ? ddor3(n) : 0)),
+    alt: cavernAlt,
+    altHarm: cavernAlt.map((n) => (n ? ddor3(n) : 0)),
+    bass: [
+      // stalactite roots — one note per bar on the low D pedal, a G
+      // and C for color, and a soft A-Bb-C walk that pulls the loop shut
+      38, 0, 0, 0, 0, 0, 0, 0,
+      38, 0, 0, 0, 0, 0, 0, 0,
+      41, 0, 0, 0, 0, 0, 0, 0, // F
+      38, 0, 0, 0, 0, 0, 0, 0,
+      38, 0, 0, 0, 0, 0, 0, 0,
+      36, 0, 0, 0, 0, 0, 0, 0, // C
+      43, 0, 0, 0, 0, 0, 0, 0, // G
+      45, 0, 0, 0, 46, 0, 48, 0, // A .. Bb C — the walk into the crash
+    ],
+    kick: ('k.......' + '........').repeat(3) + '........' + 'k.....k.',
+      // one heartbeat per two bars; two thumps at the end push into the loop
+    snare: '........'.repeat(7) + '.....ss.', // the only fill in the song —
+      // two ticks walk you back to step 0
+    hat: 'c...h...' + '....h.h.'.repeat(7), // irregular ticks — falling water
+    loop: true,
+  },
+  battle_sky: {
+    // S5 air — high F-lydian triangle over a wide arp that sweeps the
+    // clouds two octaves up and down. The kit is all hat and snare
+    // with a light kick; weight is the one thing up here you don't need.
+    bpm: 150,
+    leadWave: 'triangle',
+    bassWave: 'triangle',
+    vib: 2,
+    echo: 0.13,
+    bassGate: 0.8,
+    lead: skyLead,
+    harm: skyLead.map((n) => (n ? flyd3(n) : 0)),
+    alt: skyAlt,
+    altHarm: skyAlt.map((n) => (n ? flyd3(n) : 0)),
+    arp: [
+      // two-octave sweeps — up the chord and straight back down
+      65, 69, 72, 77, 81, 84, 77, 72,
+      65, 69, 72, 77, 81, 84, 77, 72,
+      67, 71, 74, 79, 83, 86, 79, 74, // G — the lydian II
+      65, 69, 72, 77, 81, 84, 77, 72,
+      65, 69, 72, 77, 81, 84, 77, 72,
+      60, 64, 67, 72, 76, 79, 72, 67, // C
+      67, 71, 74, 79, 83, 86, 79, 74, // G again
+      60, 64, 67, 72, 76, 79, 72, 67, // C — lands the F on the crash
+    ],
+    bass: [
+      // light pedal-F, off the gas — one fifth-hop per bar
+      41, 0, 0, 0, 48, 0, 0, 0,
+      41, 0, 0, 0, 48, 0, 0, 0,
+      43, 0, 0, 0, 50, 0, 0, 0, // G
+      41, 0, 0, 0, 48, 0, 0, 0,
+      41, 0, 0, 0, 48, 0, 0, 0,
+      36, 0, 0, 0, 43, 0, 0, 0, // C
+      43, 0, 0, 0, 50, 0, 0, 0, // G
+      36, 0, 43, 0, 45, 46, 47, 48, // C, chromatic walk lands F on the crash
+    ],
+    kick: '..k.k...'.repeat(7) + '....k.k.', // featherweight, two taps a bar
+    snare: '....s...'.repeat(7) + '..ssss.s', // brushes on 3, fill at the seam
+    hat: 'chhhhhhh' + 'hhhhhhhh'.repeat(7), // steady 8ths — the wind section
     loop: true,
   },
   map: {
@@ -712,55 +1032,30 @@ export const TRACKS: Partial<Record<TrackName, Track>> = {
     leadWave: 'square',
     swing: 0.04,
     echo: 0.14,
-    lead: [
-      72, 0, 76, 0, 79, 0, 76, 0, // C E G E — call
-      77, 0, 76, 0, 74, 0, 72, 0, // fall home
-      74, 0, 77, 0, 81, 0, 77, 0, // D F A F
-      79, 0, 77, 0, 76, 0, 74, 0, // resolve down
-      72, 0, 76, 0, 79, 0, 84, 0, // leap to C6
-      83, 0, 81, 0, 79, 0, 81, 0, // B A G A
-      83, 0, 84, 0, 83, 0, 81, 0, // B C B A
-      79, 0, 0, 0, 74, 0, 76, 0, // breathe, pick back up
-      76, 76, 0, 79, 0, 81, 0, 79, // B: stabs
-      77, 77, 0, 81, 0, 83, 0, 81,
-      76, 76, 0, 79, 0, 84, 0, 83,
-      81, 0, 79, 0, 76, 0, 74, 0,
-      72, 0, 76, 0, 79, 0, 81, 0,
-      83, 0, 81, 0, 79, 0, 81, 0,
-      84, 0, 83, 0, 81, 0, 79, 0,
-      76, 0, 74, 0, 72, 0, 0, 0,
-    ],
-    harm: [ // hand-voiced thirds — C major, not the E-minor pool
-      67, 0, 72, 0, 76, 0, 72, 0,
-      74, 0, 72, 0, 69, 0, 67, 0,
-      71, 0, 74, 0, 76, 0, 74, 0,
-      76, 0, 74, 0, 72, 0, 71, 0,
-      67, 0, 72, 0, 76, 0, 79, 0,
-      79, 0, 77, 0, 76, 0, 77, 0,
-      79, 0, 81, 0, 79, 0, 77, 0,
-      76, 0, 0, 0, 71, 0, 72, 0,
-      72, 72, 0, 76, 0, 79, 0, 76,
-      74, 74, 0, 77, 0, 79, 0, 77,
-      72, 72, 0, 76, 0, 81, 0, 79,
-      77, 0, 76, 0, 72, 0, 71, 0,
-      69, 0, 72, 0, 76, 0, 77, 0,
-      79, 0, 77, 0, 76, 0, 77, 0,
-      81, 0, 79, 0, 77, 0, 76, 0,
-      72, 0, 71, 0, 67, 0, 0, 0,
-    ],
-    arp: [
-      // C C F G | C Am Dm G | then C F C G twice under the stabs
-      ...rep([60, 64, 67, 72], 4), ...rep([65, 69, 72, 77], 2), ...rep([67, 71, 74, 79], 2),
-      ...rep([60, 64, 67, 72], 2), ...rep([57, 60, 64, 69], 2), ...rep([62, 65, 69, 74], 2), ...rep([67, 71, 74, 79], 2),
-      ...rep([60, 64, 67, 72], 2), ...rep([65, 69, 72, 77], 2), ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2),
-      ...rep([60, 64, 67, 72], 2), ...rep([65, 69, 72, 77], 2), ...rep([60, 64, 67, 72], 2), ...rep([67, 71, 74, 79], 2),
-    ],
-    bass: [
-      ...rep([36, 48], 8), ...rep([41, 53], 4), ...rep([43, 55], 4),
-      ...rep([36, 48], 4), ...rep([33, 45], 4), ...rep([38, 50], 4), ...rep([43, 55], 4),
-      ...rep([36, 48], 4), ...rep([41, 53], 4), ...rep([36, 48], 4), ...rep([43, 55], 4),
-      ...rep([36, 48], 4), ...rep([41, 53], 4), ...rep([36, 48], 4), ...rep([43, 55], 4),
-    ],
+    lead: trainerLead,
+    harm: trainerHarm,
+    arp: trainerArp,
+    bass: trainerBass,
+    kick: 'k...k.k.'.repeat(15) + 'k.k.k.k.',
+    snare: '..s...s.'.repeat(15) + '..s..ss.',
+    hat: 'hhhhhhhh'.repeat(8) + 'h.h.h.h.'.repeat(8),
+    loop: true,
+  },
+  trainer_forge: {
+    // S6 the lazy way — the march data transposed +4 into E major and
+    // re-voiced hot: saw lead instead of square, faster, drier. Same
+    // shape as 'trainer', so every typed trainer still reads as a
+    // trainer, just fire/electric/fighting-flavored.
+    bpm: 152,
+    lead: trainerLead.map((n) => (n ? n + 4 : 0)),
+    harm: trainerHarm.map((n) => (n ? n + 4 : 0)),
+    arp: trainerArp.map((n) => (n ? n + 4 : 0)),
+    bass: trainerBass.map((n) => (n ? n + 4 : 0)),
+    leadWave: 'sawtooth',
+    bassWave: 'sawtooth',
+    swing: 0.02,
+    vib: 3,
+    echo: 0.11,
     kick: 'k...k.k.'.repeat(15) + 'k.k.k.k.',
     snare: '..s...s.'.repeat(15) + '..s..ss.',
     hat: 'hhhhhhhh'.repeat(8) + 'h.h.h.h.'.repeat(8),
@@ -853,11 +1148,23 @@ export const TRACKS: Partial<Record<TrackName, Track>> = {
   },
 };
 
-// biome → wild-battle song. Only volcano is written so far — the
-// selector (battle.ts) does `BIOME_TRACK[theme] ?? 'battle'`, so
-// unwritten biomes fall back to the generic battle theme.
+// biome → wild-battle song. The selector (battle.ts) does
+// `BIOME_TRACK[theme] ?? 'battle'` — all four biomes are written now,
+// but the fallback stays for anything new.
 export const BIOME_TRACK: Record<string, TrackName> = {
+  grove: 'battle_grove',
+  cavern: 'battle_cavern',
   volcano: 'battle_volcano',
+  sky: 'battle_sky',
+};
+
+// trainer type → song. S6 scoped down to one hand-tint: the forge
+// family (fire/electric/fighting) gets the march transposed +4 into E
+// major on a saw lead; every other type keeps 'trainer'.
+export const TRAINER_TRACK: Record<string, TrackName> = {
+  fire: 'trainer_forge',
+  electric: 'trainer_forge',
+  fighting: 'trainer_forge',
 };
 
 let curTrack: TrackName | null = null;

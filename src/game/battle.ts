@@ -1,7 +1,7 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
-import { sfx, buzz, cry, music, playJingle, BIOME_TRACK } from '../core/audio';
+import { sfx, buzz, cry, music, playJingle, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById, ASC_MODS } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
@@ -460,6 +460,7 @@ export class Battle {
   private inRival = false; // this wave is the rival echo fight
   private tagEchoDone = false; // ASC 9 TAG TEAM — the echo's one owed visit is spent
   private inTrainer = false; // this wave is a trainer squad — their mons can't be caught
+  private waveType: PokeType | null = null; // the trainer squad's mono-type — tints their march
   mapSeed = 0; // region's seed — saved so a resumed run regens the same island
   private region: RegionMap; // the climb's world map — drawn between stages
   private regionBase: HTMLCanvasElement | null = null; // baked terrain — region never changes
@@ -835,6 +836,7 @@ export class Battle {
     const elite = node?.kind === 'elite';
     const ttype = node?.kind === 'trainer' || elite ? node.ttype ?? 'normal' : null;
     this.inTrainer = ttype != null;
+    this.waveType = ttype;
     this.eliteWave = elite;
     this.inEvent = false;
     this.waveShots = 0;
@@ -884,6 +886,8 @@ export class Battle {
     this.waveSpecial = null;
     this.curMod = null; // mutators live and die with the wave they rolled on
     this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent;
+    // the family stab lands under the gym march — colored by the leader's type
+    if (this.waveHadGym) playJingle(GYM_STAB[spawns.find((s) => s.boss)?.def.type ?? 'normal'] ?? 'gym_earth');
     // gym leaders own their sky — every gym court runs weather. ASC 8
     // STORM: the sky never clears — every other wave rolls the pool too.
     if (this.waveHadGym) this.weather = WEATHER_FOR[this.theme];
@@ -909,6 +913,7 @@ export class Battle {
       spawns = [{ def: inv, nx: 0.5, ny: 0.3, boss: true }, ...spawns.slice(0, 2)];
       this.waveSpecial = `A WILD ${inv.name.toUpperCase()} APPEARED!`;
       sfx('invade');
+      playJingle('invade'); // the minor stab under the rise — a legendary just walked in
     }
     this.curSpawns = spawns; // rival/invade overrides still feed the recruit roll
     if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
@@ -1497,7 +1502,7 @@ export class Battle {
     // under trainers, the wild loop everywhere else
     if (this.phase === 'map') music('map');
     else if (this.phase !== 'won' && this.phase !== 'lost') {
-      music(this.enemies.some((e) => e.boss) || this.inRival ? 'gym' : this.inTrainer ? 'trainer' : BIOME_TRACK[this.theme] ?? 'battle');
+      music(this.enemies.some((e) => e.boss) || this.inRival ? 'gym' : this.inTrainer ? TRAINER_TRACK[this.waveType ?? ''] ?? 'trainer' : BIOME_TRACK[this.theme] ?? 'battle');
     }
     // hit-stop: freeze-frame feel on big combos
     const hit = this.hitStop > 0;

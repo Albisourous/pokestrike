@@ -78,25 +78,25 @@ Mood families for typed content (default call, adjust by ear):
 - [x] S2 Audition hook: `__dbg.song(name)` in the `?dev` block
   (main.ts:211) — `unlockAudio()` + `music(name)`, prints TrackNames on
   bad input. Builders can't hear; this is the human's taste-check tool.
-- [ ] S3 `battle_grove`: C lydian, ~140bpm, triangle lead, swing ~0.08,
+- [x] S3 `battle_grove`: C lydian, ~140bpm, triangle lead, swing ~0.08,
   no guitar — pastoral bounce.
-- [ ] S4 `battle_cavern`: D dorian, ~120bpm, sine lead low (60–72),
+- [x] S4 `battle_cavern`: D dorian, ~120bpm, sine lead low (60–72),
   echo 0.3, sparse with long rests — drips in a cave.
-- [ ] S5 `battle_sky`: F lydian/mixo, ~150bpm, high lead, wide `arp`,
+- [x] S5 `battle_sky`: F lydian/mixo, ~150bpm, high lead, wide `arp`,
   hat-driven kit, light kick — air.
-- [ ] S6 Trainer type tint: store `this.waveType = ttype` in `spawnWave`
+- [x] S6 Trainer type tint: store `this.waveType = ttype` in `spawnWave`
   (it's computed at ~line 830, currently dropped to a boolean). Add 4
   `trainer_<family>` tracks precomputed as DATA from the trainer march
   (transpose ±semitones + `leadWave`/`swing`/`echo` per family) — zero
   sequencer changes. If it still reads samey in audition, hand-write
   the forge variant.
-- [ ] S7 Gym type stab: `JINGLES` entries `gym_forge|gym_shade|gym_earth|gym_gale`
+- [x] S7 Gym type stab: `JINGLES` entries `gym_forge|gym_shade|gym_earth|gym_gale`
   (one dark V-stab each, family-colored) fired at boss-wave spawn —
   layers over the gym theme, no conflict.
 - [x] S8 Jingle batch: `clear` (stage-clear riff), `fail` (catch-fail
   wha-wha two-note drop), `hatch` (egg), `rest` (Poké Center heal motif).
   Wire at their call sites.
-- [ ] S9 `invade` sting → jingle: the legendary crash-in deserves a
+- [x] S9 `invade` sting → jingle: the legendary crash-in deserves a
   1-bar minor stab, not just the sfx rise.
 
 ## Later (only when the backlog is dry)
