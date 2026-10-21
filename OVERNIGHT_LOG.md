@@ -286,3 +286,98 @@ route to pause SETTINGS/QUIT.
 - build+smoke green. Snug check pending: echo 806 vs chip 808.
 - FOLLOWUP ✓ — echo hook moved to tagline band (was grazing armed
   NEW label + chip row); screenshot-verified both states.
+
+## Iteration — pause-drift sweep (B21)
+- Every this.time stamp now advances under pause: warp/boost/hazard
+  cooldowns, bump throttle, ricochet windows, per-shooter hit maps,
+  ult arm. Bonus catch: ultArmT lapsed mid-pause.
+- Hostile orb contact rings now #ff6b6b (bursts were already red).
+- build+smoke green. Overnight docs committed (9a6cd5e).
+
+## Iteration — cross-system fixes (R5 audit, inline)
+- HIGH: waveCleared() now guards 'lost' — a posthumous kill during
+  the lose-sting could flip a final-wave wipe to WON in stats/tasks/
+  rating/streaks, or inflate pk_gyms on any wave.
+- HIGH: pointerUp off-aim releases dissolve the drag instead of
+  forcing phase='shot' — held pull across a posthumous clear could
+  re-run ceremonies, dup pk_gyms/rewards, or un-lose via ashRevive.
+- drawAim gated to aim phase (no ghost on loot/reward screens).
+- 6 other seams verified clean (endT/rewardPending structure,
+  perkTick clauses, asc plumbing, foeZap lifecycle, waveIntroT,
+  HOME-save round-trip). Noted: perkTick tSt not serialized
+  (stingy-side drift only).
+- build+smoke green.
+- REAL PLAYTHROUGH ✓ — playwright live session: title → draft →
+  charm → map → WILD node → 3 real pointer pulls (damage, countdowns,
+  SUPER READY, ult rings all live) → wave cleared → reward board.
+  Stray drags during reward correctly ignored (no mis-picks). Pointer
+  path validated end-to-end in a real browser.
+- FOLLOWUP ✓ — map-phase stray hits now log "X TOOK A STRAY HIT — n"
+  (the map early-return hides damage texts; field log is the channel).
+
+════════════════════════════════════════════════════════════════
+MORNING SUMMARY — the night in one read
+════════════════════════════════════════════════════════════════
+29 commits pushed to origin/main overnight (baseline 9de24a6 → 3a13936).
+Every iteration verified: npm run build + npm run smoke green before
+commit. One red commit slipped through early (masked by a pipe) —
+caught next verify, root-caused, and fixed in a7b381d.
+
+STABILITY — the important stuff first
+- Determinism: pull gauge now seeds off run rng (killed the seed-777
+  flake); every remaining Math.random is cosmetic-only.
+- Save/resume hardened: strict shape validation, tuple filtering,
+  gym-credit dedup, egg persistence (SAVE_VER 3), HOME saves legal.
+- Data-loss doors closed: 2-tap confirms on new-climb + DAILY; pause
+  menu with SETTINGS/QUIT; stray-orb wipes during loot/reward/map now
+  register; posthumous-kill outcome flip (lost→won in stats!) fixed.
+- A latent softlock found + fixed: delayed-ult kills left the field
+  dead-but-aim → wave-clear failsafe + idempotent waveCleared.
+
+INPUT (mobile) — the biggest real-device wins
+- pointerId gating: a second finger can no longer hijack the sling
+  or fire the ult. Multi-touch was completely untracked before.
+- 0.25s transition input lock: no more blind charm picks or
+  un-walkable route commits from double-taps.
+- prefers-reduced-motion honored; punch zoom gated by shake.
+- Hit targets, countdown size, contrast, color+shape channels all
+  bumped to spec.
+
+FEEL — Monster Strike juice pass
+- Win/lose celebration beat (endT) — FIELD REPORT no longer slams
+  over the ceremony. WAVE CLEAR/STAGE CLEAR callouts, crit ceremony,
+  hit squash on all damage paths.
+- Sling: elastic type-colored tether, mon strains with charge, aim
+  ring shows real type-effectiveness (+weak-face star), gold-zone
+  haptic nod.
+- Enemies: ranged attacks are now telegraphed orbs; melee gets a
+  crouch windup. Wave "!" arrival beat. Typed super SFX pitch.
+- Capture ritual: ball drop → wiggles → click/burst → verdict.
+
+SYSTEMS
+- Ascension is now a DIAL on the title (pk_asc) — was auto-ramped
+  off lifetime wins with no opt-out. Default = old behavior.
+- Balance pass: weekly task calibrations (BIG LEAGUE 8000, gyms 3),
+  Dire Hit flat 5%, Focus Sash 3-stage re-arm, minefield 3 mines,
+  luck shrine 100, day-care rare weight, no aim-phase perk farming.
+- Content: +9 biome species, 3 new rooms (pool 11), 4 new ?-events,
+  3 task templates, Weakness Policy perk.
+- Meta surface: rival-echo title hook, PEAK/RANK bits, board stats
+  footer, field-log for map-phase stray hits.
+
+VERIFIED FOR REAL
+- Playwright live playthrough: title → draft → charm → map → battle →
+  real pointer pulls → wave cleared → reward board. Screenshots taken.
+- Parked-run + rival-echo title state screenshotted and spacing-fixed.
+
+KNOWN LEFTOVERS (conscious skips, not bugs)
+- perkTick timers (sash re-arm, leftovers/ether) don't serialize —
+  resume mid-window restarts them (stingy-side only).
+- Resume forks the rng stream — a resumed run is deterministic per
+  save but differs from an uninterrupted run on the same seed.
+- Flat ascension tiers (1/5/7/8/9) have no named modifier — the flat
+  HP/dmg scaling IS their modifier; naming them is future design work.
+- Real touch hardware feel — everything is verified in browser;
+  your thumbs are the final judge.
+- ~10 cosmetic pause-drift fields got swept; purely cosmetic ones
+  (wave-intro fade, trail stamps) deliberately left.
