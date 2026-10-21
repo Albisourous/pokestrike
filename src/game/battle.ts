@@ -6760,6 +6760,8 @@ export class Battle {
     const bh = 16;
     const bx = a.x + (a.w - bw) / 2;
     const by = a.y + 14;
+    const zx = bx + bw * zone.c, zw = bw * 2 * zone.hw;
+    // bezel plate + a lighter top edge — the FRLG meter bevel
     ctx.fillStyle = 'rgba(10,14,32,0.8)';
     ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
     ctx.strokeStyle = '#0a0e20';
@@ -6767,22 +6769,50 @@ export class Battle {
     ctx.strokeRect(bx - 4, by - 4, bw + 8, bh + 8);
     ctx.fillStyle = '#ffffff1c';
     ctx.fillRect(bx, by, bw, bh);
-    // gold zone = the perfect-release window the fill ping-pongs into;
-    // its spot on the bar is the mon's own (speed-keyed), lit when hit
-    ctx.fillStyle = lit ? '#ffd84d55' : '#ffd84d33';
-    ctx.fillRect(bx + bw * (zone.c - zone.hw), by, bw * 2 * zone.hw, bh);
+    ctx.fillStyle = '#ffffff14';
+    ctx.fillRect(bx, by, bw, 2);
+    // ruler notches — tenths along the track's bottom lip
+    ctx.fillStyle = '#ffffff26';
+    for (let i = 1; i < 10; i++) ctx.fillRect(bx + bw * i * 0.1, by + bh - 3, 1, 3);
+    // the gold zone — bracketed band, pulsing while the needle sits inside
+    const pulse = lit ? 0.9 + 0.1 * Math.sin(this.time * 18) : 1;
+    ctx.globalAlpha = (lit ? 0.34 : 0.2) * pulse;
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillRect(zx - zw / 2, by, zw, bh);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = lit ? '#ffd84d' : '#b89a3e';
+    // bracket caps — ⌈ ⌉ at both edges of the window
+    ctx.fillRect(zx - zw / 2, by - 3, 2, bh + 6);
+    ctx.fillRect(zx + zw / 2 - 2, by - 3, 2, bh + 6);
+    ctx.fillRect(zx - zw / 2, by - 3, 7, 2);
+    ctx.fillRect(zx - zw / 2, by + bh + 1, 7, 2);
+    ctx.fillRect(zx + zw / 2 - 7, by - 3, 7, 2);
+    ctx.fillRect(zx + zw / 2 - 7, by + bh + 1, 7, 2);
+    // the needle — a bright hand sweeping the track, trailing ghosts
+    // behind it (dir re-derived from the same phase math as charge())
+    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.14);
+    const ph = (this.dragT + this.gaugeStart * 2 * P) % (2 * P);
+    const dir = ph < P ? 1 : -1;
+    for (const [g, al] of [[0.028, 0.14], [0.014, 0.3]] as const) {
+      const gx = bx + bw * Math.min(Math.max(frac - dir * g, 0), 1);
+      ctx.globalAlpha = al;
+      ctx.fillStyle = color;
+      ctx.fillRect(gx - 1, by - 1, 3, bh + 2);
+    }
+    ctx.globalAlpha = 1;
+    const nx = bx + bw * frac;
     ctx.save();
     if (lit) {
       ctx.shadowColor = '#ffd84d';
-      ctx.shadowBlur = 14;
+      ctx.shadowBlur = 12;
     }
     ctx.fillStyle = lit ? '#ffd84d' : color;
-    ctx.fillRect(bx, by, bw * frac, bh);
+    ctx.fillRect(nx - 2, by - 2, 4, bh + 4);
+    ctx.beginPath();
+    ctx.arc(nx, by - 5, lit ? 4 : 3, 0, Math.PI * 2);
+    ctx.fillStyle = lit ? '#fff2c0' : '#ffffff';
+    ctx.fill();
     ctx.restore();
-    // gold ticks mark both edges of the max-power window
-    ctx.fillStyle = '#ffd84d';
-    ctx.fillRect(bx + bw * (zone.c - zone.hw), by - 3, 2, bh + 6);
-    ctx.fillRect(bx + bw * (zone.c + zone.hw) - 2, by - 3, 2, bh + 6);
   }
 
   private drawAim(ctx: CanvasRenderingContext2D) {
@@ -6967,15 +6997,32 @@ export class Battle {
     ctx.beginPath();
     ctx.arc(u.x, u.y, rr, a0 + Math.PI * 2 * (zone.c - zone.hw), a0 + Math.PI * 2 * (zone.c + zone.hw));
     ctx.stroke();
+    // notch ticks at the window's edges — crop marks for the release
+    ctx.strokeStyle = maxed ? '#ffd84d' : '#b89a3e';
+    ctx.lineWidth = 3;
+    for (const edge of [zone.c - zone.hw, zone.c + zone.hw]) {
+      const ea = a0 + Math.PI * 2 * edge;
+      ctx.beginPath();
+      ctx.moveTo(u.x + Math.cos(ea) * (rr - 5), u.y + Math.sin(ea) * (rr - 5));
+      ctx.lineTo(u.x + Math.cos(ea) * (rr + 5), u.y + Math.sin(ea) * (rr + 5));
+      ctx.stroke();
+    }
     ctx.save();
     if (maxed) {
       ctx.shadowColor = '#ffd84d';
       ctx.shadowBlur = 12;
     }
     ctx.strokeStyle = maxed ? '#ffd84d' : color;
+    ctx.lineWidth = 5;
     ctx.beginPath();
     ctx.arc(u.x, u.y, rr, a0, a0 + Math.PI * 2 * frac);
     ctx.stroke();
+    // the hand's tip — a bright orb riding the sweep point
+    const na = a0 + Math.PI * 2 * frac;
+    ctx.beginPath();
+    ctx.arc(u.x + Math.cos(na) * rr, u.y + Math.sin(na) * rr, maxed ? 5 : 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = maxed ? '#fff2c0' : '#ffffff';
+    ctx.fill();
     ctx.restore();
 
     // launch arrow: unit -> opposite direction, length + glow from charge
