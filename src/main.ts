@@ -549,6 +549,23 @@ function sceneMusic() {
   music('title');
 }
 
+// the ? chip's one gate, read by both the hit-test and the draw: the dealt
+// boards (draft/charm) and the between-fight lulls — wherever a choice is on
+// the table, the manual is one tap away
+const helpChipUp = () =>
+  scene === 'draft' ||
+  scene === 'charm' ||
+  (scene === 'battle' && !!battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen);
+
+// one click per real page turn — edges stay quiet so a held arrow key or a
+// trackpad flick can't machine-gun the synth
+function helpFlip(d: number) {
+  const np = Math.min(Math.max(helpPage + d, 0), HELP_PAGE_COUNT - 1);
+  if (np === helpPage) return;
+  helpPage = np;
+  sfx('ui');
+}
+
 canvas.addEventListener('pointerdown', (e) => {
   unlockAudio(); // first gesture spins up the synth
   sceneMusic();
@@ -612,6 +629,14 @@ canvas.addEventListener('pointerdown', (e) => {
       if (v && claimTask(v.id)) playJingle('task'); // the bag pays out
       return;
     }
+    return;
+  }
+  // the ? chip rides the dealt boards too — checked ahead of the scenes so a
+  // tap can't fall through to a fast-forward or a card pick
+  if (helpChipUp() && inRect(p.x, p.y, HELP_CHIP)) {
+    sfx('ui');
+    helpOpen = true;
+    helpPage = 0;
     return;
   }
   if (scene === 'title') {
@@ -787,14 +812,9 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
-    // mid-run reference: the ? chip shows between fights
+    // mid-run chips — the ? half of this gate moved up to helpChipUp() so the
+    // dealt boards share it; the mute chip stays a between-fights control
     if (battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
-      if (inRect(p.x, p.y, HELP_CHIP)) {
-        sfx('ui');
-        helpOpen = true;
-        helpPage = 0;
-        return;
-      }
       if (inRect(p.x, p.y, MUTE_CHIP)) {
         toggleMute();
         sfx('ui');
@@ -956,13 +976,16 @@ canvas.addEventListener('pointerup', (e) => {
     const p = toLogical(e);
     if (moved) {
       // horizontal swipe flips pages; vertical wiggle does nothing
-      if (p.x - x0 < -30) helpPage = Math.min(helpPage + 1, HELP_PAGE_COUNT - 1);
-      else if (p.x - x0 > 30) helpPage = Math.max(helpPage - 1, 0);
+      if (p.x - x0 < -30) helpFlip(1);
+      else if (p.x - x0 > 30) helpFlip(-1);
       return;
     }
-    if (inRect(p.x, p.y, HELP_CLOSE) || !inRect(p.x, p.y, HELP_PANEL)) helpOpen = false;
-    else if (inRect(p.x, p.y, HELP_NEXT)) helpPage = Math.min(helpPage + 1, HELP_PAGE_COUNT - 1);
-    else if (inRect(p.x, p.y, HELP_PREV)) helpPage = Math.max(helpPage - 1, 0);
+    // CLOSE or an outside tap dismisses — a click like every sibling modal
+    if (inRect(p.x, p.y, HELP_CLOSE) || !inRect(p.x, p.y, HELP_PANEL)) {
+      helpOpen = false;
+      sfx('ui');
+    } else if (inRect(p.x, p.y, HELP_NEXT)) helpFlip(1);
+    else if (inRect(p.x, p.y, HELP_PREV)) helpFlip(-1);
     return;
   }
   if (dexDrag) {
@@ -1003,9 +1026,11 @@ canvas.addEventListener('pointerup', (e) => {
 addEventListener('keydown', (e) => {
   unlockAudio();
   if (helpOpen) {
-    if (e.key === 'Escape' || e.key === '?') helpOpen = false;
-    else if (e.key === 'ArrowRight') helpPage = Math.min(helpPage + 1, HELP_PAGE_COUNT - 1);
-    else if (e.key === 'ArrowLeft') helpPage = Math.max(0, helpPage - 1);
+    if (e.key === 'Escape' || e.key === '?') {
+      helpOpen = false;
+      sfx('ui');
+    } else if (e.key === 'ArrowRight') helpFlip(1);
+    else if (e.key === 'ArrowLeft') helpFlip(-1);
     return;
   }
   if (tasksOpen) {
@@ -1102,7 +1127,7 @@ canvas.addEventListener(
   (e) => {
     if (helpOpen) {
       e.preventDefault();
-      helpPage = Math.min(Math.max(helpPage + (e.deltaY + e.deltaX > 0 ? 1 : -1), 0), HELP_PAGE_COUNT - 1);
+      helpFlip(e.deltaY + e.deltaX > 0 ? 1 : -1);
       return;
     }
     if (scene === 'title' && dexOpen) {
@@ -1431,9 +1456,10 @@ function render() {
       if (result) drawResult(ctx, result, resultExtra, share, t);
       break;
   }
-  // the ?/mute chips ride between fights; the pager floats over any scene
+  // the ? chip reads the same gate as the hit-test — dealt boards included;
+  // the mute chip stays between-fights; the pager floats over any scene
+  if (helpChipUp()) drawHelpChip(ctx);
   if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
-    drawHelpChip(ctx);
     drawMuteChip(ctx);
   }
   if (helpOpen) drawHelp(ctx, helpPage);

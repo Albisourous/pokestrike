@@ -1986,7 +1986,8 @@ const HELP_SECTIONS: HelpSection[] = [
         `not a per-mon super — one shared meter · every shot banks a pip, ${ULT_SHOTS} pips arm it`,
         'when the gauge floods gold, TAP any glowing mon — its type picks the nuke',
         'all foes take the hit · bosses shrug off most of it · charge resets each fight',
-        'on keys: ? help · P pause · M mute · arrows turn pages',
+        // key affordances hide on touch — same (pointer: fine) gate as the [1]/[R] hints
+        ...(HAS_KEYS ? ['on keys: ? help · P pause · M mute · arrows turn pages'] : []),
       ];
     },
     demo: demoCharge,
@@ -2012,9 +2013,10 @@ export const HELP_PAGE_COUNT = HELP_PAGES.length;
 export const HELP_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const HELP_HEAD = 64; // title band inside the panel
 const HELP_FOOT = 44; // nav band
-export const HELP_PREV = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 38 };
-export const HELP_NEXT = { x: HELP_PANEL.x + HELP_PANEL.w - 62, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 38 };
-export const HELP_CLOSE = { x: HELP_PANEL.x + HELP_PANEL.w - 48, y: HELP_PANEL.y + 12, w: 38, h: 38 };
+// 40px touch floor — the same size as the corner chips these sit beside
+export const HELP_PREV = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 40 };
+export const HELP_NEXT = { x: HELP_PANEL.x + HELP_PANEL.w - 62, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 40 };
+export const HELP_CLOSE = { x: HELP_PANEL.x + HELP_PANEL.w - 48, y: HELP_PANEL.y + 12, w: 40, h: 40 };
 
 export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
   const r = HELP_PANEL;
