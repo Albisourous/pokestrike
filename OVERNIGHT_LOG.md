@@ -460,3 +460,29 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   SPLASH (canon dud).
 - QUEUED: B32 daily modifier card; B34 HP-based signatures (WATER
   SPOUT scales on caster HP, FISSURE, SEISMIC TOSS, ENDEAVOR).
+- 4d5f920 pushed: B34 — 4 HP-aware signatures (WATER SPOUT scales on
+  caster HP, FISSURE OHKOs grounded prey only, SEISMIC TOSS ~1.2%/lv
+  fixed damage, ENDEAVOR drags to caster fraction). Fix in-flight:
+  flyers assert held refs not indices (KO compacts enemies[]).
+- 4ec0db8 pushed: B31 — 8 signatures (metronome refactor, future sight
+  telegraph, thunderbolt on Pikachu, canon-dud splash). 4 stale smoke
+  tests repointed off newly-signature species.
+- 4d5f920 pushed: B34 + M0 — 4 HP-aware signatures (WATER SPOUT hp-scaled,
+  FISSURE grounded-only OHKO+daze, SEISMIC TOSS lvl-scaled fixed dmg,
+  ENDEAVOR fraction pull, Math.max(1) no-KO floor) + S0 songbook
+  validator (caught+fixed 4 empty drum strings). B34 committed directly
+  despite spec — author/message correct, work verified, kept.
+- QUEUED: B32 daily modifier card; M1 biome selector + battle_volcano
+  (S1); then S2 audition hook so taste-checks are possible.
+- ef5be6c pushed: B32+B24+B27+S1/S2/S8 merge — 6 seeded daily rule
+  cards (GOLD FEVER/HEARTY/BIG SPENDER/ROUGH ROAD/STORM CHASER/GLASS
+  CANNON, seed-derived so resume keeps its card, title card + share
+  line); ASC_MODS names all 9 tiers, new effects ROAMERS(2×invades)/
+  INFLATION(+30%/tier)/FRENZY(drift×1.25)/STORM(weather every wave)/
+  TAG TEAM(owed echo); COMMUTER w-dailies task kind; VICTORY STAR +
+  WEEK SIBLING streak trophies; battle_volcano (E phrygian 170bpm
+  guitar+slap) + BIOME_TRACK selector; clear/fail/hatch/rest jingles
+  wired; __dbg.song audition hook. Fix: revert double-apply modId door
+  (seed derivation covers resume).
+- QUEUED: S3 battle_grove, S4 battle_cavern, S5 battle_sky, S6 trainer
+  tint, S7 gym stab, S9 invade sting; scout refill for game backlog.
