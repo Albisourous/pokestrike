@@ -7,7 +7,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, typeMult, type PokeType } from './types';
 import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
 import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED, ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, board, settings, setSetting, bagStock, streakDaily, streakWins, type Settings } from './meta';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, type Settings } from './meta';
 import { taskViews, tasksReady, taskResetsIn } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -88,6 +88,9 @@ export const FREE_BTN = { x: W / 2 - 200, y: 704, w: 195, h: 68 };
 export const DAILY_BTN = { x: W / 2 + 5, y: 704, w: 195, h: 68 };
 // only visible while a saved run waits — slips between the big buttons and the DEX row
 export const NEW_BTN = { x: W / 2 - 80, y: FREE_BTN.y + FREE_BTN.h + 1, w: 160, h: 13 };
+// the ascension dial — parked in the dead band under the ladder readout;
+// a tap cycles the heat 0..wins, hit-tested ahead of the start pill
+export const ASC_BTN = { x: W / 2 - 70, y: 912, w: 140, h: 30 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -1551,6 +1554,15 @@ export function drawTitle(
     ctx.stroke();
   }
 
+  // a fallen team haunts the next climb — one spectral line in the band
+  // under the start pill (it stacks under the new-climb link when a run parks)
+  if (echoIds()?.length) {
+    ctx.font = fontB(7);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = TYPE_COLOR.ghost;
+    ctx.fillText('A RIVAL TEAM HAUNTS THE CLIMB', W / 2, FREE_BTN.y + FREE_BTN.h + 23);
+  }
+
   // ? badge, top corner — the how-to-play overlay
   ctx.fillStyle = '#12152b';
   ctx.fillRect(HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
@@ -1605,7 +1617,8 @@ export function drawTitle(
   // the records line is the one-more-run hook — ranked ladder, best score
   const b = best();
   const ld = tier();
-  const bits = [`RANK ${ld.name}`, `BEST ${b.score.toLocaleString('en-US')}`];
+  const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
+  if (b.stage) bits.push(`PEAK ${b.stage}`);
   if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
   const wStreak = streakWins();
   if (wStreak > 1) bits.push(`STREAK ${wStreak}`);
@@ -1624,10 +1637,23 @@ export function drawTitle(
   ctx.font = fontB(7);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
-    ld.next ? `${rating()} PTS — ${Math.round(ld.prog * 100)}% TO ${ld.next.name}` : `${rating()} PTS — TOP OF THE LADDER`,
+    ld.next
+      ? `${rating()} PTS ${ld.name} — ${Math.round(ld.prog * 100)}% TO ${ld.next.name}`
+      : `${rating()} PTS ${ld.name} — TOP OF THE LADDER`,
     W / 2,
     ry + 19,
   );
+  // the heat dial: gold while a pick is on, parchment at zero, grayed until
+  // a first clear lifts the cap off the floor — a tap cycles 0..cap
+  const ascCap = Math.min(b.wins, 9);
+  const pick = ascPick();
+  pill(ctx, ASC_BTN, {
+    c: pick > 0 ? '#ffd84d' : '#e8ecf8',
+    cd: pick > 0 ? '#c8a44d' : '#aab0c8',
+    tc: '#2a2440',
+    label: `ASC ${pick}`,
+    disabled: ascCap === 0,
+  });
 
   // build tag — bug reports should name their build
   ctx.font = fontB(7);
@@ -2222,8 +2248,15 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
   });
   ctx.restore();
 
+  // the lifetime ledger under the plaques — same muted small print
+  const bb = best();
   ctx.font = fontB(8);
   ctx.fillStyle = '#8890b8';
+  ctx.fillText(
+    `BEST ${bb.score.toLocaleString('en-US')} · PEAK ${bb.stage} · RUNS ${bb.runs} · WINS ${bb.wins}`,
+    r.x + r.w / 2,
+    r.y + r.h - 28,
+  );
   ctx.fillText('tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 

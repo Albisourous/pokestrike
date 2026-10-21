@@ -9,7 +9,7 @@ import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, ascPick, setAsc, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -31,6 +31,7 @@ import {
   FREE_BTN,
   NEW_BTN,
   DAILY_BTN,
+  ASC_BTN,
   HELP_BTN,
   HELP_CHIP,
   GEAR_BTN,
@@ -137,7 +138,7 @@ let stage = makeStage(randSeed());
 // draw from it, so every run reproduces from its seed (shares carry it)
 let runSeed = 0;
 let runIsDaily = false; // a shared-date climb — the share card says so
-let runRng: () => number = Math.random;
+let runRng: () => number = mulberry32(runSeed);
 let helpOpen = false;
 let menuOpen = false; // overworld TEAM · ITEMS panel
 let settingsOpen = false;
@@ -337,7 +338,7 @@ const draftPick = (i: number) => {
   menuOpen = false;
   battle.coach = !coachDone(); // first-ever run teaches by doing
   battle.rank = rank();
-  battle.asc = Math.min(best().wins, 9); // every clear raises the heat
+  battle.asc = Math.min(ascPick(), best().wins, 9); // the title's heat dial, capped by clears
   battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
   battle.shinyRate = shinyCharm() ? 2 : 1; // dex milestone doubles the gold
   // the last losing team returns as a rival wave — battle eats it
@@ -701,6 +702,15 @@ canvas.addEventListener('pointerdown', (e) => {
       startDraft();
       scene = 'draft';
       sceneMusic();
+      return;
+    }
+    if (inRect(p.x, p.y, ASC_BTN)) {
+      // the heat dial — a tap cycles the pick 0..cap; grayed at zero wins
+      const cap = Math.min(best().wins, 9);
+      if (cap > 0) {
+        setAsc((ascPick() + 1) % (cap + 1));
+        sfx('ui');
+      }
       return;
     }
     if (inRect(p.x, p.y, FREE_BTN)) {

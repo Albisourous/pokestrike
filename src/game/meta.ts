@@ -222,6 +222,23 @@ export function recordRun(score: number, stage: number, won: boolean) {
   return newBest;
 }
 
+// --- ascension pick: the player's chosen heat, capped by wins --------------
+// Plain unversioned pk_asc blob (like pk_bag/pk_streak — a standalone key,
+// no SAVE_VER step). Absent = ride the cap, which is the old auto-ramp:
+// every clear raised the heat whether you asked or not.
+let memAsc: number | null = null;
+
+export function ascPick(): number {
+  const raw = load<unknown>('pk_asc');
+  const stored = typeof raw === 'number' && Number.isFinite(raw) ? raw : memAsc;
+  return Math.min(stored ?? best().wins, best().wins, 9);
+}
+
+export function setAsc(n: number): void {
+  memAsc = Math.min(Math.max(Math.round(n), 0), Math.min(best().wins, 9));
+  store('pk_asc', memAsc);
+}
+
 // --- the badge case: one canon badge per gym leader ----------------------
 // Each badge is themed to its leader's typing; together they're the climb's
 // real trophy — a full case means LEAGUE CHAMPION. Declared above the
