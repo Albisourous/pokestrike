@@ -581,3 +581,19 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   their live bought total (NOW …) + battle field-log announces LAB
   bonuses; smoke now proves all 9 lab upgrades change battle state;
   lab section heads fitFont'd (TRAINING title clipped).
+- 9af8955→ec88809 pushed: tutorial arc — drawCoach gained READY-super,
+  ball-drop and pickup beats; help deck gained a ▶ TUTORIAL pill
+  (top-left) that re-arms the kinetic coach mid-battle or for the next
+  run via meta resetCoach(); first-boot deck now greets "your first
+  fight teaches the pull" so it reads as onboarding, not a manual.
+- 88f58ac→30eedc3 pushed (design-doc + 3 parallel agents, all gated):
+  CR-style home tabs — floating MONS/CLIMB/TOWN nav bar (y856–932, ~28px
+  clear of the iOS swipe zone), notification dots (gold free-pull on
+  MONS, red task count on TOWN), per-tab hit gating in main.ts, new
+  dexRecent() helper + smoke pins. CLIMB keeps the play surface;
+  MONS = hatcher hero card + dex card + LATEST CATCHES; TOWN = LAB/
+  TASKS/TROPHIES/TOP RUNS cards + wide ASCENSION dial. Follow-ups:
+  MONS card dressing (type pedestal + watermark + twinkles on the
+  featured pull, ball icon + % on dex, type pads on catches), TOWN band
+  icons, bodies rebalanced off the dead top space; the asc "flame"
+  glyph shipped then reverted — it read as a smudge at pill scale.
