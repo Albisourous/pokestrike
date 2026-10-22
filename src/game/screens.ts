@@ -2646,7 +2646,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   for (const hd of heads) {
     const hy = LAB_VIEW.y + hd.y - scroll;
     ctx.textAlign = 'left';
-    ctx.font = font(9);
+    fitFont(ctx, hd.text, 9, LAB_VIEW.w - 8);
     ctx.fillStyle = '#8890b8';
     ctx.fillText(hd.text, LAB_VIEW.x + 4, hy + 14);
     ctx.strokeStyle = 'rgba(90,98,136,0.35)';
