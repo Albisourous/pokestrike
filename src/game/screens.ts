@@ -88,11 +88,13 @@ export function bagRowItems(): BagItem[] {
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
-export const FREE_BTN = { x: W / 2 - 205, y: 704, w: 148, h: 68 };
-export const DAILY_BTN = { x: FREE_BTN.x + FREE_BTN.w + 8, y: 704, w: 150, h: 68 };
+// the hero row anchors the whole bottom stack — kept high so the records
+// line, ladder and footer links clear the iOS home-swipe zone
+export const FREE_BTN = { x: W / 2 - 205, y: 676, w: 148, h: 68 };
+export const DAILY_BTN = { x: FREE_BTN.x + FREE_BTN.w + 8, y: FREE_BTN.y, w: 150, h: 68 };
 // the daily chroma raid squeezes beside DAILY — the hero row's third pill
 // ends at W-27, flush with the menu chips' right edge below
-export const RAID_BTN = { x: DAILY_BTN.x + DAILY_BTN.w + 8, y: 704, w: W - 27 - (DAILY_BTN.x + DAILY_BTN.w + 8), h: 68 };
+export const RAID_BTN = { x: DAILY_BTN.x + DAILY_BTN.w + 8, y: FREE_BTN.y, w: W - 27 - (DAILY_BTN.x + DAILY_BTN.w + 8), h: 68 };
 // only visible while a saved run waits — slips between the big buttons and the DEX row
 export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260, h: 24 };
 // the drawn link stays a 24px sliver guarding CONTINUE; the live target is
@@ -100,10 +102,10 @@ export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260,
 // DAILY/RAID's bottom edge (NEW_HIT is hit-tested first and ate their taps)
 export const NEW_HIT = { x: NEW_BTN.x, y: DAILY_BTN.y + DAILY_BTN.h + 1, w: NEW_BTN.w, h: 34 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
-// beta lifeline — a quiet link bottom-left; the drawn text is small, the
-// tap target gets the standard slop
-export const BUG_BTN = { x: 10, y: H - 26, w: 96, h: 18 };
-export const BUG_HIT = { x: 0, y: H - 48, w: 130, h: 48 };
+// beta lifeline — a quiet link bottom-left, riding the ladder label's
+// baseline so the bottom edge stays clear for the iOS home swipe
+export const BUG_BTN = { x: 10, y: H - 66, w: 96, h: 18 };
+export const BUG_HIT = { x: 0, y: H - 76, w: 130, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
 export const HELP_CHIP = { x: W - 58, y: 54, w: 40, h: 40 };
@@ -1095,7 +1097,7 @@ export function drawTitle(
   ctx.textAlign = 'center';
   // the ladder: a fill bar toward the next tier, tinted to the current one.
   // Label above the bar — under it, the baseline sat 2px off the canvas edge
-  const rw = 220, rx = W / 2 - rw / 2, ry = HATCH_BTN.y + HATCH_BTN.h + 31;
+  const rw = 220, rx = W / 2 - rw / 2, ry = HATCH_BTN.y + HATCH_BTN.h + 27;
   ctx.font = fontB(7);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
@@ -1170,7 +1172,7 @@ export function drawTitle(
   ctx.font = fontB(7);
   ctx.textAlign = 'right';
   ctx.fillStyle = '#ffffff30';
-  ctx.fillText(__BUILD__, W - 10, H - 8);
+  ctx.fillText(__BUILD__, W - 10, BUG_BTN.y + BUG_BTN.h - 4);
   // the report link rides the opposite corner — a tester never hunts for it
   ctx.textAlign = 'left';
   ctx.fillStyle = '#8890b8';
