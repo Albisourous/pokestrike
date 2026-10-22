@@ -851,6 +851,42 @@ export function dustCost(d: SpeciesDef): number {
   return 80 * (tierOf(d) + 1);
 }
 
+// Evolution lines for the collection chase: a line is a root + every
+// descendant (branches count together — the EEVEE line is one set).
+// Roots are pullable species nothing else evolves into; one-member
+// "lines" are skipped — a set needs at least an evolution to chase.
+export interface EvoLine {
+  root: number;
+  ids: number[];
+}
+export const EVO_LINES: EvoLine[] = (() => {
+  const froms = new Set<number>();
+  for (const d of PULLABLE) {
+    const to = d.evolvesTo;
+    (Array.isArray(to) ? to : [to]).forEach((id) => id != null && froms.add(id));
+  }
+  const seen = new Set<number>();
+  const lines: EvoLine[] = [];
+  for (const d of PULLABLE) {
+    if (!d.evolvesTo || froms.has(d.id) || seen.has(d.id)) continue;
+    const ids: number[] = [];
+    const walk = (id: number) => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      ids.push(id);
+      const to = speciesById(id)?.evolvesTo;
+      (Array.isArray(to) ? to : [to]).forEach((e) => e != null && walk(e));
+    };
+    walk(d.id);
+    if (ids.length > 1) lines.push({ root: d.id, ids });
+  }
+  return lines;
+})();
+
+// a completed line pays a one-time star bounty scaled to its length —
+// a 3-mon line is worth a pull
+export const setPay = (line: EvoLine): number => 10 * line.ids.length;
+
 // depth 0 (seeded stages 1-3) → tier ≤1; rolled depth 1-2 → ≤2; deeper → all
 const tierCap = (depth: number) => (depth <= 0 ? 1 : depth < 3 ? 2 : 3);
 const capped = (src: SpeciesDef[], depth: number) => {

@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@font-face { font-family: ps2p; src: url(public/fonts/PressStart2P-Regular.ttf); }
+@font-face { font-family: rc; src: url(public/fonts/RobotoCondensed.ttf); }
+* { margin: 0; box-sizing: border-box; }
+body { background: #05070f; font-family: rc, monospace; display: flex; gap: 28px; padding: 28px; align-items: flex-start; }
+.col { width: 340px; flex: none; }
+h2 { font: 11px ps2p; color: #888; margin-bottom: 12px; text-align: center; }
+.frame { overflow: hidden; position: relative; }
+/* shared fragment parts */
+.part { margin-bottom: 12px; }
+.lbl { font-size: 11px; opacity: .55; text-align: center; margin: 4px 0 14px; letter-spacing: .5px; }
+img { image-rendering: pixelated; }
+.mons { display: flex; justify-content: space-around; align-items: flex-end; padding: 14px 10px 8px; }
+.mons img { width: 56px; height: 56px; }
+.mons .nm { font-size: 10px; text-align: center; margin-top: 4px; }
+.btns { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.tabs { display: flex; }
+.tab { flex: 1; text-align: center; padding: 10px 0 8px; font-size: 10px; }
+.tab img { width: 22px; height: 22px; display: block; margin: 0 auto 4px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; padding: 5px 12px; }
+.chip img { width: 16px; height: 16px; }
+
+/* ============ A — GBA authentic ============ */
+.a .frame { background: linear-gradient(#7ec850, #4e9838); padding: 14px; }
+.a h2 { color: #9df0ff; }
+.a .card { background: #f8f8f0; border: 3px solid #283058; border-radius: 8px; box-shadow: 0 3px 0 #28305880; color: #283058; }
+.a .card .hd { font: 9px ps2p; text-align: center; padding: 7px; border-bottom: 2px solid #d0d0c0; color: #283058; letter-spacing: 1px; }
+.a .mons .nm { color: #586070; font-weight: 700; }
+.a .btn { font: 9px ps2p; border: 3px solid #283058; border-radius: 8px; padding: 11px 18px; box-shadow: 0 3px 0 #28305880; cursor: default; }
+.a .btn.pri { background: #ffd848; color: #283058; }
+.a .btn.sec { background: #e8e8e0; color: #586070; }
+.a .chip { background: #283058; color: #f8f8f0; border-radius: 12px; border: 2px solid #f8f8f0; }
+.a .tabs { background: #283058; border: 3px solid #283058; border-radius: 10px; overflow: hidden; }
+.a .tab { background: #283058; color: #8890b8; }
+.a .tab.on { background: #f8f8f0; color: #283058; border-radius: 6px; font-weight: 700; }
+
+/* ============ B — arcade hard-edge ============ */
+.b .frame { background: #101020; padding: 14px; border: 4px solid #000; }
+.b .card { background: #f8f8f8; border: 4px solid #000; box-shadow: 6px 6px 0 #000; color: #000; }
+.b .card .hd { font: 10px ps2p; background: #e04030; color: #fff; text-align: center; padding: 8px; border-bottom: 4px solid #000; letter-spacing: 1px; }
+.b .mons .nm { color: #333; font-weight: 700; }
+.b .btn { font: 9px ps2p; border: 4px solid #000; padding: 12px 18px; box-shadow: 5px 5px 0 #000; cursor: default; }
+.b .btn.pri { background: #ffd820; color: #000; }
+.b .btn.sec { background: #4048c8; color: #fff; }
+.b .chip { background: #000; color: #ffd820; border: 3px solid #ffd820; }
+.b .tabs { background: #000; border: 4px solid #000; gap: 4px; padding: 4px; }
+.b .tab { background: #202038; color: #6870a0; border: 3px solid #000; }
+.b .tab.on { background: #ffd820; color: #000; font-weight: 700; }
+
+/* ============ C — chroma dark ============ */
+.c .frame { background: radial-gradient(ellipse at 50% 0%, #1a2450, #0a0e20 70%); padding: 14px; border-radius: 18px; }
+.c .card { background: linear-gradient(160deg, #1c2450, #12172f); border: 1px solid #3a4480; border-radius: 16px; color: #e8ecf8; box-shadow: 0 0 24px #4a5cff22, inset 0 1px 0 #ffffff14; }
+.c .card .hd { font: 9px ps2p; text-align: center; padding: 12px; color: #ffd84d; letter-spacing: 2px; text-shadow: 0 0 12px #ffd84d66; }
+.c .mons { padding: 6px 10px 14px; }
+.c .mons .nm { color: #8890b8; }
+.c .btn { font: 9px ps2p; border-radius: 999px; padding: 13px 22px; border: none; cursor: default; }
+.c .btn.pri { background: linear-gradient(#ffe76a, #f5a614); color: #2a2440; box-shadow: 0 4px 16px #f5a61455, inset 0 -3px 0 #c07f0a; }
+.c .btn.sec { background: #1c2450; color: #aab4dd; border: 1px solid #3a4480; }
+.c .chip { background: #101430ee; color: #ffd84d; border-radius: 999px; border: 1px solid #ffd84d55; }
+.c .tabs { background: #101430ee; border-radius: 16px; border: 1px solid #c8a44d88; padding: 5px; }
+.c .tab { border-radius: 12px; color: #8890b8; }
+.c .tab.on { background: #1b2140; color: #ffd84d; box-shadow: inset 0 0 0 1.5px #c8a44d, 0 0 12px #c8a44d33; }
+</style>
+</head>
+<body>
+
+<div class="col a"><h2>A — GBA AUTHENTIC</h2><div class="frame">
+  <div class="part" style="text-align:center"><span class="chip"><img src="public/sprites/items/star-piece.png">★ 80 · ◆ 0</span></div>
+  <div class="card part"><div class="hd">TODAY</div>
+    <div class="mons">
+      <div><img src="public/sprites/9.png"><div class="nm">BLASTOISE</div></div>
+      <div><img src="public/sprites/376.png"><div class="nm">METAGROSS</div></div>
+      <div><img src="public/sprites/615.png"><div class="nm">CRYOGONAL</div></div>
+    </div>
+  </div>
+  <div class="btns part">
+    <div class="btn pri">START CLIMB</div>
+    <div class="btn sec">DAILY</div>
+  </div>
+  <div class="tabs part">
+    <div class="tab on"><img src="public/sprites/badges/1.png">CLIMB</div>
+    <div class="tab"><img src="public/sprites/items/star-piece.png">SHOP</div>
+    <div class="tab"><img src="public/sprites/items/poke-ball.png">MONS</div>
+    <div class="tab"><img src="public/sprites/items/sign.png">TOWN</div>
+  </div>
+  <div class="lbl">white boxes · navy frames · GBA menu canon</div>
+</div></div>
+
+<div class="col b"><h2>B — ARCADE HARD-EDGE</h2><div class="frame">
+  <div class="part" style="text-align:center"><span class="chip"><img src="public/sprites/items/star-piece.png">80 · 0</span></div>
+  <div class="card part"><div class="hd">TODAY</div>
+    <div class="mons">
+      <div><img src="public/sprites/9.png"><div class="nm">BLASTOISE</div></div>
+      <div><img src="public/sprites/376.png"><div class="nm">METAGROSS</div></div>
+      <div><img src="public/sprites/615.png"><div class="nm">CRYOGONAL</div></div>
+    </div>
+  </div>
+  <div class="btns part">
+    <div class="btn pri">START CLIMB</div>
+    <div class="btn sec">DAILY</div>
+  </div>
+  <div class="tabs part">
+    <div class="tab on"><img src="public/sprites/badges/1.png">CLIMB</div>
+    <div class="tab"><img src="public/sprites/items/star-piece.png">SHOP</div>
+    <div class="tab"><img src="public/sprites/items/poke-ball.png">MONS</div>
+    <div class="tab"><img src="public/sprites/items/sign.png">TOWN</div>
+  </div>
+  <div class="lbl">0px corners · solid offset blocks · NES/Sega punch</div>
+</div></div>
+
+<div class="col c"><h2>C — CHROMA DARK</h2><div class="frame">
+  <div class="part" style="text-align:center"><span class="chip"><img src="public/sprites/items/star-piece.png">80 · 0</span></div>
+  <div class="card part"><div class="hd">TODAY</div>
+    <div class="mons">
+      <div><img src="public/sprites/9.png"><div class="nm">BLASTOISE</div></div>
+      <div><img src="public/sprites/376.png"><div class="nm">METAGROSS</div></div>
+      <div><img src="public/sprites/615.png"><div class="nm">CRYOGONAL</div></div>
+    </div>
+  </div>
+  <div class="btns part">
+    <div class="btn pri">START CLIMB</div>
+    <div class="btn sec">DAILY</div>
+  </div>
+  <div class="tabs part">
+    <div class="tab on"><img src="public/sprites/badges/1.png">CLIMB</div>
+    <div class="tab"><img src="public/sprites/items/star-piece.png">SHOP</div>
+    <div class="tab"><img src="public/sprites/items/poke-ball.png">MONS</div>
+    <div class="tab"><img src="public/sprites/items/sign.png">TOWN</div>
+  </div>
+  <div class="lbl">deep navy · gold/type glow · modern gacha polish</div>
+</div></div>
+
+</body>
+</html>

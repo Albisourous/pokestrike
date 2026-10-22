@@ -1,4 +1,4 @@
-import { speciesById, TOTAL_STAGES, AVATARS } from './data';
+import { speciesById, TOTAL_STAGES, AVATARS, EVO_LINES, setPay } from './data';
 import { LV_CAP } from './stats';
 
 // Run-to-run persistence: the caught-dex, gym-win count (which sets rank),
@@ -40,6 +40,36 @@ export function dexIds(): number[] {
 
 // Last n caught species, newest first — the MONS tab's LATEST CATCHES strip.
 export const dexRecent = (n = 3): number[] => dexIds().slice(-n).reverse();
+
+// --- evolution-line sets: complete a whole line, claim a star bounty -----
+let memSets: number[] | null = null; // claimed line roots
+const setClaimed = (): number[] => {
+  const raw = load<unknown>('pk_sets');
+  return Array.isArray(raw) ? raw.filter((x): x is number => Number.isFinite(x)) : (memSets ?? []);
+};
+
+// per-line progress vs the dex — [owned, total, root]
+export const setProgress = (): { root: number; have: number; need: number }[] => {
+  const owned = new Set(dexIds());
+  return EVO_LINES.map((l) => ({ root: l.root, have: l.ids.filter((id) => owned.has(id)).length, need: l.ids.length }));
+};
+
+// completed-but-unclaimed lines — the CLAIM badge on the MONS tab's SETS card
+export const setsReady = (): number[] => {
+  const claimed = new Set(setClaimed());
+  const owned = new Set(dexIds());
+  return EVO_LINES.filter((l) => !claimed.has(l.root) && l.ids.every((id) => owned.has(id))).map((l) => l.root);
+};
+
+export function claimSet(root: number): number {
+  const line = EVO_LINES.find((l) => l.root === root);
+  if (!line || !setsReady().includes(root)) return 0;
+  const list = [...setClaimed(), root];
+  memSets = list;
+  store('pk_sets', list);
+  addStars(setPay(line));
+  return setPay(line);
+}
 
 export function recordCapture(ids: number[]) {
   for (const id of ids) memDex.add(id);
@@ -1048,7 +1078,6 @@ export interface Settings {
   master: number; // every sound, 0..1
   music: number; // sequencer bus, 0..1
   sfx: number; // synth one-shots, 0..1
-  cries: number; // species .ogg cries, 0..1
   haptics: boolean; // vibration
   shake: number; // screen shake intensity, 0..1 (v1 stored a bool: true→1, false→0)
   flash: boolean; // full-screen flash frames
@@ -1059,7 +1088,6 @@ export interface Settings {
   uiSfx: boolean; // menu clicks and blips
   dmgNums: boolean; // damage floaters over mons
   aimGuide: boolean; // the sling's launch arrow while aiming
-  ambients: boolean; // wild mons wandering the title
   mapGlints: boolean; // sea sparkle pass on the climb map
 }
 
@@ -1067,7 +1095,6 @@ const SETTING_DEFAULTS: Settings = {
   master: 0.8,
   music: 0.5,
   sfx: 0.7,
-  cries: 0.6,
   haptics: true,
   shake: 1,
   flash: true,
@@ -1078,7 +1105,6 @@ const SETTING_DEFAULTS: Settings = {
   uiSfx: true,
   dmgNums: true,
   aimGuide: true,
-  ambients: true,
   mapGlints: true,
 };
 let memSettings: Settings = { ...SETTING_DEFAULTS };
@@ -1122,11 +1148,11 @@ export function settings(): Settings {
     s.flash = false;
   }
   if (raw && typeof raw === 'object') {
-    for (const k of ['master', 'music', 'sfx', 'cries'] as const) {
+    for (const k of ['master', 'music', 'sfx'] as const) {
       const v = raw[k];
       if (typeof v === 'number' && Number.isFinite(v)) s[k] = Math.min(1, Math.max(0, v));
     }
-    for (const k of ['haptics', 'flash', 'battery', 'fps', 'uiSfx', 'dmgNums', 'aimGuide', 'ambients', 'mapGlints'] as const) {
+    for (const k of ['haptics', 'flash', 'battery', 'fps', 'uiSfx', 'dmgNums', 'aimGuide', 'mapGlints'] as const) {
       const v = raw[k];
       if (typeof v === 'boolean') s[k] = v;
     }

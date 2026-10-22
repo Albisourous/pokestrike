@@ -1,6 +1,6 @@
-import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
+import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay } from './data';
 import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -8,8 +8,8 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, type Settings } from './meta';
-import { tasksReady, taskResetsIn, raidPick, featuredPull, dealPick } from './tasks';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, type Settings } from './meta';
+import { tasksReady, taskResetsIn, raidPick, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 
@@ -102,19 +102,25 @@ export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260,
 // DAILY/RAID's bottom edge (NEW_HIT is hit-tested first and ate their taps)
 export const NEW_HIT = { x: NEW_BTN.x, y: DAILY_BTN.y + DAILY_BTN.h + 1, w: NEW_BTN.w, h: 34 };
 // --- home tabs: the CR-style bottom nav the title's bodies hang off -------
-export type HomeTab = 'mons' | 'climb' | 'town';
+export type HomeTab = 'climb' | 'shop' | 'mons' | 'town';
 // a floating bar, not flush — its bottom edge keeps ~28px clear of the
 // iOS home-swipe zone
 export const TAB_BAR = { x: 50, y: H - 104, w: W - 100, h: 76 };
-// three equal cells: MONS left, CLIMB center (the play tab), TOWN right
+// four cells in spec order: play, shop, collection, town hub
 export const TAB_CELLS: { tab: HomeTab; x: number; y: number; w: number; h: number }[] =
-  (['mons', 'climb', 'town'] as HomeTab[]).map((tab, i) => ({
+  (['climb', 'shop', 'mons', 'town'] as HomeTab[]).map((tab, i) => ({
     tab,
-    x: TAB_BAR.x + (TAB_BAR.w * i) / 3,
+    x: TAB_BAR.x + (TAB_BAR.w * i) / 4,
     y: TAB_BAR.y,
-    w: TAB_BAR.w / 3,
+    w: TAB_BAR.w / 4,
     h: TAB_BAR.h,
   }));
+
+// press-pop feedback — main stamps the tap time (same `t` the loop runs on)
+let tabPressT = -9;
+export const noteTabPress = (t: number) => {
+  tabPressT = t;
+};
 
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // beta lifeline — a quiet link bottom-left, parked just above the tab bar
@@ -333,24 +339,9 @@ function monitorGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: 
   ctx.fillRect(cx + 2.5 * s, cy - 4.5 * s, 3 * s, 7 * s);
 }
 
-// house glyph — the TOWN tab's icon; same stroke family as gearGlyph
-function homeGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(cx - 9 * s, cy + 1 * s);
-  ctx.lineTo(cx, cy - 8 * s);
-  ctx.lineTo(cx + 9 * s, cy + 1 * s);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillRect(cx - 6.5 * s, cy, 13 * s, 8 * s);
-  // the door is a notch of the bar's navy behind it
-  ctx.fillStyle = '#101430';
-  ctx.fillRect(cx - 1.5 * s, cy + 3 * s, 3 * s, 5 * s);
-}
-
 // tab-icon fallbacks — drawn stand-ins so a cold sprite cache never blanks
-// a tab: a ball for MONS, twin peaks for CLIMB (the TOWN house is a glyph
-// already, so it needs no fallback)
+// a tab: a ball for MONS, twin peaks for CLIMB, a star for SHOP (TOWN's
+// NPC ships with the boot atlas, so it needs no fallback)
 function ballGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
   ctx.strokeStyle = color;
   ctx.lineWidth = 2 * s;
@@ -485,6 +476,14 @@ export function fitFont(ctx: CanvasRenderingContext2D, label: string, px: number
   let size = px;
   ctx.font = font(size);
   while (size > 6 && ctx.measureText(label).width > maxW) ctx.font = font(--size);
+  return size;
+}
+
+// fitFont's dense-face twin — spark-grid names shrink in half-px steps
+function fitFontB(ctx: CanvasRenderingContext2D, label: string, px: number, maxW: number) {
+  let size = px;
+  ctx.font = fontB(size);
+  while (size > 5 && ctx.measureText(label).width > maxW) ctx.font = fontB((size -= 0.5));
   return size;
 }
 
@@ -706,82 +705,10 @@ export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXE
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
 export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
 
-// --- ambient title: drifting wilds, today's offers --------------------------
+// --- ambient title: today's offers ----------------------------------------
 // The pitch between the wordmark and the buttons is scenery, not a demo —
-// wilds wander it on a spring and a TODAY card sells the day's rotating
-// offers. The sling lives in battle.
+// a TODAY card sells the day's rotating offers. The sling lives in battle.
 const PITCH = { x: 26, y: 268, w: W - 52, h: 396 };
-
-interface WildMon {
-  id: number; x: number; y: number; vx: number; vy: number;
-  ax: number; ay: number; wT: number; s: number;
-}
-// a scatter of wilds roams the pitch — hops to a nearby spot, the odd dart
-const WILDS: WildMon[] = [
-  { id: 25, x: 130, y: 330, vx: 0, vy: 0, ax: 130, ay: 330, wT: 0.4, s: 40 },
-  { id: 133, x: 420, y: 300, vx: 0, vy: 0, ax: 420, ay: 300, wT: 0.9, s: 42 },
-  { id: 1, x: 100, y: 560, vx: 0, vy: 0, ax: 100, ay: 560, wT: 0.2, s: 44 },
-  { id: 4, x: 440, y: 590, vx: 0, vy: 0, ax: 440, ay: 590, wT: 0.7, s: 44 },
-  { id: 7, x: 270, y: 630, vx: 0, vy: 0, ax: 270, ay: 630, wT: 1.1, s: 46 },
-  { id: 60, x: 330, y: 380, vx: 0, vy: 0, ax: 330, ay: 380, wT: 0.6, s: 38 },
-];
-
-export function updateTitle(dt: number) {
-  for (const f of WILDS) {
-    f.wT -= dt;
-    if (f.wT <= 0) {
-      f.wT = 0.5 + Math.random() * 0.9;
-      const m = f.s * 0.5 + 10;
-      const dart = Math.random() < 0.22;
-      const tx = dart ? PITCH.x + m + Math.random() * (PITCH.w - 2 * m) : f.x + (Math.random() - 0.5) * 160;
-      const ty = dart ? PITCH.y + m + Math.random() * (PITCH.h - 2 * m) : f.y + (Math.random() - 0.5) * 160;
-      f.ax = Math.min(Math.max(tx, PITCH.x + m), PITCH.x + PITCH.w - m);
-      f.ay = Math.min(Math.max(ty, PITCH.y + m), PITCH.y + PITCH.h - m);
-    }
-    f.vx += (f.ax - f.x) * 26 * dt;
-    f.vy += (f.ay - f.y) * 26 * dt;
-    const damp = Math.exp(-7 * dt);
-    f.vx *= damp;
-    f.vy *= damp;
-    f.x += f.vx * dt;
-    f.y += f.vy * dt;
-  }
-  // no piling up — wilds shoulder off each other
-  for (let i = 0; i < WILDS.length; i++)
-    for (let j = i + 1; j < WILDS.length; j++) {
-      const a = WILDS[i], c = WILDS[j];
-      const dx = a.x - c.x, dy = a.y - c.y;
-      const d = Math.hypot(dx, dy) || 1;
-      const min = a.s * 0.5 + c.s * 0.5;
-      if (d >= min) continue;
-      const push = (min - d) / 2;
-      a.x += (dx / d) * push; a.y += (dy / d) * push;
-      c.x -= (dx / d) * push; c.y -= (dy / d) * push;
-    }
-  // the TODAY card is glass over grass — wilds shoulder out of its lane so
-  // no silhouette reads as a fourth offer
-  const card = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
-  for (const f of WILDS) {
-    const m = f.s * 0.5;
-    if (f.x <= card.x - m || f.x >= card.x + card.w + m || f.y <= card.y - m || f.y >= card.y + card.h + m) continue;
-    const dl = f.x - (card.x - m), dr = card.x + card.w + m - f.x;
-    const dtp = f.y - (card.y - m), db = card.y + card.h + m - f.y;
-    const min = Math.min(dl, dr, dtp, db);
-    if (min === dl) f.x = card.x - m;
-    else if (min === dr) f.x = card.x + card.w + m;
-    else if (min === dtp) f.y = card.y - m;
-    else f.y = card.y + card.h + m;
-    f.ax = f.x; f.ay = f.y;
-  }
-}
-
-function drawWilds(ctx: CanvasRenderingContext2D, t: number) {
-  for (const [i, f] of WILDS.entries()) {
-    monShadow(ctx, f.x, f.y + f.s * 0.05, f.s);
-    const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
-    drawMon(ctx, f.id, f.x, f.y + wob, f.s);
-  }
-}
 
 // Wild mons at the screen edges — the stadium crowd, clear of the pitch
 const WILD_MONS: [number, number, number][] = [
@@ -914,7 +841,6 @@ export function drawTitle(
   // dust on the title mean the economy is visible before any overlay opens
   balanceChip(ctx, { x: W / 2 - 92, y: 28, w: 184, h: 36 }, starN, dust());
 
-  if (settings().ambients) drawWilds(ctx, t);
 
   // corner badges are chrome, not body — they ride every tab: how-to-play,
   // mute, settings
@@ -930,7 +856,8 @@ export function drawTitle(
   gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
 
   if (tab === 'climb') drawClimbBody(ctx, t, cont, newArmed, dailyArmed);
-  else if (tab === 'mons') drawMonsBody(ctx, t, freeNow);
+  else if (tab === 'shop') drawShopBody(ctx, t, freeNow);
+  else if (tab === 'mons') drawMonsBody(ctx, t);
   else drawTownBody(ctx, taskN);
 
   // the floating nav draws last — no body should peek through under it
@@ -1219,7 +1146,8 @@ function drawTabBar(
   ctx.stroke();
 
   void loadItem('poke-ball');
-  void loadItem('badges/1.png');
+  void loadItem('badges/1');
+  void loadItem('star-piece');
 
   for (const cell of TAB_CELLS) {
     const on = cell.tab === active;
@@ -1243,16 +1171,34 @@ function drawTabBar(
 
     const icY = cell.y + 25;
     const tint = on ? PARCH : '#8890b8';
+    // press-pop — the just-tapped pill squashes for ~0.16s (stamp set in main)
+    const pop = on ? Math.max(0, 1 - (t - tabPressT) / 0.16) : 0;
+    // every tab icon is a real asset: ball, gym badge, star piece, townsperson
     const spr =
-      cell.tab === 'mons' ? itemSprite('poke-ball') : cell.tab === 'climb' ? itemSprite('badges/1.png') : undefined;
+      cell.tab === 'mons'
+        ? itemSprite('poke-ball')
+        : cell.tab === 'climb'
+          ? itemSprite('badges/1')
+          : cell.tab === 'shop'
+            ? itemSprite('star-piece')
+            : undefined;
     ctx.save();
     ctx.globalAlpha = on ? 1 : 0.55;
+    if (pop) {
+      ctx.translate(cx, icY);
+      ctx.scale(1 - 0.15 * pop, 1 - 0.15 * pop);
+      ctx.translate(-cx, -icY);
+    }
     if (spr) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(spr, cx - 12, icY - 12, 24, 24);
-    } else if (cell.tab === 'mons') ballGlyph(ctx, cx, icY, 1, tint);
+    } else if (cell.tab === 'town') drawNpc(ctx, 'mom_down_0', cx, icY + 12, 28);
+    else if (cell.tab === 'mons') ballGlyph(ctx, cx, icY, 1, tint);
     else if (cell.tab === 'climb') peakGlyph(ctx, cx, icY, 1, tint);
-    else homeGlyph(ctx, cx, icY, 1, tint);
+    else {
+      ctx.fillStyle = tint;
+      fillStar(ctx, cx, icY, 11);
+    }
     ctx.restore();
 
     ctx.font = fontB(10);
@@ -1292,7 +1238,66 @@ function drawTabBar(
 }
 
 // --- MONS: the creature loop — hatcher hero, dex card, latest catches -----
-function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
+// --- SHOP: stars and sparks in, mons out — hatcher hero + the daily deal ---
+function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
+  hatcherCard(ctx, t, freeNow);
+
+  // the day's −25% spark bargain — its own card so the deal sells itself
+  const dr = DEAL_BTN;
+  menuCard(ctx, dr, 12);
+  stripeBand(ctx, { x: dr.x + 3, y: dr.y + 3, w: dr.w - 6, h: 30 }, '#9df0ff');
+  ctx.textAlign = 'left';
+  ctx.font = font(9);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText('SPARK DEAL −25%', dr.x + 14, dr.y + 23);
+  const deal = dealPick();
+  // a type-tinted pad — the bargain stands on its own color like the rest
+  const dcx = dr.x + 82, dcy = dr.y + 102;
+  ctx.fillStyle = `${TYPE_COLOR[deal.type]}30`;
+  ctx.beginPath();
+  ctx.ellipse(dcx, dcy + 44, 64, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  monShadow(ctx, dcx, dcy + 4, 78);
+  try {
+    drawMon(ctx, deal.id, dcx, dcy + Math.sin(t * 2.4) * 2.5, 78);
+  } catch {
+    void loadSprite(deal.id);
+  }
+  const tx2 = dr.x + 156;
+  ctx.textAlign = 'left';
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#9df0ff';
+  ctx.fillText('TODAY ONLY', tx2, dr.y + 58);
+  fitFont(ctx, deal.name.toUpperCase(), 12, dr.x + dr.w - tx2 - 14);
+  ctx.fillStyle = PARCH;
+  ctx.fillText(deal.name.toUpperCase(), tx2, dr.y + 82);
+  ctx.font = fontB(8);
+  ctx.fillStyle = TYPE_COLOR[deal.type];
+  ctx.fillText(deal.type2 ? `${deal.type} · ${deal.type2}`.toUpperCase() : deal.type.toUpperCase(), tx2, dr.y + 101);
+  // the price leads; the struck list price beside it makes the −25% land
+  const was = dustCost(deal);
+  ctx.font = fontB(11);
+  ctx.fillStyle = '#9df0ff';
+  const cost = `${dealCost(deal)}`;
+  ctx.fillText(`◆ ${cost}`, tx2, dr.y + 123);
+  const pw = ctx.measureText(`◆ ${cost}`).width;
+  ctx.font = fontB(8);
+  const wl = `was ◆ ${was}`;
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(wl, tx2 + pw + 12, dr.y + 121);
+  ctx.strokeStyle = '#8890b8';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tx2 + pw + 12, dr.y + 118);
+  ctx.lineTo(tx2 + pw + 12 + ctx.measureText(wl).width, dr.y + 118);
+  ctx.stroke();
+  ctx.font = fontB(9);
+  ctx.fillStyle = '#aab4dd';
+  ctx.fillText('TAP TO OPEN THE HATCHER ›', tx2, dr.y + 148);
+}
+
+// the hatcher's hero card — featured pull on its type stage, pity, prices
+function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
   const pullN = pullCount();
   const r = HATCH_BTN;
   menuCard(ctx, r, 12);
@@ -1309,48 +1314,97 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
     ctx.fillText('FREE PULL TODAY', r.x + r.w - 16, r.y + 26);
   }
 
-  // the day's rate-up face on a real stage — type-tinted pedestal, a faint
-  // ball watermark, twinkles breathing around the sprite
+  // the day's rate-up face on a stage of its own — a type-glow card with
+  // pedestal, ball watermark, and twinkles breathing around the sprite
   const feat = featuredPull();
-  const fcx = r.x + 112, fcy = r.y + 156;
-  ballGlyph(ctx, fcx, fcy + 4, 4.6, 'rgba(255,255,255,0.05)');
-  ctx.fillStyle = `${TYPE_COLOR[feat.type]}30`;
+  const ftc = TYPE_COLOR[feat.type];
+  const stage = { x: r.x + 16, y: r.y + 50, w: 200, h: 146 };
+  ctx.save();
+  roundRect(ctx, stage.x, stage.y, stage.w, stage.h, 10);
+  ctx.clip();
+  ctx.fillStyle = '#0d1126';
+  ctx.fillRect(stage.x, stage.y, stage.w, stage.h);
+  const sg = ctx.createRadialGradient(
+    stage.x + stage.w / 2,
+    stage.y + stage.h * 0.44,
+    8,
+    stage.x + stage.w / 2,
+    stage.y + stage.h * 0.44,
+    stage.w * 0.9,
+  );
+  sg.addColorStop(0, `${ftc}55`);
+  sg.addColorStop(1, `${ftc}00`);
+  ctx.fillStyle = sg;
+  ctx.fillRect(stage.x, stage.y, stage.w, stage.h);
+  ctx.restore();
+  rim(ctx, stage, 10, `${ftc}88`, 1.5);
+
+  const fcx = stage.x + stage.w / 2, fcy = stage.y + 72;
+  ballGlyph(ctx, fcx, fcy - 6, 4.6, 'rgba(255,255,255,0.07)');
+  ctx.fillStyle = `${ftc}40`;
   ctx.beginPath();
-  ctx.ellipse(fcx, fcy + 46, 78, 20, 0, 0, Math.PI * 2);
+  ctx.ellipse(fcx, fcy + 42, 68, 17, 0, 0, Math.PI * 2);
   ctx.fill();
-  monShadow(ctx, fcx, fcy + 8, 108);
+  monShadow(ctx, fcx, fcy + 6, 100);
   try {
-    drawMon(ctx, feat.id, fcx, fcy + Math.sin(t * 2.2) * 3, 108);
+    drawMon(ctx, feat.id, fcx, fcy + Math.sin(t * 2.2) * 3, 100);
   } catch {
     void loadSprite(feat.id);
   }
-  const twk: [number, number][] = [[-76, -52], [72, -60], [56, 36]];
+  const twk: [number, number][] = [[-70, -42], [66, -50], [56, 28]];
   ctx.fillStyle = '#ffe89d';
   twk.forEach(([dx, dy], i) => {
     ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.6 + i * 2.1));
     fillStar(ctx, fcx + dx, fcy + dy, 4.5);
   });
   ctx.globalAlpha = 1;
-  ctx.font = fontB(7);
+  ctx.font = fontB(8);
   ctx.textAlign = 'center';
-  ctx.fillStyle = TYPE_COLOR[feat.type];
-  ctx.fillText(feat.type2 ? `${feat.type} · ${feat.type2}`.toUpperCase() : feat.type.toUpperCase(), fcx, fcy + 78);
+  ctx.fillStyle = mixHex(ftc, '#ffffff', 0.35);
+  ctx.fillText(
+    feat.type2 ? `${feat.type} · ${feat.type2}`.toUpperCase() : feat.type.toUpperCase(),
+    fcx,
+    stage.y + stage.h - 12,
+  );
 
-  const tx = r.x + 232;
+  const tx = stage.x + stage.w + 18;
   ctx.textAlign = 'left';
-  ctx.font = fontB(8);
+  ctx.font = fontB(9);
   ctx.fillStyle = '#ffd84d';
-  ctx.fillText('RATE UP', tx, r.y + 70);
-  fitFont(ctx, feat.name.toUpperCase(), 12, r.x + r.w - tx - 14);
+  ctx.fillText('RATE-UP TODAY', tx, r.y + 72);
+  fitFont(ctx, feat.name.toUpperCase(), 13, r.x + r.w - tx - 14);
   ctx.fillStyle = PARCH;
-  ctx.fillText(feat.name.toUpperCase(), tx, r.y + 94);
+  ctx.fillText(feat.name.toUpperCase(), tx, r.y + 98);
   ctx.font = fontB(8);
+  ctx.fillStyle = '#c8d0f0';
+  ctx.fillText('10× ODDS IN THE RARE+ POOL', tx, r.y + 118);
   ctx.fillStyle = '#a8b0d8';
-  ctx.fillText(`RARE GUARANTEED IN ${PULL_PITY - (pullN % PULL_PITY)}`, tx, r.y + 128);
-  ctx.fillStyle = PARCH;
-  ctx.fillText(`PULL ★${PULL_COST} · TEN ★${PULL10_COST}`, tx, r.y + 150);
-  ctx.fillStyle = '#8890b8';
-  ctx.fillText('TAP TO OPEN THE HATCHER', tx, r.y + 172);
+  ctx.fillText(`RARE+ GUARANTEED IN ${PULL_PITY - (pullN % PULL_PITY)} PULLS`, tx, r.y + 137);
+  // the price of admission — two cost chips: the single, the discounted ten
+  const pw = (r.x + r.w - 16 - tx - 10) / 2;
+  ([['×1', PULL_COST], ['×10', PULL10_COST]] as [string, number][]).forEach(([k, cost], i) => {
+    const px = tx + i * (pw + 10);
+    roundRect(ctx, px, r.y + 148, pw, 32, 8);
+    ctx.fillStyle = '#1a2040';
+    ctx.fill();
+    rim(ctx, { x: px, y: r.y + 148, w: pw, h: 32 }, 8, GOLD, 1);
+    ctx.textAlign = 'center';
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`PULL ${k}`, px + pw / 2, r.y + 161);
+    ctx.font = fontB(10);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillText(`★${cost}`, px + pw / 2, r.y + 176);
+  });
+
+  // the whole card is the button — the pill at its foot says so out loud
+  pill(
+    ctx,
+    { x: r.x + 16, y: r.y + r.h - 46, w: r.w - 32, h: 34 },
+    freeNow
+      ? { c: '#ffd84d', cd: '#c8a44d', tc: '#2a2440', label: 'FREE PULL WAITING — TAP TO OPEN' }
+      : { c: '#3a4160', cd: '#262c44', tc: '#e8ecf8', label: 'TAP TO OPEN THE HATCHER' },
+  );
 
   // the old chip's breathing glow — today's free pull still sells itself
   if (freeNow) {
@@ -1362,10 +1416,14 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
     ctx.stroke();
     ctx.restore();
   }
+}
 
+// --- MONS: the collection — dex, evolution sets, latest catches ------------
+function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   // the dex card keeps the chip's two facts — how full, and the nearest
   // open loop: catches to the charm, badges to the crown, pulls to pity
   const dexN = dexIds().length;
+  const pullN = pullCount();
   const badges = gymBadges();
   const dexRw = nextDexReward();
   const nextGoal = dexN < SHINY_CHARM_AT
@@ -1390,6 +1448,19 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.font = fontB(8);
   ctx.fillStyle = '#a8b0d8';
   ctx.fillText(nextGoal, d.x + 18, d.y + 62);
+  // a claimable set bounty advertises on the dex card too — the SETS card
+  // below owns the claiming
+  const readySets = setsReady().length;
+  if (readySets) {
+    const label = `${readySets} SET BONUS${readySets > 1 ? 'ES' : ''} READY`;
+    const chipX = d.x + 18 + ctx.measureText(nextGoal).width + 10;
+    ctx.font = fontB(7);
+    roundRect(ctx, chipX, d.y + 51, ctx.measureText(label).width + 14, 15, 7);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fill();
+    ctx.fillStyle = '#2a2440';
+    ctx.fillText(label, chipX + 7, d.y + 62);
+  }
   ctx.textAlign = 'right';
   ctx.fillStyle = '#8890b8';
   ctx.fillText('TAP TO BROWSE', d.x + d.w - 18, d.y + 62);
@@ -1405,6 +1476,75 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.font = fontB(7);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(`${Math.round((dexN / CATCHABLE) * 100)}%`, bx + bw, by + 20);
+
+  // LINE SETS — whole evolution families for a one-time star bounty. A
+  // ready line turns the card into a CLAIM button; otherwise it shows the
+  // nearest finish so the chase stays visible
+  const sr = SETS_BTN;
+  const ready = setsReady();
+  menuCard(ctx, sr, 12);
+  stripeBand(ctx, { x: sr.x + 3, y: sr.y + 3, w: sr.w - 6, h: 30 }, ready.length ? GOLD : '#6fdc6f');
+  ctx.textAlign = 'left';
+  ctx.font = font(9);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText(ready.length ? 'LINE SETS — CLAIM!' : 'LINE SETS', sr.x + 14, sr.y + 23);
+  ctx.textAlign = 'right';
+  ctx.font = fontB(7);
+  const done = setProgress().filter((p) => p.have === p.need).length;
+  ctx.fillText(`${done}/${EVO_LINES.length} COMPLETE`, sr.x + sr.w - 14, sr.y + 22);
+  ctx.textAlign = 'left';
+  if (ready.length) {
+    // every claimable line lists itself with its payout — a tap banks them all
+    ctx.font = font(9);
+    ctx.fillStyle = '#ffd84d';
+    let ry = sr.y + 56;
+    let pay = 0;
+    ready.forEach((root) => {
+      const line = EVO_LINES.find((l) => l.root === root)!;
+      pay += setPay(line);
+      if (ry < sr.y + sr.h - 20) {
+        ctx.fillText(`${speciesById(root)?.name.toUpperCase() ?? root} LINE +★${setPay(line)}`, sr.x + 14, ry);
+        ry += 20;
+      }
+    });
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`TAP TO CLAIM +★${pay}`, sr.x + 14, sr.y + sr.h - 14);
+  } else {
+    // nearest line to finishing — sprites of the missing links sell the gap
+    const next = setProgress()
+      .filter((p) => p.have > 0 && p.have < p.need)
+      .sort((a, b) => b.have / b.need - a.have / a.need)[0];
+    if (next) {
+      const line = EVO_LINES.find((l) => l.root === next.root)!;
+      ctx.font = font(9);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(`${speciesById(next.root)?.name.toUpperCase() ?? next.root} LINE`, sr.x + 14, sr.y + 62);
+      ctx.font = fontB(8);
+      ctx.fillStyle = '#a8b0d8';
+      ctx.fillText(`${next.have}/${next.need} CAUGHT · PAYS ★${setPay(line)}`, sr.x + 14, sr.y + 82);
+      // the line's silhouettes — caught bright, missing dimmed
+      const owned = new Set(dexIds());
+      line.ids.slice(0, 6).forEach((id, i) => {
+        const ix = sr.x + 40 + i * 56;
+        ctx.save();
+        ctx.globalAlpha = owned.has(id) ? 1 : 0.22;
+        try {
+          drawMon(ctx, id, ix, sr.y + 116, 40);
+        } catch {
+          void loadSprite(id);
+        }
+        ctx.restore();
+      });
+    } else {
+      ctx.font = fontB(9);
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText('CATCH TO START A LINE', sr.x + 14, sr.y + 76);
+    }
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText('TAP TO BROWSE THE DEX', sr.x + 14, sr.y + sr.h - 12);
+  }
 
   // latest catches — the dex's newest faces; decorative, no hit test
   const s = CATCH_STRIP;
@@ -2147,12 +2287,14 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
 // --- haven't caught; the count is the only hint at what's out there -------
 // home-tab card rects — the same _BTN names the hit tests know, re-homed to
-// the cards the tab bodies draw. MONS owns the hatcher hero + the dex card;
-// TOWN owns the 2-col grid and the wide ascension row.
+// the cards the tab bodies draw. SHOP owns the hatcher hero + spark deal;
+// MONS owns dex / line-sets / catches; TOWN owns the 2-col grid + ASC + HALL.
 export const HATCH_BTN = { x: 30, y: 210, w: W - 60, h: 250 };
-export const DEX_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 116 };
+export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 170 };
+export const DEX_BTN = { x: 30, y: 230, w: W - 60, h: 120 };
+export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
 // the catches strip is decorative — no hit rect needed
-const CATCH_STRIP = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 150 };
+const CATCH_STRIP = { x: 30, y: SETS_BTN.y + SETS_BTN.h + 16, w: W - 60, h: 160 };
 const TOWN_COL = (W - 60 - 16) / 2; // 232 — two columns on a 16px gutter
 export const LAB_BTN = { x: 30, y: 230, w: TOWN_COL, h: 150 };
 export const TASKS_BTN = { x: LAB_BTN.x + TOWN_COL + 16, y: LAB_BTN.y, w: TOWN_COL, h: 150 };
@@ -2186,6 +2328,16 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.font = font(17);
   ctx.fillStyle = '#ffd84d';
   ctx.fillText(`POKÉDEX ${dexN}/${CATCHABLE}`, r.x + r.w / 2, r.y + 40);
+  // second header fact: set-bounty progress — gold when a claim waits
+  const setsN = setsReady().length;
+  const linesDone = setProgress().filter((p) => p.have === p.need).length;
+  ctx.font = fontB(8);
+  ctx.fillStyle = setsN ? '#ffd84d' : '#8890b8';
+  ctx.fillText(
+    `${Math.round((dexN / CATCHABLE) * 100)}% FOUND · ${linesDone}/${EVO_LINES.length} LINES${setsN ? ` · ${setsN} SET BONUS${setsN > 1 ? 'ES' : ''} READY` : ''}`,
+    r.x + r.w / 2,
+    r.y + 57,
+  );
 
   const seen = new Set(dexList);
   const shinies = new Set(shinyIds());
@@ -2440,6 +2592,7 @@ export type HatchPhase = 'idle' | 'shake' | 'reveal' | 'results';
 export interface HatchState {
   phase: HatchPhase;
   t: number; // seconds inside the current phase — drives wobble/pop
+  tMax: number; // current phase's length — main.ts sizes it to the pull's hype
   results: PullResult[]; // the pull queue — reveal + results read it
   i: number; // which result the reveal is on (10-pull tap-through)
   sparkScroll: number; // SPARK grid scroll — only live while phase is 'idle'
@@ -2451,14 +2604,15 @@ export interface HatchState {
 // shared modal frame — hatcher and lab both ride it; main.ts needs it for
 // the modal-inside/outside tap test
 export const HATCH_PANEL = DEX_PANEL;
-const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 66, w: HATCH_PANEL.w - 32, h: 88 };
-export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
-export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
-const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 234, w: HATCH_PANEL.w - 32, h: 10 };
-const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 330, w: HATCH_PANEL.w - 32, h: 456 };
+const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 76, w: HATCH_PANEL.w - 32, h: 110 };
+export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 198, w: 218, h: 64 };
+export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 198, w: 218, h: 64 };
+const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 284, w: HATCH_PANEL.w - 32, h: 18 };
+const RATE_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 314, w: HATCH_PANEL.w - 32, h: 54 };
+const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 406, w: HATCH_PANEL.w - 32, h: 394 };
 const SPARK_COLS = 4;
 const SPARK_CELL_W = SPARK_VIEW.w / SPARK_COLS;
-const SPARK_CELL_H = 112;
+const SPARK_CELL_H = 118;
 const HATCH_MODAL = { x: 80, y: 244, w: W - 160, h: 400 };
 export const SKIP_PULL_BTN = { x: HATCH_MODAL.x + HATCH_MODAL.w - 92, y: HATCH_MODAL.y + 12, w: 80, h: 30 };
 
@@ -2521,6 +2675,40 @@ function dustTag(ctx: CanvasRenderingContext2D, cx: number, cy: number, n: numbe
   ctx.fillText(label, x0 + 10, cy);
 }
 
+// the price INSIDE a pull pill — a dark plaque: star icon + count, or the
+// free-pull tag when cost is null. The pill's own sub-line printed too dim
+// for the shop's one job, so the price gets ink of its own.
+function pricePlaque(
+  ctx: CanvasRenderingContext2D,
+  b: { x: number; y: number; w: number; h: number },
+  cost: number | null,
+  ok: boolean,
+) {
+  ctx.font = fontB(9);
+  const label = cost == null ? 'FREE · 1/DAY' : `${cost}`;
+  const pw = ctx.measureText(label).width + (cost == null ? 20 : 32);
+  const px = b.x + b.w / 2 - pw / 2;
+  const py = b.y + b.h - 28;
+  roundRect(ctx, px, py, pw, 20, 10);
+  ctx.fillStyle = 'rgba(26,32,64,0.75)';
+  ctx.fill();
+  rim(ctx, { x: px, y: py, w: pw, h: 20 }, 10, ok ? '#ffe89d' : '#ff6b6b', 1);
+  let tx = px + 10;
+  if (cost != null) {
+    const star = itemSprite('star-piece');
+    if (star) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(star, px + 7, py + 3, 14, 14);
+      ctx.restore();
+    }
+    tx = px + 24;
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = ok ? '#ffe89d' : '#ff9d9d';
+  ctx.fillText(label, tx, py + 14.5);
+}
+
 export function hatchScrollMax(s: HatchState) {
   if (s.phase !== 'idle') return 0; // the pull show eats drags — the shop's scroll waits
   const rows = Math.ceil(PULLABLE.length / SPARK_COLS);
@@ -2560,139 +2748,211 @@ export function drawHatch(
   ctx.fillText('THE HATCHER', r.x + 22, r.y + 42);
   balanceChip(ctx, { x: r.x + r.w - 178, y: r.y + 22, w: 160, h: 32 }, info.stars, info.dust);
 
-  // the day's featured rate-up — a full-bleed striped banner, sprite + odds
+  // the motivation line — pool progress sells why a pull matters; a
+  // claimable line-set bounty gets a loud gold chip on the same row
+  const dexSet = new Set(dexIds());
+  const poolFound = PULLABLE.reduce((n, d) => n + (dexSet.has(d.id) ? 1 : 0), 0);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#a8b0d8';
+  ctx.fillText(`${poolFound} / ${PULLABLE.length} FOUND — EVERY PULL GROWS YOUR DRAFT POOL`, r.x + 22, r.y + 66);
+  const ready = setsReady();
+  if (ready.length) {
+    const sl = ready.length > 1 ? `${ready.length} SET BONUSES READY` : 'SET BONUS READY';
+    ctx.font = fontB(8);
+    chip(ctx, r.x + r.w - 16 - (ctx.measureText(sl).width + 14), r.y + 54, sl, {
+      bg: '#ffd84d',
+      fg: '#2a2440',
+      fontPx: 8,
+    });
+  }
+
+  // the day's featured rate-up — a full-bleed band tinted by the mon's own
+  // type: a bigger stage, the name up front, and what "featured" buys you
   const f = info.featured;
+  const fc = f ? TYPE_COLOR[f.type] : '#8a5cff';
   ctx.save();
   roundRect(ctx, FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h, 10);
   ctx.clip();
   const fg = ctx.createLinearGradient(0, FEAT_BAND.y, 0, FEAT_BAND.y + FEAT_BAND.h);
-  fg.addColorStop(0, '#8a5cff');
-  fg.addColorStop(1, mixHex('#8a5cff', '#12162b', 0.55));
+  fg.addColorStop(0, mixHex(fc, '#12162b', 0.22));
+  fg.addColorStop(1, mixHex(fc, '#12162b', 0.8));
   ctx.fillStyle = fg;
   ctx.fillRect(FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h);
   stripes(ctx, FEAT_BAND);
   ctx.restore();
-  ctx.strokeStyle = '#0a0d18';
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, FEAT_BAND.x + 0.5, FEAT_BAND.y + 0.5, FEAT_BAND.w - 1, FEAT_BAND.h - 1, 10);
-  ctx.stroke();
+  edge(ctx, FEAT_BAND, 10);
+  rim(ctx, FEAT_BAND, 10, fc, 1.5);
   if (f) {
     void loadSprite(f.id);
+    // the stage — a type-tinted pedestal under a faint ball watermark
+    const scx = FEAT_BAND.x + 68, scy = FEAT_BAND.y + FEAT_BAND.h / 2 + 2;
+    ballGlyph(ctx, scx, scy - 4, 4.2, 'rgba(255,255,255,0.09)');
+    ctx.fillStyle = `${fc}50`;
+    ctx.beginPath();
+    ctx.ellipse(scx, scy + 42, 62, 15, 0, 0, Math.PI * 2);
+    ctx.fill();
+    monShadow(ctx, scx, scy + 4, 96);
     try {
-      drawMon(ctx, f.id, FEAT_BAND.x + 54, FEAT_BAND.y + FEAT_BAND.h / 2 + 6, 74);
+      drawMon(ctx, f.id, scx, scy + Math.sin(s.t * 2.4) * 2.5, 96);
     } catch {
       /* sprite still warming */
     }
-    chip(ctx, FEAT_BAND.x + 10, FEAT_BAND.y + 10, 'FEATURED', { bg: '#2a2440', fg: '#e8ecf8' });
+    const tx = FEAT_BAND.x + 140;
     ctx.textAlign = 'left';
-    fitFont(ctx, f.name.toUpperCase(), 12, FEAT_BAND.w - 220);
-    ctx.fillStyle = '#2a2440';
-    ctx.fillText(f.name.toUpperCase(), FEAT_BAND.x + 104, FEAT_BAND.y + 44);
-    ctx.font = fontB(7);
-    ctx.globalAlpha = 0.75;
-    ctx.fillText('RATE UP — RARE+ POOL', FEAT_BAND.x + 104, FEAT_BAND.y + 60);
-    ctx.globalAlpha = 1;
-    chip(ctx, FEAT_BAND.x + FEAT_BAND.w - 96, FEAT_BAND.y + FEAT_BAND.h / 2 - 8, '10× TODAY', {
-      bg: '#ffd84d',
-      fg: '#2a2440',
-    });
+    fitFont(ctx, f.name.toUpperCase(), 14, FEAT_BAND.x + FEAT_BAND.w - tx - 96);
+    ctx.fillStyle = '#f8f4e4';
+    ctx.fillText(f.name.toUpperCase(), tx, FEAT_BAND.y + 44);
+    ctx.font = fontB(8);
+    ctx.fillStyle = mixHex(fc, '#ffffff', 0.45);
+    ctx.fillText(f.type2 ? `${f.type} · ${f.type2}`.toUpperCase() : f.type.toUpperCase(), tx, FEAT_BAND.y + 64);
+    ctx.fillStyle = '#c8d0f0';
+    ctx.fillText('10× ODDS IN THE RARE+ POOL', tx, FEAT_BAND.y + 84);
+    // the badge — FEATURED flags the corner, 10× is the band's one number
+    chip(ctx, FEAT_BAND.x + FEAT_BAND.w - 61, FEAT_BAND.y + 10, 'FEATURED', { bg: '#2a2440', fg: '#e8ecf8' });
+    roundRect(ctx, FEAT_BAND.x + FEAT_BAND.w - 82, FEAT_BAND.y + FEAT_BAND.h / 2 - 12, 66, 50, 10);
+    ctx.fillStyle = 'rgba(26,32,64,0.65)';
+    ctx.fill();
+    rim(ctx, { x: FEAT_BAND.x + FEAT_BAND.w - 82, y: FEAT_BAND.y + FEAT_BAND.h / 2 - 12, w: 66, h: 50 }, 10, '#ffe89d', 1);
+    ctx.textAlign = 'center';
+    ctx.font = font(11);
+    ctx.fillStyle = '#ffe89d';
+    ctx.fillText('10×', FEAT_BAND.x + FEAT_BAND.w - 49, FEAT_BAND.y + FEAT_BAND.h / 2 + 10);
+    ctx.font = fontB(6.5);
+    ctx.fillStyle = '#e8ecf8';
+    ctx.fillText('RATE-UP', FEAT_BAND.x + FEAT_BAND.w - 49, FEAT_BAND.y + FEAT_BAND.h / 2 + 27);
   } else {
     ctx.textAlign = 'center';
     ctx.font = font(10);
-    ctx.fillStyle = '#2a2440';
+    ctx.fillStyle = '#e8ecf8';
     ctx.fillText('NO FEATURED PULL TODAY', FEAT_BAND.x + FEAT_BAND.w / 2, FEAT_BAND.y + FEAT_BAND.h / 2 + 4);
   }
 
-  // the pulls — ×1 is parchment, ×10 the gold MS ten-pull; dim when short.
-  // A daily free pull turns the first pill gold — the come-back-tomorrow hook
+  // the pulls — the shop's heroes. ×1 parchment, ×10 the gold MS ten-pull,
+  // price as a dark plaque inside the pill so it reads at thumb distance.
+  // A daily free pull turns ×1 gold and rings it in breathing light
   pill(ctx, PULL1_BTN, {
     c: info.free ? '#ffd84d' : '#e8ecf8',
     cd: info.free ? '#c8a44d' : '#aab0c8',
     tc: '#2a2440',
-    label: info.free ? 'FREE PULL' : 'PULL ×1',
-    sub: info.free ? 'ONE A DAY' : `${PULL_COST} STAR PIECES`,
+    label: '',
     disabled: !info.free && info.stars < PULL_COST,
   });
   pill(ctx, PULL10_BTN, {
     c: '#ffd84d',
     cd: '#c8a44d',
     tc: '#2a2440',
-    label: 'PULL ×10',
-    sub: `${PULL10_COST} · RARE GUARANTEED`,
+    label: '',
     disabled: info.stars < PULL10_COST,
   });
-  const starIcon = itemSprite('star-piece');
-  if (starIcon) {
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#2a2440';
+  fitFont(ctx, info.free ? 'FREE PULL' : 'PULL ×1', 11, PULL1_BTN.w - 28);
+  ctx.fillText(info.free ? 'FREE PULL' : 'PULL ×1', PULL1_BTN.x + PULL1_BTN.w / 2, PULL1_BTN.y + 25);
+  fitFont(ctx, 'PULL ×10', 11, PULL10_BTN.w - 28);
+  ctx.fillText('PULL ×10', PULL10_BTN.x + PULL10_BTN.w / 2, PULL10_BTN.y + 25);
+  pricePlaque(ctx, PULL1_BTN, info.free ? null : PULL_COST, info.free || info.stars >= PULL_COST);
+  pricePlaque(ctx, PULL10_BTN, PULL10_COST, info.stars >= PULL10_COST);
+  // the ten-pull's built-in discount — a corner tag inside the pill
+  ctx.font = fontB(7);
+  const dv = ctx.measureText('−10%').width + 12;
+  roundRect(ctx, PULL10_BTN.x + PULL10_BTN.w - dv - 8, PULL10_BTN.y + 6, dv, 15, 7);
+  ctx.fillStyle = 'rgba(26,32,64,0.55)';
+  ctx.fill();
+  ctx.fillStyle = '#ffe89d';
+  ctx.fillText('−10%', PULL10_BTN.x + PULL10_BTN.w - dv / 2 - 8, PULL10_BTN.y + 17);
+  if (info.free) {
     ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.globalAlpha = info.stars < PULL_COST ? 0.4 : 1;
-    ctx.drawImage(starIcon, PULL1_BTN.x + 12, PULL1_BTN.y + PULL1_BTN.h / 2 - 11, 22, 22);
-    ctx.globalAlpha = info.stars < PULL10_COST ? 0.4 : 1;
-    ctx.drawImage(starIcon, PULL10_BTN.x + 12, PULL10_BTN.y + PULL10_BTN.h / 2 - 11, 22, 22);
+    ctx.globalAlpha = 0.45 + Math.sin(s.t * 5) * 0.3;
+    ctx.strokeStyle = '#ffe89d';
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, PULL1_BTN.x - 3, PULL1_BTN.y - 3, PULL1_BTN.w + 6, PULL1_BTN.h + 6, PULL1_BTN.h / 2 + 3);
+    ctx.stroke();
     ctx.restore();
   }
 
-  // pity — every Nth pull rolls rare+; the meter is the near-miss hook
+  // pity — every Nth pull rolls rare+. Ten pips, one per pull, so the meter
+  // reads as banked progress; the last pip keeps a gold outline — the prize
+  // slot — and pityIn counting to 1 means the NEXT pull is the guarantee
+  const done = PULL_PITY - info.pityIn;
   ctx.textAlign = 'center';
-  ctx.font = fontB(8);
-  ctx.fillStyle = info.pityIn <= 1 ? '#ffd84d' : '#8890b8';
-  // pityIn counts down to 1 — the pull that lands ON 1 is the guaranteed one
-  ctx.fillText(info.pityIn <= 1 ? 'NEXT PULL IS GUARANTEED RARE' : `GUARANTEED RARE IN ${info.pityIn}`, W / 2, PITY_BAR.y - 6);
-  ctx.fillStyle = '#0a0d18';
-  ctx.fillRect(PITY_BAR.x, PITY_BAR.y, PITY_BAR.w, PITY_BAR.h);
-  const pf = Math.min(1, Math.max(0, 1 - info.pityIn / PULL_PITY));
-  if (pf > 0) {
-    ctx.fillStyle = '#ffd84d';
-    ctx.fillRect(PITY_BAR.x, PITY_BAR.y, Math.max(4, PITY_BAR.w * pf), PITY_BAR.h);
+  ctx.font = font(9);
+  ctx.fillStyle = info.pityIn <= 1 ? '#ffd84d' : '#c8d0f0';
+  ctx.fillText(
+    info.pityIn <= 1 ? 'NEXT PULL IS A GUARANTEED RARE+' : `${info.pityIn} MORE PULLS TO A GUARANTEED RARE+`,
+    W / 2,
+    PITY_BAR.y - 9,
+  );
+  const pgap = 4;
+  const pseg = (PITY_BAR.w - pgap * (PULL_PITY - 1)) / PULL_PITY;
+  for (let i = 0; i < PULL_PITY; i++) {
+    const sx = PITY_BAR.x + i * (pseg + pgap);
+    roundRect(ctx, sx, PITY_BAR.y, pseg, PITY_BAR.h, 4);
+    if (i < done) {
+      ctx.fillStyle = '#ffd84d';
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#1a2040';
+      ctx.fill();
+      ctx.strokeStyle = i === PULL_PITY - 1 ? GOLD : '#2a3560';
+      ctx.lineWidth = i === PULL_PITY - 1 ? 1.5 : 1;
+      ctx.stroke();
+    }
   }
-  ctx.strokeStyle = '#2a3560';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(PITY_BAR.x + 0.5, PITY_BAR.y + 0.5, PITY_BAR.w - 1, PITY_BAR.h - 1);
 
-  // the odds, tiered — a 2×2 rate card under the pity meter. Buckets read
-  // PULL_RATES straight so the print can never drift from pullSpecies';
-  // shiny rides every pull, so it gets its own cell and shows live odds
+  // the odds, tiered — one glanceable rate card: tier name, the number big,
+  // and a bar drawn to scale. Buckets read PULL_RATES straight so the print
+  // can never drift from pullSpecies'; shiny rides every pull so it gets
+  // its own cell with live odds. A payout flash borrows the slot
   if (s.phase === 'idle') {
     if (info.flash) {
       ctx.textAlign = 'center';
-      ctx.font = fontB(8);
+      ctx.font = fontB(9);
       ctx.fillStyle = '#ffd84d';
-      ctx.fillText(info.flash, W / 2, PITY_BAR.y + PITY_BAR.h + 22);
+      ctx.fillText(info.flash, W / 2, RATE_BAND.y + RATE_BAND.h / 2 + 4);
     } else {
       const wknd = shinyOdds() > PULL_SHINY;
       const cells: [string, number, string][] = [
-        ['COMMON', PULL_RATES.common, '#8890b8'],
+        ['COMMON', PULL_RATES.common, '#a8b0d8'],
         ['RARE', PULL_RATES.rare, '#5a9bf0'],
         ['EPIC', PULL_RATES.epic, '#f0b02f'],
-        [`SHINY${wknd ? ' · WKND ×2' : ''}`, shinyOdds(), '#ffd84d'],
+        [wknd ? 'SHINY ×2' : 'SHINY', shinyOdds(), '#ffd84d'],
       ];
-      const cw = (PITY_BAR.w - 14) / 2;
+      roundRect(ctx, RATE_BAND.x, RATE_BAND.y, RATE_BAND.w, RATE_BAND.h, 8);
+      ctx.fillStyle = '#0d1126';
+      ctx.fill();
+      rim(ctx, RATE_BAND, 8, '#2a3560', 1);
+      const cw = RATE_BAND.w / cells.length;
       cells.forEach(([label, pct, color], i) => {
-        const cx = PITY_BAR.x + (i % 2) * (cw + 14);
-        const cy = PITY_BAR.y + PITY_BAR.h + 10 + Math.floor(i / 2) * 16;
-        ctx.textAlign = 'left';
+        const cx = RATE_BAND.x + i * cw;
+        if (i) {
+          ctx.strokeStyle = '#232a4a';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(cx + 0.5, RATE_BAND.y + 8);
+          ctx.lineTo(cx + 0.5, RATE_BAND.y + RATE_BAND.h - 8);
+          ctx.stroke();
+        }
+        ctx.textAlign = 'center';
         ctx.font = fontB(7);
         ctx.fillStyle = color;
-        ctx.fillText(label, cx, cy + 7);
-        const bx = cx + (wknd && i === 3 ? 82 : 50);
-        const bw = cx + cw - 36 - bx;
-        ctx.fillStyle = '#0a0d18';
-        ctx.fillRect(bx, cy + 2, bw, 6);
+        ctx.fillText(label, cx + cw / 2, RATE_BAND.y + 16);
+        ctx.font = font(10);
+        ctx.fillStyle = i === 0 ? '#e8ecf8' : color;
+        ctx.fillText(`${Math.round(pct * 100)}%`, cx + cw / 2, RATE_BAND.y + 38);
+        // the honest bar — odds drawn to scale across the cell's foot
         ctx.fillStyle = color;
-        ctx.fillRect(bx, cy + 2, Math.max(2, bw * pct), 6);
-        ctx.textAlign = 'right';
-        ctx.fillText(`${Math.round(pct * 100)}%`, cx + cw, cy + 7);
+        ctx.fillRect(cx + 10, RATE_BAND.y + RATE_BAND.h - 7, Math.max(3, (cw - 20) * pct), 3);
       });
     }
   }
 
-  // SPARK — the dust shop: buy the species outright, owned ones dim out
-  ctx.font = font(9);
-  ctx.fillStyle = '#aab4dd';
+  // SPARK — the dust shop: buy the species outright, owned ones tag IN DEX
+  ctx.font = font(10);
+  ctx.fillStyle = '#c8d0f0';
   ctx.fillText('SPARK EXCHANGE', W / 2, SPARK_VIEW.y - 24);
-  ctx.font = fontB(7);
-  ctx.fillStyle = '#5a6284';
-  ctx.fillText('buy a mon outright with dust — sparked or pulled, it joins the dex', W / 2, SPARK_VIEW.y - 11);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('buy a mon outright with dust — sparked or pulled, it joins the dex', W / 2, SPARK_VIEW.y - 10);
 
   const seen = new Set(dexIds());
   ctx.save();
@@ -2710,41 +2970,90 @@ export function drawHatch(
     const spTier = tierOf(def);
     const epic = spTier >= 3 || INVADER_IDS.has(def.id);
     const cell = { x: cx + 4, y: cy + 4, w: SPARK_CELL_W - 8, h: SPARK_CELL_H - 8 };
-    ctx.save();
-    ctx.globalAlpha = owned ? 0.35 : 1;
+    const tcol = epic ? '#f0b02f' : spTier === 2 ? '#5a9bf0' : '#2a3560';
     roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 8);
     ctx.fillStyle = '#0d1126';
     ctx.fill();
-    ctx.strokeStyle = epic ? '#f0b02f' : spTier === 2 ? '#5a9bf0' : '#2a3560';
+    ctx.strokeStyle = tcol;
     ctx.lineWidth = spTier >= 2 ? 1.5 : 1;
     ctx.stroke();
+    // a type-tinted floor pad — the cell's mon stands on its own color
+    ctx.fillStyle = `${TYPE_COLOR[def.type]}26`;
+    ctx.beginPath();
+    ctx.ellipse(cell.x + cell.w / 2, cell.y + 60, 38, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    ctx.globalAlpha = owned ? 0.4 : 1;
     void loadSprite(def.id);
     try {
-      drawMon(ctx, def.id, cell.x + cell.w / 2, cell.y + 32, 50);
+      drawMon(ctx, def.id, cell.x + cell.w / 2, cell.y + 34, 52);
     } catch {
       /* sprite still warming */
     }
+    ctx.restore();
+    // rare+ stock wears its tier as a corner flag — the rim color made words
+    if (spTier >= 2) {
+      ctx.font = fontB(6);
+      const tl = epic ? 'EPIC' : 'RARE';
+      const tw = ctx.measureText(tl).width + 8;
+      ctx.fillStyle = tcol;
+      ctx.fillRect(cell.x, cell.y, tw, 12);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#0d1126';
+      ctx.fillText(tl, cell.x + 4, cell.y + 9);
+    }
     ctx.textAlign = 'center';
-    ctx.font = fontB(6);
-    ctx.fillStyle = PARCH;
-    ctx.fillText(def.name.toUpperCase(), cell.x + cell.w / 2, cell.y + 62);
+    fitFontB(ctx, def.name.toUpperCase(), 8, cell.w - 10);
+    ctx.fillStyle = owned ? '#8890b8' : PARCH;
+    ctx.fillText(def.name.toUpperCase(), cell.x + cell.w / 2, cell.y + 74);
     if (owned) {
-      ctx.fillStyle = '#5a6284';
-      ctx.fillText('OWNED', cell.x + cell.w / 2, cell.y + 80);
+      // caught reads as a green tag, not a dim-out — the grid's owned state
+      ctx.font = fontB(7);
+      const ow = ctx.measureText('IN DEX').width + 26;
+      const ox = cell.x + cell.w / 2 - ow / 2;
+      roundRect(ctx, ox, cell.y + 84, ow, 16, 8);
+      ctx.fillStyle = '#1d3524';
+      ctx.fill();
+      ctx.strokeStyle = '#6fdc6f';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.strokeStyle = '#9fe89f';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ox + 7, cell.y + 92);
+      ctx.lineTo(ox + 10, cell.y + 95);
+      ctx.lineTo(ox + 15, cell.y + 88);
+      ctx.stroke();
+      ctx.fillStyle = '#9fe89f';
+      ctx.fillText('IN DEX', ox + ow / 2 + 4, cell.y + 96);
     } else {
       const isDeal = def.id === deal.id;
-      // dealCost's discount inline — the deal species prices at 25% off
-      const cost = isDeal ? Math.ceil(dustCost(def) * 0.75) : dustCost(def);
-      dustTag(ctx, cell.x + cell.w / 2, cell.y + 82, cost, info.dust >= cost ? '#9df0ff' : '#ff6b6b');
+      // dealCost carries the −25% — non-deal ids price at list, no re-roll
+      const cost = dealCost(def);
+      dustTag(ctx, cell.x + cell.w / 2 - (isDeal ? 12 : 0), cell.y + 92, cost, info.dust >= cost ? '#9df0ff' : '#ff6b6b');
       if (isDeal) {
-        // the daily discount tab — gold corner flag, struck-through list price
+        // the struck list price beside the deal price — the bargain shows
+        const wl = `${dustCost(def)}`;
+        ctx.font = fontB(7);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#8890b8';
+        const wx = cell.x + cell.w / 2 + 14;
+        ctx.fillText(wl, wx, cell.y + 92);
+        ctx.strokeStyle = '#8890b8';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(wx, cell.y + 89);
+        ctx.lineTo(wx + ctx.measureText(wl).width, cell.y + 89);
+        ctx.stroke();
+        // the daily discount tab — a gold corner flag
         ctx.fillStyle = '#ffd84d';
-        ctx.fillRect(cell.x + cell.w - 38, cell.y, 38, 13);
+        ctx.fillRect(cell.x + cell.w - 36, cell.y, 36, 14);
+        ctx.textAlign = 'center';
+        ctx.font = fontB(7);
         ctx.fillStyle = '#2a2440';
-        ctx.fillText('DEAL', cell.x + cell.w - 19, cell.y + 10);
+        ctx.fillText('−25%', cell.x + cell.w - 18, cell.y + 10);
       }
     }
-    ctx.restore();
   }
   ctx.restore();
 
@@ -2757,9 +3066,452 @@ export function drawHatch(
   if (s.phase !== 'idle') drawPullShow(ctx, s);
 }
 
+// --- pull theatre: the gacha cinematic ------------------------------------
+// Shake charges on a letterboxed stage; the reveal's flash beat kicks the
+// screen, then the mon flash-reveals under god-rays and burst rings.
+// hype 0/1/2 = common / rare / epic-or-shiny — counts + palette scale it.
+const SHOW_CY = 396; // stage center — text marquee hangs below it
+const LB_H = 88; // letterbox bar height once fully closed
+const LB_SLAM = 0.4; // seconds for the bars to slam shut
+const FLASH_T = 0.34; // the silhouette→color beat inside the reveal
+const PRISM = ['#ff6b6b', '#ffd84d', '#7dff8a', '#6bb6ff', '#c05df0'];
+const RAY_N = [0, 10, 16]; // god-ray wedges by hype
+const BURST_N = [26, 46, 74]; // spark count on the flash beat by hype
+const KICK = [0, 5, 10]; // screen-kick px on the flash beat by hype
+const FLASH_A = [0.15, 0.3, 0.55]; // full-screen whiteout alpha by hype
+
 // shake → reveal → results. Timing is main.ts's; everything here derives
 // from s.t (phase-local seconds) and the result queue.
 function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
+  if (s.phase === 'results') {
+    drawPullSummary(ctx, s);
+    return;
+  }
+  // the theatre runs the whole letterboxed screen — the modal stays parked
+  ctx.fillStyle = 'rgba(4,6,14,0.92)';
+  ctx.fillRect(0, 0, W, H);
+  const res = s.results[s.i];
+  const def = res && speciesById(res.id);
+  const tier = def ? tierOf(def) : 0; // BST tier — invaders ride rarity 3 past it
+  const hype = res ? (res.shiny || res.rarity >= 3 || tier >= 3 ? 2 : res.rarity === 2 || tier === 2 ? 1 : 0) : 0;
+  const cx = W / 2;
+  const cy = SHOW_CY;
+  // the flash beat kicks the screen — a damped rattle for its first 0.4s
+  const kick = s.phase === 'reveal' ? KICK[hype] * Math.max(0, 1 - s.t / 0.4) : 0;
+  ctx.save();
+  if (kick) ctx.translate(Math.sin(s.t * 97) * kick, Math.cos(s.t * 83) * kick);
+  if (s.phase === 'shake') drawShakeScene(ctx, s, res, hype, cx, cy);
+  else if (res && def) drawRevealScene(ctx, s, res, def, hype, cx, cy);
+  ctx.restore();
+  // the bars slam shut on s.t — a shake-skip or raid entry just finishes
+  // the close inside the reveal; the summary draws its own sliding back out
+  letterbox(ctx, clamp01(s.t / LB_SLAM));
+}
+
+// seeded hash — the reel's spark layouts can't Math.random or a seeded
+// replay's visuals would flicker frame to frame
+const rnd = (n: number) => {
+  const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const eo = (v: number) => 1 - (1 - v) * (1 - v); // ease-out quad
+// '#rrggbb' + alpha → '#rrggbbaa' — the palette stays hex, alpha rides along
+const withA = (c: string, a: number) =>
+  c +
+  Math.round(clamp01(a) * 255)
+    .toString(16)
+    .padStart(2, '0');
+
+// cinema bars — k=1 fully closed; the shake slams them, the summary opens
+function letterbox(ctx: CanvasRenderingContext2D, k: number) {
+  const h = LB_H * eo(clamp01(k));
+  if (h <= 0) return;
+  ctx.fillStyle = '#04060e';
+  ctx.fillRect(0, 0, W, h);
+  ctx.fillRect(0, H - h, W, h);
+}
+
+// spiky stamp badge — n long spikes with an inner ring at 0.68r
+function burstStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, n: number) {
+  ctx.beginPath();
+  for (let i = 0; i < n * 2; i++) {
+    const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+    const rad = i % 2 ? r * 0.68 : r;
+    const px = cx + Math.cos(a) * rad;
+    const py = cy + Math.sin(a) * rad;
+    if (i) ctx.lineTo(px, py);
+    else ctx.moveTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+// dark silhouette for the reveal's hold beat — built once per species like
+// assets' whiteSprite cache, never in the draw path's hot loop
+const silCache = new Map<number, HTMLCanvasElement>();
+function silSprite(id: number): HTMLCanvasElement | null {
+  const hit = silCache.get(id);
+  if (hit) return hit;
+  let c: HTMLCanvasElement;
+  try {
+    const img = whiteSprite(id); // throws till the sprite lands — caller skips
+    c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const t = c.getContext('2d')!;
+    t.drawImage(img, 0, 0);
+    t.globalCompositeOperation = 'source-in';
+    t.fillStyle = '#05070f';
+    t.fillRect(0, 0, c.width, c.height);
+  } catch {
+    return null;
+  }
+  silCache.set(id, c);
+  return c;
+}
+
+// the charge-up: converging rings, inbound sparks, a ball that jitters
+// faster and harder until the seam cracks — the rarity's tell colors it all
+function drawShakeScene(
+  ctx: CanvasRenderingContext2D,
+  s: HatchState,
+  res: PullResult | undefined,
+  hype: number,
+  cx: number,
+  cy: number,
+) {
+  const T = Math.max(s.tMax, 0.01);
+  const p = clamp01(s.t / T);
+  if (res) void loadSprite(res.id); // warm the art during the charge — the beat can't wait
+  // the tell: rares+ glow gold, epic/shiny prism — and ~1-in-6 commons fake
+  // the gold anyway (Monster Strike's fake-out, kept from the old reel)
+  const fake = res ? ((res.id * 2654435761) >>> 0) % 100 < 16 : false;
+  const tellC =
+    hype === 2 ? PRISM[Math.floor(s.t * 9) % PRISM.length] : hype === 1 || fake ? '#ffd84d' : '#c0c8e0';
+
+  // inbound spark lanes — seeded per pull so the charge reads identical
+  // every frame (and every replay)
+  const n = 16 + hype * 10;
+  for (let k = 0; k < n; k++) {
+    const seed = (res?.id ?? 1) * 131 + k * 17;
+    const a = rnd(seed) * Math.PI * 2;
+    const q = (s.t * (0.5 + rnd(seed + 1) * 0.7) * (1 + p) + rnd(seed + 2)) % 1;
+    const rr = 26 + (1 - q) * 220;
+    const sz = 1.5 + rnd(seed + 3) * 3;
+    ctx.globalAlpha = q * 0.85;
+    ctx.fillStyle = k % 3 ? tellC : '#ffffff';
+    ctx.fillRect(cx + Math.cos(a) * rr - sz / 2, cy + Math.sin(a) * rr - sz / 2, sz, sz);
+  }
+  ctx.globalAlpha = 1;
+
+  // rings collapse onto the ball — faster and tighter as the charge builds
+  for (let k = 0; k < 3; k++) {
+    const q = (s.t * (0.9 + p * 2.2) + k / 3) % 1;
+    ctx.globalAlpha = q * 0.55;
+    ctx.strokeStyle = tellC;
+    ctx.lineWidth = 1.5 + q * 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 30 + (1 - q) * (140 + hype * 45), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // the charge glow — its pulse rate climbs with the charge
+  const pulse = 0.5 + 0.3 * Math.sin(s.t * (6 + p * 14)) + p * 0.4;
+  const glow = ctx.createRadialGradient(cx, cy, 8, cx, cy, 130 + hype * 35);
+  glow.addColorStop(0, withA(tellC, pulse * 0.8));
+  glow.addColorStop(1, withA(tellC, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - 170, cy - 170, 340, 340);
+
+  // the ball — jitter frequency and amplitude both ramp toward the pop
+  const ball = itemSprite('poke-ball');
+  const freq = 13 + p * 50;
+  const amp = 1.5 + p * 13;
+  ctx.save();
+  ctx.translate(cx + Math.sin(s.t * freq) * amp * 0.45, cy + Math.cos(s.t * freq * 0.87) * amp * 0.3);
+  ctx.rotate(Math.sin(s.t * freq) * (0.12 + p * 0.3));
+  ctx.imageSmoothingEnabled = false;
+  if (ball) {
+    const bs = 108 + Math.sin(s.t * freq * 0.5) * 4 * p;
+    ctx.drawImage(ball, -bs / 2, -bs / 2, bs, bs);
+  }
+  ctx.restore();
+
+  // the last beat — the seam cracks light before the cut to reveal
+  if (p > 0.85) {
+    const q = (p - 0.85) / 0.15;
+    ctx.fillStyle = `rgba(255,255,255,${0.75 * q})`;
+    ctx.fillRect(cx - 2 - q * 9, cy - 48, 4 + q * 18, 96);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.font = font(9);
+  ctx.fillStyle = hype === 2 ? '#ffd84d' : '#8890b8';
+  const dots = '.'.repeat(1 + (Math.floor(s.t * 3) % 3));
+  ctx.fillText(
+    hype === 2 ? `THE AIR CRACKLES${dots}` : hype === 1 || fake ? `THE BALL GLOWS${dots}` : `THE BALL TWITCHES${dots}`,
+    cx,
+    cy + 124,
+  );
+  if (s.results.length > 1) {
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#5a6284';
+    ctx.fillText(`${s.i + 1} OF ${s.results.length} — TAP TO HURRY`, cx, cy + 148);
+  }
+}
+
+// the reveal — the mon's dark silhouette holds a beat, then FLASH_T cracks
+// it to color under rotating god-rays, burst rings and a spark shower
+function drawRevealScene(
+  ctx: CanvasRenderingContext2D,
+  s: HatchState,
+  res: PullResult,
+  def: SpeciesDef,
+  hype: number,
+  cx: number,
+  cy: number,
+) {
+  void loadSprite(res.id);
+  const seed = res.id * 2654435761 + s.i * 7919 + (res.shiny ? 41 : 0);
+  const T = Math.max(s.tMax, 0.01);
+  const fade = clamp01(s.t / 0.3) * clamp01((T - s.t) / 0.35); // in/out gate
+  const typeC = TYPE_COLOR[def.type];
+  const main = hype === 2 ? (res.shiny ? '#ffd84d' : '#c05df0') : hype === 1 ? '#ffd84d' : '#c0c8e0';
+  const prism = hype === 2;
+  const pick = (k: number) => (prism ? PRISM[k % PRISM.length] : main);
+  const ft = s.t - FLASH_T; // seconds past the color beat
+
+  // the pillar — a light column squeezed out of a radial gradient
+  if (hype >= 1) {
+    ctx.save();
+    ctx.translate(cx, cy - 30);
+    ctx.scale(0.16 + hype * 0.05, 1);
+    const beam = ctx.createRadialGradient(0, 0, 10, 0, 0, 420);
+    beam.addColorStop(0, withA('#ffffff', 0.4 * fade));
+    beam.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = beam;
+    ctx.beginPath();
+    ctx.arc(0, 0, 420, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // god-rays — wedges wheeling behind the mon, prism-sliced on big pulls
+  const rays = RAY_N[hype];
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(s.t * 0.5);
+  for (let k = 0; k < rays; k++) {
+    ctx.save();
+    ctx.rotate((k / rays) * Math.PI * 2);
+    ctx.fillStyle = withA(pick(k), (0.13 + 0.05 * Math.sin(s.t * 5 + k * 1.7)) * fade);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(-30, -440);
+    ctx.lineTo(30, -440);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+
+  // FGO's rainbow summon ring — segmented arcs counter-rotating
+  if (prism) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    for (let ring = 0; ring < 2; ring++) {
+      ctx.save();
+      ctx.rotate((ring ? -1 : 1) * s.t * (0.7 + ring * 0.35));
+      const rr = 98 + ring * 28;
+      for (let k = 0; k < 12; k++) {
+        ctx.strokeStyle = PRISM[(k + ring * 2) % PRISM.length];
+        ctx.globalAlpha = 0.6 * fade;
+        ctx.lineWidth = 8 - ring * 3;
+        ctx.beginPath();
+        ctx.arc(0, 0, rr, (k / 12) * Math.PI * 2, (k / 12) * Math.PI * 2 + 0.32);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+
+  // the type-tinted stage glow the mon lands on
+  ctx.save();
+  ctx.translate(cx, cy + 88);
+  ctx.scale(1, 0.3);
+  const gg = ctx.createRadialGradient(0, 0, 6, 0, 0, 130);
+  gg.addColorStop(0, withA(typeC, 0.55 * fade));
+  gg.addColorStop(1, withA(typeC, 0));
+  ctx.fillStyle = gg;
+  ctx.beginPath();
+  ctx.arc(0, 0, 130, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // burst rings — expanding shockwaves off the flash beat
+  for (let k = 0; k <= hype; k++) {
+    const rt = ft - k * 0.08;
+    if (rt <= 0 || rt > 0.6) continue;
+    const q = rt / 0.6;
+    ctx.strokeStyle = pick(k);
+    ctx.globalAlpha = 0.85 * (1 - q);
+    ctx.lineWidth = Math.max(1, 9 - q * 8);
+    ctx.beginPath();
+    ctx.arc(cx, cy, 26 + eo(q) * (190 + hype * 95 + k * 26), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // the mon — silhouette till the beat, then color lands with an overshoot
+  const pop = 1 + 0.45 * Math.max(0, 1 - s.t * 4);
+  const sz = (98 + hype * 16) * Math.min(pop, 1.32);
+  const up = -8 * eo(clamp01(s.t / 0.3));
+  if (ft < 0) {
+    const sil = silSprite(res.id);
+    if (sil) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(sil, cx - sz / 2, cy + up - sz / 2, sz, sz);
+      ctx.restore();
+    }
+  } else {
+    try {
+      ctx.globalAlpha = clamp01(ft / 0.1);
+      (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, cy + up, sz);
+      ctx.globalAlpha = 1;
+    } catch {
+      /* sprite still warming */
+    }
+  }
+
+  // the white hit on the beat + a full-screen whiteout scaled by hype
+  if (ft >= 0) {
+    if (ft < 0.22) {
+      const fg = ctx.createRadialGradient(cx, cy, 8, cx, cy, 250);
+      fg.addColorStop(0, `rgba(255,255,255,${0.9 * (1 - ft / 0.22)})`);
+      fg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = fg;
+      ctx.fillRect(cx - 250, cy - 250, 500, 500);
+    }
+    const wa = FLASH_A[hype] * Math.max(0, 1 - ft / 0.18);
+    if (wa > 0.01) {
+      ctx.fillStyle = `rgba(255,255,255,${wa})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // the burst — seeded sparks fly out, stars mixed in on bigger pulls
+  if (ft >= 0 && ft < 1.1) {
+    const n = BURST_N[hype];
+    for (let k = 0; k < n; k++) {
+      const life = 0.5 + rnd(seed + k * 7 + 2) * 0.5;
+      const q = ft / life;
+      if (q >= 1) continue;
+      const a = rnd(seed + k * 7) * Math.PI * 2;
+      const v = 90 + rnd(seed + k * 7 + 1) * (270 + hype * 110);
+      const px = cx + Math.cos(a) * v * ft;
+      const py = cy + Math.sin(a) * v * ft * 0.82 + rnd(seed + k * 7 + 3) * 130 * ft * ft;
+      const sz = (2 + rnd(seed + k * 7 + 4) * 4) * (1 - q);
+      ctx.globalAlpha = 1 - q;
+      ctx.fillStyle = k % 4 ? pick(k) : '#ffffff';
+      if (k % 6 === 0) fillStar(ctx, px, py, Math.max(1.5, sz * 1.7));
+      else ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // the shower — sparks sift down through the bars while the card holds
+  const span = H - LB_H * 2;
+  for (let k = 0; k < 10 + hype * 8; k++) {
+    const sx = cx - 190 + rnd(seed + 900 + k * 3) * 380 + Math.sin(s.t * 2 + k) * 14;
+    const sy = LB_H + ((rnd(seed + 901 + k) * span + s.t * (24 + rnd(seed + 902 + k) * 44)) % span);
+    const tw = Math.abs(Math.sin(s.t * (3 + rnd(seed + 903 + k) * 4) + k * 2));
+    const ss = 1.5 + rnd(seed + 904 + k) * 2.5;
+    ctx.globalAlpha = tw * 0.45 * fade;
+    ctx.fillStyle = k % 4 ? pick(k) : '#ffffff';
+    ctx.fillRect(sx, sy, ss, ss);
+  }
+  ctx.globalAlpha = 1;
+
+  // the marquee — a type bar slides in, the name pops, stars land one by one
+  const ny = cy + 124;
+  const nameK = eo(clamp01((s.t - 0.45) / 0.25));
+  if (nameK > 0) {
+    ctx.fillStyle = typeC;
+    ctx.fillRect(cx - 95 * nameK, ny + 13, 190 * nameK, 3);
+    ctx.textAlign = 'center';
+    fitFont(ctx, def.name.toUpperCase(), 13, W - 90);
+    ctx.fillStyle = PARCH;
+    ctx.save();
+    ctx.translate(cx, ny);
+    const sc = nameK + 0.4 * Math.sin(Math.PI * clamp01((s.t - 0.45) / 0.3));
+    ctx.scale(sc, sc);
+    ctx.fillText(def.name.toUpperCase(), 0, 0);
+    ctx.restore();
+  }
+  const starC = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
+  for (let k = 0; k < res.rarity; k++) {
+    const kt = clamp01((s.t - 0.56 - k * 0.09) / 0.18);
+    if (kt <= 0) continue;
+    ctx.fillStyle = starC;
+    fillStar(
+      ctx,
+      cx + (k - (res.rarity - 1) / 2) * 24,
+      ny + 36,
+      9 * (0.4 + 0.6 * eo(kt) + 0.4 * Math.sin(kt * Math.PI)),
+    );
+  }
+
+  // the stamp slams in rotated — SHINY! beats NEW! beats the plain dupe line
+  const stampK = clamp01((s.t - 0.66) / 0.2);
+  if (stampK > 0) {
+    ctx.save();
+    ctx.translate(cx, ny + 74);
+    ctx.rotate(-0.08);
+    const sc = 2 - eo(stampK);
+    ctx.scale(sc, sc);
+    ctx.textAlign = 'center';
+    if (res.shiny) {
+      ctx.fillStyle = '#ffd84d';
+      burstStar(ctx, 0, 0, 42, 12);
+      ctx.font = font(9);
+      ctx.fillStyle = '#2a2440';
+      ctx.fillText('SHINY!', 0, 4);
+    } else if (!res.dupe) {
+      ctx.fillStyle = '#d0483e';
+      burstStar(ctx, 0, 0, 36, 10);
+      ctx.font = font(9);
+      ctx.fillStyle = '#fff5d6';
+      ctx.fillText('NEW!', 0, 4);
+    } else {
+      ctx.font = font(10);
+      ctx.fillStyle = '#5a9bf0';
+      ctx.fillText(`DUPE +${res.dust} DUST`, 0, 4);
+    }
+    ctx.restore();
+  }
+
+  // reel position + the out — SKIP ≫ keeps its hit rect inside the parked rim
+  if (s.results.length > 1) {
+    const pw = s.results.length * 10 - 6;
+    for (let k = 0; k < s.results.length; k++) {
+      ctx.fillStyle = k === s.i ? '#ffd84d' : '#3a4160';
+      ctx.fillRect(cx - pw / 2 + k * 10, H - LB_H - 44, 6, 6);
+    }
+    pill(ctx, SKIP_PULL_BTN, { c: '#3a4160', cd: '#262c44', tc: '#aab4dd', label: 'SKIP ≫' });
+  }
+  ctx.textAlign = 'center';
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(s.results.length > 1 ? 'TAP FOR NEXT' : 'TAP TO CONTINUE', cx, H - LB_H - 22);
+}
+// 'results' — the whole pull laid out in the parked modal; a single pull
+// gets the hero card. The theatre's bars slide back open over the top.
+function drawPullSummary(ctx: CanvasRenderingContext2D, s: HatchState) {
   ctx.fillStyle = 'rgba(6,10,22,0.72)';
   ctx.fillRect(0, 0, W, H);
   const m = HATCH_MODAL;
@@ -2773,91 +3525,15 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
   edge(ctx, m, 12);
   const cx = m.x + m.w / 2;
 
-  if (s.phase === 'shake') {
-    const res = s.results[s.i];
-    // the gold tell: rares flash, ~1-in-6 commons fake it (MS's fake-out)
-    const gold = res ? res.rarity >= 2 || ((res.id * 2654435761) >>> 0) % 100 < 16 : false;
-    const cy = m.y + m.h / 2 - 10;
-    const wob = Math.sin(s.t * 13) * 0.4 * Math.max(0, 1 - s.t / 1.8); // 2-3 decaying wobbles
-    const pulse = 0.4 + 0.3 * Math.sin(s.t * 9);
-    const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, 96);
-    glow.addColorStop(0, gold ? `rgba(255,216,77,${pulse})` : `rgba(200,208,224,${pulse * 0.5})`);
-    glow.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(cx - 96, cy - 96, 192, 192);
-    const ball = itemSprite('poke-ball');
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(wob);
-    ctx.imageSmoothingEnabled = false;
-    if (ball) ctx.drawImage(ball, -48, -48, 96, 96);
-    ctx.restore();
-    ctx.textAlign = 'center';
-    ctx.font = font(9);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText('THE BALL TWITCHES...', cx, m.y + m.h - 34);
-    return;
+  // a winning queue warms the whole card — gold haze behind the header
+  if (s.results.some((r) => r.shiny || r.rarity >= 2)) {
+    const wg = ctx.createRadialGradient(cx, m.y + 90, 10, cx, m.y + 90, 240);
+    wg.addColorStop(0, 'rgba(255,216,77,0.14)');
+    wg.addColorStop(1, 'rgba(255,216,77,0)');
+    ctx.fillStyle = wg;
+    ctx.fillRect(m.x, m.y, m.w, m.h);
   }
 
-  if (s.phase === 'reveal') {
-    const res = s.results[s.i];
-    const def = res && speciesById(res.id);
-    if (!res || !def) return;
-    void loadSprite(res.id);
-    const cy = m.y + 148;
-    const starC = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
-    // the burst — rarity-tinted rays spinning out behind the sprite
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.globalAlpha = 0.55;
-    ctx.strokeStyle = starC;
-    ctx.lineWidth = 3;
-    for (let k = 0; k < 10; k++) {
-      const a = (k / 10) * Math.PI * 2 + s.t * 1.6;
-      const rr = 78 + 8 * Math.sin(s.t * 6 + k);
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a) * 60, Math.sin(a) * 60);
-      ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
-      ctx.stroke();
-    }
-    ctx.restore();
-    const pop = 1 + 0.35 * Math.max(0, 1 - s.t * 3.5); // landing overshoot, reel-pop style
-    try {
-      (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, cy, 100 * Math.min(pop, 1.25));
-    } catch {
-      /* sprite still warming */
-    }
-    for (let k = 0; k < res.rarity; k++) {
-      ctx.fillStyle = starC;
-      fillStar(ctx, cx + (k - (res.rarity - 1) / 2) * 22, cy + 78, 9);
-    }
-    ctx.textAlign = 'center';
-    fitFont(ctx, def.name.toUpperCase(), 12, m.w - 40);
-    ctx.fillStyle = PARCH;
-    ctx.fillText(def.name.toUpperCase(), cx, cy + 108);
-    ctx.font = font(10);
-    ctx.fillStyle = res.dupe ? '#5a9bf0' : '#ffd84d';
-    ctx.fillText(res.dupe ? `DUPE +${res.dust} DUST` : 'NEW!', cx, cy + 138);
-    if (res.shiny) {
-      ctx.font = fontB(8);
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillText('★ SHINY ★', cx, cy + 160);
-    }
-    ctx.font = fontB(8);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(
-      s.results.length > 1 ? `${s.i + 1} OF ${s.results.length} — TAP FOR NEXT` : 'TAP TO CONTINUE',
-      cx,
-      m.y + m.h - 26,
-    );
-    if (s.results.length > 1) {
-      // SKIP ≫ — the 10-pull's fast-forward sits inside the modal's rim
-      pill(ctx, SKIP_PULL_BTN, { c: '#3a4160', cd: '#262c44', tc: '#aab4dd', label: 'SKIP ≫' });
-    }
-    return;
-  }
-
-  // 'results' — the whole pull laid out; a single pull gets the hero card
   ctx.textAlign = 'center';
   ctx.font = font(11);
   ctx.fillStyle = '#ffd84d';
@@ -2867,11 +3543,19 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
     const def = res && speciesById(res.id);
     if (res && def) {
       void loadSprite(res.id);
+      // the hero card pops in like the reveal did — overshoot, then settle
+      const k = eo(clamp01(s.t / 0.3));
+      ctx.save();
+      ctx.translate(cx, m.y + 170);
+      ctx.scale(0.6 + 0.4 * k + 0.15 * Math.sin(Math.PI * clamp01(s.t / 0.35)), 0.6 + 0.4 * k + 0.15 * Math.sin(Math.PI * clamp01(s.t / 0.35)));
+      ctx.translate(-cx, -(m.y + 170));
       try {
         (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, m.y + 170, 110);
       } catch {
         /* sprite still warming */
       }
+      ctx.restore();
+      ctx.globalAlpha = k;
       const starC = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
       for (let k = 0; k < res.rarity; k++) {
         ctx.fillStyle = starC;
@@ -2883,34 +3567,53 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
       ctx.font = font(10);
       ctx.fillStyle = res.dupe ? '#5a9bf0' : '#ffd84d';
       ctx.fillText(res.dupe ? `DUPE +${res.dust} DUST` : 'NEW!', cx, m.y + 306);
+      ctx.globalAlpha = 1;
     }
   } else {
     const cols = 5;
     const cw = (m.w - 32) / cols;
     const rh = 96;
     s.results.forEach((res, i) => {
+      // cards deal in one by one — the reel's last staggered beat
+      const k = eo(clamp01((s.t - i * 0.05) / 0.22));
+      if (k <= 0) return;
       const cell = { x: m.x + 16 + (i % cols) * cw + 3, y: m.y + 52 + Math.floor(i / cols) * rh + 3, w: cw - 6, h: rh - 6 };
+      ctx.save();
+      ctx.translate(cell.x + cell.w / 2, cell.y + cell.h / 2);
+      const sc = (0.4 + 0.6 * k) * (1 + 0.3 * Math.sin(Math.PI * k));
+      ctx.scale(sc, sc);
+      ctx.translate(-(cell.x + cell.w / 2), -(cell.y + cell.h / 2));
       roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 7);
       ctx.fillStyle = '#12162b';
       ctx.fill();
       ctx.strokeStyle = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#5a9bf0' : '#2a3560';
       ctx.lineWidth = res.rarity >= 2 ? 1.5 : 1;
       ctx.stroke();
+      // big pulls keep their win shimmer — a second rim that breathes
+      if (res.shiny || res.rarity >= 3) {
+        ctx.globalAlpha = 0.45 + 0.3 * Math.sin(s.t * 6 + i);
+        ctx.strokeStyle = res.shiny ? '#ffd84d' : '#c05df0';
+        ctx.lineWidth = 2;
+        roundRect(ctx, cell.x - 1.5, cell.y - 1.5, cell.w + 3, cell.h + 3, 8);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       void loadSprite(res.id);
       try {
         (res.shiny ? drawShiny : drawMon)(ctx, res.id, cell.x + cell.w / 2, cell.y + 30, 44);
       } catch {
         /* sprite still warming */
       }
-      const sc = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
+      const sc2 = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
       for (let k = 0; k < res.rarity; k++) {
-        ctx.fillStyle = sc;
+        ctx.fillStyle = sc2;
         fillStar(ctx, cell.x + cell.w / 2 + (k - (res.rarity - 1) / 2) * 12, cell.y + 58, 5);
       }
       ctx.textAlign = 'center';
       ctx.font = fontB(6);
       ctx.fillStyle = res.dupe ? '#5a9bf0' : '#ffd84d';
       ctx.fillText(res.dupe ? `+${res.dust}` : 'NEW', cell.x + cell.w / 2, cell.y + 76);
+      ctx.restore();
     });
   }
   const news = s.results.filter((r) => !r.dupe).length;
@@ -2922,6 +3625,7 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
   ctx.font = fontB(8);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('TAP TO COLLECT', cx, m.y + m.h - 24);
+  letterbox(ctx, 1 - clamp01(s.t / 0.4)); // the bars ride back out over the card
 }
 
 // --- the lab: the deterministic sink — every star buys a sure thing ---------
@@ -4472,8 +5176,8 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
 // --- toggle rows. Geometry is the single source for draw + hit tests. ----
 
 export type SettingsCat = 'sound' | 'graphics' | 'feel' | 'trainer';
-export type SettingsSliderKey = 'master' | 'music' | 'sfx' | 'cries' | 'shake';
-export type SettingsToggleKey = 'haptics' | 'flash' | 'battery' | 'fps' | 'uiSfx' | 'dmgNums' | 'aimGuide' | 'ambients' | 'mapGlints';
+export type SettingsSliderKey = 'master' | 'music' | 'sfx' | 'shake';
+export type SettingsToggleKey = 'haptics' | 'flash' | 'battery' | 'fps' | 'uiSfx' | 'dmgNums' | 'aimGuide' | 'mapGlints';
 export type SettingsSegKey = 'quality' | 'pickupFx';
 export type SettingsHit =
   | { kind: 'tab'; i: number }
@@ -4494,7 +5198,7 @@ export const SETTINGS_PANEL = { x: 22, y: 38, w: W - 44, h: 800 };
 export const SETTINGS_CLOSE = { x: W / 2 - 100, y: SETTINGS_PANEL.y + SETTINGS_PANEL.h - 64, w: 200, h: 46 };
 
 export const SETTINGS_CATS: { id: SettingsCat; name: string; tab: string; sub: string }[] = [
-  { id: 'sound', name: 'SOUND', tab: 'volume & cries', sub: 'volume, music and cries' },
+  { id: 'sound', name: 'SOUND', tab: 'volume', sub: 'volume, music and effects' },
   { id: 'graphics', name: 'GRAPHICS', tab: 'res & effects', sub: 'quality, battery and effects' },
   { id: 'feel', name: 'FEEL', tab: 'rumble', sub: 'haptics and feedback' },
   { id: 'trainer', name: 'TRAINER', tab: 'your look', sub: 'the trainer on the map' },
@@ -4511,7 +5215,6 @@ const SET_ROWS: Record<SettingsCat, SettingsRow[]> = {
     { kind: 'slider', key: 'master', label: 'MASTER VOLUME' },
     { kind: 'slider', key: 'music', label: 'MUSIC' },
     { kind: 'slider', key: 'sfx', label: 'EFFECTS' },
-    { kind: 'slider', key: 'cries', label: 'POKÉMON CRIES' },
     { kind: 'toggle', key: 'uiSfx', label: 'MENU SOUNDS', sub: 'clicks & blips in menus' },
   ],
   graphics: [
@@ -4520,7 +5223,6 @@ const SET_ROWS: Record<SettingsCat, SettingsRow[]> = {
     { kind: 'slider', key: 'shake', label: 'SHAKE INTENSITY', sub: 'hit feedback strength' },
     { kind: 'toggle', key: 'flash', label: 'REDUCE FLASHES', sub: 'caps full-screen flash intensity', invert: true },
     { kind: 'seg', key: 'pickupFx', label: 'PICKUP EFFECTS', sub: 'fewer sparkles under pickups' },
-    { kind: 'toggle', key: 'ambients', label: 'TITLE WILDS', sub: 'mon wanderers on the title' },
     { kind: 'toggle', key: 'mapGlints', label: 'MAP SPARKLES', sub: 'sea glints on the climb map' },
     { kind: 'toggle', key: 'fps', label: 'SHOW FPS', sub: 'frame counter in the corner' },
   ],
@@ -4640,7 +5342,7 @@ export function settingsSegSet(key: SettingsSegKey, i: number) {
 }
 
 export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, vals: Settings) {
-  ctx.fillStyle = 'rgba(4,6,16,0.82)';
+  ctx.fillStyle = 'rgba(4,6,16,0.9)';
   ctx.fillRect(0, 0, W, H);
   roundRect(ctx, SETTINGS_PANEL.x, SETTINGS_PANEL.y, SETTINGS_PANEL.w, SETTINGS_PANEL.h, 14);
   ctx.fillStyle = '#0d1122';

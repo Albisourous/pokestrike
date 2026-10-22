@@ -1,6 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, cry, music, toggleMute, syncVolumes, playJingle, buzz, TRACKS } from './core/audio';
+import { unlockAudio, sfx, music, toggleMute, syncVolumes, playJingle, buzz, TRACKS } from './core/audio';
 import type { TrackName } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS } from './game/data';
 import type { SpeciesDef, StageDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -111,8 +111,10 @@ import {
   slop,
   font,
   fontB,
-  updateTitle,
   TAB_CELLS,
+  noteTabPress,
+  DEAL_BTN,
+  SETS_BTN,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
@@ -199,7 +201,7 @@ let boardOpen = false;
 let hatchOpen = false;
 let labOpen = false;
 let labScroll = 0;
-let hatch: HatchState = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0 };
+let hatch: HatchState = { phase: 'idle', t: 0, tMax: 0, results: [], i: 0, sparkScroll: 0 };
 // a spark buy arms like the NEW-climb link — first tap arms for 3s, only a
 // second tap inside the window spends the dust
 let sparkArm = { id: -1, t: -10 };
@@ -404,7 +406,6 @@ const draftPick = (i: number) => {
   const offers = draftOffers();
   if (i >= offers.length) return;
   sfx('ui');
-  cry(draftPool[offers[i]].id, 0.15); // picked mon calls out — quiet, the ogg cries are hot
   statOffer('draft', offers.map((o) => draftPool[o].id), draftPool[offers[i]].id);
   draft.picked.push(offers[i]);
   offerCache = null;
@@ -639,8 +640,18 @@ function rerollDraft() {
 
 // --- the hatcher: the pull machine + the dust spark shop -----------------
 // tunables (Oct-21 spec — guesses, marked for playtesting)
-const HATCH_SHAKE_T = 0.9; // ball-rock seconds before the reveal
-const HATCH_REVEAL_T = 1.6; // a card holds this long, then the reel plays itself
+const HATCH_SHAKE_T = 1.15; // base ball-rock seconds before the reveal
+const HATCH_REVEAL_T = 1.7; // a card holds this long, then the reel plays itself
+// bigger pulls buy a longer stage — epic and shiny each add runway
+const hatchLen = (base: number, res?: PullResult) =>
+  base + (res ? (res.rarity - 1) * 0.3 + (res.shiny ? 0.55 : 0) : 0);
+// the reveal beat's verdict sound — shiny jackpots, epics get the dark sting
+const revealSfx = (res?: PullResult) => {
+  if (!res) return;
+  if (res.shiny) sfx('perfect');
+  else if (res.rarity >= 3) sfx('invade');
+  else sfx('caught', res.rarity === 2 ? 1.25 : 1);
+};
 const SPARK_ARM_T = 3; // two-tap confirm window on a dust buy
 
 // milestone checks the run-end path runs — a pull crossing a threshold
@@ -693,8 +704,10 @@ const doPull = (n: number) => {
   hatch.label = undefined; // a raid's 'RAID CLEARED' header can't ride the next pull
   hatch.i = 0;
   hatch.t = 0;
+  hatch.tMax = hatchLen(HATCH_SHAKE_T, results[0]);
   hatch.phase = 'shake'; // the ball rocks before the first reveal
   sfx('ui');
+  sfx('beam', 0.5); // the charge-up's rising whine under the wobble
 };
 
 // the spark grid's two-tap buy — first tap arms for 3s, the dust spend on
@@ -732,6 +745,8 @@ const hatchTap = (p: { x: number; y: number }) => {
   if (hatch.phase === 'shake') {
     hatch.phase = 'reveal'; // an impatient tap skips the rest of the shake
     hatch.t = 0;
+    hatch.tMax = hatchLen(HATCH_REVEAL_T, hatch.results[hatch.i]);
+    revealSfx(hatch.results[hatch.i]);
     return;
   }
   if (hatch.phase === 'reveal') {
@@ -744,8 +759,12 @@ const hatchTap = (p: { x: number; y: number }) => {
     }
     if (++hatch.i >= hatch.results.length) {
       hatch.phase = 'results';
-      hatch.t = 0;
+    } else {
+      // the next card's theatre starts clean — clock, runway and its own hit
+      hatch.tMax = hatchLen(HATCH_REVEAL_T, hatch.results[hatch.i]);
+      revealSfx(hatch.results[hatch.i]);
     }
+    hatch.t = 0;
     return;
   }
   if (hatch.phase === 'results') {
@@ -977,15 +996,25 @@ canvas.addEventListener('pointerdown', (e) => {
     for (const cell of TAB_CELLS) {
       if (inRect(p.x, p.y, cell)) {
         homeTab = cell.tab;
+        noteTabPress(t); // press-pop reads the stamp on the new active pill
         sfx('ui');
         return;
       }
     }
-    if (homeTab === 'mons' && inRect(p.x, p.y, HATCH_BTN)) {
+    if (homeTab === 'shop' && (inRect(p.x, p.y, HATCH_BTN) || inRect(p.x, p.y, DEAL_BTN))) {
       sfx('ui');
       hatchOpen = true;
-      hatch = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0 };
+      hatch = { phase: 'idle', t: 0, tMax: 0, results: [], i: 0, sparkScroll: 0 };
       sparkArm = { id: -1, t: -10 };
+      return;
+    }
+    if (homeTab === 'mons' && inRect(p.x, p.y, SETS_BTN)) {
+      // LINE SETS — the card sells "TAP TO CLAIM" only while a bounty waits
+      const ready = setsReady();
+      if (ready.length) {
+        for (const root of ready) claimSet(root);
+        sfx('perfect');
+      } else sfx('ui');
       return;
     }
     if (homeTab === 'town' && inRect(p.x, p.y, LAB_BTN)) {
@@ -1395,12 +1424,9 @@ canvas.addEventListener('pointerup', (e) => {
   if (e.pointerId !== activeId) return; // not the gesture's finger — its lift fires nothing
   activeId = null;
   if (settingsDrag) {
-    const key = settingsDrag.key;
     settingsDrag = null;
     syncVolumes(); // a tap-set never saw a pointermove — flush the volume here
-    // the cries slider auditions itself — a real cry stands in for the click
-    if (key === 'cries') cry(25, 0.4);
-    else sfx('ui'); // one click on release, not a stream while dragging
+    sfx('ui'); // one click on release, not a stream while dragging
     return;
   }
   if (settingsOpen) return;
@@ -1688,19 +1714,24 @@ function update(dt: number) {
   t += dt;
   if (dt > 0) fpsEma = fpsEma ? fpsEma + (1 / dt - fpsEma) * 0.08 : 1 / dt;
   syncWake();
-  if (scene === 'title') updateTitle(dt);
-  // the hatcher's phase clock always ticks — the shake reads it for its
-  // ~0.9s, the reveal/results passes use it for pop-in animation
+
+  // the hatcher's phase clock always ticks — tMax carries each phase's
+  // runway (sized to the pull's hype), the scenes read s.t for animation
   if (hatchOpen) {
     hatch.t += dt;
-    if (hatch.phase === 'shake' && hatch.t >= HATCH_SHAKE_T) {
+    if (hatch.phase === 'shake' && hatch.t >= hatch.tMax) {
       hatch.phase = 'reveal';
       hatch.t = 0;
-      sfx('caught'); // the click — same verdict sound the catches use
-    } else if (hatch.phase === 'reveal' && hatch.t >= HATCH_REVEAL_T) {
+      hatch.tMax = hatchLen(HATCH_REVEAL_T, hatch.results[hatch.i]);
+      revealSfx(hatch.results[hatch.i]);
+    } else if (hatch.phase === 'reveal' && hatch.t >= hatch.tMax) {
       // the reel plays itself — a 10-pull shouldn't cost 10 taps; taps
       // still fast-forward through hatchTap's advance
       if (++hatch.i >= hatch.results.length) hatch.phase = 'results';
+      else {
+        hatch.tMax = hatchLen(HATCH_REVEAL_T, hatch.results[hatch.i]);
+        revealSfx(hatch.results[hatch.i]); // each card earns its own hit
+      }
       hatch.t = 0;
     }
   }
@@ -1755,14 +1786,16 @@ function update(dt: number) {
           const dexPay = pullMilestones(); // the raid capture can cross collector/living too
           // the prize rides the hatcher's theatre — straight to reveal:
           // the fight itself was the ball-shake
+          const raidRes: PullResult = { id: boss.id, rarity: 3, dupe, shiny: true, dust: dupe ? DUST_BY_TIER[3] : 0 };
           hatch = {
             phase: 'reveal',
             t: 0,
+            tMax: hatchLen(HATCH_REVEAL_T, raidRes),
             i: 0,
             sparkScroll: 0,
             label: 'RAID CLEARED',
             dexPay,
-            results: [{ id: boss.id, rarity: 3, dupe, shiny: true, dust: dupe ? DUST_BY_TIER[3] : 0 }],
+            results: [raidRes],
           };
           hatchOpen = true;
         } else {

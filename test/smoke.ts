@@ -1,7 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay } from '../src/game/data';
 import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
@@ -10,7 +10,7 @@ import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick } from '../src/game/meta';
+import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
@@ -642,14 +642,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   localStorage.setItem('pk_settings', '{broken');
   const d = settings();
   ok(
-    d.master === 0.8 && d.music === 0.5 && d.sfx === 0.7 && d.cries === 0.6 && d.haptics && d.shake === 1 && d.flash &&
+    d.master === 0.8 && d.music === 0.5 && d.sfx === 0.7 && d.haptics && d.shake === 1 && d.flash &&
       d.quality === 'high' && d.pickupFx === 'complete' && !d.battery && !d.fps && d.uiSfx && d.dmgNums && d.aimGuide &&
-      d.ambients && d.mapGlints,
+      d.mapGlints,
     'garbage pk_settings falls back to defaults',
   );
-  localStorage.setItem('pk_settings', JSON.stringify({ cries: 0.1, junk: 'x' }));
+  // cries is retired — an old save's cries key is plain junk now: real keys
+  // merge, missing keys read defaults, and nothing leaks a cries field back
+  localStorage.setItem('pk_settings', JSON.stringify({ music: 0.2, cries: 0.1, junk: 'x' }));
   const p = settings();
-  ok(p.cries === 0.1 && p.master === 0.8 && p.flash === true, 'a partial blob merges over defaults');
+  ok(p.music === 0.2 && p.master === 0.8 && p.flash === true, 'a partial blob merges real keys over defaults');
+  ok(!('cries' in p), 'a stored cries key is ignored junk — it never merges back');
   // v1 stored shake as a bool — it migrates to the 0..1 intensity on read
   localStorage.setItem('pk_settings', JSON.stringify({ shake: true }));
   ok(settings().shake === 1, 'stored shake:true migrates to intensity 1');
@@ -671,10 +674,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   setSetting('quality', 'medium');
   ok(settings().quality === 'medium', 'setSetting invalidates the parse cache — no reload needed');
   setSetting('master', 0.8);
+  setSetting('music', 0.5);
   setSetting('shake', 1);
   setSetting('quality', 'high');
-  setSetting('pickupFx', 'complete');
-  setSetting('cries', 0.6); // leave the store at defaults
+  setSetting('pickupFx', 'complete'); // leave the store at defaults
 }
 
 // --- shiny roll + guaranteed catch ----------------------------------------
@@ -2534,6 +2537,48 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   localStorage.removeItem('pk_tasks');
 }
 
+// --- evolution-line sets: a completed line pays its star bounty once ------
+{
+  const dexSave = localStorage.getItem('pk_dex'); // the real dex goes back after
+  const setsSave = localStorage.getItem('pk_sets');
+  localStorage.setItem('pk_dex', '[]'); // a valid empty blob — memDex stays out of it
+  localStorage.removeItem('pk_sets');
+
+  ok(
+    EVO_LINES.length > 0 &&
+      EVO_LINES.every((l) => l.ids.length > 1 && l.ids[0] === l.root && l.ids.every((id) => !!speciesById(id))),
+    `${EVO_LINES.length} evo-line sets — every line is a root plus a descendant`,
+  );
+  ok(setPay(EVO_LINES[0]) === 10 * EVO_LINES[0].ids.length, 'set pay scales with line length');
+  ok(setsReady().length === 0 && setProgress().every((p) => p.have === 0), 'an empty dex readies no sets');
+  ok(claimSet(EVO_LINES[0].root) === 0, 'claiming an incomplete line pays nothing');
+
+  // a dex holding the whole line readies exactly that root
+  const line = EVO_LINES[0];
+  recordCapture(line.ids);
+  ok(setsReady().join() === String(line.root), `a full line readies its set (${speciesById(line.root)?.name})`);
+  const prog = setProgress().find((p) => p.root === line.root)!;
+  ok(prog.have === prog.need && prog.need === line.ids.length, `setProgress reads ${prog.have}/${prog.need}`);
+
+  // the claim banks setPay stars once — a second tap reads 0
+  const sS = stars();
+  ok(claimSet(line.root) === setPay(line) && stars() === sS + setPay(line), `the set claim pays +${setPay(line)} stars`);
+  ok(claimSet(line.root) === 0 && stars() === sS + setPay(line), 'the same set never pays twice');
+  ok(setsReady().length === 0, 'a claimed set leaves the ready list');
+
+  // a corrupt pk_sets falls back to the memory copy — the claim survives
+  localStorage.setItem('pk_sets', '{broken');
+  ok(setsReady().length === 0 && claimSet(line.root) === 0, 'corrupt pk_sets keeps the claimed line claimed');
+  // a valid array is authoritative — foreign ids aren't roots, so the set re-readies
+  localStorage.setItem('pk_sets', '[999999]');
+  ok(setsReady().join() === String(line.root), 'a foreign pk_sets array re-readies the unclaimed set');
+
+  if (dexSave == null) localStorage.removeItem('pk_dex');
+  else localStorage.setItem('pk_dex', dexSave);
+  if (setsSave == null) localStorage.removeItem('pk_sets');
+  else localStorage.setItem('pk_sets', setsSave);
+}
+
 // --- the rookie ladder + the first-boot help flag --------------------------
 {
   const bestSave = localStorage.getItem('pk_best'); // the real record goes back
@@ -2595,7 +2640,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     'pk_badges', 'pk_bag', 'pk_stars', 'pk_dust', 'pk_pulls', 'pk_free',
     'pk_grant', 'pk_boost', 'pk_raid', 'pk_login', 'pk_win', 'pk_grind',
     'pk_lab', 'pk_seen', 'pk_stats', 'pk_run', 'pk_settings', 'pk_tasks',
-    'pk_streak', 'pk_ver', 'pk_trainer',
+    'pk_streak', 'pk_ver', 'pk_trainer', 'pk_sets',
   ];
   const JUNK = [
     '{broken', '42', '"str"', 'true', '[]', '{}', '[1,"x",null]',
@@ -2604,6 +2649,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const now = Date.now();
   const READERS: [string, () => unknown][] = [
     ['dexIds', () => dexIds()], ['shinyIds', () => shinyIds()],
+    ['setProgress', () => setProgress()], ['setsReady', () => setsReady()],
     ['unlockedAch', () => unlockedAch()], ['coachDone', () => coachDone()],
     ['best', () => best()], ['gymBadges', () => gymBadges()],
     ['rating', () => rating()], ['tier', () => tier()], ['board', () => board()],
