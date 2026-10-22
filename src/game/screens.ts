@@ -1598,10 +1598,8 @@ function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
     sub: ascModName?.toUpperCase() ?? (ascCap === 0 ? 'CLEAR A CLIMB TO UNLOCK' : 'TAP TO CYCLE'),
     disabled: ascCap === 0,
   });
-  // the dial's heat mark — dark ink on the pill face, same icon family
-  ctx.globalAlpha = ascCap === 0 ? 0.3 : 0.75;
-  townIcon(ctx, 'flame', ASC_BTN.x + 44, ASC_BTN.y + ASC_BTN.h / 2);
-  ctx.globalAlpha = 1;
+  // no icon on the dial — at pill scale the flame read as a smudge; the
+  // centered label carries it
 }
 
 // The crash-receipt instructions, in a card — the game collects no
@@ -2112,16 +2110,16 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 // home-tab card rects — the same _BTN names the hit tests know, re-homed to
 // the cards the tab bodies draw. MONS owns the hatcher hero + the dex card;
 // TOWN owns the 2-col grid and the wide ascension row.
-export const HATCH_BTN = { x: 30, y: 240, w: W - 60, h: 250 };
+export const HATCH_BTN = { x: 30, y: 210, w: W - 60, h: 250 };
 export const DEX_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 116 };
 // the catches strip is decorative — no hit rect needed
 const CATCH_STRIP = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 150 };
 const TOWN_COL = (W - 60 - 16) / 2; // 232 — two columns on a 16px gutter
-export const LAB_BTN = { x: 30, y: 270, w: TOWN_COL, h: 150 };
+export const LAB_BTN = { x: 30, y: 230, w: TOWN_COL, h: 150 };
 export const TASKS_BTN = { x: LAB_BTN.x + TOWN_COL + 16, y: LAB_BTN.y, w: TOWN_COL, h: 150 };
 export const ACH_BTN = { x: 30, y: LAB_BTN.y + LAB_BTN.h + 16, w: TOWN_COL, h: 150 };
 export const BOARD_BTN = { x: TASKS_BTN.x, y: ACH_BTN.y, w: TOWN_COL, h: 150 };
-export const ASC_BTN = { x: 30, y: ACH_BTN.y + ACH_BTN.h + 16, w: W - 60, h: 110 };
+export const ASC_BTN = { x: 30, y: ACH_BTN.y + ACH_BTN.h + 16, w: W - 60, h: 130 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
