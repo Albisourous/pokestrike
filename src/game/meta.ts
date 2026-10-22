@@ -38,6 +38,9 @@ export function dexIds(): number[] {
   return Array.isArray(raw) ? raw.filter((x): x is number => Number.isFinite(x)) : [...memDex];
 }
 
+// Last n caught species, newest first — the MONS tab's LATEST CATCHES strip.
+export const dexRecent = (n = 3): number[] => dexIds().slice(-n).reverse();
+
 export function recordCapture(ids: number[]) {
   for (const id of ids) memDex.add(id);
   store('pk_dex', [...new Set([...dexIds(), ...ids])]);

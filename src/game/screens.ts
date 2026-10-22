@@ -8,7 +8,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, featuredPull, dealPick } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -101,11 +101,26 @@ export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260,
 // a 34px slab top-aligned on it — a centered slab used to ride up into
 // DAILY/RAID's bottom edge (NEW_HIT is hit-tested first and ate their taps)
 export const NEW_HIT = { x: NEW_BTN.x, y: DAILY_BTN.y + DAILY_BTN.h + 1, w: NEW_BTN.w, h: 34 };
+// --- home tabs: the CR-style bottom nav the title's bodies hang off -------
+export type HomeTab = 'mons' | 'climb' | 'town';
+// a floating bar, not flush — its bottom edge keeps ~28px clear of the
+// iOS home-swipe zone
+export const TAB_BAR = { x: 50, y: H - 104, w: W - 100, h: 76 };
+// three equal cells: MONS left, CLIMB center (the play tab), TOWN right
+export const TAB_CELLS: { tab: HomeTab; x: number; y: number; w: number; h: number }[] =
+  (['mons', 'climb', 'town'] as HomeTab[]).map((tab, i) => ({
+    tab,
+    x: TAB_BAR.x + (TAB_BAR.w * i) / 3,
+    y: TAB_BAR.y,
+    w: TAB_BAR.w / 3,
+    h: TAB_BAR.h,
+  }));
+
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
-// beta lifeline — a quiet link bottom-left, riding the ladder label's
-// baseline so the bottom edge stays clear for the iOS home swipe
-export const BUG_BTN = { x: 10, y: H - 66, w: 96, h: 18 };
-export const BUG_HIT = { x: 0, y: H - 76, w: 130, h: 44 };
+// beta lifeline — a quiet link bottom-left, parked just above the tab bar
+// so the nav never covers it
+export const BUG_BTN = { x: 10, y: TAB_BAR.y - 30, w: 96, h: 18 };
+export const BUG_HIT = { x: 0, y: TAB_BAR.y - 40, w: 130, h: 40 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
 export const HELP_CHIP = { x: W - 58, y: 54, w: 40, h: 40 };
@@ -318,6 +333,49 @@ function monitorGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: 
   ctx.fillRect(cx + 2.5 * s, cy - 4.5 * s, 3 * s, 7 * s);
 }
 
+// house glyph — the TOWN tab's icon; same stroke family as gearGlyph
+function homeGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx - 9 * s, cy + 1 * s);
+  ctx.lineTo(cx, cy - 8 * s);
+  ctx.lineTo(cx + 9 * s, cy + 1 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillRect(cx - 6.5 * s, cy, 13 * s, 8 * s);
+  // the door is a notch of the bar's navy behind it
+  ctx.fillStyle = '#101430';
+  ctx.fillRect(cx - 1.5 * s, cy + 3 * s, 3 * s, 5 * s);
+}
+
+// tab-icon fallbacks — drawn stand-ins so a cold sprite cache never blanks
+// a tab: a ball for MONS, twin peaks for CLIMB (the TOWN house is a glyph
+// already, so it needs no fallback)
+function ballGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 * s;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 8 * s, 0, Math.PI * 2);
+  ctx.moveTo(cx - 8 * s, cy);
+  ctx.lineTo(cx + 8 * s, cy);
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2.4 * s, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function peakGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx - 9 * s, cy + 6 * s);
+  ctx.lineTo(cx - 3 * s, cy - 7 * s);
+  ctx.lineTo(cx + 1 * s, cy - 2 * s);
+  ctx.lineTo(cx + 4 * s, cy - 5 * s);
+  ctx.lineTo(cx + 9 * s, cy + 6 * s);
+  ctx.closePath();
+  ctx.fill();
+}
 
 function edge(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
   ctx.strokeStyle = '#0a0d18';
@@ -343,6 +401,18 @@ function rim(
 function cardFrame(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
   rim(ctx, r, rad, '#e8ecf8', 3);
   edge(ctx, r, rad);
+}
+
+// home-tab card face: the lab card's dark slab + joker frame, lifted off
+// the pitch by a small drop shadow
+function menuCard(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad = 10) {
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, r.x + 2, r.y + 4, r.w, r.h, rad);
+  ctx.fill();
+  roundRect(ctx, r.x, r.y, r.w, r.h, rad);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, rad);
 }
 
 // a star drawn as a path — the ★ glyph's bearings drift off-center in a frame
@@ -821,16 +891,14 @@ export function drawTitle(
   cont: { stage: number; score: number } | null = null,
   newArmed = false, // new-climb link's two-tap confirm is lit — red warn label
   dailyArmed = false, // DAILY's own two-tap — warn-red face while it's lit
+  tab: HomeTab,
 ) {
   // meta getters each hit localStorage + JSON.parse — one read each per frame
   const starN = stars();
-  const raidDone = raidDoneToday();
-  const raidDef = raidPick();
-  const rookie = nextRookie();
-  const dexN = dexIds().length;
-  const badges = gymBadges();
-  const pullN = pullCount();
-  const achN = unlockedAch().size;
+  // the tab dots read these on every tab — the bodies get them passed in
+  // rather than paying for a second parse
+  const taskN = tasksReady();
+  const freeNow = freePullLeft();
 
   drawField(ctx);
   drawWildMons(ctx);
@@ -842,16 +910,49 @@ export function drawTitle(
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
-  // wordmark rides upper-left — the action owns the rest of the pitch
-  const logo = itemSprite('ui/pokemon-logo');
-  if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
-  logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
-
   // the wallet rides top-center like a Clash Royale gold bar — stars and
   // dust on the title mean the economy is visible before any overlay opens
   balanceChip(ctx, { x: W / 2 - 92, y: 28, w: 184, h: 36 }, starN, dust());
 
   if (settings().ambients) drawWilds(ctx, t);
+
+  // corner badges are chrome, not body — they ride every tab: how-to-play,
+  // mute, settings
+  cornerBadge(ctx, HELP_BTN, { dither: 0.09 });
+  ctx.textAlign = 'center';
+  ctx.font = font(16);
+  ctx.fillStyle = PARCH;
+  ctx.fillText('?', HELP_BTN.x + HELP_BTN.w / 2 + 3, HELP_BTN.y + HELP_BTN.h / 2 + 14);
+  const mcx = MUTE_BTN.x + MUTE_BTN.w / 2, mcy = MUTE_BTN.y + MUTE_BTN.h / 2;
+  cornerBadge(ctx, MUTE_BTN, { dither: 0.09 });
+  speakerGlyph(ctx, mcx, mcy, 1);
+  cornerBadge(ctx, GEAR_BTN, { dither: 0.09 });
+  gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
+
+  if (tab === 'climb') drawClimbBody(ctx, t, cont, newArmed, dailyArmed);
+  else if (tab === 'mons') drawMonsBody(ctx, t, freeNow);
+  else drawTownBody(ctx, taskN);
+
+  // the floating nav draws last — no body should peek through under it
+  drawTabBar(ctx, t, tab, freeNow, taskN);
+}
+
+// the run tab — today's title minus the meta chips the bottom nav now owns
+function drawClimbBody(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  cont: { stage: number; score: number } | null,
+  newArmed: boolean,
+  dailyArmed: boolean,
+) {
+  const raidDone = raidDoneToday();
+  const raidDef = raidPick();
+  const rookie = nextRookie();
+
+  // wordmark rides upper-left — the action owns the rest of the pitch
+  const logo = itemSprite('ui/pokemon-logo');
+  if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
+  logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
   // the last climb's fallen team haunts the pitch as ghosts — CR shows your
   // deck on the home screen; ours shows the team you have to avenge
@@ -1001,74 +1102,9 @@ export function drawTitle(
 
   // the echo's haunt lives on the pitch itself now — spectral mons beat a caption line
 
-  // ? badge, top corner — the how-to-play overlay
-  cornerBadge(ctx, HELP_BTN, { dither: 0.09 });
-  ctx.font = font(16);
-  ctx.fillStyle = PARCH;
-  ctx.fillText('?', HELP_BTN.x + HELP_BTN.w / 2 + 3, HELP_BTN.y + HELP_BTN.h / 2 + 14);
-
-  // mute badge, opposite corner — speaker glyph, slashed when off
-  const mcx = MUTE_BTN.x + MUTE_BTN.w / 2, mcy = MUTE_BTN.y + MUTE_BTN.h / 2;
-  cornerBadge(ctx, MUTE_BTN, { dither: 0.09 });
-  speakerGlyph(ctx, mcx, mcy, 1);
-
-  // gear badge beside the ? — opens the settings modal
-  cornerBadge(ctx, GEAR_BTN, { dither: 0.09 });
-  gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
-  // dex, trophies, ladder, tasks — one row of equal parchment pills
-  // the goal-gradient tell — the dex chip always names the nearest open
-  // loop: catches to the charm, badges to the crown, then pulls to pity
-  const dexRw = nextDexReward();
-  const nextGoal = dexN < SHINY_CHARM_AT
-    ? `${SHINY_CHARM_AT - dexN} TO CHARM`
-    : dexRw
-      ? `${dexRw.at - dexN} TO +${dexRw.pay}★`
-      : badges.size < BADGES.length
-        ? `${BADGES.length - badges.size} BADGES LEFT`
-        : `PITY IN ${PULL_PITY - (pullN % PULL_PITY)}`;
-  pill(ctx, DEX_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `DEX ${dexN}/${CATCHABLE}`, sub: nextGoal });
-  pill(ctx, ACH_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `★ ${achN}/${ACHIEVEMENTS.length}` });
-  pill(ctx, BOARD_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TOP RUNS' });
-  pill(ctx, TASKS_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TASKS' });
-  // a claimable task pins a red count pip on the chip corner — the same
-  // notification pull the dex count works, shrunk to a badge
-  const taskN = tasksReady();
-  if (taskN > 0) {
-    const bx = TASKS_BTN.x + TASKS_BTN.w - 4, by = TASKS_BTN.y + 4;
-    ctx.beginPath();
-    ctx.arc(bx, by, 9, 0, Math.PI * 2);
-    ctx.fillStyle = '#e03c34';
-    ctx.fill();
-    ctx.strokeStyle = '#0a0d18';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.font = fontB(7);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#f8f8f0';
-    ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
-  }
-  // row two — the meta loop's front doors. The hatcher wears the climb's
-  // gold, the lab stays parchment; the ascension dial rides the tail.
-  // Today's free pull is the CR free chest — the chip breathes while it waits
-  const freeNow = freePullLeft();
-  pill(ctx, HATCH_BTN, {
-    c: '#ffd84d',
-    cd: '#c8a44d',
-    tc: '#2a2440',
-    label: 'HATCHER',
-    sub: freeNow ? 'FREE PULL TODAY' : `★ ${starN}`,
-  });
-  if (freeNow) {
-    ctx.save();
-    ctx.globalAlpha = 0.4 + Math.sin(t * 5) * 0.3;
-    ctx.strokeStyle = '#ffe89d';
-    ctx.lineWidth = 2.5;
-    roundRect(ctx, HATCH_BTN.x - 3, HATCH_BTN.y - 3, HATCH_BTN.w + 6, HATCH_BTN.h + 6, 13);
-    ctx.stroke();
-    ctx.restore();
-  }
-  pill(ctx, LAB_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'LAB' });
-  // the records line is the one-more-run hook — ranked ladder, best score
+  // the records line is the one-more-run hook — ranked ladder, best score.
+  // Re-anchored to the hero row now the chip rows are gone: the +50 clears
+  // the abandon-link / daily-mod tail that still owns the band right below.
   const b = best();
   const ld = tier();
   const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
@@ -1085,7 +1121,7 @@ export function drawTitle(
   const recLine = bits.join(' · ');
   const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
   fitFont(ctx, recFull, 8, W - 40);
-  const recY = HATCH_BTN.y + HATCH_BTN.h + 17;
+  const recY = FREE_BTN.y + FREE_BTN.h + 50;
   const recX = W / 2 - ctx.measureText(recFull).width / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
@@ -1097,7 +1133,7 @@ export function drawTitle(
   ctx.textAlign = 'center';
   // the ladder: a fill bar toward the next tier, tinted to the current one.
   // Label above the bar — under it, the baseline sat 2px off the canvas edge
-  const rw = 220, rx = W / 2 - rw / 2, ry = HATCH_BTN.y + HATCH_BTN.h + 27;
+  const rw = 220, rx = W / 2 - rw / 2, ry = FREE_BTN.y + FREE_BTN.h + 61;
   ctx.font = fontB(7);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
@@ -1114,20 +1150,6 @@ export function drawTitle(
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 1;
   ctx.strokeRect(rx + 0.5, ry + 0.5, rw - 1, 6);
-  // the heat dial rides chip row two's tail: gold while a pick is on,
-  // parchment at zero, grayed until a first clear lifts the cap — a tap
-  // cycles 0..cap. The picked tier's name rides inside as the pill's sub
-  const ascCap = Math.min(b.wins, 9);
-  const pick = ascPick();
-  const ascModName = pick > 0 ? ASC_MODS[pick - 1]?.name : undefined;
-  pill(ctx, ASC_BTN, {
-    c: pick > 0 ? '#ffd84d' : '#e8ecf8',
-    cd: pick > 0 ? '#c8a44d' : '#aab0c8',
-    tc: '#2a2440',
-    label: `ASC ${pick}`,
-    sub: ascModName?.toUpperCase(),
-    disabled: ascCap === 0,
-  });
 
   // the day's login drop — a gold banner over the pitch top for the first
   // seconds on title, so the calendar reads as a reward, not a ledger line
@@ -1177,6 +1199,306 @@ export function drawTitle(
   ctx.textAlign = 'left';
   ctx.fillStyle = '#8890b8';
   ctx.fillText('REPORT BUGS', BUG_BTN.x, BUG_BTN.y + BUG_BTN.h - 4);
+}
+
+// the floating bottom nav — a raised gold-crowned pill marks the active
+// cell, badge dots pull the eye to unclaimed pulls and tasks. Sprites fall
+// back to drawn glyphs while the cache is still cold — no blank tabs.
+function drawTabBar(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  active: HomeTab,
+  freeNow: boolean,
+  taskN: number,
+) {
+  roundRect(ctx, TAB_BAR.x, TAB_BAR.y, TAB_BAR.w, TAB_BAR.h, 18);
+  ctx.fillStyle = '#101430ee';
+  ctx.fill();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  void loadItem('poke-ball');
+  void loadItem('badges/1.png');
+
+  for (const cell of TAB_CELLS) {
+    const on = cell.tab === active;
+    const cx = cell.x + cell.w / 2;
+    const pr = { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
+    roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
+    if (on) {
+      // raised navy pill with a gold crown — the lifted-tab read
+      ctx.fillStyle = '#1b2140';
+      ctx.fill();
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(pr.x + 20, pr.y + 3);
+      ctx.lineTo(pr.x + pr.w - 20, pr.y + 3);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fill();
+    }
+
+    const icY = cell.y + 25;
+    const tint = on ? PARCH : '#8890b8';
+    const spr =
+      cell.tab === 'mons' ? itemSprite('poke-ball') : cell.tab === 'climb' ? itemSprite('badges/1.png') : undefined;
+    ctx.save();
+    ctx.globalAlpha = on ? 1 : 0.55;
+    if (spr) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(spr, cx - 12, icY - 12, 24, 24);
+    } else if (cell.tab === 'mons') ballGlyph(ctx, cx, icY, 1, tint);
+    else if (cell.tab === 'climb') peakGlyph(ctx, cx, icY, 1, tint);
+    else homeGlyph(ctx, cx, icY, 1, tint);
+    ctx.restore();
+
+    ctx.font = fontB(10);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = on ? GOLD : '#8890b8';
+    ctx.fillText(cell.tab.toUpperCase(), cx, cell.y + cell.h - 14);
+
+    // badge dots — the notification pull. MONS breathes gold while the
+    // daily free pull waits; TOWN carries the claimable-task count in red.
+    const bx = cx + 20, by = cell.y + 14;
+    if (cell.tab === 'mons' && freeNow) {
+      ctx.save();
+      ctx.globalAlpha = 0.7 + Math.sin(t * 5) * 0.3;
+      ctx.beginPath();
+      ctx.arc(bx, by, 5.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (cell.tab === 'town' && taskN > 0) {
+      ctx.beginPath();
+      ctx.arc(bx, by, 9, 0, Math.PI * 2);
+      ctx.fillStyle = '#e03c34';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.font = fontB(7);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#f8f8f0';
+      ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
+    }
+  }
+}
+
+// --- MONS: the creature loop — hatcher hero, dex card, latest catches -----
+function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
+  const pullN = pullCount();
+  const r = HATCH_BTN;
+  menuCard(ctx, r, 12);
+
+  // gold header band — the hatcher is the economy's front door
+  stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 36 }, GOLD);
+  ctx.textAlign = 'left';
+  ctx.font = font(11);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText('THE HATCHER', r.x + 18, r.y + 28);
+  if (freeNow) {
+    ctx.textAlign = 'right';
+    ctx.font = fontB(8);
+    ctx.fillText('FREE PULL TODAY', r.x + r.w - 16, r.y + 26);
+  }
+
+  // the day's rate-up face, big enough to sell the pull
+  const feat = featuredPull();
+  const fcx = r.x + 112, fcy = r.y + 156;
+  monShadow(ctx, fcx, fcy + 8, 108);
+  try {
+    drawMon(ctx, feat.id, fcx, fcy + Math.sin(t * 2.2) * 3, 108);
+  } catch {
+    void loadSprite(feat.id);
+  }
+
+  const tx = r.x + 232;
+  ctx.textAlign = 'left';
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('RATE UP', tx, r.y + 70);
+  fitFont(ctx, feat.name.toUpperCase(), 12, r.x + r.w - tx - 14);
+  ctx.fillStyle = PARCH;
+  ctx.fillText(feat.name.toUpperCase(), tx, r.y + 94);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#a8b0d8';
+  ctx.fillText(`RARE GUARANTEED IN ${PULL_PITY - (pullN % PULL_PITY)}`, tx, r.y + 128);
+  ctx.fillStyle = PARCH;
+  ctx.fillText(`PULL ★${PULL_COST} · TEN ★${PULL10_COST}`, tx, r.y + 150);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('TAP TO OPEN THE HATCHER', tx, r.y + 172);
+
+  // the old chip's breathing glow — today's free pull still sells itself
+  if (freeNow) {
+    ctx.save();
+    ctx.globalAlpha = 0.4 + Math.sin(t * 5) * 0.3;
+    ctx.strokeStyle = '#ffe89d';
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, 15);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // the dex card keeps the chip's two facts — how full, and the nearest
+  // open loop: catches to the charm, badges to the crown, pulls to pity
+  const dexN = dexIds().length;
+  const badges = gymBadges();
+  const dexRw = nextDexReward();
+  const nextGoal = dexN < SHINY_CHARM_AT
+    ? `${SHINY_CHARM_AT - dexN} TO CHARM`
+    : dexRw
+      ? `${dexRw.at - dexN} TO +${dexRw.pay}★`
+      : badges.size < BADGES.length
+        ? `${BADGES.length - badges.size} BADGES LEFT`
+        : `PITY IN ${PULL_PITY - (pullN % PULL_PITY)}`;
+  const d = DEX_BTN;
+  menuCard(ctx, d, 12);
+  ctx.textAlign = 'left';
+  ctx.font = font(11);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('POKÉDEX', d.x + 18, d.y + 36);
+  ctx.textAlign = 'right';
+  ctx.font = font(14);
+  ctx.fillStyle = PARCH;
+  ctx.fillText(`${dexN}/${CATCHABLE}`, d.x + d.w - 18, d.y + 40);
+  ctx.textAlign = 'left';
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#a8b0d8';
+  ctx.fillText(nextGoal, d.x + 18, d.y + 62);
+  // a slim fill toward a full dex — the ladder bar's idiom
+  const bw = d.w - 36, bx = d.x + 18, by = d.y + d.h - 28;
+  ctx.fillStyle = '#1a2040';
+  ctx.fillRect(bx, by, bw, 8);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillRect(bx, by, Math.max(3, (bw * dexN) / CATCHABLE), 8);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, 7);
+
+  // latest catches — the dex's newest faces; decorative, no hit test
+  const s = CATCH_STRIP;
+  menuCard(ctx, s, 12);
+  ctx.textAlign = 'left';
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('LATEST CATCHES', s.x + 18, s.y + 24);
+  const recent = dexRecent(3);
+  if (!recent.length) {
+    ctx.font = font(9);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('CATCHES LAND HERE', s.x + s.w / 2, s.y + s.h / 2 + 14);
+  } else {
+    const shinies = new Set(shinyIds());
+    recent.forEach((id, i) => {
+      const cx = s.x + s.w / 2 + (i - (recent.length - 1) / 2) * 150;
+      const cy = s.y + 84;
+      monShadow(ctx, cx, cy + 4, 56);
+      try {
+        drawMon(ctx, id, cx, cy + Math.sin(t * 2.2 + i * 1.7) * 2.5, 56);
+      } catch {
+        void loadSprite(id);
+      }
+      const def = speciesById(id);
+      ctx.font = fontB(7);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = PARCH;
+      ctx.fillText(def ? def.name.toUpperCase() : `#${id}`, cx, s.y + s.h - 22);
+      if (shinies.has(id)) {
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText('★', cx + 30, cy - 24);
+      }
+    });
+  }
+}
+
+// --- TOWN: the meta loop — lab, tasks, trophies, board, the asc dial ------
+function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
+  // card chrome + a banded title + one fat stat + one quiet line
+  const townCard = (
+    r: { x: number; y: number; w: number; h: number },
+    band: string,
+    title: string,
+    stat: string,
+    sub: string,
+    sub2?: string,
+  ) => {
+    menuCard(ctx, r, 10);
+    stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 30 }, band);
+    ctx.textAlign = 'left';
+    fitFont(ctx, title, 9, r.w - 24);
+    ctx.fillStyle = '#2a2440';
+    ctx.fillText(title, r.x + 14, r.y + 23);
+    ctx.font = font(11);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(stat, r.x + 14, r.y + 76);
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(sub, r.x + 14, r.y + 100);
+    if (sub2) ctx.fillText(sub2, r.x + 14, r.y + 122);
+  };
+
+  // one pk_lab parse covers both reads — the same caching labLevelMap does
+  const lvls = labLevelMap();
+  const trained = LAB_UPGRADES.filter((u) => (lvls.get(u.id) ?? 0) > 0).length;
+  const nextCost = Math.min(...LAB_UPGRADES.map((u) => u.costs[lvls.get(u.id) ?? 0] ?? Infinity));
+  townCard(
+    LAB_BTN,
+    '#3a8cff',
+    'THE LAB',
+    `${trained}/${LAB_UPGRADES.length} TRAINED`,
+    'PERMANENT UPGRADES',
+    nextCost === Infinity ? 'ALL MAXED' : `NEXT LV ★${nextCost}`,
+  );
+  townCard(TASKS_BTN, '#e03c34', 'TASKS', taskN > 0 ? `${taskN} READY` : 'NONE READY', `RESETS ${taskResetsIn('daily')}`);
+  // a claimable task pins the red count pip on the card corner — the same
+  // badge the chip row wore
+  if (taskN > 0) {
+    const bx = TASKS_BTN.x + TASKS_BTN.w - 4, by = TASKS_BTN.y + 4;
+    ctx.beginPath();
+    ctx.arc(bx, by, 9, 0, Math.PI * 2);
+    ctx.fillStyle = '#e03c34';
+    ctx.fill();
+    ctx.strokeStyle = '#0a0d18';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.font = fontB(7);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f8f8f0';
+    ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
+  }
+  townCard(ACH_BTN, GOLD, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, 'FEATS EARNED');
+  const b = best();
+  const runs = board().length;
+  townCard(
+    BOARD_BTN,
+    '#9a6cff',
+    'TOP RUNS',
+    `BEST ${b.score.toLocaleString('en-US')}`,
+    b.stage ? `PEAK STAGE ${b.stage}` : 'NO CLIMB YET',
+    runs ? `${runs} RUNS LOGGED` : undefined,
+  );
+
+  // the ascension dial, stretched wide — same pick/cap logic the chip ran:
+  // gold while a pick is on, parchment at zero, grayed till a first clear
+  const ascCap = Math.min(b.wins, 9);
+  const pick = ascPick();
+  const ascModName = pick > 0 ? ASC_MODS[pick - 1]?.name : undefined;
+  pill(ctx, ASC_BTN, {
+    c: pick > 0 ? '#ffd84d' : '#e8ecf8',
+    cd: pick > 0 ? '#c8a44d' : '#aab0c8',
+    tc: '#2a2440',
+    label: `ASCENSION ${pick}`,
+    sub: ascModName?.toUpperCase() ?? (ascCap === 0 ? 'CLEAR A CLIMB TO UNLOCK' : 'TAP TO CYCLE'),
+    disabled: ascCap === 0,
+  });
 }
 
 // The crash-receipt instructions, in a card — the game collects no
@@ -1684,22 +2006,19 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 
 // --- dex overlay: caught mons only — a real dex doesn't list what you ---
 // --- haven't caught; the count is the only hint at what's out there -------
-// the menu chip row — four equal chips on 8px gutters, spanning the old
-// row's left edge to W-27 so TASKS slots in without moving the records line
-const MENU_CHIP_W = (W - 27 - (W / 2 - 205) - 3 * 8) / 4; // 106
-// +36 over FREE's edge leaves the parked-run line (NEW_BTN, 24px + the
-// rival-echo note) its band — records and ladder key off this row and follow
-export const DEX_BTN = { x: W / 2 - 205, y: FREE_BTN.y + FREE_BTN.h + 36, w: MENU_CHIP_W, h: 48 };
-export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
-export const BOARD_BTN = { x: ACH_BTN.x + ACH_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
-export const TASKS_BTN = { x: BOARD_BTN.x + BOARD_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
-// chip row two — the meta loop's doors, 8px under the menu row. The records
-// line + ladder key off this row so the whole readout follows it down.
-export const HATCH_BTN = { x: DEX_BTN.x, y: DEX_BTN.y + DEX_BTN.h + 8, w: MENU_CHIP_W, h: 48 };
-export const LAB_BTN = { x: HATCH_BTN.x + HATCH_BTN.w + 8, y: HATCH_BTN.y, w: MENU_CHIP_W, h: 48 };
-// the ascension dial rides row two's back half (spans the last two chip
-// slots) — there's no band left below the ladder for it anymore
-export const ASC_BTN = { x: LAB_BTN.x + LAB_BTN.w + 8, y: HATCH_BTN.y, w: W - 27 - (LAB_BTN.x + LAB_BTN.w + 8), h: 48 };
+// home-tab card rects — the same _BTN names the hit tests know, re-homed to
+// the cards the tab bodies draw. MONS owns the hatcher hero + the dex card;
+// TOWN owns the 2-col grid and the wide ascension row.
+export const HATCH_BTN = { x: 30, y: 240, w: W - 60, h: 250 };
+export const DEX_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 116 };
+// the catches strip is decorative — no hit rect needed
+const CATCH_STRIP = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 150 };
+const TOWN_COL = (W - 60 - 16) / 2; // 232 — two columns on a 16px gutter
+export const LAB_BTN = { x: 30, y: 270, w: TOWN_COL, h: 150 };
+export const TASKS_BTN = { x: LAB_BTN.x + TOWN_COL + 16, y: LAB_BTN.y, w: TOWN_COL, h: 150 };
+export const ACH_BTN = { x: 30, y: LAB_BTN.y + LAB_BTN.h + 16, w: TOWN_COL, h: 150 };
+export const BOARD_BTN = { x: TASKS_BTN.x, y: ACH_BTN.y, w: TOWN_COL, h: 150 };
+export const ASC_BTN = { x: 30, y: ACH_BTN.y + ACH_BTN.h + 16, w: W - 60, h: 110 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;

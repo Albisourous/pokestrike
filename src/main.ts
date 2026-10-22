@@ -111,8 +111,9 @@ import {
   font,
   fontB,
   updateTitle,
+  TAB_CELLS,
 } from './game/screens';
-import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState } from './game/screens';
+import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
 import { dailyMod, DAILY_MODS, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
@@ -167,6 +168,8 @@ const modForSeed = (s: number) => {
   return dailyMod(Date.UTC(+d.slice(0, 4), +d.slice(4, 6) - 1, +d.slice(6, 8)));
 };
 let runRng: () => number = mulberry32(runSeed);
+// which home tab is showing — session state only (every boot lands on CLIMB)
+let homeTab: HomeTab = 'climb';
 let helpOpen = false;
 let helpWelcome = false; // first-boot open greets; manual opens don't
 let bugOpen = false; // the report-a-bug card — seed + build receipt
@@ -969,37 +972,45 @@ canvas.addEventListener('pointerdown', (e) => {
       };
       return;
     }
-    if (inRect(p.x, p.y, HATCH_BTN)) {
+    // the bottom nav is shared chrome — live on every tab, ahead of the body
+    for (const cell of TAB_CELLS) {
+      if (inRect(p.x, p.y, cell)) {
+        homeTab = cell.tab;
+        sfx('ui');
+        return;
+      }
+    }
+    if (homeTab === 'mons' && inRect(p.x, p.y, HATCH_BTN)) {
       sfx('ui');
       hatchOpen = true;
       hatch = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0 };
       sparkArm = { id: -1, t: -10 };
       return;
     }
-    if (inRect(p.x, p.y, LAB_BTN)) {
+    if (homeTab === 'town' && inRect(p.x, p.y, LAB_BTN)) {
       sfx('ui');
       labOpen = true;
       labScroll = 0;
       return;
     }
-    if (inRect(p.x, p.y, DEX_BTN)) {
+    if (homeTab === 'mons' && inRect(p.x, p.y, DEX_BTN)) {
       sfx('ui');
       dexOpen = true;
       dexScroll = 0;
       return;
     }
-    if (inRect(p.x, p.y, ACH_BTN)) {
+    if (homeTab === 'town' && inRect(p.x, p.y, ACH_BTN)) {
       sfx('ui');
       achOpen = true;
       achScroll = 0;
       return;
     }
-    if (inRect(p.x, p.y, BOARD_BTN)) {
+    if (homeTab === 'town' && inRect(p.x, p.y, BOARD_BTN)) {
       sfx('ui');
       boardOpen = true;
       return;
     }
-    if (inRect(p.x, p.y, TASKS_BTN)) {
+    if (homeTab === 'town' && inRect(p.x, p.y, TASKS_BTN)) {
       sfx('ui');
       tasksOpen = true;
       tasksTab = 'daily';
@@ -1023,12 +1034,12 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui'); // plays only when unmuting
       return;
     }
-    if (inRect(p.x, p.y, BUG_HIT)) {
+    if (homeTab === 'climb' && inRect(p.x, p.y, BUG_HIT)) {
       bugOpen = true;
       sfx('ui');
       return;
     }
-    if (titleSave && inRect(p.x, p.y, NEW_HIT)) {
+    if (homeTab === 'climb' && titleSave && inRect(p.x, p.y, NEW_HIT)) {
       // start over — the parked climb is dropped for a fresh seed. Two-tap
       // confirm: a stray-low finger on CONTINUE lands in this sliver, so the
       // first tap only arms the warn label; the second inside 3s is the deed.
@@ -1046,7 +1057,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (inRect(p.x, p.y, ASC_BTN)) {
+    if (homeTab === 'town' && inRect(p.x, p.y, ASC_BTN)) {
       // the heat dial — a tap cycles the pick 0..cap; grayed at zero wins
       const cap = Math.min(best().wins, 9);
       if (cap > 0) {
@@ -1055,7 +1066,7 @@ canvas.addEventListener('pointerdown', (e) => {
       }
       return;
     }
-    if (inRect(p.x, p.y, FREE_BTN)) {
+    if (homeTab === 'climb' && inRect(p.x, p.y, FREE_BTN)) {
       sfx('ui');
       if (titleSave) {
         const s = titleSave;
@@ -1069,7 +1080,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (inRect(p.x, p.y, DAILY_BTN)) {
+    if (homeTab === 'climb' && inRect(p.x, p.y, DAILY_BTN)) {
       // same date seed for everyone — the climb itself is the share.
       // Two-tap like NEW: starting drops the parked run, so a live save arms
       // the warn pill first; with no save there's nothing to lose — go.
@@ -1087,7 +1098,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (inRect(p.x, p.y, RAID_BTN)) {
+    if (homeTab === 'climb' && inRect(p.x, p.y, RAID_BTN)) {
       // the day's boss drops once — a beaten raid stays done till UTC midnight
       if (raidDoneToday()) {
         sfx('ui', 0.6); // soft deny — same pitch every dead tap gets
@@ -1936,7 +1947,7 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - newConfirmT0 < 3, t - dailyConfirmT0 < 3);
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - newConfirmT0 < 3, t - dailyConfirmT0 < 3, homeTab);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
