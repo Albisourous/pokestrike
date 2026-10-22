@@ -1454,11 +1454,73 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
 }
 
 // --- TOWN: the meta loop — lab, tasks, trophies, board, the asc dial ------
+// band icons — quick-scan glyphs, all strokes in the band's ink color
+function townIcon(ctx: CanvasRenderingContext2D, kind: 'lab' | 'tasks' | 'cup' | 'podium' | 'flame', cx: number, cy: number) {
+  const c = '#2a2440';
+  ctx.strokeStyle = c;
+  ctx.fillStyle = c;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (kind === 'lab') {
+    // flask: neck, shoulders, belly — liquid line inside
+    ctx.moveTo(cx - 3, cy - 9);
+    ctx.lineTo(cx + 3, cy - 9);
+    ctx.lineTo(cx + 3, cy - 2);
+    ctx.lineTo(cx + 8, cy + 8);
+    ctx.lineTo(cx - 8, cy + 8);
+    ctx.lineTo(cx - 3, cy - 2);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.fillRect(cx - 5.5, cy + 3.5, 11, 4.5);
+  } else if (kind === 'tasks') {
+    // checklist: two ticks + lines
+    for (let i = 0; i < 2; i++) {
+      const y = cy - 6 + i * 9;
+      ctx.moveTo(cx - 8, y);
+      ctx.lineTo(cx - 5.5, y + 2.5);
+      ctx.lineTo(cx - 2, y - 2.5);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, y);
+      ctx.lineTo(cx + 8, y);
+      ctx.stroke();
+      ctx.beginPath();
+    }
+  } else if (kind === 'cup') {
+    // trophy: bowl + stem + base + ears
+    ctx.fillRect(cx - 6, cy - 9, 12, 8);
+    ctx.moveTo(cx - 6, cy - 7);
+    ctx.arc(cx - 8, cy - 6, 3, Math.PI / 2, Math.PI * 1.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + 6, cy - 7);
+    ctx.arc(cx + 8, cy - 6, 3, -Math.PI / 2, Math.PI / 2);
+    ctx.stroke();
+    ctx.fillRect(cx - 1.5, cy - 1, 3, 5);
+    ctx.fillRect(cx - 5, cy + 4, 10, 3);
+  } else if (kind === 'podium') {
+    // podium: three bars, center tallest
+    ctx.fillRect(cx - 9, cy - 2, 5, 10);
+    ctx.fillRect(cx - 2.5, cy - 8, 5, 16);
+    ctx.fillRect(cx + 4, cy + 2, 5, 6);
+  } else {
+    // flame: the ascension dial's heat — two licks, not a teardrop
+    ctx.moveTo(cx + 1, cy - 9);
+    ctx.quadraticCurveTo(cx + 8, cy - 4, cx + 6, cy + 4);
+    ctx.quadraticCurveTo(cx + 5, cy + 9, cx, cy + 9);
+    ctx.quadraticCurveTo(cx - 8, cy + 9, cx - 6, cy + 2);
+    ctx.quadraticCurveTo(cx - 5, cy - 2, cx - 2, cy - 4);
+    ctx.quadraticCurveTo(cx - 2, cy - 1, cx + 1, cy - 9);
+    ctx.fill();
+  }
+}
+
 function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
   // card chrome + a banded title + one fat stat + one quiet line
   const townCard = (
     r: { x: number; y: number; w: number; h: number },
     band: string,
+    icon: 'lab' | 'tasks' | 'cup' | 'podium' | 'flame',
     title: string,
     stat: string,
     sub: string,
@@ -1467,9 +1529,10 @@ function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
     menuCard(ctx, r, 10);
     stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 30 }, band);
     ctx.textAlign = 'left';
-    fitFont(ctx, title, 9, r.w - 24);
+    fitFont(ctx, title, 9, r.w - 60);
     ctx.fillStyle = '#2a2440';
     ctx.fillText(title, r.x + 14, r.y + 23);
+    townIcon(ctx, icon, r.x + r.w - 24, r.y + 18);
     ctx.font = font(11);
     ctx.fillStyle = PARCH;
     ctx.fillText(stat, r.x + 14, r.y + 76);
@@ -1486,12 +1549,13 @@ function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
   townCard(
     LAB_BTN,
     '#3a8cff',
+    'lab',
     'THE LAB',
     `${trained}/${LAB_UPGRADES.length} TRAINED`,
     'PERMANENT UPGRADES',
     nextCost === Infinity ? 'ALL MAXED' : `NEXT LV ★${nextCost}`,
   );
-  townCard(TASKS_BTN, '#e03c34', 'TASKS', taskN > 0 ? `${taskN} READY` : 'NONE READY', `RESETS ${taskResetsIn('daily')}`);
+  townCard(TASKS_BTN, '#e03c34', 'tasks', 'TASKS', taskN > 0 ? `${taskN} READY` : 'NONE READY', `RESETS ${taskResetsIn('daily')}`);
   // a claimable task pins the red count pip on the card corner — the same
   // badge the chip row wore
   if (taskN > 0) {
@@ -1508,12 +1572,13 @@ function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
     ctx.fillStyle = '#f8f8f0';
     ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
   }
-  townCard(ACH_BTN, GOLD, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, 'FEATS EARNED');
+  townCard(ACH_BTN, GOLD, 'cup', 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, 'FEATS EARNED');
   const b = best();
   const runs = board().length;
   townCard(
     BOARD_BTN,
     '#9a6cff',
+    'podium',
     'TOP RUNS',
     `BEST ${b.score.toLocaleString('en-US')}`,
     b.stage ? `PEAK STAGE ${b.stage}` : 'NO CLIMB YET',
@@ -1533,6 +1598,10 @@ function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
     sub: ascModName?.toUpperCase() ?? (ascCap === 0 ? 'CLEAR A CLIMB TO UNLOCK' : 'TAP TO CYCLE'),
     disabled: ascCap === 0,
   });
+  // the dial's heat mark — dark ink on the pill face, same icon family
+  ctx.globalAlpha = ascCap === 0 ? 0.3 : 0.75;
+  townIcon(ctx, 'flame', ASC_BTN.x + 44, ASC_BTN.y + ASC_BTN.h / 2);
+  ctx.globalAlpha = 1;
 }
 
 // The crash-receipt instructions, in a card — the game collects no
