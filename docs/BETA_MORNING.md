@@ -191,6 +191,28 @@ epic + shiny cinematics in a live browser by stubbing `Math.random` —
 prism ring, rays, silhouette reveal and the `SHINY!` starburst all fire.
 Deploy to Pages confirmed green after each push.
 
+**Audit pass on the new theatre** (`33b07e4`): a focused review found and
+fixed — spark "TAP AGAIN" label lingering after the 3s arm window lapsed
+(now reports `armedId:-1`), the spark grid + deal rolls rendering every
+frame beneath the theatre's 0.92 dim (now idle-gated), `dealCost`
+re-rolling `dealPick`/`raidPick` per cell (inlined against the frame's
+hoisted deal), a 150ms input lock so a tap meant for one phase can't
+skip the card the auto-advance just opened, raid captures now credit
+the rookie 'HATCH A MON' rung, a `globalAlpha` leak if the reveal sprite
+was still warming, and SKIP's hit slop grew to 12px to cover the
+flash-beat screen kick.
+
+**Concurrency note**: that commit also swept in the other session's
+in-flight "GBA authentic" reskin (paper card faces in navy frames, gold
+CTA) and a new 5th `RAID` home tab — both verified complete and green
+before pushing. Known issue in the reskin: `townCard` still draws its
+hero stat + the raid boss name in `PARCH` (cream) on `PAPER` faces —
+washed out on TOWN and RAID; the palette comment itself says PARCH is
+dark-chrome-only. Left for the concurrent session since they were still
+mid-edit on `screens.ts` (broken intermediate state at handoff — e.g.
+`const PAPER = PAPER` self-init + duplicate `INK` — their problem to
+finish, HEAD is clean).
+
 ## Questions for the morning
 
 1. Are you OK shipping the beta publicly under Pokémon branding, or
