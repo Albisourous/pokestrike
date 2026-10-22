@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds } from './game/data';
 import type { SpeciesDef, StageDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -104,10 +104,6 @@ import {
   inRect,
   font,
   fontB,
-  titlePointerDown,
-  titlePointerMove,
-  titlePointerUp,
-  titlePointerCancel,
   updateTitle,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState } from './game/screens';
@@ -188,6 +184,7 @@ let hatch: HatchState = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0
 // a spark buy arms like the NEW-climb link — first tap arms for 3s, only a
 // second tap inside the window spends the dust
 let sparkArm = { id: -1, t: -10 };
+let hatchFlash = { text: '', t: -10 }; // transient gold line under the pity bar — milestone payouts name themselves
 let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
@@ -615,21 +612,29 @@ const HATCH_REVEAL_T = 1.6; // a card holds this long, then the reel plays itsel
 const SPARK_ARM_T = 3; // two-tap confirm window on a dust buy
 
 // milestone checks the run-end path runs — a pull crossing a threshold
-// toasts immediately instead of waiting for the next climb's report
+// toasts immediately instead of waiting for the next climb's report.
+// Returns the dex-tier stars paid so the UI can name the payout.
 const pullMilestones = () => {
   if (dexIds().length >= 50 && unlockAch('collector')) playJingle('task');
   if (dexIds().length >= CATCHABLE && unlockAch('living')) playJingle('task');
+  const claims = claimDexRewards(); // collection tiers pay out
+  if (claims.length) playJingle('task');
+  return claims.reduce((s, c) => s + c.pay, 0);
 };
 
 // Math.random, never runRng — a title-side pull must not shift a resumed
 // climb's stream or a shared ?seed= replay
 const doPull = (n: number) => {
-  if (!spendStars(n === 10 ? PULL10_COST : PULL_COST)) {
+  // one free pull a day opens the hatcher for every wallet — the daily's
+  // cheapest reason to come back
+  if (n === 1 && freePullLeft()) useFreePull();
+  else if (!spendStars(n === 10 ? PULL10_COST : PULL_COST)) {
     sfx('ui', 0.6); // short on stars — the price pill was red for a reason
     return;
   }
   const featuredId = featuredPull().id; // today's 10x rate-up, same for everyone
   const results: PullResult[] = [];
+  let dexPay = 0; // milestone stars this pull banked — the summary names them
   for (let k = 0; k < n; k++) {
     const def = pullSpecies(Math.random, { rarePlus: bumpPulls() % PULL_PITY === 0, featuredId });
     const tier = tierOf(def);
@@ -640,7 +645,7 @@ const doPull = (n: number) => {
       addDust(dustPay); // a pulled dupe converts instead of re-recording
     } else {
       recordCapture([def.id]); // the dex IS the unlock ledger — the draft pool grows
-      pullMilestones();
+      dexPay += pullMilestones();
     }
     const shiny = Math.random() < shinyOdds(); // weekends double it
     if (shiny) {
@@ -651,6 +656,7 @@ const doPull = (n: number) => {
     results.push({ id: def.id, rarity: INVADER_IDS.has(def.id) || tier >= 3 ? 3 : tier === 2 ? 2 : 1, dupe, shiny, dust: dustPay });
   }
   hatch.results = results;
+  hatch.dexPay = dexPay;
   hatch.i = 0;
   hatch.t = 0;
   hatch.phase = 'shake'; // the ball rocks before the first reveal
@@ -675,7 +681,8 @@ const sparkBuy = (def: SpeciesDef) => {
     return;
   }
   recordCapture([def.id]);
-  pullMilestones();
+  const dexPay = pullMilestones(); // a dust buy can cross a tier too
+  if (dexPay) hatchFlash = { text: `DEX MILESTONE +${dexPay} ★`, t };
   playJingle('catch');
 };
 
@@ -1021,8 +1028,6 @@ canvas.addEventListener('pointerdown', (e) => {
       startRaid();
       return;
     }
-    // the pitch is playable — a drag on the grass grabs the demo ball
-    if (titlePointerDown(p)) return;
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
     // bag chips are their own control — a tap toggles the pick and never
@@ -1261,7 +1266,6 @@ canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse' && !e.buttons) {
     activeId = null;
     helpDrag = dexDrag = boxDrag = settingsDrag = null;
-    if (scene === 'title') titlePointerCancel();
     if (scene === 'battle') battle?.pointerCancel();
     return;
   }
@@ -1298,7 +1302,6 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
   if (helpOpen) return; // a key-opened manual owns input without a drag
-  if (scene === 'title') titlePointerMove(p);
   if (scene === 'battle') battle?.pointerMove(p);
 });
 
@@ -1372,7 +1375,6 @@ canvas.addEventListener('pointerup', (e) => {
     return;
   }
   if (helpOpen) return; // a key-opened manual owns input without a drag
-  if (scene === 'title') titlePointerUp();
   if (scene === 'battle') battle?.pointerUp();
 });
 // desktop keys: Esc/? toggles the manual, arrows page it, P pauses a live
@@ -1502,7 +1504,6 @@ canvas.addEventListener('pointercancel', (e) => {
   boxDrag = null;
   settingsDrag = null;
   // an interrupt isn't a release — drop the drag, don't fire the shot
-  if (scene === 'title') titlePointerCancel();
   if (scene === 'battle') battle?.pointerCancel();
 });
 
@@ -1649,7 +1650,7 @@ function update(dt: number) {
           if (INVADER_IDS.has(boss.id)) unlockAch('myth'); // an invader raid tames the myth
           unlockAch('shiny'); // the first gold dex entry is its own trophy
           playJingle('task'); // the payout chime
-          pullMilestones(); // the raid capture can cross collector/living too
+          const dexPay = pullMilestones(); // the raid capture can cross collector/living too
           // the prize rides the hatcher's theatre — straight to reveal:
           // the fight itself was the ball-shake
           hatch = {
@@ -1658,6 +1659,7 @@ function update(dt: number) {
             i: 0,
             sparkScroll: 0,
             label: 'RAID CLEARED',
+            dexPay,
             results: [{ id: boss.id, rarity: 3, dupe, shiny: true, dust: dupe ? DUST_BY_TIER[3] : 0 }],
           };
           hatchOpen = true;
@@ -1745,6 +1747,11 @@ function update(dt: number) {
       // the next run's rival "echo"
       recordCapture(battle.box.map((b) => b.id));
       result.newDex = dexIds().length - dexBefore;
+      const dexPay = claimDexRewards().reduce((s, c) => s + c.pay, 0); // collection tiers pay out
+      if (dexPay) {
+        result.dexPay = dexPay; // the report names its own finding
+        playJingle('task');
+      }
       if (dexIds().length >= 50) trophy('collector');
       if (dexIds().length >= CATCHABLE) trophy('living');
       if (!won) saveEcho(battle.players.map((p) => ({ id: p.def.id, lvl: p.lvl })));
@@ -1846,6 +1853,8 @@ function render() {
           dust: dust(),
           pityIn: PULL_PITY - (pullCount() % PULL_PITY),
           featured: featuredPull(),
+          free: freePullLeft(),
+          flash: t - hatchFlash.t < 2.5 ? hatchFlash.text : undefined,
         });
       if (labOpen) drawLab(ctx, labScroll, stars());
       break;

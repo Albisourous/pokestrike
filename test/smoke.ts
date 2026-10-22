@@ -10,7 +10,7 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
@@ -2402,6 +2402,85 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const mon = Date.UTC(2026, 9, 26); // 2026-10-26 is a Monday
   ok(shinyOdds(sat) === PULL_SHINY * 2, 'weekend pulls double the shiny roll');
   ok(shinyOdds(mon) === PULL_SHINY, 'weekday pulls hold the base odds');
+}
+
+// --- dex milestones, the daily free pull, and the KO bounty ---------------
+// pk_dex is forged straight into the store — dexIds() reads the blob verbatim
+{
+  ok(
+    DEX_REWARDS.length >= 3 &&
+      DEX_REWARDS.every((r, i) => r.pay > 0 && (i === 0 || r.at > DEX_REWARDS[i - 1].at)),
+    `dex rewards: ${DEX_REWARDS.length} tiers ascending by at, every pay > 0`,
+  );
+  const dexSave = localStorage.getItem('pk_dex'); // the real dex goes back after
+  const fakeDex = (n: number, base: number) =>
+    localStorage.setItem('pk_dex', JSON.stringify(Array.from({ length: n }, (_, i) => base + i)));
+
+  // a claim pays every crossed tier, in order, exactly once
+  fakeDex(DEX_REWARDS[1].at, 9000);
+  ok(
+    nextDexReward()?.at === DEX_REWARDS[0].at && nextDexReward()?.pay === DEX_REWARDS[0].pay,
+    'the first unclaimed tier is next up',
+  );
+  const sD = stars();
+  const wantD = DEX_REWARDS.slice(0, 2);
+  const gotD = claimDexRewards();
+  ok(
+    gotD.length === 2 && gotD.every((r, i) => r.at === wantD[i].at && r.pay === wantD[i].pay),
+    `a ${DEX_REWARDS[1].at}-deep dex claims the first two tiers in order`,
+  );
+  ok(stars() === sD + wantD[0].pay + wantD[1].pay, `each tier banks its pay (+${stars() - sD})`);
+  ok(claimDexRewards().length === 0, 'a claimed tier never pays twice');
+
+  // a real catch crossing the third tier pays only that one
+  recordCapture(Array.from({ length: DEX_REWARDS[2].at - DEX_REWARDS[1].at }, (_, i) => 8000 + i));
+  ok(nextDexReward()?.at === DEX_REWARDS[2].at, 'the third tier is next once crossed');
+  const sD2 = stars();
+  const gotD2 = claimDexRewards();
+  ok(
+    gotD2.length === 1 && gotD2[0].at === DEX_REWARDS[2].at && stars() === sD2 + DEX_REWARDS[2].pay,
+    'only the newly-crossed tier pays',
+  );
+
+  // a maxed dex claims the rest of the ladder — then nothing is left
+  fakeDex(DEX_REWARDS[DEX_REWARDS.length - 1].at, 7000);
+  const sD3 = stars();
+  const restD = DEX_REWARDS.slice(3);
+  const gotD3 = claimDexRewards();
+  ok(
+    gotD3.length === restD.length &&
+      gotD3.every((r, i) => r.at === restD[i].at && r.pay === restD[i].pay) &&
+      stars() === sD3 + restD.reduce((s, r) => s + r.pay, 0),
+    'a full dex claims every remaining tier',
+  );
+  ok(nextDexReward() === null && claimDexRewards().length === 0, 'nothing left once every tier pays');
+  if (dexSave == null) localStorage.removeItem('pk_dex');
+  else localStorage.setItem('pk_dex', dexSave);
+
+  // the daily free pull: clean store → on the house, spent → gone, back tomorrow
+  localStorage.removeItem('pk_free');
+  ok(freePullLeft(), 'a clean pk_free leaves the daily pull available');
+  useFreePull();
+  ok(!freePullLeft(), 'useFreePull spends today\'s pull');
+  ok(freePullLeft(Date.now() + 86400000), 'a fresh day re-arms the free pull');
+  localStorage.removeItem('pk_free');
+
+  // the KO bounty: every 5th enemy KO pays +5 stars into the run tally
+  const kb = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  kb.traits.clear(); // keep the count exact — no trait splash KOs
+  const sK = kb.starsRun;
+  for (let w = 0; w < 3 && (kb as any).totalKos < 5; w++) {
+    (kb as any).spawnWave(w);
+    for (const e of [...(kb as any).enemies]) {
+      while (!e.dead && (kb as any).totalKos < 5) (kb as any).hurt(e, e.hp + 50, '#fff');
+      if ((kb as any).totalKos >= 5) break;
+    }
+  }
+  const wantK = Math.ceil(5 * (kb as any).starMult * starBoost());
+  ok(
+    (kb as any).totalKos >= 5 && kb.starsRun === sK + wantK,
+    `the 5th enemy KO pays its star bounty (+${kb.starsRun - sK})`,
+  );
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

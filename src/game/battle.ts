@@ -332,6 +332,7 @@ export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any gl
 const STAR_ROW = 2; // a cleared map row pays this + its 1-based stage number
 const STAR_WIN = 40; // climb-clear lump
 const LOOT_STAR = [2, 4]; // star pickups per gym fountain, worth +1 each
+const KO_BOUNTY = { every: 5, pay: 5 }; // every Nth KO banks star pieces — keeps the run economy ticking inside fights
 // the lab's per-level rates (meta.ts LAB_UPGRADES owns names/costs)
 const LAB_HP_LV = 0.08; // hp: team maxHp mult /level
 const LAB_DMG_LV = 0.05; // dmg: hit damage mult /level
@@ -2442,6 +2443,10 @@ export class Battle {
       this.kosThisShot++;
       this.totalKos++;
       if (this.totalKos >= 40) this.award('rampage');
+      if (this.totalKos % KO_BOUNTY.every === 0) {
+        const got = this.earnStars(KO_BOUNTY.pay);
+        this.texts.push({ x: e.x, y: e.y - e.r - 70, text: `BOUNTY +${got} ★`, t: 1.2, color: '#c9a8ff', big: true });
+      }
       this.maxKos = Math.max(this.maxKos, this.kosThisShot);
       // EXP: the mon that launched this shot levels up — growth you can
       // watch mid-run. Bigger foes teach more, and punching up doubles it,

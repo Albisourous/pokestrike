@@ -58,6 +58,49 @@ export function recordShiny(id: number) {
 export const SHINY_CHARM_AT = 100;
 export const shinyCharm = () => dexIds().length >= SHINY_CHARM_AT;
 
+// --- dex milestones: filling the dex itself pays out ------------------------
+// pk_dexrw { n } counts leading tiers claimed — the rewards are ordered, so
+// one counter covers the whole ladder. The dex never shrinks and a tier can
+// only land once, so re-firing the claim after every catch is safe.
+export const DEX_REWARDS: { at: number; pay: number }[] = [
+  { at: 10, pay: 30 }, { at: 25, pay: 60 }, { at: 50, pay: 100 },
+  { at: 75, pay: 150 }, { at: 100, pay: 200 }, { at: 150, pay: 300 },
+  { at: 200, pay: 400 }, { at: 300, pay: 600 }, { at: 400, pay: 800 },
+  { at: 514, pay: 1500 },
+];
+let memDexRw = 0;
+
+const dexRwN = (): number => {
+  const raw = load<Partial<{ n: number }>>('pk_dexrw');
+  const n = raw && typeof raw === 'object' && typeof raw.n === 'number' && Number.isFinite(raw.n) ? raw.n : memDexRw;
+  // a corrupt blob reads as nothing-claimed — a fractional/negative n would
+  // index the ladder as undefined, not as a tier
+  return Math.max(0, Math.floor(n));
+};
+
+// Pays every reachable unclaimed tier and returns what landed — [] when
+// nothing's new, so a back-to-back second call is a no-op.
+export function claimDexRewards(): { at: number; pay: number }[] {
+  const out: { at: number; pay: number }[] = [];
+  const dex = dexIds().length;
+  let n = dexRwN();
+  while (n < DEX_REWARDS.length && dex >= DEX_REWARDS[n].at) {
+    addStars(DEX_REWARDS[n].pay);
+    out.push(DEX_REWARDS[n]);
+    n++;
+  }
+  if (out.length) {
+    memDexRw = n;
+    store('pk_dexrw', { n });
+  }
+  return out;
+}
+
+// the next unclaimed tier — the "X TO GO" target, null once all are banked
+export function nextDexReward(): { at: number; pay: number } | null {
+  return DEX_REWARDS[dexRwN()] ?? null;
+}
+
 // First-run coaching: set once the first wave clears — quit mid-run and the
 // ghost pull comes back next launch.
 export const coachDone = () => load<boolean>('pk_coach') ?? memCoach;
@@ -424,6 +467,24 @@ export function bumpPulls(): number {
   memPulls = pullCount() + 1;
   store('pk_pulls', memPulls);
   return memPulls;
+}
+
+// one hatcher pull on the house per UTC day — pk_free { day } is the same
+// once-per-day stamp as pk_raid; absent means today's pull is still waiting
+let memFree = '';
+
+const freeDay = (): string => {
+  const raw = load<Partial<{ day: string }>>('pk_free');
+  return raw && typeof raw === 'object' && typeof raw.day === 'string' ? raw.day : memFree;
+};
+
+export function freePullLeft(now = Date.now()): boolean {
+  return freeDay() !== dayKey(now);
+}
+
+export function useFreePull(now = Date.now()): void {
+  memFree = dayKey(now);
+  store('pk_free', { day: memFree });
 }
 
 // the hatcher's welcome wagon: an empty wallet gets two pulls on the house

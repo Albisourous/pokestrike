@@ -1,15 +1,15 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
-import { isMuted, sfx } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, bst, LEADER_NPC, ASC_MODS } from './data';
+import { isMuted } from '../core/audio';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS } from './data';
 import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
-import { TYPE_COLOR, typeMult, type PokeType } from './types';
-import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
-import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED, ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, type Settings } from './meta';
-import { taskViews, tasksReady, taskResetsIn, raidPick, dealPick, dealCost } from './tasks';
+import { TYPE_COLOR, type PokeType } from './types';
+import { roleOf, moveOf, superDesc } from './stats';
+import { ULT_SHOTS } from './battle';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, type Settings } from './meta';
+import { taskViews, tasksReady, taskResetsIn, raidPick, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 
@@ -46,6 +46,7 @@ export interface RunResult {
   stars?: number; // star pieces banked this run — drawn as a findings row when set
   starsBonus?: number; // the once-a-day first-clear drop — its own findings row
   grind?: { n: number; pay: number }; // nth finished run today — the session pays out
+  dexPay?: number; // dex-milestone stars this run banked — its own findings row
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -585,255 +586,37 @@ export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXE
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
 export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
 
-// The attract loop isn't one shot — it's a rotation of scripted skeletons,
-// each a different lesson: the pass chain, the bank off two walls, the
-// full-court sweep of every foe, the tight ricochet squeeze. Straight legs
-// the scripted ball walks; the shared checks fire bumps and score hits the
-// same as a real pull.
-const ATTRACT = { windup: 0.7, rest: 0.6, speed: 300 };
-const PAD = { x: 400, y: 560 }; // pikachu's mark — every script opens here
-const SCRIPTS: { aim: { x: number; y: number }; legs: { x: number; y: number }[] }[] = [
-  {
-    aim: { x: 430, y: 395 }, // THE PASS — bump the whole squad, clip machop
-    legs: [PAD, { x: 118, y: 335 }, { x: 150, y: 585 }, { x: 200, y: 620 }, { x: 430, y: 395 }],
-  },
-  {
-    aim: { x: 470, y: 288 }, // THE BANK — wall, wall, gastly
-    legs: [PAD, { x: 486, y: 320 }, { x: 60, y: 300 }, { x: 470, y: 288 }],
-  },
-  {
-    aim: { x: 95, y: 260 }, // THE SWEEP — touch all three foes, end on spearow
-    legs: [PAD, { x: 430, y: 395 }, { x: 470, y: 288 }, { x: 95, y: 260 }],
-  },
-  {
-    aim: { x: 150, y: 585 }, // THE SQUEEZE — hug the rail through the squad to squirtle
-    legs: [PAD, { x: 200, y: 620 }, { x: 60, y: 630 }, { x: 118, y: 335 }, { x: 150, y: 585 }],
-  },
+// --- ambient title: drifting wilds, today's offers --------------------------
+// The pitch between the wordmark and the buttons is scenery, not a demo —
+// wilds wander it on a spring and a TODAY card sells the day's rotating
+// offers. The sling lives in battle.
+const PITCH = { x: 26, y: 268, w: W - 52, h: 396 };
+
+interface WildMon {
+  id: number; x: number; y: number; vx: number; vy: number;
+  ax: number; ay: number; wT: number; s: number;
+}
+// a scatter of wilds roams the pitch — hops to a nearby spot, the odd dart
+const WILDS: WildMon[] = [
+  { id: 25, x: 130, y: 330, vx: 0, vy: 0, ax: 130, ay: 330, wT: 0.4, s: 40 },
+  { id: 133, x: 420, y: 300, vx: 0, vy: 0, ax: 420, ay: 300, wT: 0.9, s: 42 },
+  { id: 1, x: 100, y: 560, vx: 0, vy: 0, ax: 100, ay: 560, wT: 0.2, s: 44 },
+  { id: 4, x: 440, y: 590, vx: 0, vy: 0, ax: 440, ay: 590, wT: 0.7, s: 44 },
+  { id: 7, x: 270, y: 630, vx: 0, vy: 0, ax: 270, ay: 630, wT: 1.1, s: 46 },
+  { id: 60, x: 330, y: 380, vx: 0, vy: 0, ax: 330, ay: 380, wT: 0.6, s: 38 },
 ];
-// leg start times per script, windup first — the last leg lands on the aim
-const SCRIPT_T = SCRIPTS.map((s) => {
-  const t = [ATTRACT.windup];
-  for (let i = 1; i < s.legs.length; i++) {
-    const p = s.legs[i], q = s.legs[i - 1];
-    t.push(t[i - 1] + Math.hypot(p.x - q.x, p.y - q.y) / ATTRACT.speed);
-  }
-  return t;
-});
-const SCRIPT_CYCLE = SCRIPT_T.map((t) => t[t.length - 1] + ATTRACT.rest);
-const attractPos = (tc: number) => {
-  const s = SCRIPTS[play.script];
-  const T = SCRIPT_T[play.script];
-  for (let i = 1; i < T.length; i++) {
-    if (tc <= T[i]) {
-      const u = Math.min(1, (tc - T[i - 1]) / (T[i] - T[i - 1]));
-      const p = s.legs[i - 1];
-      const q = i === s.legs.length - 1 ? play.aim : s.legs[i];
-      return { x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u };
-    }
-  }
-  return s.legs[0];
-};
-const TITLE_FOES: [number, number, number, number][] = [ // id, x, y, size
-  [92, 470, 288, 50], // gastly
-  [66, 430, 395, 54], // machop
-  [21, 95, 260, 46], // spearow — gives the left rail something to hit
-];
-// your squad fields like a real wave — pikachu leads off and the other
-// three's homes ARE the scripted legs, so the loop bumps all of them
-const TITLE_TEAM: [number, number, number][] = [ // id, home x, home y
-  [25, PAD.x, PAD.y], // pikachu starts on the pad
-  [1, 118, 335], // bulbasaur
-  [7, 150, 585], // squirtle
-  [4, 200, 620], // charmander
-];
-
-// --- playable title sandbox --------------------------------------------------
-// The pitch between the wordmark and the buttons is a live demo: the scripted
-// attract loop plays until a drag lands on the grass, then the squad is the
-// player's — pull-back sling, wall bounces, bump a teammate and their super
-// fires. Launch, meter, physics and turn rotation are the real battle rules
-// (battle.ts constants + the pointerUp charge formula), not a tuned-down toy.
-export const TITLE_FIELD = { x: 26, y: 268, w: W - 52, h: 396 };
-const BALL_R = 26;
-
-// same formulas as Battle.charge / Battle.sweetSpot, keyed to whoever's up
-const monDiff = (def: SpeciesDef) => Math.min(Math.max((bst(def) - 320) / 300, 0), 1);
-const monCharge = (def: SpeciesDef, dragT: number) => {
-  const P = 0.85 - 0.3 * monDiff(def);
-  const ph = dragT % (2 * P);
-  return ph < P ? ph / P : 2 - ph / P;
-};
-const monZone = (def: SpeciesDef) => {
-  const n = Math.min(def.stats.spe / 120, 1);
-  const d = monDiff(def);
-  const hw = Math.max(0.09 - 0.05 * n - 0.04 * d, 0.025);
-  const c = Math.min(Math.max(0.68 + 0.27 * n, hw), 1 - hw);
-  return { c, hw };
-};
-const monLaunch = (def: SpeciesDef) => launchMult(def.stats) * ROLE_MODS[roleOf(def.stats, def.healer)].launch;
-
-interface TitleFoe {
-  id: number; ax: number; ay: number; wT: number;
-  x: number; y: number; vx: number; vy: number; s: number; timer: number;
-}
-interface TitleMon {
-  id: number; x: number; y: number; s: number; fired: boolean; pulse: number;
-  vx: number; vy: number;
-}
-const play = {
-  live: false, // flips while the player's hands are on the field — the
-  // attract loop takes it back once they've been idle a beat
-  idle: 0,
-  dragStart: null as { x: number; y: number } | null,
-  dragNow: null as { x: number; y: number } | null,
-  dragT: 0,
-  wasGold: false,
-  launched: false, // once you've slung one the drag prompt has done its job
-  script: 0, // which attract skeleton the scripted ball is riding
-  turn: 0, // squad index riding the sling — a settled shot hands it on
-  t: 0, // attract clock — drives the scripted rider until live flips
-  ball: { x: TITLE_TEAM[0][1], y: TITLE_TEAM[0][2], vx: 0, vy: 0, live: false, trail: [] as { x: number; y: number }[] },
-  team: TITLE_TEAM.map(([id, x, y]): TitleMon => ({ id, x, y, s: 52, fired: false, pulse: 0, vx: 0, vy: 0 })),
-  bolts: [] as { x1: number; y1: number; x2: number; y2: number; t: number; delay: number; foe: TitleFoe; dmg: number }[],
-  foes: TITLE_FOES.map(([id, x, y, s], i): TitleFoe => ({ id, ax: x, ay: y, wT: Math.random() * 0.9, x, y, vx: 0, vy: 0, s, timer: 3 - i })),
-  aim: { x: 430, y: 395 }, // the scripted way-out leg clips the nearest foe
-  orbs: [] as { x: number; y: number; vx: number; vy: number; t: number; tgt: TitleFoe | TitleMon; c: string; dmg: number }[],
-  waves: [] as { x: number; y: number; r: number; maxR: number; t: number; life: number; dmg: (f: TitleFoe) => number; hits: Set<TitleFoe> }[],
-  pops: [] as { x: number; y: number; t: number; label: string; color: string }[],
-  hitSet: new Set<TitleFoe>(), // a scripted pass sits on its leg — one hit each
-  lastTc: 0, // wraps each attract cycle — the foe countdown ticks per shot
-};
-const activeMon = () => play.team[play.turn];
-const activeDef = () => speciesById(activeMon().id)!;
-
-export function titlePointerDown(p: { x: number; y: number }): boolean {
-  if (!inRect(p.x, p.y, TITLE_FIELD)) return false;
-  play.live = true;
-  play.idle = 0;
-  // a scripted pass may be mid-flight — the ball freezes where it was and
-  // that spot becomes the active mon's ground
-  const a = activeMon();
-  a.x = play.ball.x;
-  a.y = play.ball.y;
-  Object.assign(play.ball, { vx: 0, vy: 0, live: false });
-  play.ball.trail = [];
-  play.hitSet.clear();
-  for (const m of play.team) m.fired = false;
-  // grass is the sling, same as battle — a press anywhere starts the pull
-  play.dragStart = { x: p.x, y: p.y };
-  play.dragNow = { x: p.x, y: p.y };
-  play.dragT = 0;
-  play.wasGold = false;
-  return true;
-}
-export function titlePointerMove(p: { x: number; y: number }) {
-  if (play.dragStart) play.dragNow = { x: p.x, y: p.y };
-}
-export function titlePointerUp() {
-  if (!play.dragStart || !play.dragNow) return;
-  const b = play.ball;
-  // same launch as Battle.pointerUp: pull aims, meter timing powers
-  const pull = { x: play.dragStart.x - play.dragNow.x, y: play.dragStart.y - play.dragNow.y };
-  const d = Math.hypot(pull.x, pull.y);
-  const def = activeDef();
-  const frac = monCharge(def, play.dragT);
-  const zone = monZone(def);
-  const gold = Math.abs(frac - zone.c) <= zone.hw;
-  play.dragStart = play.dragNow = null;
-  if (d < 18 || b.live) return; // a tap isn't a pull — same jitter floor as battle
-  const speed = BASE_SHOT_SPEED * POWER * monLaunch(def) * (0.4 + 0.6 * (gold ? 1 : frac));
-  b.vx = (pull.x / d) * speed;
-  b.vy = (pull.y / d) * speed;
-  b.live = true;
-  b.trail = [];
-  play.hitSet.clear();
-  play.launched = true;
-  for (const f of play.foes) f.timer = f.timer <= 1 ? 3 : f.timer - 1;
-  for (const m of play.team) m.fired = false; // bump combo re-arms each shot, like the real cd
-  sfx('launch');
-}
-export function titlePointerCancel() {
-  play.dragStart = play.dragNow = null;
-}
-
-// the bump super, keyed to the bumped mon's type — a pocket version of
-// battle's bumpAlly cases: chain, homing orbs, flame front + fireballs, drain
-const fireSuper = (m: TitleMon) => {
-  const md = speciesById(m.id)!;
-  play.pops.push({ x: m.x, y: m.y - 46, t: 0.9, label: `${moveOf(m.id, md.type)}!`, color: TYPE_COLOR[md.type] });
-  const foeDef = (f: TitleFoe) => speciesById(f.id)!;
-  const dmg = (f: TitleFoe, pw = 1) =>
-    Math.round(specDamage(md.stats.spa, foeDef(f).stats.spd, typeMult(md.type, foeDef(f)), 0.7 * pw));
-  if (md.type === 'electric') {
-    // chain lightning hops the pack, enemy → enemy like bumpAlly's case
-    sfx('zap');
-    let from = { x: m.x, y: m.y };
-    const chained: TitleFoe[] = [];
-    for (let i = 0; i < play.foes.length; i++) {
-      const next = play.foes
-        .filter((f) => !chained.includes(f))
-        .sort((a, c) => Math.hypot(a.x - from.x, a.y - from.y) - Math.hypot(c.x - from.x, c.y - from.y))[0];
-      if (!next) break;
-      chained.push(next);
-      play.bolts.push({ x1: from.x, y1: from.y, x2: next.x, y2: next.y, t: 0.3, delay: i * 0.1, foe: next, dmg: dmg(next) });
-      from = next;
-    }
-  } else if (md.type === 'water') {
-    // homing orbs on the nearest 3
-    sfx('splash');
-    play.foes
-      .slice()
-      .sort((a, c) => Math.hypot(a.x - m.x, a.y - m.y) - Math.hypot(c.x - m.x, c.y - m.y))
-      .slice(0, 3)
-      .forEach((tgt, i) => {
-        const a = (i / 3) * Math.PI * 2;
-        play.orbs.push({ x: m.x, y: m.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, t: 1.8, tgt, c: '#6890f0', dmg: dmg(tgt) });
-      });
-  } else if (md.type === 'fire') {
-    // flame ring rolls out, fireballs hunt the farthest — the real fire
-    // super's one-two, not just a shove
-    sfx('sizzle');
-    play.waves.push({ x: m.x, y: m.y, r: 0, maxR: 220, t: 0.45, life: 0.45, dmg: (f) => dmg(f, 1.4), hits: new Set() });
-    play.foes
-      .slice()
-      .sort((a, c) => Math.hypot(c.x - m.x, c.y - m.y) - Math.hypot(a.x - m.x, a.y - m.y))
-      .slice(0, 3)
-      .forEach((tgt, i) => {
-        const a = (i / 3) * Math.PI * 2;
-        play.orbs.push({ x: m.x, y: m.y, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, t: 1.8, tgt, c: '#f08030', dmg: dmg(tgt, 0.9) });
-      });
-  } else {
-    // grass drain — wisps leech off every foe back into the bumped mon
-    sfx('heal');
-    for (const f of play.foes) {
-      play.pops.push({ x: f.x, y: f.y - 30, t: 0.7, label: String(dmg(f)), color: '#78c850' });
-      play.orbs.push({ x: f.x, y: f.y, vx: 0, vy: 0, t: 1.4, tgt: m, c: '#78c850', dmg: 0 });
-    }
-  }
-};
 
 export function updateTitle(dt: number) {
-  // the meter runs while a pull is held — gold-entry tick, same cue as battle
-  if (play.dragStart) {
-    play.dragT += dt;
-    const z = monZone(activeDef());
-    const inGold = Math.abs(monCharge(activeDef(), play.dragT) - z.c) <= z.hw;
-    if (inGold && !play.wasGold) sfx('tick');
-    play.wasGold = inGold;
-  }
-  // foes roam the whole pitch like battle creeps — hop to a nearby spot,
-  // dart across now and then; the same spring eats knockback, so hits
-  // still shove and settle
-  for (const f of play.foes) {
+  for (const f of WILDS) {
     f.wT -= dt;
     if (f.wT <= 0) {
       f.wT = 0.5 + Math.random() * 0.9;
       const m = f.s * 0.5 + 10;
       const dart = Math.random() < 0.22;
-      const tx = dart ? TITLE_FIELD.x + m + Math.random() * (TITLE_FIELD.w - 2 * m) : f.x + (Math.random() - 0.5) * 160;
-      const ty = dart ? TITLE_FIELD.y + m + Math.random() * (TITLE_FIELD.h - 2 * m) : f.y + (Math.random() - 0.5) * 160;
-      f.ax = Math.min(Math.max(tx, TITLE_FIELD.x + m), TITLE_FIELD.x + TITLE_FIELD.w - m);
-      f.ay = Math.min(Math.max(ty, TITLE_FIELD.y + m), TITLE_FIELD.y + TITLE_FIELD.h - m);
+      const tx = dart ? PITCH.x + m + Math.random() * (PITCH.w - 2 * m) : f.x + (Math.random() - 0.5) * 160;
+      const ty = dart ? PITCH.y + m + Math.random() * (PITCH.h - 2 * m) : f.y + (Math.random() - 0.5) * 160;
+      f.ax = Math.min(Math.max(tx, PITCH.x + m), PITCH.x + PITCH.w - m);
+      f.ay = Math.min(Math.max(ty, PITCH.y + m), PITCH.y + PITCH.h - m);
     }
     f.vx += (f.ax - f.x) * 26 * dt;
     f.vy += (f.ay - f.y) * 26 * dt;
@@ -843,10 +626,10 @@ export function updateTitle(dt: number) {
     f.x += f.vx * dt;
     f.y += f.vy * dt;
   }
-  // no piling up — foes shoulder off each other, the squad, the parked ball
-  for (let i = 0; i < play.foes.length; i++)
-    for (let j = i + 1; j < play.foes.length; j++) {
-      const a = play.foes[i], c = play.foes[j];
+  // no piling up — wilds shoulder off each other
+  for (let i = 0; i < WILDS.length; i++)
+    for (let j = i + 1; j < WILDS.length; j++) {
+      const a = WILDS[i], c = WILDS[j];
       const dx = a.x - c.x, dy = a.y - c.y;
       const d = Math.hypot(dx, dy) || 1;
       const min = a.s * 0.5 + c.s * 0.5;
@@ -855,238 +638,29 @@ export function updateTitle(dt: number) {
       a.x += (dx / d) * push; a.y += (dy / d) * push;
       c.x -= (dx / d) * push; c.y -= (dy / d) * push;
     }
-  for (const f of play.foes) {
-    for (const m of play.team) {
-      if (m === activeMon()) continue;
-      const dx = f.x - m.x, dy = f.y - m.y;
-      const d = Math.hypot(dx, dy) || 1;
-      const min = f.s * 0.5 + m.s * 0.5;
-      if (d < min) { f.x += (dx / d) * (min - d); f.y += (dy / d) * (min - d); }
-    }
-    if (!play.ball.live) {
-      const dx = f.x - play.ball.x, dy = f.y - play.ball.y;
-      const d = Math.hypot(dx, dy) || 1;
-      const min = f.s * 0.5 + 30;
-      if (d < min) { f.x += (dx / d) * (min - d); f.y += (dy / d) * (min - d); }
-    }
-  }
-  // a knocked teammate glides out and settles — the separations above shove
-  // any foe it slides through
-  const F0 = TITLE_FIELD;
-  for (const m of play.team) {
-    if (m === activeMon() || (!m.vx && !m.vy)) continue;
-    m.x += m.vx * dt;
-    m.y += m.vy * dt;
-    const fr0 = Math.exp(-6 * dt);
-    m.vx *= fr0;
-    m.vy *= fr0;
-    const r = m.s * 0.5;
-    m.x = Math.min(Math.max(m.x, F0.x + r), F0.x + F0.w - r);
-    m.y = Math.min(Math.max(m.y, F0.y + r), F0.y + F0.h - r);
-    if (Math.hypot(m.vx, m.vy) < 24) m.vx = m.vy = 0;
-  }
-  const b = play.ball;
-  let flying = false;
-  // hands off long enough and the pitch slips back into the demo cycle —
-  // any touch grabs it again
-  if (play.live && !play.dragStart && !b.live) {
-    play.idle += dt;
-    if (play.idle > 5) {
-      play.live = false;
-      play.t = 0;
-      play.lastTc = 0;
-    }
-  } else {
-    play.idle = 0;
-  }
-  if (!play.live) {
-    // attract loop: pikachu rides scripted legs — the shared checks below
-    // fire the bumps and score the hits, same as a real pull
-    play.t += dt;
-    const cyc = SCRIPT_CYCLE[play.script];
-    const lastT = SCRIPT_T[play.script][SCRIPT_T[play.script].length - 1];
-    const tc = play.t % cyc;
-    if (tc < play.lastTc) {
-      for (const f of play.foes) f.timer = f.timer <= 1 ? 3 : f.timer - 1;
-      play.script = (play.script + 1) % SCRIPTS.length; // next skeleton up
-    }
-    play.lastTc = tc;
-    const pos = attractPos(Math.min(tc, lastT));
-    if (tc < ATTRACT.windup || tc >= lastT) {
-      b.live = false;
-      b.vx = b.vy = 0;
-      b.x = PAD.x;
-      b.y = PAD.y;
-      if (tc < ATTRACT.windup) {
-        play.hitSet.clear();
-        for (const m of play.team) m.fired = false;
-        // the way-out leg clips whichever foe has drifted nearest the lane
-        const anchor = SCRIPTS[play.script].aim;
-        const nf = play.foes
-          .slice()
-          .sort((a, c) => Math.hypot(a.x - anchor.x, a.y - anchor.y) - Math.hypot(c.x - anchor.x, c.y - anchor.y))[0];
-        if (nf) { play.aim.x = nf.x; play.aim.y = nf.y; }
-      }
-    } else {
-      const ahead = attractPos(Math.min(tc + 0.03, lastT));
-      b.vx = (ahead.x - pos.x) / 0.03;
-      b.vy = (ahead.y - pos.y) / 0.03;
-      b.x = pos.x;
-      b.y = pos.y;
-      b.live = true;
-      flying = true;
-    }
-  } else if (b.live) {
-    flying = true;
-    const sp = Math.hypot(b.vx, b.vy);
-    if (sp < STOP_SPEED) {
-      // settled — the mon holds its landing spot like the real game and the
-      // next squad member steps up wherever it rests
-      b.live = false;
-      b.vx = b.vy = 0;
-      const me = activeMon();
-      me.x = b.x;
-      me.y = b.y;
-      play.turn = (play.turn + 1) % play.team.length;
-      const nx = activeMon();
-      b.x = nx.x;
-      b.y = nx.y;
-      const nd = activeDef();
-      play.pops.push({ x: nx.x, y: nx.y - 40, t: 0.8, label: `${nd.name} UP`, color: TYPE_COLOR[nd.type] });
-    } else {
-      b.x += b.vx * dt;
-      b.y += b.vy * dt;
-      const fr = Math.exp(-FRICTION * dt);
-      b.vx *= fr;
-      b.vy *= fr;
-    }
-    const F = TITLE_FIELD;
-    const wall = (v: number) => { if (Math.abs(v) > 120) sfx('bounce', 0.9); };
-    if (b.x < F.x + BALL_R) { b.x = F.x + BALL_R; wall(b.vx); b.vx = Math.abs(b.vx) * WALL_REST; }
-    if (b.x > F.x + F.w - BALL_R) { b.x = F.x + F.w - BALL_R; wall(b.vx); b.vx = -Math.abs(b.vx) * WALL_REST; }
-    if (b.y < F.y + BALL_R) { b.y = F.y + BALL_R; wall(b.vy); b.vy = Math.abs(b.vy) * WALL_REST; }
-    if (b.y > F.y + F.h - BALL_R) { b.y = F.y + F.h - BALL_R; wall(b.vy); b.vy = -Math.abs(b.vy) * WALL_REST; }
-  }
-  if (flying) {
-    b.trail.push({ x: b.x, y: b.y });
-    if (b.trail.length > 7) b.trail.shift();
-    const sp = Math.hypot(b.vx, b.vy);
-    const bDef = activeDef();
-    for (const f of play.foes) {
-      if (play.hitSet.has(f)) continue;
-      const fr2 = f.s * 0.5;
-      const dx = b.x - f.x, dy = b.y - f.y;
-      const d = Math.hypot(dx, dy);
-      if (d >= BALL_R + fr2 || d === 0) continue;
-      const nx = dx / d, ny = dy / d; // unit normal, foe → ball
-      if (play.live) {
-        b.x = f.x + nx * (BALL_R + fr2);
-        b.y = f.y + ny * (BALL_R + fr2);
-        const vn = b.vx * nx + b.vy * ny;
-        b.vx = (b.vx - 2 * vn * nx) * UNIT_REST;
-        b.vy = (b.vy - 2 * vn * ny) * UNIT_REST;
-      } else {
-        play.hitSet.add(f);
-      }
-      f.vx -= nx * sp * 0.5;
-      f.vy -= ny * sp * 0.5;
-      const fDef = speciesById(f.id)!;
-      const eff = typeMult(bDef.type, fDef);
-      play.pops.push({
-        x: f.x, y: f.y, t: 0.8,
-        label: String(physDamage(bDef.stats.atk, fDef.stats.def, eff, 1.4)),
-        color: eff > 1 ? '#ffd84d' : '#e8ecf8',
-      });
-      sfx('hit', 0.9);
-    }
-    // bumping a teammate fires their super — the same trigger as bumpAlly
-    for (const m of play.team) {
-      if (m === activeMon() || m.fired) continue;
-      if (Math.hypot(b.x - m.x, b.y - m.y) >= BALL_R + m.s * 0.5) continue;
-      m.fired = true;
-      m.pulse = 1;
-      fireSuper(m);
-    }
-  }
-  for (let i = play.orbs.length - 1; i >= 0; i--) {
-    const o = play.orbs[i];
-    o.t -= dt;
-    const dx = o.tgt.x - o.x, dy = o.tgt.y - o.y;
-    const d = Math.hypot(dx, dy) || 1;
-    const k = Math.min(1, 9 * dt);
-    o.vx += ((dx / d) * 520 - o.vx) * k;
-    o.vy += ((dy / d) * 520 - o.vy) * k;
-    o.x += o.vx * dt;
-    o.y += o.vy * dt;
-    if (d < o.tgt.s * 0.5 + 8 || o.t <= 0) {
-      if (d < o.tgt.s * 0.5 + 8) {
-        if ('ax' in o.tgt) { // a foe eats it — knock + the damage number
-          o.tgt.vx += (dx / d) * 160;
-          o.tgt.vy += (dy / d) * 160;
-          play.pops.push({ x: o.tgt.x, y: o.tgt.y, t: 0.7, label: String(o.dmg), color: o.c });
-        } else {
-          play.pops.push({ x: o.tgt.x, y: o.tgt.y, t: 0.5, label: '', color: o.c });
-        }
-      }
-      play.orbs.splice(i, 1);
-    }
-  }
-  // a rolling flame front catches each foe once as it passes over
-  for (let i = play.waves.length - 1; i >= 0; i--) {
-    const w = play.waves[i];
-    w.t -= dt;
-    w.r = (1 - Math.max(0, w.t) / w.life) * w.maxR;
-    for (const f of play.foes) {
-      if (w.hits.has(f)) continue;
-      const d = Math.hypot(f.x - w.x, f.y - w.y);
-      if (d > w.r + f.s * 0.5) continue;
-      w.hits.add(f);
-      f.vx += ((f.x - w.x) / (d || 1)) * 170;
-      f.vy += ((f.y - w.y) / (d || 1)) * 170;
-      play.pops.push({ x: f.x, y: f.y - 26, t: 0.7, label: String(w.dmg(f)), color: '#f08030' });
-    }
-    if (w.t <= 0) play.waves.splice(i, 1);
-  }
-  // chain arcs land a beat apart — each one knocks its target on arrival
-  for (let i = play.bolts.length - 1; i >= 0; i--) {
-    const bl = play.bolts[i];
-    if (bl.delay > 0) {
-      bl.delay -= dt;
-      if (bl.delay <= 0) {
-        const d = Math.hypot(bl.foe.x - bl.x1, bl.foe.y - bl.y1) || 1;
-        bl.foe.vx += ((bl.foe.x - bl.x1) / d) * 200;
-        bl.foe.vy += ((bl.foe.y - bl.y1) / d) * 200;
-        play.pops.push({ x: bl.foe.x, y: bl.foe.y, t: 0.7, label: String(bl.dmg), color: '#f8d030' });
-        sfx('zap', 1.15);
-      }
-    } else {
-      bl.t -= dt;
-      if (bl.t <= 0) play.bolts.splice(i, 1);
-    }
-  }
-  for (const m of play.team) if (m.pulse > 0) m.pulse -= dt * 3;
-  for (let i = play.pops.length - 1; i >= 0; i--) {
-    play.pops[i].t -= dt;
-    if (play.pops[i].t <= 0) play.pops.splice(i, 1);
+  // the TODAY card is glass over grass — wilds shoulder out of its lane so
+  // no silhouette reads as a fourth offer
+  const card = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
+  for (const f of WILDS) {
+    const m = f.s * 0.5;
+    if (f.x <= card.x - m || f.x >= card.x + card.w + m || f.y <= card.y - m || f.y >= card.y + card.h + m) continue;
+    const dl = f.x - (card.x - m), dr = card.x + card.w + m - f.x;
+    const dtp = f.y - (card.y - m), db = card.y + card.h + m - f.y;
+    const min = Math.min(dl, dr, dtp, db);
+    if (min === dl) f.x = card.x - m;
+    else if (min === dr) f.x = card.x + card.w + m;
+    else if (min === dtp) f.y = card.y - m;
+    else f.y = card.y + card.h + m;
+    f.ax = f.x; f.ay = f.y;
   }
 }
 
-// jagged chain-lightning arc — regenerated every frame so it crackles
-function bolt(ctx: CanvasRenderingContext2D, x1: number, y1: number, x2: number, y2: number) {
-  const dx = x2 - x1, dy = y2 - y1;
-  const dl = Math.hypot(dx, dy) || 1;
-  const px = -dy / dl, py = dx / dl;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  for (const u of [0.33, 0.66])
-    ctx.lineTo(x1 + dx * u + px * (Math.random() - 0.5) * dl * 0.16, y1 + dy * u + py * (Math.random() - 0.5) * dl * 0.16);
-  ctx.lineTo(x2, y2);
-  ctx.strokeStyle = '#f8d030';
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.strokeStyle = '#fff8d0';
-  ctx.lineWidth = 1.2;
-  ctx.stroke();
+function drawWilds(ctx: CanvasRenderingContext2D, t: number) {
+  for (const [i, f] of WILDS.entries()) {
+    monShadow(ctx, f.x, f.y + f.s * 0.05, f.s);
+    const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
+    drawMon(ctx, f.id, f.x, f.y + wob, f.s);
+  }
 }
 
 // Wild mons at the screen edges — the stadium crowd, clear of the pitch
@@ -1154,18 +728,6 @@ function monShadow(ctx: CanvasRenderingContext2D, x: number, y: number, size: nu
   ctx.fill();
 }
 
-// 4-point hit sparkle — the game's impact star
-function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, color: string) {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x, y - r);
-  ctx.quadraticCurveTo(x, y, x + r, y);
-  ctx.quadraticCurveTo(x, y, x, y + r);
-  ctx.quadraticCurveTo(x, y, x - r, y);
-  ctx.quadraticCurveTo(x, y, x, y - r);
-  ctx.fill();
-}
-
 // Big leaning wordmark: gold gradient fill, navy outline, hard drop shadow.
 function logoBig(ctx: CanvasRenderingContext2D, text: string, cx: number, baseY: number, size: number, maxW: number) {
   ctx.save();
@@ -1199,146 +761,6 @@ function drawWildMons(ctx: CanvasRenderingContext2D) {
   });
 }
 
-// the friendly read — green hp bar + a row of charged pips, same chrome the
-// battle HUD gives your side
-const allyHud = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, ty: PokeType) => {
-  const bw = s * 0.75;
-  ctx.fillStyle = '#000a';
-  ctx.fillRect(x - bw / 2, y + s * 0.5 + 4, bw, 5);
-  ctx.fillStyle = '#6fdc6f';
-  ctx.fillRect(x - bw / 2, y + s * 0.5 + 4, bw, 5);
-  for (let i = 0; i < 4; i++) {
-    ctx.fillStyle = TYPE_COLOR[ty];
-    ctx.fillRect(x + (i - 1.5) * 7 - 2.5, y + s * 0.5 + 12, 5, 5);
-  }
-};
-
-// every actor on the pitch, shared by the attract loop and the live sandbox
-// — the scripted rider and a real pull feed the same play.ball
-function drawActors(ctx: CanvasRenderingContext2D, t: number) {
-  play.foes.forEach((f, i) => {
-    monShadow(ctx, f.x, f.y + f.s * 0.05, f.s);
-    const wob = Math.hypot(f.vx, f.vy) < 30 ? Math.sin(t * 2.2 + i * 1.7) * 2.5 : 0;
-    drawMon(ctx, f.id, f.x, f.y + wob, f.s);
-    // battle's hostile reads: flat-red hp bar + the attack countdown
-    ctx.fillStyle = '#000a';
-    ctx.fillRect(f.x - f.s * 0.38, f.y + f.s * 0.5 + 4, f.s * 0.75, 5);
-    ctx.fillStyle = '#e05050';
-    ctx.fillRect(f.x - f.s * 0.38, f.y + f.s * 0.5 + 4, f.s * 0.75, 5);
-    ctx.font = font(10);
-    ctx.textAlign = 'center';
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 3;
-    ctx.strokeText(`${Math.ceil(f.timer)}`, f.x + f.s * 0.5 - 2, f.y - f.s * 0.5 + 7);
-    ctx.fillStyle = f.timer <= 1 ? '#ff6b6b' : '#fff';
-    ctx.fillText(`${Math.ceil(f.timer)}`, f.x + f.s * 0.5 - 2, f.y - f.s * 0.5 + 7);
-  });
-
-  // the rest of the squad idles on the pitch — sling through one and
-  // their super fires
-  for (const m of play.team) {
-    if (m === activeMon()) continue; // the ball draws itself
-    monShadow(ctx, m.x, m.y + m.s * 0.05, m.s);
-    drawMon(ctx, m.id, m.x, m.y + Math.sin(t * 2.4 + m.id) * 2.5, m.s * (1 + Math.max(0, m.pulse) * 0.15));
-    if (m.pulse > 0) {
-      ctx.globalAlpha = m.pulse;
-      ctx.strokeStyle = TYPE_COLOR[speciesById(m.id)!.type];
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.s * 0.5 + (1 - m.pulse) * 30, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    allyHud(ctx, m.x, m.y, m.s, speciesById(m.id)!.type);
-  }
-
-  for (const bl of play.bolts) if (bl.delay <= 0) bolt(ctx, bl.x1, bl.y1, bl.x2, bl.y2);
-
-  // flame fronts — a hot lip rolling out over a faint scorch wash
-  for (const w of play.waves) {
-    const a = Math.max(0, w.t / w.life);
-    ctx.globalAlpha = a * 0.18;
-    ctx.fillStyle = '#f08030';
-    ctx.beginPath();
-    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = a;
-    ctx.strokeStyle = '#f08030';
-    ctx.lineWidth = 9;
-    ctx.beginPath();
-    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = '#ffe76a';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-
-  for (const o of play.orbs) {
-    ctx.fillStyle = o.c;
-    ctx.beginPath();
-    ctx.arc(o.x, o.y, 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffffcc';
-    ctx.beginPath();
-    ctx.arc(o.x, o.y, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  const b = play.ball;
-  const bDef = activeDef();
-  if (b.live) {
-    b.trail.forEach((g, gi) => {
-      ctx.globalAlpha = ((gi + 1) / b.trail.length) * 0.22;
-      drawMon(ctx, bDef.id, g.x, g.y, 62);
-    });
-    ctx.globalAlpha = 1;
-    const ang = Math.atan2(b.vy, b.vx) * 0.7;
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.rotate(ang);
-    drawMon(ctx, bDef.id, 0, 0, 78);
-    ctx.restore();
-  } else {
-    monShadow(ctx, b.x, b.y + 8, 76);
-    ctx.save();
-    ctx.translate(b.x, b.y + Math.sin(t * 2) * 1.5);
-    if (play.dragStart) ctx.rotate(-0.15); // coiling into the pull
-    drawMon(ctx, bDef.id, 0, 0, 76);
-    ctx.restore();
-    allyHud(ctx, b.x, b.y, 76, bDef.type);
-    // whose-turn marker — the gold chevron bobs over the mon on deck
-    if (!play.dragStart) {
-      const bob = Math.sin(t * 4) * 3;
-      ctx.fillStyle = '#ffd84d';
-      ctx.beginPath();
-      ctx.moveTo(b.x - 8, b.y - 60 + bob);
-      ctx.lineTo(b.x + 8, b.y - 60 + bob);
-      ctx.lineTo(b.x, b.y - 50 + bob);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
-  const pulse = 1 + Math.sin(t * 5) * 0.15;
-  for (const pop of play.pops) {
-    ctx.globalAlpha = Math.min(1, pop.t / 0.3);
-    sparkle(ctx, pop.x, pop.y, 12 * pulse, pop.color);
-    if (pop.label) {
-      ctx.textAlign = 'center';
-      ctx.font = fontB(11);
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 3;
-      ctx.strokeText(pop.label, pop.x, pop.y - 34);
-      ctx.fillStyle = pop.color;
-      ctx.fillText(pop.label, pop.x, pop.y - 34);
-    }
-  }
-  ctx.globalAlpha = 1;
-}
-
 // the login drop reads as a pop, not a ledger line — a gold banner that
 // floats over the pitch for the first seconds of the session's first title
 let loginT0 = -1;
@@ -1365,178 +787,38 @@ export function drawTitle(
   if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
   logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
-  if (play.live) {
-    // --- live sandbox: the pitch is the player's ---
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 10]);
-    ctx.strokeRect(TITLE_FIELD.x, TITLE_FIELD.y, TITLE_FIELD.w, TITLE_FIELD.h);
-    ctx.restore();
-    drawActors(ctx, t);
+  drawWilds(ctx, t);
 
-    const b = play.ball;
-    const bDef = activeDef();
-    // the real aim read: pull dir aims, the meter powers — same preview the
-    // battle scene draws (path dots, charge ring, gold band, launch arrow)
-    if (play.dragStart && play.dragNow && !b.live) {
-      const pull = { x: play.dragStart.x - play.dragNow.x, y: play.dragStart.y - play.dragNow.y };
-      const pullLen = Math.hypot(pull.x, pull.y);
-      const frac = monCharge(bDef, play.dragT);
-      const zone = monZone(bDef);
-      const maxed = Math.abs(frac - zone.c) <= zone.hw;
-      const color = TYPE_COLOR[bDef.type];
-      const F = TITLE_FIELD;
-
-      // release-timing bar across the pitch top — Battle.drawMeter's layout
-      const bw = Math.min(320, F.w * 0.64), bh = 14;
-      const bx = F.x + (F.w - bw) / 2, by = F.y + 10;
-      ctx.fillStyle = 'rgba(10,14,32,0.8)';
-      ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
-      ctx.fillStyle = '#ffffff1c';
-      ctx.fillRect(bx, by, bw, bh);
-      ctx.fillStyle = '#ffd84d55';
-      ctx.fillRect(bx + bw * (zone.c - zone.hw), by, bw * 2 * zone.hw, bh);
-      ctx.save();
-      if (maxed) {
-        ctx.shadowColor = '#ffd84d';
-        ctx.shadowBlur = 14;
-      }
-      ctx.fillStyle = maxed ? '#ffd84d' : color;
-      ctx.fillRect(bx, by, bw * frac, bh);
-      ctx.restore();
-      ctx.fillStyle = '#ffd84d';
-      ctx.fillRect(bx + bw * (zone.c - zone.hw), by - 3, 2, bh + 6);
-      ctx.fillRect(bx + bw * (zone.c + zone.hw) - 2, by - 3, 2, bh + 6);
-
-      if (pullLen >= 12) {
-        const dir = { x: pull.x / pullLen, y: pull.y / pullLen };
-        const speed = BASE_SHOT_SPEED * POWER * monLaunch(bDef) * (0.4 + 0.6 * (maxed ? 1 : frac));
-
-        // predicted path — same sim as battle's aim: one wall bounce, stop
-        // at first contact
-        let sx = b.x, sy = b.y, svx = dir.x * speed, svy = dir.y * speed;
-        const dots: { x: number; y: number }[] = [];
-        let dead = false;
-        sim: for (let i = 0; i < 60; i++) {
-          const damp = Math.exp(-FRICTION / 30);
-          svx *= damp;
-          svy *= damp;
-          sx += svx / 30;
-          sy += svy / 30;
-          if (Math.hypot(svx, svy) < 90) break;
-          if (sx - BALL_R < F.x) { sx = F.x + BALL_R; svx = -svx * WALL_REST; dead = true; }
-          else if (sx + BALL_R > F.x + F.w) { sx = F.x + F.w - BALL_R; svx = -svx * WALL_REST; dead = true; }
-          if (sy - BALL_R < F.y) { sy = F.y + BALL_R; svy = -svy * WALL_REST; dead = true; }
-          else if (sy + BALL_R > F.y + F.h) { sy = F.y + F.h - BALL_R; svy = -svy * WALL_REST; dead = true; }
-          for (const f of play.foes)
-            if (Math.hypot(sx - f.x, sy - f.y) < BALL_R + f.s * 0.5) { dead = true; break sim; }
-          if (dead) break;
-          if (i % 2 === 0) dots.push({ x: sx, y: sy });
-        }
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = color;
-        for (const q of dots) {
-          ctx.beginPath();
-          ctx.arc(q.x, q.y, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.globalAlpha = 1;
-        if (dead && dots.length) {
-          const q = dots[dots.length - 1];
-          ctx.strokeStyle = color;
-          ctx.lineWidth = 2;
-          ctx.globalAlpha = 0.8;
-          ctx.beginPath();
-          ctx.moveTo(q.x, q.y - 7);
-          ctx.lineTo(q.x + 7, q.y);
-          ctx.lineTo(q.x, q.y + 7);
-          ctx.lineTo(q.x - 7, q.y);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.globalAlpha = 1;
-        }
-
-        // charge ring on the ball — the timing read where the eyes are
-        const rr = BALL_R + 16, a0 = -Math.PI / 2;
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = '#ffffff22';
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, rr, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.strokeStyle = '#ffd84d66';
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, rr, a0 + Math.PI * 2 * (zone.c - zone.hw), a0 + Math.PI * 2 * (zone.c + zone.hw));
-        ctx.stroke();
-        ctx.save();
-        if (maxed) {
-          ctx.shadowColor = '#ffd84d';
-          ctx.shadowBlur = 12;
-        }
-        ctx.strokeStyle = maxed ? '#ffd84d' : color;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, rr, a0, a0 + Math.PI * 2 * frac);
-        ctx.stroke();
-        ctx.restore();
-
-        // launch arrow — points where the mon will fly, grows with charge
-        const ex = b.x + dir.x * (50 + frac * 160);
-        const ey = b.y + dir.y * (50 + frac * 160);
-        ctx.save();
-        if (maxed) {
-          ctx.shadowColor = '#ffd84d';
-          ctx.shadowBlur = 16;
-        }
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(b.x, b.y);
-        ctx.lineTo(ex, ey);
-        ctx.stroke();
-        const hs = 14;
-        const px = -dir.y, py = dir.x;
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.moveTo(ex + dir.x * hs, ey + dir.y * hs);
-        ctx.lineTo(ex + px * hs * 0.6, ey + py * hs * 0.6);
-        ctx.lineTo(ex - px * hs * 0.6, ey - py * hs * 0.6);
-        ctx.fill();
-        ctx.restore();
-      }
-    }
-
-  } else {
-    drawActors(ctx, t);
-  }
-
-  // drag prompt — a ghost pull loops the gesture until the first real launch
-  if (!play.launched && !play.ball.live) {
-    const bx = play.ball.x;
-    const by = play.ball.y;
-    const gp = (t % 1.7) / 1.7;
-    const ga = gp < 0.75 ? Math.sin((gp / 0.75) * Math.PI) : 0;
-    ctx.save();
-    ctx.globalAlpha = ga;
-    ctx.strokeStyle = '#e8ecf8';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(bx - 58 * Math.min(1, gp / 0.75), by + 64 * Math.min(1, gp / 0.75), 9, 0, Math.PI * 2);
+  // TODAY card — the day's three rotating offers in one glance: the rate-up
+  // pull, the chroma raid boss, the spark deal. The home menu's one summary.
+  {
+    const offers: { def: SpeciesDef; tag: string; c: string }[] = [
+      { def: featuredPull(), tag: 'RATE UP', c: '#ffd84d' },
+      { def: raidPick(), tag: raidDoneToday() ? '✓ CLEARED' : 'SHINY BOSS', c: '#9a6cff' },
+      { def: dealPick(), tag: 'DEAL −25%', c: '#9df0ff' },
+    ];
+    const card = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
+    ctx.fillStyle = 'rgba(10,14,32,0.74)';
+    roundRect(ctx, card.x, card.y, card.w, card.h, 10);
+    ctx.fill();
+    ctx.strokeStyle = GOLD;
+    ctx.lineWidth = 1.5;
     ctx.stroke();
-    ctx.globalAlpha = ga * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(bx, by);
-    ctx.lineTo(bx - 58 * Math.min(1, gp / 0.75), by + 64 * Math.min(1, gp / 0.75));
-    ctx.stroke();
-    ctx.restore();
-    ctx.globalAlpha = 0.55 + Math.sin(t * 3.4) * 0.3;
+    ctx.font = font(10);
+    ctx.fillStyle = '#ffd84d';
     ctx.textAlign = 'center';
-    fitFont(ctx, 'GRAB A MON · PULL BACK · LET GO — THE PITCH IS PLAYABLE', 10, W - 60);
-    ctx.strokeStyle = '#0a2410';
-    ctx.lineWidth = 4;
-    ctx.strokeText('GRAB A MON · PULL BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
-    ctx.fillStyle = '#ffe76a';
-    ctx.fillText('GRAB A MON · PULL BACK · LET GO — THE PITCH IS PLAYABLE', W / 2, TITLE_FIELD.y + TITLE_FIELD.h - 14);
-    ctx.globalAlpha = 1;
+    ctx.fillText('TODAY', card.x + card.w / 2, card.y + 28);
+    offers.forEach((o, i) => {
+      const cx = card.x + (card.w * (i + 0.5)) / 3;
+      monShadow(ctx, cx, card.y + 84, 54);
+      drawMon(ctx, o.def.id, cx, card.y + 84 + Math.sin(t * 2.2 + i * 1.7) * 2.5, 54);
+      ctx.font = fontB(7);
+      ctx.fillStyle = o.c;
+      ctx.fillText(o.tag, cx, card.y + 118);
+      ctx.font = fontB(8);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(o.def.name.toUpperCase(), cx, card.y + 132);
+    });
   }
 
   // the pitch in one line — a stranger gets the loop before they tap a thing
@@ -1566,7 +848,10 @@ export function drawTitle(
     cd: '#6b4ac0',
     tc: '#2a2440',
     label: 'CHROMA RAID',
-    sub: raidDone ? '✓ CLEARED TODAY' : `${raidPick().name.toUpperCase()} · DAILY SHINY`,
+    // cleared → the chip sells tomorrow's boss instead of going dead
+    sub: raidDone
+      ? `TMRW: ${raidPick(Date.now() + 86400000).name.toUpperCase()}`
+      : `${raidPick().name.toUpperCase()} · DAILY SHINY`,
     disabled: raidDone,
   });
   // a live daily streak pins a pip on the corner — the tasksReady red pip's
@@ -1667,11 +952,14 @@ export function drawTitle(
   // the goal-gradient tell — the dex chip always names the nearest open
   // loop: catches to the charm, badges to the crown, then pulls to pity
   const dexN = dexIds().length;
+  const dexRw = nextDexReward();
   const nextGoal = !shinyCharm()
     ? `${SHINY_CHARM_AT - dexN} TO CHARM`
-    : gymBadges().size < BADGES.length
-      ? `${BADGES.length - gymBadges().size} BADGES LEFT`
-      : `PITY IN ${PULL_PITY - (pullCount() % PULL_PITY)}`;
+    : dexRw
+      ? `${dexRw.at - dexN} TO +${dexRw.pay}★`
+      : gymBadges().size < BADGES.length
+        ? `${BADGES.length - gymBadges().size} BADGES LEFT`
+        : `PITY IN ${PULL_PITY - (pullCount() % PULL_PITY)}`;
   pill(ctx, DEX_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `DEX ${dexN}/${CATCHABLE}`, sub: nextGoal });
   pill(ctx, ACH_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}` });
   pill(ctx, BOARD_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TOP RUNS' });
@@ -2531,6 +1819,7 @@ export interface HatchState {
   i: number; // which result the reveal is on (10-pull tap-through)
   sparkScroll: number; // SPARK grid scroll — only live while phase is 'idle'
   label?: string; // the summary's header — 'RAID CLEARED' rides the same cards
+  dexPay?: number; // dex-milestone stars this pull banked — the summary names the payout
 }
 
 const HATCH_PANEL = DEX_PANEL;
@@ -2621,7 +1910,7 @@ export function sparkHit(scroll: number, x: number, y: number): SpeciesDef | nul
 export function drawHatch(
   ctx: CanvasRenderingContext2D,
   s: HatchState,
-  info: { stars: number; dust: number; pityIn: number; featured: SpeciesDef | null },
+  info: { stars: number; dust: number; pityIn: number; featured: SpeciesDef | null; free: boolean; flash?: string },
 ) {
   const r = HATCH_PANEL;
   void loadItem('star-piece');
@@ -2683,14 +1972,15 @@ export function drawHatch(
     ctx.fillText('NO FEATURED PULL TODAY', FEAT_BAND.x + FEAT_BAND.w / 2, FEAT_BAND.y + FEAT_BAND.h / 2 + 4);
   }
 
-  // the pulls — ×1 is parchment, ×10 the gold MS ten-pull; dim when short
+  // the pulls — ×1 is parchment, ×10 the gold MS ten-pull; dim when short.
+  // A daily free pull turns the first pill gold — the come-back-tomorrow hook
   pill(ctx, PULL1_BTN, {
-    c: '#e8ecf8',
-    cd: '#aab0c8',
+    c: info.free ? '#ffd84d' : '#e8ecf8',
+    cd: info.free ? '#c8a44d' : '#aab0c8',
     tc: '#2a2440',
-    label: 'PULL ×1',
-    sub: `${PULL_COST} STAR PIECES`,
-    disabled: info.stars < PULL_COST,
+    label: info.free ? 'FREE PULL' : 'PULL ×1',
+    sub: info.free ? 'ONE A DAY' : `${PULL_COST} STAR PIECES`,
+    disabled: !info.free && info.stars < PULL_COST,
   });
   pill(ctx, PULL10_BTN, {
     c: '#ffd84d',
@@ -2732,9 +2022,10 @@ export function drawHatch(
   if (s.phase === 'idle') {
     const wknd = shinyOdds() > PULL_SHINY;
     ctx.font = fontB(7);
-    ctx.fillStyle = wknd ? '#ffd84d' : '#5a6284';
+    ctx.fillStyle = info.flash || wknd ? '#ffd84d' : '#5a6284';
     ctx.fillText(
-      `72% COMMON · 25% RARE · 3% EPIC — ${shinyOdds() * 100}% SHINY${wknd ? ' · WEEKEND ×2' : ''} PER PULL`,
+      info.flash ??
+        `72% COMMON · 25% RARE · 3% EPIC — ${shinyOdds() * 100}% SHINY${wknd ? ' · WEEKEND ×2' : ''} PER PULL`,
       W / 2,
       PITY_BAR.y + PITY_BAR.h + 9,
     );
@@ -2970,7 +2261,7 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
   ctx.textAlign = 'center';
   ctx.font = fontB(9);
   ctx.fillStyle = '#aab4dd';
-  ctx.fillText(`${news} NEW${dust ? ` · +${dust} DUST` : ''}`, cx, m.y + m.h - 40);
+  ctx.fillText(`${news} NEW${dust ? ` · +${dust} DUST` : ''}${s.dexPay ? ` · DEX +${s.dexPay}★` : ''}`, cx, m.y + m.h - 40);
   ctx.font = fontB(8);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('TAP TO COLLECT', cx, m.y + m.h - 24);
@@ -4146,6 +3437,7 @@ export function drawResult(
   if (res.stars) findings.push(['STAR PIECES', `+${res.stars}`, '#ffd84d']); // the wallet's payout — even a wipe banks
   if (res.starsBonus) findings.push(['FIRST WIN TODAY', `+${res.starsBonus}`, '#ffd84d']);
   if (res.grind) findings.push([`RUN ${res.grind.n} TODAY`, `+${res.grind.pay}`, '#ffd84d']);
+  if (res.dexPay) findings.push(['DEX MILESTONES', `+${res.dexPay}`, '#c9a8ff']);
   if (res.rating) {
     const r = res.rating;
     findings.push([
