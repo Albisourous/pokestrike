@@ -1601,7 +1601,7 @@ export const HELP_CLOSE_HIT = { x: HELP_CLOSE.x - 8, y: HELP_CLOSE.y - 8, w: 56,
 // re-arms the kinetic battle coach — top-left, kept narrow to clear the title
 export const HELP_TUT = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + 12, w: 96, h: 40 };
 
-export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed = false) {
+export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed = false, welcome = false) {
   const r = HELP_PANEL;
   ctx.fillStyle = 'rgba(6,10,22,0.82)';
   ctx.fillRect(0, 0, W, H);
@@ -1614,6 +1614,11 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   ctx.font = font(17);
   ctx.fillStyle = '#ffd84d';
   ctx.fillText('HOW TO PLAY', r.x + r.w / 2, r.y + 42);
+  if (welcome) {
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#9fb0d8';
+    ctx.fillText('your first fight teaches the pull — this deck is the manual', r.x + r.w / 2, r.y + 60);
+  }
 
   ctx.strokeStyle = '#8890b8';
   ctx.lineWidth = 2;

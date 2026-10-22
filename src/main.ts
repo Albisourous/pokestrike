@@ -168,6 +168,7 @@ const modForSeed = (s: number) => {
 };
 let runRng: () => number = mulberry32(runSeed);
 let helpOpen = false;
+let helpWelcome = false; // first-boot open greets; manual opens don't
 let bugOpen = false; // the report-a-bug card — seed + build receipt
 let menuOpen = false; // overworld TEAM · ITEMS panel
 let settingsOpen = false;
@@ -1404,6 +1405,7 @@ canvas.addEventListener('pointerup', (e) => {
     // CLOSE or an outside tap dismisses — a click like every sibling modal
     if (inRect(p.x, p.y, HELP_CLOSE_HIT) || !inRect(p.x, p.y, HELP_PANEL)) {
       helpOpen = false;
+      helpWelcome = false;
       sfx('ui');
     } else if (inRect(p.x, p.y, slop(HELP_TUT, 4))) {
       // re-arm the kinetic coach: a live battle starts coaching at its next
@@ -1411,6 +1413,7 @@ canvas.addEventListener('pointerup', (e) => {
       if (battle && battle.phase !== 'won' && battle.phase !== 'lost') battle.coach = true;
       else resetCoach();
       helpOpen = false; // closing shows the ghost pull immediately mid-battle
+      helpWelcome = false;
       sfx('ui');
     } else if (inRect(p.x, p.y, slop(HELP_NEXT, 4))) helpFlip(1);
     else if (inRect(p.x, p.y, slop(HELP_PREV, 4))) helpFlip(-1);
@@ -1464,6 +1467,7 @@ addEventListener('keydown', (e) => {
   if (helpOpen) {
     if (e.key === 'Escape' || e.key === '?') {
       helpOpen = false;
+      helpWelcome = false;
       sfx('ui');
     } else if (e.key === 'ArrowRight') helpFlip(1);
     else if (e.key === 'ArrowLeft') helpFlip(-1);
@@ -2050,7 +2054,7 @@ function render() {
     drawMuteChip(ctx);
     drawGearChip(ctx); // same gate as the hit-test — no dead or buried hotspots
   }
-  if (helpOpen) drawHelp(ctx, helpPage, (!!battle && battle.coach) || !coachDone());
+  if (helpOpen) drawHelp(ctx, helpPage, (!!battle && battle.coach) || !coachDone(), helpWelcome);
   if (bugOpen) drawBugCard(ctx, runSave()?.seed ?? titleSave?.seed ?? null);
   if (settingsOpen) drawSettings(ctx, settingsCat, settings());
   if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
@@ -2118,6 +2122,7 @@ Promise.all([
     // pull itself inside run one. Later boots leave it under the ? chip
     if (!helpSeen()) {
       helpOpen = true;
+      helpWelcome = true;
       markHelpSeen();
     }
     startLoop(update, render);
