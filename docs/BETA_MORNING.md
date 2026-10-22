@@ -59,6 +59,30 @@ og/manifest/icons correctly; the final push re-deploys this build.
    with the crash-receipt line (`SEED nnn · BUILD xxx`) and filing
    instructions; build sha on title confirmed; `docs/BETA.md` written
    with tester instructions, bug-report flow, and `?seed=` replay tip.
+6. **Screenshot-driven pass 2** (`c73de8d`→`a31bede`, your live shots):
+   - **Start area rebuilt** — the HOME cottage sat centered on the node,
+     so the trainer stood on the roof and the building hung over the
+     sea. It's raised onto a real grass yard with the trainer at the
+     door; smoke pins the yard across all seeds.
+   - **Trainer customization** — new TRAINER settings tab: 15 avatars
+     (`pk_trainer`), drives the overworld sprite. Fixed a real asset bug
+     along the way: rotation-packed atlas frames were skipped on load,
+     blanking half the roster.
+   - **Settings filled out** — 5 new toggles, all wired to live behavior:
+     MENU SOUNDS, TITLE WILDS, MAP SPARKLES, DAMAGE NUMBERS, AIM ARROW;
+     modal grew to fit. Old saves default everything on.
+   - **iOS swipe-zone fix** — the title's bottom stack (records, ladder,
+     REPORT BUGS, sha) sat in the home-gesture area. Lifted ~28px; the
+     footer is one line and the ladder bar is now the lowest element.
+   - **Hatcher odds** — flat text line → tiered 2×2 rate card fed by a
+     `PULL_RATES` constant `pullSpecies` now reads too (printed odds can
+     never drift from the roll).
+   - **Lab levels were never dead** — all nine were already wired into
+     Battle construction; they just showed nothing. Cards now print the
+     bought total (`NOW +16% TEAM MAX HP`) and the battle field log
+     announces `LAB +16%HP · +5%DMG …`. Smoke proves every upgrade
+     changes measurable battle state. Also fixed a clipped TRAINING
+     section head.
 
 ## What I decided, and why
 
@@ -77,7 +101,9 @@ og/manifest/icons correctly; the final push re-deploys this build.
 ## Still broken / not fully verified
 
 - **No real-device touch test** — sling is playable on mouse; 44px
-  targets are met in logical space, but feel on a phone is unverified.
+  targets are met in logical space, and the bottom strip is now clear
+  of the iOS home-swipe zone, but pull-back feel on a phone is
+  unverified.
 - **Result-screen compaction** is verified by construction (clipped +
   capped), not by screenshot of a heavily-loaded report.
 - **`pauseChip` remains <44px** deliberately (arena-tap conflict).
