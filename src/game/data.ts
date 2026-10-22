@@ -829,6 +829,9 @@ export const shinyOdds = (now = Date.now()): number => {
 
 // Rarity is a BUCKET roll, then uniform inside the bucket — pool share never
 // sets the rates. Epic also sweeps invaders: tier alone misses Phione (tier 2).
+// PULL_RATES is the single source for the cuts — the hatcher prints these
+// numbers, so they must always sum to 1.
+export const PULL_RATES = { common: 0.72, rare: 0.25, epic: 0.03 } as const;
 const PULL_COMMON = PULLABLE.filter((d) => tierOf(d) <= 1 && !INVADER_IDS.has(d.id));
 const PULL_RARE = PULLABLE.filter((d) => tierOf(d) === 2 && !INVADER_IDS.has(d.id));
 const PULL_EPIC = PULLABLE.filter((d) => tierOf(d) >= 3 || INVADER_IDS.has(d.id));
@@ -836,8 +839,8 @@ const PULL_EPIC = PULLABLE.filter((d) => tierOf(d) >= 3 || INVADER_IDS.has(d.id)
 // rarePlus (pity rolls) drops the common bucket — rare:epic renormalize to
 // 25:3. A featuredId inside the rolled bucket weighs 10x there (rate-up).
 export function pullSpecies(rng: () => number, opts?: { rarePlus?: boolean; featuredId?: number }): SpeciesDef {
-  const r = opts?.rarePlus ? 0.72 + rng() * 0.28 : rng();
-  const bucket = r < 0.72 ? PULL_COMMON : r < 0.97 ? PULL_RARE : PULL_EPIC;
+  const r = opts?.rarePlus ? PULL_RATES.common + rng() * (1 - PULL_RATES.common) : rng();
+  const bucket = r < PULL_RATES.common ? PULL_COMMON : r < PULL_RATES.common + PULL_RATES.rare ? PULL_RARE : PULL_EPIC;
   const fid = opts?.featuredId;
   const feat = fid == null ? undefined : bucket.find((d) => d.id === fid);
   const i = Math.floor(rng() * (bucket.length + (feat ? 9 : 0)));

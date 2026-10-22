@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS } from './data';
 import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -1976,7 +1976,7 @@ const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 66, w: HATCH_PANEL
 export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
 export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
 const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 234, w: HATCH_PANEL.w - 32, h: 10 };
-const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 298, w: HATCH_PANEL.w - 32, h: 492 };
+const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 330, w: HATCH_PANEL.w - 32, h: 456 };
 const SPARK_COLS = 4;
 const SPARK_CELL_W = SPARK_VIEW.w / SPARK_COLS;
 const SPARK_CELL_H = 112;
@@ -2170,18 +2170,41 @@ export function drawHatch(
   ctx.lineWidth = 1;
   ctx.strokeRect(PITY_BAR.x + 0.5, PITY_BAR.y + 0.5, PITY_BAR.w - 1, PITY_BAR.h - 1);
 
-  // the odds, in print. Bucket cuts track pullSpecies' 0.72/0.97 rolls by
-  // hand; the shiny number reads live so the weekend window advertises itself
+  // the odds, tiered — a 2×2 rate card under the pity meter. Buckets read
+  // PULL_RATES straight so the print can never drift from pullSpecies';
+  // shiny rides every pull, so it gets its own cell and shows live odds
   if (s.phase === 'idle') {
-    const wknd = shinyOdds() > PULL_SHINY;
-    ctx.font = fontB(7);
-    ctx.fillStyle = info.flash || wknd ? '#ffd84d' : '#5a6284';
-    ctx.fillText(
-      info.flash ??
-        `72% COMMON · 25% RARE · 3% EPIC — ${shinyOdds() * 100}% SHINY${wknd ? ' · WEEKEND ×2' : ''} PER PULL`,
-      W / 2,
-      PITY_BAR.y + PITY_BAR.h + 9,
-    );
+    if (info.flash) {
+      ctx.textAlign = 'center';
+      ctx.font = fontB(8);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(info.flash, W / 2, PITY_BAR.y + PITY_BAR.h + 22);
+    } else {
+      const wknd = shinyOdds() > PULL_SHINY;
+      const cells: [string, number, string][] = [
+        ['COMMON', PULL_RATES.common, '#8890b8'],
+        ['RARE', PULL_RATES.rare, '#5a9bf0'],
+        ['EPIC', PULL_RATES.epic, '#f0b02f'],
+        [`SHINY${wknd ? ' · WKND ×2' : ''}`, shinyOdds(), '#ffd84d'],
+      ];
+      const cw = (PITY_BAR.w - 14) / 2;
+      cells.forEach(([label, pct, color], i) => {
+        const cx = PITY_BAR.x + (i % 2) * (cw + 14);
+        const cy = PITY_BAR.y + PITY_BAR.h + 10 + Math.floor(i / 2) * 16;
+        ctx.textAlign = 'left';
+        ctx.font = fontB(7);
+        ctx.fillStyle = color;
+        ctx.fillText(label, cx, cy + 7);
+        const bx = cx + (wknd && i === 3 ? 82 : 50);
+        const bw = cx + cw - 36 - bx;
+        ctx.fillStyle = '#0a0d18';
+        ctx.fillRect(bx, cy + 2, bw, 6);
+        ctx.fillStyle = color;
+        ctx.fillRect(bx, cy + 2, Math.max(2, bw * pct), 6);
+        ctx.textAlign = 'right';
+        ctx.fillText(`${Math.round(pct * 100)}%`, cx + cw, cy + 7);
+      });
+    }
   }
 
   // SPARK — the dust shop: buy the species outright, owned ones dim out

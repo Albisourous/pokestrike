@@ -1,7 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds } from '../src/game/data';
 import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
@@ -2287,6 +2287,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     if (!(tierOf(d) >= 2 || INVADER_IDS.has(d.id))) rarePlusOk = false;
   }
   ok(rarePlusOk, 'rarePlus pulls only deal rare+epic buckets');
+  ok(Math.abs(PULL_RATES.common + PULL_RATES.rare + PULL_RATES.epic - 1) < 1e-9,
+    'printed pull rates still sum to a full table');
   const feat = featuredPull(0);
   ok((tierOf(feat) >= 2 || INVADER_IDS.has(feat.id)) && featuredPull(0).id === feat.id,
     'featured pick is rare+ and stable within the day');
