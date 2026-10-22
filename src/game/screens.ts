@@ -100,6 +100,10 @@ export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260,
 // DAILY/RAID's bottom edge (NEW_HIT is hit-tested first and ate their taps)
 export const NEW_HIT = { x: NEW_BTN.x, y: DAILY_BTN.y + DAILY_BTN.h + 1, w: NEW_BTN.w, h: 34 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
+// beta lifeline — a quiet link bottom-left; the drawn text is small, the
+// tap target gets the standard slop
+export const BUG_BTN = { x: 10, y: H - 26, w: 96, h: 18 };
+export const BUG_HIT = { x: 0, y: H - 48, w: 130, h: 48 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
 export const HELP_CHIP = { x: W - 58, y: 54, w: 40, h: 40 };
@@ -1154,6 +1158,46 @@ export function drawTitle(
   ctx.textAlign = 'right';
   ctx.fillStyle = '#ffffff30';
   ctx.fillText(__BUILD__, W - 10, H - 8);
+  // the report link rides the opposite corner — a tester never hunts for it
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('REPORT BUGS', BUG_BTN.x, BUG_BTN.y + BUG_BTN.h - 4);
+}
+
+// The crash-receipt instructions, in a card — the game collects no
+// telemetry, so a report IS a screenshot plus the receipt line
+export function drawBugCard(ctx: CanvasRenderingContext2D, seed: number | null) {
+  ctx.fillStyle = 'rgba(4,6,16,0.85)';
+  ctx.fillRect(0, 0, W, H);
+  const r = { x: 40, y: 250, w: W - 80, h: 330 };
+  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
+  ctx.fillStyle = '#0d1122';
+  ctx.fill();
+  rim(ctx, r, 10, GOLD, 2);
+  edge(ctx, r, 10);
+  ctx.textAlign = 'center';
+  ctx.font = font(13);
+  ctx.fillStyle = GOLD;
+  ctx.fillText('REPORT A BUG', W / 2, r.y + 40);
+  ctx.font = fontB(10);
+  ctx.fillStyle = '#aab4dd';
+  const lines = [
+    'We collect no telemetry — your report',
+    'IS the log. To file one:',
+    '',
+    '1. Screenshot what broke (a crash',
+    '    paints its own receipt).',
+    '2. Include the line below.',
+    "3. Note what you tapped last.",
+  ];
+  lines.forEach((l, i) => ctx.fillText(l, W / 2, r.y + 78 + i * 20));
+  ctx.font = font(9);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText(seed != null ? `SEED ${seed} · ${__BUILD__}` : `BUILD ${__BUILD__}`, W / 2, r.y + 250);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#5a6284';
+  ctx.fillText('post it where you found the build', W / 2, r.y + 276);
+  ctx.fillText('tap anywhere to close', W / 2, r.y + r.h - 18);
 }
 
 // --- help overlay: scrollable sections, each a mini diagram + a caption ---

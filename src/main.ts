@@ -52,6 +52,8 @@ import {
   bagChipRect,
   bagRowItems,
   drawHelp,
+  drawBugCard,
+  BUG_HIT,
   drawPerkPick,
   CHARM_SKIP,
   TOOL_ROLL,
@@ -165,6 +167,7 @@ const modForSeed = (s: number) => {
 };
 let runRng: () => number = mulberry32(runSeed);
 let helpOpen = false;
+let bugOpen = false; // the report-a-bug card — seed + build receipt
 let menuOpen = false; // overworld TEAM · ITEMS panel
 let settingsOpen = false;
 let tasksOpen = false;
@@ -870,6 +873,12 @@ canvas.addEventListener('pointerdown', (e) => {
     helpDrag = { x0: p.x, y0: p.y, moved: false };
     return;
   }
+  // the bug card swallows its own tap-out — it's a card, not a drag surface
+  if (bugOpen) {
+    bugOpen = false;
+    sfx('ui');
+    return;
+  }
   // the settings modal too — tabs switch, sliders grab, toggles flip on
   // pointerdown; CLOSE or a tap outside dismisses
   if (settingsOpen) {
@@ -1005,6 +1014,11 @@ canvas.addEventListener('pointerdown', (e) => {
     if (inRect(p.x, p.y, MUTE_BTN)) {
       toggleMute();
       sfx('ui'); // plays only when unmuting
+      return;
+    }
+    if (inRect(p.x, p.y, BUG_HIT)) {
+      bugOpen = true;
+      sfx('ui');
       return;
     }
     if (titleSave && inRect(p.x, p.y, NEW_HIT)) {
@@ -2024,6 +2038,7 @@ function render() {
     drawGearChip(ctx); // same gate as the hit-test — no dead or buried hotspots
   }
   if (helpOpen) drawHelp(ctx, helpPage);
+  if (bugOpen) drawBugCard(ctx, runSave()?.seed ?? titleSave?.seed ?? null);
   if (settingsOpen) drawSettings(ctx, settingsCat, settings());
   if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
   // playtester lifeline: you can't see their console — a crash paints

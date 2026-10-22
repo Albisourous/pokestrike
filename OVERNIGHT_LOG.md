@@ -556,3 +556,12 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   corridors, 3 lanes, 12 anchors at lane mouths); catch ritual now
   draws over the reward board (drawCatchBalls replay + [690,830] band
   clamp via narrow internals cast — upgrade path: public drawBalls).
+- 24718d3 pushed: resume softlock fix — applySnapshot backfilled waves
+  without advancing depth, so a parked-then-resumed climb cleared the
+  last gym at depth 5 < FINAL_DEPTH and stalled on the map at "STAGE
+  10 OF 9" (reported live by the human). Depth restores to the rolled
+  invariant after backfill; smoke asserts resume→last-row→'won'.
+- acd3b8e pushed: S6 completed — trainer_shade (−3 triangle 132bpm),
+  trainer_earth (+7 slap 140), trainer_gale (+12 airy 148) join
+  trainer_forge; TRAINER_TRACK covers all 11 types. Audition via
+  ?dev __dbg.song('trainer_shade') etc.

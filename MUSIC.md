@@ -84,12 +84,10 @@ Mood families for typed content (default call, adjust by ear):
   echo 0.3, sparse with long rests — drips in a cave.
 - [x] S5 `battle_sky`: F lydian/mixo, ~150bpm, high lead, wide `arp`,
   hat-driven kit, light kick — air.
-- [x] S6 Trainer type tint: store `this.waveType = ttype` in `spawnWave`
-  (it's computed at ~line 830, currently dropped to a boolean). Add 4
-  `trainer_<family>` tracks precomputed as DATA from the trainer march
-  (transpose ±semitones + `leadWave`/`swing`/`echo` per family) — zero
-  sequencer changes. If it still reads samey in audition, hand-write
-  the forge variant.
+- [x] S6 Trainer type tint: `this.waveType = ttype` stored in `spawnWave`;
+  all 4 `trainer_<family>` tracks live as march-data transposes —
+  forge +4 saw, shade −3 triangle/132bpm, earth +7 slap/140, gale
+  +12/148. `TRAINER_TRACK` covers all 11 types.
 - [x] S7 Gym type stab: `JINGLES` entries `gym_forge|gym_shade|gym_earth|gym_gale`
   (one dark V-stab each, family-colored) fired at boss-wave spawn —
   layers over the gym theme, no conflict.
