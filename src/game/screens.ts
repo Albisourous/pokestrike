@@ -209,12 +209,12 @@ export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
 export const REWARD_TEAM = { x: W / 2 - 95, y: 872, w: 190, h: 40 };
 // the NEW CATCH card doubles as a button — it opens the team panel
 export const REWARD_CATCH = { x: W / 2 - 190, y: 158, w: 380, h: 78 };
-// offer-tool row under the perk cards — reroll / skip / banish pills.
-// perkCardRect ends at 580; the held-items strip yields to just below these.
-// the tool row is a thumb target first — 46px tall, hugged under the cards
-export const TOOL_ROLL = { x: 33, y: 588, w: 150, h: 46 };
-export const TOOL_SKIP = { x: W / 2 - 75, y: 588, w: 150, h: 46 };
-export const TOOL_BAN = { x: W - 33 - 150, y: 588, w: 150, h: 46 };
+// offer-tool row under the perk cards — reroll / banish pills. (The old
+// SKIP pill is gone: every board must be picked.) perkCardRect ends at
+// 580; the held-items strip yields to just below these. The tool row is
+// a thumb target first — 46px tall, hugged under the cards
+export const TOOL_ROLL = { x: 55, y: 588, w: 190, h: 46 };
+export const TOOL_BAN = { x: W - 55 - 190, y: 588, w: 190, h: 46 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
 export const BOX_STRIP = { x: 24, y: 536, w: W - 48, h: 64 };
@@ -4656,9 +4656,9 @@ export function drawReward(
       ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
     }
   }
-  // StS lets you decline a reward — cashes out as score via the tool row's
-  // SKIP pill now — and lets you check the deck mid-pick: TEAM · ITEMS is
-  // the same panel the map carries
+  // every board is pick-one — the old decline-for-score pill is gone; you
+  // can still check the deck mid-pick: TEAM · ITEMS is the same panel the
+  // map carries
   pill(ctx, REWARD_TEAM, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'TEAM · ITEMS' });
 
   // a split evolution blocks the reward pick until its form is chosen
@@ -4706,9 +4706,9 @@ export function drawReward(
   }
 }
 
-// The offer-board tool row: REROLL re-deals the offers, SKIP cashes the
-// board out as +150 score, BANISH arms then culls the next card tapped.
-// Charges are per-run — main.ts hit-tests TOOL_* and owns the tools state.
+// The offer-board tool row: REROLL re-deals the offers, BANISH arms then
+// culls the next card tapped — that perk stays out of every board left in
+// the run. Charges are per-run — main.ts hit-tests TOOL_* and owns state.
 export function drawToolRow(
   ctx: CanvasRenderingContext2D,
   tools: { roll: number; ban: number },
@@ -4724,17 +4724,17 @@ export function drawToolRow(
     sub: HAS_KEYS ? '[R]' : undefined,
     disabled: tools.roll <= 0,
   });
-  pill(ctx, TOOL_SKIP, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP +150', sub: HAS_KEYS ? '[X]' : undefined });
   ctx.save();
-  // armed reads as their .armed state — a pulsing red waiting on a card tap
+  // armed reads as their .armed state — a pulsing red waiting on a card
+  // tap; the label turns into the instruction so it can't misread
   if (banArmed) ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 8);
   pill(ctx, TOOL_BAN, {
     c: '#ff5a5f',
     cd: '#e0303e',
     tc: '#fff',
-    label: 'BANISH',
-    badge: `×${tools.ban}`,
-    sub: HAS_KEYS ? '[Z]' : undefined,
+    label: banArmed ? 'TAP A CARD' : 'BANISH',
+    badge: banArmed ? undefined : `×${tools.ban}`,
+    sub: banArmed ? 'culls it all run' : HAS_KEYS ? '[Z]' : undefined,
     disabled: tools.ban <= 0,
   });
   ctx.restore();

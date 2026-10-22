@@ -59,7 +59,6 @@ import {
   drawPerkPick,
   CHARM_SKIP,
   TOOL_ROLL,
-  TOOL_SKIP,
   TOOL_BAN,
   drawToolRow,
   REWARD_TEAM,
@@ -375,13 +374,6 @@ const rewardReroll = () => {
   rewardT0 = t; // the reels deal again for the new offers
   rewardLanded = 0;
   sfx('ui');
-};
-
-const rewardSkip = () => {
-  if (!battle || battle.phase !== 'reward') return;
-  statOffer('perks', battle.rewardOffers.map((p) => p.id), null);
-  battle.declineReward();
-  inputLockT = t + 0.25; // reward → map: the route taps shouldn't catch this tap's twin
 };
 
 const charmPick = (i: number) => {
@@ -1324,13 +1316,10 @@ canvas.addEventListener('pointerdown', (e) => {
         sfx('ui', 0.8); // the skip still clicks — low pitch, it cut the show short
         return;
       }
-      // the tool row: reroll re-deals, skip cashes out, banish arms a card tap
+      // the tool row: reroll re-deals, banish arms a card tap — boards are
+      // pick-one only now, no cash-out
       if (inRect(p.x, p.y, TOOL_ROLL)) {
         rewardReroll();
-        return;
-      }
-      if (inRect(p.x, p.y, TOOL_SKIP)) {
-        rewardSkip();
         return;
       }
       if (inRect(p.x, p.y, TOOL_BAN)) {
@@ -1543,7 +1532,7 @@ addEventListener('keydown', (e) => {
     return;
   }
   // the dealt boards take keys too — [1..4] picks (the lab's fourth card is
-  // real), or banishes when armed; R rerolls, Z arms banish, X cashes out.
+  // real), or banishes when armed; R rerolls, Z arms banish.
   // The same 250ms lock the pointer layer eats applies here, or a key timed
   // to the board turnover double-fires into the next screen.
   if (t < inputLockT) return;
@@ -1590,10 +1579,6 @@ addEventListener('keydown', (e) => {
       const wasArmed = battle.banArmed;
       if (battle.toggleBanish() !== wasArmed) sfx('ui'); // arming and standing down both click
       else sfx('ui', 0.6); // out of banishes — a denied key still answers
-      return;
-    }
-    if (e.key === 'x' || e.key === 'X') {
-      rewardSkip();
       return;
     }
   }
