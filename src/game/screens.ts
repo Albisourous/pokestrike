@@ -4490,8 +4490,8 @@ type SettingsRow =
   | { kind: 'toggle'; key: SettingsToggleKey; label: string; sub?: string; invert?: boolean }
   | { kind: 'seg'; key: SettingsSegKey; label: string; sub?: string };
 
-export const SETTINGS_PANEL = { x: 24, y: 228, w: W - 48, h: 580 };
-export const SETTINGS_CLOSE = { x: W / 2 - 90, y: SETTINGS_PANEL.y + SETTINGS_PANEL.h - 58, w: 180, h: 44 };
+export const SETTINGS_PANEL = { x: 22, y: 38, w: W - 44, h: 800 };
+export const SETTINGS_CLOSE = { x: W / 2 - 100, y: SETTINGS_PANEL.y + SETTINGS_PANEL.h - 64, w: 200, h: 46 };
 
 export const SETTINGS_CATS: { id: SettingsCat; name: string; tab: string; sub: string }[] = [
   { id: 'sound', name: 'SOUND', tab: 'volume & cries', sub: 'volume, music and cries' },
@@ -4532,29 +4532,29 @@ const SET_ROWS: Record<SettingsCat, SettingsRow[]> = {
   trainer: [], // the avatar grid draws itself — no settings rows
 };
 
-const SET_RAIL = { x: SETTINGS_PANEL.x + 14, y: SETTINGS_PANEL.y + 36, w: 160 };
-const SET_TAB_H = 64;
-const SET_TAB_GAP = 10;
+const SET_RAIL = { x: SETTINGS_PANEL.x + 16, y: SETTINGS_PANEL.y + 52, w: 150 };
+const SET_TAB_H = 78;
+const SET_TAB_GAP = 14;
 const SET_PANEL = {
-  x: SET_RAIL.x + SET_RAIL.w + 12,
-  y: SETTINGS_PANEL.y + 14,
-  w: SETTINGS_PANEL.x + SETTINGS_PANEL.w - 14 - (SET_RAIL.x + SET_RAIL.w + 12),
+  x: SET_RAIL.x + SET_RAIL.w + 14,
+  y: SETTINGS_PANEL.y + 16,
+  w: SETTINGS_PANEL.x + SETTINGS_PANEL.w - 16 - (SET_RAIL.x + SET_RAIL.w + 14),
   // ends a gutter above the CLOSE row — rows must never slide under it
-  h: SETTINGS_PANEL.h - 28 - 62,
+  h: SETTINGS_PANEL.h - 32 - 78,
 };
-const SET_BAND = { x: SET_PANEL.x + 4, y: SET_PANEL.y + 4, w: SET_PANEL.w - 8, h: 44 };
+const SET_BAND = { x: SET_PANEL.x + 4, y: SET_PANEL.y + 4, w: SET_PANEL.w - 8, h: 56 };
 const SET_ROW = { x: SET_PANEL.x + 4, w: SET_PANEL.w - 8 };
-const SET_ROWS_Y = SET_BAND.y + SET_BAND.h + 14;
-const SET_SLIDER_H = 70;
+const SET_ROWS_Y = SET_BAND.y + SET_BAND.h + 18;
+const SET_SLIDER_H = 92;
 const SET_TOGGLE_H = 66;
-const SET_SEG_H = 62;
-const SET_TRACK = { x: SET_ROW.x + 14, w: SET_ROW.w - 28, h: 10 };
-const SET_SEG_TRACK = { x: SET_TRACK.x, w: SET_TRACK.w, h: 22 };
+const SET_SEG_H = 86;
+const SET_TRACK = { x: SET_ROW.x + 14, w: SET_ROW.w - 28, h: 12 };
+const SET_SEG_TRACK = { x: SET_TRACK.x, w: SET_TRACK.w, h: 28 };
 
 // rows carrying a sub line pack tighter — the sub eats the label's bottom pad.
-// sub-toggle pitch is 48 so its hit row clears the 44px touch floor
+// sub-toggle pitch is 54 so its hit row clears the 44px touch floor
 const setRowPitch = (r: SettingsRow) =>
-  r.kind === 'seg' ? SET_SEG_H : r.sub ? (r.kind === 'slider' ? 58 : 48) : r.kind === 'slider' ? SET_SLIDER_H : SET_TOGGLE_H;
+  r.kind === 'seg' ? SET_SEG_H : r.sub ? (r.kind === 'slider' ? 82 : 54) : r.kind === 'slider' ? SET_SLIDER_H : SET_TOGGLE_H;
 
 export function settingsTabRect(i: number) {
   return { x: SET_RAIL.x, y: SET_RAIL.y + i * (SET_TAB_H + SET_TAB_GAP), w: SET_RAIL.w, h: SET_TAB_H };
@@ -4568,7 +4568,7 @@ function settingsRowRect(i: number, cat: SettingsCat) {
 }
 
 // the inset track a segmented row's pills ride in — shared by hit and draw
-const segTrackRect = (r: { y: number }) => ({ x: SET_SEG_TRACK.x, y: r.y + 36, w: SET_SEG_TRACK.w, h: SET_SEG_TRACK.h });
+const segTrackRect = (r: { y: number }) => ({ x: SET_SEG_TRACK.x, y: r.y + 46, w: SET_SEG_TRACK.w, h: SET_SEG_TRACK.h });
 
 const segIndex = (key: SettingsSegKey, tr: { x: number; w: number }, x: number) => {
   const n = SETTINGS_SEG_OPTIONS[key].length;
@@ -4578,7 +4578,7 @@ const segIndex = (key: SettingsSegKey, tr: { x: number; w: number }, x: number) 
 // the TRAINER tab's avatar grid — 4×4 cards under the band, draw and hit
 // test read the same rect
 const AV_COLS = 4;
-const AV_CELL = { w: 64, h: 74, gap: 6 };
+const AV_CELL = { w: 66, h: 80, gap: 8 };
 const avatarRect = (i: number) => {
   const gw = AV_COLS * AV_CELL.w + (AV_COLS - 1) * AV_CELL.gap;
   return {
@@ -4605,19 +4605,19 @@ export function settingsRowHit(p: { x: number; y: number }, cat: SettingsCat): S
     const row = rows[i];
     const r = settingsRowRect(i, cat);
     if (row.kind === 'slider') {
-      // the drag slab is the track ±17px — a thumb hit gets >=22px of
+      // the drag slab is the track ±20px — a thumb hit gets >=24px of
       // grace, but never past the row's bottom or a sub-slider bleeds
       // into the toggle below it
-      const slabY = r.y + (row.sub ? 21 : 16);
-      if (inRect(p.x, p.y, { x: r.x, y: slabY, w: r.w, h: Math.min(46, r.y + r.h - slabY) }))
+      const slabY = r.y + (row.sub ? 34 : 38);
+      if (inRect(p.x, p.y, { x: r.x, y: slabY, w: r.w, h: Math.min(56, r.y + r.h - slabY) }))
         return { kind: 'slider', key: row.key };
     } else if (row.kind === 'toggle') {
       if (inRect(p.x, p.y, r)) return { kind: 'toggle', key: row.key };
     } else {
-      // seg hits live on the track — 44px deep, bottom-flush with the row so
+      // seg hits live on the track — 50px deep, bottom-flush with the row so
       // it never bleeds into the next; a label tap still doesn't pick options
       const tr = segTrackRect(r);
-      if (inRect(p.x, p.y, { x: tr.x - 6, y: tr.y - 18, w: tr.w + 12, h: 44 }))
+      if (inRect(p.x, p.y, { x: tr.x - 6, y: tr.y - 18, w: tr.w + 12, h: 50 }))
         return { kind: 'seg', key: row.key, i: segIndex(row.key, tr, p.x) };
     }
   }
@@ -4642,45 +4642,45 @@ export function settingsSegSet(key: SettingsSegKey, i: number) {
 export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, vals: Settings) {
   ctx.fillStyle = 'rgba(4,6,16,0.82)';
   ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, SETTINGS_PANEL.x, SETTINGS_PANEL.y, SETTINGS_PANEL.w, SETTINGS_PANEL.h, 10);
+  roundRect(ctx, SETTINGS_PANEL.x, SETTINGS_PANEL.y, SETTINGS_PANEL.w, SETTINGS_PANEL.h, 14);
   ctx.fillStyle = '#0d1122';
   ctx.fill();
-  rim(ctx, SETTINGS_PANEL, 10, GOLD, 2);
-  edge(ctx, SETTINGS_PANEL, 10);
+  rim(ctx, SETTINGS_PANEL, 14, GOLD, 2);
+  edge(ctx, SETTINGS_PANEL, 14);
 
   ctx.textAlign = 'center';
-  ctx.font = font(10);
+  ctx.font = font(12);
   ctx.fillStyle = GOLD;
-  ctx.fillText('SETTINGS', SET_RAIL.x + SET_RAIL.w / 2, SETTINGS_PANEL.y + 24);
+  ctx.fillText('SETTINGS', SET_RAIL.x + SET_RAIL.w / 2, SETTINGS_PANEL.y + 34);
 
   // category pills: icon circle + bold name + dim sub — the live category
   // fills gold-tinted, the rest stay ink
   SETTINGS_CATS.forEach((c, i) => {
     const r = settingsTabRect(i);
     const on = c.id === cat;
-    roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 16);
     ctx.fillStyle = on ? '#2a2440' : '#12162b';
     ctx.fill();
-    rim(ctx, r, 14, on ? GOLD : '#2a3560', on ? 2 : 1);
-    edge(ctx, r, 14);
-    const cx = r.x + 30;
+    rim(ctx, r, 16, on ? GOLD : '#2a3560', on ? 2 : 1);
+    edge(ctx, r, 16);
+    const cx = r.x + 34;
     const cy = r.y + r.h / 2;
     ctx.beginPath();
-    ctx.arc(cx, cy, 17, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 20, 0, Math.PI * 2);
     ctx.fillStyle = on ? '#ffd84d' : '#1a2040';
     ctx.fill();
     const ink = on ? '#2a2440' : '#8890b8';
-    if (c.id === 'sound') speakerGlyph(ctx, cx, cy, 0.85, false, ink);
-    else if (c.id === 'graphics') monitorGlyph(ctx, cx, cy, 1, ink);
-    else if (c.id === 'trainer') personGlyph(ctx, cx, cy, 1, ink);
-    else gearGlyph(ctx, cx, cy, 1, ink);
+    if (c.id === 'sound') speakerGlyph(ctx, cx, cy, 1, false, ink);
+    else if (c.id === 'graphics') monitorGlyph(ctx, cx, cy, 1.15, ink);
+    else if (c.id === 'trainer') personGlyph(ctx, cx, cy, 1.15, ink);
+    else gearGlyph(ctx, cx, cy, 1.15, ink);
     ctx.textAlign = 'left';
-    ctx.font = font(9);
+    fitFont(ctx, c.name, 9, r.w - 70);
     ctx.fillStyle = on ? PARCH : '#aab4dd';
-    ctx.fillText(c.name, r.x + 56, r.y + 28);
-    ctx.font = fontB(7);
+    ctx.fillText(c.name, r.x + 62, r.y + 35);
+    ctx.font = fontB(8);
     ctx.fillStyle = '#5a6284';
-    ctx.fillText(c.tab, r.x + 56, r.y + 44);
+    ctx.fillText(c.tab, r.x + 62, r.y + 53);
   });
 
   // the content panel — striped band names the live category
@@ -4693,12 +4693,12 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
   stripeBand(ctx, SET_BAND, GOLD);
   const cdef = SETTINGS_CATS.find((c) => c.id === cat)!;
   ctx.textAlign = 'left';
-  ctx.font = font(13);
+  ctx.font = font(15);
   ctx.fillStyle = '#2a2440';
-  ctx.fillText(cdef.name, SET_BAND.x + 14, SET_BAND.y + 25);
-  ctx.font = fontB(7);
+  ctx.fillText(cdef.name, SET_BAND.x + 16, SET_BAND.y + 32);
+  ctx.font = fontB(8);
   ctx.globalAlpha = 0.75;
-  ctx.fillText(cdef.sub, SET_BAND.x + 14, SET_BAND.y + 38);
+  ctx.fillText(cdef.sub, SET_BAND.x + 16, SET_BAND.y + 47);
   ctx.globalAlpha = 1;
 
   if (cat === 'trainer') {
@@ -4710,7 +4710,7 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
       ctx.fillStyle = on ? '#2a2440' : '#0a0d18';
       ctx.fill();
       rim(ctx, r, 8, on ? GOLD : '#2a3560', on ? 2 : 1);
-      drawNpc(ctx, `${a.id}_down_0`, r.x + r.w / 2, r.y + 48, 46);
+      drawNpc(ctx, `${a.id}_down_0`, r.x + r.w / 2, r.y + 52, 50);
       ctx.textAlign = 'center';
       ctx.font = font(6);
       ctx.fillStyle = on ? '#ffd84d' : '#8890b8';
@@ -4721,21 +4721,21 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
   SET_ROWS[cat].forEach((row, i) => {
     const r = settingsRowRect(i, cat);
     ctx.textAlign = 'left';
-    ctx.font = font(9);
+    ctx.font = font(10);
     ctx.fillStyle = '#e8ecf8';
-    ctx.fillText(row.label, r.x + 2, r.y + (row.sub || row.kind !== 'toggle' ? 15 : r.h / 2 + 4));
+    ctx.fillText(row.label, r.x + 2, r.y + (row.sub || row.kind !== 'toggle' ? 18 : r.h / 2 + 5));
     if (row.sub) {
-      ctx.font = fontB(7);
+      ctx.font = fontB(8);
       ctx.fillStyle = '#5a6284';
-      ctx.fillText(row.sub, r.x + 2, r.y + 27);
+      ctx.fillText(row.sub, r.x + 2, r.y + 32);
     }
     if (row.kind === 'slider') {
       const v = vals[row.key];
-      ctx.font = fontB(10);
+      ctx.font = font(9);
       ctx.fillStyle = '#ffd84d';
       ctx.textAlign = 'right';
-      ctx.fillText(`${Math.round(v * 100)}%`, r.x + r.w - 2, r.y + 15);
-      const ty = r.y + (row.sub ? 38 : 33);
+      ctx.fillText(`${Math.round(v * 100)}%`, r.x + r.w - 2, r.y + 18);
+      const ty = r.y + (row.sub ? 48 : 54);
       roundRect(ctx, SET_TRACK.x, ty, SET_TRACK.w, SET_TRACK.h, 5);
       ctx.fillStyle = '#0a0d18';
       ctx.fill();
@@ -4759,22 +4759,22 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
       const by = ty + SET_TRACK.h / 2;
       ctx.save();
       ctx.beginPath();
-      ctx.arc(bx, by, 12, 0, Math.PI * 2);
+      ctx.arc(bx, by, 14, 0, Math.PI * 2);
       ctx.clip();
       ctx.fillStyle = '#f8f8f0';
-      ctx.fillRect(bx - 12, by - 12, 24, 24);
+      ctx.fillRect(bx - 14, by - 14, 28, 28);
       ctx.fillStyle = '#f04038';
-      ctx.fillRect(bx - 12, by - 12, 24, 12);
+      ctx.fillRect(bx - 14, by - 14, 28, 14);
       ctx.fillStyle = '#0a0d18';
-      ctx.fillRect(bx - 12, by - 2, 24, 4);
+      ctx.fillRect(bx - 14, by - 2, 28, 4);
       ctx.restore();
       ctx.beginPath();
-      ctx.arc(bx, by, 12, 0, Math.PI * 2);
+      ctx.arc(bx, by, 14, 0, Math.PI * 2);
       ctx.strokeStyle = '#0a0d18';
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(bx, by, 4, 0, Math.PI * 2);
+      ctx.arc(bx, by, 5, 0, Math.PI * 2);
       ctx.fillStyle = '#f8f8f0';
       ctx.fill();
       ctx.strokeStyle = '#0a0d18';
@@ -4782,17 +4782,17 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
       ctx.stroke();
     } else if (row.kind === 'toggle') {
       const on = row.invert ? !vals[row.key] : vals[row.key];
-      const tr = { x: r.x + r.w - 64, y: r.y + r.h / 2 - 13, w: 54, h: 26 };
-      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 13);
+      const tr = { x: r.x + r.w - 70, y: r.y + r.h / 2 - 15, w: 60, h: 30 };
+      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 15);
       ctx.fillStyle = on ? '#ffd84d' : '#232840';
       ctx.fill();
-      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 13);
+      roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 15);
       ctx.strokeStyle = '#0a0d18';
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      const kx = on ? tr.x + tr.w - 14 : tr.x + 14;
+      const kx = on ? tr.x + tr.w - 16 : tr.x + 16;
       ctx.beginPath();
-      ctx.arc(kx, tr.y + 13, 10, 0, Math.PI * 2);
+      ctx.arc(kx, tr.y + 15, 12, 0, Math.PI * 2);
       ctx.fillStyle = on ? '#f8f8f0' : '#5a6284';
       ctx.fill();
       ctx.strokeStyle = '#0a0d18';
@@ -4820,17 +4820,17 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
       ctx.stroke();
       ctx.textAlign = 'center';
       opts.forEach((o, oi) => {
-        ctx.font = fontB(8);
+        ctx.font = fontB(9);
         ctx.fillStyle = oi === sel ? '#2a2440' : '#8890b8';
-        ctx.fillText(o.toUpperCase(), tr.x + sw * (oi + 0.5), tr.y + tr.h / 2 + 3);
+        ctx.fillText(o.toUpperCase(), tr.x + sw * (oi + 0.5), tr.y + tr.h / 2 + 4);
       });
     }
   });
 
   ctx.textAlign = 'center';
-  ctx.font = fontB(7);
+  ctx.font = fontB(8);
   ctx.fillStyle = '#5a6284';
-  ctx.fillText('saved when you leave', P.x + P.w / 2, P.y + P.h - 12);
+  ctx.fillText('saved when you leave', P.x + P.w / 2, P.y + P.h - 14);
 
   pill(ctx, SETTINGS_CLOSE, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'CLOSE' });
   if (HAS_KEYS) keyHint(ctx, SETTINGS_CLOSE, '[esc]');
