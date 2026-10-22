@@ -6591,10 +6591,6 @@ export class Battle {
       const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
       frame = `may_${dir}_${[1, 0, 2][Math.floor(this.time * 8) % 3]}`;
     }
-    if (at) {
-      const bob = this.mapWalk ? 0 : Math.sin(this.time * 4) * 1.5;
-      drawNpc(ctx, frame, ox + lx * cell + cell / 2, oy + (ly - cam) * cell + cell * 0.55 + bob, cell * 1.7);
-    }
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
     const links = this.region.nodes[this.mapNode].links;
@@ -6646,12 +6642,15 @@ export class Battle {
         ctx.fillText('?', nx + 3, ny + 8);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN; // start + rest are towns
+        // HOME's cottage backs onto the tile above the stop so the player
+        // (drawn over everything, below) stands at its door, not its roof
+        const up = n.kind === 'start';
         // ground shadow first — the building stands on the island, not on it floats
         ctx.fillStyle = 'rgba(8,14,24,0.35)';
         ctx.beginPath();
-        ctx.ellipse(nx, ny + cell * 0.55, cell * 0.85, cell * 0.26, 0, 0, Math.PI * 2);
+        ctx.ellipse(nx, ny + cell * (up ? -0.5 : 0.55), cell * 0.85, cell * 0.26, 0, 0, Math.PI * 2);
         ctx.fill();
-        drawTile(ctx, icon, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
+        drawTile(ctx, icon, nx - cell, ny - cell * (up ? 2.5 : 1.35), cell * 2, cell * 2);
         if (n.kind === 'rest' || n.kind === 'mart') {
           const potion = itemSprite(n.kind === 'rest' ? 'max-potion' : 'potion');
           if (potion) ctx.drawImage(potion, nx - 10, ny - cell * 2, 20, 20);
@@ -6711,6 +6710,12 @@ export class Battle {
         ctx.fillText(ty, nx, ny - cell * 1.55 + 12);
       }
     });
+    // the trainer draws last — she walks in front of the stops, and at
+    // HOME she stands on the cottage's doorstep instead of its roof
+    if (at) {
+      const bob = this.mapWalk ? 0 : Math.sin(this.time * 4) * 1.5;
+      drawNpc(ctx, frame, ox + lx * cell + cell / 2, oy + (ly - cam) * cell + cell * 0.55 + bob, cell * 1.7);
+    }
     ctx.restore(); // end island clip
     ctx.strokeStyle = '#2a3560';
     ctx.lineWidth = 3;

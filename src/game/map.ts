@@ -131,8 +131,16 @@ export function genRegion(seed: number): RegionMap {
     });
   };
   // HOME: the starter pick — nodes[0] so the climb starts standing on it,
-  // one row below stage 1's fork. It never hosts a wave.
-  stop(Math.round(cx), MAP_H - 2, 'start', -1);
+  // one row below stage 1's fork. It never hosts a wave. Two rows up
+  // from the island's edge so the cottage clears the frame's fade.
+  stop(Math.round(cx), MAP_H - 4, 'start', -1);
+  // HOME's yard — the cottage draws on the tiles above the stop, so the
+  // clearing needs to be a real pad, not the usual door-tile cross
+  for (let dy = -3; dy <= 0; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = Math.round(cx) + dx, y = MAP_H - 4 + dy;
+      if (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H) tiles[y * MAP_W + x] = T_GRASS;
+    }
   for (let r = 0; r < TOTAL_STAGES; r++) {
     const ty = MAP_H - 2 - (r + 1) * ROW_GAP;
     // utility rows field 3 stops — mostly services, but ~45% of the time a
@@ -213,7 +221,11 @@ export function genRegion(seed: number): RegionMap {
   // ring around stops stay clear.
   const decor = new Map<number, 'tree' | 'flower' | 'rock'>();
   const nearNode = (x: number, y: number) =>
-    nodes.some((n) => Math.abs(n.tx - x) + Math.abs(n.ty - y) <= 1);
+    nodes.some((n) =>
+      n.kind === 'start'
+        ? Math.abs(n.tx - x) <= 1 && y - n.ty >= -3 && y - n.ty <= 1 // the yard pad
+        : Math.abs(n.tx - x) + Math.abs(n.ty - y) <= 1,
+    );
   const free = (x: number, y: number) =>
     land(x, y) && !route.has(y * MAP_W + x) && !nearNode(x, y) && !decor.has(y * MAP_W + x);
   // tree clumps of 2-4 trees — reads as forest, not polka dots; the

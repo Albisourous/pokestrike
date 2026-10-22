@@ -6,7 +6,7 @@ import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
-import { genRegion, routePath } from '../src/game/map';
+import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
@@ -1013,6 +1013,13 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
         if (p.length < 2 || p[p.length - 1].x !== t.tx || p[p.length - 1].y !== t.ty) walkable = false;
       }
     ok(walkable, `seed ${s}: every link has a walkable route`);
+    // the cottage stands on stamped grass — a water tile under it means
+    // the house floats on stilts over the sea
+    const home = r.nodes[0];
+    ok(
+      [0, 1, 2, 3].every((dy) => r.tiles[(home.ty - dy) * MAP_W + home.tx] === T_GRASS),
+      `seed ${s}: HOME's yard stays dry`,
+    );
   }
 }
 
