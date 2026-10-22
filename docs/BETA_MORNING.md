@@ -147,6 +147,41 @@ their next green commit instead of dragging half-built code into mine.
 If the worktree errors you see (`DEAL_BTN`, `pullN`, `SETS_BTN`,
 `tabPressT`) persist, they're mid-feature — committed HEAD is clean.
 
+## Addendum 2 — cries out, hatcher cinematic (5-agent wave)
+
+**Cries feature deleted** (`dc3f023`) — `cry()`, the audio cache, all 11
+call sites, the `cries` settings key + slider row, and all 649 vendored
+`.ogg` files (~8.7MB). Old saves carrying a `cries` key are ignored junk.
+
+**Pull theatre rebuilt** (`37b2fb8`) — FGO/Genshin-style: letterbox bars
+slam in, spark lanes + collapsing energy rings charge the ball, seam
+cracks light, dark silhouette flash-reveals to color, god-rays + burst
+rings + light pillar, and epic/shiny pulls get a counter-rotating prism
+summon ring, whiteout kick and longer runway (`HatchState.tMax` scales
+per result). All particle fields are hash-seeded — no `Math.random` in
+the draw path. Marquee: type underbar, pop-in name, staggered stars,
+rotated `SHINY!`/`NEW!`/`DUPE` stamp.
+
+**Hatcher readability** — featured band is now type-colored with a
+96px sprite stage + `10× ODDS` explainer; pull buttons carry in-pill
+price plaques (red when short); the pity bar is a 10-pip countdown;
+rates live in a framed 4-column card; spark cells got type pads, tier
+flags, `✓ IN DEX` chips and struck deal prices; plus a `N/514 FOUND —
+EVERY PULL GROWS YOUR DRAFT POOL` motivation line + SET BONUS chip.
+
+**Why-pull design** — `docs/superpowers/specs/2026-10-22-hatcher-motivation.md`
+ranks the value stack; the two cheapest cues (dex-found counter, set-bonus
+chip) shipped in the overlay header.
+
+**Dead wiring fixed** (was another session's half-landed work): HATCH_BTN
+was gated to the 'mons' tab while drawing on 'shop' — tap dead there and
+it occluded DEX_BTN on 'mons'. Now `shop`-gated, DEAL_BTN opens the
+hatcher too, SETS_BTN actually claims all ready lines (`claimSet` was
+never called anywhere), and `noteTabPress` drives a tab press-pop.
+
+**Smoke**: 11 new sets asserts + `cries`-key-ignored coverage; suite
+green, typecheck green, build green.
+
 ## Questions for the morning
 
 1. Are you OK shipping the beta publicly under Pokémon branding, or
