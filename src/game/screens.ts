@@ -1155,9 +1155,23 @@ function drawTabBar(
     const cx = cell.x + cell.w / 2;
     // CLIMB is the hero tab — its pill rides 12px proud of the bar
     const hero = cell.tab === 'climb';
-    const pr = hero
+    const rest = hero
       ? { x: cell.x + 4, y: cell.y - 12, w: cell.w - 8, h: cell.h + 2 }
       : { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
+    // the active tab is physically bigger — CR-style, the highlight lifts
+    // the pill a few px proud of its cell so the nav reads at a glance
+    const big = hero
+      ? { x: cell.x + 2, y: cell.y - 20, w: cell.w - 4, h: cell.h + 10 }
+      : { x: cell.x + 3, y: cell.y - 2, w: cell.w - 6, h: cell.h - 2 };
+    // grow-in on switch: back-out ease overshoots the pill past `big` then
+    // settles — a spring pop, not an instant swap (stamp set in main)
+    const grow = on ? bo(clamp01((t - tabPressT) / 0.24)) : 0;
+    const pr = {
+      x: rest.x + (big.x - rest.x) * grow,
+      y: rest.y + (big.y - rest.y) * grow,
+      w: rest.w + (big.w - rest.w) * grow,
+      h: rest.h + (big.h - rest.h) * grow,
+    };
     roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
     if (on) {
       // raised paper pill with a gold crown — the lifted-tab read
@@ -1196,9 +1210,10 @@ function drawTabBar(
             : undefined;
     ctx.save();
     ctx.globalAlpha = on ? 1 : 0.55;
-    if (pop) {
+    const iscale = (on && grow < 1 ? 0.8 + 0.2 * grow : 1) * (1 - 0.15 * pop); // icon rides the pill's grow
+    if (iscale !== 1) {
       ctx.translate(cx, icY);
-      ctx.scale(1 - 0.15 * pop, 1 - 0.15 * pop);
+      ctx.scale(iscale, iscale);
       ctx.translate(-cx, -icY);
     }
     if (spr) {
@@ -3332,6 +3347,10 @@ const rnd = (n: number) => {
 };
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const eo = (v: number) => 1 - (1 - v) * (1 - v); // ease-out quad
+const bo = (v: number) => { // back-out — overshoots ~1.1 then settles at 1
+  const c = 1.70158, u = v - 1;
+  return 1 + (c + 1) * u * u * u + c * u * u;
+};
 // '#rrggbb' + alpha → '#rrggbbaa' — the palette stays hex, alpha rides along
 const withA = (c: string, a: number) =>
   c +
