@@ -643,7 +643,8 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const d = settings();
   ok(
     d.master === 0.8 && d.music === 0.5 && d.sfx === 0.7 && d.cries === 0.6 && d.haptics && d.shake === 1 && d.flash &&
-      d.quality === 'high' && d.pickupFx === 'complete' && !d.battery && !d.fps,
+      d.quality === 'high' && d.pickupFx === 'complete' && !d.battery && !d.fps && d.uiSfx && d.dmgNums && d.aimGuide &&
+      d.ambients && d.mapGlints,
     'garbage pk_settings falls back to defaults',
   );
   localStorage.setItem('pk_settings', JSON.stringify({ cries: 0.1, junk: 'x' }));
@@ -658,6 +659,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   localStorage.setItem('pk_settings', JSON.stringify({ quality: 'ultra', pickupFx: 'simple' }));
   const q = settings();
   ok(q.quality === 'high' && q.pickupFx === 'simple', 'enums merge valid members, reject strangers');
+  // the FX booleans honor an explicit off, and junk types fall back to on
+  localStorage.setItem('pk_settings', JSON.stringify({ dmgNums: false, uiSfx: 7, aimGuide: 'no' }));
+  const f = settings();
+  ok(!f.dmgNums && f.uiSfx && f.aimGuide, 'FX toggles honor stored false, reject non-booleans');
   setSetting('master', 0.3);
   setSetting('shake', 0);
   ok(settings().master === 0.3 && settings().shake === 0, 'setSetting lands on the merged read');

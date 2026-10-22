@@ -1047,6 +1047,11 @@ export interface Settings {
   battery: boolean; // render every other rAF
   fps: boolean; // fps counter overlay
   pickupFx: 'complete' | 'simple'; // pickup ring+glow vs bare icon+label
+  uiSfx: boolean; // menu clicks and blips
+  dmgNums: boolean; // damage floaters over mons
+  aimGuide: boolean; // the sling's launch arrow while aiming
+  ambients: boolean; // wild mons wandering the title
+  mapGlints: boolean; // sea sparkle pass on the climb map
 }
 
 const SETTING_DEFAULTS: Settings = {
@@ -1061,6 +1066,11 @@ const SETTING_DEFAULTS: Settings = {
   battery: false,
   fps: false,
   pickupFx: 'complete',
+  uiSfx: true,
+  dmgNums: true,
+  aimGuide: true,
+  ambients: true,
+  mapGlints: true,
 };
 let memSettings: Settings = { ...SETTING_DEFAULTS };
 
@@ -1107,7 +1117,7 @@ export function settings(): Settings {
       const v = raw[k];
       if (typeof v === 'number' && Number.isFinite(v)) s[k] = Math.min(1, Math.max(0, v));
     }
-    for (const k of ['haptics', 'flash', 'battery', 'fps'] as const) {
+    for (const k of ['haptics', 'flash', 'battery', 'fps', 'uiSfx', 'dmgNums', 'aimGuide', 'ambients', 'mapGlints'] as const) {
       const v = raw[k];
       if (typeof v === 'boolean') s[k] = v;
     }

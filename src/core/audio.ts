@@ -132,6 +132,7 @@ export type Sfx =
   | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick' | 'bounce' | 'warn';
 
 export function sfx(name: Sfx, pitch = 1) {
+  if (name === 'ui' && !settings().uiSfx) return;
   switch (name) {
     case 'launch':
       noise(0.18, 900, 0.25, 0, -600);

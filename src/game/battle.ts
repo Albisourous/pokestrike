@@ -2466,17 +2466,18 @@ export class Battle {
         weakest.hp = Math.min(weakest.hp + Math.max(1, Math.round(d * leech)), weakest.maxHp);
       }
     }
-    this.pushText({
-      x: e.x + (Math.random() - 0.5) * e.r * 1.2,
-      y: e.y - e.r - 8,
-      text: immune ? 'IMMUNE' : crit ? `${d} CRIT!` : `${d}${suffix}`,
-      t: 0.9,
-      color: immune ? '#8a90a8' : crit ? '#ffd84d' : color,
-      big: crit || suffix === '!',
-      // the number sells the hit — chunkier damage pops bigger
-      size: Math.min(1.7, 0.85 + d / 90),
-      tilt: (Math.random() - 0.5) * 0.16,
-    });
+    if (settings().dmgNums)
+      this.pushText({
+        x: e.x + (Math.random() - 0.5) * e.r * 1.2,
+        y: e.y - e.r - 8,
+        text: immune ? 'IMMUNE' : crit ? `${d} CRIT!` : `${d}${suffix}`,
+        t: 0.9,
+        color: immune ? '#8a90a8' : crit ? '#ffd84d' : color,
+        big: crit || suffix === '!',
+        // the number sells the hit — chunkier damage pops bigger
+        size: Math.min(1.7, 0.85 + d / 90),
+        tilt: (Math.random() - 0.5) * 0.16,
+      });
     // every landed hit reads on the sprite — orbs, dots and ults squash too
     if (d > 0 && !e.dead) e.sq = Math.max(e.sq, 0.5);
     // the shot's damage tally climbs mid-flight, MS-style — every pop feeds it
@@ -5237,7 +5238,8 @@ export class Battle {
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
     }
     p.hp -= dmg;
-    this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
+    if (settings().dmgNums)
+      this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
     // the map early-returns before texts draw — a stray orb hit there
     // would be invisible, so it goes on the field log instead
     if (this.phase === 'map') this.log(`${p.def.name.toUpperCase()} TOOK A STRAY HIT — ${dmg}`);
@@ -6539,7 +6541,7 @@ export class Battle {
       for (let y = y0; y < y1; y++) {
         for (let x = 0; x < MAP_W; x++) {
           if (this.region.tiles[y * MAP_W + x] !== T_WATER || this.region.route.has(y * MAP_W + x)) continue;
-          if ((x * 7 + y * 11 + sparkle) % 23 === 0) {
+          if (settings().mapGlints && (x * 7 + y * 11 + sparkle) % 23 === 0) {
             ctx.fillStyle = 'rgba(255,255,255,0.25)';
             ctx.fillRect(ox + x * cell + cell * 0.3, oy + (y - cam) * cell + cell * 0.35, cell * 0.4, 2);
           }
@@ -6558,7 +6560,7 @@ export class Battle {
           if (this.region.route.has(i)) flat('#c8a868', x, y);
           else if (t === T_WATER) {
             flat('#3060b0', x, y);
-            if ((x * 7 + y * 11 + sparkle) % 23 === 0) {
+            if (settings().mapGlints && (x * 7 + y * 11 + sparkle) % 23 === 0) {
               ctx.fillStyle = 'rgba(255,255,255,0.25)';
               ctx.fillRect(px + cell * 0.3, py + cell * 0.35, cell * 0.4, 2);
             }
@@ -7792,32 +7794,34 @@ export class Battle {
     ctx.restore();
 
     // launch arrow: unit -> opposite direction, length + glow from charge
-    const ex = u.x + dir.x * (50 + frac * 160);
-    const ey = u.y + dir.y * (50 + frac * 160);
-    ctx.save();
-    if (maxed) {
-      ctx.shadowColor = '#ffd84d';
-      ctx.shadowBlur = 16;
+    if (settings().aimGuide) {
+      const ex = u.x + dir.x * (50 + frac * 160);
+      const ey = u.y + dir.y * (50 + frac * 160);
+      ctx.save();
+      if (maxed) {
+        ctx.shadowColor = '#ffd84d';
+        ctx.shadowBlur = 16;
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      // dashed = pierce (phases through foes), solid = bounce
+      ctx.setLineDash(u.def.pierce ? [8, 6] : []);
+      ctx.beginPath();
+      ctx.moveTo(u.x, u.y);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const hs = 14;
+      const px = -dir.y;
+      const py = dir.x;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(ex + dir.x * hs, ey + dir.y * hs);
+      ctx.lineTo(ex + px * hs * 0.6, ey + py * hs * 0.6);
+      ctx.lineTo(ex - px * hs * 0.6, ey - py * hs * 0.6);
+      ctx.fill();
+      ctx.restore();
     }
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 4;
-    // dashed = pierce (phases through foes), solid = bounce
-    ctx.setLineDash(u.def.pierce ? [8, 6] : []);
-    ctx.beginPath();
-    ctx.moveTo(u.x, u.y);
-    ctx.lineTo(ex, ey);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    const hs = 14;
-    const px = -dir.y;
-    const py = dir.x;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(ex + dir.x * hs, ey + dir.y * hs);
-    ctx.lineTo(ex + px * hs * 0.6, ey + py * hs * 0.6);
-    ctx.lineTo(ex - px * hs * 0.6, ey - py * hs * 0.6);
-    ctx.fill();
-    ctx.restore();
   }
 
   private drawWave(ctx: CanvasRenderingContext2D, w: Wave) {

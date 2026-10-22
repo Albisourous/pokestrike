@@ -849,7 +849,7 @@ export function drawTitle(
   // dust on the title mean the economy is visible before any overlay opens
   balanceChip(ctx, { x: W / 2 - 92, y: 28, w: 184, h: 36 }, starN, dust());
 
-  drawWilds(ctx, t);
+  if (settings().ambients) drawWilds(ctx, t);
 
   // the last climb's fallen team haunts the pitch as ghosts — CR shows your
   // deck on the home screen; ours shows the team you have to avenge
@@ -3964,7 +3964,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
 
 export type SettingsCat = 'sound' | 'graphics' | 'feel' | 'trainer';
 export type SettingsSliderKey = 'master' | 'music' | 'sfx' | 'cries' | 'shake';
-export type SettingsToggleKey = 'haptics' | 'flash' | 'battery' | 'fps';
+export type SettingsToggleKey = 'haptics' | 'flash' | 'battery' | 'fps' | 'uiSfx' | 'dmgNums' | 'aimGuide' | 'ambients' | 'mapGlints';
 export type SettingsSegKey = 'quality' | 'pickupFx';
 export type SettingsHit =
   | { kind: 'tab'; i: number }
@@ -3981,7 +3981,7 @@ type SettingsRow =
   | { kind: 'toggle'; key: SettingsToggleKey; label: string; sub?: string; invert?: boolean }
   | { kind: 'seg'; key: SettingsSegKey; label: string; sub?: string };
 
-export const SETTINGS_PANEL = { x: 24, y: 258, w: W - 48, h: 480 };
+export const SETTINGS_PANEL = { x: 24, y: 228, w: W - 48, h: 580 };
 export const SETTINGS_CLOSE = { x: W / 2 - 90, y: SETTINGS_PANEL.y + SETTINGS_PANEL.h - 58, w: 180, h: 44 };
 
 export const SETTINGS_CATS: { id: SettingsCat; name: string; tab: string; sub: string }[] = [
@@ -4003,6 +4003,7 @@ const SET_ROWS: Record<SettingsCat, SettingsRow[]> = {
     { kind: 'slider', key: 'music', label: 'MUSIC' },
     { kind: 'slider', key: 'sfx', label: 'EFFECTS' },
     { kind: 'slider', key: 'cries', label: 'POKÉMON CRIES' },
+    { kind: 'toggle', key: 'uiSfx', label: 'MENU SOUNDS', sub: 'clicks & blips in menus' },
   ],
   graphics: [
     { kind: 'seg', key: 'quality', label: 'QUALITY', sub: 'low performs better' },
@@ -4010,9 +4011,15 @@ const SET_ROWS: Record<SettingsCat, SettingsRow[]> = {
     { kind: 'slider', key: 'shake', label: 'SHAKE INTENSITY', sub: 'hit feedback strength' },
     { kind: 'toggle', key: 'flash', label: 'REDUCE FLASHES', sub: 'caps full-screen flash intensity', invert: true },
     { kind: 'seg', key: 'pickupFx', label: 'PICKUP EFFECTS', sub: 'fewer sparkles under pickups' },
+    { kind: 'toggle', key: 'ambients', label: 'TITLE WILDS', sub: 'mon wanderers on the title' },
+    { kind: 'toggle', key: 'mapGlints', label: 'MAP SPARKLES', sub: 'sea glints on the climb map' },
     { kind: 'toggle', key: 'fps', label: 'SHOW FPS', sub: 'frame counter in the corner' },
   ],
-  feel: [{ kind: 'toggle', key: 'haptics', label: 'HAPTICS' }],
+  feel: [
+    { kind: 'toggle', key: 'haptics', label: 'HAPTICS' },
+    { kind: 'toggle', key: 'dmgNums', label: 'DAMAGE NUMBERS', sub: 'hit values over mons' },
+    { kind: 'toggle', key: 'aimGuide', label: 'AIM ARROW', sub: 'launch direction while aiming' },
+  ],
   trainer: [], // the avatar grid draws itself — no settings rows
 };
 
@@ -4023,7 +4030,8 @@ const SET_PANEL = {
   x: SET_RAIL.x + SET_RAIL.w + 12,
   y: SETTINGS_PANEL.y + 14,
   w: SETTINGS_PANEL.x + SETTINGS_PANEL.w - 14 - (SET_RAIL.x + SET_RAIL.w + 12),
-  h: 390,
+  // ends a gutter above the CLOSE row — rows must never slide under it
+  h: SETTINGS_PANEL.h - 28 - 62,
 };
 const SET_BAND = { x: SET_PANEL.x + 4, y: SET_PANEL.y + 4, w: SET_PANEL.w - 8, h: 44 };
 const SET_ROW = { x: SET_PANEL.x + 4, w: SET_PANEL.w - 8 };
