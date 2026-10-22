@@ -2305,6 +2305,24 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const broke = LAB_UPGRADES.find((u) => labLevel(u.id) < u.max && u.costs[labLevel(u.id)] > stars());
   if (broke) ok(!buyLab(broke.id), 'an unaffordable upgrade refuses to sell');
 
+  // lab levels change measurable battle state — a level must do something
+  const preLab = localStorage.getItem('pk_lab');
+  localStorage.setItem('pk_lab', '{}'); // a clean store — earlier buys mustn't leak in
+  const unlabbed = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  localStorage.setItem('pk_lab', JSON.stringify({ hp: 2, dmg: 1, spc: 1, luck: 2, reroll: 2, ban: 1, fourth: 1, revive: 1, earnings: 1 }));
+  const labbed = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  ok(labbed.players[0].maxHp > unlabbed.players[0].maxHp, 'HP UP levels raise fielded maxHp');
+  ok(Math.abs(labbed.dmgMult - unlabbed.dmgMult * 1.05) < 1e-9, 'PROTEIN levels raise hit damage');
+  ok(labbed.teamLuck() - unlabbed.teamLuck() === 4, 'LUCKY EGG levels feed team luck');
+  ok(labbed.tools.roll - unlabbed.tools.roll === 2 && labbed.tools.ban - unlabbed.tools.ban === 1,
+    'DIRE HIT/QUICK CLAW levels seed tool charges');
+  ok(labbed.perkOfferN === unlabbed.perkOfferN + 1, 'MASTER BALL deals a fourth perk card');
+  ok(labbed.reviveToken && !unlabbed.reviveToken, 'REVIVE level arms the token');
+  ok(Math.abs((labbed as any).starMult - 1.1) < 1e-9, 'AMULET COIN levels raise star payout');
+  ok(Math.abs((labbed as any).labSpcMult - 1.05) < 1e-9, 'CALCIUM levels raise super damage');
+  ok(labbed.fieldLog.some((l) => l.startsWith('LAB')), 'bought levels announce on the field log');
+  if (preLab == null) localStorage.removeItem('pk_lab'); else localStorage.setItem('pk_lab', preLab);
+
   statPull(25, false); statPull(25, true);
   const pullsLog = (statsDump() as { pulls?: Record<string, [number, number]> }).pulls;
   ok(pullsLog?.[25]?.[0] === 1 && pullsLog[25][1] === 2, 'pull telemetry tallies total + dupes');

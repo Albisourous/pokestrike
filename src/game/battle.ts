@@ -662,6 +662,16 @@ export class Battle {
     this.tools = { roll: 1 + labLevel('reroll'), ban: 1 + labLevel('ban') };
     this.perkOfferN = 3 + (labLevel('fourth') ? 1 : 0);
     this.reviveToken = !!labLevel('revive');
+    // bought levels announce themselves — the field log names what the lab
+    // is actually doing this run so a purchase never feels dead
+    const labBits = [
+      labLevel('hp') && `+${LAB_HP_LV * labLevel('hp') * 100}%HP`,
+      labLevel('dmg') && `+${LAB_DMG_LV * labLevel('dmg') * 100}%DMG`,
+      labLevel('spc') && `+${LAB_SPC_LV * labLevel('spc') * 100}%SPC`,
+      labLevel('luck') && `+${LAB_LUCK_LV * labLevel('luck')}LUCK`,
+      labLevel('earnings') && `+${LAB_EARN_LV * labLevel('earnings') * 100}%★`,
+    ].filter(Boolean);
+    if (labBits.length) this.log(`LAB ${labBits.join(' · ')}`);
     const n = team.length;
     team.forEach((def, i) => {
       const role = roleOf(def);

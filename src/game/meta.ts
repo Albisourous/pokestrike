@@ -716,16 +716,16 @@ export function grindBonus(now = Date.now()): { n: number; pay: number } {
 // battle construction; RUN TEAM rows seed per-run charges/one-shots.
 // `skip` from the Oct-20 table became `earnings` — shipped SKIP is free, so
 // charging for it would have nerfed current gameplay.
-export const LAB_UPGRADES: { id: string; name: string; icon: string; max: number; desc: string; costs: number[] }[] = [
-  { id: 'hp', name: 'HP UP', icon: 'hp-up', max: 5, desc: '+8% team max HP /level', costs: [40, 60, 90, 130, 180] },
-  { id: 'dmg', name: 'PROTEIN', icon: 'protein', max: 5, desc: '+5% hit damage /level', costs: [40, 60, 90, 130, 180] },
-  { id: 'spc', name: 'CALCIUM', icon: 'calcium', max: 5, desc: '+5% super damage /level', costs: [40, 60, 90, 130, 180] },
-  { id: 'luck', name: 'LUCKY EGG', icon: 'lucky-egg', max: 4, desc: '+2 team luck /level', costs: [40, 60, 90, 130] },
-  { id: 'reroll', name: 'DIRE HIT', icon: 'dire-hit', max: 3, desc: '+1 reroll charge /level', costs: [60, 80, 120] },
-  { id: 'earnings', name: 'AMULET COIN', icon: 'amulet-coin', max: 3, desc: '+10% star earnings /level', costs: [60, 80, 120] },
-  { id: 'ban', name: 'QUICK CLAW', icon: 'quick-claw', max: 2, desc: '+1 banish charge /level', costs: [60, 80] },
-  { id: 'fourth', name: 'MASTER BALL', icon: 'master-ball', max: 1, desc: 'perk boards offer 4 cards', costs: [400] },
-  { id: 'revive', name: 'REVIVE', icon: 'revive', max: 1, desc: 'first KO each run revives at 50% HP', costs: [500] },
+export const LAB_UPGRADES: { id: string; name: string; icon: string; max: number; desc: string; now: (lvl: number) => string; costs: number[] }[] = [
+  { id: 'hp', name: 'HP UP', icon: 'hp-up', max: 5, desc: '+8% team max HP /level', now: (l) => `+${8 * l}% team max HP`, costs: [40, 60, 90, 130, 180] },
+  { id: 'dmg', name: 'PROTEIN', icon: 'protein', max: 5, desc: '+5% hit damage /level', now: (l) => `+${5 * l}% hit damage`, costs: [40, 60, 90, 130, 180] },
+  { id: 'spc', name: 'CALCIUM', icon: 'calcium', max: 5, desc: '+5% super damage /level', now: (l) => `+${5 * l}% super damage`, costs: [40, 60, 90, 130, 180] },
+  { id: 'luck', name: 'LUCKY EGG', icon: 'lucky-egg', max: 4, desc: '+2 team luck /level', now: (l) => `+${2 * l} team luck`, costs: [40, 60, 90, 130] },
+  { id: 'reroll', name: 'DIRE HIT', icon: 'dire-hit', max: 3, desc: '+1 reroll charge /level', now: (l) => `${1 + l} rerolls each run`, costs: [60, 80, 120] },
+  { id: 'earnings', name: 'AMULET COIN', icon: 'amulet-coin', max: 3, desc: '+10% star earnings /level', now: (l) => `+${10 * l}% star earnings`, costs: [60, 80, 120] },
+  { id: 'ban', name: 'QUICK CLAW', icon: 'quick-claw', max: 2, desc: '+1 banish charge /level', now: (l) => `${1 + l} banishes each run`, costs: [60, 80] },
+  { id: 'fourth', name: 'MASTER BALL', icon: 'master-ball', max: 1, desc: 'perk boards offer 4 cards', now: () => 'perk boards deal 4 cards', costs: [400] },
+  { id: 'revive', name: 'REVIVE', icon: 'revive', max: 1, desc: 'first KO each run revives at 50% HP', now: () => 'first KO revives at 50%', costs: [500] },
 ];
 
 let memLab: Record<string, number> = {};

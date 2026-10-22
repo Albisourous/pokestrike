@@ -2584,7 +2584,12 @@ function drawLabCard(
   ctx.textAlign = 'left';
   ctx.font = fontB(7);
   ctx.fillStyle = '#a8b0d8';
-  wrap2(ctx, u.desc, r.w - 24).forEach((l, i) => ctx.fillText(l, r.x + 12, r.y + 58 + i * 13));
+  ctx.fillText(u.desc, r.x + 12, r.y + 56);
+  // the bought effect, summed — levels must show what they've already bought
+  if (lvl > 0) {
+    ctx.fillStyle = GOLD;
+    ctx.fillText(`NOW ${u.now(lvl).toUpperCase()}`, r.x + 12, r.y + 70);
+  }
 
   levelPips(ctx, { x: r.x + 12, y: r.y + 78, w: r.w - 24, h: 7 }, lvl, u.max);
 
