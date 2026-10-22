@@ -884,7 +884,7 @@ export function drawTitle(
   });
   pill(ctx, DAILY_BTN, dailyArmed
     ? { c: '#e03c34', cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
-    : { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY' });
+    : { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY', sub: `RESETS ${taskResetsIn('daily')}` });
   // the day's one seeded epic wears the rate-up band's purple — cleared,
   // the pill sleeps gray till tomorrow's roll
   pill(ctx, RAID_BTN, {

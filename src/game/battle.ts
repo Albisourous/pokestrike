@@ -3879,7 +3879,10 @@ export class Battle {
       this.echoCleared = true; // the echo is beaten — reclaim it
       this.award('rival');
     }
-    if (this.waveHadGym) this.gymsBeaten++;
+    if (this.waveHadGym) {
+      this.gymsBeaten++;
+      this.taskPing('gyms', this.gymsBeaten, this.arena.x + this.arena.w / 2, this.arena.y + 54);
+    }
     // last-kill slow-mo — the kill shot gets a beat to land
     this.hitStop = Math.max(this.hitStop, 0.5);
     this.addPunch(0.08);
@@ -4274,7 +4277,11 @@ export class Battle {
   // stops pay too; progress is progress
   private bankStage(row: number) {
     this.earnStars(STAR_ROW + row + 1);
-    this.taskPing('score', this.score, this.arena.x + this.arena.w / 2, this.arena.y + 54);
+    const cx = this.arena.x + this.arena.w / 2;
+    this.taskPing('score', this.score, cx, this.arena.y + 54);
+    // row just cleared = row + 1 stages beaten — same count taskTick banks
+    this.taskPing('stages', row + 1, cx, this.arena.y + 54);
+    this.taskPing('maxstage', row + 1, cx, this.arena.y + 54);
   }
 
   // the chore board goes live mid-run — a counter crossing its goal pings the
@@ -4541,6 +4548,7 @@ export class Battle {
     sfx('ui');
     this.grantPerk(perk);
     this.perksTaken++;
+    this.taskPing('perks', this.perksTaken, this.arena.x + this.arena.w / 2, this.arena.y + 54);
     this.rewardOffers = [];
     this.advanceReward(); // relic banked — the map's TEAM · ITEMS handles swaps now
   }
@@ -7529,6 +7537,31 @@ export class Battle {
     // pull distance, so a "full pull" is the needle topping out). max()
     // keeps it from fighting contact squashes mid-flight.
     u.sq = Math.max(u.sq, frac * 0.45);
+
+    // the in-zone tell lives on the ball, not the bar — eyes stay on the
+    // court when the needle's golden. Pulsing ring + a pair of orbiting
+    // sparks; the release flash is what it promises
+    if (maxed) {
+      const pr = u.r + 7 + Math.sin(this.time * 18) * 2.5;
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.strokeStyle = '#ffd84d';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#ffd84d';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y, pr, 0, Math.PI * 2);
+      ctx.stroke();
+      for (let k = 0; k < 2; k++) {
+        const a0 = this.time * 5 + k * Math.PI;
+        const sx2 = u.x + Math.cos(a0) * pr;
+        const sy2 = u.y + Math.sin(a0) * pr;
+        starPath(ctx, sx2, sy2, 3.5, 0.4);
+        ctx.fillStyle = '#fff2c0';
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     // predicted path: one bounce worth — banking off walls, stopping at the
     // first contact. Any further is noise. Cached on a quantized signature;
