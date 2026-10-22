@@ -211,7 +211,11 @@ washed out on TOWN and RAID; the palette comment itself says PARCH is
 dark-chrome-only. Left for the concurrent session since they were still
 mid-edit on `screens.ts` (broken intermediate state at handoff — e.g.
 `const PAPER = PAPER` self-init + duplicate `INK` — their problem to
-finish, HEAD is clean).
+finish, HEAD is clean). **Update**: they finished — the PARCH-on-paper
+contrast bug is fixed (`townCard` stat now `INK`, subs `INK_FAINT`), and
+the same session shipped an ascension rung ladder on TOWN (direct-set
+heat via `hitAscCell`, denied rungs answer with `noteAscDeny` + a warn
+pitch). Committed as `ccfc2f3` + `7fe5c97` after gate-green verification.
 
 ## Questions for the morning
 
