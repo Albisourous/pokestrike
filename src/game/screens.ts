@@ -428,6 +428,24 @@ function fillStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   ctx.fill();
 }
 
+// gradient cache — a CanvasGradient is fully fixed by its geometry + stops,
+// so keying the ctor args gives identical fills without re-allocating one
+// per frame (the field alone ran four radials a frame). Bounded like the
+// measure memo — cold restart beats eviction bookkeeping.
+const gradCache = new Map<string, CanvasGradient>();
+const gradFor = (
+  ctx: CanvasRenderingContext2D,
+  key: string,
+  make: (c: CanvasRenderingContext2D) => CanvasGradient,
+) => {
+  let g = gradCache.get(key);
+  if (!g) {
+    if (gradCache.size >= 400) gradCache.clear();
+    gradCache.set(key, (g = make(ctx)));
+  }
+  return g;
+};
+
 // Balatro-ish card face: dark panel with a type-colored glow behind the
 // art and an edge vignette. Reusable for any card that wants to show a type.
 function cardFace(
@@ -445,9 +463,12 @@ function cardFace(
   const gx = r.x + r.w / 2;
   const gy = r.y + r.h * 0.42;
   const c = TYPE_COLOR[type];
-  const glow = ctx.createRadialGradient(gx, gy, 8, gx, gy, r.w * 0.95);
-  glow.addColorStop(0, `${c}28`);
-  glow.addColorStop(1, `${c}00`);
+  const glow = gradFor(ctx, `cardGlow:${gx},${gy},${r.w},${type}`, (cc) => {
+    const g = cc.createRadialGradient(gx, gy, 8, gx, gy, r.w * 0.95);
+    g.addColorStop(0, `${c}28`);
+    g.addColorStop(1, `${c}00`);
+    return g;
+  });
   ctx.fillStyle = glow;
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.restore();
@@ -474,11 +495,25 @@ function dither(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: num
   ctx.restore();
 }
 
+// measureText storms: fitFont/wrap2 re-measure the same static strings every
+// frame. Font+text fully determine the width, so a bounded memo ends it —
+// cold restart on full beats eviction bookkeeping (contents are static strings)
+const measureCache = new Map<string, number>();
+const measureW = (ctx: CanvasRenderingContext2D, text: string) => {
+  const k = `${ctx.font}\n${text}`;
+  let w = measureCache.get(k);
+  if (w === undefined) {
+    if (measureCache.size >= 500) measureCache.clear();
+    measureCache.set(k, (w = ctx.measureText(text).width));
+  }
+  return w;
+};
+
 // shrink a label's px until it fits a width — pixel type runs wide
 export function fitFont(ctx: CanvasRenderingContext2D, label: string, px: number, maxW: number) {
   let size = px;
   ctx.font = font(size);
-  while (size > 6 && ctx.measureText(label).width > maxW) ctx.font = font(--size);
+  while (size > 6 && measureW(ctx, label) > maxW) ctx.font = font(--size);
   return size;
 }
 
@@ -486,7 +521,7 @@ export function fitFont(ctx: CanvasRenderingContext2D, label: string, px: number
 function fitFontB(ctx: CanvasRenderingContext2D, label: string, px: number, maxW: number) {
   let size = px;
   ctx.font = fontB(size);
-  while (size > 5 && ctx.measureText(label).width > maxW) ctx.font = fontB((size -= 0.5));
+  while (size > 5 && measureW(ctx, label) > maxW) ctx.font = fontB((size -= 0.5));
   return size;
 }
 
@@ -500,19 +535,27 @@ const roleTag = (def: SpeciesDef) => {
 // greedy word-wrap into at most two lines at the current font — descs are
 // short enough that a third line never earns its keep
 export function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
-  if (ctx.measureText(text).width <= maxW) return [text];
+  if (measureW(ctx, text) <= maxW) return [text];
   const words = text.split(' ');
   let first = '';
   let used = 0;
-  while (used < words.length && ctx.measureText(first ? `${first} ${words[used]}` : words[used]).width <= maxW) {
+  while (used < words.length && measureW(ctx, first ? `${first} ${words[used]}` : words[used]) <= maxW) {
     first = first ? `${first} ${words[used]}` : words[used];
     used++;
   }
   let rest = words.slice(used).join(' ');
-  // line two has nowhere to wrap — ellipsize rather than clip mid-word
-  if (ctx.measureText(rest).width > maxW) {
-    while (rest.length > 1 && ctx.measureText(`${rest}…`).width > maxW) rest = rest.slice(0, -1);
-    rest = `${rest.trimEnd()}…`;
+  // line two has nowhere to wrap — ellipsize rather than clip mid-word.
+  // binary-search the longest prefix that fits next to the ellipsis —
+  // char-at-a-time was one measureText per trimmed char per frame
+  if (measureW(ctx, rest) > maxW) {
+    let lo = 1;
+    let hi = rest.length;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (measureW(ctx, `${rest.slice(0, mid)}…`) <= maxW) lo = mid;
+      else hi = mid - 1;
+    }
+    rest = `${rest.slice(0, lo).trimEnd()}…`;
   }
   return [first, rest];
 }
@@ -577,9 +620,12 @@ export function stripeBand(ctx: CanvasRenderingContext2D, r: { x: number; y: num
   ctx.save();
   roundRect(ctx, r.x, r.y, r.w, r.h + 9, 9);
   ctx.clip();
-  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
-  g.addColorStop(0, color);
-  g.addColorStop(1, mixHex(color, PAPER, 0.55));
+  const g = gradFor(ctx, `band:${r.y},${r.h},${color}`, (cc) => {
+    const lg = cc.createLinearGradient(0, r.y, 0, r.y + r.h);
+    lg.addColorStop(0, color);
+    lg.addColorStop(1, mixHex(color, PAPER, 0.55));
+    return lg;
+  });
   ctx.fillStyle = g;
   ctx.fillRect(r.x, r.y, r.w, r.h);
   stripes(ctx, r);
@@ -757,10 +803,12 @@ function drawField(ctx: CanvasRenderingContext2D) {
     [130, 780, 180, 'rgba(16,52,16,0.10)'],
     [420, 90, 170, 'rgba(16,52,16,0.08)'],
   ] as const) {
-    const rg = ctx.createRadialGradient(x, y, 10, x, y, r);
-    rg.addColorStop(0, c);
-    rg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = rg;
+    ctx.fillStyle = gradFor(ctx, `field:${x},${y},${r}`, (cc) => {
+      const rg = cc.createRadialGradient(x, y, 10, x, y, r);
+      rg.addColorStop(0, c);
+      rg.addColorStop(1, 'rgba(0,0,0,0)');
+      return rg;
+    });
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   }
 }
@@ -785,9 +833,12 @@ function logoBig(ctx: CanvasRenderingContext2D, text: string, cx: number, baseY:
   ctx.transform(1, 0, -0.07, 1, 0, 0);
   ctx.textAlign = 'center';
   ctx.lineJoin = 'round';
-  const grad = ctx.createLinearGradient(0, -size, 0, 0);
-  grad.addColorStop(0, '#ffe76a');
-  grad.addColorStop(1, '#f5a614');
+  const grad = gradFor(ctx, `logo:${size}`, (cc) => {
+    const lg = cc.createLinearGradient(0, -size, 0, 0);
+    lg.addColorStop(0, '#ffe76a');
+    lg.addColorStop(1, '#f5a614');
+    return lg;
+  });
   ctx.lineWidth = Math.max(4, size * 0.16);
   ctx.strokeStyle = '#16244d';
   ctx.fillStyle = 'rgba(8,16,40,0.5)';
@@ -828,9 +879,12 @@ export function drawTitle(
   drawWildMons(ctx);
 
   // stadium shadow at the edges keeps the eye on logo + impact
-  const vig = ctx.createRadialGradient(W / 2, 400, 280, W / 2, 400, 640);
-  vig.addColorStop(0, '#00000000');
-  vig.addColorStop(1, 'rgba(6,14,6,0.2)');
+  const vig = gradFor(ctx, 'vignette', (cc) => {
+    const rg = cc.createRadialGradient(W / 2, 400, 280, W / 2, 400, 640);
+    rg.addColorStop(0, '#00000000');
+    rg.addColorStop(1, 'rgba(6,14,6,0.2)');
+    return rg;
+  });
   ctx.fillStyle = vig;
   ctx.fillRect(0, 0, W, H);
 
@@ -1025,15 +1079,16 @@ function drawClimbBody(
     : '';
   const recLine = bits.join(' · ');
   const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
-  fitFont(ctx, recFull, 8, W - 40);
+  // the dense-stat face — the pixel font's floor can't squeeze this line
+  fitFontB(ctx, recFull, 8, W - 44);
   const recY = FREE_BTN.y + FREE_BTN.h + 58;
-  const recX = W / 2 - ctx.measureText(recFull).width / 2;
+  const recX = W / 2 - measureW(ctx, recFull) / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
   ctx.fillText(boostTxt ? `${recLine} · ` : recLine, recX, recY);
   if (boostTxt) {
     ctx.fillStyle = GOLD;
-    ctx.fillText(boostTxt, recX + ctx.measureText(`${recLine} · `).width, recY);
+    ctx.fillText(boostTxt, recX + measureW(ctx, `${recLine} · `), recY);
   }
   ctx.textAlign = 'center';
   // the ladder: a fill bar toward the next tier, tinted to the current one —
@@ -2947,9 +3002,12 @@ export function drawHatch(
   ctx.save();
   roundRect(ctx, FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h, 10);
   ctx.clip();
-  const fg = ctx.createLinearGradient(0, FEAT_BAND.y, 0, FEAT_BAND.y + FEAT_BAND.h);
-  fg.addColorStop(0, mixHex(fc, PAPER, 0.22));
-  fg.addColorStop(1, mixHex(fc, PAPER, 0.8));
+  const fg = gradFor(ctx, `feat:${fc}`, (cc) => {
+    const lg = cc.createLinearGradient(0, FEAT_BAND.y, 0, FEAT_BAND.y + FEAT_BAND.h);
+    lg.addColorStop(0, mixHex(fc, PAPER, 0.22));
+    lg.addColorStop(1, mixHex(fc, PAPER, 0.8));
+    return lg;
+  });
   ctx.fillStyle = fg;
   ctx.fillRect(FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h);
   stripes(ctx, FEAT_BAND);
@@ -4768,7 +4826,16 @@ function drawRoster(
   ctx.beginPath();
   ctx.rect(BOX_STRIP.x - 4, BOX_STRIP.y - 6, BOX_STRIP.w + 8, BOX_STRIP.h + 12);
   ctx.clip();
-  box.forEach((def, i) => {
+  // the clip already hides off-strip slots — walk only the visible index
+  // range instead of paying a card draw for all of them. Same formula as
+  // boxSlotRect: x = strip.x + off + i*step - scroll, visible while it
+  // overlaps the clip's ±4px slop
+  const step = BOX_SLOT + BOX_GAP;
+  const off = Math.max(0, (BOX_STRIP.w - (box.length * step - BOX_GAP)) / 2);
+  const lo = Math.max(0, Math.floor((boxScroll - off - BOX_SLOT - 4) / step) + 1);
+  const hi = Math.min(box.length - 1, Math.ceil((BOX_STRIP.w + 4 + boxScroll - off) / step) - 1);
+  for (let i = lo; i <= hi; i++) {
+    const def = box[i];
     const r = boxSlotRect(i, box.length, boxScroll);
     const sel = i === selBox;
     const dy = sel ? -3 : 0; // the pick lifts its card off the strip
@@ -4807,7 +4874,7 @@ function drawRoster(
       chip(ctx, r.x + 3, card.y + 3, `Lv${lvl}`, { bg: 'rgba(12,16,32,0.85)', fg: ACCENT });
       ctx.textAlign = 'center';
     }
-  });
+  }
   ctx.restore();
   const maxScroll = boxScrollMax(box.length);
   if (maxScroll > 0) {
@@ -5375,6 +5442,11 @@ export function drawResult(
   ctx.restore();
 }
 
+// toLocaleString per frame was the HUD's only non-trivial alloc — two slots
+// memoize it (the score is stable for seconds at a time)
+let scoreStrN = -1;
+let scoreStr = '';
+
 export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1, t = 0) {
   ctx.fillStyle = INK_FAINT;
   ctx.font = fontB(9);
@@ -5409,7 +5481,11 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   ctx.fillText(`SHOTS ${shots}`, W - 30, 44);
   ctx.font = font(8);
   ctx.fillStyle = GOLD;
-  ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W - 30, 60);
+  if (score !== scoreStrN) {
+    scoreStrN = score;
+    scoreStr = score.toLocaleString('en-US'); // a string the frame can reuse — the score barely moves
+  }
+  ctx.fillText(`SCORE ${scoreStr}`, W - 30, 60);
   // streak + ult share a second row under the stage name — a third right
   // row would land inside the arena rim and get drawn over
   ctx.font = fontB(8);
@@ -5601,10 +5677,31 @@ export function settingsRowHit(p: { x: number; y: number }, cat: SettingsCat): S
   return null;
 }
 
+// drag writes hit pk_settings per pointermove otherwise — the live value
+// rides sliderPending for the draw while setSetting flushes to storage at
+// ~4Hz; settingsSliderFlush (the drop points in main.ts) banks the last x
+let sliderPending: { key: SettingsSliderKey; v: number } | null = null;
+let sliderLastWrite = -1;
+
 // x → 0..1 across the shared track span — pointerdown sets immediately,
 // pointermove while dragging keeps calling this
 export function settingsSliderSet(key: SettingsSliderKey, x: number) {
-  setSetting(key, Math.min(1, Math.max(0, (x - SET_TRACK.x) / SET_TRACK.w)));
+  const v = Math.min(1, Math.max(0, (x - SET_TRACK.x) / SET_TRACK.w));
+  if (sliderPending && sliderPending.key !== key) settingsSliderFlush(); // new drag, old key pending
+  sliderPending = { key, v };
+  const now = performance.now();
+  if (now - sliderLastWrite >= 250) {
+    sliderLastWrite = now;
+    setSetting(key, v);
+    sliderPending = null;
+  }
+}
+
+// release/cancel/close — always persist whatever the thumb last touched
+export function settingsSliderFlush() {
+  if (!sliderPending) return;
+  setSetting(sliderPending.key, sliderPending.v);
+  sliderPending = null;
 }
 
 export function settingsToggleFlip(key: SettingsToggleKey) {
@@ -5707,7 +5804,9 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
       ctx.fillText(row.sub, r.x + 2, r.y + 32);
     }
     if (row.kind === 'slider') {
-      const v = vals[row.key];
+      // a throttled write keeps the thumb live from the pending value —
+      // vals[] only catches up at the ~4Hz flush
+      const v = sliderPending?.key === row.key ? sliderPending.v : vals[row.key];
       ctx.font = font(9);
       ctx.fillStyle = GOLD;
       ctx.textAlign = 'right';
@@ -5720,10 +5819,13 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
       ctx.save();
       roundRect(ctx, SET_TRACK.x, ty, SET_TRACK.w, SET_TRACK.h, 5);
       ctx.clip();
-      const g = ctx.createLinearGradient(0, ty, 0, ty + SET_TRACK.h);
-      g.addColorStop(0, '#ffe76a');
-      g.addColorStop(0.55, GOLD);
-      g.addColorStop(1, '#c8a44d');
+      const g = gradFor(ctx, `sliderFill:${ty}`, (cc) => {
+        const lg = cc.createLinearGradient(0, ty, 0, ty + SET_TRACK.h);
+        lg.addColorStop(0, '#ffe76a');
+        lg.addColorStop(0.55, GOLD);
+        lg.addColorStop(1, '#c8a44d');
+        return lg;
+      });
       ctx.fillStyle = g;
       ctx.fillRect(SET_TRACK.x, ty, Math.max(SET_TRACK.h, SET_TRACK.w * v), SET_TRACK.h);
       ctx.restore();
