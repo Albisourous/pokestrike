@@ -2729,7 +2729,7 @@ export function sparkHit(scroll: number, x: number, y: number): SpeciesDef | nul
 export function drawHatch(
   ctx: CanvasRenderingContext2D,
   s: HatchState,
-  info: { stars: number; dust: number; pityIn: number; featured: SpeciesDef | null; free: boolean; flash?: string },
+  info: { stars: number; dust: number; pityIn: number; featured: SpeciesDef | null; free: boolean; flash?: string; armedId?: number; armedFrac?: number },
 ) {
   const r = HATCH_PANEL;
   void loadItem('star-piece');
@@ -3030,8 +3030,27 @@ export function drawHatch(
       const isDeal = def.id === deal.id;
       // dealCost carries the −25% — non-deal ids price at list, no re-roll
       const cost = dealCost(def);
-      dustTag(ctx, cell.x + cell.w / 2 - (isDeal ? 12 : 0), cell.y + 92, cost, info.dust >= cost ? '#9df0ff' : '#ff6b6b');
-      if (isDeal) {
+      const armed = info.armedId === def.id;
+      if (armed) {
+        // two-tap confirm: pulse the rim, spend the price line on the cue,
+        // and burn the window down a bottom strip
+        ctx.save();
+        ctx.globalAlpha = 0.55 + 0.45 * Math.sin(s.t * 10);
+        roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 8);
+        ctx.strokeStyle = '#ffd84d';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+        fitFontB(ctx, `TAP AGAIN · ◆${cost}`, 9, cell.w - 12);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillText(`TAP AGAIN · ◆${cost}`, cell.x + cell.w / 2, cell.y + 92);
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillRect(cell.x + 4, cell.y + cell.h - 5, (cell.w - 8) * Math.max(0, info.armedFrac ?? 0), 3);
+      } else {
+        dustTag(ctx, cell.x + cell.w / 2 - (isDeal ? 12 : 0), cell.y + 92, cost, info.dust >= cost ? '#9df0ff' : '#ff6b6b');
+      }
+      if (isDeal && !armed) {
         // the struck list price beside the deal price — the bargain shows
         const wl = `${dustCost(def)}`;
         ctx.font = fontB(7);

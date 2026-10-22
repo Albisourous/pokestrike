@@ -1993,6 +1993,8 @@ function render() {
           featured: featuredPull(),
           free: freePullLeft(),
           flash: t - hatchFlash.t < 2.5 ? hatchFlash.text : undefined,
+          armedId: sparkArm.id,
+          armedFrac: sparkArm.id >= 0 ? Math.max(0, 1 - (t - sparkArm.t) / SPARK_ARM_T) : 0,
         });
       if (labOpen) drawLab(ctx, labScroll, stars());
       break;
