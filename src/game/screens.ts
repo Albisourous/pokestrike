@@ -4086,7 +4086,7 @@ function drawBagRow(
   if (!items.length) return;
   ctx.textAlign = 'center';
   ctx.font = font(8);
-  ctx.fillStyle = INK_FAINT;
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText(`BAG — TAKE UP TO ${BAG_MAX}${sel.size ? ` · ${Math.min(sel.size, BAG_MAX)}/${BAG_MAX}` : ''}`, W / 2, BAG_ROW.y + 13);
   items.forEach((it, i) => {
     const on = sel.has(it.id);
@@ -4114,7 +4114,7 @@ function drawBagRow(
       ctx.restore();
     }
     ctx.font = fontB(7);
-    ctx.fillStyle = on ? INK : '#a8b0d0';
+    ctx.fillStyle = on ? INK : INK_SOFT;
     ctx.textAlign = 'center';
     ctx.fillText(it.name.toUpperCase(), cr.x + cr.w / 2, cr.y + 49);
     // ×n stock badge top-right — gold-lit when the chip is picked
@@ -4124,14 +4124,14 @@ function drawBagRow(
     roundRect(ctx, cr.x + cr.w - bw - 5, cr.y + 5, bw, 13, 6.5);
     ctx.fillStyle = on ? GOLD : 'rgba(42,36,64,0.9)';
     ctx.fill();
-    ctx.fillStyle = on ? INK : INK;
+    ctx.fillStyle = on ? INK : PARCH; // the badge face is dark until picked
     ctx.fillText(n, cr.x + cr.w - bw / 2 - 5, cr.y + 14.5);
   });
   // last tap answers "what does this one do?" — one dim line, order-free
   const li = items.findIndex((it) => it.id === last);
   if (li >= 0) {
     ctx.font = fontB(7);
-    ctx.fillStyle = '#6a7498';
+    ctx.fillStyle = INK_SOFT;
     ctx.textAlign = 'center';
     ctx.fillText(items[li].desc.toUpperCase(), W / 2, BAG_ROW.y + 92);
   }
@@ -4154,9 +4154,10 @@ export function drawDraft(
   ctx.fillStyle = '#f8d030';
   ctx.fillText(`DRAFT: PICK ${picked.length + 1} OF 4`, W / 2, 120);
   ctx.font = font(9);
-  ctx.fillStyle = INK_FAINT;
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText(stageName, W / 2, 155);
   ctx.font = fontB(9);
+  ctx.fillStyle = INK;
   const spinning = spin.age < REEL_STOPS[REEL_STOPS.length - 1];
   ctx.fillText(
     spinning
@@ -4192,16 +4193,45 @@ export function drawDraft(
       ctx.save();
       roundRect(ctx, band.x, band.y, band.w, band.h + 9, 9);
       ctx.clip();
-      ctx.fillStyle = '#0a0e1e';
+      ctx.fillStyle = INK;
       ctx.fillRect(band.x, band.y, band.w, band.h);
-      // ease-out quart — a fast blur of faces that settles hard on the deal
+      // quart ease-out, then a 10px overshoot in the last fifth — the reel
+      // brakes hard and the dealt face clicks back up like a real slot stop
       const steps = 9 + i * 3;
-      const pos = steps * (1 - Math.pow(1 - spinP, 4));
+      const over = Math.sin(clamp01((spinP - 0.8) / 0.2) * Math.PI) * 10;
+      const pos = steps * (1 - Math.pow(1 - spinP, 4)) + over / 80;
+      // normalized reel speed: the quart's derivative, 1 at deal → 0 at stop
+      const spd = Math.pow(1 - spinP, 3);
       const L = spin.pool.length;
+      const bcx = band.x + band.w / 2, bcy = band.y + band.h / 2;
       for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
         const d = spin.pool[(((spin.idx[i] + j - steps) % L) + L) % L];
-        drawMon(ctx, d.id, band.x + band.w / 2, band.y + band.h / 2 + (j - pos) * 80, 72);
+        const py = bcy + (j - pos) * 80;
+        // speed stretch — faces pull tall while the reel flies, settle square
+        ctx.save();
+        ctx.translate(bcx, py);
+        ctx.scale(1 - spd * 0.14, 1 + spd * 0.32);
+        drawMon(ctx, d.id, 0, 0, 76);
+        ctx.restore();
+        // a ghost trails fast faces — cheap motion blur against the dark
+        if (spd > 0.2) {
+          ctx.save();
+          ctx.globalAlpha = spd * 0.3;
+          drawMon(ctx, d.id, bcx, py - spd * 24, 76);
+          ctx.restore();
+        }
       }
+      // the payline — gold pips mark the row the reel stops on
+      ctx.fillStyle = GOLD;
+      ctx.globalAlpha = 0.9;
+      [-1, 1].forEach((s) => {
+        ctx.beginPath();
+        ctx.moveTo(band.x + (s < 0 ? 2 : band.w - 2), bcy);
+        ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy - 6);
+        ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy + 6);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
       // fade the band edges so faces slide out of the dark
       const g = ctx.createLinearGradient(0, band.y, 0, band.y + band.h);
       g.addColorStop(0, 'rgba(10,14,30,0.9)');
@@ -4211,10 +4241,21 @@ export function drawDraft(
       ctx.fillStyle = g;
       ctx.fillRect(band.x, band.y, band.w, band.h);
       ctx.restore();
-      ctx.font = font(9);
-      ctx.fillStyle = '#3a4468';
-      ctx.textAlign = 'center';
-      ctx.fillText('· · ·', r.x + r.w / 2, r.y + 184);
+      // the body deals in as skeleton bars — a shimmer reads "rolling",
+      // not "broken": the paper half stays empty no longer
+      const shim = 0.14 + 0.09 * Math.sin(spin.age * 7 + i * 1.9);
+      ctx.fillStyle = `rgba(40,48,88,${shim})`;
+      const bars: [number, number][] = [
+        [r.y + 156, r.w - 56], // name
+        [r.y + 180, 92], // #id · level
+        [r.y + 202, 108], // type · role
+        [r.y + 224, 96], // super line
+        [r.y + 242, r.w - 40], // desc
+      ];
+      bars.forEach(([by, bw]) => {
+        roundRect(ctx, r.x + r.w / 2 - bw / 2, by, bw, 10, 5);
+        ctx.fill();
+      });
       return;
     }
     // landing pop: the sprite overshoots for a beat as the reel stops
@@ -4303,7 +4344,7 @@ export function drawDraft(
 
   // picked team strip
   ctx.font = font(9);
-  ctx.fillStyle = INK_FAINT;
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText('YOUR TEAM', W / 2, 650);
   for (let i = 0; i < 4; i++) {
     const sx = W / 2 - 4 * 44 + i * 88;
@@ -4329,7 +4370,7 @@ export function drawDraft(
   const types = [...new Set(picked.map((d) => d.type))];
   if (types.length) {
     ctx.font = fontB(7);
-    ctx.fillStyle = INK_FAINT;
+    ctx.fillStyle = INK_SOFT;
     ctx.fillText('COVERAGE — matching types unlock team TRAITS', W / 2, 772);
     types.forEach((ty, i) => {
       const cx = W / 2 - (types.length * 34 - 6) / 2 + i * 34;
@@ -4344,10 +4385,10 @@ export function drawDraft(
   }
 
   ctx.font = fontB(8);
-  ctx.fillStyle = INK_FAINT;
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText('tip: fly through an ally mid-shot — charged allies fire their super', W / 2, 810);
   ctx.font = fontB(7);
-  ctx.fillStyle = '#6a7498';
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText('PIERCE flies through enemies · COPY repeats the bumper\'s super · speed sets launch, power tightens the gold window', W / 2, 826);
 }
 
@@ -4396,19 +4437,45 @@ export function drawPerkCard(
     ctx.save();
     roundRect(ctx, band.x, band.y, band.w, band.h + 9, 9);
     ctx.clip();
-    ctx.fillStyle = '#0a0e1e';
+    ctx.fillStyle = INK;
     ctx.fillRect(band.x, band.y, band.w, band.h);
-    // ease-out quart — a fast blur of icons that settles hard on the deal
+    // quart ease-out + end overshoot — same stop language as the draft reel
     const spinP = Math.min(spin.age / stopAt, 1);
     const steps = 9 + spin.i * 3;
-    const pos = steps * (1 - Math.pow(1 - spinP, 4));
+    const over = Math.sin(clamp01((spinP - 0.8) / 0.2) * Math.PI) * 7;
+    const pos = steps * (1 - Math.pow(1 - spinP, 4)) + over / 48;
+    const spd = Math.pow(1 - spinP, 3); // 1 at deal → 0 at the stop
     const L = ITEM_REEL.length;
     const idx = Math.max(0, ITEM_REEL.indexOf(perk.item));
     ctx.imageSmoothingEnabled = false;
+    const bcx = band.x + band.w / 2, bcy = band.y + band.h / 2;
     for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
       const img = itemSprite(ITEM_REEL[(((idx + j - steps) % L) + L) % L]);
-      if (img) ctx.drawImage(img, band.x + band.w / 2 - 20, band.y + band.h / 2 - 20 + (j - pos) * 48, 40, 40);
+      const py = bcy + (j - pos) * 48;
+      if (!img) continue;
+      ctx.save();
+      ctx.translate(bcx, py);
+      ctx.scale(1 - spd * 0.12, 1 + spd * 0.3);
+      ctx.drawImage(img, -20, -20, 40, 40);
+      ctx.restore();
+      if (spd > 0.2) {
+        ctx.save();
+        ctx.globalAlpha = spd * 0.3;
+        ctx.drawImage(img, bcx - 20, py - 20 - spd * 16, 40, 40);
+        ctx.restore();
+      }
     }
+    // the payline — gold pips mark the row the reel stops on
+    ctx.fillStyle = GOLD;
+    ctx.globalAlpha = 0.9;
+    [-1, 1].forEach((s) => {
+      ctx.beginPath();
+      ctx.moveTo(band.x + (s < 0 ? 2 : band.w - 2), bcy);
+      ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy - 5);
+      ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy + 5);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
     // fade the band edges so icons slide out of the dark
     const g = ctx.createLinearGradient(0, band.y, 0, band.y + band.h);
     g.addColorStop(0, 'rgba(10,14,30,0.9)');
@@ -4418,10 +4485,13 @@ export function drawPerkCard(
     ctx.fillStyle = g;
     ctx.fillRect(band.x, band.y, band.w, band.h);
     ctx.restore();
-    ctx.textAlign = 'center';
-    ctx.font = font(9);
-    ctx.fillStyle = '#3a4468';
-    ctx.fillText('· · ·', r.x + r.w / 2, r.y + 178);
+    // skeleton bars where the name/desc land — shimmer says "rolling"
+    const shim = 0.14 + 0.09 * Math.sin(spin.age * 7 + spin.i * 1.9);
+    ctx.fillStyle = `rgba(40,48,88,${shim})`;
+    [[r.y + 96, r.w - 40], [r.y + 122, r.w - 24], [r.y + 140, r.w - 30], [r.y + 158, r.w - 44]].forEach(([by, bw]) => {
+      roundRect(ctx, r.x + r.w / 2 - bw / 2, by, bw, 10, 5);
+      ctx.fill();
+    });
     return;
   }
   // landing pop: the icon overshoots for a beat as the reel stops
