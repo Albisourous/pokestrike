@@ -1004,7 +1004,7 @@ export function drawTitle(
   const recLine = bits.join(' · ');
   const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
   fitFont(ctx, recFull, 8, W - 40);
-  const recY = HATCH_BTN.y + HATCH_BTN.h + 22;
+  const recY = HATCH_BTN.y + HATCH_BTN.h + 17;
   const recX = W / 2 - ctx.measureText(recFull).width / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
@@ -1014,15 +1014,9 @@ export function drawTitle(
     ctx.fillText(boostTxt, recX + ctx.measureText(`${recLine} · `).width, recY);
   }
   ctx.textAlign = 'center';
-  // the ladder: a fill bar toward the next tier, tinted to the current one
-  const rw = 220, rx = W / 2 - rw / 2, ry = HATCH_BTN.y + HATCH_BTN.h + 33;
-  ctx.fillStyle = '#1a2040';
-  ctx.fillRect(rx, ry, rw, 7);
-  ctx.fillStyle = ld.color;
-  ctx.fillRect(rx, ry, Math.max(3, rw * ld.prog), 7);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(rx + 0.5, ry + 0.5, rw - 1, 6);
+  // the ladder: a fill bar toward the next tier, tinted to the current one.
+  // Label above the bar — under it, the baseline sat 2px off the canvas edge
+  const rw = 220, rx = W / 2 - rw / 2, ry = HATCH_BTN.y + HATCH_BTN.h + 31;
   ctx.font = fontB(7);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(
@@ -1030,8 +1024,15 @@ export function drawTitle(
       ? `${rating()} PTS ${ld.name} — ${Math.round(ld.prog * 100)}% TO ${ld.next.name}`
       : `${rating()} PTS ${ld.name} — TOP OF THE LADDER`,
     W / 2,
-    ry + 13,
+    ry - 3,
   );
+  ctx.fillStyle = '#1a2040';
+  ctx.fillRect(rx, ry, rw, 7);
+  ctx.fillStyle = ld.color;
+  ctx.fillRect(rx, ry, Math.max(3, rw * ld.prog), 7);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(rx + 0.5, ry + 0.5, rw - 1, 6);
   // the heat dial rides chip row two's tail: gold while a pick is on,
   // parchment at zero, grayed until a first clear lifts the cap — a tap
   // cycles 0..cap. The picked tier's name rides inside as the pill's sub
