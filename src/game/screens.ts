@@ -16,7 +16,7 @@ import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 import {
   INK, INK_SOFT, INK_FAINT, PAPER, PAPER_HI, PARCH, GOLD, GOLD_HI, ACCENT, DANGER,
-  font, fontB, uiWindow, uiPanel, cursorTri,
+  font, fontB, uiWindow, uiPanel, uiRow, uiClose, cursorTri, scrim,
 } from './ui';
 
 export const W = 540;
@@ -1426,10 +1426,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
   const pw = (r.x + r.w - 16 - tx - 10) / 2;
   ([['×1', PULL_COST], ['×10', PULL10_COST]] as [string, number][]).forEach(([k, cost], i) => {
     const px = tx + i * (pw + 10);
-    roundRect(ctx, px, r.y + 148, pw, 32, 8);
-    ctx.fillStyle = '#e8e8e0';
-    ctx.fill();
-    rim(ctx, { x: px, y: r.y + 148, w: pw, h: 32 }, 8, GOLD, 1);
+    uiWindow(ctx, { x: px, y: r.y + 148, w: pw, h: 32 }, { rad: 8, rim: false, shadow: false });
     ctx.textAlign = 'center';
     ctx.font = fontB(7);
     ctx.fillStyle = INK_FAINT;
@@ -1466,17 +1463,7 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
   const raidDone = raidDoneToday();
   const boss = raidPick();
   const r = RAID_CARD;
-  menuCard(ctx, r, 12);
-  stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 30 }, '#9a6cff');
-  ctx.textAlign = 'left';
-  ctx.font = font(9);
-  ctx.fillStyle = INK;
-  ctx.fillText('CHROMA RAID', r.x + 14, r.y + 23);
-  if (raidDone) {
-    ctx.textAlign = 'right';
-    ctx.fillText('✓ CLEARED', r.x + r.w - 14, r.y + 23);
-    ctx.textAlign = 'left';
-  }
+  uiPanel(ctx, r, 'CHROMA RAID', { sub: raidDone ? '✓ CLEARED' : undefined });
 
   // the boss stands center on a chroma stage — shiny palette, slow hover
   const bcx = r.x + r.w / 2, bcy = r.y + 122;
@@ -1550,16 +1537,9 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
         ? `${BADGES.length - badges.size} BADGES LEFT`
         : `PITY IN ${PULL_PITY - (pullN % PULL_PITY)}`;
   const d = DEX_BTN;
-  menuCard(ctx, d, 12);
-  ctx.textAlign = 'left';
-  ballGlyph(ctx, d.x + 28, d.y + 32, 1.4, '#e03c34');
-  ctx.font = font(11);
-  ctx.fillStyle = GOLD;
-  ctx.fillText('POKÉDEX', d.x + 52, d.y + 36);
-  ctx.textAlign = 'right';
-  ctx.font = font(14);
-  ctx.fillStyle = INK;
-  ctx.fillText(`${dexN}/${CATCHABLE}`, d.x + d.w - 18, d.y + 40);
+  uiPanel(ctx, d, 'POKÉDEX', { h: 26, sub: `${dexN}/${CATCHABLE}` });
+  // the dex's ball icon rides the title band's left edge
+  ballGlyph(ctx, d.x + 22, d.y + 16, 1.1, '#e03c34');
   ctx.textAlign = 'left';
   ctx.font = fontB(8);
   ctx.fillStyle = INK_SOFT;
@@ -1598,28 +1578,25 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   // nearest finish so the chase stays visible
   const sr = SETS_BTN;
   const ready = setsReady();
-  menuCard(ctx, sr, 12);
-  stripeBand(ctx, { x: sr.x + 3, y: sr.y + 3, w: sr.w - 6, h: 30 }, ready.length ? GOLD : '#6fdc6f');
-  ctx.textAlign = 'left';
-  ctx.font = font(9);
-  ctx.fillStyle = INK;
-  ctx.fillText(ready.length ? 'LINE SETS — CLAIM!' : 'LINE SETS', sr.x + 14, sr.y + 23);
-  ctx.textAlign = 'right';
-  ctx.font = fontB(7);
   const done = setProgress().filter((p) => p.have === p.need).length;
-  ctx.fillText(`${done}/${EVO_LINES.length} COMPLETE`, sr.x + sr.w - 14, sr.y + 22);
+  uiPanel(ctx, sr, ready.length ? 'LINE SETS — CLAIM!' : 'LINE SETS', {
+    sub: `${done}/${EVO_LINES.length} COMPLETE`,
+  });
   ctx.textAlign = 'left';
   if (ready.length) {
-    // every claimable line lists itself with its payout — a tap banks them all
-    ctx.font = font(9);
-    ctx.fillStyle = GOLD;
+    // every claimable line lists itself as a menu row — a tap banks them all
     let ry = sr.y + 56;
     let pay = 0;
     ready.forEach((root) => {
       const line = EVO_LINES.find((l) => l.root === root)!;
       pay += setPay(line);
       if (ry < sr.y + sr.h - 20) {
-        ctx.fillText(`${speciesById(root)?.name.toUpperCase() ?? root} LINE +★${setPay(line)}`, sr.x + 14, ry);
+        uiRow(
+          ctx,
+          { x: sr.x + 8, y: ry - 14, w: sr.w - 16, h: 20 },
+          `${speciesById(root)?.name.toUpperCase() ?? root} LINE`,
+          { right: `+★${setPay(line)}` },
+        );
         ry += 20;
       }
     });
@@ -1664,11 +1641,7 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
 
   // latest catches — the dex's newest faces; decorative, no hit test
   const s = CATCH_STRIP;
-  menuCard(ctx, s, 12);
-  ctx.textAlign = 'left';
-  ctx.font = fontB(8);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('LATEST CATCHES', s.x + 18, s.y + 24);
+  uiPanel(ctx, s, 'LATEST CATCHES', { h: 26 });
   const recent = dexRecent(3);
   if (!recent.length) {
     // ghost ball silhouettes behind the empty line — the strip reads as a
@@ -1714,18 +1687,12 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
 // from the npcs atlas. Signs posted at each door carry the stats the old
 // cards did. The gym's rung board anchors the bottom edge.
 
-// a door sign — paper plaque on a post, name + one stat line
+// a door sign — a tiny menu-window plaque on a post, name + one stat line
 function townSign(ctx: CanvasRenderingContext2D, cx: number, y: number, w: number, name: string, sub: string) {
   ctx.fillStyle = '#8a6238';
   ctx.fillRect(cx - 2, y + 28, 4, 10);
   const r = { x: cx - w / 2, y, w, h: 32 };
-  ctx.fillStyle = 'rgba(40,48,88,0.3)';
-  roundRect(ctx, r.x + 1, r.y + 3, r.w, r.h, 7);
-  ctx.fill();
-  roundRect(ctx, r.x, r.y, r.w, r.h, 7);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, r, 7, INK, 2);
+  uiWindow(ctx, r, { rad: 6 });
   ctx.textAlign = 'center';
   ctx.font = font(7);
   ctx.fillStyle = INK;
@@ -1834,18 +1801,12 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
 // The crash-receipt instructions, in a card — the game collects no
 // telemetry, so a report IS a screenshot plus the receipt line
 export function drawBugCard(ctx: CanvasRenderingContext2D, seed: number | null) {
-  ctx.fillStyle = 'rgba(4,6,16,0.85)';
-  ctx.fillRect(0, 0, W, H);
+  scrim(ctx, 0.85);
   const r = { x: 40, y: 250, w: W - 80, h: 330 };
-  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, r, 10, GOLD, 2);
-  edge(ctx, r, 10);
+  uiPanel(ctx, r, 'REPORT A BUG');
+  // tap-anywhere still closes; the × is the window's look, not a new target
+  uiClose(ctx, { x: r.x + r.w - 34, y: r.y + 4, w: 28, h: 26 });
   ctx.textAlign = 'center';
-  ctx.font = font(13);
-  ctx.fillStyle = GOLD;
-  ctx.fillText('REPORT A BUG', W / 2, r.y + 40);
   ctx.font = fontB(10);
   ctx.fillStyle = INK_SOFT;
   const lines = [
@@ -4053,15 +4014,8 @@ function drawBagRow(
     const on = sel.has(it.id);
     const r = bagChipRect(i, items.length);
     const cr = { x: r.x, y: r.y + (on ? -4 : 0), w: r.w, h: r.h };
-    // same anatomy as the offer cards, pocket size: drop shadow, dark face,
-    // frame — gold inner rim when it's riding along
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    roundRect(ctx, cr.x + 2, cr.y + 4, cr.w, cr.h, 8);
-    ctx.fill();
-    roundRect(ctx, cr.x, cr.y, cr.w, cr.h, 8);
-    ctx.fillStyle = PAPER;
-    ctx.fill();
-    cardFrame(ctx, cr, 8);
+    // pocket-size menu windows — gold inner rim when it's riding along
+    uiWindow(ctx, cr, { rad: 8 });
     if (on) rim(ctx, cr, 8, GOLD, 2);
     void loadItem(it.item);
     const img = itemSprite(it.item);
