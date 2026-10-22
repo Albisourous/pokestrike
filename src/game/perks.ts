@@ -622,6 +622,21 @@ export const BAG_ITEMS: BagItem[] = [
     desc: '+10% crit chance',
     apply: (b) => { b.critCh += 0.1; },
   },
+  {
+    id: 'wide-lens', name: 'Wide Lens', item: 'wide-lens',
+    desc: '+10% catch chance',
+    apply: (b) => { b.captureChance += 0.1; },
+  },
+  {
+    id: 'muscle-band', name: 'Muscle Band', item: 'muscle-band',
+    desc: '+10% hit damage',
+    apply: (b) => { b.physMult *= 1.1; },
+  },
+  {
+    id: 'rocky-helmet', name: 'Rocky Helmet', item: 'rocky-helmet',
+    desc: 'attackers take 15 recoil',
+    apply: (b) => { b.thorns += 15; },
+  },
 ];
 
 // Roll a rarity tier, then pick within it — an empty tier trickles down to
@@ -637,7 +652,7 @@ const RELIC_TYPE: Record<string, PokeType> = {
   'sharp-beak': 'flying', 'spell-tag': 'ghost', 'twisted-spoon': 'psychic',
   'black-belt': 'fighting', 'silk-scarf': 'normal',
 };
-export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>, ban?: Set<string>): Perk[] {
+export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>, ban?: Set<string>, count = 3): Perk[] {
   const pool = PERKS.filter(
     (p) =>
       (p.minRank == null || p.minRank <= rank) &&
@@ -646,7 +661,7 @@ export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<stri
       !ban?.has(p.id), // banished ids stay out of every board for the rest of the run
   );
   const out: Perk[] = [];
-  for (let i = 0; i < 3 && pool.length; i++) {
+  for (let i = 0; i < count && pool.length; i++) {
     const roll = rng();
     let tier = Math.min(roll < 0.04 ? 0 : roll < 0.16 ? 1 : roll < 0.5 ? 2 : 3, cap);
     let cands: Perk[] = [];

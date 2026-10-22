@@ -1,6 +1,6 @@
-import { itemSprite, loadItem, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
+import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted, sfx } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, ENEMY_DB, ELITES, INVADERS, ROSTER, speciesById, bst, LEADER_NPC, ASC_MODS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, bst, LEADER_NPC, ASC_MODS } from './data';
 import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -8,8 +8,8 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, typeMult, type PokeType } from './types';
 import { roleOf, moveOf, superDesc, launchMult, physDamage, specDamage, ROLE_MODS } from './stats';
 import { BASE_SHOT_SPEED, POWER, WALL_REST, UNIT_REST, FRICTION, STOP_SPEED, ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, type Settings } from './meta';
-import { taskViews, tasksReady, taskResetsIn } from './tasks';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, type Settings } from './meta';
+import { taskViews, tasksReady, taskResetsIn, raidPick, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 
@@ -21,12 +21,9 @@ export const H = 960;
 // stay wired regardless; this decides chrome, not input.
 const HAS_KEYS = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
 
-// species that can ever drop a ball — the dex completion denominator
-// (roster mons count too: a rival echo can field them and they can be caught)
-const DEX_LIST = [...new Map([...ROSTER, ...ENEMY_DB, ...ELITES, ...INVADERS].map((s) => [s.id, s])).values()].sort(
-  (a, b) => a.id - b.id,
-);
-export const CATCHABLE = DEX_LIST.length;
+// species that can ever drop a ball — the dex completion denominator, and the
+// hatcher's pull pool; the dedup'd set lives in data.ts as PULLABLE now
+export const CATCHABLE = PULLABLE.length;
 
 export interface RunResult {
   won: boolean;
@@ -46,6 +43,9 @@ export interface RunResult {
   seed: number; // the run's roll — a shared seed replays this climb
   runNo?: number; // lifetime run count — the report's CASE no; the seed stands in till main.ts fills it
   depth?: number; // stages reached — the DEPTH finding; a wipe without one parses it back out of `extra`
+  stars?: number; // star pieces banked this run — drawn as a findings row when set
+  starsBonus?: number; // the once-a-day first-clear drop — its own findings row
+  grind?: { n: number; pay: number }; // nth finished run today — the session pays out
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -85,16 +85,16 @@ export function bagRowItems(): BagItem[] {
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
-export const FREE_BTN = { x: W / 2 - 200, y: 704, w: 195, h: 68 };
-export const DAILY_BTN = { x: W / 2 + 5, y: 704, w: 195, h: 68 };
+export const FREE_BTN = { x: W / 2 - 205, y: 704, w: 148, h: 68 };
+export const DAILY_BTN = { x: FREE_BTN.x + FREE_BTN.w + 8, y: 704, w: 150, h: 68 };
+// the daily chroma raid squeezes beside DAILY — the hero row's third pill
+// ends at W-27, flush with the menu chips' right edge below
+export const RAID_BTN = { x: DAILY_BTN.x + DAILY_BTN.w + 8, y: 704, w: W - 27 - (DAILY_BTN.x + DAILY_BTN.w + 8), h: 68 };
 // only visible while a saved run waits — slips between the big buttons and the DEX row
 export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260, h: 24 };
 // the drawn link stays a 24px sliver guarding CONTINUE, but the live target
 // is a 36px slab centered on it — main.ts hit-tests NEW_HIT, not NEW_BTN
 export const NEW_HIT = { x: NEW_BTN.x, y: NEW_BTN.y + NEW_BTN.h / 2 - 18, w: NEW_BTN.w, h: 36 };
-// the ascension dial — parked in the dead band under the ladder readout;
-// a tap cycles the heat 0..wins, hit-tested ahead of the start pill
-export const ASC_BTN = { x: W / 2 - 70, y: 904, w: 140, h: 44 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
@@ -144,8 +144,15 @@ export const GEAR_BTN = { x: HELP_BTN.x - 54, y: 22, w: 44, h: 44 };
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
-// item reward cards reuse the draft card spacing
-export function perkCardRect(i: number) {
+// item reward cards reuse the draft card spacing. A 4th offer (the lab's
+// FOURTH OPTION upgrade) can't squeeze another column into 540px — it goes
+// 2×2 around the tool row: row 1 keeps the 3-card band, the TOOL_* pills
+// stay parked, row 2 lands under them.
+export function perkCardRect(i: number, n = 3) {
+  if (n >= 4) {
+    const gx = (W - (2 * CARD_W + CARD_GAP)) / 2;
+    return { x: gx + (i % 2) * (CARD_W + CARD_GAP), y: 376 + Math.floor(i / 2) * 266, w: CARD_W, h: 200 };
+  }
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
 }
 export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
@@ -487,6 +494,18 @@ export function keyHint(ctx: CanvasRenderingContext2D, r: { x: number; y: number
   ctx.font = fontB(7);
   const w = ctx.measureText(label).width + 14;
   chip(ctx, r.x + r.w - w - 8, r.y + r.h - 24, label, { bg: 'rgba(42,36,64,0.8)', fg: '#e8ecf8' });
+}
+
+// Lv pips — `max` dashes spread across the rect, the first `lvl` lit gold.
+// The lab card's level row; same pip language as the battle HUD's hp pips.
+export function levelPips(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, lvl: number, max: number) {
+  const gap = 5;
+  const w = Math.max(4, (r.w - (max - 1) * gap) / max);
+  const h = Math.min(5, r.h);
+  for (let i = 0; i < max; i++) {
+    ctx.fillStyle = i < lvl ? '#ffd84d' : '#2a3560';
+    ctx.fillRect(r.x + i * (w + gap), r.y + (r.h - h) / 2, w, h);
+  }
 }
 
 // candy pill button: light→base→dark gradient face with full-radius ends
@@ -1320,6 +1339,10 @@ function drawActors(ctx: CanvasRenderingContext2D, t: number) {
   ctx.globalAlpha = 1;
 }
 
+// the login drop reads as a pop, not a ledger line — a gold banner that
+// floats over the pitch for the first seconds of the session's first title
+let loginT0 = -1;
+
 export function drawTitle(
   ctx: CanvasRenderingContext2D,
   t: number,
@@ -1535,14 +1558,26 @@ export function drawTitle(
   pill(ctx, DAILY_BTN, dailyArmed
     ? { c: '#e03c34', cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
     : { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY' });
-  // a live daily streak pins a gold pip on the corner — the tasksReady
-  // red pip's family, flipped to gold for a kept-up habit
+  // the day's one seeded epic wears the rate-up band's purple — cleared,
+  // the pill sleeps gray till tomorrow's roll
+  const raidDone = raidDoneToday();
+  pill(ctx, RAID_BTN, {
+    c: '#9a6cff',
+    cd: '#6b4ac0',
+    tc: '#2a2440',
+    label: 'CHROMA RAID',
+    sub: raidDone ? '✓ CLEARED TODAY' : `${raidPick().name.toUpperCase()} · DAILY SHINY`,
+    disabled: raidDone,
+  });
+  // a live daily streak pins a pip on the corner — the tasksReady red pip's
+  // family, gold while banked and warn-red when the chain dies at midnight
   const dStreak = streakDaily();
+  const risky = streakRisky();
   if (dStreak > 0) {
     const bx = DAILY_BTN.x + DAILY_BTN.w - 4, by = DAILY_BTN.y + 4;
     ctx.beginPath();
     ctx.arc(bx, by, 9, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffd84d';
+    ctx.fillStyle = risky ? '#e03c34' : '#ffd84d';
     ctx.fill();
     ctx.strokeStyle = '#0a0d18';
     ctx.lineWidth = 2;
@@ -1563,6 +1598,10 @@ export function drawTitle(
     ctx.fillText(`TODAY: ${dm.name}`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 11);
     ctx.fillStyle = '#8890b8';
     ctx.fillText(dm.desc, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 21);
+    if (risky) {
+      ctx.fillStyle = '#e03c34';
+      ctx.fillText(`STREAK ${risky} DIES TONIGHT`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 31);
+    }
     ctx.restore();
   }
   if (cont) {
@@ -1625,7 +1664,15 @@ export function drawTitle(
   ctx.strokeRect(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h);
   gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
   // dex, trophies, ladder, tasks — one row of equal parchment pills
-  pill(ctx, DEX_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `DEX ${dexIds().length}/${CATCHABLE}` });
+  // the goal-gradient tell — the dex chip always names the nearest open
+  // loop: catches to the charm, badges to the crown, then pulls to pity
+  const dexN = dexIds().length;
+  const nextGoal = !shinyCharm()
+    ? `${SHINY_CHARM_AT - dexN} TO CHARM`
+    : gymBadges().size < BADGES.length
+      ? `${BADGES.length - gymBadges().size} BADGES LEFT`
+      : `PITY IN ${PULL_PITY - (pullCount() % PULL_PITY)}`;
+  pill(ctx, DEX_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `DEX ${dexN}/${CATCHABLE}`, sub: nextGoal });
   pill(ctx, ACH_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}` });
   pill(ctx, BOARD_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TOP RUNS' });
   pill(ctx, TASKS_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TASKS' });
@@ -1646,6 +1693,10 @@ export function drawTitle(
     ctx.fillStyle = '#f8f8f0';
     ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
   }
+  // row two — the meta loop's front doors. The hatcher wears the climb's
+  // gold, the lab stays parchment; the ascension dial rides the tail
+  pill(ctx, HATCH_BTN, { c: '#ffd84d', cd: '#c8a44d', tc: '#2a2440', label: 'HATCHER', sub: `★ ${stars()}` });
+  pill(ctx, LAB_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'LAB' });
   // the records line is the one-more-run hook — ranked ladder, best score
   const b = best();
   const ld = tier();
@@ -1654,11 +1705,27 @@ export function drawTitle(
   if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
   const wStreak = streakWins();
   if (wStreak > 1) bits.push(`STREAK ${wStreak}`);
-  fitFont(ctx, bits.join(' · '), 8, W - 40);
+  // a live star-boost tails the records line in muted gold — the quiet
+  // countdown while a finished raid or daily is still paying out
+  const boostMs = boostLeft();
+  const boostTxt = boostMs > 0
+    ? `★ BOOST ×${starBoost()} ${Math.floor(boostMs / 3600000)}h${String(Math.floor((boostMs % 3600000) / 60000)).padStart(2, '0')}m`
+    : '';
+  const recLine = bits.join(' · ');
+  const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
+  fitFont(ctx, recFull, 8, W - 40);
+  const recY = HATCH_BTN.y + HATCH_BTN.h + 22;
+  const recX = W / 2 - ctx.measureText(recFull).width / 2;
+  ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
-  ctx.fillText(bits.join(' · '), W / 2, DEX_BTN.y + DEX_BTN.h + 22);
+  ctx.fillText(boostTxt ? `${recLine} · ` : recLine, recX, recY);
+  if (boostTxt) {
+    ctx.fillStyle = GOLD;
+    ctx.fillText(boostTxt, recX + ctx.measureText(`${recLine} · `).width, recY);
+  }
+  ctx.textAlign = 'center';
   // the ladder: a fill bar toward the next tier, tinted to the current one
-  const rw = 220, rx = W / 2 - rw / 2, ry = DEX_BTN.y + DEX_BTN.h + 33;
+  const rw = 220, rx = W / 2 - rw / 2, ry = HATCH_BTN.y + HATCH_BTN.h + 33;
   ctx.fillStyle = '#1a2040';
   ctx.fillRect(rx, ry, rw, 7);
   ctx.fillStyle = ld.color;
@@ -1673,26 +1740,60 @@ export function drawTitle(
       ? `${rating()} PTS ${ld.name} — ${Math.round(ld.prog * 100)}% TO ${ld.next.name}`
       : `${rating()} PTS ${ld.name} — TOP OF THE LADDER`,
     W / 2,
-    ry + 13, // ASC_BTN grew to a 44px touch target — keep the caption's ink clear of its rim
+    ry + 13,
   );
-  // the heat dial: gold while a pick is on, parchment at zero, grayed until
-  // a first clear lifts the cap off the floor — a tap cycles 0..cap
+  // the heat dial rides chip row two's tail: gold while a pick is on,
+  // parchment at zero, grayed until a first clear lifts the cap — a tap
+  // cycles 0..cap. The picked tier's name rides inside as the pill's sub
   const ascCap = Math.min(b.wins, 9);
   const pick = ascPick();
+  const ascModName = pick > 0 ? ASC_MODS[pick - 1]?.name : undefined;
   pill(ctx, ASC_BTN, {
     c: pick > 0 ? '#ffd84d' : '#e8ecf8',
     cd: pick > 0 ? '#c8a44d' : '#aab0c8',
     tc: '#2a2440',
     label: `ASC ${pick}`,
+    sub: ascModName?.toUpperCase(),
     disabled: ascCap === 0,
   });
-  // the picked tier's name under the dial — ASC 0 leaves the band empty
-  const ascModName = pick > 0 ? ASC_MODS[pick - 1]?.name : undefined;
-  if (ascModName) {
-    ctx.font = fontB(7);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(ascModName, ASC_BTN.x + ASC_BTN.w / 2, ASC_BTN.y + ASC_BTN.h + 10);
+
+  // the day's login drop — a gold banner over the pitch top for the first
+  // seconds on title, so the calendar reads as a reward, not a ledger line
+  const lt = loginToday();
+  if (lt) {
+    if (loginT0 < 0) loginT0 = t;
+    const age = t - loginT0;
+    if (age < 6) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (6 - age) / 1.5);
+      const msg = `DAY ${lt.n} LOGIN · +${lt.prize}★`;
+      const back = lt.back > 0 ? `WELCOME BACK · +${lt.back}★` : '';
+      ctx.font = font(11);
+      let bw = ctx.measureText(msg).width;
+      if (back) {
+        ctx.font = fontB(9);
+        bw = Math.max(bw, ctx.measureText(back).width);
+        ctx.font = font(11);
+      }
+      bw += 40;
+      const bh = back ? 56 : 38;
+      const br = { x: W / 2 - bw / 2, y: 325 - bh / 2, w: bw, h: bh };
+      ctx.fillStyle = '#161228';
+      ctx.fillRect(br.x, br.y, br.w, br.h);
+      dither(ctx, br, 0.08);
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(br.x + 1, br.y + 1, br.w - 2, br.h - 2);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText(msg, W / 2, br.y + (back ? 24 : 25));
+      if (back) {
+        ctx.font = fontB(9);
+        ctx.fillStyle = '#aab4dd';
+        ctx.fillText(back, W / 2, br.y + 42);
+      }
+      ctx.restore();
+    }
   }
 
   // build tag — bug reports should name their build
@@ -2160,6 +2261,13 @@ export const DEX_BTN = { x: W / 2 - 205, y: FREE_BTN.y + FREE_BTN.h + 36, w: MEN
 export const ACH_BTN = { x: DEX_BTN.x + DEX_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
 export const BOARD_BTN = { x: ACH_BTN.x + ACH_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
 export const TASKS_BTN = { x: BOARD_BTN.x + BOARD_BTN.w + 8, y: DEX_BTN.y, w: MENU_CHIP_W, h: 48 };
+// chip row two — the meta loop's doors, 8px under the menu row. The records
+// line + ladder key off this row so the whole readout follows it down.
+export const HATCH_BTN = { x: DEX_BTN.x, y: DEX_BTN.y + DEX_BTN.h + 8, w: MENU_CHIP_W, h: 48 };
+export const LAB_BTN = { x: HATCH_BTN.x + HATCH_BTN.w + 8, y: HATCH_BTN.y, w: MENU_CHIP_W, h: 48 };
+// the ascension dial rides row two's back half (spans the last two chip
+// slots) — there's no band left below the ladder for it anymore
+export const ASC_BTN = { x: LAB_BTN.x + LAB_BTN.w + 8, y: HATCH_BTN.y, w: W - 27 - (LAB_BTN.x + LAB_BTN.w + 8), h: 48 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
@@ -2191,7 +2299,7 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, r.h - DEX_HEAD - 36);
   ctx.clip();
   ctx.font = fontB(7);
-  DEX_LIST.filter((def) => seen.has(def.id)).forEach((def, i) => {
+  PULLABLE.filter((def) => seen.has(def.id)).forEach((def, i) => {
     const cx = r.x + 20 + (i % DEX_COLS) * DEX_CELL + DEX_CELL / 2;
     const cy = r.y + DEX_HEAD + 8 + Math.floor(i / DEX_COLS) * DEX_CELL - scroll + DEX_CELL / 2;
     drawMon(ctx, def.id, cx, cy, DEX_CELL - 20);
@@ -2401,6 +2509,658 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.font = fontB(8);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('trophies persist across runs · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+}
+
+// --- the hatcher + the lab: the star-piece economy's two fronts -------------
+// Both ride the DEX_PANEL overlay pattern (dim + framed panel + clipped
+// scroll view). main.ts owns the pull state machine — HatchState is what it
+// hands the draw each frame: phase clock, result queue, spark scroll.
+
+export interface PullResult {
+  id: number;
+  rarity: 1 | 2 | 3; // bucket: common / rare / epic — sets the star count + rim
+  dupe: boolean; // already dex'd — it converted to dust instead
+  shiny: boolean;
+  dust: number; // dust paid out by this result (dupes only)
+}
+export type HatchPhase = 'idle' | 'shake' | 'reveal' | 'results';
+export interface HatchState {
+  phase: HatchPhase;
+  t: number; // seconds inside the current phase — drives wobble/pop
+  results: PullResult[]; // the pull queue — reveal + results read it
+  i: number; // which result the reveal is on (10-pull tap-through)
+  sparkScroll: number; // SPARK grid scroll — only live while phase is 'idle'
+  label?: string; // the summary's header — 'RAID CLEARED' rides the same cards
+}
+
+const HATCH_PANEL = DEX_PANEL;
+const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 66, w: HATCH_PANEL.w - 32, h: 88 };
+export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
+export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
+const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 234, w: HATCH_PANEL.w - 32, h: 10 };
+const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 290, w: HATCH_PANEL.w - 32, h: 500 };
+const SPARK_COLS = 4;
+const SPARK_CELL_W = SPARK_VIEW.w / SPARK_COLS;
+const SPARK_CELL_H = 112;
+const HATCH_MODAL = { x: 80, y: 244, w: W - 160, h: 400 };
+export const SKIP_PULL_BTN = { x: HATCH_MODAL.x + HATCH_MODAL.w - 92, y: HATCH_MODAL.y + 12, w: 80, h: 30 };
+
+// the wallet pill — star pieces buy pulls, dust buys sparks outright
+function balanceChip(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  starN: number,
+  dust?: number,
+) {
+  roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
+  ctx.fillStyle = '#1a2040';
+  ctx.fill();
+  rim(ctx, r, r.h / 2, GOLD, 1.5);
+  void loadItem('star-piece');
+  const star = itemSprite('star-piece');
+  if (star) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(star, r.x + 10, r.y + r.h / 2 - 9, 18, 18);
+    ctx.restore();
+  }
+  ctx.textAlign = 'left';
+  ctx.font = fontB(9);
+  let tx = r.x + 34;
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText(`${starN}`, tx, r.y + r.h / 2 + 3.5);
+  tx += ctx.measureText(`${starN}`).width + 8;
+  if (dust != null) {
+    // the second wallet reads cyan — a small diamond, not the star icon
+    const mid = r.y + r.h / 2 - 1;
+    ctx.fillStyle = '#9df0ff';
+    ctx.beginPath();
+    ctx.moveTo(tx + 4, mid - 5);
+    ctx.lineTo(tx + 8, mid);
+    ctx.lineTo(tx + 4, mid + 5);
+    ctx.lineTo(tx, mid);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillText(`${dust}`, tx + 12, r.y + r.h / 2 + 3.5);
+  }
+}
+
+// a dust price — small cyan diamond + count, laid out as one centered unit
+function dustTag(ctx: CanvasRenderingContext2D, cx: number, cy: number, n: number, textColor: string) {
+  ctx.font = fontB(7);
+  const label = `${n}`;
+  const tw = ctx.measureText(label).width;
+  const x0 = cx - (tw + 10) / 2;
+  ctx.fillStyle = '#9df0ff';
+  ctx.beginPath();
+  ctx.moveTo(x0 + 3.5, cy - 7);
+  ctx.lineTo(x0 + 7, cy - 3);
+  ctx.lineTo(x0 + 3.5, cy + 1);
+  ctx.lineTo(x0, cy - 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = textColor;
+  ctx.textAlign = 'left';
+  ctx.fillText(label, x0 + 10, cy);
+}
+
+export function hatchScrollMax(s: HatchState) {
+  if (s.phase !== 'idle') return 0; // the pull show eats drags — the shop's scroll waits
+  const rows = Math.ceil(PULLABLE.length / SPARK_COLS);
+  return Math.max(0, rows * SPARK_CELL_H - SPARK_VIEW.h);
+}
+
+// pointer → pullable species in the spark grid (same math as the draw)
+export function sparkHit(scroll: number, x: number, y: number): SpeciesDef | null {
+  if (!inRect(x, y, SPARK_VIEW)) return null;
+  const col = Math.floor((x - SPARK_VIEW.x) / SPARK_CELL_W);
+  const row = Math.floor((y - SPARK_VIEW.y + scroll) / SPARK_CELL_H);
+  return PULLABLE[row * SPARK_COLS + col] ?? null;
+}
+
+export function drawHatch(
+  ctx: CanvasRenderingContext2D,
+  s: HatchState,
+  info: { stars: number; dust: number; pityIn: number; featured: SpeciesDef | null },
+) {
+  const r = HATCH_PANEL;
+  void loadItem('star-piece');
+  void loadItem('poke-ball');
+  ctx.fillStyle = 'rgba(6,10,22,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 14);
+
+  // header left, wallet right — the shop reads like a counter
+  ctx.textAlign = 'left';
+  ctx.font = font(15);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText('THE HATCHER', r.x + 22, r.y + 42);
+  balanceChip(ctx, { x: r.x + r.w - 178, y: r.y + 22, w: 160, h: 32 }, info.stars, info.dust);
+
+  // the day's featured rate-up — a full-bleed striped banner, sprite + odds
+  const f = info.featured;
+  ctx.save();
+  roundRect(ctx, FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h, 10);
+  ctx.clip();
+  const fg = ctx.createLinearGradient(0, FEAT_BAND.y, 0, FEAT_BAND.y + FEAT_BAND.h);
+  fg.addColorStop(0, '#8a5cff');
+  fg.addColorStop(1, mixHex('#8a5cff', '#12162b', 0.55));
+  ctx.fillStyle = fg;
+  ctx.fillRect(FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h);
+  stripes(ctx, FEAT_BAND);
+  ctx.restore();
+  ctx.strokeStyle = '#0a0d18';
+  ctx.lineWidth = 1.5;
+  roundRect(ctx, FEAT_BAND.x + 0.5, FEAT_BAND.y + 0.5, FEAT_BAND.w - 1, FEAT_BAND.h - 1, 10);
+  ctx.stroke();
+  if (f) {
+    void loadSprite(f.id);
+    try {
+      drawMon(ctx, f.id, FEAT_BAND.x + 54, FEAT_BAND.y + FEAT_BAND.h / 2 + 6, 74);
+    } catch {
+      /* sprite still warming */
+    }
+    chip(ctx, FEAT_BAND.x + 10, FEAT_BAND.y + 10, 'FEATURED', { bg: '#2a2440', fg: '#e8ecf8' });
+    ctx.textAlign = 'left';
+    fitFont(ctx, f.name.toUpperCase(), 12, FEAT_BAND.w - 220);
+    ctx.fillStyle = '#2a2440';
+    ctx.fillText(f.name.toUpperCase(), FEAT_BAND.x + 104, FEAT_BAND.y + 44);
+    ctx.font = fontB(7);
+    ctx.globalAlpha = 0.75;
+    ctx.fillText('RATE UP — RARE+ POOL', FEAT_BAND.x + 104, FEAT_BAND.y + 60);
+    ctx.globalAlpha = 1;
+    chip(ctx, FEAT_BAND.x + FEAT_BAND.w - 96, FEAT_BAND.y + FEAT_BAND.h / 2 - 8, '10× TODAY', {
+      bg: '#ffd84d',
+      fg: '#2a2440',
+    });
+  } else {
+    ctx.textAlign = 'center';
+    ctx.font = font(10);
+    ctx.fillStyle = '#2a2440';
+    ctx.fillText('NO FEATURED PULL TODAY', FEAT_BAND.x + FEAT_BAND.w / 2, FEAT_BAND.y + FEAT_BAND.h / 2 + 4);
+  }
+
+  // the pulls — ×1 is parchment, ×10 the gold MS ten-pull; dim when short
+  pill(ctx, PULL1_BTN, {
+    c: '#e8ecf8',
+    cd: '#aab0c8',
+    tc: '#2a2440',
+    label: 'PULL ×1',
+    sub: `${PULL_COST} STAR PIECES`,
+    disabled: info.stars < PULL_COST,
+  });
+  pill(ctx, PULL10_BTN, {
+    c: '#ffd84d',
+    cd: '#c8a44d',
+    tc: '#2a2440',
+    label: 'PULL ×10',
+    sub: `${PULL10_COST} · RARE GUARANTEED`,
+    disabled: info.stars < PULL10_COST,
+  });
+  const starIcon = itemSprite('star-piece');
+  if (starIcon) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.globalAlpha = info.stars < PULL_COST ? 0.4 : 1;
+    ctx.drawImage(starIcon, PULL1_BTN.x + 12, PULL1_BTN.y + PULL1_BTN.h / 2 - 11, 22, 22);
+    ctx.globalAlpha = info.stars < PULL10_COST ? 0.4 : 1;
+    ctx.drawImage(starIcon, PULL10_BTN.x + 12, PULL10_BTN.y + PULL10_BTN.h / 2 - 11, 22, 22);
+    ctx.restore();
+  }
+
+  // pity — every Nth pull rolls rare+; the meter is the near-miss hook
+  ctx.textAlign = 'center';
+  ctx.font = fontB(8);
+  ctx.fillStyle = info.pityIn <= 1 ? '#ffd84d' : '#8890b8';
+  ctx.fillText(info.pityIn <= 0 ? 'THIS PULL IS GUARANTEED RARE' : `GUARANTEED RARE IN ${info.pityIn}`, W / 2, PITY_BAR.y - 6);
+  ctx.fillStyle = '#0a0d18';
+  ctx.fillRect(PITY_BAR.x, PITY_BAR.y, PITY_BAR.w, PITY_BAR.h);
+  const pf = Math.min(1, Math.max(0, 1 - info.pityIn / PULL_PITY));
+  if (pf > 0) {
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillRect(PITY_BAR.x, PITY_BAR.y, Math.max(4, PITY_BAR.w * pf), PITY_BAR.h);
+  }
+  ctx.strokeStyle = '#2a3560';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PITY_BAR.x + 0.5, PITY_BAR.y + 0.5, PITY_BAR.w - 1, PITY_BAR.h - 1);
+
+  // the odds, in print. Bucket cuts track pullSpecies' 0.72/0.97 rolls by
+  // hand; the shiny number reads live so the weekend window advertises itself
+  if (s.phase === 'idle') {
+    const wknd = shinyOdds() > PULL_SHINY;
+    ctx.font = fontB(7);
+    ctx.fillStyle = wknd ? '#ffd84d' : '#5a6284';
+    ctx.fillText(
+      `72% COMMON · 25% RARE · 3% EPIC — ${shinyOdds() * 100}% SHINY${wknd ? ' · WEEKEND ×2' : ''} PER PULL`,
+      W / 2,
+      PITY_BAR.y + PITY_BAR.h + 9,
+    );
+  }
+
+  // SPARK — the dust shop: buy the species outright, owned ones dim out
+  ctx.font = font(9);
+  ctx.fillStyle = '#aab4dd';
+  ctx.fillText('SPARK EXCHANGE', W / 2, SPARK_VIEW.y - 24);
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#5a6284';
+  ctx.fillText('buy a mon outright with dust — sparked or pulled, it joins the dex', W / 2, SPARK_VIEW.y - 11);
+
+  const seen = new Set(dexIds());
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(SPARK_VIEW.x - 4, SPARK_VIEW.y, SPARK_VIEW.w + 8, SPARK_VIEW.h);
+  ctx.clip();
+  const row0 = Math.max(0, Math.floor(s.sparkScroll / SPARK_CELL_H));
+  const rowN = Math.ceil((s.sparkScroll + SPARK_VIEW.h) / SPARK_CELL_H);
+  for (let i = row0 * SPARK_COLS; i < rowN * SPARK_COLS && i < PULLABLE.length; i++) {
+    const def = PULLABLE[i];
+    const cx = SPARK_VIEW.x + (i % SPARK_COLS) * SPARK_CELL_W;
+    const cy = SPARK_VIEW.y + Math.floor(i / SPARK_COLS) * SPARK_CELL_H - s.sparkScroll;
+    const owned = seen.has(def.id);
+    const spTier = tierOf(def);
+    const epic = spTier >= 3 || INVADER_IDS.has(def.id);
+    const cell = { x: cx + 4, y: cy + 4, w: SPARK_CELL_W - 8, h: SPARK_CELL_H - 8 };
+    ctx.save();
+    ctx.globalAlpha = owned ? 0.35 : 1;
+    roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 8);
+    ctx.fillStyle = '#0d1126';
+    ctx.fill();
+    ctx.strokeStyle = epic ? '#f0b02f' : spTier === 2 ? '#5a9bf0' : '#2a3560';
+    ctx.lineWidth = spTier >= 2 ? 1.5 : 1;
+    ctx.stroke();
+    void loadSprite(def.id);
+    try {
+      drawMon(ctx, def.id, cell.x + cell.w / 2, cell.y + 32, 50);
+    } catch {
+      /* sprite still warming */
+    }
+    ctx.textAlign = 'center';
+    ctx.font = fontB(6);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(def.name.toUpperCase(), cell.x + cell.w / 2, cell.y + 62);
+    if (owned) {
+      ctx.fillStyle = '#5a6284';
+      ctx.fillText('OWNED', cell.x + cell.w / 2, cell.y + 80);
+    } else {
+      const deal = def.id === dealPick().id;
+      const cost = dealCost(def);
+      dustTag(ctx, cell.x + cell.w / 2, cell.y + 82, cost, info.dust >= cost ? '#9df0ff' : '#ff6b6b');
+      if (deal) {
+        // the daily discount tab — gold corner flag, struck-through list price
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillRect(cell.x + cell.w - 38, cell.y, 38, 13);
+        ctx.fillStyle = '#2a2440';
+        ctx.fillText('DEAL', cell.x + cell.w - 19, cell.y + 10);
+      }
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('pulled or sparked mons join the dex + future drafts · tap outside to close', W / 2, r.y + r.h - 14);
+
+  // the pull show rides on top — dim the shop, modal carries the reveal
+  if (s.phase !== 'idle') drawPullShow(ctx, s);
+}
+
+// shake → reveal → results. Timing is main.ts's; everything here derives
+// from s.t (phase-local seconds) and the result queue.
+function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
+  ctx.fillStyle = 'rgba(6,10,22,0.72)';
+  ctx.fillRect(0, 0, W, H);
+  const m = HATCH_MODAL;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  roundRect(ctx, m.x + 3, m.y + 5, m.w, m.h, 12);
+  ctx.fill();
+  roundRect(ctx, m.x, m.y, m.w, m.h, 12);
+  ctx.fillStyle = '#0d1122';
+  ctx.fill();
+  rim(ctx, m, 12, GOLD, 2);
+  edge(ctx, m, 12);
+  const cx = m.x + m.w / 2;
+
+  if (s.phase === 'shake') {
+    const res = s.results[s.i];
+    // the gold tell: rares flash, ~1-in-6 commons fake it (MS's fake-out)
+    const gold = res ? res.rarity >= 2 || ((res.id * 2654435761) >>> 0) % 100 < 16 : false;
+    const cy = m.y + m.h / 2 - 10;
+    const wob = Math.sin(s.t * 13) * 0.4 * Math.max(0, 1 - s.t / 1.8); // 2-3 decaying wobbles
+    const pulse = 0.4 + 0.3 * Math.sin(s.t * 9);
+    const glow = ctx.createRadialGradient(cx, cy, 10, cx, cy, 96);
+    glow.addColorStop(0, gold ? `rgba(255,216,77,${pulse})` : `rgba(200,208,224,${pulse * 0.5})`);
+    glow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - 96, cy - 96, 192, 192);
+    const ball = itemSprite('poke-ball');
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(wob);
+    ctx.imageSmoothingEnabled = false;
+    if (ball) ctx.drawImage(ball, -48, -48, 96, 96);
+    ctx.restore();
+    ctx.textAlign = 'center';
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('THE BALL TWITCHES...', cx, m.y + m.h - 34);
+    return;
+  }
+
+  if (s.phase === 'reveal') {
+    const res = s.results[s.i];
+    const def = res && speciesById(res.id);
+    if (!res || !def) return;
+    void loadSprite(res.id);
+    const cy = m.y + 148;
+    const starC = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
+    // the burst — rarity-tinted rays spinning out behind the sprite
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.globalAlpha = 0.55;
+    ctx.strokeStyle = starC;
+    ctx.lineWidth = 3;
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2 + s.t * 1.6;
+      const rr = 78 + 8 * Math.sin(s.t * 6 + k);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * 60, Math.sin(a) * 60);
+      ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const pop = 1 + 0.35 * Math.max(0, 1 - s.t * 3.5); // landing overshoot, reel-pop style
+    try {
+      (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, cy, 100 * Math.min(pop, 1.25));
+    } catch {
+      /* sprite still warming */
+    }
+    for (let k = 0; k < res.rarity; k++) {
+      ctx.fillStyle = starC;
+      fillStar(ctx, cx + (k - (res.rarity - 1) / 2) * 22, cy + 78, 9);
+    }
+    ctx.textAlign = 'center';
+    fitFont(ctx, def.name.toUpperCase(), 12, m.w - 40);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(def.name.toUpperCase(), cx, cy + 108);
+    ctx.font = font(10);
+    ctx.fillStyle = res.dupe ? '#5a9bf0' : '#ffd84d';
+    ctx.fillText(res.dupe ? `DUPE +${res.dust} DUST` : 'NEW!', cx, cy + 138);
+    if (res.shiny) {
+      ctx.font = fontB(8);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText('★ SHINY ★', cx, cy + 160);
+    }
+    ctx.font = fontB(8);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(
+      s.results.length > 1 ? `${s.i + 1} OF ${s.results.length} — TAP FOR NEXT` : 'TAP TO CONTINUE',
+      cx,
+      m.y + m.h - 26,
+    );
+    if (s.results.length > 1) {
+      // SKIP ≫ — the 10-pull's fast-forward sits inside the modal's rim
+      pill(ctx, SKIP_PULL_BTN, { c: '#3a4160', cd: '#262c44', tc: '#aab4dd', label: 'SKIP ≫' });
+    }
+    return;
+  }
+
+  // 'results' — the whole pull laid out; a single pull gets the hero card
+  ctx.textAlign = 'center';
+  ctx.font = font(11);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText(s.label ?? 'PULL RESULTS', cx, m.y + 36);
+  if (s.results.length === 1) {
+    const res = s.results[0];
+    const def = res && speciesById(res.id);
+    if (res && def) {
+      void loadSprite(res.id);
+      try {
+        (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, m.y + 170, 110);
+      } catch {
+        /* sprite still warming */
+      }
+      const starC = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
+      for (let k = 0; k < res.rarity; k++) {
+        ctx.fillStyle = starC;
+        fillStar(ctx, cx + (k - (res.rarity - 1) / 2) * 22, m.y + 244, 9);
+      }
+      fitFont(ctx, def.name.toUpperCase(), 11, m.w - 40);
+      ctx.fillStyle = PARCH;
+      ctx.fillText(def.name.toUpperCase(), cx, m.y + 278);
+      ctx.font = font(10);
+      ctx.fillStyle = res.dupe ? '#5a9bf0' : '#ffd84d';
+      ctx.fillText(res.dupe ? `DUPE +${res.dust} DUST` : 'NEW!', cx, m.y + 306);
+    }
+  } else {
+    const cols = 5;
+    const cw = (m.w - 32) / cols;
+    const rh = 96;
+    s.results.forEach((res, i) => {
+      const cell = { x: m.x + 16 + (i % cols) * cw + 3, y: m.y + 52 + Math.floor(i / cols) * rh + 3, w: cw - 6, h: rh - 6 };
+      roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 7);
+      ctx.fillStyle = '#12162b';
+      ctx.fill();
+      ctx.strokeStyle = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#5a9bf0' : '#2a3560';
+      ctx.lineWidth = res.rarity >= 2 ? 1.5 : 1;
+      ctx.stroke();
+      void loadSprite(res.id);
+      try {
+        (res.shiny ? drawShiny : drawMon)(ctx, res.id, cell.x + cell.w / 2, cell.y + 30, 44);
+      } catch {
+        /* sprite still warming */
+      }
+      const sc = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#ffd84d' : '#a8b0c8';
+      for (let k = 0; k < res.rarity; k++) {
+        ctx.fillStyle = sc;
+        fillStar(ctx, cell.x + cell.w / 2 + (k - (res.rarity - 1) / 2) * 12, cell.y + 58, 5);
+      }
+      ctx.textAlign = 'center';
+      ctx.font = fontB(6);
+      ctx.fillStyle = res.dupe ? '#5a9bf0' : '#ffd84d';
+      ctx.fillText(res.dupe ? `+${res.dust}` : 'NEW', cell.x + cell.w / 2, cell.y + 76);
+    });
+  }
+  const news = s.results.filter((r) => !r.dupe).length;
+  const dust = s.results.reduce((a, r) => a + r.dust, 0);
+  ctx.textAlign = 'center';
+  ctx.font = fontB(9);
+  ctx.fillStyle = '#aab4dd';
+  ctx.fillText(`${news} NEW${dust ? ` · +${dust} DUST` : ''}`, cx, m.y + m.h - 40);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('TAP TO COLLECT', cx, m.y + m.h - 24);
+}
+
+// --- the lab: the deterministic sink — every star buys a sure thing ---------
+const LAB_HEAD = 86;
+const LAB_COLS = 2;
+const LAB_CARD_W = 219;
+const LAB_CARD_H = 128;
+const LAB_GAP = 10;
+const LAB_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + LAB_HEAD, w: HATCH_PANEL.w - 32, h: 0 };
+LAB_VIEW.h = HATCH_PANEL.y + HATCH_PANEL.h - 30 - LAB_VIEW.y;
+// section split by id — the rest of LAB_UPGRADES lands in RUN TEAM
+const LAB_TRAIN = new Set(['hp', 'dmg', 'spc', 'luck']);
+
+// the price pill's rect inside a card — labHit tests the same rect the draw
+// renders, so only a deliberate tap on the buy strip spends
+const labBuyRect = (r: { x: number; y: number; w: number; h: number }) => ({
+  x: r.x + 10,
+  y: r.y + r.h - 32,
+  w: r.w - 20,
+  h: 24,
+});
+
+// card rects + section heads in CONTENT coords (y=0 is the view top) —
+// drawLab and labHit share this so a tap always lands where a card drew
+function labLayout() {
+  const secs: [string, (typeof LAB_UPGRADES)[number][], boolean][] = [
+    ['TRAINING — EVERY RUN STARTS STRONGER', LAB_UPGRADES.filter((u) => LAB_TRAIN.has(u.id)), true],
+    ['RUN TEAM — PER-RUN TOOLS', LAB_UPGRADES.filter((u) => !LAB_TRAIN.has(u.id)), false],
+  ];
+  const heads: { text: string; y: number }[] = [];
+  const cards: { u: (typeof LAB_UPGRADES)[number]; train: boolean; r: { x: number; y: number; w: number; h: number } }[] = [];
+  let y = 0;
+  for (const [title, list, train] of secs) {
+    if (!list.length) continue;
+    heads.push({ text: title, y });
+    y += 26;
+    list.forEach((u, i) => {
+      cards.push({
+        u,
+        train,
+        r: {
+          x: LAB_VIEW.x + (i % LAB_COLS) * (LAB_CARD_W + LAB_GAP),
+          y: y + Math.floor(i / LAB_COLS) * (LAB_CARD_H + LAB_GAP),
+          w: LAB_CARD_W,
+          h: LAB_CARD_H,
+        },
+      });
+    });
+    y += Math.ceil(list.length / LAB_COLS) * (LAB_CARD_H + LAB_GAP) + 10;
+  }
+  return { heads, cards, h: y };
+}
+
+export function labScrollMax() {
+  return Math.max(0, labLayout().h - LAB_VIEW.h);
+}
+
+// pointer → lab upgrade id, or null — only the buy strip answers
+export function labHit(scroll: number, x: number, y: number): string | null {
+  if (!inRect(x, y, LAB_VIEW)) return null;
+  for (const c of labLayout().cards) {
+    const cr = { ...c.r, y: c.r.y + LAB_VIEW.y - scroll };
+    if (inRect(x, y, labBuyRect(cr))) return c.u.id;
+  }
+  return null;
+}
+
+function drawLabCard(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  u: (typeof LAB_UPGRADES)[number],
+  train: boolean,
+  stars: number,
+) {
+  const lvl = labLevel(u.id);
+  const maxed = lvl >= u.max;
+  const cost = u.costs[lvl] ?? 0;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  roundRect(ctx, r.x + 2, r.y + 4, r.w, r.h, 8);
+  ctx.fill();
+  roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 8);
+
+  // the tinted header carries the item icon — training reads gold, tools blue
+  const band = { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 38 };
+  stripeBand(ctx, band, train ? GOLD : '#3a8cff');
+  void loadItem(u.icon);
+  const img = itemSprite(u.icon);
+  if (img) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 5;
+    ctx.shadowOffsetY = 2;
+    ctx.drawImage(img, band.x + 8, band.y + 4, 30, 30);
+    ctx.restore();
+  }
+  ctx.textAlign = 'left';
+  fitFont(ctx, u.name.toUpperCase(), 8, band.w - 44 - 52);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText(u.name.toUpperCase(), band.x + 44, band.y + 24);
+  ctx.textAlign = 'right';
+  ctx.font = fontB(7);
+  ctx.fillText(`LV ${lvl}/${u.max}`, band.x + band.w - 8, band.y + 24);
+
+  ctx.textAlign = 'left';
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#a8b0d8';
+  wrap2(ctx, u.desc, r.w - 24).forEach((l, i) => ctx.fillText(l, r.x + 12, r.y + 58 + i * 13));
+
+  levelPips(ctx, { x: r.x + 12, y: r.y + 78, w: r.w - 24, h: 7 }, lvl, u.max);
+
+  const buy = labBuyRect(r);
+  if (maxed) {
+    ctx.font = fontB(7);
+    const mw = ctx.measureText('MAXED').width + 16;
+    chip(ctx, buy.x + buy.w - mw, buy.y + 4, 'MAXED', { bg: '#232840', fg: '#8890b8' });
+  } else {
+    const afford = stars >= cost;
+    pill(ctx, buy, {
+      c: afford ? '#ffd84d' : '#e03c34',
+      cd: afford ? '#c8a44d' : '#a02a24',
+      tc: afford ? '#2a2440' : '#fff',
+      label: `LV UP · ${cost}`,
+    });
+    void loadItem('star-piece');
+    const star = itemSprite('star-piece');
+    if (star) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.globalAlpha = afford ? 1 : 0.6;
+      ctx.drawImage(star, buy.x + 10, buy.y + buy.h / 2 - 7, 14, 14);
+      ctx.restore();
+    }
+  }
+}
+
+export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: number) {
+  const r = HATCH_PANEL;
+  void loadItem('star-piece');
+  ctx.fillStyle = 'rgba(6,10,22,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
+  ctx.fillStyle = '#12162b';
+  ctx.fill();
+  cardFrame(ctx, r, 14);
+
+  ctx.textAlign = 'left';
+  ctx.font = font(15);
+  ctx.fillStyle = '#ffd84d';
+  ctx.fillText("PROF.'S LAB", r.x + 22, r.y + 42);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('SPEND YOUR STAR PIECES', r.x + 22, r.y + 60);
+  balanceChip(ctx, { x: r.x + r.w - 178, y: r.y + 22, w: 160, h: 32 }, stars);
+
+  const { heads, cards } = labLayout();
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(LAB_VIEW.x - 6, LAB_VIEW.y, LAB_VIEW.w + 12, LAB_VIEW.h);
+  ctx.clip();
+  for (const hd of heads) {
+    const hy = LAB_VIEW.y + hd.y - scroll;
+    ctx.textAlign = 'left';
+    ctx.font = font(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(hd.text, LAB_VIEW.x + 4, hy + 14);
+    ctx.strokeStyle = 'rgba(90,98,136,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(LAB_VIEW.x + 4, hy + 21);
+    ctx.lineTo(LAB_VIEW.x + LAB_VIEW.w - 4, hy + 21);
+    ctx.stroke();
+  }
+  for (const c of cards) {
+    const cr = { ...c.r, y: c.r.y + LAB_VIEW.y - scroll };
+    if (cr.y + cr.h < LAB_VIEW.y || cr.y > LAB_VIEW.y + LAB_VIEW.h) continue;
+    drawLabCard(ctx, cr, c.u, c.train, stars);
+  }
+  ctx.restore();
+
+  ctx.textAlign = 'center';
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('lab levels persist across runs — every star buys a sure thing · tap outside to close', W / 2, r.y + r.h - 14);
 }
 
 // the BAG row — card-lite chips of stocked consumables; ≤2 ride into the
@@ -2883,34 +3643,39 @@ export function drawReward(
     335,
   );
 
+  const four = offers.length >= 4; // the lab's FOURTH OPTION board goes 2×2
   offers.forEach((perk, i) =>
-    drawPerkCard(ctx, perkCardRect(i), perk, { age: spin, i }, { owned: !!perk.id && !!perkIds?.includes(perk.id) }),
+    drawPerkCard(ctx, perkCardRect(i, offers.length), perk, { age: spin, i }, { owned: !!perk.id && !!perkIds?.includes(perk.id) }),
   );
 
   // held items — the run's build so far, a strip of icons under the
-  // tool row so you can read your loadout at a glance
+  // tool row so you can read your loadout at a glance. The 4-card board's
+  // second row shoves it to the seam above TEAM · ITEMS.
   if (heldItems.length) {
     const iw = 22, gap = 6, n = Math.min(heldItems.length, 14);
     let ix = W / 2 - (n * (iw + gap) - gap) / 2;
     heldItems.slice(0, 14).forEach((item) => {
       const img = itemSprite(item);
       ctx.globalAlpha = 0.9;
-      if (img) ctx.drawImage(img, ix, 644, iw, iw);
+      if (img) ctx.drawImage(img, ix, four ? 846 : 644, iw, iw);
       ix += iw + gap;
     });
     ctx.globalAlpha = 1;
   }
 
   // next row on the map — gyms announce themselves; wild rows stay quiet
-  // since the actual choice happens on the map now
+  // since the actual choice happens on the map now. The 2×2 board's second
+  // row owns this band — the map says the same thing anyway.
   ctx.font = font(8);
   const nextY = 852;
-  if (next.gym) {
-    ctx.fillStyle = '#f85888';
-    ctx.fillText('NEXT: GYM LEADER', W / 2, nextY);
-  } else {
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
+  if (!four) {
+    if (next.gym) {
+      ctx.fillStyle = '#f85888';
+      ctx.fillText('NEXT: GYM LEADER', W / 2, nextY);
+    } else {
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
+    }
   }
   // StS lets you decline a reward — cashes out as score via the tool row's
   // SKIP pill now — and lets you check the deck mid-pick: TEAM · ITEMS is
@@ -3299,23 +4064,28 @@ export function drawPerkPick(
   ctx.font = fontB(9);
   ctx.fillStyle = '#8890b8';
   ctx.fillText(sub, W / 2, 315);
-  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i), p, undefined, { idx: i }));
+  const four = offers.length >= 4; // the lab's FOURTH OPTION hits the charm board too
+  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i, offers.length), p, undefined, { idx: i }));
   // declining pays score instead — a dead offer still has a price
   pill(ctx, CHARM_SKIP, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SKIP +200 PTS' });
-  // the drafted squad rides under the offers — pick the item for THESE mons
+  // the drafted squad rides under the offers — pick the item for THESE mons.
+  // The 2×2 board's second row pushes the squad to the bottom seam, shrunk.
   if (team.length) {
+    const labelY = four ? 854 : 664;
+    const monY = four ? 884 : 702;
+    const monS = four ? 44 : 62;
     ctx.font = font(9);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('YOUR TEAM', W / 2, 664);
+    ctx.fillText('YOUR TEAM', W / 2, labelY);
     team.forEach((def, i) => {
-      const mx = W / 2 + (i - (team.length - 1) / 2) * 92;
-      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, 702, 62);
+      const mx = W / 2 + (i - (team.length - 1) / 2) * (four ? 76 : 92);
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, monY, monS);
       ctx.font = fontB(8);
       ctx.fillStyle = PARCH;
-      ctx.fillText(def.name.toUpperCase(), mx, 736);
+      ctx.fillText(def.name.toUpperCase(), mx, monY + (four ? 32 : 34));
       ctx.font = fontB(6);
       ctx.fillStyle = TYPE_COLOR[def.type];
-      ctx.fillText(def.type.toUpperCase(), mx, 748);
+      ctx.fillText(def.type.toUpperCase(), mx, monY + (four ? 44 : 46));
     });
   }
 }
@@ -3373,6 +4143,9 @@ export function drawResult(
     ['TIME', `${res.time.toFixed(1)}s`, '#e8ecf8'],
     ['CAUGHT', `${res.caught}`, '#e8ecf8'],
   ];
+  if (res.stars) findings.push(['STAR PIECES', `+${res.stars}`, '#ffd84d']); // the wallet's payout — even a wipe banks
+  if (res.starsBonus) findings.push(['FIRST WIN TODAY', `+${res.starsBonus}`, '#ffd84d']);
+  if (res.grind) findings.push([`RUN ${res.grind.n} TODAY`, `+${res.grind.pay}`, '#ffd84d']);
   if (res.rating) {
     const r = res.rating;
     findings.push([

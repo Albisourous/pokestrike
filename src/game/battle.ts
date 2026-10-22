@@ -9,7 +9,7 @@ import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
 import type { EventChoice, EventArt } from './events';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
 import type { Theme, PropSpec } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
@@ -326,6 +326,19 @@ const PICKUP_META: Record<PickupKind, { label: string; color: string }> = {
   elixir: { label: 'CD -1', color: '#9ecbff' },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
+// star pieces — the meta wallet paid by run progress (Oct-20/21 specs;
+// rates are guesses pending playtesting): a cleared map row pays
+// 2 + stage#, a climb win pays a lump, gym fountains spill a few shards
+const STAR_ROW = 2; // a cleared map row pays this + its 1-based stage number
+const STAR_WIN = 40; // climb-clear lump
+const LOOT_STAR = [2, 4]; // star pickups per gym fountain, worth +1 each
+// the lab's per-level rates (meta.ts LAB_UPGRADES owns names/costs)
+const LAB_HP_LV = 0.08; // hp: team maxHp mult /level
+const LAB_DMG_LV = 0.05; // dmg: hit damage mult /level
+const LAB_SPC_LV = 0.05; // spc: bump-super damage mult /level
+const LAB_LUCK_LV = 2; // luck: flat team luck /level
+const LAB_EARN_LV = 0.1; // earnings: star payout mult /level
+const REVIVE_FRAC = 0.5; // revive token: the first KO stands back up at half
 // pass-through combo heat ramp — cyan→gold as the chain climbs; the bump
 // pops, the shot meter and the ball's wake all read the same ladder
 const COMBO_COLORS = ['#9df0ff', '#f8d030', '#f08030', '#f85888', '#ffd84d'];
@@ -532,8 +545,19 @@ export class Battle {
   boxSel = -1; // box index picked for swapping
   teamSel = -1; // team index picked — a swap starts from either side
   depth = 0; // rolled stages survived past the opening trio
+  raid = false; // standalone one-boss fight — never touches 'reward'/'map' or the climb-clear ledger
   rewardOffers: Perk[] = [];
   tools = { roll: 1, ban: 1 }; // offer-tool charges, per-run — REROLL re-deals, BANISH culls
+  perkOfferN = 3; // perk cards per board — lab 'fourth' deals a fourth
+  // lab multis — read once at construction (the shop lives on the title,
+  // a mid-run buy can't happen); perks re-apply on top in applySnapshot
+  private labHpMult = 1; // 'hp': team maxHp mult
+  private labSpcMult = 1; // 'spc': bump-super damage mult
+  private labLuck = 0; // 'luck': flat team luck feeding the gym fountain
+  private starMult = 1; // 'earnings': star payout mult, ceil'd per payout
+  starsRun = 0; // star pieces banked this run — the result screen's +N row
+  reviveToken = false; // 'revive': the first KO each run stands back up
+  reviveUsed = false; // spent flag — persisted like ashArmed
   perkBan = new Set<string>(); // perk ids banished this run — filtered out of future boards
   banArmed = false; // armed: the next card tap banishes instead of picks
   private rewardCap = 3; // tier cap the board was dealt at — reroll re-deals the same quality
@@ -570,7 +594,7 @@ export class Battle {
   fieldLog: string[] = [];
   // victory loot — a gym boss bursts into PokéCoins; drag the lead mon to
   // scoop them before the lap ends
-  private lootCoins: { x: number; y: number; vx: number; vy: number; r: number; spin: number; kind: 'coin' | 'gem' | 'heart' | 'candy'; val: number }[] = [];
+  private lootCoins: { x: number; y: number; vx: number; vy: number; r: number; spin: number; kind: 'coin' | 'gem' | 'heart' | 'candy' | 'star'; val: number }[] = [];
   private lootT = 0;
   private lootDrag = false;
   private lootDown: Vec | null = null; // where the leash was grabbed — an unmoved release is a tap, not a scoop
@@ -592,13 +616,23 @@ export class Battle {
     bag: string[] = [], // run-start bag picks (pk_bag ids) — applied below
   ) {
     this.theme = stage.theme;
+    // the lab's permanent training — apply BEFORE perks replay in
+    // applySnapshot, so a maxHp bump can't stomp banked hp (Oct-20 ordering)
+    this.labHpMult = 1 + LAB_HP_LV * labLevel('hp');
+    this.dmgMult *= 1 + LAB_DMG_LV * labLevel('dmg');
+    this.labSpcMult = 1 + LAB_SPC_LV * labLevel('spc');
+    this.labLuck = LAB_LUCK_LV * labLevel('luck');
+    this.starMult = 1 + LAB_EARN_LV * labLevel('earnings');
+    this.tools = { roll: 1 + labLevel('reroll'), ban: 1 + labLevel('ban') };
+    this.perkOfferN = 3 + (labLevel('fourth') ? 1 : 0);
+    this.reviveToken = !!labLevel('revive');
     const n = team.length;
     team.forEach((def, i) => {
       const role = roleOf(def);
       const m = ROLE_MODS[role];
       // draft picks roll lvl 5-14: same scaling curve as mid-run KOs
       const lvl = Math.max(1, Math.min(LV_CAP, def.lvl ?? 1));
-      const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl));
+      const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl) * this.labHpMult);
       // supers start at zero charge — each shot banks a turn toward firing
       const cd = Math.max(1, Math.round(bumpCooldown(def.type) * this.cdMult) - m.cdMod);
       this.players.push({
@@ -663,6 +697,15 @@ export class Battle {
     this.phase = 'map';
   }
 
+  // A raid skips the island — the constructor always parks on 'map', so the
+  // caller jumps the lone staged wave straight into the fight.
+  startFight() {
+    this.spawnWave(0);
+    this.nextTurn();
+    this.waveSpecial = 'CHROMA RAID'; // the banner names the event, not 'WAVE 1'
+    this.log('CHROMA RAID');
+  }
+
   // gym stops wear their leader's type on the sign, like trainer doors —
   // a staged gym reads the boss it already rolled; a rolled gym picks a
   // boss type now so the wave honors the sign when it's dealt. The pick
@@ -720,6 +763,8 @@ export class Battle {
       bag: this.bagIds.filter((id) => !BAG_ITEMS.find((i) => i.id === id)?.durable),
       masterArmed: this.masterArmed,
       ashArmed: this.ashArmed,
+      reviveUsed: this.reviveUsed,
+      starsRun: this.starsRun,
       score: this.score,
       perksTaken: this.perksTaken,
       gymsBeaten: this.gymsBeaten,
@@ -770,6 +815,8 @@ export class Battle {
     for (const id of this.bagIds) BAG_ITEMS.find((i) => i.id === id)?.apply(this);
     if (s.masterArmed != null) this.masterArmed = s.masterArmed;
     if (s.ashArmed != null) this.ashArmed = s.ashArmed;
+    this.reviveUsed = s.reviveUsed ?? false; // a spent token stays spent
+    this.starsRun = s.starsRun ?? 0;
     // stamp saved hp last so perk heals/maxHp growth don't double-count
     this.players.forEach((p, i) => {
       const t = s.team[i];
@@ -893,7 +940,7 @@ export class Battle {
     // a dead run's team can return as a rival fight — fail-forward echo
     this.waveSpecial = null;
     this.curMod = null; // mutators live and die with the wave they rolled on
-    this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent;
+    this.waveHadGym = spawns.some((s) => s.boss) && !this.inEvent && !this.raid; // a raid boss isn't a leader — no badge, bag stock or gymsBeaten
     // the family stab lands under the gym march — colored by the leader's type
     if (this.waveHadGym) playJingle(GYM_STAB[spawns.find((s) => s.boss)?.def.type ?? 'normal'] ?? 'gym_earth');
     // gym leaders own their sky — every gym court runs weather. ASC 8
@@ -989,7 +1036,7 @@ export class Battle {
     // gym aces and event alphas carry a held item — pokelike's curated
     // boss kit, one rolled quirk per fight
     const armed = this.enemies.find((e) => e.boss);
-    if (armed && (this.waveHadGym || this.inEvent)) this.armBoss(armed);
+    if (armed && (this.waveHadGym || this.inEvent || this.raid)) this.armBoss(armed); // the raid boss keeps its rolled quirk
     // normal trait: the squad mends as the wave forms
     const mend = this.t('normal') * 0.05;
     if (mend > 0) {
@@ -1159,7 +1206,8 @@ export class Battle {
     const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
     // wild level = the climb's depth: route-1 fodder up to champion-tier;
     // the level is honest (bulkier wilds), not just a number
-    const el = Math.min(LV_CAP, 5 + wi * 10 + (this.rng() < 0.35 ? 4 : 0) + (s.boss ? 8 : 0));
+    // raids flat-line at +30 — a one-wave stage has no climb to ride
+    const el = Math.min(LV_CAP, 5 + wi * 10 + (this.raid ? 30 : 0) + (this.rng() < 0.35 ? 4 : 0) + (s.boss ? 8 : 0));
     const ehp = Math.round(
       (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * lvlHp(s.def.stats.hp, el),
     );
@@ -1189,7 +1237,7 @@ export class Battle {
       // palette via def.shiny (golden-mon event), and your rival echo keeps
       // the palette it died with — including a shiny if you lost one.
       // Trainer mons are owned already: never shiny, never catchable.
-      shiny: !s.boss && !this.inTrainer && (!!s.def.shiny || (!this.inRival && this.rng() < SHINY_RATE * this.shinyRate)),
+      shiny: !this.inTrainer && (!!s.def.shiny || (!s.boss && !this.inRival && this.rng() < SHINY_RATE * this.shinyRate)),
       dead: false,
       dotTicks: 0,
       dotDmg: 0,
@@ -3153,6 +3201,7 @@ export class Battle {
           (this.typePow[src.def.type] ?? 1) *
           p.pow *
           SUPER_POW *
+          this.labSpcMult * // lab CALCIUM — a straight super amp
           (1 + (n - 1) * this.comboDmg), // metronome ramps with combo length
       );
     // passive talent: a small role effect on EVERY pass, on or off cooldown
@@ -3797,11 +3846,35 @@ export class Battle {
     this.waveSpecial = this.waveIndex + 1 >= this.waveCount ? 'STAGE CLEAR!' : 'WAVE CLEAR!';
     this.waveBanner = 1.1;
     sfx('wave');
+    // a raid is the whole fight — the win beat is short and never rolls the
+    // climb's reward board, map or clear ledger
+    if (this.raid && this.waveIndex + 1 >= this.waveCount) {
+      this.phase = 'won';
+      this.endT = 1.2;
+      this.waveSpecial = 'RAID CLEARED!';
+      this.log('RAID CLEARED!');
+      this.screenFlash('#ffd84d', 0.35);
+      this.addPunch(0.14);
+      this.addShake(10);
+      sfx('perfect');
+      buzz([60, 80, 120]);
+      return;
+    }
     if (this.waveIndex + 1 >= this.waveCount && this.depth >= FINAL_DEPTH) {
       this.phase = 'won';
       this.endT = 1.6; // let the star shower play out before the report lands
       this.award('first-clear');
       if (this.asc > 0) this.award('ascended');
+      // the last row clears too — its stage payday rides on the win lump
+      this.bankStage(this.waveIndex);
+      const starPay = this.earnStars(STAR_WIN);
+      this.texts.push({
+        x: this.arena.x + this.arena.w / 2,
+        y: this.arena.y + 140,
+        text: `+${starPay} ★`,
+        t: 1.6, color: '#c9a8ff', big: true,
+      });
+      this.log(`CLIMB CLEAR — +${starPay} STAR PIECES`);
       this.screenFlash('#ffd84d', 0.35);
       this.addPunch(0.14);
       // victory star-shower — the whole court celebrates
@@ -4136,9 +4209,26 @@ export class Battle {
     return s;
   }
 
-  // fusion tally — MS luck: absorbed dupes pay out as bonus gym loot
+  // fusion tally — MS luck: absorbed dupes pay out as bonus gym loot;
+  // the lab's LUCKY EGG adds flat luck on top
   teamLuck() {
-    return this.players.reduce((a, p) => a + (p.def.luck ?? 0), 0);
+    return this.players.reduce((a, p) => a + (p.def.luck ?? 0), this.labLuck);
+  }
+
+  // star pieces: every payout passes the AMULET COIN multiplier and banks
+  // into both the persistent wallet and this run's tally. Returns the
+  // credited amount for the pickup's +N text.
+  private earnStars(n: number) {
+    const v = Math.ceil(n * this.starMult * starBoost()); // boost reads live — a mid-session grant applies
+    addStars(v);
+    this.starsRun += v;
+    return v;
+  }
+
+  // a cleared map row pays 2 + stage# (stage 1 = row 0 pays 3) — utility
+  // stops pay too; progress is progress
+  private bankStage(row: number) {
+    this.earnStars(STAR_ROW + row + 1);
   }
 
   private enterReward() {
@@ -4147,7 +4237,7 @@ export class Battle {
     // hard stops pay out uncommon-or-better relics — the risk has a price;
     // elites go further: rare-or-better only
     this.rewardCap = this.eliteWave ? 1 : this.hardWave ? 2 : 3;
-    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan);
+    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan, this.perkOfferN);
     this.banArmed = false; // a fresh board can't inherit a leftover armed tap
     this.hardWave = false;
     this.eliteWave = false;
@@ -4258,6 +4348,23 @@ export class Battle {
         val: 0,
       });
     }
+    // star pieces mixed into the burst — the pull machine's purple shards,
+    // worth +1 apiece, same arc and bounce as the coins
+    const starN = LOOT_STAR[0] + Math.floor(this.rng() * (LOOT_STAR[1] - LOOT_STAR[0] + 1));
+    for (let i = 0; i < starN; i++) {
+      const a = this.rng() * Math.PI * 2;
+      const sp = 240 + this.rng() * 320;
+      this.lootCoins.push({
+        x: ox,
+        y: oy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 350,
+        r: 13,
+        spin: this.rng() * Math.PI * 2,
+        kind: 'star',
+        val: 1,
+      });
+    }
     this.waveSpecial = 'VICTORY LOOT!';
     this.waveBanner = 1.6;
     this.screenFlash('#ffd84d', 0.25);
@@ -4315,6 +4422,12 @@ export class Battle {
             this.texts.push({ x: c.x, y: c.y - 16, text: 'SUPER CHARGE!', t: 0.9, color: '#9df0ff', big: false });
             this.burst(c.x, c.y, '#9df0ff', 10, 300, 0.7);
             sfx('ready');
+          } else if (c.kind === 'star') {
+            // star piece — feeds the hatcher, not the score
+            const got = this.earnStars(c.val);
+            this.burst(c.x, c.y, '#c9a8ff', 8, 300, 0.7);
+            this.texts.push({ x: c.x, y: c.y - 16, text: `+${got} ★`, t: 0.9, color: '#c9a8ff', big: false });
+            sfx('tick', 1.1 + Math.min(1.2, this.lootChain * 0.07));
           } else {
             this.score += c.val;
             this.lootGot += c.val;
@@ -4377,6 +4490,7 @@ export class Battle {
     this.boxSel = -1;
     this.teamSel = -1;
     this.pendingNext = this.waveIndex + 1;
+    this.bankStage(this.waveIndex); // the row just fought through pays out
     this.phase = 'map'; // pick the next stop on the region map
   }
 
@@ -4394,7 +4508,7 @@ export class Battle {
   // banished ids stay out of the fresh deal.
   rerollOffers(): boolean {
     if (this.phase !== 'reward' || this.tools.roll <= 0) return false;
-    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan);
+    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan, this.perkOfferN);
     this.tools.roll--;
     return true;
   }
@@ -4466,6 +4580,7 @@ export class Battle {
         this.stage.waves.push(rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)]));
       }
       this.pendingNext = n.row + 1;
+      this.bankStage(n.row); // a peaceful stop still cleared its row
       return;
     }
     this.spawnWave(this.pendingNext, n);
@@ -4503,6 +4618,7 @@ export class Battle {
       this.stage.waves.push(rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)]));
     }
     this.pendingNext = c.node.row + 1;
+    this.bankStage(c.node.row);
     // the result card keeps the event's face when the pick brings none
     this.eventBox = { note: out.note, art: out.art ?? c.art };
     if (out.note) this.log(out.note);
@@ -4612,7 +4728,7 @@ export class Battle {
       this.eventChoice = { ...martStock(this), node: n };
       this.cardT = 0;
     } else if (n.kind === 'chest') {
-      const p = rollPerks(this.rng, 1, this.rank, this.teamTypes(), this.perkBan)[0];
+      const p = rollPerks(this.rng, 1, this.rank, this.teamTypes(), this.perkBan, 1)[0];
       if (p) {
         this.grantPerk(p);
         this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;
@@ -5017,6 +5133,18 @@ export class Battle {
     sfx('hurt');
     buzz(20);
     if (p.hp <= 0) {
+      // the lab's revive token eats the first KO of the run — the mon
+      // stands back up at half instead of fainting (once per run, saved
+      // like ashArmed so a parked climb can't re-spend it)
+      if (this.reviveToken && !this.reviveUsed) {
+        this.reviveUsed = true;
+        p.hp = Math.ceil(p.maxHp * REVIVE_FRAC);
+        this.texts.push({ x: p.x, y: p.y - p.r - 30, text: 'REVIVE!', t: 1.4, color: '#a0e060', big: true });
+        this.burst(p.x, p.y, '#a0e060', 14, 420);
+        this.log(`${p.def.name.toUpperCase()} REVIVED AT 50%`);
+        sfx('heal');
+        return;
+      }
       p.hp = 0;
       p.dead = true;
       this.killer = src?.def.name ?? 'the hazards'; // who lands the wipe — the result screen names it
@@ -5381,6 +5509,20 @@ export class Battle {
         ctx.lineTo(c.r * 0.68, -c.r * 0.05);
         ctx.closePath();
         ctx.fill();
+      } else if (c.kind === 'star') {
+        // star piece — the meta wallet's purple shard, same coin silhouette
+        ctx.fillStyle = '#5a34b8';
+        ctx.beginPath();
+        ctx.arc(0, 0, c.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#c9a8ff';
+        ctx.beginPath();
+        ctx.arc(0, 0, c.r - 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#5a34b8';
+        ctx.font = font(10);
+        ctx.textAlign = 'center';
+        ctx.fillText('★', 0, 3);
       } else {
         // candy — a wrapped drop: blue orb with twisted ends
         ctx.fillStyle = '#58b0f8';
@@ -5461,30 +5603,6 @@ export class Battle {
     }
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
-
-    // sling tether — while a pull's on, a rubber band runs fingertip →
-    // ball, sagging ~8px under its own tension. Under the units so the
-    // band reads pinned behind the mon, not taped on top of it.
-    if (this.dragging) {
-      const u = this.active;
-      const pl = len({ x: this.dragStart.x - this.dragNow.x, y: this.dragStart.y - this.dragNow.y });
-      if (u && !u.dead && pl >= 12) {
-        ctx.strokeStyle = TYPE_COLOR[u.def.type];
-        ctx.lineWidth = 3;
-        ctx.globalAlpha = 0.85;
-        ctx.beginPath();
-        ctx.moveTo(this.dragNow.x, this.dragNow.y);
-        // control point sits 2× the sag below the chord — a quadratic's
-        // midpoint reaches only halfway to it
-        ctx.quadraticCurveTo(
-          (this.dragNow.x + u.x) / 2,
-          (this.dragNow.y + u.y) / 2 + 16,
-          u.x, u.y,
-        );
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-    }
 
     for (const e of this.enemies) this.drawUnit(ctx, e);
     for (const p of this.players) this.drawUnit(ctx, p);

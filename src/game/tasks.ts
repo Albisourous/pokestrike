@@ -1,5 +1,6 @@
 import { mulberry32 } from '../core/rng';
 import { bankBag, taskState, saveTaskState, type TaskState } from './meta';
+import { pullSpecies, tierOf, INVADER_IDS, dustCost, type SpeciesDef } from './data';
 
 // Daily/weekly task board — the retention loop that pays bag items. Each
 // period's board is seeded off its key so every player rolls the same
@@ -83,6 +84,67 @@ const COUNT: Record<TaskPeriod, number> = { daily: 3, weekly: 4 };
 // seeded by the ISO year-week — same key, same board, for everyone.
 export const dayKey = (now = Date.now()): string => new Date(now).toISOString().slice(0, 10);
 export const daySeed = (now = Date.now()): number => Math.floor(now / 86400000);
+
+// Today's hatcher rate-up species — seeded off the day so everyone sees the
+// same mon. Rare+ pool only: a featured Rattata is a bad ad. Lives here, not
+// in data.ts, because daySeed does (data → tasks → meta → data would cycle).
+export function featuredPull(now = Date.now()): SpeciesDef {
+  return pullSpecies(mulberry32(daySeed(now)), { rarePlus: true });
+}
+
+// --- the daily chroma raid ---------------------------------------------------
+// One seeded epic boss per UTC day, same for everyone — the share link is
+// the replay, like every daily here. Each roller gets its own salt
+// (arbitrary picks — they only need to differ from each other and from
+// featuredPull's bare daySeed) so the boss, the loaner team and the rate-up
+// mon roll off three different streams.
+
+export function raidPick(now = Date.now()): SpeciesDef {
+  const rng = mulberry32(daySeed(now) * 31 + 7);
+  const feat = featuredPull(now).id; // the raid boss can't double as the hatcher ad
+  // the seeded sequence is fixed, so looping to the first epic-bucket hit
+  // stays deterministic — rarePlus makes every draw rare or epic
+  let d: SpeciesDef;
+  do {
+    d = pullSpecies(rng, { rarePlus: true });
+  } while ((tierOf(d) < 3 && !INVADER_IDS.has(d.id)) || d.id === feat);
+  return d;
+}
+
+export function raidTeam(now = Date.now()): SpeciesDef[] {
+  const rng = mulberry32(daySeed(now) * 31 + 19);
+  // boss and rate-up ids sit in the skip set too — a loaner that mirrors the
+  // raid boss (or the hatcher ad) reads as a bug, ~2 days a month by chance
+  const seen = new Set<number>([raidPick(now).id, featuredPull(now).id]);
+  const out: SpeciesDef[] = [];
+  while (out.length < 3) {
+    const d = pullSpecies(rng, { rarePlus: true });
+    if (seen.has(d.id)) continue;
+    seen.add(d.id);
+    // pullSpecies hands out shared pool entries — clone before setting the
+    // loaner level, never mutate the roster
+    out.push({ ...d, lvl: 30 });
+  }
+  return out;
+}
+
+// --- the daily deal ---------------------------------------------------------
+// One seeded rare+ spark mon at 25% off dust — the rotating reason to open
+// the exchange. Its own salt so it can't collide with the raid or rate-up.
+export function dealPick(now = Date.now()): SpeciesDef {
+  const rng = mulberry32(daySeed(now) * 31 + 43);
+  const seen = new Set<number>([raidPick(now).id, featuredPull(now).id]);
+  let d: SpeciesDef;
+  do {
+    d = pullSpecies(rng, { rarePlus: true });
+  } while (seen.has(d.id));
+  return d;
+}
+
+export function dealCost(d: SpeciesDef, now = Date.now()): number {
+  const base = dustCost(d);
+  return d.id === dealPick(now).id ? Math.ceil(base * 0.75) : base;
+}
 
 // ISO-8601: the week holding the year's first Thursday; the Thursday's year
 // is the ISO year, so late-December days can belong to next year's W01

@@ -8,9 +8,10 @@ import { vec } from './core/vec';
 import { Battle, PAUSE_QUIT, PAUSE_SETTINGS } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf } from './game/data';
-import type { SpeciesDef } from './game/data';
-import { dexIds, recordCapture, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, type RunSave } from './game/meta';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds } from './game/data';
+import type { SpeciesDef, StageDef } from './game/data';
+import { THEMES } from './game/bg';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -33,6 +34,7 @@ import {
   FREE_BTN,
   NEW_HIT,
   DAILY_BTN,
+  RAID_BTN,
   ASC_BTN,
   HELP_BTN,
   HELP_CHIP,
@@ -88,6 +90,17 @@ import {
   drawTasks,
   taskRowHit,
   settingsSegSet,
+  HATCH_BTN,
+  LAB_BTN,
+  PULL1_BTN,
+  PULL10_BTN,
+  SKIP_PULL_BTN,
+  drawHatch,
+  drawLab,
+  sparkHit,
+  labHit,
+  labScrollMax,
+  hatchScrollMax,
   inRect,
   font,
   fontB,
@@ -97,8 +110,8 @@ import {
   titlePointerCancel,
   updateTitle,
 } from './game/screens';
-import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey } from './game/screens';
-import { taskViews, claimTask, taskTick, type TaskPeriod } from './game/tasks';
+import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState } from './game/screens';
+import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod } from './game/tasks';
 import { dailyMod, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
 
@@ -165,6 +178,16 @@ let dexScroll = 0;
 let achOpen = false;
 let achScroll = 0;
 let boardOpen = false;
+// hatcher + lab — same overlay pattern as dex/ach/board/tasks: title chips
+// open, Esc/dead taps close, drag scrolls. The hatch carries a small pull
+// state machine the way the dex carries scroll state.
+let hatchOpen = false;
+let labOpen = false;
+let labScroll = 0;
+let hatch: HatchState = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0 };
+// a spark buy arms like the NEW-climb link — first tap arms for 3s, only a
+// second tap inside the window spends the dust
+let sparkArm = { id: -1, t: -10 };
 let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
@@ -394,7 +417,7 @@ const draftPick = (i: number) => {
   if (new URLSearchParams(location.search).has('dev'))
     (window as unknown as { __battle: Battle }).__battle = battle;
   // the charm pick gates the climb — ASC 3+ pays out a second charm
-  startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes());
+  startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes(), undefined, battle.perkOfferN); // lab 'fourth' deals a fourth charm card too
   charmBonus = battle.asc >= 3;
   charmPicks = charmBonus ? 2 : 1;
   scene = 'charm';
@@ -491,6 +514,25 @@ function resumeRun(s: RunSave) {
   sceneMusic();
 }
 
+// the daily raid: one UTC-seeded epic boss for everyone — a standalone fight
+// on the day's loaner trio, not a climb (no map, no draft, no end-of-run
+// ledger, and a parked pk_run is never touched)
+function startRaid() {
+  const raidStage: StageDef = {
+    name: 'CHROMA RAID',
+    theme: THEMES[daySeed() % THEMES.length], // seeded rotate — same court for everyone
+    waves: [[{ def: { ...raidPick(), shiny: true }, nx: 0.5, ny: 0.3, boss: true }]], // the chroma boss wears its palette
+  };
+  battle = new Battle(arenaRect(), raidTeam(), raidStage, mulberry32(daySeed() * 7919 + 13), []);
+  battle.raid = true;
+  battle.rank = rank();
+  battle.shinyRate = shinyCharm() ? 2 : 1;
+  battle.startFight(); // no island — straight into the lone wave
+  scene = 'battle';
+  inputLockT = t + 0.25; // the arena is live — eat the tap's twin
+  sceneMusic(); // no-op on 'battle' — the fight picks its own track, same as a resumed run
+}
+
 function startDraft() {
   // Catches feed the draft by tier: weak species join the general deal as
   // new faces, but tier-2+ monsters only surface on the ace board — a caught
@@ -565,6 +607,135 @@ function rerollDraft() {
   respinDraft();
   sfx('ui');
 }
+
+// --- the hatcher: the pull machine + the dust spark shop -----------------
+// tunables (Oct-21 spec — guesses, marked for playtesting)
+const HATCH_SHAKE_T = 0.9; // ball-rock seconds before the reveal
+const HATCH_REVEAL_T = 1.6; // a card holds this long, then the reel plays itself
+const SPARK_ARM_T = 3; // two-tap confirm window on a dust buy
+
+// milestone checks the run-end path runs — a pull crossing a threshold
+// toasts immediately instead of waiting for the next climb's report
+const pullMilestones = () => {
+  if (dexIds().length >= 50 && unlockAch('collector')) playJingle('task');
+  if (dexIds().length >= CATCHABLE && unlockAch('living')) playJingle('task');
+};
+
+// Math.random, never runRng — a title-side pull must not shift a resumed
+// climb's stream or a shared ?seed= replay
+const doPull = (n: number) => {
+  if (!spendStars(n === 10 ? PULL10_COST : PULL_COST)) {
+    sfx('ui', 0.6); // short on stars — the price pill was red for a reason
+    return;
+  }
+  const featuredId = featuredPull().id; // today's 10x rate-up, same for everyone
+  const results: PullResult[] = [];
+  for (let k = 0; k < n; k++) {
+    const def = pullSpecies(Math.random, { rarePlus: bumpPulls() % PULL_PITY === 0, featuredId });
+    const tier = tierOf(def);
+    const dupe = dexIds().includes(def.id);
+    let dustPay = 0;
+    if (dupe) {
+      dustPay = DUST_BY_TIER[tier];
+      addDust(dustPay); // a pulled dupe converts instead of re-recording
+    } else {
+      recordCapture([def.id]); // the dex IS the unlock ledger — the draft pool grows
+      pullMilestones();
+    }
+    const shiny = Math.random() < shinyOdds(); // weekends double it
+    if (shiny) {
+      recordShiny(def.id); // shiny logs either way — dupe or new face
+      if (unlockAch('shiny')) playJingle('task');
+    }
+    statPull(def.id, dupe);
+    results.push({ id: def.id, rarity: INVADER_IDS.has(def.id) || tier >= 3 ? 3 : tier === 2 ? 2 : 1, dupe, shiny, dust: dustPay });
+  }
+  hatch.results = results;
+  hatch.i = 0;
+  hatch.t = 0;
+  hatch.phase = 'shake'; // the ball rocks before the first reveal
+  sfx('ui');
+};
+
+// the spark grid's two-tap buy — first tap arms for 3s, the dust spend on
+// the second is the real guard
+const sparkBuy = (def: SpeciesDef) => {
+  if (dexIds().includes(def.id)) {
+    sfx('ui', 0.6); // already in the dex — the dimmed cell denies
+    return;
+  }
+  if (sparkArm.id !== def.id || t - sparkArm.t >= SPARK_ARM_T) {
+    sparkArm = { id: def.id, t };
+    sfx('ui', 0.6); // armed, not bought — the warn pitch says so
+    return;
+  }
+  sparkArm = { id: -1, t: -10 };
+  if (!spendDust(dealCost(def))) { // today's deal species prices at 25% off
+    sfx('ui', 0.6); // short on dust — the spend itself is the guard
+    return;
+  }
+  recordCapture([def.id]);
+  pullMilestones();
+  playJingle('catch');
+};
+
+// a tap inside the hatch overlay: mid-theatre taps drive the state machine;
+// idle taps pull, spark, or fall out the bottom like the sibling overlays
+const hatchTap = (p: { x: number; y: number }) => {
+  if (hatch.phase === 'shake') {
+    hatch.phase = 'reveal'; // an impatient tap skips the rest of the shake
+    hatch.t = 0;
+    return;
+  }
+  if (hatch.phase === 'reveal') {
+    sfx('ui');
+    // SKIP ≫ jumps the rest of the reel straight to the summary grid
+    if (hatch.results.length > 1 && inRect(p.x, p.y, SKIP_PULL_BTN)) {
+      hatch.phase = 'results';
+      hatch.t = 0;
+      return;
+    }
+    if (++hatch.i >= hatch.results.length) {
+      hatch.phase = 'results';
+      hatch.t = 0;
+    }
+    return;
+  }
+  if (hatch.phase === 'results') {
+    hatch.phase = 'idle'; // the summary's tap lands back at the shop
+    hatch.results = [];
+    hatch.t = 0;
+    sfx('ui');
+    return;
+  }
+  if (inRect(p.x, p.y, PULL1_BTN)) {
+    doPull(1);
+    return;
+  }
+  if (inRect(p.x, p.y, PULL10_BTN)) {
+    doPull(10);
+    return;
+  }
+  const cell = sparkHit(hatch.sparkScroll, p.x, p.y);
+  if (cell) {
+    sparkBuy(cell);
+    return;
+  }
+  hatchOpen = false; // dead space is a tap-out like its siblings
+  sfx('ui');
+};
+
+// lab taps: a card spends stars on its next level; dead space closes
+const labTap = (p: { x: number; y: number }) => {
+  const id = labHit(labScroll, p.x, p.y);
+  if (id) {
+    if (buyLab(id)) sfx('ui'); // a level pip fills
+    else sfx('ui', 0.6); // broke or maxed — the price pill was red
+    return;
+  }
+  labOpen = false;
+  sfx('ui');
+};
 
 // navigator.clipboard rejects on iOS Safari even in a gesture — the
 // textarea + execCommand trick still works there, so it's the fallback
@@ -718,8 +889,27 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (scene === 'title') {
-    if (dexOpen || achOpen || boardOpen) {
-      dexDrag = { y0: p.y, s0: dexOpen ? dexScroll : achScroll, moved: false };
+    // every open overlay swallows the tap into a scroll drag — a drag that
+    // never moved resolves as a tap on pointerup
+    if (dexOpen || achOpen || boardOpen || hatchOpen || labOpen) {
+      dexDrag = {
+        y0: p.y,
+        s0: hatchOpen ? hatch.sparkScroll : labOpen ? labScroll : dexOpen ? dexScroll : achScroll,
+        moved: false,
+      };
+      return;
+    }
+    if (inRect(p.x, p.y, HATCH_BTN)) {
+      sfx('ui');
+      hatchOpen = true;
+      hatch = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0 };
+      sparkArm = { id: -1, t: -10 };
+      return;
+    }
+    if (inRect(p.x, p.y, LAB_BTN)) {
+      sfx('ui');
+      labOpen = true;
+      labScroll = 0;
       return;
     }
     if (inRect(p.x, p.y, DEX_BTN)) {
@@ -821,6 +1011,16 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
+    if (inRect(p.x, p.y, RAID_BTN)) {
+      // the day's boss drops once — a beaten raid stays done till UTC midnight
+      if (raidDoneToday()) {
+        sfx('ui', 0.6); // soft deny — same pitch every dead tap gets
+        return;
+      }
+      sfx('ui');
+      startRaid();
+      return;
+    }
     // the pitch is playable — a drag on the grass grabs the demo ball
     if (titlePointerDown(p)) return;
   } else if (scene === 'draft') {
@@ -875,7 +1075,7 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     for (let i = 0; i < startOffers.length; i++) {
-      if (inRect(p.x, p.y, perkCardRect(i))) {
+      if (inRect(p.x, p.y, perkCardRect(i, startOffers.length))) {
         charmPick(i);
         return;
       }
@@ -1009,7 +1209,7 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
-        if (inRect(p.x, p.y, perkCardRect(i))) {
+        if (inRect(p.x, p.y, perkCardRect(i, battle.rewardOffers.length))) {
           rewardPick(i);
           return;
         }
@@ -1078,8 +1278,14 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (dexDrag) {
     if (Math.abs(p.y - dexDrag.y0) > 10) dexDrag.moved = true;
-    const s = Math.min(Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0), achOpen ? achScrollMax() : dexScrollMax());
-    if (achOpen) achScroll = s; else dexScroll = s;
+    const s = Math.min(
+      Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0),
+      labOpen ? labScrollMax() : hatchOpen ? hatchScrollMax(hatch) : achOpen ? achScrollMax() : dexScrollMax(),
+    );
+    if (labOpen) labScroll = s;
+    else if (hatchOpen) hatch.sparkScroll = s;
+    else if (achOpen) achScroll = s;
+    else dexScroll = s;
     return;
   }
   if (boxDrag) {
@@ -1131,10 +1337,17 @@ canvas.addEventListener('pointerup', (e) => {
     const { moved } = dexDrag;
     dexDrag = null;
     if (!moved) {
-      dexOpen = false;
-      achOpen = false;
-      boardOpen = false;
-      sfx('ui'); // tap-to-close clicks like every sibling modal
+      // a drag that never moved is a tap: hatch/lab route it to their own
+      // hit-tests (pull pills, spark cells, lab cards); the rest close out
+      const p = toLogical(e);
+      if (hatchOpen) hatchTap(p);
+      else if (labOpen) labTap(p);
+      else {
+        dexOpen = false;
+        achOpen = false;
+        boardOpen = false;
+        sfx('ui'); // tap-to-close clicks like every sibling modal
+      }
     }
     return;
   }
@@ -1251,11 +1464,21 @@ addEventListener('keydown', (e) => {
     }
     return;
   }
-  // Esc pops the topmost overlay first — board paints over ach over dex —
-  // and only reaches the manual once the screen is bare; '?' still opens
-  // help over anything, same as tapping the chip
-  if (e.key === 'Escape' && (boardOpen || achOpen || dexOpen)) {
-    if (boardOpen) boardOpen = false;
+  // Esc pops the topmost overlay first — lab paints over hatch over board
+  // over ach over dex — and only reaches the manual once the screen is
+  // bare; '?' still opens help over anything, same as tapping the chip
+  if (e.key === 'Escape' && (labOpen || hatchOpen || boardOpen || achOpen || dexOpen)) {
+    if (labOpen) labOpen = false;
+    else if (hatchOpen) {
+      // mid-theatre Esc advances the reveal like a tap — the pull's already
+      // paid, so closing here would eat the results unseen
+      if (hatch.phase !== 'idle') {
+        hatchTap({ x: -1, y: -1 });
+        return;
+      }
+      hatchOpen = false;
+    }
+    else if (boardOpen) boardOpen = false;
     else if (achOpen) achOpen = false;
     else dexOpen = false;
     sfx('ui');
@@ -1300,6 +1523,16 @@ canvas.addEventListener(
     if (scene === 'title' && achOpen) {
       e.preventDefault();
       achScroll = Math.min(Math.max(achScroll + e.deltaY, 0), achScrollMax());
+      return;
+    }
+    if (scene === 'title' && labOpen) {
+      e.preventDefault();
+      labScroll = Math.min(Math.max(labScroll + e.deltaY, 0), labScrollMax());
+      return;
+    }
+    if (scene === 'title' && hatchOpen) {
+      e.preventDefault();
+      hatch.sparkScroll = Math.min(Math.max(hatch.sparkScroll + e.deltaY, 0), hatchScrollMax(hatch));
       return;
     }
     if (scene !== 'battle' || !battle || !((battle.phase === 'map' || battle.phase === 'reward') && menuOpen)) return;
@@ -1353,6 +1586,21 @@ function update(dt: number) {
   if (dt > 0) fpsEma = fpsEma ? fpsEma + (1 / dt - fpsEma) * 0.08 : 1 / dt;
   syncWake();
   if (scene === 'title') updateTitle(dt);
+  // the hatcher's phase clock always ticks — the shake reads it for its
+  // ~0.9s, the reveal/results passes use it for pop-in animation
+  if (hatchOpen) {
+    hatch.t += dt;
+    if (hatch.phase === 'shake' && hatch.t >= HATCH_SHAKE_T) {
+      hatch.phase = 'reveal';
+      hatch.t = 0;
+      sfx('caught'); // the click — same verdict sound the catches use
+    } else if (hatch.phase === 'reveal' && hatch.t >= HATCH_REVEAL_T) {
+      // the reel plays itself — a 10-pull shouldn't cost 10 taps; taps
+      // still fast-forward through hatchTap's advance
+      if (++hatch.i >= hatch.results.length) hatch.phase = 'results';
+      hatch.t = 0;
+    }
+  }
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
@@ -1385,7 +1633,43 @@ function update(dt: number) {
     }
     // the win/lose beat plays out in the arena first — the report (and its
     // jingle) lands only once battle's endT freeze finishes
-    if ((battle.phase === 'won' || battle.phase === 'lost') && battle.endT <= 0) {
+    if (battle.raid) {
+      // a raid ends at the arena — the whole climb ledger (stats, tasks,
+      // streaks, rating, board, echo, report) belongs to the climb only
+      if ((battle.phase === 'won' || battle.phase === 'lost') && battle.endT <= 0) {
+        const won = battle.phase === 'won';
+        if (won) {
+          markRaidDone(); // one boss a day — the chip goes dark till UTC midnight
+          const boss = raidPick(); // day-seeded — same pick startRaid fielded
+          const dupe = dexIds().includes(boss.id); // read BEFORE the capture lands
+          recordShiny(boss.id); // the prize: a gold entry of today's boss
+          recordCapture([boss.id]);
+          if (dupe) addDust(DUST_BY_TIER[3]); // a dupe raid pays epic dust like a dupe pull
+          addStars(Math.ceil(40 * starBoost())); // tunable guess: 40★ raid purse
+          if (INVADER_IDS.has(boss.id)) unlockAch('myth'); // an invader raid tames the myth
+          unlockAch('shiny'); // the first gold dex entry is its own trophy
+          playJingle('task'); // the payout chime
+          pullMilestones(); // the raid capture can cross collector/living too
+          // the prize rides the hatcher's theatre — straight to reveal:
+          // the fight itself was the ball-shake
+          hatch = {
+            phase: 'reveal',
+            t: 0,
+            i: 0,
+            sparkScroll: 0,
+            label: 'RAID CLEARED',
+            results: [{ id: boss.id, rarity: 3, dupe, shiny: true, dust: dupe ? DUST_BY_TIER[3] : 0 }],
+          };
+          hatchOpen = true;
+        } else {
+          playJingle('lose'); // free retry — the chip stays lit
+        }
+        battle = null;
+        scene = 'title';
+        titleSave = runSave(); // a parked climb's CONTINUE survives the raid
+        sceneMusic();
+      }
+    } else if ((battle.phase === 'won' || battle.phase === 'lost') && battle.endT <= 0) {
       const won = battle.phase === 'won';
       const stageReached = won ? TOTAL_STAGES : battle.waveIndex + 1;
       statRunEnd(stageReached, won);
@@ -1405,6 +1689,8 @@ function update(dt: number) {
       });
       // streaks bump once per finished run — a lost daily still counts the day
       bumpStreaks(won, runIsDaily);
+      // a finished daily pays a star-piece boost till UTC midnight — win or lose
+      if (runIsDaily) grantBoost((daySeed() + 1) * 86400_000, 1.5); // tunable guess: ×1.5
       const dexBefore = dexIds().length;
       const prevBest = best().score;
       const mvp = battle.players.reduce((a, p) => (p.lvl > a.lvl ? p : a), battle.players[0]);
@@ -1439,6 +1725,9 @@ function update(dt: number) {
         rating: { delta: rr.delta, tier: rr.tier.name, color: rr.tier.color, up: rr.promoted },
         place,
         seed: runSeed,
+        stars: battle.starsRun, // the run's banked star pieces — the report's +N row
+        starsBonus: won ? firstWinBonus() : 0, // once-a-day clear bonus — banks before the report draws it
+        grind: grindBonus(), // every finished run today pays a little more
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
       const trophy = (id: string) => {
@@ -1551,6 +1840,14 @@ function render() {
       if (dexOpen) drawDex(ctx, dexScroll);
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
+      if (hatchOpen)
+        drawHatch(ctx, hatch, {
+          stars: stars(),
+          dust: dust(),
+          pityIn: PULL_PITY - (pullCount() % PULL_PITY),
+          featured: featuredPull(),
+        });
+      if (labOpen) drawLab(ctx, labScroll, stars());
       break;
     case 'charm':
       drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM',
@@ -1700,6 +1997,8 @@ Promise.all([
   loadItem('oran-berry'),
   loadItem('protein'),
   loadItem('elixir'),
+  loadItem('star-piece'), // the hatcher/lab wallet icon — blanks harmlessly if unvendored
+  loadItem('amulet-coin'), // the lab's earnings-upgrade icon
   ...PERKS.map((p) => loadItem(p.item)),
   ...BADGES.map((b) => loadItem(`badges/${b.icon}`)),
   document.fonts.load('700 10px rc').catch(() => console.warn('rc font failed, using monospace')),

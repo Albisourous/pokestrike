@@ -801,6 +801,48 @@ export const BOSS_POOL = ENEMY_DB.slice(-11);
 export const bst = (d: SpeciesDef) =>
   d.stats.hp + d.stats.atk + d.stats.def + d.stats.spa + d.stats.spd + d.stats.spe;
 export const tierOf = (d: SpeciesDef) => (bst(d) >= 560 ? 3 : bst(d) >= 460 ? 2 : bst(d) >= 360 ? 1 : 0);
+
+// --- the hatcher ---------------------------------------------------------------
+// Every catchable species can drop — the dedup'd set screens.ts built as
+// DEX_LIST; PULLABLE is the canonical home now. Sorted by id for the dex grid.
+export const PULLABLE: SpeciesDef[] = [
+  ...new Map([...ROSTER, ...ENEMY_DB, ...ELITES, ...INVADERS].map((s) => [s.id, s])).values(),
+].sort((a, b) => a.id - b.id);
+export const INVADER_IDS = new Set(INVADERS.map((i) => i.id));
+
+export const PULL_COST = 30;
+export const PULL10_COST = 270; // 10% off — any 10 pulls hold a pity roll anyway
+export const PULL_PITY = 10;
+export const DUST_BY_TIER = [5, 10, 40, 120] as const; // dupe pull → dust, by tier
+export const PULL_SHINY = 0.02; // per-pull shiny odds — a lottery on the lottery
+
+// Sat/Sun UTC double the shiny roll — the standing calendar window.
+export const shinyOdds = (now = Date.now()): number => {
+  const d = new Date(now).getUTCDay();
+  return PULL_SHINY * (d === 0 || d === 6 ? 2 : 1);
+};
+
+// Rarity is a BUCKET roll, then uniform inside the bucket — pool share never
+// sets the rates. Epic also sweeps invaders: tier alone misses Phione (tier 2).
+const PULL_COMMON = PULLABLE.filter((d) => tierOf(d) <= 1 && !INVADER_IDS.has(d.id));
+const PULL_RARE = PULLABLE.filter((d) => tierOf(d) === 2 && !INVADER_IDS.has(d.id));
+const PULL_EPIC = PULLABLE.filter((d) => tierOf(d) >= 3 || INVADER_IDS.has(d.id));
+
+// rarePlus (pity rolls) drops the common bucket — rare:epic renormalize to
+// 25:3. A featuredId inside the rolled bucket weighs 10x there (rate-up).
+export function pullSpecies(rng: () => number, opts?: { rarePlus?: boolean; featuredId?: number }): SpeciesDef {
+  const r = opts?.rarePlus ? 0.72 + rng() * 0.28 : rng();
+  const bucket = r < 0.72 ? PULL_COMMON : r < 0.97 ? PULL_RARE : PULL_EPIC;
+  const fid = opts?.featuredId;
+  const feat = fid == null ? undefined : bucket.find((d) => d.id === fid);
+  const i = Math.floor(rng() * (bucket.length + (feat ? 9 : 0)));
+  return feat && i < 9 ? feat : bucket[i - (feat ? 9 : 0)];
+}
+
+export function dustCost(d: SpeciesDef): number {
+  return 80 * (tierOf(d) + 1);
+}
+
 // depth 0 (seeded stages 1-3) → tier ≤1; rolled depth 1-2 → ≤2; deeper → all
 const tierCap = (depth: number) => (depth <= 0 ? 1 : depth < 3 ? 2 : 3);
 const capped = (src: SpeciesDef[], depth: number) => {

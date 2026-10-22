@@ -1,7 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds } from '../src/game/data';
 import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
@@ -10,9 +10,9 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
-import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn } from '../src/game/tasks';
+import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 
 let fails = 0;
@@ -45,7 +45,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(JSON.parse(localStorage.getItem('pk_bag')!)['friend-ball'] === 0, 'spendBag persists the clamp in one write');
 
   // every catalog entry: unique ids, real sprites, terse one-line descs
-  ok(BAG_ITEMS.length === 10 && new Set(BAG_ITEMS.map((i) => i.id)).size === 10, 'ten bag items, unique ids');
+  ok(BAG_ITEMS.length === 13 && new Set(BAG_ITEMS.map((i) => i.id)).size === 13, 'thirteen bag items, unique ids');
   ok(BAG_ITEMS.every((i) => existsSync(`public/sprites/items/${i.item}.png`)), 'every bag item has a vendored sprite');
 
   // the constructor applies each pick's apply() with the team fielded
@@ -57,6 +57,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const br = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['macho-brace']);
   ok(Math.abs(br.scoreMult - 1.2) < 1e-9 && Math.abs(br.launchBoost - 0.92) < 1e-9,
     `macho brace: score x${br.scoreMult.toFixed(2)}, launch x${br.launchBoost.toFixed(2)}`);
+  const wl = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['wide-lens']);
+  ok(Math.abs(wl.captureChance - 0.16) < 1e-9, `wide lens adds catch chance (${wl.captureChance.toFixed(2)})`);
+  const mu = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['muscle-band']);
+  ok(Math.abs(mu.physMult - 1.1) < 1e-9, `muscle band boosts hit damage (x${mu.physMult.toFixed(2)})`);
+  const rh = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['rocky-helmet']);
+  ok(rh.thorns === 15, `rocky helmet arms recoil (${rh.thorns})`);
 
   // exp share: the fielded team starts +2 levels over a same-seed baseline
   const base = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
@@ -2242,6 +2248,160 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     }
     ok(cAff < cElig, `control seed ${s}: affixes stay a minority (${cAff}/${cElig})`);
   }
+}
+
+// --- the hatcher: star/dust ledgers, pull buckets, pity, spark, lab ---------
+// dead last on purpose: a bought lab level retunes later Battle asserts
+{
+  // earlier battle runs banked real stars — read the baseline, assert deltas
+  const s0 = stars();
+  localStorage.removeItem('pk_dust');
+  localStorage.removeItem('pk_pulls');
+  localStorage.removeItem('pk_lab');
+  ok(addStars(42) === s0 + 42 && stars() === s0 + 42, 'stars bank and read back');
+  ok(!spendStars(stars() + 1) && stars() === s0 + 42, 'spendStars refuses when short — balance unchanged');
+  ok(spendStars(PULL_COST) && stars() === s0 + 12, 'a pull-priced spend deducts');
+  ok(addDust(25) === 25 && spendDust(10) && !spendDust(99) && dust() === 15, 'dust banks, spends, guards');
+  ok(bumpPulls() === 1 && pullCount() === 1, 'pull counter bumps');
+
+  const pullIds = new Set(PULLABLE.map((d) => d.id));
+  ok(PULLABLE.length === pullIds.size && [...pullIds].every((id) => !!speciesById(id)),
+    'PULLABLE is deduped and every entry resolves to a species');
+
+  ok(pullSpecies(mulberry32(7)).id === pullSpecies(mulberry32(7)).id, 'same seed, same pull');
+  let rarePlusOk = true;
+  for (let i = 0; i < 40; i++) {
+    const d = pullSpecies(mulberry32(100 + i), { rarePlus: true });
+    if (!(tierOf(d) >= 2 || INVADER_IDS.has(d.id))) rarePlusOk = false;
+  }
+  ok(rarePlusOk, 'rarePlus pulls only deal rare+epic buckets');
+  const feat = featuredPull(0);
+  ok((tierOf(feat) >= 2 || INVADER_IDS.has(feat.id)) && featuredPull(0).id === feat.id,
+    'featured pick is rare+ and stable within the day');
+  ok(PULLABLE.every((d) => dustCost(d) === 80 * (tierOf(d) + 1)), 'spark price rides tier');
+
+  // lab: a buy deducts and persists; a maxed or unaffordable upgrade refuses
+  const up = LAB_UPGRADES.find((u) => u.max > 1)!;
+  const sBefore = stars();
+  addStars(up.costs[0]);
+  ok(buyLab(up.id) && labLevel(up.id) === 1 && stars() === sBefore, 'lab buy deducts and levels');
+  while (labLevel(up.id) < up.max) { addStars(up.costs[labLevel(up.id)]); buyLab(up.id); }
+  const maxedStars = stars();
+  ok(!buyLab(up.id) && stars() === maxedStars, 'a maxed upgrade refuses to sell');
+  const broke = LAB_UPGRADES.find((u) => labLevel(u.id) < u.max && u.costs[labLevel(u.id)] > stars());
+  if (broke) ok(!buyLab(broke.id), 'an unaffordable upgrade refuses to sell');
+
+  statPull(25, false); statPull(25, true);
+  const pullsLog = (statsDump() as { pulls?: Record<string, [number, number]> }).pulls;
+  ok(pullsLog?.[25]?.[0] === 1 && pullsLog[25][1] === 2, 'pull telemetry tallies total + dupes');
+
+  // the starter grant: fires once into an empty wallet, never into a funded one
+  localStorage.removeItem('pk_grant');
+  spendStars(stars()); // drain — the grant only pays the broke
+  ok(starterGrant() && stars() === 60, 'starter grant seeds an empty wallet');
+  ok(!starterGrant() && stars() === 60, 'the grant does not pay twice');
+  localStorage.removeItem('pk_grant');
+  ok(!starterGrant() && stars() === 60, 'a funded wallet gets no grant');
+
+  // v4 migration: a parked v3-shaped run gains revive/stars defaults
+  localStorage.setItem('pk_run', JSON.stringify({ eggIn: 0, eggJustLaid: false }));
+  localStorage.setItem('pk_ver', '3');
+  migrateSaves();
+  const parked = JSON.parse(localStorage.getItem('pk_run')!);
+  ok(parked.reviveUsed === false && parked.starsRun === 0, 'v4 fills revive + stars tally on parked runs');
+  localStorage.removeItem('pk_run');
+
+  // chroma raid: the star boost persists one blob, grants only extend it
+  const now = Date.now();
+  localStorage.removeItem('pk_boost');
+  localStorage.removeItem('pk_raid');
+  grantBoost(now + 3600e3, 1.5);
+  ok(starBoost(now) === 1.5 && boostLeft(now) > 0, 'star boost banks x1.5 with time left');
+  grantBoost(now + 100, 2); // a sooner expiry must not shorten a later one
+  ok(starBoost(now) === 1.5 && boostLeft(now) > 3000e3, 'grantBoost only extends — the longer until wins');
+  localStorage.setItem('pk_boost', JSON.stringify({ until: now - 1, mult: 9 }));
+  ok(starBoost(now) === 1 && boostLeft(now) === 0, 'an expired boost reads as x1');
+
+  // the raid flag keys on the day — stale days don't count
+  ok(!raidDoneToday(), 'no raid flag on a clean store');
+  markRaidDone();
+  ok(raidDoneToday(), 'markRaidDone flips the daily flag');
+  localStorage.setItem('pk_raid', JSON.stringify({ day: '1999-01-01' }));
+  ok(!raidDoneToday(), 'a stale day key is not done today');
+
+  // the daily pick is seeded off the day and stays epic-or-invader
+  const pick = raidPick();
+  ok(raidPick().id === pick.id, 'raid pick is deterministic within the day');
+  ok(tierOf(pick) >= 3 || INVADER_IDS.has(pick.id), 'raid pick is epic-or-invader');
+  ok(!!speciesById(pick.id), 'raid pick resolves via speciesById');
+
+  // the raid team: three unique lvl-30 species, stable across calls
+  const rt = raidTeam();
+  ok(rt.length === 3 && new Set(rt.map((d) => d.id)).size === 3, 'raid team is 3 unique species');
+  ok(rt.every((d) => !!speciesById(d.id) && d.lvl === 30), 'raid team resolves at lvl 30');
+  ok(raidTeam().map((d) => d.id).join() === rt.map((d) => d.id).join(), 'raid team is deterministic');
+  rt[0].lvl = 99; // entries are fresh copies, not the pool defs
+  ok(raidTeam()[0].lvl === 30, 'raid team hands out fresh lvl-30 copies');
+
+  // login calendar: one drop a day, chained days escalate, gaps pay a comeback
+  const DAY_MS = 86400000;
+  const base = Date.now();
+  const sLogin = stars();
+  loginCheck(); // boot already banked today's drop — re-entry is a no-op
+  ok(stars() === sLogin, 'a second same-day login pays nothing');
+  const lt0 = loginToday()!;
+  ok(lt0.n >= 1 && lt0.prize >= 20, 'today\'s login drop is recorded');
+  loginCheck(base + DAY_MS);
+  const lt1 = loginToday(base + DAY_MS)!;
+  ok(lt1.n === lt0.n + 1 && lt1.prize === Math.min(20 + lt0.n * 10, 100), 'a chained day escalates the prize');
+  for (let d = 2; d <= 6; d++) loginCheck(base + d * DAY_MS);
+  ok(loginToday(base + 6 * DAY_MS)!.prize === 150, 'day 7 pays the milestone spike');
+  loginCheck(base + 11 * DAY_MS); // a 5-day gap — the chain snaps, the comeback pays
+  const ltB = loginToday(base + 11 * DAY_MS)!;
+  ok(ltB.n === 1 && ltB.back === 60, 'a lapsed login resets and pays the comeback');
+
+  // streak-at-risk: an unbanked chain warns, a banked one stays quiet
+  bumpStreaks(true, true, base - 2 * DAY_MS);
+  bumpStreaks(true, true, base - DAY_MS);
+  ok(streakRisky() >= 2, 'a chain that died overnight reads as at-risk');
+  bumpStreaks(true, true, base);
+  ok(streakRisky() === 0, 'a banked chain is safe');
+
+  // first-win-of-day: banks once, the boost multiplies, next day pays again
+  const fwWant = Math.ceil(50 * starBoost(base + 11 * DAY_MS));
+  const sW = stars();
+  const fw = firstWinBonus();
+  ok(fw === Math.ceil(50 * starBoost()) && stars() === sW + fw, 'first clear of the day pays its bonus');
+  ok(firstWinBonus() === 0, 'the daily first-win pays once');
+  ok(firstWinBonus(base + 11 * DAY_MS) === fwWant, 'the next day pays again');
+
+  // session escalation: run n pays min(10n, 40), resets on a fresh UTC day
+  localStorage.removeItem('pk_grind');
+  const boostNow = starBoost();
+  const g1 = grindBonus();
+  ok(g1.n === 1 && g1.pay === Math.ceil(10 * boostNow), 'first run of the day pays the floor');
+  const g2 = grindBonus();
+  ok(g2.n === 2 && g2.pay === Math.ceil(20 * boostNow), 'the next run pays more');
+  grindBonus();
+  grindBonus();
+  const g5 = grindBonus();
+  ok(g5.pay === Math.ceil(40 * boostNow), 'the session payout caps at 40');
+  ok(grindBonus(base + DAY_MS).n === 1, 'the counter resets on a new day');
+
+  // the daily deal: one seeded rare+ mon, 25% off, same for everyone today
+  const deal = dealPick();
+  ok(dealPick().id === deal.id, 'deal pick is deterministic within the day');
+  ok(tierOf(deal) >= 2 || INVADER_IDS.has(deal.id), 'the deal is rare-or-better');
+  ok(deal.id !== raidPick().id && deal.id !== featuredPull().id, 'the deal never mirrors the raid or rate-up');
+  ok(dealCost(deal) === Math.ceil(dustCost(deal) * 0.75), 'the deal species prices at 25% off');
+  const offDeal = PULLABLE.find((d) => d.id !== deal.id)!;
+  ok(dealCost(offDeal) === dustCost(offDeal), 'every other species keeps list price');
+
+  // the weekend window: Sat/Sun UTC doubles shiny odds, weekdays stay flat
+  const sat = Date.UTC(2026, 9, 24); // 2026-10-24 is a Saturday
+  const mon = Date.UTC(2026, 9, 26); // 2026-10-26 is a Monday
+  ok(shinyOdds(sat) === PULL_SHINY * 2, 'weekend pulls double the shiny roll');
+  ok(shinyOdds(mon) === PULL_SHINY, 'weekday pulls hold the base odds');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

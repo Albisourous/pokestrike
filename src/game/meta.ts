@@ -367,13 +367,280 @@ export function spendBag(ids: string[]): void {
   store('pk_bag', s);
 }
 
+// --- the meta wallet: star pieces, dust, pulls, the lab --------------------
+// Four standalone unversioned pk_* keys (like pk_bag — absent reads 0, memX
+// covers private mode). Stars are banked every run and spent on hatcher pulls
+// + lab levels; dust is the dupe-conversion currency behind the spark shop.
+
+let memStars = 0;
+let memDust = 0;
+let memPulls = 0;
+
+export function stars(): number {
+  const s = load<unknown>('pk_stars');
+  return typeof s === 'number' && Number.isFinite(s) ? s : memStars;
+}
+
+export function addStars(n: number): number {
+  memStars = stars() + n;
+  store('pk_stars', memStars);
+  return memStars;
+}
+
+export function spendStars(n: number): boolean {
+  const bal = stars();
+  if (bal < n) return false;
+  memStars = bal - n;
+  store('pk_stars', memStars);
+  return true;
+}
+
+export function dust(): number {
+  const d = load<unknown>('pk_dust');
+  return typeof d === 'number' && Number.isFinite(d) ? d : memDust;
+}
+
+export function addDust(n: number): number {
+  memDust = dust() + n;
+  store('pk_dust', memDust);
+  return memDust;
+}
+
+export function spendDust(n: number): boolean {
+  const bal = dust();
+  if (bal < n) return false;
+  memDust = bal - n;
+  store('pk_dust', memDust);
+  return true;
+}
+
+// lifetime pull count — the pity meter reads it, so it never resets
+export function pullCount(): number {
+  const p = load<unknown>('pk_pulls');
+  return typeof p === 'number' && Number.isFinite(p) ? p : memPulls;
+}
+
+export function bumpPulls(): number {
+  memPulls = pullCount() + 1;
+  store('pk_pulls', memPulls);
+  return memPulls;
+}
+
+// the hatcher's welcome wagon: an empty wallet gets two pulls on the house
+// so the machine teaches itself on first contact — pk_grant makes it
+// once-ever (in private mode the store throws, so it re-grants per boot,
+// which is session-scoped generosity anyway)
+export function starterGrant(): boolean {
+  if (stars() !== 0 || load<unknown>('pk_grant') != null) return false;
+  addStars(60);
+  store('pk_grant', true);
+  return true;
+}
+
+// --- chroma raid + star boost: the daily's two standalone keys -------------
+// Plain unversioned blobs like pk_bag/pk_streak — no RunSave shape, no
+// SAVE_VER step. pk_boost { until: epochMs, mult } is the timed earnings
+// multiplier a finished daily pays out; pk_raid { day: 'YYYY-MM-DD' } marks
+// the UTC day the raid boss went down (retries are free, the win banks once).
+// memX covers private mode; readers shape-check, so a corrupt blob reads as
+// absent rather than NaN-ing the multiplier.
+let memBoost: { until: number; mult: number } | null = null;
+let memRaid: string | null = null;
+
+// The blob is atomic: an until with no mult (or vice versa) is corrupt, not
+// a partial merge, so it falls back to the session copy whole.
+const boost = (): { until: number; mult: number } | null => {
+  const raw = load<Partial<{ until: number; mult: number }>>('pk_boost');
+  if (
+    raw &&
+    typeof raw === 'object' &&
+    typeof raw.until === 'number' &&
+    Number.isFinite(raw.until) &&
+    typeof raw.mult === 'number' &&
+    Number.isFinite(raw.mult)
+  )
+    return { until: raw.until, mult: raw.mult };
+  return memBoost;
+};
+
+export function starBoost(now = Date.now()): number {
+  const b = boost();
+  return b && b.until > now ? b.mult : 1;
+}
+
+export function boostLeft(now = Date.now()): number {
+  const b = boost();
+  return b ? Math.max(0, b.until - now) : 0;
+}
+
+// Only a longer `until` lands — a same-day regrant is idempotent: it can
+// never shorten the timer or rewrite the mult under the player's feet.
+export function grantBoost(untilMs: number, mult: number): void {
+  if (untilMs <= (boost()?.until ?? 0)) return;
+  memBoost = { until: untilMs, mult };
+  store('pk_boost', memBoost);
+}
+
+const raidDay = (): string => {
+  const raw = load<Partial<{ day: string }>>('pk_raid');
+  return raw && typeof raw === 'object' && typeof raw.day === 'string' ? raw.day : (memRaid ?? '');
+};
+
+export function raidDoneToday(now = Date.now()): boolean {
+  return raidDay() === dayKey(now);
+}
+
+export function markRaidDone(now = Date.now()): void {
+  memRaid = dayKey(now);
+  store('pk_raid', { day: memRaid });
+}
+
+// --- login calendar, comeback gift, first-win: the retention trio -----------
+// pk_login {day, n, prize, back}: `day` doubles as last-seen so the gap
+// measures itself; prize/back are what today's boot banked, kept in the blob
+// so the title can banner them all day. pk_win {day} marks the first-win
+// bonus — banks once. Same unversioned-blob pattern as pk_raid/pk_streak.
+interface Login {
+  day: string; // UTC YYYY-MM-DD
+  n: number;
+  prize: number;
+  back: number;
+}
+let memLogin: Login = { day: '', n: 0, prize: 0, back: 0 };
+let memWinDay = '';
+
+const login = (): Login => {
+  const l = { ...memLogin };
+  const raw = load<Partial<Login>>('pk_login');
+  if (raw && typeof raw === 'object') {
+    if (typeof raw.day === 'string') l.day = raw.day;
+    if (typeof raw.n === 'number' && Number.isFinite(raw.n)) l.n = raw.n;
+    if (typeof raw.prize === 'number' && Number.isFinite(raw.prize)) l.prize = raw.prize;
+    if (typeof raw.back === 'number' && Number.isFinite(raw.back)) l.back = raw.back;
+  }
+  return l;
+};
+
+// One drop per UTC day: +20 on day one, +10 per chained day to a 100 cap, a
+// 150 spike every 7th; a gap over 3 days pays a comeback on top. Runs from
+// migrateSaves after starterGrant so a first boot pays both.
+export function loginCheck(now = Date.now()): void {
+  const l = login();
+  const today = dayKey(now);
+  if (l.day === today) return;
+  const gap = l.day
+    ? Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${l.day}T00:00:00Z`)) / 86400000)
+    : 0;
+  const n = l.day === dayKey(now - 86400000) ? l.n + 1 : 1;
+  const prize = n % 7 === 0 ? 150 : Math.min(20 + (n - 1) * 10, 100);
+  const back = gap > 3 ? 60 : 0;
+  memLogin = { day: today, n, prize, back };
+  store('pk_login', memLogin);
+  addStars(prize + back);
+}
+
+export function loginToday(now = Date.now()): Login | null {
+  const l = login();
+  return l.day === dayKey(now) ? l : null;
+}
+
+// the loss-aversion tell — a chained streak that today hasn't banked yet
+export function streakRisky(now = Date.now()): number {
+  const s = streak();
+  return s.daily >= 2 && s.lastDaily === dayKey(now - 86400000) ? s.daily : 0;
+}
+
+// +50 on the day's first clear — the second daily appointment after the
+// raid's. The live boost window still multiplies it, same as raid payout.
+export function firstWinBonus(now = Date.now()): number {
+  const today = dayKey(now);
+  const raw = load<Partial<{ day: string }>>('pk_win');
+  const last = raw && typeof raw === 'object' && typeof raw.day === 'string' ? raw.day : memWinDay;
+  if (last === today) return 0;
+  memWinDay = today;
+  store('pk_win', { day: today });
+  const n = Math.ceil(50 * starBoost());
+  addStars(n);
+  return n;
+}
+
+// --- session escalation: each finished run today pays a little more --------
+// pk_grind {day, n} counts finished runs on the UTC day; run n pays
+// min(10n, 40), boost-adjusted like the other drops. Run one always pays,
+// so "one more run" always has a price tag on it.
+let memGrind: { day: string; n: number } = { day: '', n: 0 };
+
+export function grindBonus(now = Date.now()): { n: number; pay: number } {
+  const today = dayKey(now);
+  const raw = load<Partial<{ day: string; n: number }>>('pk_grind');
+  const stored =
+    raw && typeof raw === 'object' && typeof raw.day === 'string' && typeof raw.n === 'number' && Number.isFinite(raw.n)
+      ? (raw as { day: string; n: number })
+      : null;
+  const cur = stored ?? memGrind;
+  const n = (cur.day === today ? cur.n : 0) + 1;
+  memGrind = { day: today, n };
+  store('pk_grind', memGrind);
+  const pay = Math.ceil(Math.min(10 * n, 40) * starBoost(now));
+  addStars(pay);
+  return { n, pay };
+}
+
+// Permanent upgrades bought with star pieces — the deterministic sink next
+// to the hatcher's gamble. TRAINING rows are permanent multis applied at
+// battle construction; RUN TEAM rows seed per-run charges/one-shots.
+// `skip` from the Oct-20 table became `earnings` — shipped SKIP is free, so
+// charging for it would have nerfed current gameplay.
+export const LAB_UPGRADES: { id: string; name: string; icon: string; max: number; desc: string; costs: number[] }[] = [
+  { id: 'hp', name: 'HP UP', icon: 'hp-up', max: 5, desc: '+8% team max HP /level', costs: [40, 60, 90, 130, 180] },
+  { id: 'dmg', name: 'PROTEIN', icon: 'protein', max: 5, desc: '+5% hit damage /level', costs: [40, 60, 90, 130, 180] },
+  { id: 'spc', name: 'CALCIUM', icon: 'calcium', max: 5, desc: '+5% super damage /level', costs: [40, 60, 90, 130, 180] },
+  { id: 'luck', name: 'LUCKY EGG', icon: 'lucky-egg', max: 4, desc: '+2 team luck /level', costs: [40, 60, 90, 130] },
+  { id: 'reroll', name: 'DIRE HIT', icon: 'dire-hit', max: 3, desc: '+1 reroll charge /level', costs: [60, 80, 120] },
+  { id: 'earnings', name: 'AMULET COIN', icon: 'amulet-coin', max: 3, desc: '+10% star earnings /level', costs: [60, 80, 120] },
+  { id: 'ban', name: 'QUICK CLAW', icon: 'quick-claw', max: 2, desc: '+1 banish charge /level', costs: [60, 80] },
+  { id: 'fourth', name: 'MASTER BALL', icon: 'master-ball', max: 1, desc: 'perk boards offer 4 cards', costs: [400] },
+  { id: 'revive', name: 'REVIVE', icon: 'revive', max: 1, desc: 'first KO each run revives at 50% HP', costs: [500] },
+];
+
+let memLab: Record<string, number> = {};
+
+const labLevels = (): Record<string, number> => {
+  const raw = load<unknown>('pk_lab');
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>))
+      if (typeof v === 'number' && Number.isFinite(v) && v > 0) out[k] = Math.floor(v);
+    return out;
+  }
+  return { ...memLab };
+};
+
+export function labLevel(id: string): number {
+  return labLevels()[id] ?? 0;
+}
+
+export function buyLab(id: string): boolean {
+  const lvl = labLevel(id);
+  // costs[level] is the next level's price — an unknown id or a maxed
+  // upgrade indexes past the array, so there's nothing to charge
+  const cost = LAB_UPGRADES.find((u) => u.id === id)?.costs[lvl];
+  if (cost == null || !spendStars(cost)) return false;
+  const lvls = labLevels();
+  lvls[id] = lvl + 1;
+  memLab = lvls;
+  store('pk_lab', lvls);
+  return true;
+}
+
 // --- save versioning: migrate once at boot so readers stay dumb ------------
 // pk_ver stamps the save schema — bump SAVE_VER and add a step whenever a
 // pk_* shape changes, instead of coercing old data on every read.
 // v2: RunSave gains tools/perkBan — reader defaults cover v1 saves,
 // no data transform needed below
 // v3: RunSave gains eggIn/eggJustLaid — parked runs get defaults below
-const SAVE_VER = 3;
+// v4: RunSave gains reviveUsed/starsRun — parked runs get defaults below
+const SAVE_VER = 4;
 
 export function migrateSaves() {
   const v = load<number>('pk_ver') ?? 0;
@@ -399,7 +666,20 @@ export function migrateSaves() {
       store('pk_run', s);
     }
   }
+  if (v < 4) {
+    // v4: the mid-run save gained the revive flag + this run's star tally —
+    // fill defaults on a parked climb so the stored blob matches new saves
+    const s = load<RunSave>('pk_run');
+    // a valid-JSON primitive (42, "x", true) can't take the property write
+    if (typeof s === 'object' && s !== null && s.reviveUsed == null) {
+      s.reviveUsed = false;
+      s.starsRun = 0;
+      store('pk_run', s);
+    }
+  }
   if (v !== SAVE_VER) store('pk_ver', SAVE_VER);
+  starterGrant(); // unversioned — a promo, not a shape; pk_grant self-gates
+  loginCheck(); // same family — once-per-UTC-day self-gate
 }
 
 // --- decision telemetry ------------------------------------------------------
@@ -412,11 +692,12 @@ interface Stats {
   draft: Record<string, [number, number]>; // species id -> [taken, offered]
   perks: Record<string, [number, number]>; // perk id -> [taken, offered]
   perkban: Record<string, [number, number]>; // perk id -> [banished, offered] — kept apart so perk pick rates stay clean
+  pulls: Record<string, [number, number]>; // species id -> [dupes, total] — the hatcher's dupe rate
   deaths: Record<string, number>; // stage -> runs that ended there
   wins: number;
   runs: number;
 }
-let memStats: Stats = { draft: {}, perks: {}, perkban: {}, deaths: {}, wins: 0, runs: 0 };
+let memStats: Stats = { draft: {}, perks: {}, perkban: {}, pulls: {}, deaths: {}, wins: 0, runs: 0 };
 
 const stats = (): Stats => {
   const raw = load<Stats>('pk_stats');
@@ -432,6 +713,17 @@ export function statOffer(kind: 'draft' | 'perks' | 'perkban', offered: (string 
     e[1]++;
     if (id === taken) e[0]++;
   }
+  memStats = s;
+  store('pk_stats', s);
+}
+
+// one call per hatched pull — pull volume and the dupe rate audit the economy
+export function statPull(id: number, dupe: boolean) {
+  const s = stats();
+  s.pulls ??= {}; // stored v1-v3 blobs predate the pull ledger — don't crash on the missing key
+  const e = (s.pulls[id] ??= [0, 0]);
+  e[1]++;
+  if (dupe) e[0]++;
   memStats = s;
   store('pk_stats', s);
 }
@@ -462,7 +754,9 @@ export interface RunSave {
   bag?: string[]; // bag item ids replayed on resume (durable ones filtered out)
   masterArmed?: boolean; // armed one-shot flags save verbatim — a spent ball stays spent
   ashArmed?: boolean;
+  reviveUsed?: boolean; // the lab revive token is one-shot per run — a spent revive stays spent (v4+)
   score: number;
+  starsRun?: number; // star pieces banked this run — the result screen's +N row (v4+)
   perksTaken: number;
   gymsBeaten: number;
   shiniesCaught: number;
@@ -533,7 +827,8 @@ export function runSave(): RunSave | null {
     (s.perkBan == null || Array.isArray(s.perkBan)) &&
     (s.tools == null ||
       (typeof s.tools === 'object' && Number.isFinite(s.tools.roll) && Number.isFinite(s.tools.ban))) &&
-    (s.eggIn == null || Number.isFinite(s.eggIn));
+    (s.eggIn == null || Number.isFinite(s.eggIn)) &&
+    (s.starsRun == null || Number.isFinite(s.starsRun));
   return ok ? s : null;
 }
 
