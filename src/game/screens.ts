@@ -1309,15 +1309,32 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
     ctx.fillText('FREE PULL TODAY', r.x + r.w - 16, r.y + 26);
   }
 
-  // the day's rate-up face, big enough to sell the pull
+  // the day's rate-up face on a real stage — type-tinted pedestal, a faint
+  // ball watermark, twinkles breathing around the sprite
   const feat = featuredPull();
   const fcx = r.x + 112, fcy = r.y + 156;
+  ballGlyph(ctx, fcx, fcy + 4, 4.6, 'rgba(255,255,255,0.05)');
+  ctx.fillStyle = `${TYPE_COLOR[feat.type]}30`;
+  ctx.beginPath();
+  ctx.ellipse(fcx, fcy + 46, 78, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
   monShadow(ctx, fcx, fcy + 8, 108);
   try {
     drawMon(ctx, feat.id, fcx, fcy + Math.sin(t * 2.2) * 3, 108);
   } catch {
     void loadSprite(feat.id);
   }
+  const twk: [number, number][] = [[-76, -52], [72, -60], [56, 36]];
+  ctx.fillStyle = '#ffe89d';
+  twk.forEach(([dx, dy], i) => {
+    ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.6 + i * 2.1));
+    fillStar(ctx, fcx + dx, fcy + dy, 4.5);
+  });
+  ctx.globalAlpha = 1;
+  ctx.font = fontB(7);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = TYPE_COLOR[feat.type];
+  ctx.fillText(feat.type2 ? `${feat.type} · ${feat.type2}`.toUpperCase() : feat.type.toUpperCase(), fcx, fcy + 78);
 
   const tx = r.x + 232;
   ctx.textAlign = 'left';
@@ -1361,9 +1378,10 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   const d = DEX_BTN;
   menuCard(ctx, d, 12);
   ctx.textAlign = 'left';
+  ballGlyph(ctx, d.x + 28, d.y + 32, 1.4, '#e03c34');
   ctx.font = font(11);
   ctx.fillStyle = '#ffd84d';
-  ctx.fillText('POKÉDEX', d.x + 18, d.y + 36);
+  ctx.fillText('POKÉDEX', d.x + 52, d.y + 36);
   ctx.textAlign = 'right';
   ctx.font = font(14);
   ctx.fillStyle = PARCH;
@@ -1372,7 +1390,10 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.font = fontB(8);
   ctx.fillStyle = '#a8b0d8';
   ctx.fillText(nextGoal, d.x + 18, d.y + 62);
-  // a slim fill toward a full dex — the ladder bar's idiom
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('TAP TO BROWSE', d.x + d.w - 18, d.y + 62);
+  // a slim fill toward a full dex — the ladder bar's idiom, percent inside
   const bw = d.w - 36, bx = d.x + 18, by = d.y + d.h - 28;
   ctx.fillStyle = '#1a2040';
   ctx.fillRect(bx, by, bw, 8);
@@ -1381,6 +1402,9 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 1;
   ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, 7);
+  ctx.font = fontB(7);
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText(`${Math.round((dexN / CATCHABLE) * 100)}%`, bx + bw, by + 20);
 
   // latest catches — the dex's newest faces; decorative, no hit test
   const s = CATCH_STRIP;
@@ -1391,6 +1415,9 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.fillText('LATEST CATCHES', s.x + 18, s.y + 24);
   const recent = dexRecent(3);
   if (!recent.length) {
+    // ghost ball silhouettes behind the empty line — the strip reads as a
+    // stage waiting for its cast, not a dead card
+    [-90, 0, 90].forEach((dx) => ballGlyph(ctx, s.x + s.w / 2 + dx, s.y + 76, 1.6, 'rgba(255,255,255,0.07)'));
     ctx.font = font(9);
     ctx.textAlign = 'center';
     ctx.fillStyle = '#8890b8';
@@ -1400,17 +1427,24 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
     recent.forEach((id, i) => {
       const cx = s.x + s.w / 2 + (i - (recent.length - 1) / 2) * 150;
       const cy = s.y + 84;
+      const cdef = speciesById(id);
+      // type-tinted floor pad — each catch lands on its own color
+      if (cdef) {
+        ctx.fillStyle = `${TYPE_COLOR[cdef.type]}2e`;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 30, 46, 11, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       monShadow(ctx, cx, cy + 4, 56);
       try {
         drawMon(ctx, id, cx, cy + Math.sin(t * 2.2 + i * 1.7) * 2.5, 56);
       } catch {
         void loadSprite(id);
       }
-      const def = speciesById(id);
       ctx.font = fontB(7);
       ctx.textAlign = 'center';
       ctx.fillStyle = PARCH;
-      ctx.fillText(def ? def.name.toUpperCase() : `#${id}`, cx, s.y + s.h - 22);
+      ctx.fillText(cdef ? cdef.name.toUpperCase() : `#${id}`, cx, s.y + s.h - 22);
       if (shinies.has(id)) {
         ctx.fillStyle = '#ffd84d';
         ctx.fillText('★', cx + 30, cy - 24);
