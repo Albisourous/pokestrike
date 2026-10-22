@@ -570,3 +570,14 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   distribution options + numbered questions. Deploy verified live: Pages
   serves the 6c1e1f1 bundle; one transient sprite 404 observed DURING
   the deploy swap (CDN propagation race) — resolved within a minute.
+- c73de8d→a31bede pushed (screenshot-driven pass, all gated):
+  start-area cottage raised off the sea with a real grass yard + player
+  at the door; TRAINER settings tab (15 avatars, pk_trainer, rotated
+  atlas frames un-skipped); settings filled with 5 real toggles
+  (uiSfx/dmgNums/aimGuide/ambients/mapGlints) + modal grown to fit;
+  title bottom stack lifted ~28px out of the iOS home-swipe zone with
+  the footer consolidated to one line; hatcher odds became a tiered
+  2×2 rate card fed by new PULL_RATES single source; lab cards print
+  their live bought total (NOW …) + battle field-log announces LAB
+  bonuses; smoke now proves all 9 lab upgrades change battle state;
+  lab section heads fitFont'd (TRAINING title clipped).
