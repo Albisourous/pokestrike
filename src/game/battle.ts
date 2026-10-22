@@ -8,6 +8,8 @@ import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
 import type { EventChoice, EventArt } from './events';
+import { taskViews } from './tasks';
+import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
@@ -438,6 +440,7 @@ export class Battle {
   private shotCombo = 0; // pass-through links chained this shot
   private shotDmg = 0; // running damage tally this shot — read under the COMBO meter
   private kosThisShot = 0; // enemies downed by the current shot
+  private taskDone = new Set<string>(); // a task pings once per run
   private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false, hx: 0, hy: 0 };
   private texts: FloatText[] = [];
   private orbs: Orb[] = [];
@@ -2443,6 +2446,7 @@ export class Battle {
       this.kosThisShot++;
       this.totalKos++;
       if (this.totalKos >= 40) this.award('rampage');
+      this.taskPing('kos', this.totalKos, e.x, e.y - e.r - 90);
       if (this.totalKos % KO_BOUNTY.every === 0) {
         const got = this.earnStars(KO_BOUNTY.pay);
         this.texts.push({ x: e.x, y: e.y - e.r - 70, text: `BOUNTY +${got} ★`, t: 1.2, color: '#c9a8ff', big: true });
@@ -3965,6 +3969,8 @@ export class Battle {
     this.boxLvl.push(Math.max(1, def.lvl ?? 1));
     this.boxGain = def;
     this.boxPing = true;
+    // the chore board is live mid-run — a catch task pings the moment it lands
+    this.taskPing('catches', this.box.length, this.arena.x + this.arena.w / 2, this.arena.y + 54);
     // every new box face earns the ritual — the KO catch passes theatre:
     // false because it runs its own sequence on the KO spot instead
     if (theatre) {
@@ -4234,6 +4240,23 @@ export class Battle {
   // stops pay too; progress is progress
   private bankStage(row: number) {
     this.earnStars(STAR_ROW + row + 1);
+    this.taskPing('score', this.score, this.arena.x + this.arena.w / 2, this.arena.y + 54);
+  }
+
+  // the chore board goes live mid-run — a counter crossing its goal pings the
+  // moment it happens instead of surfacing as paperwork on the run report.
+  // v.have is banked progress; `now` is this run's unbanked contribution.
+  private taskPing(kind: TaskKind, now: number, x: number, y: number) {
+    if (this.raid) return; // raids bank nothing — no pings either
+    for (const period of ['daily', 'weekly'] as const) {
+      for (const v of taskViews(period)) {
+        if (v.kind !== kind || v.done || this.taskDone.has(v.id)) continue;
+        if (v.have + now < v.n) continue;
+        this.taskDone.add(v.id);
+        this.texts.push({ x, y, text: `TASK: ${v.label} ✓`, t: 1.5, color: '#ffd84d', big: true });
+        sfx('ui', 0.9);
+      }
+    }
   }
 
   private enterReward() {

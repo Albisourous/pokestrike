@@ -2468,6 +2468,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   // the KO bounty: every 5th enemy KO pays +5 stars into the run tally
   const kb = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
   kb.traits.clear(); // keep the count exact — no trait splash KOs
+  // a live task ping: BATTLE TESTED sits one KO short when the fight starts
+  saveTaskState({ day: dayKey(Date.now()), dp: { kos: 14 }, dsel: ['d-kos'], dclaim: [], week: weekKey(Date.now()), wp: {}, wsel: [], wclaim: [] });
   const sK = kb.starsRun;
   for (let w = 0; w < 3 && (kb as any).totalKos < 5; w++) {
     (kb as any).spawnWave(w);
@@ -2481,6 +2483,11 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     (kb as any).totalKos >= 5 && kb.starsRun === sK + wantK,
     `the 5th enemy KO pays its star bounty (+${kb.starsRun - sK})`,
   );
+  ok(
+    (kb as any).texts.some((tx: any) => tx.text === 'TASK: BATTLE TESTED ✓'),
+    'crossing a task goal pings mid-fight, not at the report',
+  );
+  localStorage.removeItem('pk_tasks');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

@@ -1754,6 +1754,15 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.fillText(b.name.replace(' BADGE', ''), cx, cy + 33);
   });
 
+  // locked trophies get a live fraction — the goal-gradient on every open loop
+  const progress: Record<string, [number, number] | undefined> = {
+    collector: [dexIds().length, 50],
+    living: [dexIds().length, CATCHABLE],
+    triple: [best().wins, 3],
+    league: [gymBadges().size, BADGES.length],
+    'hot-streak': [streakWins(), 3],
+    'daily-devotion': [streakDaily(), 7],
+  };
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x + 8, r.y + ACH_HEAD, r.w - 16, r.h - ACH_HEAD - 36);
@@ -1784,6 +1793,14 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.font = fontB(8);
     ctx.fillStyle = has ? PARCH : '#5a6288';
     ctx.fillText(a.desc, r.x + 58, y + 36);
+    const prog = !has && progress[a.id];
+    if (prog) {
+      ctx.textAlign = 'right';
+      ctx.font = fontB(9);
+      ctx.fillStyle = prog[0] >= prog[1] * 0.7 ? '#ffd84d' : '#8890b8'; // close loops read gold
+      ctx.fillText(`${Math.min(prog[0], prog[1])}/${prog[1]}`, r.x + r.w - 26, y + 36);
+      ctx.textAlign = 'left';
+    }
     ctx.strokeStyle = 'rgba(90,98,136,0.25)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -2005,7 +2022,8 @@ export function drawHatch(
   ctx.textAlign = 'center';
   ctx.font = fontB(8);
   ctx.fillStyle = info.pityIn <= 1 ? '#ffd84d' : '#8890b8';
-  ctx.fillText(info.pityIn <= 0 ? 'THIS PULL IS GUARANTEED RARE' : `GUARANTEED RARE IN ${info.pityIn}`, W / 2, PITY_BAR.y - 6);
+  // pityIn counts down to 1 — the pull that lands ON 1 is the guaranteed one
+  ctx.fillText(info.pityIn <= 1 ? 'NEXT PULL IS GUARANTEED RARE' : `GUARANTEED RARE IN ${info.pityIn}`, W / 2, PITY_BAR.y - 6);
   ctx.fillStyle = '#0a0d18';
   ctx.fillRect(PITY_BAR.x, PITY_BAR.y, PITY_BAR.w, PITY_BAR.h);
   const pf = Math.min(1, Math.max(0, 1 - info.pityIn / PULL_PITY));

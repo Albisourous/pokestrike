@@ -23,6 +23,7 @@ export interface TaskView {
   id: string;
   label: string;
   n: number;
+  kind: TaskKind; // which counter this task eats — live pings match on it
   have: number; // raw counter — can run past n, `done` is the gate
   reward: string;
   desc: string; // 'ko 15 foes' — derived from kind+n, never authored
@@ -252,7 +253,7 @@ export function taskViews(period: TaskPeriod, now = Date.now()): TaskView[] {
   const live = livePeriod(taskState(), period, now);
   return live.defs.map((d) => {
     const have = live.prog[d.kind] ?? 0;
-    return { id: d.id, label: d.label, n: d.n, have, reward: d.reward, desc: kindDesc(d.kind, d.n), done: have >= d.n, claimed: live.claim.includes(d.id) };
+    return { id: d.id, label: d.label, n: d.n, kind: d.kind, have, reward: d.reward, desc: kindDesc(d.kind, d.n), done: have >= d.n, claimed: live.claim.includes(d.id) };
   });
 }
 
