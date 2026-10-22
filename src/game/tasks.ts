@@ -104,11 +104,12 @@ export function raidPick(now = Date.now()): SpeciesDef {
   const rng = mulberry32(daySeed(now) * 31 + 7);
   const feat = featuredPull(now).id; // the raid boss can't double as the hatcher ad
   // the seeded sequence is fixed, so looping to the first epic-bucket hit
-  // stays deterministic — rarePlus makes every draw rare or epic
-  let d: SpeciesDef;
-  do {
+  // stays deterministic — rarePlus makes every draw rare or epic. The cap is
+  // paranoia: if the epic bucket ever emptied, the last draw stands in
+  // rather than hang the title screen
+  let d: SpeciesDef = pullSpecies(rng, { rarePlus: true });
+  for (let i = 0; i < 999 && ((tierOf(d) < 3 && !INVADER_IDS.has(d.id)) || d.id === feat); i++)
     d = pullSpecies(rng, { rarePlus: true });
-  } while ((tierOf(d) < 3 && !INVADER_IDS.has(d.id)) || d.id === feat);
   return d;
 }
 
@@ -118,14 +119,19 @@ export function raidTeam(now = Date.now()): SpeciesDef[] {
   // raid boss (or the hatcher ad) reads as a bug, ~2 days a month by chance
   const seen = new Set<number>([raidPick(now).id, featuredPull(now).id]);
   const out: SpeciesDef[] = [];
-  while (out.length < 3) {
+  // capped: if the rare+ pool ever shrank under 3 loaners the last draw pads
+  // the slots — a duplicate teammate beats a hung tab
+  let last: SpeciesDef | undefined;
+  for (let i = 0; i < 1000 && out.length < 3; i++) {
     const d = pullSpecies(rng, { rarePlus: true });
+    last = d;
     if (seen.has(d.id)) continue;
     seen.add(d.id);
     // pullSpecies hands out shared pool entries — clone before setting the
     // loaner level, never mutate the roster
     out.push({ ...d, lvl: 30 });
   }
+  while (out.length < 3) out.push({ ...last!, lvl: 30 });
   return out;
 }
 
@@ -135,10 +141,10 @@ export function raidTeam(now = Date.now()): SpeciesDef[] {
 export function dealPick(now = Date.now()): SpeciesDef {
   const rng = mulberry32(daySeed(now) * 31 + 43);
   const seen = new Set<number>([raidPick(now).id, featuredPull(now).id]);
-  let d: SpeciesDef;
-  do {
-    d = pullSpecies(rng, { rarePlus: true });
-  } while (seen.has(d.id));
+  // capped like raidPick — a skip-set covering the whole rare+ pool would
+  // spin forever otherwise; the last draw stands in
+  let d: SpeciesDef = pullSpecies(rng, { rarePlus: true });
+  for (let i = 0; i < 999 && seen.has(d.id); i++) d = pullSpecies(rng, { rarePlus: true });
   return d;
 }
 

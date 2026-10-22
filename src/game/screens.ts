@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost } from './data';
 import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -8,8 +8,8 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, type Settings } from './meta';
-import { taskViews, tasksReady, taskResetsIn, raidPick, featuredPull, dealPick, dealCost } from './tasks';
+import { dexIds, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, type Settings } from './meta';
+import { taskViews, tasksReady, taskResetsIn, raidPick, featuredPull, dealPick } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 
@@ -101,14 +101,26 @@ export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
 export const HELP_CHIP = { x: W - 58, y: 54, w: 40, h: 40 };
+// corner-badge chrome — dark slab, optional dither, gold stroke; only the
+// glyph inside varies (? / speaker / cog). The mid-run chips run lighter:
+// an alpha face with a hairline rim; the title's badges are solid + dithered.
+function cornerBadge(
+  ctx: CanvasRenderingContext2D,
+  r: { x: number; y: number; w: number; h: number },
+  o: { bg?: string; dither?: number; lw?: number } = {},
+) {
+  ctx.fillStyle = o.bg ?? '#12152b';
+  ctx.fillRect(r.x, r.y, r.w, r.h);
+  if (o.dither) dither(ctx, r, o.dither);
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = o.lw ?? 2;
+  ctx.strokeRect(r.x, r.y, r.w, r.h);
+}
+
 export function drawHelpChip(ctx: CanvasRenderingContext2D) {
   const cx = HELP_CHIP.x + HELP_CHIP.w / 2;
   const cy = HELP_CHIP.y + HELP_CHIP.h / 2;
-  ctx.fillStyle = '#12152bcc';
-  ctx.fillRect(HELP_CHIP.x, HELP_CHIP.y, HELP_CHIP.w, HELP_CHIP.h);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(HELP_CHIP.x, HELP_CHIP.y, HELP_CHIP.w, HELP_CHIP.h);
+  cornerBadge(ctx, HELP_CHIP, { bg: '#12152bcc', lw: 1.5 });
   ctx.font = font(12);
   ctx.fillStyle = PARCH;
   ctx.textAlign = 'center';
@@ -120,11 +132,7 @@ export const MUTE_CHIP = { x: W - 100, y: 54, w: 40, h: 40 };
 export function drawMuteChip(ctx: CanvasRenderingContext2D) {
   const cx = MUTE_CHIP.x + MUTE_CHIP.w / 2;
   const cy = MUTE_CHIP.y + MUTE_CHIP.h / 2;
-  ctx.fillStyle = '#12152bcc';
-  ctx.fillRect(MUTE_CHIP.x, MUTE_CHIP.y, MUTE_CHIP.w, MUTE_CHIP.h);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(MUTE_CHIP.x, MUTE_CHIP.y, MUTE_CHIP.w, MUTE_CHIP.h);
+  cornerBadge(ctx, MUTE_CHIP, { bg: '#12152bcc', lw: 1.5 });
   speakerGlyph(ctx, cx, cy, 0.72);
 }
 // settings cog, mid-run size — the next 42px slot left of MUTE_CHIP's grid
@@ -132,11 +140,7 @@ export const MAP_GEAR = { x: W - 142, y: 54, w: 40, h: 40 };
 export function drawGearChip(ctx: CanvasRenderingContext2D) {
   const cx = MAP_GEAR.x + MAP_GEAR.w / 2;
   const cy = MAP_GEAR.y + MAP_GEAR.h / 2;
-  ctx.fillStyle = '#12152bcc';
-  ctx.fillRect(MAP_GEAR.x, MAP_GEAR.y, MAP_GEAR.w, MAP_GEAR.h);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(MAP_GEAR.x, MAP_GEAR.y, MAP_GEAR.w, MAP_GEAR.h);
+  cornerBadge(ctx, MAP_GEAR, { bg: '#12152bcc', lw: 1.5 });
   gearGlyph(ctx, cx, cy, 1.3, PARCH);
 }
 export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
@@ -773,6 +777,16 @@ export function drawTitle(
   newArmed = false, // new-climb link's two-tap confirm is lit — red warn label
   dailyArmed = false, // DAILY's own two-tap — warn-red face while it's lit
 ) {
+  // meta getters each hit localStorage + JSON.parse — one read each per frame
+  const starN = stars();
+  const raidDone = raidDoneToday();
+  const raidDef = raidPick();
+  const rookie = nextRookie();
+  const dexN = dexIds().length;
+  const badges = gymBadges();
+  const pullN = pullCount();
+  const achN = unlockedAch().size;
+
   drawField(ctx);
   drawWildMons(ctx);
 
@@ -790,7 +804,7 @@ export function drawTitle(
 
   // the wallet rides top-center like a Clash Royale gold bar — stars and
   // dust on the title mean the economy is visible before any overlay opens
-  balanceChip(ctx, { x: W / 2 - 92, y: 28, w: 184, h: 36 }, stars(), dust());
+  balanceChip(ctx, { x: W / 2 - 92, y: 28, w: 184, h: 36 }, starN, dust());
 
   drawWilds(ctx, t);
 
@@ -824,7 +838,7 @@ export function drawTitle(
   {
     const offers: { def: SpeciesDef; tag: string; c: string }[] = [
       { def: featuredPull(), tag: 'RATE UP', c: '#ffd84d' },
-      { def: raidPick(), tag: raidDoneToday() ? '✓ CLEARED' : 'SHINY BOSS', c: '#9a6cff' },
+      { def: raidDef, tag: raidDone ? '✓ CLEARED' : 'SHINY BOSS', c: '#9a6cff' },
       { def: dealPick(), tag: 'DEAL −25%', c: '#9df0ff' },
     ];
     const card = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
@@ -866,14 +880,13 @@ export function drawTitle(
     tc: '#2a2440',
     label: cont ? 'CONTINUE' : 'START CLIMB',
     // fresh trainers see the ladder's next step on the front door itself
-    sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : nextRookie() ? `ROOKIE ${nextRookie()!.n + 1}/${ROOKIE_STEPS.length} · ${nextRookie()!.label}` : undefined,
+    sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : rookie ? `ROOKIE ${rookie.n + 1}/${ROOKIE_STEPS.length} · ${rookie.label}` : undefined,
   });
   pill(ctx, DAILY_BTN, dailyArmed
     ? { c: '#e03c34', cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
     : { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY' });
   // the day's one seeded epic wears the rate-up band's purple — cleared,
   // the pill sleeps gray till tomorrow's roll
-  const raidDone = raidDoneToday();
   pill(ctx, RAID_BTN, {
     c: '#9a6cff',
     cd: '#6b4ac0',
@@ -882,7 +895,7 @@ export function drawTitle(
     // cleared → the chip sells tomorrow's boss instead of going dead
     sub: raidDone
       ? `TMRW: ${raidPick(Date.now() + 86400000).name.toUpperCase()}`
-      : `${raidPick().name.toUpperCase()} · DAILY SHINY`,
+      : `${raidDef.name.toUpperCase()} · DAILY SHINY`,
     disabled: raidDone,
   });
   // a live daily streak pins a pip on the corner — the tasksReady red pip's
@@ -944,48 +957,32 @@ export function drawTitle(
   // the echo's haunt lives on the pitch itself now — spectral mons beat a caption line
 
   // ? badge, top corner — the how-to-play overlay
-  ctx.fillStyle = '#12152b';
-  ctx.fillRect(HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
-  dither(ctx, HELP_BTN, 0.09);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(HELP_BTN.x, HELP_BTN.y, HELP_BTN.w, HELP_BTN.h);
+  cornerBadge(ctx, HELP_BTN, { dither: 0.09 });
   ctx.font = font(16);
   ctx.fillStyle = PARCH;
   ctx.fillText('?', HELP_BTN.x + HELP_BTN.w / 2 + 3, HELP_BTN.y + HELP_BTN.h / 2 + 14);
 
   // mute badge, opposite corner — speaker glyph, slashed when off
   const mcx = MUTE_BTN.x + MUTE_BTN.w / 2, mcy = MUTE_BTN.y + MUTE_BTN.h / 2;
-  ctx.fillStyle = '#12152b';
-  ctx.fillRect(MUTE_BTN.x, MUTE_BTN.y, MUTE_BTN.w, MUTE_BTN.h);
-  dither(ctx, MUTE_BTN, 0.09);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(MUTE_BTN.x, MUTE_BTN.y, MUTE_BTN.w, MUTE_BTN.h);
+  cornerBadge(ctx, MUTE_BTN, { dither: 0.09 });
   speakerGlyph(ctx, mcx, mcy, 1);
 
   // gear badge beside the ? — opens the settings modal
-  ctx.fillStyle = '#12152b';
-  ctx.fillRect(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h);
-  dither(ctx, GEAR_BTN, 0.09);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(GEAR_BTN.x, GEAR_BTN.y, GEAR_BTN.w, GEAR_BTN.h);
+  cornerBadge(ctx, GEAR_BTN, { dither: 0.09 });
   gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
   // dex, trophies, ladder, tasks — one row of equal parchment pills
   // the goal-gradient tell — the dex chip always names the nearest open
   // loop: catches to the charm, badges to the crown, then pulls to pity
-  const dexN = dexIds().length;
   const dexRw = nextDexReward();
-  const nextGoal = !shinyCharm()
+  const nextGoal = dexN < SHINY_CHARM_AT
     ? `${SHINY_CHARM_AT - dexN} TO CHARM`
     : dexRw
       ? `${dexRw.at - dexN} TO +${dexRw.pay}★`
-      : gymBadges().size < BADGES.length
-        ? `${BADGES.length - gymBadges().size} BADGES LEFT`
-        : `PITY IN ${PULL_PITY - (pullCount() % PULL_PITY)}`;
+      : badges.size < BADGES.length
+        ? `${BADGES.length - badges.size} BADGES LEFT`
+        : `PITY IN ${PULL_PITY - (pullN % PULL_PITY)}`;
   pill(ctx, DEX_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `DEX ${dexN}/${CATCHABLE}`, sub: nextGoal });
-  pill(ctx, ACH_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}` });
+  pill(ctx, ACH_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: `★ ${achN}/${ACHIEVEMENTS.length}` });
   pill(ctx, BOARD_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TOP RUNS' });
   pill(ctx, TASKS_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'TASKS' });
   // a claimable task pins a red count pip on the chip corner — the same
@@ -1014,7 +1011,7 @@ export function drawTitle(
     cd: '#c8a44d',
     tc: '#2a2440',
     label: 'HATCHER',
-    sub: freeNow ? 'FREE PULL TODAY' : `★ ${stars()}`,
+    sub: freeNow ? 'FREE PULL TODAY' : `★ ${starN}`,
   });
   if (freeNow) {
     ctx.save();
@@ -1610,6 +1607,8 @@ export function dexScrollMax() {
 
 export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   const r = DEX_PANEL;
+  const dexList = dexIds(); // one parse a frame — seen count + charm both read it
+  const dexN = dexList.length;
   ctx.fillStyle = 'rgba(6,10,22,0.82)';
   ctx.fillRect(0, 0, W, H);
   roundRect(ctx, r.x, r.y, r.w, r.h, 14);
@@ -1620,9 +1619,9 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.textAlign = 'center';
   ctx.font = font(17);
   ctx.fillStyle = '#ffd84d';
-  ctx.fillText(`POKÉDEX ${dexIds().length}/${CATCHABLE}`, r.x + r.w / 2, r.y + 40);
+  ctx.fillText(`POKÉDEX ${dexN}/${CATCHABLE}`, r.x + r.w / 2, r.y + 40);
 
-  const seen = new Set(dexIds());
+  const seen = new Set(dexList);
   const shinies = new Set(shinyIds());
   ctx.save();
   ctx.beginPath();
@@ -1649,12 +1648,12 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
 
   // the completion milestone is the promise that keeps hunters grinding
   ctx.font = fontB(8);
-  if (shinyCharm()) {
+  if (dexN >= SHINY_CHARM_AT) {
     ctx.fillStyle = '#ffd84d';
     ctx.fillText('★ SHINY CHARM: shinies are twice as common ★', r.x + r.w / 2, r.y + r.h - 26);
   } else {
     ctx.fillStyle = '#8890b8';
-    ctx.fillText(`${SHINY_CHARM_AT - dexIds().length} more catches for the SHINY CHARM (x2 shinies)`, r.x + r.w / 2, r.y + r.h - 26);
+    ctx.fillText(`${SHINY_CHARM_AT - dexN} more catches for the SHINY CHARM (x2 shinies)`, r.x + r.w / 2, r.y + r.h - 26);
   }
   ctx.fillStyle = '#8890b8';
   ctx.fillText('catch wild mons to fill the dex: they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
@@ -1797,11 +1796,12 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   });
 
   // locked trophies get a live fraction — the goal-gradient on every open loop
+  const dexN = dexIds().length;
   const progress: Record<string, [number, number] | undefined> = {
-    collector: [dexIds().length, 50],
-    living: [dexIds().length, CATCHABLE],
+    collector: [dexN, 50],
+    living: [dexN, CATCHABLE],
     triple: [best().wins, 3],
-    league: [gymBadges().size, BADGES.length],
+    league: [held.size, BADGES.length],
     'hot-streak': [streakWins(), 3],
     'daily-devotion': [streakDaily(), 7],
   };
@@ -2107,6 +2107,7 @@ export function drawHatch(
   ctx.clip();
   const row0 = Math.max(0, Math.floor(s.sparkScroll / SPARK_CELL_H));
   const rowN = Math.ceil((s.sparkScroll + SPARK_VIEW.h) / SPARK_CELL_H);
+  const deal = dealPick(); // one seeded roll a frame — dealCost re-rolled it per cell
   for (let i = row0 * SPARK_COLS; i < rowN * SPARK_COLS && i < PULLABLE.length; i++) {
     const def = PULLABLE[i];
     const cx = SPARK_VIEW.x + (i % SPARK_COLS) * SPARK_CELL_W;
@@ -2137,10 +2138,11 @@ export function drawHatch(
       ctx.fillStyle = '#5a6284';
       ctx.fillText('OWNED', cell.x + cell.w / 2, cell.y + 80);
     } else {
-      const deal = def.id === dealPick().id;
-      const cost = dealCost(def);
+      const isDeal = def.id === deal.id;
+      // dealCost's discount inline — the deal species prices at 25% off
+      const cost = isDeal ? Math.ceil(dustCost(def) * 0.75) : dustCost(def);
       dustTag(ctx, cell.x + cell.w / 2, cell.y + 82, cost, info.dust >= cost ? '#9df0ff' : '#ff6b6b');
-      if (deal) {
+      if (isDeal) {
         // the daily discount tab — gold corner flag, struck-through list price
         ctx.fillStyle = '#ffd84d';
         ctx.fillRect(cell.x + cell.w - 38, cell.y, 38, 13);
@@ -2349,8 +2351,13 @@ const labBuyRect = (r: { x: number; y: number; w: number; h: number }) => ({
 });
 
 // card rects + section heads in CONTENT coords (y=0 is the view top) —
-// drawLab and labHit share this so a tap always lands where a card drew
+// drawLab and labHit share this so a tap always lands where a card drew.
+// It's a pure function of LAB_UPGRADES, so the rect map builds once.
+let labLayoutCache: ReturnType<typeof computeLabLayout> | null = null;
 function labLayout() {
+  return (labLayoutCache ??= computeLabLayout());
+}
+function computeLabLayout() {
   const secs: [string, (typeof LAB_UPGRADES)[number][], boolean][] = [
     ['TRAINING — EVERY RUN STARTS STRONGER', LAB_UPGRADES.filter((u) => LAB_TRAIN.has(u.id)), true],
     ['RUN TEAM — PER-RUN TOOLS', LAB_UPGRADES.filter((u) => !LAB_TRAIN.has(u.id)), false],
@@ -2393,14 +2400,36 @@ export function labHit(scroll: number, x: number, y: number): string | null {
   return null;
 }
 
+// one pk_lab read a frame — labLevel() re-parses storage per call. Same
+// filtering meta's labLevels applies; a missing/corrupt save falls back to
+// the per-id getter so its in-memory copy still wins (private mode).
+function labLevelMap(): Map<string, number> {
+  try {
+    const raw = localStorage.getItem('pk_lab');
+    const obj = raw != null ? (JSON.parse(raw) as unknown) : null;
+    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
+      const rec = obj as Record<string, unknown>;
+      return new Map(
+        LAB_UPGRADES.map((u) => {
+          const v = rec[u.id];
+          return [u.id, typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0];
+        }),
+      );
+    }
+  } catch {
+    /* private mode or a corrupt value — the getter's memory copy covers it */
+  }
+  return new Map(LAB_UPGRADES.map((u) => [u.id, labLevel(u.id)]));
+}
+
 function drawLabCard(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
   u: (typeof LAB_UPGRADES)[number],
   train: boolean,
   stars: number,
+  lvl: number,
 ) {
-  const lvl = labLevel(u.id);
   const maxed = lvl >= u.max;
   const cost = u.costs[lvl] ?? 0;
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
@@ -2485,6 +2514,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   balanceChip(ctx, { x: r.x + r.w - 178, y: r.y + 22, w: 160, h: 32 }, stars);
 
   const { heads, cards } = labLayout();
+  const lvls = labLevelMap();
   ctx.save();
   ctx.beginPath();
   ctx.rect(LAB_VIEW.x - 6, LAB_VIEW.y, LAB_VIEW.w + 12, LAB_VIEW.h);
@@ -2505,7 +2535,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   for (const c of cards) {
     const cr = { ...c.r, y: c.r.y + LAB_VIEW.y - scroll };
     if (cr.y + cr.h < LAB_VIEW.y || cr.y > LAB_VIEW.y + LAB_VIEW.h) continue;
-    drawLabCard(ctx, cr, c.u, c.train, stars);
+    drawLabCard(ctx, cr, c.u, c.train, stars, lvls.get(c.u.id) ?? 0);
   }
   ctx.restore();
 
@@ -2524,9 +2554,10 @@ function drawBagRow(
   sel: ReadonlySet<string>,
   last: string | null,
 ) {
-  const items = bagRowItems();
-  if (!items.length) return;
+  // bagRowItems' filter inline so the stock read serves both the list and the ×n badges
   const stock = bagStock();
+  const items = BAG_ITEMS.filter((it) => (stock[it.id] ?? 0) > 0);
+  if (!items.length) return;
   ctx.textAlign = 'center';
   ctx.font = font(8);
   ctx.fillStyle = '#8890b8';

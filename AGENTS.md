@@ -7,7 +7,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 ## Direction
 
 - North star: **Monster Strike physics · Pokémon pixel-art theme · StS progression**. If a change serves none of the three, it's scope creep.
-- One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd), via the FREE PLAY button; `?seed=NNN` forces a seed for debugging. Endless is future work — don't build for it.
+- One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd), via the START CLIMB button; `?seed=NNN` forces a seed for debugging. Endless is future work — don't build for it.
 - Two level canons: **battle arenas are Archero** — each wave pulls one hand-authored 9×11 room template (`ROOM_LAYOUTS`/`ROOM_BOSS` char grids in `data.ts`: `2` rock, `3` liquid moat, `4` mine, `S` spawn anchor), never procedural geometry; **the overworld map is Slay the Spire** — the seeded branching node map it already is.
 - Single art source: **Pokémon FireRed/LeafGreen (Gen 3 GBA)**. Mon sprites are official FRLG battle fronts vendored from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) (`sprites/pokemon/versions/generation-iii/firered-leafgreen/<id>.png`); item icons come from the same repo (`sprites/items/`). Scenery/props get sliced or blitted from the Gracidea `tileset`/`npcs` atlases at `public/sprites/gracidea/` (RSE, same era). Never procedural shapes.
 - Anti-goals: no monetization mechanics, no non-Pokémon content.
@@ -49,8 +49,9 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/events.ts` — the `?`-stop event pool (heals, catches, ambush scripted waves, egg)
 - `src/game/traits.ts` — tiered type traits from fielded mons (shiny counts double)
 - `src/game/maptiles.ts` — `TILE_*` source rects into `tileset.webp` for the map
-- `src/game/meta.ts` — localStorage persistence: dex catches, rank, rival echo, mid-run save (`pk_run` banked at map safe points, CONTINUE on title), decision telemetry (`pk_stats`)
-- `src/game/screens.ts` — title / draft / result drawing + hit rects (draft offers come from `draftOrder(rng)` in `data.ts`)
+- `src/game/meta.ts` — localStorage persistence: dex catches, rank, rival echo, mid-run save (`pk_run` banked at map safe points, CONTINUE on title), decision telemetry (`pk_stats`), and the earned-progression stores — stars/dust wallets, pulls + pity, lab, board, login calendar, rookie ladder, dex-reward tiers, free pull, streaks, first-win, session grind. New stores are unversioned shape-checked blobs (`load` + field validation + `mem*` fallback); only a `pk_*` shape change in a versioned blob needs `SAVE_VER` + `migrateSaves()`
+- `src/game/tasks.ts` — daily/weekly task board + the UTC-seeded daily picks (`featuredPull` rate-up, `raidPick`/`raidTeam` chroma raid, `dealPick`/`dealCost` spark deal); seeded `do/while` picks are iteration-capped
+- `src/game/screens.ts` — all drawing + hit rects: title home menu (ambient wilds, TODAY card, currency bar), draft offers (from `draftOrder(rng)` in `data.ts`), result card, and the overlays — hatcher (pull theatre + spark shop), lab, tasks, dex, trophies, board, help deck
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/gracidea/` — scenery canon (see Direction): `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
 - `public/sprites/<id>.png` — 64×64 FRLG battle fronts by dex id, vendored from PokeAPI/sprites

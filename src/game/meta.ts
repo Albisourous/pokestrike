@@ -210,8 +210,9 @@ export function tier(r = rating()) {
 }
 
 // Called once per finished run. Depth is the ladder's currency: every stage
-// pays, a clear pays double, and only a run that dies before stage 4 bleeds
-// points — losing deep is still a climb.
+// pays, a clear pays double, and only a run that dies before stage 6 bleeds
+// points (16 - stage*3 stays positive through stage 5) — losing deep is still
+// a climb.
 export function applyRunRating(stage: number, won: boolean, asc: number) {
   const before = rating();
   const delta = Math.round(stage * 4 + (won ? 30 + asc * 5 : 0) - (won ? 0 : Math.max(0, 16 - stage * 3)));
@@ -828,13 +829,22 @@ let memStats: Stats = { draft: {}, perks: {}, perkban: {}, pulls: {}, deaths: {}
 
 const stats = (): Stats => {
   const raw = load<Stats>('pk_stats');
-  return raw && typeof raw === 'object' && raw.draft ? raw : memStats;
+  if (!raw || typeof raw !== 'object' || !raw.draft) return memStats;
+  // the draft check only proves the oldest key — stored blobs predate the
+  // ledgers added since (perkban, pulls, deaths, the counters), so every
+  // field a writer touches gets normalized here, once, for all of them
+  raw.perks ??= {};
+  raw.perkban ??= {};
+  raw.pulls ??= {};
+  raw.deaths ??= {};
+  raw.wins ??= 0;
+  raw.runs ??= 0;
+  return raw;
 };
 
 // one call per offer board shown — taken=null when the player skips it
 export function statOffer(kind: 'draft' | 'perks' | 'perkban', offered: (string | number)[], taken: string | number | null) {
-  const s = stats();
-  s.perkban ??= {}; // stored v1 blobs predate the banish ledger — don't crash on the missing key
+  const s = stats(); // every ledger key is normalized inside stats()
   for (const id of offered) {
     const e = (s[kind][id] ??= [0, 0]);
     e[1]++;
@@ -846,8 +856,7 @@ export function statOffer(kind: 'draft' | 'perks' | 'perkban', offered: (string 
 
 // one call per hatched pull — pull volume and the dupe rate audit the economy
 export function statPull(id: number, dupe: boolean) {
-  const s = stats();
-  s.pulls ??= {}; // stored v1-v3 blobs predate the pull ledger — don't crash on the missing key
+  const s = stats(); // every ledger key is normalized inside stats()
   const e = (s.pulls[id] ??= [0, 0]);
   e[1]++;
   if (dupe) e[0]++;

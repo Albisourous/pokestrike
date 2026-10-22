@@ -638,6 +638,13 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
   if (b.players.some((p) => p.dead))
     stock.push(['revive', shelf('revive', 350, 'REVIVE — HALF HP', 'revive', (bb) => {
       const dead = bb.players.filter((p) => p.dead);
+      if (!dead.length) {
+        // the shelf only lists revive over a corpse — if that ever went stale
+        // mid-flow, hand the charge back instead of indexing an empty list
+        bb.score += price(350);
+        sold.delete('revive');
+        return 'NOBODY NEEDED REVIVING.';
+      }
       const p = dead[Math.floor(bb.roll() * dead.length)];
       p.dead = false;
       p.hp = Math.round(p.maxHp / 2);

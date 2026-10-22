@@ -546,9 +546,18 @@ const tSt = (b: Battle) => {
 const PERK_TICK = new Map<string, NonNullable<Perk['tick']>>();
 for (const p of PERKS) if (p.tick) PERK_TICK.set(p.id, p.tick);
 
+// perkIds mutates in place (grantPerk pushes, applySnapshot reassigns), so
+// the dedupe Set caches per-battle on ref+length — no per-frame allocation
+const perkSetCache = new WeakMap<Battle, { ref: string[]; len: number; set: Set<string> }>();
+
 export function perkTick(b: Battle, dt: number) {
   // dedupe: a DUPE grant shares one state key — two entries would double-fire
-  for (const id of new Set(b.perkIds)) PERK_TICK.get(id)?.(b, dt);
+  let m = perkSetCache.get(b);
+  if (!m || m.ref !== b.perkIds || m.len !== b.perkIds.length) {
+    m = { ref: b.perkIds, len: b.perkIds.length, set: new Set(b.perkIds) };
+    perkSetCache.set(b, m);
+  }
+  for (const id of m.set) PERK_TICK.get(id)?.(b, dt);
 }
 
 // --- bag items: persistent consumables -----------------------------------

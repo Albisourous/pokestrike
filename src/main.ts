@@ -43,6 +43,7 @@ import {
   MAP_GEAR,
   drawHelpChip,
   drawMuteChip,
+  drawGearChip,
   MUTE_BTN,
   DRAFT_REROLL,
   REEL_STOPS,
@@ -107,7 +108,7 @@ import {
   updateTitle,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState } from './game/screens';
-import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod } from './game/tasks';
+import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
 import { dailyMod, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
 
@@ -166,6 +167,13 @@ let menuOpen = false; // overworld TEAM · ITEMS panel
 let settingsOpen = false;
 let tasksOpen = false;
 let tasksTab: TaskPeriod = 'daily';
+// taskViews JSON.parses pk_tasks every call — recompute only when the board
+// can actually change (open, tab switch, claim), not per drawn frame
+let taskViewsCache: { tab: TaskPeriod; views: TaskView[] } | null = null;
+const currentTaskViews = (): TaskView[] => {
+  if (taskViewsCache?.tab !== tasksTab) taskViewsCache = { tab: tasksTab, views: taskViews(tasksTab) };
+  return taskViewsCache.views;
+};
 let settingsCat: SettingsCat = 'sound';
 let settingsDrag: { key: SettingsSliderKey } | null = null;
 let helpPage = 0;
@@ -659,6 +667,7 @@ const doPull = (n: number) => {
   hatch.results = results;
   hatch.dexPay = dexPay;
   hatch.rookiePay = rookieCheck().reduce((s, r) => s + r.pay, 0); // 'HATCH A MON' clears here
+  hatch.label = undefined; // a raid's 'RAID CLEARED' header can't ride the next pull
   hatch.i = 0;
   hatch.t = 0;
   hatch.phase = 'shake'; // the ball rocks before the first reveal
@@ -684,9 +693,13 @@ const sparkBuy = (def: SpeciesDef) => {
   }
   recordCapture([def.id]);
   const dexPay = pullMilestones(); // a dust buy can cross a tier too
-  if (dexPay) hatchFlash = { text: `DEX MILESTONE +${dexPay} ★`, t };
   const rookie = rookieCheck(); // a spark buy is a hatch for the rookie board
-  if (rookie.length) hatchFlash = { text: `ROOKIE +${rookie.reduce((s, r) => s + r.pay, 0)} ★`, t };
+  // one flash can carry both payouts — a buy that hits a dex tier AND a
+  // rookie step shouldn't eat the first line
+  const flash: string[] = [];
+  if (dexPay) flash.push(`DEX MILESTONE +${dexPay} ★`);
+  if (rookie.length) flash.push(`ROOKIE +${rookie.reduce((s, r) => s + r.pay, 0)} ★`);
+  if (flash.length) hatchFlash = { text: flash.join(' · '), t };
   playJingle('catch');
 };
 
@@ -883,9 +896,10 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     if (hit?.kind === 'claim' && hit.i != null) {
-      const v = taskViews(tasksTab)[hit.i];
+      const v = currentTaskViews()[hit.i];
       // taskRowHit fires on any slap of the slab — done pays, the rest deny
       if (v?.done && claimTask(v.id)) {
+        taskViewsCache = null; // the claim flag flipped — next read re-parses
         playJingle('task'); // the bag pays out
         const rookie = rookieCheck(); // 'CLAIM A TASK' clears on this tap
         if (rookie.length) taskFlash = { text: `ROOKIE +${rookie.reduce((s, r) => s + r.pay, 0)} ★`, t };
@@ -947,6 +961,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       tasksOpen = true;
       tasksTab = 'daily';
+      taskViewsCache = null; // progress accrued since the last peek — re-parse
       return;
     }
     if (inRect(p.x, p.y, HELP_BTN)) {
@@ -1289,14 +1304,15 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (dexDrag) {
     if (Math.abs(p.y - dexDrag.y0) > 10) dexDrag.moved = true;
+    // same overlay order as pointerdown's s0 pick — hatch→lab→dex→ach
     const s = Math.min(
       Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0),
-      labOpen ? labScrollMax() : hatchOpen ? hatchScrollMax(hatch) : achOpen ? achScrollMax() : dexScrollMax(),
+      hatchOpen ? hatchScrollMax(hatch) : labOpen ? labScrollMax() : dexOpen ? dexScrollMax() : achScrollMax(),
     );
-    if (labOpen) labScroll = s;
-    else if (hatchOpen) hatch.sparkScroll = s;
-    else if (achOpen) achScroll = s;
-    else dexScroll = s;
+    if (hatchOpen) hatch.sparkScroll = s;
+    else if (labOpen) labScroll = s;
+    else if (dexOpen) dexScroll = s;
+    else achScroll = s;
     return;
   }
   if (boxDrag) {
@@ -1686,7 +1702,9 @@ function update(dt: number) {
       taskTick({
         kos: battle.totalKos,
         catches: battle.box.length,
-        stages: stageReached,
+        // cleared stages, not the stage died on — same count buildShare draws;
+        // waveIndex is the row fought (-1 at HOME), so a win means all of them
+        stages: won ? TOTAL_STAGES : Math.max(0, battle.waveIndex),
         gyms: battle.gymsBeaten,
         perks: battle.perksTaken,
         score: battle.score,
@@ -1960,10 +1978,11 @@ function render() {
   if (helpChipUp()) drawHelpChip(ctx);
   if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
     drawMuteChip(ctx);
+    drawGearChip(ctx); // same gate as the MAP_GEAR hit-test — the chip was a dead hotspot
   }
   if (helpOpen) drawHelp(ctx, helpPage);
   if (settingsOpen) drawSettings(ctx, settingsCat, settings());
-  if (tasksOpen) drawTasks(ctx, taskViews(tasksTab), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
+  if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
   // playtester lifeline: you can't see their console — a crash paints
   // itself with the run's seed and build, so one screenshot is the report
   if (crash) {
