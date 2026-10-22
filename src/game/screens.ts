@@ -937,13 +937,6 @@ function drawClimbBody(
     });
   }
 
-  // the pitch in one line — a stranger gets the loop before they tap a thing
-  ctx.font = font(11);
-  ctx.fillStyle = '#0a2410';
-  ctx.textAlign = 'center';
-  ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2 + 1, FREE_BTN.y - 15);
-  ctx.fillStyle = PARCH;
-  ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
   // one hero pill — the daily rides its flank at the same height. The raid
   // isn't a door here anymore; its tab carries the boss face + chroma dot.
   pill(ctx, FREE_BTN, {

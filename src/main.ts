@@ -34,7 +34,6 @@ import {
   FREE_BTN,
   NEW_HIT,
   DAILY_BTN,
-  RAID_BTN,
   ASC_BTN,
   hitAscCell,
   noteAscDeny,
@@ -1132,10 +1131,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (
-      (homeTab === 'climb' && inRect(p.x, p.y, RAID_BTN)) ||
-      (homeTab === 'raid' && inRect(p.x, p.y, RAID_FIGHT))
-    ) {
+    if (homeTab === 'raid' && inRect(p.x, p.y, RAID_FIGHT)) {
       // the day's boss drops once — a beaten raid stays done till UTC midnight
       if (raidDoneToday()) {
         sfx('ui', 0.6); // soft deny — same pitch every dead tap gets
