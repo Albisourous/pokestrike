@@ -1353,19 +1353,8 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
 function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
   const pullN = pullCount();
   const r = HATCH_BTN;
-  menuCard(ctx, r, 12);
-
-  // gold header band — the hatcher is the economy's front door
-  stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 36 }, GOLD);
-  ctx.textAlign = 'left';
-  ctx.font = font(11);
-  ctx.fillStyle = INK;
-  ctx.fillText('THE HATCHER', r.x + 18, r.y + 28);
-  if (freeNow) {
-    ctx.textAlign = 'right';
-    ctx.font = fontB(8);
-    ctx.fillText('FREE PULL TODAY', r.x + r.w - 16, r.y + 26);
-  }
+  // the economy's front door — a titled window; the free pull flags in-band
+  uiPanel(ctx, r, 'THE HATCHER', { h: 36, sub: freeNow ? 'FREE PULL TODAY' : undefined });
 
   // the day's rate-up face on a stage of its own — a type-glow card with
   // pedestal, ball watermark, and twinkles breathing around the sprite
