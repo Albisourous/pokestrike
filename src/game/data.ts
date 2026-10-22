@@ -808,6 +808,11 @@ export const tierOf = (d: SpeciesDef) => (bst(d) >= 560 ? 3 : bst(d) >= 460 ? 2 
 export const PULLABLE: SpeciesDef[] = [
   ...new Map([...ROSTER, ...ENEMY_DB, ...ELITES, ...INVADERS].map((s) => [s.id, s])).values(),
 ].sort((a, b) => a.id - b.id);
+// the dex's full page: evo-only forms are caught through evolution, not
+// the hatcher — without them the count outruns the grid
+export const DEX_ALL: SpeciesDef[] = [
+  ...new Map([...PULLABLE, ...EVOS].map((s) => [s.id, s])).values(),
+].sort((a, b) => a.id - b.id);
 export const INVADER_IDS = new Set(INVADERS.map((i) => i.id));
 
 export const PULL_COST = 30;

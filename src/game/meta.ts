@@ -1,4 +1,5 @@
 import { speciesById, TOTAL_STAGES } from './data';
+import { LV_CAP } from './stats';
 
 // Run-to-run persistence: the caught-dex, gym-win count (which sets rank),
 // and the last losing team saved as the next run's rival "echo".
@@ -243,7 +244,11 @@ export function board(): BoardEntry[] {
   const list = Array.isArray(raw) ? raw : memBoard;
   return list.filter(
     (e): e is BoardEntry =>
-      !!e && typeof e.s === 'number' && Array.isArray(e.team) && typeof e.st === 'number',
+      !!e &&
+      Number.isFinite(e.s) &&
+      Number.isFinite(e.st) &&
+      Array.isArray(e.team) &&
+      e.team.every((id: number) => Number.isFinite(id)),
   );
 }
 
@@ -328,7 +333,8 @@ let memAsc: number | null = null;
 export function ascPick(): number {
   const raw = load<unknown>('pk_asc');
   const stored = typeof raw === 'number' && Number.isFinite(raw) ? raw : memAsc;
-  return Math.min(stored ?? best().wins, best().wins, 9);
+  // floor at 0 — a negative stored pick would weaken foes and blank ASC_MODS
+  return Math.max(0, Math.min(stored ?? best().wins, best().wins, 9));
 }
 
 export function setAsc(n: number): void {
@@ -475,7 +481,8 @@ let memPulls = 0;
 
 export function stars(): number {
   const s = load<unknown>('pk_stars');
-  return typeof s === 'number' && Number.isFinite(s) ? s : memStars;
+  // a negative wallet is corruption, not debt — clamp to zero
+  return typeof s === 'number' && Number.isFinite(s) ? Math.max(0, s) : memStars;
 }
 
 export function addStars(n: number): number {
@@ -494,7 +501,7 @@ export function spendStars(n: number): boolean {
 
 export function dust(): number {
   const d = load<unknown>('pk_dust');
-  return typeof d === 'number' && Number.isFinite(d) ? d : memDust;
+  return typeof d === 'number' && Number.isFinite(d) ? Math.max(0, d) : memDust;
 }
 
 export function addDust(n: number): number {
@@ -514,7 +521,7 @@ export function spendDust(n: number): boolean {
 // lifetime pull count — the pity meter reads it, so it never resets
 export function pullCount(): number {
   const p = load<unknown>('pk_pulls');
-  return typeof p === 'number' && Number.isFinite(p) ? p : memPulls;
+  return typeof p === 'number' && Number.isFinite(p) ? Math.max(0, Math.floor(p)) : memPulls;
 }
 
 export function bumpPulls(): number {
@@ -572,7 +579,8 @@ const boost = (): { until: number; mult: number } | null => {
     typeof raw.until === 'number' &&
     Number.isFinite(raw.until) &&
     typeof raw.mult === 'number' &&
-    Number.isFinite(raw.mult)
+    Number.isFinite(raw.mult) &&
+    raw.mult > 0 // a 0/negative mult stored under a far-future until would zero earnings
   )
     return { until: raw.until, mult: raw.mult };
   return memBoost;
@@ -629,9 +637,10 @@ const login = (): Login => {
   const raw = load<Partial<Login>>('pk_login');
   if (raw && typeof raw === 'object') {
     if (typeof raw.day === 'string') l.day = raw.day;
-    if (typeof raw.n === 'number' && Number.isFinite(raw.n)) l.n = raw.n;
-    if (typeof raw.prize === 'number' && Number.isFinite(raw.prize)) l.prize = raw.prize;
-    if (typeof raw.back === 'number' && Number.isFinite(raw.back)) l.back = raw.back;
+    // negatives would invert the prize math into a wallet drain — clamp up
+    if (typeof raw.n === 'number' && Number.isFinite(raw.n)) l.n = Math.max(0, Math.floor(raw.n));
+    if (typeof raw.prize === 'number' && Number.isFinite(raw.prize)) l.prize = Math.max(0, raw.prize);
+    if (typeof raw.back === 'number' && Number.isFinite(raw.back)) l.back = Math.max(0, raw.back);
   }
   return l;
 };
@@ -693,6 +702,7 @@ export function grindBonus(now = Date.now()): { n: number; pay: number } {
       ? (raw as { day: string; n: number })
       : null;
   const cur = stored ?? memGrind;
+  if (cur.n < 0) cur.n = 0; // a corrupt negative count would price runs below zero
   const n = (cur.day === today ? cur.n : 0) + 1;
   memGrind = { day: today, n };
   store('pk_grind', memGrind);
@@ -755,7 +765,10 @@ export function buyLab(id: string): boolean {
 // no data transform needed below
 // v3: RunSave gains eggIn/eggJustLaid — parked runs get defaults below
 // v4: RunSave gains reviveUsed/starsRun — parked runs get defaults below
-const SAVE_VER = 4;
+// v5: team[] gains luck/cdMod, the run gains tagEchoDone/modId — all read
+// through ?? defaults, and the lost per-mon fields can't be backfilled, so
+// no transform step exists; the bump just documents the shape
+const SAVE_VER = 5;
 
 export function migrateSaves() {
   const v = load<number>('pk_ver') ?? 0;
@@ -829,16 +842,18 @@ let memStats: Stats = { draft: {}, perks: {}, perkban: {}, pulls: {}, deaths: {}
 
 const stats = (): Stats => {
   const raw = load<Stats>('pk_stats');
-  if (!raw || typeof raw !== 'object' || !raw.draft) return memStats;
+  if (!raw || typeof raw !== 'object' || !raw.draft || typeof raw.draft !== 'object') return memStats;
   // the draft check only proves the oldest key — stored blobs predate the
   // ledgers added since (perkban, pulls, deaths, the counters), so every
-  // field a writer touches gets normalized here, once, for all of them
-  raw.perks ??= {};
-  raw.perkban ??= {};
-  raw.pulls ??= {};
-  raw.deaths ??= {};
-  raw.wins ??= 0;
-  raw.runs ??= 0;
+  // field a writer touches gets normalized here, once, for all of them.
+  // Wrong-type fields (perks: 5, deaths: "x") survive ??= — then a writer's
+  // subscript-assign throws on the primitive, so each ledger re-checks type
+  for (const k of ['perks', 'perkban', 'pulls', 'deaths'] as const) {
+    const v = raw[k];
+    if (!v || typeof v !== 'object') raw[k] = {};
+  }
+  if (typeof raw.wins !== 'number' || !Number.isFinite(raw.wins)) raw.wins = 0;
+  if (typeof raw.runs !== 'number' || !Number.isFinite(raw.runs)) raw.runs = 0;
   return raw;
 };
 
@@ -879,7 +894,8 @@ export interface RunSave {
   eggIn?: number; // ?-pool egg: stops until it hatches (v3+)
   eggJustLaid?: boolean; // the laying arrival doesn't consume a tick
   modId?: string; // the daily rule card applied to this run (v4+)
-  team: { id: number; lvl: number; shiny?: boolean; hp: number }[];
+  team: { id: number; lvl: number; shiny?: boolean; hp: number; luck?: number; cdMod?: number; cd?: number; sash?: boolean }[];
+  tagEchoDone?: boolean; // ASC 9's owed echo visit — a spent flag stays spent (v5+)
   box: { id: number; lvl?: number; shiny?: boolean; luck?: number }[];
   boxHp: number[];
   boxLvl: number[];
@@ -946,17 +962,29 @@ export function runSave(): RunSave | null {
     Array.isArray(s.team) &&
     s.team.length > 0 &&
     s.team.every(
-      (e) => !!e && Number.isFinite(e.id) && Number.isFinite(e.hp) && (e.lvl == null || Number.isFinite(e.lvl)),
+      (e) =>
+        !!e &&
+        Number.isFinite(e.id) &&
+        Number.isFinite(e.hp) &&
+        e.hp <= 99999 &&
+        (e.lvl == null || (Number.isFinite(e.lvl) && e.lvl >= 1 && e.lvl <= LV_CAP)) &&
+        (e.luck == null || Number.isFinite(e.luck)) &&
+        (e.cdMod == null || Number.isFinite(e.cdMod)),
     ) &&
     Array.isArray(s.box) &&
-    s.box.every((e) => !!e && Number.isFinite(e.id) && (e.lvl == null || Number.isFinite(e.lvl))) &&
-    // hp/lvl ride parallel to the box — positional pairing, every slot a real number
+    s.box.every((e) => !!e && Number.isFinite(e.id) && (e.lvl == null || (Number.isFinite(e.lvl) && e.lvl <= LV_CAP))) &&
+    // hp/lvl ride parallel to the box — positional pairing, every slot a
+    // real in-range number (an unbounded hp is a god-mon on resume)
     Array.isArray(s.boxHp) &&
     s.boxHp.length === s.box.length &&
-    s.boxHp.every((v) => Number.isFinite(v)) &&
+    s.boxHp.every((v) => Number.isFinite(v) && v >= 0 && v <= 99999) &&
     Array.isArray(s.boxLvl) &&
     s.boxLvl.length === s.box.length &&
-    s.boxLvl.every((v) => Number.isFinite(v)) &&
+    s.boxLvl.every((v) => Number.isFinite(v) && v >= 1 && v <= LV_CAP) &&
+    // depth is the rolled-wave count — it can't exceed the rows a 9-stop
+    // climb rolls, and a huge value would make foes unkillable on resume
+    s.depth >= 0 &&
+    s.depth <= TOTAL_STAGES - 3 &&
     Array.isArray(s.perks) &&
     Array.isArray(s.heldItems) &&
     (s.bag == null || Array.isArray(s.bag)) &&

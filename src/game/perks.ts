@@ -678,6 +678,9 @@ export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<stri
       cands = pool.filter((p) => p.rarity === TIERS[tier]);
       if (cands.length) break;
     }
+    // every surviving perk can sit above the rolled tier after heavy
+    // banishing — an empty trickle would push undefined and eat pool's tail
+    if (!cands.length) break;
     const pick = cands[Math.floor(rng() * cands.length)];
     out.push(pick);
     pool.splice(pool.indexOf(pick), 1);

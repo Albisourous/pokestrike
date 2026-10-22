@@ -42,9 +42,17 @@ interface GameEvent {
   run: (b: Battle) => EventOutcome;
 }
 
+// returns how many mons actually needed the mend — a "healed!" claim on a
+// full-HP team is a lie the chime shouldn't tell
 const healAll = (b: Battle, frac: number) => {
-  for (const p of b.players) if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * frac));
-  sfx('heal'); // the mend chime — every team heal lands on the ear
+  let n = 0;
+  for (const p of b.players)
+    if (!p.dead && p.hp < p.maxHp) {
+      p.hp = Math.min(p.maxHp, p.hp + Math.round(p.maxHp * frac));
+      n++;
+    }
+  if (n) sfx('heal'); // the mend chime — every team heal lands on the ear
+  return n;
 };
 
 // a boxed catch at wave-appropriate level — wounded mons arrive hurt,
@@ -75,17 +83,20 @@ const EVENTS: GameEvent[] = [
   {
     w: 3,
     run: (b) => {
+      const needed = b.players.some((p) => p.dead || p.hp < p.maxHp);
       for (const p of b.players) { p.dead = false; p.hp = p.maxHp; }
-      sfx('heal'); // the spring revives too — healAll can't reach dead mons
-      return { note: 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!', art: { item: 'mystic-water' }, skip: true };
+      if (needed) sfx('heal'); // the spring revives too — healAll can't reach dead mons
+      return { note: needed ? 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!' : 'A HIDDEN SPRING — BUT NOBODY NEEDED IT.', art: { item: 'mystic-water' }, skip: true };
     },
   },
   {
     w: 4,
     run: (b) => {
-      healAll(b, 0.3);
+      const n = healAll(b, 0.3);
       return {
-        note: 'YOU FOUND A BERRY BUSH — THE TEAM RECOVERED 30%!',
+        note: n
+          ? 'YOU FOUND A BERRY BUSH — THE TEAM RECOVERED 30%!'
+          : 'A BERRY BUSH — BUT THE TEAM WAS ALREADY AT FULL STRENGTH.',
         art: { item: b.roll() < 0.5 ? 'oran-berry' : 'sitrus-berry' },
         skip: true,
       };
@@ -147,6 +158,8 @@ const EVENTS: GameEvent[] = [
       const shiny = b.roll() < (1 / 48) * 3;
       const name = p.def.name.toUpperCase();
       b.applyDef(p, { ...def, shiny: shiny || undefined }, p.lvl, p.hp / p.maxHp);
+      recordCapture([def.id]); // the stranger lands in the dex like any catch
+      if (shiny) recordShiny(def.id);
       return {
         note: `${name} LEFT… AND ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED!`,
         art: { mon: def.id },
@@ -197,6 +210,7 @@ const EVENTS: GameEvent[] = [
         options: [
           {
             label: 'PAY 300 SCORE',
+            cost: 300, // the wallet tag dims it like every other priced pick
             run: (bb) => {
               if (bb.score < 300) return { note: 'HE SCOWLED — "COME BACK RICHER."', skip: true };
               bb.score -= 300;
@@ -302,6 +316,7 @@ const EVENTS: GameEvent[] = [
               const name = weak.def.name.toUpperCase();
               bb.applyDef(weak, { ...def, shiny: shiny || undefined }, Math.min(100, weak.lvl + 4), weak.hp / weak.maxHp);
               recordCapture([def.id]); // the stranger lands in the dex
+              if (shiny) recordShiny(def.id); // a shiny arrival counts like a caught one
               return { note: `${name} LEFT… ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED AT Lv${weak.lvl}!`, skip: true };
             },
           },
@@ -613,7 +628,8 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
     },
   });
   const stock: [string, EventChoice][] = [
-    ['potion', shelf('potion', 200, 'POTION — HEAL 40%', 'potion', (bb) => (healAll(bb, 0.4), 'THE TEAM RECOVERED 40%!'))],
+    ['potion', shelf('potion', 200, 'POTION — HEAL 40%', 'potion', (bb) =>
+      healAll(bb, 0.4) ? 'THE TEAM RECOVERED 40%!' : 'ALREADY AT FULL HP — THE SPRAY FIZZLED.')],
     ['candy', shelf('candy', 400, 'RARE CANDY — +1 LV', 'hp-up', (bb) => {
       for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
       return 'EVERYONE GREW +1 LEVEL!';

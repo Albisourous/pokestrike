@@ -770,10 +770,17 @@ export class Battle {
     this.log(`RELIC — ${p.name.toUpperCase()}`);
   }
 
-  // The run is only safe to bank on the map — mid-fight, mid-walk or
-  // mid-choice frames have half-resolved state. Callers get null there.
+  // The run is safe to bank on the map — and at the reward/loot break,
+  // where the row is already resolved. Refusing to save there let a
+  // quit-at-reward resume BEFORE the fight and re-pay its KOs and row.
+  // Resuming past it costs the unclaimed board pick — the honest price
+  // of a mid-choice park. Mid-fight, mid-walk or mid-choice frames still
+  // return null.
   snapshot(): RunSave | null {
-    if (this.phase !== 'map' || this.mapWalk || this.eventChoice || this.evoChoice) return null;
+    const parked =
+      this.phase === 'map' ||
+      ((this.phase === 'reward' || this.phase === 'loot') && !this.evoChoice);
+    if (!parked || this.mapWalk || this.eventChoice) return null;
     return {
       seed: 0, // caller stamps the run seed — battle only knows mapSeed
       daily: false,
@@ -782,11 +789,24 @@ export class Battle {
       mapNode: this.mapNode,
       waveIndex: this.waveIndex,
       depth: this.depth,
-      pendingNext: this.pendingNext,
+      // banked mid-reward/loot: the row already fought is resolved, so the
+      // resume marker sits past it — the wave can't be refought for a
+      // second row pay
+      pendingNext: this.phase === 'map' ? this.pendingNext : this.waveIndex + 1,
       mapNote: this.mapNote,
       eggIn: this.eggIn,
       eggJustLaid: this.eggJustLaid,
-      team: this.players.map((p) => ({ id: p.def.id, lvl: p.lvl, shiny: p.shiny || undefined, hp: p.hp })),
+      team: this.players.map((p) => ({
+        id: p.def.id,
+        lvl: p.lvl,
+        shiny: p.shiny || undefined,
+        hp: p.hp,
+        luck: p.def.luck,
+        cdMod: p.cdMod,
+        cd: p.cd,
+        sash: p.sash,
+      })),
+      tagEchoDone: this.tagEchoDone,
       box: this.box.map((d) => ({ id: d.id, lvl: d.lvl, shiny: d.shiny || undefined, luck: d.luck })),
       boxHp: [...this.boxHp],
       boxLvl: [...this.boxLvl],
@@ -853,12 +873,19 @@ export class Battle {
     if (s.ashArmed != null) this.ashArmed = s.ashArmed;
     this.reviveUsed = s.reviveUsed ?? false; // a spent token stays spent
     this.starsRun = s.starsRun ?? 0;
-    // stamp saved hp last so perk heals/maxHp growth don't double-count
+    // a spent echo visit stays spent — without this a park/resume re-arms it
+    this.tagEchoDone = s.tagEchoDone ?? false;
+    // stamp saved per-mon state last so perk replays (heals, elixir's
+    // cd = 0, focus-sash re-arm) can't double-fire on top of it
     this.players.forEach((p, i) => {
       const t = s.team[i];
       if (!t) return;
       p.hp = Math.max(0, Math.min(t.hp, p.maxHp));
       p.dead = p.hp <= 0;
+      if (t.luck != null) p.def = { ...p.def, luck: t.luck };
+      if (t.cdMod != null) p.cdMod = t.cdMod;
+      if (t.cd != null) p.cd = Math.max(0, Math.min(t.cd, p.cdMax));
+      if (t.sash != null) p.sash = t.sash;
     });
     // hp/lvl ride parallel to the box — drop each dead species WITH its
     // pair, or one filtered slot shifts every later mon's numbers
@@ -1772,6 +1799,9 @@ export class Battle {
       this.hitSolid(u);
       // court gimmicks — the ball feels the floor it's flying over
       for (const hz of this.hazards) {
+        // a hazard can kill mid-pass (mine, lava chip) — a corpse stops
+        // feeling the floor instead of warping/sizzling through the rest
+        if (u.dead) break;
         if (hz.spent || dist(u, hz) > u.r + hz.r + 1) continue;
         // a landlocked ball never enters the water — hitSolid banks it
         // off the surface, so its effects only touch swimmers
@@ -1858,8 +1888,10 @@ export class Battle {
             u.vx *= Math.exp(-8 * h);
             u.vy *= Math.exp(-8 * h);
           }
-        } else if (!this.slowImmune && this.time - u.hzT > 0.5) {
-          // lava & spikes chip the ball on contact — MS damage walls
+        } else if ((hz.kind === 'lava' || hz.kind === 'spikes') && !this.slowImmune && this.time - u.hzT > 0.5) {
+          // lava & spikes chip the ball on contact — MS damage walls.
+          // Field zones (static/power/well) must not land here: they work
+          // by being entered, and chip turned them into disguised lava.
           u.hzT = this.time;
           this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.04)));
           sfx('sizzle');
@@ -2321,8 +2353,10 @@ export class Battle {
   private collide(u: Unit, o: { x: number; y: number; r: number }): boolean {
     const rr = u.r + o.r;
     const d = dist(u, o);
-    if (d >= rr || d === 0) return false;
-    const n = norm({ x: o.x - u.x, y: o.y - u.y });
+    if (d >= rr) return false;
+    // dead-center overlap: norm() is 0/0 — pop apart on a fixed axis or the
+    // pair stays stacked forever
+    const n = d > 0 ? norm({ x: o.x - u.x, y: o.y - u.y }) : { x: 0, y: -1 };
     u.x = o.x - n.x * rr;
     u.y = o.y - n.y * rr;
     const vn = u.vx * n.x + u.vy * n.y;
@@ -4292,7 +4326,9 @@ export class Battle {
     for (const period of ['daily', 'weekly'] as const) {
       for (const v of taskViews(period)) {
         if (v.kind !== kind || v.done || this.taskDone.has(v.id)) continue;
-        if (v.have + now < v.n) continue;
+        // maxstage is a high-water mark, not a cumulative counter — adding
+        // banked have on top would ping "reach stage 8" at stage 5 forever
+        if ((v.kind === 'maxstage' ? now : v.have + now) < v.n) continue;
         this.taskDone.add(v.id);
         this.pushText({ x, y, text: `TASK: ${v.label} ✓`, t: 1.5, color: '#ffd84d', big: true });
         sfx('ui', 0.9);
@@ -5178,6 +5214,9 @@ export class Battle {
   }
 
   private damagePlayer(p: Unit, dmg: number, src?: Unit) {
+    // a corpse takes nothing — hazards and stray orbs were re-firing the
+    // whole KO beat (REVENGE stack, sash burn, revive spend, killer rewrite)
+    if (p.dead) return;
     // flying trait: incoming attacks whiff outright — surfaced so a zero
     // never reads as a bug
     if (this.t('flying') > 0 && this.rng() < Math.min(0.25, this.t('flying') * 0.07)) {
@@ -6722,8 +6761,9 @@ export class Battle {
     // header rides over the faded island edge — text stays crisp while
     // rooftops scroll beneath it
     ctx.fillStyle = '#f8d030';
-    // long region names shrink instead of running under the corner chips
-    fitFont(ctx, this.stage.name.toUpperCase(), 22, 320);
+    // long region names shrink instead of running under the corner chips —
+    // 236px keeps the cap inside the gear chip's left edge
+    fitFont(ctx, this.stage.name.toUpperCase(), 22, 236);
     ctx.fillText(this.stage.name.toUpperCase(), 270, 64);
     ctx.font = font(12);
     ctx.fillStyle = '#8890b8';

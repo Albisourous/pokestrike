@@ -37,10 +37,10 @@ import {
   RAID_BTN,
   ASC_BTN,
   HELP_BTN,
-  HELP_CHIP,
+  HELP_CHIP_HIT,
   GEAR_BTN,
-  MUTE_CHIP,
-  MAP_GEAR,
+  MUTE_CHIP_HIT,
+  MAP_GEAR_HIT,
   drawHelpChip,
   drawMuteChip,
   drawGearChip,
@@ -63,7 +63,7 @@ import {
   HELP_PANEL,
   HELP_PREV,
   HELP_NEXT,
-  HELP_CLOSE,
+  HELP_CLOSE_HIT,
   HELP_PAGE_COUNT,
   DEX_BTN,
   drawDex,
@@ -99,17 +99,19 @@ import {
   drawHatch,
   drawLab,
   sparkHit,
+  HATCH_PANEL,
   labHit,
   labScrollMax,
   hatchScrollMax,
   inRect,
+  slop,
   font,
   fontB,
   updateTitle,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState } from './game/screens';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
-import { dailyMod, type DailyMod } from './game/daily';
+import { dailyMod, DAILY_MODS, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
 
 type Scene = 'loading' | 'title' | 'draft' | 'charm' | 'battle' | 'result';
@@ -194,7 +196,7 @@ let hatch: HatchState = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0
 let sparkArm = { id: -1, t: -10 };
 let hatchFlash = { text: '', t: -10 }; // transient gold line under the pity bar — milestone payouts name themselves
 let taskFlash = { text: '', t: -10 }; // same flash, on the chores board
-let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
+let dexDrag: { y0: number; s0: number; moved: boolean; for?: 'hatch' | 'lab' | 'dex' | 'ach' | 'board' } | null = null;
 let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
 let startOffers: Perk[] = []; // starter charm pick between draft and battle
@@ -457,12 +459,16 @@ function newRun(daily = false) {
 }
 
 // bank the climb whenever the team is parked on the map — mid-fight tabs
-// resume at the last stop, not mid-wave
+// resume at the last stop, not mid-wave. Draft/charm scenes hold a battle
+// parked on a pre-run map: saving there would offer a CONTINUE that skips
+// the charm pick entirely.
 function bankRun() {
+  if (scene !== 'battle') return;
   const s = battle?.snapshot();
   if (s) {
     s.seed = runSeed;
     s.daily = runIsDaily;
+    s.modId = runMod?.id; // the rule card's id survives a DAILY_MODS reshuffle
     saveRun(s);
   }
 }
@@ -482,7 +488,9 @@ document.addEventListener('visibilitychange', () => {
 function resumeRun(s: RunSave) {
   runSeed = s.seed;
   runIsDaily = s.daily;
-  runMod = s.daily ? modForSeed(s.seed) : null;
+  // the save names its rule card — a DAILY_MODS reorder can't swap a parked
+  // daily into a different mod mid-run; v4 saves re-derive like before
+  runMod = s.daily ? (DAILY_MODS.find((m) => m.id === s.modId) ?? modForSeed(s.seed)) : null;
   runRng = mulberry32(runSeed);
   stage = makeStage(runSeed);
   // entries keep their save row attached — applySnapshot stamps hp by index,
@@ -562,10 +570,16 @@ function startDraft() {
   // picks stay, but every team gets one anchor with an evo ceiling
   const aceTypes = new Set<string>();
   const aces: number[] = [];
-  while (aces.length < 3) {
+  // a thin candidate pool (fewer than 3 distinct types) would spin forever —
+  // cap the tries, then pad the spread deterministically from what's there
+  for (let i = 0; i < 200 && aces.length < 3; i++) {
     const c = aceCandidates[Math.floor(runRng() * aceCandidates.length)];
-    if (aceTypes.has(c.type)) continue;
+    if (!c || aceTypes.has(c.type)) continue;
     aceTypes.add(c.type);
+    aces.push(draftPool.push(c) - 1);
+  }
+  for (const c of aceCandidates) {
+    if (aces.length >= 3) break;
     aces.push(draftPool.push(c) - 1);
   }
   draft.order.splice((DRAFT_ROUNDS - 1) * 3, 3, ...aces);
@@ -714,7 +728,7 @@ const hatchTap = (p: { x: number; y: number }) => {
   if (hatch.phase === 'reveal') {
     sfx('ui');
     // SKIP ≫ jumps the rest of the reel straight to the summary grid
-    if (hatch.results.length > 1 && inRect(p.x, p.y, SKIP_PULL_BTN)) {
+    if (hatch.results.length > 1 && inRect(p.x, p.y, slop(SKIP_PULL_BTN, 7))) {
       hatch.phase = 'results';
       hatch.t = 0;
       return;
@@ -745,6 +759,9 @@ const hatchTap = (p: { x: number; y: number }) => {
     sparkBuy(cell);
     return;
   }
+  // dead space INSIDE the panel is modal like the siblings — only a tap
+  // past the edge dismisses; a fat-finger on the shop shouldn't close it
+  if (inRect(p.x, p.y, HATCH_PANEL)) return;
   hatchOpen = false; // dead space is a tap-out like its siblings
   sfx('ui');
 };
@@ -757,6 +774,7 @@ const labTap = (p: { x: number; y: number }) => {
     else sfx('ui', 0.6); // broke or maxed — the price pill was red
     return;
   }
+  if (inRect(p.x, p.y, HATCH_PANEL)) return; // inside dead space is modal
   labOpen = false;
   sfx('ui');
 };
@@ -818,7 +836,14 @@ function sceneMusic() {
 const helpChipUp = () =>
   scene === 'draft' ||
   scene === 'charm' ||
-  (scene === 'battle' && !!battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen);
+  // mapModals (event cards, walks) and the evo pick own the screen — a
+  // chip under a modal is an invisible hotspot
+  (scene === 'battle' &&
+    !!battle &&
+    (battle.phase === 'map' || battle.phase === 'reward') &&
+    !menuOpen &&
+    !battle.mapModal &&
+    !battle.evoChoice);
 
 // one click per real page turn — edges stay quiet so a held arrow key or a
 // trackpad flick can't machine-gun the synth
@@ -884,7 +909,7 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   // the tasks board swallows taps while it's up — claim, tab, or close
   if (tasksOpen) {
-    const hit = taskRowHit(p, tasksTab);
+    const hit = taskRowHit(p, currentTaskViews());
     if (hit?.kind === 'close') {
       tasksOpen = false;
       sfx('ui');
@@ -910,7 +935,7 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   // the ? chip rides the dealt boards too — checked ahead of the scenes so a
   // tap can't fall through to a fast-forward or a card pick
-  if (helpChipUp() && inRect(p.x, p.y, HELP_CHIP)) {
+  if (helpChipUp() && inRect(p.x, p.y, HELP_CHIP_HIT)) {
     sfx('ui');
     helpOpen = true;
     helpPage = 0;
@@ -924,6 +949,7 @@ canvas.addEventListener('pointerdown', (e) => {
         y0: p.y,
         s0: hatchOpen ? hatch.sparkScroll : labOpen ? labScroll : dexOpen ? dexScroll : achScroll,
         moved: false,
+        for: hatchOpen ? 'hatch' : labOpen ? 'lab' : dexOpen ? 'dex' : achOpen ? 'ach' : 'board',
       };
       return;
     }
@@ -1072,7 +1098,7 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
-    if (inRect(p.x, p.y, DRAFT_REROLL)) {
+    if (inRect(p.x, p.y, slop(DRAFT_REROLL, 3))) {
       rerollDraft(); // the helper denies when the reshuffles are spent
       return;
     }
@@ -1090,7 +1116,7 @@ canvas.addEventListener('pointerdown', (e) => {
       }
     }
   } else if (scene === 'charm') {
-    if (inRect(p.x, p.y, CHARM_SKIP)) {
+    if (inRect(p.x, p.y, slop(CHARM_SKIP, 4))) {
       // declining the charm pays score instead — dead offers have a price
       sfx('ui');
       statOffer('perks', startOffers.map((p) => p.id), null);
@@ -1129,14 +1155,15 @@ canvas.addEventListener('pointerdown', (e) => {
       }
     }
     // mid-run chips — the ? half of this gate moved up to helpChipUp() so the
-    // dealt boards share it; the mute chip stays a between-fights control
-    if (battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
-      if (inRect(p.x, p.y, MUTE_CHIP)) {
+    // dealt boards share it; the mute chip stays a between-fights control.
+    // Neither answers under a modal (event card, evo pick) — that layer owns input
+    if (battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen && !battle.mapModal && !battle.evoChoice) {
+      if (inRect(p.x, p.y, MUTE_CHIP_HIT)) {
         toggleMute();
         sfx('ui');
         return;
       }
-      if (inRect(p.x, p.y, MAP_GEAR)) {
+      if (inRect(p.x, p.y, MAP_GEAR_HIT)) {
         settingsOpen = true;
         settingsCat = 'sound';
         sfx('ui');
@@ -1147,8 +1174,8 @@ canvas.addEventListener('pointerdown', (e) => {
     // or a tap outside dismisses; inside, roster ops only
     if (battle && menuOpen && (battle.phase === 'map' || battle.phase === 'reward')) {
       // QUIT leaves the run to its parked pk_run — CONTINUE picks it back up;
-      // bankRun catches panel-made swaps on the map, and mid-reward
-      // snapshot() is null anyway so the map-entry bank stands
+      // bankRun catches panel-made swaps on the map, and a mid-reward save
+      // resumes past the fought row (the board pick is the price of parking)
       if (inRect(p.x, p.y, MENU_QUIT)) {
         sfx('ui');
         bankRun();
@@ -1198,7 +1225,7 @@ canvas.addEventListener('pointerdown', (e) => {
           if (inRect(p.x, p.y, evoCardRect(i, opts.length))) battle.pickEvo(i);
         }
         // KEEP bows out of the split — the mon stays in its current form
-        if (inRect(p.x, p.y, EVO_KEEP)) {
+        if (inRect(p.x, p.y, slop(EVO_KEEP, 5))) {
           battle.declineEvo();
           sfx('ui');
         }
@@ -1206,7 +1233,7 @@ canvas.addEventListener('pointerdown', (e) => {
       }
       // the catch card or the TEAM · ITEMS button opens the box mid-pick —
       // same modal the map carries, the relic pick waits
-      if (inRect(p.x, p.y, REWARD_TEAM) || (battle.boxGain && inRect(p.x, p.y, REWARD_CATCH))) {
+      if (inRect(p.x, p.y, slop(REWARD_TEAM, 4)) || (battle.boxGain && inRect(p.x, p.y, REWARD_CATCH))) {
         sfx('ui');
         menuOpen = true;
         battle.boxPing = false;
@@ -1304,14 +1331,17 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (dexDrag) {
     if (Math.abs(p.y - dexDrag.y0) > 10) dexDrag.moved = true;
-    // same overlay order as pointerdown's s0 pick — hatch→lab→dex→ach
+    // the pull theatre eats drags — sparkScrollMax is 0 mid-show, so a drag
+    // there would zero the shop's scroll for no reason
+    if (dexDrag.for === 'hatch' && hatch.phase !== 'idle') return;
+    if (dexDrag.for === 'board') return; // the board has no scroll — don't drag ach's by proxy
     const s = Math.min(
       Math.max(dexDrag.s0 + dexDrag.y0 - p.y, 0),
-      hatchOpen ? hatchScrollMax(hatch) : labOpen ? labScrollMax() : dexOpen ? dexScrollMax() : achScrollMax(),
+      dexDrag.for === 'hatch' ? hatchScrollMax(hatch) : dexDrag.for === 'lab' ? labScrollMax() : dexDrag.for === 'dex' ? dexScrollMax() : achScrollMax(),
     );
-    if (hatchOpen) hatch.sparkScroll = s;
-    else if (labOpen) labScroll = s;
-    else if (dexOpen) dexScroll = s;
+    if (dexDrag.for === 'hatch') hatch.sparkScroll = s;
+    else if (dexDrag.for === 'lab') labScroll = s;
+    else if (dexDrag.for === 'dex') dexScroll = s;
     else achScroll = s;
     return;
   }
@@ -1352,11 +1382,11 @@ canvas.addEventListener('pointerup', (e) => {
       return;
     }
     // CLOSE or an outside tap dismisses — a click like every sibling modal
-    if (inRect(p.x, p.y, HELP_CLOSE) || !inRect(p.x, p.y, HELP_PANEL)) {
+    if (inRect(p.x, p.y, HELP_CLOSE_HIT) || !inRect(p.x, p.y, HELP_PANEL)) {
       helpOpen = false;
       sfx('ui');
-    } else if (inRect(p.x, p.y, HELP_NEXT)) helpFlip(1);
-    else if (inRect(p.x, p.y, HELP_PREV)) helpFlip(-1);
+    } else if (inRect(p.x, p.y, slop(HELP_NEXT, 4))) helpFlip(1);
+    else if (inRect(p.x, p.y, slop(HELP_PREV, 4))) helpFlip(-1);
     return;
   }
   if (dexDrag) {
@@ -1428,10 +1458,13 @@ addEventListener('keydown', (e) => {
     }
     return;
   }
-  // the dealt boards take keys too — [1..3] picks (or banishes when armed),
-  // R rerolls, Z arms banish, X cashes out; Escape disarms before help opens
+  // the dealt boards take keys too — [1..4] picks (the lab's fourth card is
+  // real), or banishes when armed; R rerolls, Z arms banish, X cashes out.
+  // The same 250ms lock the pointer layer eats applies here, or a key timed
+  // to the board turnover double-fires into the next screen.
+  if (t < inputLockT) return;
   if (scene === 'draft' && draftLanded >= REEL_STOPS.length) {
-    const i = ['1', '2', '3'].indexOf(e.key);
+    const i = ['1', '2', '3', '4'].indexOf(e.key);
     if (i >= 0) {
       draftPick(i);
       return;
@@ -1442,7 +1475,7 @@ addEventListener('keydown', (e) => {
     }
   }
   if (scene === 'charm') {
-    const i = ['1', '2', '3'].indexOf(e.key);
+    const i = ['1', '2', '3', '4'].indexOf(e.key);
     if (i >= 0 && i < startOffers.length) {
       charmPick(i);
       return;
@@ -1460,7 +1493,7 @@ addEventListener('keydown', (e) => {
       sfx('ui');
       return;
     }
-    const i = ['1', '2', '3'].indexOf(e.key);
+    const i = ['1', '2', '3', '4'].indexOf(e.key);
     if (i >= 0 && i < battle.rewardOffers.length) {
       rewardPick(i);
       return;
@@ -1556,6 +1589,9 @@ canvas.addEventListener(
     }
     if (scene === 'title' && hatchOpen) {
       e.preventDefault();
+      // mid-theatre the shop isn't drawn and its scroll max is 0 — don't
+      // let a wheel flick zero the parked scroll position
+      if (hatch.phase !== 'idle') return;
       hatch.sparkScroll = Math.min(Math.max(hatch.sparkScroll + e.deltaY, 0), hatchScrollMax(hatch));
       return;
     }
@@ -1976,9 +2012,16 @@ function render() {
   // the ? chip reads the same gate as the hit-test — dealt boards included;
   // the mute chip stays between-fights; the pager floats over any scene
   if (helpChipUp()) drawHelpChip(ctx);
-  if (scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward') && !menuOpen) {
+  if (
+    scene === 'battle' &&
+    battle &&
+    (battle.phase === 'map' || battle.phase === 'reward') &&
+    !menuOpen &&
+    !battle.mapModal &&
+    !battle.evoChoice
+  ) {
     drawMuteChip(ctx);
-    drawGearChip(ctx); // same gate as the MAP_GEAR hit-test — the chip was a dead hotspot
+    drawGearChip(ctx); // same gate as the hit-test — no dead or buried hotspots
   }
   if (helpOpen) drawHelp(ctx, helpPage);
   if (settingsOpen) drawSettings(ctx, settingsCat, settings());

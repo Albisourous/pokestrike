@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost } from './data';
 import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -9,7 +9,7 @@ import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
 import { dexIds, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, type Settings } from './meta';
-import { taskViews, tasksReady, taskResetsIn, raidPick, featuredPull, dealPick } from './tasks';
+import { tasksReady, taskResetsIn, raidPick, featuredPull, dealPick } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 
@@ -22,8 +22,9 @@ export const H = 960;
 const HAS_KEYS = typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
 
 // species that can ever drop a ball — the dex completion denominator, and the
-// hatcher's pull pool; the dedup'd set lives in data.ts as PULLABLE now
-export const CATCHABLE = PULLABLE.length;
+// every species the dex can hold — pulls plus evo-only forms; the dedup'd
+// set lives in data.ts as DEX_ALL
+export const CATCHABLE = DEX_ALL.length;
 
 export interface RunResult {
   won: boolean;
@@ -94,13 +95,17 @@ export const DAILY_BTN = { x: FREE_BTN.x + FREE_BTN.w + 8, y: 704, w: 150, h: 68
 export const RAID_BTN = { x: DAILY_BTN.x + DAILY_BTN.w + 8, y: 704, w: W - 27 - (DAILY_BTN.x + DAILY_BTN.w + 8), h: 68 };
 // only visible while a saved run waits — slips between the big buttons and the DEX row
 export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260, h: 24 };
-// the drawn link stays a 24px sliver guarding CONTINUE, but the live target
-// is a 36px slab centered on it — main.ts hit-tests NEW_HIT, not NEW_BTN
-export const NEW_HIT = { x: NEW_BTN.x, y: NEW_BTN.y + NEW_BTN.h / 2 - 18, w: NEW_BTN.w, h: 36 };
+// the drawn link stays a 24px sliver guarding CONTINUE; the live target is
+// a 34px slab top-aligned on it — a centered slab used to ride up into
+// DAILY/RAID's bottom edge (NEW_HIT is hit-tested first and ate their taps)
+export const NEW_HIT = { x: NEW_BTN.x, y: DAILY_BTN.y + DAILY_BTN.h + 1, w: NEW_BTN.w, h: 34 };
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
 export const HELP_CHIP = { x: W - 58, y: 54, w: 40, h: 40 };
+// 2px gaps between the mid-run chips cap the hit slop — pad 2 splits the
+// gutter evenly, so a borderline tap goes to the first-checked chip
+export const HELP_CHIP_HIT = { x: HELP_CHIP.x - 2, y: HELP_CHIP.y - 2, w: 44, h: 44 };
 // corner-badge chrome — dark slab, optional dither, gold stroke; only the
 // glyph inside varies (? / speaker / cog). The mid-run chips run lighter:
 // an alpha face with a hairline rim; the title's badges are solid + dithered.
@@ -129,6 +134,7 @@ export function drawHelpChip(ctx: CanvasRenderingContext2D) {
   ctx.fillText('?', cx + 2, cy + 11);
 }
 export const MUTE_CHIP = { x: W - 100, y: 54, w: 40, h: 40 };
+export const MUTE_CHIP_HIT = { x: MUTE_CHIP.x - 2, y: MUTE_CHIP.y - 2, w: 44, h: 44 };
 export function drawMuteChip(ctx: CanvasRenderingContext2D) {
   const cx = MUTE_CHIP.x + MUTE_CHIP.w / 2;
   const cy = MUTE_CHIP.y + MUTE_CHIP.h / 2;
@@ -137,6 +143,7 @@ export function drawMuteChip(ctx: CanvasRenderingContext2D) {
 }
 // settings cog, mid-run size — the next 42px slot left of MUTE_CHIP's grid
 export const MAP_GEAR = { x: W - 142, y: 54, w: 40, h: 40 };
+export const MAP_GEAR_HIT = { x: MAP_GEAR.x - 2, y: MAP_GEAR.y - 2, w: 44, h: 44 };
 export function drawGearChip(ctx: CanvasRenderingContext2D) {
   const cx = MAP_GEAR.x + MAP_GEAR.w / 2;
   const cy = MAP_GEAR.y + MAP_GEAR.h / 2;
@@ -149,6 +156,15 @@ export const GEAR_BTN = { x: HELP_BTN.x - 54, y: 22, w: 44, h: 44 };
 
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+
+// invisible hit margin around a drawn target — the NEW_BTN/NEW_HIT pattern
+// for one-offs; only safe where no sibling hit-rect sits within `n` px
+export const slop = (r: { x: number; y: number; w: number; h: number }, n: number) => ({
+  x: r.x - n,
+  y: r.y - n,
+  w: r.w + n * 2,
+  h: r.h + n * 2,
+});
 
 // item reward cards reuse the draft card spacing. A 4th offer (the lab's
 // FOURTH OPTION upgrade) can't squeeze another column into 540px — it goes
@@ -1521,6 +1537,8 @@ const HELP_FOOT = 44; // nav band
 export const HELP_PREV = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 40 };
 export const HELP_NEXT = { x: HELP_PANEL.x + HELP_PANEL.w - 62, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 40 };
 export const HELP_CLOSE = { x: HELP_PANEL.x + HELP_PANEL.w - 48, y: HELP_PANEL.y + 12, w: 40, h: 40 };
+// modal corner targets get the full pad — nothing else hit-tests up there
+export const HELP_CLOSE_HIT = { x: HELP_CLOSE.x - 8, y: HELP_CLOSE.y - 8, w: 56, h: 56 };
 
 export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
   const r = HELP_PANEL;
@@ -1638,7 +1656,7 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, r.h - DEX_HEAD - 36);
   ctx.clip();
   ctx.font = fontB(7);
-  PULLABLE.filter((def) => seen.has(def.id)).forEach((def, i) => {
+  DEX_ALL.filter((def) => seen.has(def.id)).forEach((def, i) => {
     const cx = r.x + 20 + (i % DEX_COLS) * DEX_CELL + DEX_CELL / 2;
     const cy = r.y + DEX_HEAD + 8 + Math.floor(i / DEX_COLS) * DEX_CELL - scroll + DEX_CELL / 2;
     drawMon(ctx, def.id, cx, cy, DEX_CELL - 20);
@@ -1892,7 +1910,9 @@ export interface HatchState {
   rookiePay?: number; // rookie-ladder stars this pull banked — same line
 }
 
-const HATCH_PANEL = DEX_PANEL;
+// shared modal frame — hatcher and lab both ride it; main.ts needs it for
+// the modal-inside/outside tap test
+export const HATCH_PANEL = DEX_PANEL;
 const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 66, w: HATCH_PANEL.w - 32, h: 88 };
 export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
 export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
@@ -1974,6 +1994,9 @@ export function sparkHit(scroll: number, x: number, y: number): SpeciesDef | nul
   if (!inRect(x, y, SPARK_VIEW)) return null;
   const col = Math.floor((x - SPARK_VIEW.x) / SPARK_CELL_W);
   const row = Math.floor((y - SPARK_VIEW.y + scroll) / SPARK_CELL_H);
+  // the view's last pixels can index a phantom column, and a negative
+  // scroll (over-drag) a phantom row — both return a wrong mon, not null
+  if (col < 0 || col >= SPARK_COLS || row < 0) return null;
   return PULLABLE[row * SPARK_COLS + col] ?? null;
 }
 
@@ -2400,12 +2423,16 @@ export function labScrollMax() {
   return Math.max(0, labLayout().h - LAB_VIEW.h);
 }
 
-// pointer → lab upgrade id, or null — only the buy strip answers
+// pointer → lab upgrade id, or null — only the buy strip answers. The pill
+// draws 24px but the live target is a 44px slab inside the card's bottom —
+// a thumb shouldn't have to thread the drawn price strip to spend.
 export function labHit(scroll: number, x: number, y: number): string | null {
   if (!inRect(x, y, LAB_VIEW)) return null;
   for (const c of labLayout().cards) {
     const cr = { ...c.r, y: c.r.y + LAB_VIEW.y - scroll };
-    if (inRect(x, y, labBuyRect(cr))) return c.u.id;
+    const buy = labBuyRect(cr);
+    const hit = { x: buy.x, y: cr.y + cr.h - 44, w: buy.w, h: 44 };
+    if (inRect(x, y, hit)) return c.u.id;
   }
   return null;
 }
@@ -3555,16 +3582,37 @@ export function drawResult(
   const noteLines = extra ? wrap2(ctx, extra, W - 92) : []; // interior width of the report card
 
   // sized to content — the card tallies each block before it draws, and the
-  // whole stack (report + attachment + echo) centres above the buttons
-  const ROW = 24;
+  // whole stack (report + attachment + echo) centres above the buttons.
+  // A packed report (many findings + badge rows) can outgrow the space
+  // above REMATCH, so it compacts in steps and the panel is hard-capped —
+  // truncated tail rows clip at the card floor instead of inking buttons.
   const findingsY = 122; // band + CASE kicker + FINDINGS head
-  const noteH = extra ? 18 + noteLines.length * 13 + 6 : 0;
   const recH = res.newBest || res.shortOfBest > 0 ? 22 : 0;
-  const achH = res.newAch.length ? 20 : 0;
-  const badgeH = res.badges.length ? badgeRows.length * 28 + 4 : 0;
-  const panelH = findingsY + findings.length * ROW + recH + noteH + achH + badgeH + 12;
   const shareH = share ? 116 : 0;
   const echoH = !res.won ? 22 : 0;
+  const stackCap = RETRY_BTN.y - 8 - 46;
+  const size = (rowH: number, badgeCap: number, noteCap: number) =>
+    findingsY +
+    findings.length * rowH +
+    recH +
+    (extra ? 18 + Math.min(noteLines.length, noteCap) * 13 + 6 : 0) +
+    (res.newAch.length ? 20 : 0) +
+    (badgeRows.length ? Math.min(badgeRows.length, badgeCap) * 28 + 4 : 0) +
+    12;
+  let rowH = 24;
+  let badgeCap = badgeRows.length;
+  let noteCap = noteLines.length;
+  if (size(rowH, badgeCap, noteCap) + shareH + echoH > stackCap) {
+    rowH = 20;
+    if (size(rowH, badgeCap, noteCap) + shareH + echoH > stackCap) {
+      rowH = 19;
+      badgeCap = 2;
+      noteCap = 2;
+    }
+  }
+  const badgeDrawn = badgeRows.slice(0, badgeCap);
+  const noteDrawn = noteLines.slice(0, noteCap);
+  const panelH = Math.min(size(rowH, badgeCap, noteCap), stackCap - shareH - echoH);
   const panel = {
     x: 30,
     y: Math.max(46, Math.round((RETRY_BTN.y - 8 - (panelH + shareH + echoH)) / 2)),
@@ -3641,8 +3689,15 @@ export function drawResult(
   ctx.fillStyle = '#5a6284';
   ctx.fillText('FINDINGS', ix, panel.y + 96);
 
+  // the findings stack clips at the card floor — a compacted report keeps
+  // its top rows and loses tail rows to the cap, never over the buttons
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(panel.x, panel.y + 44, panel.w, panel.h - 44);
+  ctx.clip();
+
   findings.forEach(([label, value, color], i) => {
-    const fy = panel.y + findingsY + i * ROW;
+    const fy = panel.y + findingsY + i * rowH;
     ctx.font = fontB(8);
     ctx.fillStyle = '#464e6e';
     ctx.fillText(String(i + 1).padStart(2, '0'), ix, fy);
@@ -3657,7 +3712,7 @@ export function drawResult(
     ctx.fillStyle = '#1a2040';
     ctx.fillRect(ix, fy + 9, panel.w - 32, 1);
   });
-  let yy = panel.y + findingsY + findings.length * ROW;
+  let yy = panel.y + findingsY + findings.length * rowH;
 
   // so-close framing — the near-record loss is the strongest rematch pull
   if (res.newBest) {
@@ -3684,8 +3739,8 @@ export function drawResult(
     ctx.fillRect(ix + ctx.measureText('FIELD NOTE').width + 8, yy + 9, vx - ix - ctx.measureText('FIELD NOTE').width - 8, 1);
     ctx.font = fontB(9);
     ctx.fillStyle = '#f8d030';
-    noteLines.forEach((l, li) => ctx.fillText(l, ix, yy + 24 + li * 13));
-    yy += 18 + noteLines.length * 13 + 6;
+    noteDrawn.forEach((l, li) => ctx.fillText(l, ix, yy + 24 + li * 13));
+    yy += 18 + noteDrawn.length * 13 + 6;
   }
 
   // fresh trophies get their own gold line under the findings block
@@ -3697,8 +3752,8 @@ export function drawResult(
     yy += 20;
   }
 
-  // run badges — rarity-colored chips, up to two rows
-  badgeRows.forEach((row, ri) => {
+  // run badges — rarity-colored chips, capped rows when the report compacts
+  badgeDrawn.forEach((row, ri) => {
     const by = yy + 4 + ri * 28;
     ctx.font = fontB(8);
     const ws = row.map((b) => ctx.measureText(b.name).width + 20);
@@ -3716,6 +3771,13 @@ export function drawResult(
       bx += ws[i] + 8;
     });
   });
+  if (badgeRows.length > badgeDrawn.length) {
+    ctx.font = fontB(8);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`+ ${badgeRows.slice(badgeCap).flat().length} MORE BADGES`, W / 2, yy + 4 + badgeDrawn.length * 28 + 12);
+  }
+  ctx.restore(); // the card-floor clip ends — attachments draw uncapped
 
   // the attachment — squad + wave grid ride below the report itself
   const ay = panel.y + panel.h;
@@ -3947,8 +4009,11 @@ export function settingsRowHit(p: { x: number; y: number }, cat: SettingsCat): S
     const row = rows[i];
     const r = settingsRowRect(i, cat);
     if (row.kind === 'slider') {
-      // the drag slab is the track ±17px — a thumb hit gets >=22px of grace
-      if (inRect(p.x, p.y, { x: r.x, y: r.y + (row.sub ? 21 : 16), w: r.w, h: 46 }))
+      // the drag slab is the track ±17px — a thumb hit gets >=22px of
+      // grace, but never past the row's bottom or a sub-slider bleeds
+      // into the toggle below it
+      const slabY = r.y + (row.sub ? 21 : 16);
+      if (inRect(p.x, p.y, { x: r.x, y: slabY, w: r.w, h: Math.min(46, r.y + r.h - slabY) }))
         return { kind: 'slider', key: row.key };
     } else if (row.kind === 'toggle') {
       if (inRect(p.x, p.y, r)) return { kind: 'toggle', key: row.key };
@@ -4194,13 +4259,14 @@ function taskClaimRect(row: { x: number; y: number; w: number; h: number }) {
 }
 
 // what a point inside the panel touches — tabs and CLOSE always answer;
-// a claim slab answers on every tap now — done-vs-deny is main.ts's call
-export function taskRowHit(p: Vec, tab: 'daily' | 'weekly'): TasksHit | null {
+// a claim slab answers on every tap now — done-vs-deny is main.ts's call.
+// `views` must be the list the draw used: re-deriving here would claim a
+// different task than the row the player tapped after a day rollover.
+export function taskRowHit(p: Vec, views: TaskView[]): TasksHit | null {
   if (inRect(p.x, p.y, TASKS_CLOSE) || !inRect(p.x, p.y, TASKS_PANEL)) return { kind: 'close' };
   for (let i = 0; i < TASKS_TABS.length; i++) {
     if (inRect(p.x, p.y, tasksTabRect(i))) return { kind: 'tab', i };
   }
-  const views = taskViews(tab);
   for (let i = 0; i < views.length; i++) {
     if (inRect(p.x, p.y, taskClaimRect(taskRowRect(i)))) return { kind: 'claim', i };
   }
