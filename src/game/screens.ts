@@ -8,7 +8,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, type Settings } from './meta';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, type Settings } from './meta';
 import { taskViews, tasksReady, taskResetsIn, raidPick, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -788,7 +788,36 @@ export function drawTitle(
   if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
   logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
+  // the wallet rides top-center like a Clash Royale gold bar — stars and
+  // dust on the title mean the economy is visible before any overlay opens
+  balanceChip(ctx, { x: W / 2 - 92, y: 28, w: 184, h: 36 }, stars(), dust());
+
   drawWilds(ctx, t);
+
+  // the last climb's fallen team haunts the pitch as ghosts — CR shows your
+  // deck on the home screen; ours shows the team you have to avenge
+  const echo = echoIds();
+  if (echo?.length) {
+    ctx.save();
+    ctx.globalAlpha = 0.34;
+    echo.slice(0, 3).forEach((e, i) => {
+      const ex = PITCH.x + PITCH.w * (0.2 + i * 0.3);
+      const ey = PITCH.y + PITCH.h - 56 + Math.sin(t * 1.6 + i * 2.1) * 4;
+      monShadow(ctx, ex, PITCH.y + PITCH.h - 56, 44);
+      try {
+        drawMon(ctx, e.id, ex, ey, 44);
+      } catch {
+        /* sprite still warming */
+      }
+      void loadSprite(e.id);
+    });
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+    ctx.font = fontB(7);
+    ctx.fillStyle = TYPE_COLOR.ghost;
+    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, PITCH.y + PITCH.h - 28);
+    ctx.restore();
+  }
 
   // TODAY card — the day's three rotating offers in one glance: the rate-up
   // pull, the chroma raid boss, the spark deal. The home menu's one summary.
@@ -912,14 +941,7 @@ export function drawTitle(
     ctx.stroke();
   }
 
-  // a fallen team haunts the next climb — one spectral line in the band
-  // under the start pill (it stacks under the new-climb link when a run parks)
-  if (echoIds()?.length) {
-    ctx.font = fontB(7);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('A RIVAL TEAM HAUNTS THE CLIMB', W / 2, FREE_BTN.y - 7);
-  }
+  // the echo's haunt lives on the pitch itself now — spectral mons beat a caption line
 
   // ? badge, top corner — the how-to-play overlay
   ctx.fillStyle = '#12152b';
@@ -984,8 +1006,25 @@ export function drawTitle(
     ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
   }
   // row two — the meta loop's front doors. The hatcher wears the climb's
-  // gold, the lab stays parchment; the ascension dial rides the tail
-  pill(ctx, HATCH_BTN, { c: '#ffd84d', cd: '#c8a44d', tc: '#2a2440', label: 'HATCHER', sub: `★ ${stars()}` });
+  // gold, the lab stays parchment; the ascension dial rides the tail.
+  // Today's free pull is the CR free chest — the chip breathes while it waits
+  const freeNow = freePullLeft();
+  pill(ctx, HATCH_BTN, {
+    c: '#ffd84d',
+    cd: '#c8a44d',
+    tc: '#2a2440',
+    label: 'HATCHER',
+    sub: freeNow ? 'FREE PULL TODAY' : `★ ${stars()}`,
+  });
+  if (freeNow) {
+    ctx.save();
+    ctx.globalAlpha = 0.4 + Math.sin(t * 5) * 0.3;
+    ctx.strokeStyle = '#ffe89d';
+    ctx.lineWidth = 2.5;
+    roundRect(ctx, HATCH_BTN.x - 3, HATCH_BTN.y - 3, HATCH_BTN.w + 6, HATCH_BTN.h + 6, 13);
+    ctx.stroke();
+    ctx.restore();
+  }
   pill(ctx, LAB_BTN, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'LAB' });
   // the records line is the one-more-run hook — ranked ladder, best score
   const b = best();
