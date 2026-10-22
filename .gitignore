@@ -7,3 +7,4 @@ graphify-out/
 .playwright-cli/
 .superpowers/
 .ux/
+.scratch/
