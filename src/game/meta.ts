@@ -790,7 +790,7 @@ export const LAB_UPGRADES: { id: string; name: string; icon: string; max: number
 
 let memLab: Record<string, number> = {};
 
-const labLevels = (): Record<string, number> => {
+export const labLevels = (): Record<string, number> => {
   const raw = load<unknown>('pk_lab');
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const out: Record<string, number> = {};

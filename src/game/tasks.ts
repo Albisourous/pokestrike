@@ -87,18 +87,18 @@ export const dayKey = (now = Date.now()): string => new Date(now).toISOString().
 export const daySeed = (now = Date.now()): number => Math.floor(now / 86400000);
 
 // the title screen re-reads the daily picks every frame — memo on the day
-// seed (never the Date object) so a same-day call skips the re-roll and a
-// new UTC day rolls fresh
+// seed (never the Date object) so same-day calls skip the re-roll. Map, not
+// a single slot: title asks for today AND tomorrow's raid in one frame
 const dayMemo = <T>(roll: (seed: number) => T): ((now?: number) => T) => {
-  let seed = -1; // daySeed is >= 0 — the sentinel forces a first roll
-  let val: T | undefined;
+  const memo = new Map<number, T>();
   return (now = Date.now()) => {
     const s = daySeed(now);
-    if (s !== seed) {
-      seed = s;
-      val = roll(s);
+    let v = memo.get(s);
+    if (v === undefined) {
+      v = roll(s);
+      memo.set(s, v);
     }
-    return val!;
+    return v;
   };
 };
 

@@ -10,13 +10,13 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_TOWN, TI
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 import {
   INK, INK_SOFT, INK_FAINT, PAPER, PAPER_HI, PARCH, GOLD, GOLD_HI, ACCENT, DANGER,
-  font, fontB,
+  font, fontB, uiWindow, uiPanel, cursorTri,
 } from './ui';
 
 export const W = 540;
@@ -145,12 +145,16 @@ function cornerBadge(
   r: { x: number; y: number; w: number; h: number },
   o: { bg?: string; dither?: number; lw?: number } = {},
 ) {
-  ctx.fillStyle = o.bg ?? INK;
-  ctx.fillRect(r.x, r.y, r.w, r.h);
-  if (o.dither) dither(ctx, r, o.dither);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = o.lw ?? 2;
-  ctx.strokeRect(r.x, r.y, r.w, r.h);
+  // a dark menu-window chip — `bg` survives as the face tint (the mid-run
+  // chips' translucent slab), the double-frame is the chrome kit's own
+  uiWindow(ctx, r, { dark: true, tint: o.bg, rad: 8 });
+  if (o.dither) {
+    ctx.save();
+    roundRect(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 6);
+    ctx.clip();
+    dither(ctx, r, o.dither);
+    ctx.restore();
+  }
 }
 
 export function drawHelpChip(ctx: CanvasRenderingContext2D) {
@@ -960,17 +964,8 @@ function drawClimbBody(
       { def: dealPick(), tag: 'DEAL −25%', c: ACCENT },
     ];
     const card = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
-    ctx.fillStyle = 'rgba(40,48,88,0.35)';
-    roundRect(ctx, card.x + 2, card.y + 4, card.w, card.h, 10);
-    ctx.fill();
-    ctx.fillStyle = PAPER;
-    roundRect(ctx, card.x, card.y, card.w, card.h, 10);
-    ctx.fill();
-    cardFrame(ctx, card, 10);
-    ctx.font = font(10);
-    ctx.fillStyle = GOLD;
+    uiPanel(ctx, card, 'TODAY');
     ctx.textAlign = 'center';
-    ctx.fillText('TODAY', card.x + card.w / 2, card.y + 28);
     offers.forEach((o, i) => {
       const cx = card.x + (card.w * (i + 0.5)) / 3;
       monShadow(ctx, cx, card.y + 84, 54);
@@ -997,6 +992,19 @@ function drawClimbBody(
   pill(ctx, DAILY_BTN, dailyArmed
     ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
     : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'DAILY', sub: `RESETS ${taskResetsIn('daily')}` });
+  // armed two-tap — the blinking ▶ rides beside the warn label
+  if (dailyArmed) {
+    const label = 'DROP SAVED RUN?';
+    fitFont(ctx, label, 10, DAILY_BTN.w - 24);
+    const tw = measureW(ctx, label);
+    cursorTri(
+      ctx,
+      DAILY_BTN.x + DAILY_BTN.w / 2 - tw / 2 - 14,
+      DAILY_BTN.y + (DAILY_BTN.h - 4) / 2,
+      t,
+      '#ffe8e8',
+    );
+  }
   // a live daily streak pins a pip on the corner — the tasksReady red pip's
   // family, gold while banked and warn-red when the chain dies at midnight
   const dStreak = streakDaily();
@@ -1049,6 +1057,8 @@ function drawClimbBody(
     ctx.moveTo(W / 2 - tw / 2, NEW_BTN.y + NEW_BTN.h);
     ctx.lineTo(W / 2 + tw / 2, NEW_BTN.y + NEW_BTN.h);
     ctx.stroke();
+    // armed — the ▶ marks the link as a live confirm, blinking off `t`
+    if (newArmed) cursorTri(ctx, W / 2 - tw / 2 - 14, NEW_BTN.y + NEW_BTN.h - 8, t, col);
   }
 
   // the echo's haunt lives on the pitch itself now — spectral mons beat a caption line
@@ -1116,11 +1126,7 @@ function drawClimbBody(
       bw += 40;
       const bh = back ? 56 : 38;
       const br = { x: W / 2 - bw / 2, y: 325 - bh / 2, w: bw, h: bh };
-      ctx.fillStyle = INK;
-      ctx.fillRect(br.x, br.y, br.w, br.h);
-      ctx.strokeStyle = GOLD;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(br.x + 1, br.y + 1, br.w - 2, br.h - 2);
+      uiWindow(ctx, br, { dark: true, rad: 6, rim: false });
       ctx.textAlign = 'center';
       ctx.fillStyle = GOLD_HI;
       ctx.fillText(msg, W / 2, br.y + (back ? 24 : 25));
@@ -1154,12 +1160,8 @@ function drawTabBar(
   freeNow: boolean,
   taskN: number,
 ) {
-  roundRect(ctx, TAB_BAR.x, TAB_BAR.y, TAB_BAR.w, TAB_BAR.h, 18);
-  ctx.fillStyle = INK;
-  ctx.fill();
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
+  // the bar is a dark command strip — the menu window inverted
+  uiWindow(ctx, TAB_BAR, { dark: true, rad: 18 });
 
   void loadItem('poke-ball');
   void loadItem('badges/1');
@@ -1187,18 +1189,12 @@ function drawTabBar(
       w: rest.w + (big.w - rest.w) * grow,
       h: rest.h + (big.h - rest.h) * grow,
     };
-    roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
     if (on) {
-      // raised paper pill with a gold crown — the lifted-tab read
-      ctx.fillStyle = PAPER;
-      ctx.fill();
-      ctx.strokeStyle = GOLD;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(pr.x + 20, pr.y + 3);
-      ctx.lineTo(pr.x + pr.w - 20, pr.y + 3);
-      ctx.stroke();
+      // the picked tab pops a paper window out of the strip — same
+      // grow/spring `pr` math, the double-frame is the new crown
+      uiWindow(ctx, pr, { rad: 14 });
     } else {
+      roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
       ctx.fillStyle = 'rgba(248,248,240,0.07)';
       ctx.fill();
       if (hero) {
@@ -1304,14 +1300,9 @@ function drawTabBar(
 function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
   hatcherCard(ctx, t, freeNow);
 
-  // the day's −25% spark bargain — its own card so the deal sells itself
+  // the day's −25% spark bargain — its own window so the deal sells itself
   const dr = DEAL_BTN;
-  menuCard(ctx, dr, 12);
-  stripeBand(ctx, { x: dr.x + 3, y: dr.y + 3, w: dr.w - 6, h: 30 }, ACCENT);
-  ctx.textAlign = 'left';
-  ctx.font = font(9);
-  ctx.fillStyle = INK;
-  ctx.fillText('SPARK DEAL −25%', dr.x + 14, dr.y + 23);
+  uiPanel(ctx, dr, 'SPARK DEAL −25%');
   const deal = dealPick();
   // a type-tinted pad — the bargain stands on its own color like the rest
   const dcx = dr.x + 82, dcy = dr.y + 102;
@@ -3916,26 +3907,12 @@ export function labHit(scroll: number, x: number, y: number): string | null {
   return null;
 }
 
-// one pk_lab read a frame — labLevel() re-parses storage per call. Same
-// filtering meta's labLevels applies; a missing/corrupt save falls back to
-// the per-id getter so its in-memory copy still wins (private mode).
+// one pk_lab read a frame — labLevels() rides meta's load() cache, and its
+// memLab fallback covers a missing/corrupt save (private mode) the same way
+// the per-id getter did
 function labLevelMap(): Map<string, number> {
-  try {
-    const raw = localStorage.getItem('pk_lab');
-    const obj = raw != null ? (JSON.parse(raw) as unknown) : null;
-    if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-      const rec = obj as Record<string, unknown>;
-      return new Map(
-        LAB_UPGRADES.map((u) => {
-          const v = rec[u.id];
-          return [u.id, typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0];
-        }),
-      );
-    }
-  } catch {
-    /* private mode or a corrupt value — the getter's memory copy covers it */
-  }
-  return new Map(LAB_UPGRADES.map((u) => [u.id, labLevel(u.id)]));
+  const lvls = labLevels();
+  return new Map(LAB_UPGRADES.map((u) => [u.id, lvls[u.id] ?? 0]));
 }
 
 function drawLabCard(

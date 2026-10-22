@@ -476,7 +476,10 @@ const drawStar = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number
   }
   starPath(ctx, x, y, s, pinch);
   ctx.fill();
-  if (strokeW) ctx.stroke();
+  if (strokeW) {
+    ctx.lineWidth = strokeW; // unscaled path — device-space width, no /s
+    ctx.stroke();
+  }
 };
 
 // shadowBlur is a full blur pass per draw per frame — bake each glow once
