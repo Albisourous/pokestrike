@@ -75,6 +75,7 @@ import {
   drawAch,
   achScrollMax,
   BOARD_BTN,
+  HALL_BTN,
   drawBoard,
   CATCHABLE,
   MAP_MENU,
@@ -1005,7 +1006,7 @@ canvas.addEventListener('pointerdown', (e) => {
       achScroll = 0;
       return;
     }
-    if (homeTab === 'town' && inRect(p.x, p.y, BOARD_BTN)) {
+    if (homeTab === 'town' && (inRect(p.x, p.y, BOARD_BTN) || inRect(p.x, p.y, HALL_BTN))) {
       sfx('ui');
       boardOpen = true;
       return;

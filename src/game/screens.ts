@@ -1600,6 +1600,45 @@ function drawTownBody(ctx: CanvasRenderingContext2D, taskN: number) {
   });
   // no icon on the dial — at pill scale the flame read as a smudge; the
   // centered label carries it
+
+  // HALL OF FAME — the board's podium on the tab itself; tap → full board
+  const hb = HALL_BTN;
+  menuCard(ctx, hb, 10);
+  stripeBand(ctx, { x: hb.x + 3, y: hb.y + 3, w: hb.w - 6, h: 30 }, GOLD);
+  ctx.textAlign = 'left';
+  ctx.font = font(9);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText('HALL OF FAME', hb.x + 14, hb.y + 23);
+  ctx.textAlign = 'right';
+  ctx.font = fontB(7);
+  ctx.fillText(`${b.wins} CLEAR${b.wins === 1 ? '' : 'S'} · ${runs} RUN${runs === 1 ? '' : 'S'}`, hb.x + hb.w - 14, hb.y + 22);
+  const top = board().slice(0, 3);
+  ctx.textAlign = 'left';
+  if (!top.length) {
+    ctx.font = fontB(9);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText('WIN A CLIMB — YOUR NAME ETCHES HERE', hb.x + 14, hb.y + 84);
+  }
+  const medal = ['#ffd84d', '#aab4dd', '#c88a5a'];
+  top.forEach((e, i) => {
+    const ry = hb.y + 52 + i * 26;
+    ctx.font = font(9);
+    ctx.fillStyle = medal[i];
+    ctx.fillText(`#${i + 1}`, hb.x + 14, ry);
+    ctx.font = fontB(9);
+    ctx.fillStyle = PARCH;
+    ctx.fillText(e.s.toLocaleString('en-US'), hb.x + 52, ry);
+    ctx.fillStyle = '#8890b8';
+    ctx.fillText(`STAGE ${e.st}${e.w ? ' · ★' : ''}${e.asc ? ` · ASC${e.asc}` : ''}`, hb.x + 170, ry);
+    // the run's lineup rides the row's tail — three tiny faces
+    e.team.slice(0, 3).forEach((id, k) => {
+      try {
+        drawMon(ctx, id, hb.x + hb.w - 88 + k * 30, ry - 6, 26);
+      } catch {
+        void loadSprite(id);
+      }
+    });
+  });
 }
 
 // The crash-receipt instructions, in a card — the game collects no
@@ -2120,6 +2159,8 @@ export const TASKS_BTN = { x: LAB_BTN.x + TOWN_COL + 16, y: LAB_BTN.y, w: TOWN_C
 export const ACH_BTN = { x: 30, y: LAB_BTN.y + LAB_BTN.h + 16, w: TOWN_COL, h: 150 };
 export const BOARD_BTN = { x: TASKS_BTN.x, y: ACH_BTN.y, w: TOWN_COL, h: 150 };
 export const ASC_BTN = { x: 30, y: ACH_BTN.y + ACH_BTN.h + 16, w: W - 60, h: 130 };
+// the leaderboard's front three, visible on the tab — tap opens the board
+export const HALL_BTN = { x: 30, y: ASC_BTN.y + ASC_BTN.h + 16, w: W - 60, h: 128 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
