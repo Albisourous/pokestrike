@@ -1462,23 +1462,3 @@ export function buzz(pattern: number | number[]) {
   navigator.vibrate?.(pattern);
 }
 
-// Real species cries (PokeAPI/cries .ogg), cached and replayable.
-const cries = new Map<number, HTMLAudioElement>();
-// master cry trim — the .ogg sources are mastered way hotter than the
-// synth mix, so every call-site volume scales down by this factor
-const CRY_VOL = 0.25;
-export function cry(id: number, vol = 0.2) {
-  if (muted) return;
-  try {
-    let a = cries.get(id);
-    if (!a) {
-      a = new Audio(`sprites/cries/${id}.ogg`);
-      cries.set(id, a);
-    }
-    a.volume = vol * CRY_VOL * settings().cries;
-    a.currentTime = 0;
-    a.play().catch(() => {});
-  } catch {
-    // audio unavailable
-  }
-}

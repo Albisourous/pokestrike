@@ -1,7 +1,7 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
-import { sfx, buzz, cry, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
+import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById, ASC_MODS } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
@@ -1261,8 +1261,6 @@ export class Battle {
       this.screenFlash('#ffffff', 0.25);
       sfx('wave');
     }
-    const boss = this.enemies.find((e) => e.boss);
-    if (boss) cry(boss.def.id, 0.5); // boss roars on entry
     // a shiny announces itself in the banner — the rarest sight on the climb
     const shiny = this.enemies.find((e) => e.shiny);
     if (shiny) {
@@ -1687,7 +1685,7 @@ export class Battle {
       }
     }
     this.balls = this.balls.filter((b) => b.t > 0);
-    // evolution cinematics tick with the fight — the payoff (burst, cry)
+    // evolution cinematics tick with the fight — the payoff (burst, sfx)
     // lands the moment the flicker resolves, not when the dupe was absorbed
     for (const f of this.evoFx) {
       f.t += dt;
@@ -1696,7 +1694,6 @@ export class Battle {
         this.impact(f.u.x, f.u.y, '#ffd84d', 1.4);
         this.burst(f.u.x, f.u.y, '#ffffff', 16, 380);
         sfx('caught');
-        cry(f.to, 0.5);
       }
     }
     this.evoFx = this.evoFx.filter((f) => f.t < 1.35);
@@ -2620,7 +2617,6 @@ export class Battle {
               this.pushText({ x: e.x, y: e.y - e.r - 56, text: 'SHINY BONUS +250', t: 1.4, color: '#ffd84d', big: true });
             }
             playJingle('catch');
-            cry(e.def.id, 0.45);
             buzz([30, 50, 30, 50, 60]);
           } else {
             // broke out — the escape plays the same faint it always was
@@ -3326,7 +3322,6 @@ export class Battle {
     this.addShake(10);
     this.screenFlash(color, 0.18);
     sfx(SUPER_SFX[src.def.type], superPitch(src.def.type));
-    cry(p.def.id, 0.35);
     buzz(20);
 
     if (!this.signatureMove(src, p, bumpDmg)) switch (src.def.type) {
@@ -3651,7 +3646,6 @@ export class Battle {
     this.addShake(16);
     this.flavor(u.x, u.y, u.def.type);
     sfx(SUPER_SFX[u.def.type], superPitch(u.def.type));
-    cry(u.def.id, 0.4);
     buzz([50, 40, 90]);
     const phys = bumpIsPhysical(u.def.type);
     const multOf = (e: Unit) => typeMult(u.def.type, e.def) * weatherMult(this.weather, u.def.type);
@@ -4035,11 +4029,10 @@ export class Battle {
   }
 
   // The generic click payoff for catches without their own fanfare.
-  private catchPayoff(x: number, y: number, def: SpeciesDef) {
+  private catchPayoff(x: number, y: number) {
     return () => {
       this.impact(x, y, '#ffd84d', 0.9);
       playJingle('catch');
-      cry(def.id, 0.45);
     };
   }
 
@@ -4057,7 +4050,7 @@ export class Battle {
     // false because it runs its own sequence on the KO spot instead
     if (theatre) {
       const a = this.catchAnchor();
-      this.catchSeq(a.x, a.y, true, 'poke-ball', this.catchPayoff(a.x, a.y, def));
+      this.catchSeq(a.x, a.y, true, 'poke-ball', this.catchPayoff(a.x, a.y));
     }
   }
 
@@ -4130,7 +4123,6 @@ export class Battle {
         this.impact(this.arena.x + this.arena.w / 2, this.arena.y + 90, '#ffd84d', 1.4);
         this.burst(this.arena.x + this.arena.w / 2, this.arena.y + 90, '#ffffff', 16, 380);
         sfx('caught');
-        cry(next.id, 0.5);
       }
       return true;
     }
@@ -4188,7 +4180,6 @@ export class Battle {
     // a fielded pick plays out in the cinematic — boxed picks need the cue here
     if (!c.unit) {
       sfx('caught');
-      cry(next.id, 0.5);
     }
     this.evoChoice = this.evoPending.shift() ?? null;
   }
@@ -4369,7 +4360,7 @@ export class Battle {
         // a prize dupe never reaches boxAdd — run the ritual anyway so the
         // catch chime still waits on the click
         const a = this.catchAnchor();
-        this.catchSeq(a.x, a.y, true, 'poke-ball', this.catchPayoff(a.x, a.y, rec));
+        this.catchSeq(a.x, a.y, true, 'poke-ball', this.catchPayoff(a.x, a.y));
       }
       this.log(`${rec.name.toUpperCase()} RECRUITED`);
     }
@@ -4763,7 +4754,6 @@ export class Battle {
     this.catchSeq(a.x, a.y, true, 'poke-ball', () => {
       this.impact(a.x, a.y, '#ffd84d', 0.9);
       playJingle('hatch'); // curious arp — a new face, not a fought catch
-      cry(def.id, 0.45);
     });
     recordCapture([def.id]);
     this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
@@ -4998,7 +4988,6 @@ export class Battle {
     this.screenFlash('#f85888', 0.15);
     this.addShake(6);
     sfx('invade');
-    cry(boss.def.id, 0.4);
     for (let i = 0; i < n; i++) {
       const def = pickWild(this.rng, this.depth);
       const e = this.makeEnemy(

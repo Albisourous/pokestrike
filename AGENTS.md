@@ -10,6 +10,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - One mode: the 9-stage gym climb (stages 1–3 seeded, 4–9 rolled, a gym every 3rd), via the START CLIMB button; `?seed=NNN` forces a seed for debugging. Endless is future work — don't build for it.
 - Two level canons: **battle arenas are Archero** — each wave pulls one hand-authored 9×11 room template (`ROOM_LAYOUTS`/`ROOM_BOSS` char grids in `data.ts`: `2` rock, `3` liquid moat, `4` mine, `S` spawn anchor), never procedural geometry; **the overworld map is Slay the Spire** — the seeded branching node map it already is.
 - Single art source: **Pokémon FireRed/LeafGreen (Gen 3 GBA)**. Mon sprites are official FRLG battle fronts vendored from [PokeAPI/sprites](https://github.com/PokeAPI/sprites) (`sprites/pokemon/versions/generation-iii/firered-leafgreen/<id>.png`); item icons come from the same repo (`sprites/items/`). Scenery/props get sliced or blitted from the Gracidea `tileset`/`npcs` atlases at `public/sprites/gracidea/` (RSE, same era). Never procedural shapes.
+- **Real asset before drawn asset, always.** For any icon, sprite, prop, or UI flourish, reach for a vendored Pokémon asset first — a mon front (`drawMon`/`itemSprite`), an item icon (`sprites/items/`), a badge (`sprites/badges/`), an NPC (`drawNpc`), or a slice/blit of the gracidea atlases. If the right asset isn't vendored yet, pull it from PokeAPI/sprites (or the gracidea pack) rather than inventing a glyph. Hand-drawn code (`*Glyph`, `fillStar`, shapes) is a last resort for things no asset covers — and keep them only as cold-cache fallbacks.
 - Anti-goals: no monetization mechanics, no non-Pokémon content.
 - Replayability, in order: run variety → ascension modifiers → unlockables. Keep it simple until the core is solid.
 
@@ -57,7 +58,6 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `public/sprites/<id>.png` — 64×64 FRLG battle fronts by dex id, vendored from PokeAPI/sprites
 - `public/sprites/items/<name>.png` — item icons from the same PokeAPI repo (`sprites/items/<name>.png`)
 - `public/sprites/badges/<n>.png` — gym badge art from the same repo (`sprites/badges/<n>.png`, canon league order: Kanto 1–8, Johto 9–16, Hoenn 17–24); `GymBadge.icon` maps leaders to them
-- `public/sprites/cries/<id>.ogg` — mon cries, one per roster id, played lazily by `cry()`
 
 ## Conventions
 
