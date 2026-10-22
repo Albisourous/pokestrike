@@ -8,7 +8,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -88,19 +88,16 @@ export function bagRowItems(): BagItem[] {
 export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
-// the hero row anchors the whole bottom stack — kept high so the records
-// line, ladder and footer links clear the iOS home-swipe zone
-export const FREE_BTN = { x: W / 2 - 205, y: 676, w: 148, h: 68 };
-export const DAILY_BTN = { x: FREE_BTN.x + FREE_BTN.w + 8, y: FREE_BTN.y, w: 150, h: 68 };
-// the daily chroma raid squeezes beside DAILY — the hero row's third pill
-// ends at W-27, flush with the menu chips' right edge below
-export const RAID_BTN = { x: DAILY_BTN.x + DAILY_BTN.w + 8, y: FREE_BTN.y, w: W - 27 - (DAILY_BTN.x + DAILY_BTN.w + 8), h: 68 };
-// only visible while a saved run waits — slips between the big buttons and the DEX row
-export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260, h: 24 };
+// the hero row anchors the bottom stack: ONE primary action (the climb) with
+// the daily as its smaller flank — the raid lives on its own tab, so the row
+// carries two doors, not three competing CTAs
+export const FREE_BTN = { x: 46, y: 676, w: 296, h: 72 };
+export const DAILY_BTN = { x: FREE_BTN.x + FREE_BTN.w + 10, y: FREE_BTN.y, w: W - 46 - (FREE_BTN.x + FREE_BTN.w + 10), h: 72 };
+// only visible while a saved run waits — slips under the hero row
+export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 4, w: 260, h: 24 };
 // the drawn link stays a 24px sliver guarding CONTINUE; the live target is
-// a 34px slab top-aligned on it — a centered slab used to ride up into
-// DAILY/RAID's bottom edge (NEW_HIT is hit-tested first and ate their taps)
-export const NEW_HIT = { x: NEW_BTN.x, y: DAILY_BTN.y + DAILY_BTN.h + 1, w: NEW_BTN.w, h: 34 };
+// a 34px slab top-aligned on it so it can't ride into the pills above
+export const NEW_HIT = { x: NEW_BTN.x, y: FREE_BTN.y + FREE_BTN.h + 1, w: NEW_BTN.w, h: 34 };
 // --- home tabs: the CR-style bottom nav the title's bodies hang off -------
 export type HomeTab = 'shop' | 'mons' | 'climb' | 'raid' | 'town';
 // a floating bar, not flush — its bottom edge keeps ~28px clear of the
@@ -947,8 +944,8 @@ function drawClimbBody(
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2 + 1, FREE_BTN.y - 15);
   ctx.fillStyle = PARCH;
   ctx.fillText('SLING · BOUNCE · CATCH · CLIMB', W / 2, FREE_BTN.y - 16);
-  // the front door rides the press-edge pills — gold for the climb,
-  // parchment for the daily, same ramp the rest of the UI moved to
+  // one hero pill — the daily rides its flank at the same height. The raid
+  // isn't a door here anymore; its tab carries the boss face + chroma dot.
   pill(ctx, FREE_BTN, {
     c: GOLD_HI,
     cd: '#c8a44d',
@@ -960,19 +957,6 @@ function drawClimbBody(
   pill(ctx, DAILY_BTN, dailyArmed
     ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
     : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'DAILY', sub: `RESETS ${taskResetsIn('daily')}` });
-  // the day's one seeded epic wears the rate-up band's purple — cleared,
-  // the pill sleeps gray till tomorrow's roll
-  pill(ctx, RAID_BTN, {
-    c: '#9a6cff',
-    cd: '#6b4ac0',
-    tc: PAPER,
-    label: 'CHROMA RAID',
-    // cleared → the chip sells tomorrow's boss instead of going dead
-    sub: raidDone
-      ? `TMRW: ${raidPick(Date.now() + 86400000).name.toUpperCase()}`
-      : `${raidDef.name.toUpperCase()} · DAILY SHINY`,
-    disabled: raidDone,
-  });
   // a live daily streak pins a pip on the corner — the tasksReady red pip's
   // family, gold while banked and warn-red when the chain dies at midnight
   const dStreak = streakDaily();
@@ -991,20 +975,18 @@ function drawClimbBody(
     ctx.fillStyle = INK;
     ctx.fillText(dStreak > 9 ? '9+' : `${dStreak}`, bx, by + 3.5);
   }
-  // today's seeded rule card hugs the DAILY pill's bottom-right — it only
-  // shows on a clean title; a parked run's new-climb link owns that band
+  // today's seeded rule gets one line under DAILY — name + rule on a single
+  // row; a dying streak claims the next one in warn-red
   if (!cont) {
     const dm = todaysMod();
     ctx.save();
     ctx.font = fontB(7);
     ctx.textAlign = 'right';
     ctx.fillStyle = PARCH;
-    ctx.fillText(`TODAY: ${dm.name}`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 11);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText(dm.desc, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 21);
+    ctx.fillText(`TODAY: ${dm.name} — ${dm.desc}`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 11);
     if (risky) {
       ctx.fillStyle = '#e03c34';
-      ctx.fillText(`STREAK ${risky} DIES TONIGHT`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 31);
+      ctx.fillText(`STREAK ${risky} DIES TONIGHT`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 21);
     }
     ctx.restore();
   }
@@ -1037,10 +1019,11 @@ function drawClimbBody(
   const b = best();
   const ld = tier();
   const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
-  if (b.stage) bits.push(`PEAK ${b.stage}`);
   if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
   const wStreak = streakWins();
   if (wStreak > 1) bits.push(`STREAK ${wStreak}`);
+  // the rating's next rung folds into the records line — one stat row, one bar
+  bits.push(ld.next ? `${ld.name} ${Math.round(ld.prog * 100)}% → ${ld.next.name}` : `${ld.name} MAX`);
   // a live star-boost tails the records line in muted gold — the quiet
   // countdown while a finished raid or daily is still paying out
   const boostMs = boostLeft();
@@ -1050,7 +1033,7 @@ function drawClimbBody(
   const recLine = bits.join(' · ');
   const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
   fitFont(ctx, recFull, 8, W - 40);
-  const recY = FREE_BTN.y + FREE_BTN.h + 50;
+  const recY = FREE_BTN.y + FREE_BTN.h + 58;
   const recX = W / 2 - ctx.measureText(recFull).width / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
@@ -1060,18 +1043,9 @@ function drawClimbBody(
     ctx.fillText(boostTxt, recX + ctx.measureText(`${recLine} · `).width, recY);
   }
   ctx.textAlign = 'center';
-  // the ladder: a fill bar toward the next tier, tinted to the current one.
-  // Label above the bar — under it, the baseline sat 2px off the canvas edge
-  const rw = 220, rx = W / 2 - rw / 2, ry = FREE_BTN.y + FREE_BTN.h + 61;
-  ctx.font = fontB(7);
-  ctx.fillStyle = '#8890b8';
-  ctx.fillText(
-    ld.next
-      ? `${rating()} PTS ${ld.name} — ${Math.round(ld.prog * 100)}% TO ${ld.next.name}`
-      : `${rating()} PTS ${ld.name} — TOP OF THE LADDER`,
-    W / 2,
-    ry - 3,
-  );
+  // the ladder: a fill bar toward the next tier, tinted to the current one —
+  // its label already rode up into the stat line above
+  const rw = 220, rx = W / 2 - rw / 2, ry = FREE_BTN.y + FREE_BTN.h + 70;
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.fillRect(rx, ry, rw, 7);
   ctx.fillStyle = ld.color;
@@ -1158,11 +1132,11 @@ function drawTabBar(
     const rest = hero
       ? { x: cell.x + 4, y: cell.y - 12, w: cell.w - 8, h: cell.h + 2 }
       : { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
-    // the active tab is physically bigger — CR-style, the highlight lifts
-    // the pill a few px proud of its cell so the nav reads at a glance
+    // the active tab DWARFS its cell — wider than the column and riding
+    // 14px proud of the bar so the picked tab reads from across the room
     const big = hero
-      ? { x: cell.x + 2, y: cell.y - 20, w: cell.w - 4, h: cell.h + 10 }
-      : { x: cell.x + 3, y: cell.y - 2, w: cell.w - 6, h: cell.h - 2 };
+      ? { x: cell.x - 1, y: cell.y - 28, w: cell.w + 2, h: cell.h + 18 }
+      : { x: cell.x - 2, y: cell.y - 16, w: cell.w + 4, h: cell.h + 10 };
     // grow-in on switch: back-out ease overshoots the pill past `big` then
     // settles — a spring pop, not an instant swap (stamp set in main)
     const grow = on ? bo(clamp01((t - tabPressT) / 0.24)) : 0;
@@ -1210,7 +1184,7 @@ function drawTabBar(
             : undefined;
     ctx.save();
     ctx.globalAlpha = on ? 1 : 0.55;
-    const iscale = (on && grow < 1 ? 0.8 + 0.2 * grow : 1) * (1 - 0.15 * pop); // icon rides the pill's grow
+    const iscale = (on ? 0.9 + 0.5 * grow : 1) * (1 - 0.15 * pop); // icon rides the pill's grow — ~1.3× at rest
     if (iscale !== 1) {
       ctx.translate(cx, icY);
       ctx.scale(iscale, iscale);
