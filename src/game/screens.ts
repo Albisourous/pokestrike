@@ -401,7 +401,13 @@ export function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number)
     first = first ? `${first} ${words[used]}` : words[used];
     used++;
   }
-  return [first, words.slice(used).join(' ')];
+  let rest = words.slice(used).join(' ');
+  // line two has nowhere to wrap — ellipsize rather than clip mid-word
+  if (ctx.measureText(rest).width > maxW) {
+    while (rest.length > 1 && ctx.measureText(`${rest}…`).width > maxW) rest = rest.slice(0, -1);
+    rest = `${rest.trimEnd()}…`;
+  }
+  return [first, rest];
 }
 
 // arcade cabinet button: hard corners, solid offset block the face presses into
@@ -489,8 +495,10 @@ export function chip(
   ctx.fillStyle = o.bg;
   ctx.fill();
   ctx.fillStyle = o.fg;
+  const pa = ctx.textAlign;
   ctx.textAlign = 'left';
   ctx.fillText(text, x + 7, y + 11.5);
+  ctx.textAlign = pa;
   return w;
 }
 
@@ -559,6 +567,7 @@ export function pill(
     bw = ctx.measureText(o.badge).width + 10;
   }
   const cy = r.y + (r.h - rimH) / 2 + (o.pressed ? 2 : 0);
+  const pa = ctx.textAlign;
   ctx.textAlign = 'center';
   ctx.fillStyle = tc;
   fitFont(ctx, o.label, o.sub ? 9 : 10, r.w - 24 - bw);
@@ -579,6 +588,7 @@ export function pill(
     ctx.textAlign = 'left';
     ctx.fillText(o.badge, bx + 5, cy + 3.5);
   }
+  ctx.textAlign = pa;
 }
 
 // --- title screen: mottled grass pitch, stadium ring of mons, arched wordmark ---
@@ -1887,7 +1897,7 @@ const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 66, w: HATCH_PANEL
 export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
 export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 164, w: 218, h: 50 };
 const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 234, w: HATCH_PANEL.w - 32, h: 10 };
-const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 290, w: HATCH_PANEL.w - 32, h: 500 };
+const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 298, w: HATCH_PANEL.w - 32, h: 492 };
 const SPARK_COLS = 4;
 const SPARK_CELL_W = SPARK_VIEW.w / SPARK_COLS;
 const SPARK_CELL_H = 112;
