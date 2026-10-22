@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS } from './game/data';
 import type { SpeciesDef, StageDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -65,6 +65,7 @@ import {
   HELP_PANEL,
   HELP_PREV,
   HELP_NEXT,
+  HELP_TUT,
   HELP_CLOSE_HIT,
   HELP_PAGE_COUNT,
   DEX_BTN,
@@ -1404,6 +1405,13 @@ canvas.addEventListener('pointerup', (e) => {
     if (inRect(p.x, p.y, HELP_CLOSE_HIT) || !inRect(p.x, p.y, HELP_PANEL)) {
       helpOpen = false;
       sfx('ui');
+    } else if (inRect(p.x, p.y, slop(HELP_TUT, 4))) {
+      // re-arm the kinetic coach: a live battle starts coaching at its next
+      // aim phase; from the title it waits for the next run to bank again
+      if (battle && battle.phase !== 'won' && battle.phase !== 'lost') battle.coach = true;
+      else resetCoach();
+      helpOpen = false; // closing shows the ghost pull immediately mid-battle
+      sfx('ui');
     } else if (inRect(p.x, p.y, slop(HELP_NEXT, 4))) helpFlip(1);
     else if (inRect(p.x, p.y, slop(HELP_PREV, 4))) helpFlip(-1);
     return;
@@ -2042,7 +2050,7 @@ function render() {
     drawMuteChip(ctx);
     drawGearChip(ctx); // same gate as the hit-test — no dead or buried hotspots
   }
-  if (helpOpen) drawHelp(ctx, helpPage);
+  if (helpOpen) drawHelp(ctx, helpPage, (!!battle && battle.coach) || !coachDone());
   if (bugOpen) drawBugCard(ctx, runSave()?.seed ?? titleSave?.seed ?? null);
   if (settingsOpen) drawSettings(ctx, settingsCat, settings());
   if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);

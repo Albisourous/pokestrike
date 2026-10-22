@@ -6446,6 +6446,30 @@ export class Battle {
         ctx.globalAlpha = 1;
         line('FLY THROUGH A TEAMMATE — THE PASS SPEEDS THE BALL UP');
       }
+    } else {
+      // beats past the pull itself: teach what the field offers — first one
+      // that applies wins the bottom line (they never stack)
+      const glow = (x: number, y: number, r: number, color = '#ffd84d') => {
+        ctx.globalAlpha = 0.55 + Math.sin(this.time * 5) * 0.3;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      };
+      if (!u.dead && u.cd <= 0 && u.cdMax > 0) {
+        glow(u.x, u.y, u.r + 10);
+        line('PIPS ALL GOLD — THIS LAUNCH FIRES THE SUPER');
+      } else if (this.balls.length) {
+        const b = this.balls[0];
+        glow(b.x, b.y, 22, '#e8ecf8');
+        line('A BALL DROPPED — CLICKS SHUT MEANS THE CATCH IS YOURS');
+      } else if (this.pickups.length) {
+        const pk = this.pickups[0];
+        glow(pk.x, pk.y, 18);
+        line('ROLL THE BALL THROUGH THE RING — THE PICKUP IS YOURS');
+      }
     }
     const threat = this.enemies.find((e) => !e.dead && e.timer <= 1);
     if (threat && this.shots > 0 && this.shots <= 3) {

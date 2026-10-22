@@ -162,6 +162,12 @@ export function markCoached() {
   memCoach = true;
   store('pk_coach', true);
 }
+// The help deck's TUTORIAL pill re-arms the kinetic coach — it banks again
+// the next time a coached wave clears.
+export function resetCoach() {
+  memCoach = false;
+  store('pk_coach', false);
+}
 
 const gyms = () => {
   const g = load<unknown>('pk_gyms');

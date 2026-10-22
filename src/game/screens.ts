@@ -1598,8 +1598,10 @@ export const HELP_NEXT = { x: HELP_PANEL.x + HELP_PANEL.w - 62, y: HELP_PANEL.y 
 export const HELP_CLOSE = { x: HELP_PANEL.x + HELP_PANEL.w - 48, y: HELP_PANEL.y + 12, w: 40, h: 40 };
 // modal corner targets get the full pad — nothing else hit-tests up there
 export const HELP_CLOSE_HIT = { x: HELP_CLOSE.x - 8, y: HELP_CLOSE.y - 8, w: 56, h: 56 };
+// re-arms the kinetic battle coach — top-left, kept narrow to clear the title
+export const HELP_TUT = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + 12, w: 96, h: 40 };
 
-export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
+export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed = false) {
   const r = HELP_PANEL;
   ctx.fillStyle = 'rgba(6,10,22,0.82)';
   ctx.fillRect(0, 0, W, H);
@@ -1622,6 +1624,17 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number) {
   ctx.moveTo(cx + 7, cy - 7);
   ctx.lineTo(cx - 7, cy + 7);
   ctx.stroke();
+
+  // TUTORIAL pill — re-arms the in-battle coach (ghost pull + field beats)
+  roundRect(ctx, HELP_TUT.x, HELP_TUT.y, HELP_TUT.w, HELP_TUT.h, 10);
+  ctx.fillStyle = coachArmed ? '#16301c' : '#1b2140';
+  ctx.fill();
+  ctx.strokeStyle = coachArmed ? '#6fdc6f' : '#4a5480';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = fontB(9);
+  ctx.fillStyle = coachArmed ? '#9fe89f' : '#e8ecf8';
+  ctx.fillText(coachArmed ? 'COACH ON' : '▶ TUTORIAL', HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 25);
 
   // two roomy cards per page — bigger demos than the old scroll ever showed
   HELP_PAGES[page].secs.forEach((si, slot) => {
