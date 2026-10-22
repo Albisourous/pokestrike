@@ -565,3 +565,8 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   trainer_earth (+7 slap 140), trainer_gale (+12 airy 148) join
   trainer_forge; TRAINER_TRACK covers all 11 types. Audition via
   ?dev __dbg.song('trainer_shade') etc.
+- 6c1e1f1 pushed: beta ship kit — REPORT BUGS card on title (SEED·BUILD
+  receipt), docs/BETA.md tester guide, docs/BETA_MORNING.md handoff with
+  distribution options + numbered questions. Deploy verified live: Pages
+  serves the 6c1e1f1 bundle; one transient sprite 404 observed DURING
+  the deploy swap (CDN propagation race) — resolved within a minute.
