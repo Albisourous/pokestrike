@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS } from './data';
 import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -8,7 +8,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, type Settings } from './meta';
+import { dexIds, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, featuredPull, dealPick } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -268,6 +268,19 @@ function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: 
 }
 
 // cog glyph — settings chrome: tooth ring + hub (title badge + feel tab)
+// little person for the TRAINER tab — head + shoulders, same stroke family
+function personGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(cx, cy - 4.5 * s, 3.6 * s, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(cx - 6.5 * s, cy + 7 * s);
+  ctx.quadraticCurveTo(cx, cy - 1 * s, cx + 6.5 * s, cy + 7 * s);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function gearGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, color: string) {
   ctx.save();
   ctx.translate(cx, cy);
@@ -3949,7 +3962,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
 // --- category pills over a right panel: striped header, then slider or ---
 // --- toggle rows. Geometry is the single source for draw + hit tests. ----
 
-export type SettingsCat = 'sound' | 'graphics' | 'feel';
+export type SettingsCat = 'sound' | 'graphics' | 'feel' | 'trainer';
 export type SettingsSliderKey = 'master' | 'music' | 'sfx' | 'cries' | 'shake';
 export type SettingsToggleKey = 'haptics' | 'flash' | 'battery' | 'fps';
 export type SettingsSegKey = 'quality' | 'pickupFx';
@@ -3957,7 +3970,8 @@ export type SettingsHit =
   | { kind: 'tab'; i: number }
   | { kind: 'slider'; key: SettingsSliderKey }
   | { kind: 'toggle'; key: SettingsToggleKey }
-  | { kind: 'seg'; key: SettingsSegKey; i: number };
+  | { kind: 'seg'; key: SettingsSegKey; i: number }
+  | { kind: 'avatar'; i: number };
 
 // a settings row — the draw pass and the hit test read the same list. The
 // `invert` toggle lamp reads !stored (REDUCE FLASHES on = flash off); the
@@ -3974,6 +3988,7 @@ export const SETTINGS_CATS: { id: SettingsCat; name: string; tab: string; sub: s
   { id: 'sound', name: 'SOUND', tab: 'volume & cries', sub: 'volume, music and cries' },
   { id: 'graphics', name: 'GRAPHICS', tab: 'res & effects', sub: 'quality, battery and effects' },
   { id: 'feel', name: 'FEEL', tab: 'rumble', sub: 'haptics and feedback' },
+  { id: 'trainer', name: 'TRAINER', tab: 'your look', sub: 'the trainer on the map' },
 ];
 
 // segment order is the store order — hit index and drawn pill share this
@@ -3998,6 +4013,7 @@ const SET_ROWS: Record<SettingsCat, SettingsRow[]> = {
     { kind: 'toggle', key: 'fps', label: 'SHOW FPS', sub: 'frame counter in the corner' },
   ],
   feel: [{ kind: 'toggle', key: 'haptics', label: 'HAPTICS' }],
+  trainer: [], // the avatar grid draws itself — no settings rows
 };
 
 const SET_RAIL = { x: SETTINGS_PANEL.x + 14, y: SETTINGS_PANEL.y + 36, w: 160 };
@@ -4042,11 +4058,30 @@ const segIndex = (key: SettingsSegKey, tr: { x: number; w: number }, x: number) 
   return Math.min(n - 1, Math.max(0, Math.floor((x - tr.x) / (tr.w / n))));
 };
 
+// the TRAINER tab's avatar grid — 4×4 cards under the band, draw and hit
+// test read the same rect
+const AV_COLS = 4;
+const AV_CELL = { w: 64, h: 74, gap: 6 };
+const avatarRect = (i: number) => {
+  const gw = AV_COLS * AV_CELL.w + (AV_COLS - 1) * AV_CELL.gap;
+  return {
+    x: SET_PANEL.x + (SET_PANEL.w - gw) / 2 + (i % AV_COLS) * (AV_CELL.w + AV_CELL.gap),
+    y: SET_ROWS_Y + 4 + Math.floor(i / AV_COLS) * (AV_CELL.h + AV_CELL.gap),
+    w: AV_CELL.w,
+    h: AV_CELL.h,
+  };
+};
+
 // what a point inside the panel touches: a rail pill, a slider's drag slab
 // (the track ±23px — a thumb hit gets >=22px of grace), or a toggle's row
 export function settingsRowHit(p: { x: number; y: number }, cat: SettingsCat): SettingsHit | null {
   for (let i = 0; i < SETTINGS_CATS.length; i++) {
     if (inRect(p.x, p.y, settingsTabRect(i))) return { kind: 'tab', i };
+  }
+  if (cat === 'trainer') {
+    for (let i = 0; i < AVATARS.length; i++)
+      if (inRect(p.x, p.y, avatarRect(i))) return { kind: 'avatar', i };
+    return null;
   }
   const rows = SET_ROWS[cat];
   for (let i = 0; i < rows.length; i++) {
@@ -4120,6 +4155,7 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
     const ink = on ? '#2a2440' : '#8890b8';
     if (c.id === 'sound') speakerGlyph(ctx, cx, cy, 0.85, false, ink);
     else if (c.id === 'graphics') monitorGlyph(ctx, cx, cy, 1, ink);
+    else if (c.id === 'trainer') personGlyph(ctx, cx, cy, 1, ink);
     else gearGlyph(ctx, cx, cy, 1, ink);
     ctx.textAlign = 'left';
     ctx.font = font(9);
@@ -4147,6 +4183,23 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
   ctx.globalAlpha = 0.75;
   ctx.fillText(cdef.sub, SET_BAND.x + 14, SET_BAND.y + 38);
   ctx.globalAlpha = 1;
+
+  if (cat === 'trainer') {
+    const sel = trainerPick();
+    AVATARS.forEach((a, i) => {
+      const r = avatarRect(i);
+      const on = a.id === sel;
+      roundRect(ctx, r.x, r.y, r.w, r.h, 8);
+      ctx.fillStyle = on ? '#2a2440' : '#0a0d18';
+      ctx.fill();
+      rim(ctx, r, 8, on ? GOLD : '#2a3560', on ? 2 : 1);
+      drawNpc(ctx, `${a.id}_down_0`, r.x + r.w / 2, r.y + 48, 46);
+      ctx.textAlign = 'center';
+      ctx.font = font(6);
+      ctx.fillStyle = on ? '#ffd84d' : '#8890b8';
+      ctx.fillText(a.name, r.x + r.w / 2, r.y + r.h - 7);
+    });
+  }
 
   SET_ROWS[cat].forEach((row, i) => {
     const r = settingsRowRect(i, cat);

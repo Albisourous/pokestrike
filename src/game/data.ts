@@ -1257,6 +1257,28 @@ export const TRAINER_CLASS: Record<PokeType, { frame: string; title: string }> =
 };
 export const TRAINER_TYPES = Object.keys(TRAINER_CLASS) as PokeType[];
 
+// Player avatars — the sprite that walks the region map and stands at
+// HOME. `id` is the npc-atlas frame prefix (`${id}_down_0` idles,
+// `${id}_<dir>_<0..2>` walks). Named heroes plus the atlas's generic
+// townie sets keep it Gen-3 canon.
+export const AVATARS: { id: string; name: string }[] = [
+  { id: 'may', name: 'MAY' },
+  { id: 'wally', name: 'WALLY' },
+  { id: 'generic_m1', name: 'BOY 1' },
+  { id: 'generic_m2', name: 'BOY 2' },
+  { id: 'generic_m3', name: 'BOY 3' },
+  { id: 'generic_m4', name: 'BOY 4' },
+  { id: 'generic_m5', name: 'BOY 5' },
+  { id: 'generic_f1', name: 'GIRL 1' },
+  { id: 'generic_f2', name: 'GIRL 2' },
+  { id: 'generic_f3', name: 'GIRL 3' },
+  { id: 'generic_f4', name: 'GIRL 4' },
+  { id: 'generic_f5', name: 'GIRL 5' },
+  { id: 'generic_c1', name: 'KID 1' },
+  { id: 'generic_c2', name: 'KID 2' },
+  { id: 'generic_c3', name: 'KID 3' },
+];
+
 // The face on each gym: canon leaders where the gracidea atlas has them
 // (Norman, Brawly, Roxanne), a trainer-class stand-in for the rest — same
 // atlas as TRAINER_CLASS, so the art stays Gen-3.

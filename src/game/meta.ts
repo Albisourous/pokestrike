@@ -1,4 +1,4 @@
-import { speciesById, TOTAL_STAGES } from './data';
+import { speciesById, TOTAL_STAGES, AVATARS } from './data';
 import { LV_CAP } from './stats';
 
 // Run-to-run persistence: the caught-dex, gym-win count (which sets rank),
@@ -821,6 +821,20 @@ export const helpSeen = (): boolean => {
 export const markHelpSeen = (): void => {
   memSeen = true;
   store('pk_seen', { v: true });
+};
+
+// pk_trainer — the player's overworld avatar pick (an AVATARS id). Shape-
+// checked like the other unversioned blobs; a junk pick falls back to May.
+let memAvatar = 'may';
+export const trainerPick = (): string => {
+  const raw = load<Partial<{ pick: string }>>('pk_trainer');
+  const pick = raw && typeof raw === 'object' ? raw.pick : undefined;
+  return AVATARS.some((a) => a.id === pick) ? pick! : memAvatar;
+};
+export const setTrainer = (id: string): void => {
+  if (!AVATARS.some((a) => a.id === id)) return;
+  memAvatar = id;
+  store('pk_trainer', { pick: id });
 };
 
 // --- decision telemetry ------------------------------------------------------

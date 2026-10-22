@@ -10,7 +10,7 @@ import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
@@ -2558,7 +2558,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     'pk_badges', 'pk_bag', 'pk_stars', 'pk_dust', 'pk_pulls', 'pk_free',
     'pk_grant', 'pk_boost', 'pk_raid', 'pk_login', 'pk_win', 'pk_grind',
     'pk_lab', 'pk_seen', 'pk_stats', 'pk_run', 'pk_settings', 'pk_tasks',
-    'pk_streak', 'pk_ver',
+    'pk_streak', 'pk_ver', 'pk_trainer',
   ];
   const JUNK = [
     '{broken', '42', '"str"', 'true', '[]', '{}', '[1,"x",null]',
@@ -2580,7 +2580,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     ['settings', () => settings()], ['freePullLeft', () => freePullLeft(now)],
     ['nextDexReward', () => nextDexReward()], ['nextRookie', () => nextRookie()],
     ['helpSeen', () => helpSeen()], ['statsDump', () => statsDump()],
-    ['ascPick', () => ascPick()], ['taskViews-d', () => taskViews('daily', now)],
+    ['ascPick', () => ascPick()], ['trainerPick', () => trainerPick()],
+    ['taskViews-d', () => taskViews('daily', now)],
     ['taskViews-w', () => taskViews('weekly', now)], ['featuredPull', () => featuredPull(now)],
     ['raidPick', () => raidPick(now)], ['dealPick', () => dealPick(now)],
     ['tasksReady', () => tasksReady(now)], ['taskResetsIn', () => taskResetsIn('daily', now)],
@@ -2605,6 +2606,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
         if (rs !== null && (!Array.isArray(rs.team) || !Number.isFinite(rs.seed))) badReads++;
         const st = settings();
         if (!(st.master >= 0 && st.master <= 1) || !['high', 'medium', 'low'].includes(st.quality)) badReads++;
+        if (!/^[a-z_0-9]+$/.test(trainerPick())) badReads++;
       } catch {
         badReads++;
       }

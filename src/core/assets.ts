@@ -179,10 +179,11 @@ export function drawSheetFrame(
 }
 
 // --- gracidea NPC atlas: overworld trainer sprites for the region map ---
-// TexturePacker hash JSON; packed-rotated frames are skipped — every class
-// the map uses has an upright down/left frame.
+// TexturePacker hash JSON; rotated frames un-pack via a 90° canvas turn —
+// a few families (wally, several generics) only ship their down/up frames
+// rotated, so skipping them blanks whole rows.
 let npcsImg: HTMLImageElement | undefined;
-let npcFrames: Record<string, { x: number; y: number; w: number; h: number }> = {};
+let npcFrames: Record<string, { x: number; y: number; w: number; h: number; rot?: boolean }> = {};
 
 export function loadNpcs(): Promise<void> {
   if (npcsImg) return Promise.resolve();
@@ -197,8 +198,7 @@ export function loadNpcs(): Promise<void> {
     npcFrames = {};
     for (const [k, v] of Object.entries(meta.frames)) {
       const f = (v as { frame: { x: number; y: number; w: number; h: number }; rotated?: boolean });
-      if (f.rotated) continue;
-      npcFrames[k] = { x: f.frame.x, y: f.frame.y, w: f.frame.w, h: f.frame.h };
+      npcFrames[k] = { x: f.frame.x, y: f.frame.y, w: f.frame.w, h: f.frame.h, ...(f.rotated ? { rot: true } : {}) };
     }
   });
 }
@@ -208,9 +208,18 @@ export function loadNpcs(): Promise<void> {
 export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number, y: number, h: number) {
   const f = npcFrames[frame];
   if (!npcsImg || !f) return;
-  const w = (h / f.h) * f.w;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, x - w / 2, y - h, w, h); // feet stand on y
+  if (!f.rot) {
+    const w = (h / f.h) * f.w;
+    ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, x - w / 2, y - h, w, h); // feet stand on y
+  } else {
+    // packed 90° CW: upright dims are the packed w/h swapped — pivot at the
+    // feet's left corner, turn the canvas so the sprite lands upright
+    const uw = (h / f.w) * f.h;
+    ctx.translate(x - uw / 2, y);
+    ctx.rotate(-Math.PI / 2);
+    ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, 0, 0, h, uw);
+  }
   ctx.restore();
 }

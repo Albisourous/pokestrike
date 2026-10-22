@@ -11,7 +11,7 @@ import type { EventChoice, EventArt } from './events';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
 import type { Theme, PropSpec } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
@@ -6578,7 +6578,7 @@ export class Battle {
     const at = this.region.nodes[this.mapNode];
     let lx = at ? at.tx : 0;
     let ly = at ? at.ty : 0;
-    let frame = 'may_down_0';
+    let frame = `${trainerPick()}_down_0`;
     if (this.mapWalk) {
       const { path, t } = this.mapWalk;
       const i = Math.min(Math.floor(t), path.length - 2);
@@ -6589,7 +6589,7 @@ export class Battle {
       ly = path[i].y + dy * f;
       // walk cycle: face the travel direction, cycle step frames
       const dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-      frame = `may_${dir}_${[1, 0, 2][Math.floor(this.time * 8) % 3]}`;
+      frame = `${trainerPick()}_${dir}_${[1, 0, 2][Math.floor(this.time * 8) % 3]}`;
     }
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
