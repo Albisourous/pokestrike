@@ -9,7 +9,7 @@ import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
 import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, type Settings } from './meta';
-import { tasksReady, taskResetsIn, raidPick, featuredPull, dealPick, dealCost } from './tasks';
+import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 
@@ -102,17 +102,18 @@ export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 1, w: 260,
 // DAILY/RAID's bottom edge (NEW_HIT is hit-tested first and ate their taps)
 export const NEW_HIT = { x: NEW_BTN.x, y: DAILY_BTN.y + DAILY_BTN.h + 1, w: NEW_BTN.w, h: 34 };
 // --- home tabs: the CR-style bottom nav the title's bodies hang off -------
-export type HomeTab = 'climb' | 'shop' | 'mons' | 'town';
+export type HomeTab = 'shop' | 'mons' | 'climb' | 'raid' | 'town';
 // a floating bar, not flush — its bottom edge keeps ~28px clear of the
 // iOS home-swipe zone
 export const TAB_BAR = { x: 50, y: H - 104, w: W - 100, h: 76 };
-// four cells in spec order: play, shop, collection, town hub
+// five cells: economy+collection left, CLIMB's hero pill raised dead-center,
+// the day's raid and the town hub to its right
 export const TAB_CELLS: { tab: HomeTab; x: number; y: number; w: number; h: number }[] =
-  (['climb', 'shop', 'mons', 'town'] as HomeTab[]).map((tab, i) => ({
+  (['shop', 'mons', 'climb', 'raid', 'town'] as HomeTab[]).map((tab, i) => ({
     tab,
-    x: TAB_BAR.x + (TAB_BAR.w * i) / 4,
+    x: TAB_BAR.x + (TAB_BAR.w * i) / 5,
     y: TAB_BAR.y,
-    w: TAB_BAR.w / 4,
+    w: TAB_BAR.w / 5,
     h: TAB_BAR.h,
   }));
 
@@ -252,10 +253,19 @@ export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.closePath();
 }
 
-// Card chrome: dark indigo panel. Shared border language — a hairline
-// dark edge with a light inner rim — on cards, chips and panels.
+// DESIGN.md "GBA authentic" — light paper faces in navy frames, dark ink
+// text, gold reserved for the one CTA and rims. Chrome is only ever
+// PAPER/INK/gold; color lives in content (sprites, type chips), never fills.
 const GOLD = '#c8a44d';
-const PARCH = '#f0e6c8';
+const PARCH = '#f0e6c8'; // light text — dark chrome only, never on PAPER
+const PAPER = '#f8f8f0';
+const PAPER_HI = '#ffffff';
+const INK = '#283058';
+const INK_SOFT = '#586070';
+const INK_FAINT = '#989aa8';
+const GOLD_HI = '#ffd848'; // the CTA face
+const ACCENT = '#2a68c8'; // highlighted secondary text on paper (was #9df0ff cyan)
+const DANGER = '#d04840';
 
 // speaker glyph + slash — shared by the title badge and the mid-run chip.
 // color/muted default to the live mute state; the settings tab overrides both.
@@ -369,7 +379,7 @@ function peakGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: num
 }
 
 function edge(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
-  ctx.strokeStyle = '#0a0d18';
+  ctx.strokeStyle = INK;
   ctx.lineWidth = 1.5;
   roundRect(ctx, r.x, r.y, r.w, r.h, rad);
   ctx.stroke();
@@ -388,20 +398,21 @@ function rim(
   ctx.stroke();
 }
 
-// joker frame: pale rim inside a thin dark edge
+// the GBA box frame: one strong INK border — no nested rims
 function cardFrame(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
-  rim(ctx, r, rad, '#e8ecf8', 3);
-  edge(ctx, r, rad);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 3;
+  roundRect(ctx, r.x + 1.5, r.y + 1.5, r.w - 3, r.h - 3, rad);
+  ctx.stroke();
 }
 
-// home-tab card face: the lab card's dark slab + joker frame, lifted off
-// the pitch by a small drop shadow
+// home-tab card face: paper in a navy frame, lifted by a hard offset shadow
 function menuCard(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad = 10) {
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillStyle = 'rgba(40,48,88,0.35)';
   roundRect(ctx, r.x + 2, r.y + 4, r.w, r.h, rad);
   ctx.fill();
   roundRect(ctx, r.x, r.y, r.w, r.h, rad);
-  ctx.fillStyle = '#12162b';
+  ctx.fillStyle = PAPER;
   ctx.fill();
   cardFrame(ctx, r, rad);
 }
@@ -430,22 +441,17 @@ function cardFace(
   ctx.save();
   roundRect(ctx, r.x, r.y, r.w, r.h, 10);
   ctx.clip();
-  ctx.fillStyle = '#12162b';
+  ctx.fillStyle = PAPER;
   ctx.fillRect(r.x, r.y, r.w, r.h);
 
+  // the type tint survives as a faint content wash — chrome stays paper
   const gx = r.x + r.w / 2;
   const gy = r.y + r.h * 0.42;
   const c = TYPE_COLOR[type];
   const glow = ctx.createRadialGradient(gx, gy, 8, gx, gy, r.w * 0.95);
-  glow.addColorStop(0, `${c}66`);
+  glow.addColorStop(0, `${c}28`);
   glow.addColorStop(1, `${c}00`);
   ctx.fillStyle = glow;
-  ctx.fillRect(r.x, r.y, r.w, r.h);
-
-  const vig = ctx.createRadialGradient(gx, r.y + r.h / 2, r.w * 0.35, gx, r.y + r.h / 2, r.w * 1.05);
-  vig.addColorStop(0, '#00000000');
-  vig.addColorStop(1, '#00000055');
-  ctx.fillStyle = vig;
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.restore();
 }
@@ -516,18 +522,17 @@ export function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number)
 
 // arcade cabinet button: hard corners, solid offset block the face presses into
 export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string, on: boolean, icon?: string, iconDy = 0) {
-  ctx.fillStyle = '#0a0d18';
-  ctx.fillRect(r.x + 4, r.y + 4, r.w, r.h);
-  ctx.fillStyle = on ? '#1b2140' : '#12152b';
+  ctx.fillStyle = 'rgba(40,48,88,0.3)';
+  ctx.fillRect(r.x + 3, r.y + 3, r.w, r.h);
+  ctx.fillStyle = on ? PAPER : '#e8e8e0';
   ctx.fillRect(r.x, r.y, r.w, r.h);
-  dither(ctx, r, on ? 0.09 : 0.05);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = on ? 3 : 2;
   ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
   const ic = icon ? 42 : 0; // an icon claims the left edge — text centers in what's left
   fitFont(ctx, label, 13, r.w - 20 - ic);
   ctx.textAlign = 'center';
-  ctx.fillStyle = on ? PARCH : '#6a7090';
+  ctx.fillStyle = on ? INK : INK_FAINT;
   ctx.fillText(label, r.x + ic + (r.w - ic) / 2, r.y + r.h / 2 + 6);
   if (icon) {
     void loadItem(icon);
@@ -611,7 +616,7 @@ export function chip(
 export function keyHint(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, label: string) {
   ctx.font = fontB(7);
   const w = ctx.measureText(label).width + 14;
-  chip(ctx, r.x + r.w - w - 8, r.y + r.h - 24, label, { bg: 'rgba(42,36,64,0.8)', fg: '#e8ecf8' });
+  chip(ctx, r.x + r.w - w - 8, r.y + r.h - 24, label, { bg: INK, fg: PAPER });
 }
 
 // Lv pips — `max` dashes spread across the rect, the first `lvl` lit gold.
@@ -621,15 +626,15 @@ export function levelPips(ctx: CanvasRenderingContext2D, r: { x: number; y: numb
   const w = Math.max(4, (r.w - (max - 1) * gap) / max);
   const h = Math.min(5, r.h);
   for (let i = 0; i < max; i++) {
-    ctx.fillStyle = i < lvl ? '#ffd84d' : '#2a3560';
+    ctx.fillStyle = i < lvl ? GOLD : '#d0d0c8';
     ctx.fillRect(r.x + i * (w + gap), r.y + (r.h - h) / 2, w, h);
   }
 }
 
-// candy pill button: light→base→dark gradient face with full-radius ends
-// over a darker "press edge", stripes on top, centered ink. `pressed`
-// flattens the edge to a sliver and sinks the ink; `disabled` drops the
-// whole ramp to grays. `badge` is a small dark counter at the right end.
+// GBA pill: flat face on a solid INK press edge — the lip under the bottom
+// is the button's "up" state. `pressed` flattens the edge to a sliver and
+// sinks the ink; `disabled` drops to pale gray. `badge` is a small INK
+// counter at the right end.
 export function pill(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
@@ -644,23 +649,18 @@ export function pill(
     disabled?: boolean;
   },
 ) {
-  const c = o.disabled ? '#8a90a4' : o.c;
-  const cd = o.disabled ? '#5c6276' : o.cd;
-  const tc = o.disabled ? '#d8dcea' : o.tc;
+  const c = o.disabled ? '#d8d8d0' : o.c;
+  const tc = o.disabled ? INK_FAINT : o.tc;
   const rimH = o.pressed ? 1 : 4;
-  // the press edge is a whole pill a shade past the face's dark stop — the
-  // face sits on it and covers all but the bottom lip
+  // the press edge is a whole INK pill — the face sits on it and covers all
+  // but the bottom lip
   roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
-  ctx.fillStyle = mixHex(cd, '#12162b', 0.4);
+  ctx.fillStyle = INK;
   ctx.fill();
   ctx.save();
   roundRect(ctx, r.x, r.y, r.w, r.h - rimH, (r.h - rimH) / 2);
   ctx.clip();
-  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h - rimH);
-  g.addColorStop(0, mixHex(c, '#ffffff', 0.4));
-  g.addColorStop(0.55, c);
-  g.addColorStop(1, cd);
-  ctx.fillStyle = g;
+  ctx.fillStyle = c;
   ctx.fillRect(r.x, r.y, r.w, r.h);
   stripes(ctx, { x: r.x, y: r.y, w: r.w, h: r.h - rimH });
   ctx.restore();
@@ -858,6 +858,7 @@ export function drawTitle(
   if (tab === 'climb') drawClimbBody(ctx, t, cont, newArmed, dailyArmed);
   else if (tab === 'shop') drawShopBody(ctx, t, freeNow);
   else if (tab === 'mons') drawMonsBody(ctx, t);
+  else if (tab === 'raid') drawRaidBody(ctx, t);
   else drawTownBody(ctx, taskN);
 
   // the floating nav draws last — no body should peek through under it
@@ -910,19 +911,20 @@ function drawClimbBody(
   // pull, the chroma raid boss, the spark deal. The home menu's one summary.
   {
     const offers: { def: SpeciesDef; tag: string; c: string }[] = [
-      { def: featuredPull(), tag: 'RATE UP', c: '#ffd84d' },
+      { def: featuredPull(), tag: 'RATE UP', c: GOLD },
       { def: raidDef, tag: raidDone ? '✓ CLEARED' : 'SHINY BOSS', c: '#9a6cff' },
-      { def: dealPick(), tag: 'DEAL −25%', c: '#9df0ff' },
+      { def: dealPick(), tag: 'DEAL −25%', c: ACCENT },
     ];
     const card = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
-    ctx.fillStyle = 'rgba(10,14,32,0.74)';
+    ctx.fillStyle = 'rgba(40,48,88,0.35)';
+    roundRect(ctx, card.x + 2, card.y + 4, card.w, card.h, 10);
+    ctx.fill();
+    ctx.fillStyle = PAPER;
     roundRect(ctx, card.x, card.y, card.w, card.h, 10);
     ctx.fill();
-    ctx.strokeStyle = GOLD;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
+    cardFrame(ctx, card, 10);
     ctx.font = font(10);
-    ctx.fillStyle = '#ffd84d';
+    ctx.fillStyle = GOLD;
     ctx.textAlign = 'center';
     ctx.fillText('TODAY', card.x + card.w / 2, card.y + 28);
     offers.forEach((o, i) => {
@@ -933,7 +935,7 @@ function drawClimbBody(
       ctx.fillStyle = o.c;
       ctx.fillText(o.tag, cx, card.y + 118);
       ctx.font = fontB(8);
-      ctx.fillStyle = PARCH;
+      ctx.fillStyle = INK;
       ctx.fillText(o.def.name.toUpperCase(), cx, card.y + 132);
     });
   }
@@ -948,22 +950,22 @@ function drawClimbBody(
   // the front door rides the press-edge pills — gold for the climb,
   // parchment for the daily, same ramp the rest of the UI moved to
   pill(ctx, FREE_BTN, {
-    c: '#ffd84d',
+    c: GOLD_HI,
     cd: '#c8a44d',
-    tc: '#2a2440',
+    tc: INK,
     label: cont ? 'CONTINUE' : 'START CLIMB',
     // fresh trainers see the ladder's next step on the front door itself
     sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : rookie ? `ROOKIE ${rookie.n + 1}/${ROOKIE_STEPS.length} · ${rookie.label}` : undefined,
   });
   pill(ctx, DAILY_BTN, dailyArmed
-    ? { c: '#e03c34', cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
-    : { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'DAILY', sub: `RESETS ${taskResetsIn('daily')}` });
+    ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
+    : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'DAILY', sub: `RESETS ${taskResetsIn('daily')}` });
   // the day's one seeded epic wears the rate-up band's purple — cleared,
   // the pill sleeps gray till tomorrow's roll
   pill(ctx, RAID_BTN, {
     c: '#9a6cff',
     cd: '#6b4ac0',
-    tc: '#2a2440',
+    tc: PAPER,
     label: 'CHROMA RAID',
     // cleared → the chip sells tomorrow's boss instead of going dead
     sub: raidDone
@@ -1070,7 +1072,7 @@ function drawClimbBody(
     W / 2,
     ry - 3,
   );
-  ctx.fillStyle = '#1a2040';
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.fillRect(rx, ry, rw, 7);
   ctx.fillStyle = ld.color;
   ctx.fillRect(rx, ry, Math.max(3, rw * ld.prog), 7);
@@ -1099,18 +1101,17 @@ function drawClimbBody(
       bw += 40;
       const bh = back ? 56 : 38;
       const br = { x: W / 2 - bw / 2, y: 325 - bh / 2, w: bw, h: bh };
-      ctx.fillStyle = '#161228';
+      ctx.fillStyle = INK;
       ctx.fillRect(br.x, br.y, br.w, br.h);
-      dither(ctx, br, 0.08);
       ctx.strokeStyle = GOLD;
       ctx.lineWidth = 2;
       ctx.strokeRect(br.x + 1, br.y + 1, br.w - 2, br.h - 2);
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#ffd84d';
+      ctx.fillStyle = GOLD_HI;
       ctx.fillText(msg, W / 2, br.y + (back ? 24 : 25));
       if (back) {
         ctx.font = fontB(9);
-        ctx.fillStyle = '#aab4dd';
+        ctx.fillStyle = PAPER;
         ctx.fillText(back, W / 2, br.y + 42);
       }
       ctx.restore();
@@ -1139,7 +1140,7 @@ function drawTabBar(
   taskN: number,
 ) {
   roundRect(ctx, TAB_BAR.x, TAB_BAR.y, TAB_BAR.w, TAB_BAR.h, 18);
-  ctx.fillStyle = '#101430ee';
+  ctx.fillStyle = INK;
   ctx.fill();
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 1.5;
@@ -1152,11 +1153,15 @@ function drawTabBar(
   for (const cell of TAB_CELLS) {
     const on = cell.tab === active;
     const cx = cell.x + cell.w / 2;
-    const pr = { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
+    // CLIMB is the hero tab — its pill rides 12px proud of the bar
+    const hero = cell.tab === 'climb';
+    const pr = hero
+      ? { x: cell.x + 4, y: cell.y - 12, w: cell.w - 8, h: cell.h + 2 }
+      : { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
     roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
     if (on) {
-      // raised navy pill with a gold crown — the lifted-tab read
-      ctx.fillStyle = '#1b2140';
+      // raised paper pill with a gold crown — the lifted-tab read
+      ctx.fillStyle = PAPER;
       ctx.fill();
       ctx.strokeStyle = GOLD;
       ctx.lineWidth = 2;
@@ -1165,15 +1170,22 @@ function drawTabBar(
       ctx.lineTo(pr.x + pr.w - 20, pr.y + 3);
       ctx.stroke();
     } else {
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillStyle = 'rgba(248,248,240,0.07)';
       ctx.fill();
+      if (hero) {
+        // even at rest the front door keeps its gold outline
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
     }
 
-    const icY = cell.y + 25;
-    const tint = on ? PARCH : '#8890b8';
+    const icY = hero ? cell.y + 19 : cell.y + 25;
+    const tint = on ? INK : '#8890b8';
     // press-pop — the just-tapped pill squashes for ~0.16s (stamp set in main)
     const pop = on ? Math.max(0, 1 - (t - tabPressT) / 0.16) : 0;
-    // every tab icon is a real asset: ball, gym badge, star piece, townsperson
+    // every tab icon is a real asset: ball, gym badge, star piece, shiny boss,
+    // townsperson
     const spr =
       cell.tab === 'mons'
         ? itemSprite('poke-ball')
@@ -1193,7 +1205,14 @@ function drawTabBar(
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(spr, cx - 12, icY - 12, 24, 24);
     } else if (cell.tab === 'town') drawNpc(ctx, 'mom_down_0', cx, icY + 12, 28);
-    else if (cell.tab === 'mons') ballGlyph(ctx, cx, icY, 1, tint);
+    else if (cell.tab === 'raid') {
+      // the tab's face is today's shiny boss itself
+      try {
+        drawShiny(ctx, raidPick().id, cx, icY, 26);
+      } catch {
+        void loadSprite(raidPick().id);
+      }
+    } else if (cell.tab === 'mons') ballGlyph(ctx, cx, icY, 1, tint);
     else if (cell.tab === 'climb') peakGlyph(ctx, cx, icY, 1, tint);
     else {
       ctx.fillStyle = tint;
@@ -1203,13 +1222,26 @@ function drawTabBar(
 
     ctx.font = fontB(10);
     ctx.textAlign = 'center';
-    ctx.fillStyle = on ? GOLD : '#8890b8';
+    ctx.fillStyle = on ? INK : '#8890b8';
     ctx.fillText(cell.tab.toUpperCase(), cx, cell.y + cell.h - 14);
 
-    // badge dots — the notification pull. MONS breathes gold while the
-    // daily free pull waits; TOWN carries the claimable-task count in red.
+    // badge dots — the notification pull. SHOP breathes gold while the
+    // daily free pull waits, MONS while a line-set bounty sits; TOWN carries
+    // the claimable-task count in red; RAID glows chroma till the boss falls.
     const bx = cx + 20, by = cell.y + 14;
-    if (cell.tab === 'mons' && freeNow) {
+    if (cell.tab === 'raid' && !raidDoneToday()) {
+      ctx.save();
+      ctx.globalAlpha = 0.7 + Math.sin(t * 5) * 0.3;
+      ctx.beginPath();
+      ctx.arc(bx, by, 5.5, 0, Math.PI * 2);
+      ctx.fillStyle = '#9a6cff';
+      ctx.fill();
+      ctx.strokeStyle = '#0a0d18';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.restore();
+    }
+    if ((cell.tab === 'shop' && freeNow) || (cell.tab === 'mons' && setsReady().length > 0)) {
       ctx.save();
       ctx.globalAlpha = 0.7 + Math.sin(t * 5) * 0.3;
       ctx.beginPath();
@@ -1231,7 +1263,7 @@ function drawTabBar(
       ctx.stroke();
       ctx.font = fontB(7);
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#f8f8f0';
+      ctx.fillStyle = PAPER;
       ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
     }
   }
@@ -1248,7 +1280,7 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   stripeBand(ctx, { x: dr.x + 3, y: dr.y + 3, w: dr.w - 6, h: 30 }, '#9df0ff');
   ctx.textAlign = 'left';
   ctx.font = font(9);
-  ctx.fillStyle = '#2a2440';
+  ctx.fillStyle = INK;
   ctx.fillText('SPARK DEAL −25%', dr.x + 14, dr.y + 23);
   const deal = dealPick();
   // a type-tinted pad — the bargain stands on its own color like the rest
@@ -1266,10 +1298,10 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   const tx2 = dr.x + 156;
   ctx.textAlign = 'left';
   ctx.font = fontB(8);
-  ctx.fillStyle = '#9df0ff';
+  ctx.fillStyle = ACCENT;
   ctx.fillText('TODAY ONLY', tx2, dr.y + 58);
   fitFont(ctx, deal.name.toUpperCase(), 12, dr.x + dr.w - tx2 - 14);
-  ctx.fillStyle = PARCH;
+  ctx.fillStyle = INK;
   ctx.fillText(deal.name.toUpperCase(), tx2, dr.y + 82);
   ctx.font = fontB(8);
   ctx.fillStyle = TYPE_COLOR[deal.type];
@@ -1277,22 +1309,22 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   // the price leads; the struck list price beside it makes the −25% land
   const was = dustCost(deal);
   ctx.font = fontB(11);
-  ctx.fillStyle = '#9df0ff';
+  ctx.fillStyle = ACCENT;
   const cost = `${dealCost(deal)}`;
   ctx.fillText(`◆ ${cost}`, tx2, dr.y + 123);
   const pw = ctx.measureText(`◆ ${cost}`).width;
   ctx.font = fontB(8);
   const wl = `was ◆ ${was}`;
-  ctx.fillStyle = '#8890b8';
+  ctx.fillStyle = INK_FAINT;
   ctx.fillText(wl, tx2 + pw + 12, dr.y + 121);
-  ctx.strokeStyle = '#8890b8';
+  ctx.strokeStyle = INK_FAINT;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(tx2 + pw + 12, dr.y + 118);
   ctx.lineTo(tx2 + pw + 12 + ctx.measureText(wl).width, dr.y + 118);
   ctx.stroke();
   ctx.font = fontB(9);
-  ctx.fillStyle = '#aab4dd';
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText('TAP TO OPEN THE HATCHER ›', tx2, dr.y + 148);
 }
 
@@ -1306,7 +1338,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
   stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 36 }, GOLD);
   ctx.textAlign = 'left';
   ctx.font = font(11);
-  ctx.fillStyle = '#2a2440';
+  ctx.fillStyle = INK;
   ctx.fillText('THE HATCHER', r.x + 18, r.y + 28);
   if (freeNow) {
     ctx.textAlign = 'right';
@@ -1322,7 +1354,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
   ctx.save();
   roundRect(ctx, stage.x, stage.y, stage.w, stage.h, 10);
   ctx.clip();
-  ctx.fillStyle = '#0d1126';
+  ctx.fillStyle = PAPER_HI;
   ctx.fillRect(stage.x, stage.y, stage.w, stage.h);
   const sg = ctx.createRadialGradient(
     stage.x + stage.w / 2,
@@ -1332,7 +1364,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
     stage.y + stage.h * 0.44,
     stage.w * 0.9,
   );
-  sg.addColorStop(0, `${ftc}55`);
+  sg.addColorStop(0, `${ftc}33`);
   sg.addColorStop(1, `${ftc}00`);
   ctx.fillStyle = sg;
   ctx.fillRect(stage.x, stage.y, stage.w, stage.h);
@@ -1340,7 +1372,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
   rim(ctx, stage, 10, `${ftc}88`, 1.5);
 
   const fcx = stage.x + stage.w / 2, fcy = stage.y + 72;
-  ballGlyph(ctx, fcx, fcy - 6, 4.6, 'rgba(255,255,255,0.07)');
+  ballGlyph(ctx, fcx, fcy - 6, 4.6, 'rgba(40,48,88,0.08)');
   ctx.fillStyle = `${ftc}40`;
   ctx.beginPath();
   ctx.ellipse(fcx, fcy + 42, 68, 17, 0, 0, Math.PI * 2);
@@ -1352,7 +1384,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
     void loadSprite(feat.id);
   }
   const twk: [number, number][] = [[-70, -42], [66, -50], [56, 28]];
-  ctx.fillStyle = '#ffe89d';
+  ctx.fillStyle = GOLD;
   twk.forEach(([dx, dy], i) => {
     ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.6 + i * 2.1));
     fillStar(ctx, fcx + dx, fcy + dy, 4.5);
@@ -1360,7 +1392,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
   ctx.globalAlpha = 1;
   ctx.font = fontB(8);
   ctx.textAlign = 'center';
-  ctx.fillStyle = mixHex(ftc, '#ffffff', 0.35);
+  ctx.fillStyle = mixHex(ftc, INK, 0.2);
   ctx.fillText(
     feat.type2 ? `${feat.type} · ${feat.type2}`.toUpperCase() : feat.type.toUpperCase(),
     fcx,
@@ -1370,30 +1402,30 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
   const tx = stage.x + stage.w + 18;
   ctx.textAlign = 'left';
   ctx.font = fontB(9);
-  ctx.fillStyle = '#ffd84d';
+  ctx.fillStyle = GOLD;
   ctx.fillText('RATE-UP TODAY', tx, r.y + 72);
   fitFont(ctx, feat.name.toUpperCase(), 13, r.x + r.w - tx - 14);
-  ctx.fillStyle = PARCH;
+  ctx.fillStyle = INK;
   ctx.fillText(feat.name.toUpperCase(), tx, r.y + 98);
   ctx.font = fontB(8);
-  ctx.fillStyle = '#c8d0f0';
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText('10× ODDS IN THE RARE+ POOL', tx, r.y + 118);
-  ctx.fillStyle = '#a8b0d8';
+  ctx.fillStyle = INK_FAINT;
   ctx.fillText(`RARE+ GUARANTEED IN ${PULL_PITY - (pullN % PULL_PITY)} PULLS`, tx, r.y + 137);
   // the price of admission — two cost chips: the single, the discounted ten
   const pw = (r.x + r.w - 16 - tx - 10) / 2;
   ([['×1', PULL_COST], ['×10', PULL10_COST]] as [string, number][]).forEach(([k, cost], i) => {
     const px = tx + i * (pw + 10);
     roundRect(ctx, px, r.y + 148, pw, 32, 8);
-    ctx.fillStyle = '#1a2040';
+    ctx.fillStyle = '#e8e8e0';
     ctx.fill();
     rim(ctx, { x: px, y: r.y + 148, w: pw, h: 32 }, 8, GOLD, 1);
     ctx.textAlign = 'center';
     ctx.font = fontB(7);
-    ctx.fillStyle = '#8890b8';
+    ctx.fillStyle = INK_FAINT;
     ctx.fillText(`PULL ${k}`, px + pw / 2, r.y + 161);
     ctx.font = fontB(10);
-    ctx.fillStyle = '#ffd84d';
+    ctx.fillStyle = GOLD;
     ctx.fillText(`★${cost}`, px + pw / 2, r.y + 176);
   });
 
@@ -1419,6 +1451,80 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
 }
 
 // --- MONS: the collection — dex, evolution sets, latest catches ------------
+// --- RAID: the day's seeded chroma boss — free retries till it falls ------
+function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
+  const raidDone = raidDoneToday();
+  const boss = raidPick();
+  const r = RAID_CARD;
+  menuCard(ctx, r, 12);
+  stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 30 }, '#9a6cff');
+  ctx.textAlign = 'left';
+  ctx.font = font(9);
+  ctx.fillStyle = '#2a2440';
+  ctx.fillText('CHROMA RAID', r.x + 14, r.y + 23);
+  if (raidDone) {
+    ctx.textAlign = 'right';
+    ctx.fillText('✓ CLEARED', r.x + r.w - 14, r.y + 23);
+    ctx.textAlign = 'left';
+  }
+
+  // the boss stands center on a chroma stage — shiny palette, slow hover
+  const bcx = r.x + r.w / 2, bcy = r.y + 122;
+  ctx.fillStyle = '#9a6cff30';
+  ctx.beginPath();
+  ctx.ellipse(bcx, bcy + 54, 96, 20, 0, 0, Math.PI * 2);
+  ctx.fill();
+  monShadow(ctx, bcx, bcy + 4, 120);
+  const bob = Math.sin(t * 2.2) * 3;
+  try {
+    drawShiny(ctx, boss.id, bcx, bcy + bob, 120);
+  } catch {
+    try {
+      drawMon(ctx, boss.id, bcx, bcy + bob, 120);
+    } catch {
+      void loadSprite(boss.id);
+    }
+  }
+  ctx.textAlign = 'center';
+  fitFont(ctx, boss.name.toUpperCase(), 12, r.w - 40);
+  ctx.fillStyle = PARCH;
+  ctx.fillText(boss.name.toUpperCase(), bcx, bcy + 88);
+  ctx.font = fontB(8);
+  ctx.fillStyle = '#9a6cff';
+  ctx.fillText('SHINY BOSS · ONE PER DAY', bcx, bcy + 106);
+
+  // the loaner trio — level-30 rare+ rentals, same three for everyone
+  ctx.fillStyle = '#8890b8';
+  ctx.fillText('YOUR LV30 LOANERS', bcx, r.y + 254);
+  raidTeam().forEach((d, i) => {
+    const cx = bcx + (i - 1) * 110;
+    monShadow(ctx, cx, r.y + 292, 48);
+    try {
+      drawMon(ctx, d.id, cx, r.y + 288 + Math.sin(t * 2.2 + i * 1.7) * 2, 48);
+    } catch {
+      void loadSprite(d.id);
+    }
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#a8b0d8';
+    ctx.fillText(d.name.toUpperCase(), cx, r.y + 320);
+  });
+
+  // the fight pill — chroma face; cleared, it sells tomorrow's boss instead
+  pill(
+    ctx,
+    RAID_FIGHT,
+    raidDone
+      ? {
+          c: '#3a4160',
+          cd: '#262c44',
+          tc: '#8890b8',
+          label: 'CLEARED',
+          sub: `TMRW: ${raidPick(Date.now() + 86400000).name.toUpperCase()}`,
+        }
+      : { c: '#9a6cff', cd: '#6b4ac0', tc: '#f8f8f0', label: 'FIGHT', sub: 'FREE RETRIES · SHINY DEX + ★ ON WIN' },
+  );
+}
+
 function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   // the dex card keeps the chip's two facts — how full, and the nearest
   // open loop: catches to the charm, badges to the crown, pulls to pity
@@ -2303,6 +2409,10 @@ export const BOARD_BTN = { x: TASKS_BTN.x, y: ACH_BTN.y, w: TOWN_COL, h: 150 };
 export const ASC_BTN = { x: 30, y: ACH_BTN.y + ACH_BTN.h + 16, w: W - 60, h: 130 };
 // the leaderboard's front three, visible on the tab — tap opens the board
 export const HALL_BTN = { x: 30, y: ASC_BTN.y + ASC_BTN.h + 16, w: W - 60, h: 128 };
+// RAID: one boss card — today's shiny fight + its loaner trio — then the
+// FIGHT pill the tab's tap target rides on
+export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };
+export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const DEX_COLS = 6;
 const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
@@ -2946,7 +3056,10 @@ export function drawHatch(
     }
   }
 
-  // SPARK — the dust shop: buy the species outright, owned ones tag IN DEX
+  // SPARK — the dust shop: buy the species outright, owned ones tag IN DEX.
+  // The pull show covers the whole face in 0.92 black — skip the shop's
+  // sprites/deal rolls entirely once the theatre takes over
+  if (s.phase === 'idle') {
   ctx.font = font(10);
   ctx.fillStyle = '#c8d0f0';
   ctx.fillText('SPARK EXCHANGE', W / 2, SPARK_VIEW.y - 24);
@@ -3028,8 +3141,9 @@ export function drawHatch(
       ctx.fillText('IN DEX', ox + ow / 2 + 4, cell.y + 96);
     } else {
       const isDeal = def.id === deal.id;
-      // dealCost carries the −25% — non-deal ids price at list, no re-roll
-      const cost = dealCost(def);
+      // dealCost's −25% inlined against the frame's hoisted deal — calling
+      // it per cell re-rolled dealPick (raidPick + featuredPull inside) 16×
+      const cost = isDeal ? Math.ceil(dustCost(def) * 0.75) : dustCost(def);
       const armed = info.armedId === def.id;
       if (armed) {
         // two-tap confirm: pulse the rim, spend the price line on the cue,
@@ -3080,6 +3194,7 @@ export function drawHatch(
   ctx.font = fontB(7);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('pulled or sparked mons join the dex + future drafts · tap outside to close', W / 2, r.y + r.h - 14);
+  }
 
   // the pull show rides on top — dim the shop, modal carries the reveal
   if (s.phase !== 'idle') drawPullShow(ctx, s);
@@ -3398,13 +3513,16 @@ function drawRevealScene(
       ctx.restore();
     }
   } else {
+    // save/restore, not a bare alpha reset — a still-warming sprite throws
+    // mid-draw and would otherwise leave the flash + whiteout dimmed
+    ctx.save();
     try {
       ctx.globalAlpha = clamp01(ft / 0.1);
       (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, cy + up, sz);
-      ctx.globalAlpha = 1;
     } catch {
       /* sprite still warming */
     }
+    ctx.restore();
   }
 
   // the white hit on the beat + a full-screen whiteout scaled by hype

@@ -115,6 +115,7 @@ import {
   noteTabPress,
   DEAL_BTN,
   SETS_BTN,
+  RAID_FIGHT,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
@@ -205,6 +206,7 @@ let hatch: HatchState = { phase: 'idle', t: 0, tMax: 0, results: [], i: 0, spark
 // a spark buy arms like the NEW-climb link — first tap arms for 3s, only a
 // second tap inside the window spends the dust
 let sparkArm = { id: -1, t: -10 };
+let hatchLockT = -10; // eats a tap that lands in the same instant the reel auto-advances
 let hatchFlash = { text: '', t: -10 }; // transient gold line under the pity bar — milestone payouts name themselves
 let taskFlash = { text: '', t: -10 }; // same flash, on the chores board
 let dexDrag: { y0: number; s0: number; moved: boolean; for?: 'hatch' | 'lab' | 'dex' | 'ach' | 'board' } | null = null;
@@ -742,6 +744,7 @@ const sparkBuy = (def: SpeciesDef) => {
 // a tap inside the hatch overlay: mid-theatre taps drive the state machine;
 // idle taps pull, spark, or fall out the bottom like the sibling overlays
 const hatchTap = (p: { x: number; y: number }) => {
+  if (t - hatchLockT < 0.15) return; // a tap meant for the phase that just auto-advanced would skip the new card
   if (hatch.phase === 'shake') {
     hatch.phase = 'reveal'; // an impatient tap skips the rest of the shake
     hatch.t = 0;
@@ -751,8 +754,10 @@ const hatchTap = (p: { x: number; y: number }) => {
   }
   if (hatch.phase === 'reveal') {
     sfx('ui');
-    // SKIP ≫ jumps the rest of the reel straight to the summary grid
-    if (hatch.results.length > 1 && inRect(p.x, p.y, slop(SKIP_PULL_BTN, 7))) {
+    // SKIP ≫ jumps the rest of the reel straight to the summary grid —
+    // slop 12 because the flash-beat screen kick can slide the drawn pill
+    // ~10px off its rect on epic/shiny reveals
+    if (hatch.results.length > 1 && inRect(p.x, p.y, slop(SKIP_PULL_BTN, 12))) {
       hatch.phase = 'results';
       hatch.t = 0;
       return;
@@ -1128,7 +1133,10 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (homeTab === 'climb' && inRect(p.x, p.y, RAID_BTN)) {
+    if (
+      (homeTab === 'climb' && inRect(p.x, p.y, RAID_BTN)) ||
+      (homeTab === 'raid' && inRect(p.x, p.y, RAID_FIGHT))
+    ) {
       // the day's boss drops once — a beaten raid stays done till UTC midnight
       if (raidDoneToday()) {
         sfx('ui', 0.6); // soft deny — same pitch every dead tap gets
@@ -1719,11 +1727,13 @@ function update(dt: number) {
   // runway (sized to the pull's hype), the scenes read s.t for animation
   if (hatchOpen) {
     hatch.t += dt;
+    let auto = false; // an auto-advance this frame eats the same-instant tap
     if (hatch.phase === 'shake' && hatch.t >= hatch.tMax) {
       hatch.phase = 'reveal';
       hatch.t = 0;
       hatch.tMax = hatchLen(HATCH_REVEAL_T, hatch.results[hatch.i]);
       revealSfx(hatch.results[hatch.i]);
+      auto = true;
     } else if (hatch.phase === 'reveal' && hatch.t >= hatch.tMax) {
       // the reel plays itself — a 10-pull shouldn't cost 10 taps; taps
       // still fast-forward through hatchTap's advance
@@ -1733,7 +1743,9 @@ function update(dt: number) {
         revealSfx(hatch.results[hatch.i]); // each card earns its own hit
       }
       hatch.t = 0;
+      auto = true;
     }
+    if (auto) hatchLockT = t;
   }
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
@@ -1784,6 +1796,7 @@ function update(dt: number) {
           unlockAch('shiny'); // the first gold dex entry is its own trophy
           playJingle('task'); // the payout chime
           const dexPay = pullMilestones(); // the raid capture can cross collector/living too
+          const rookiePay = rookieCheck().reduce((s, r) => s + r.pay, 0); // a raid catch is a hatch for the ladder
           // the prize rides the hatcher's theatre — straight to reveal:
           // the fight itself was the ball-shake
           const raidRes: PullResult = { id: boss.id, rarity: 3, dupe, shiny: true, dust: dupe ? DUST_BY_TIER[3] : 0 };
@@ -1795,6 +1808,7 @@ function update(dt: number) {
             sparkScroll: 0,
             label: 'RAID CLEARED',
             dexPay,
+            rookiePay,
             results: [raidRes],
           };
           hatchOpen = true;
@@ -1993,7 +2007,9 @@ function render() {
           featured: featuredPull(),
           free: freePullLeft(),
           flash: t - hatchFlash.t < 2.5 ? hatchFlash.text : undefined,
-          armedId: sparkArm.id,
+          // an expired arm reports -1 — the cell must stop promising
+          // 'TAP AGAIN' once the window lapsed, since the next tap re-arms
+          armedId: sparkArm.id >= 0 && t - sparkArm.t < SPARK_ARM_T ? sparkArm.id : -1,
           armedFrac: sparkArm.id >= 0 ? Math.max(0, 1 - (t - sparkArm.t) / SPARK_ARM_T) : 0,
         });
       if (labOpen) drawLab(ctx, labScroll, stars());

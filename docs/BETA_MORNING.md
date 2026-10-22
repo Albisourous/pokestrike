@@ -182,6 +182,15 @@ never called anywhere), and `noteTabPress` drives a tab press-pop.
 **Smoke**: 11 new sets asserts + `cries`-key-ignored coverage; suite
 green, typecheck green, build green.
 
+**Follow-ups after the wave** (`e485592`): the spark grid's two-tap
+"armed" state now has a visual channel — pulsing gold rim, `TAP AGAIN ·
+◆N` price line, and a countdown strip burning down the 3s window
+(`armedId`/`armedFrac` piped through `drawHatch`'s info arg). Dead-button
+sweep: every exported `*_BTN`/`*_CHIP` has a live hit rect. Verified the
+epic + shiny cinematics in a live browser by stubbing `Math.random` —
+prism ring, rays, silhouette reveal and the `SHINY!` starburst all fire.
+Deploy to Pages confirmed green after each push.
+
 ## Questions for the morning
 
 1. Are you OK shipping the beta publicly under Pokémon branding, or
