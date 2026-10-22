@@ -10,7 +10,7 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
@@ -2539,6 +2539,76 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   else localStorage.setItem('pk_pulls', pullSave);
   localStorage.removeItem('pk_rookie');
   localStorage.removeItem('pk_tasks');
+}
+
+// --- fuzz: garbage in any pk_* key can't throw or NaN a reader -------------
+// A truncated/corrupt/foreign blob is the returning-player risk — every
+// reader must fall back to its memory copy or defaults, never propagate junk.
+{
+  const KEYS = [
+    'pk_dex', 'pk_dex_shiny', 'pk_dexrw', 'pk_rookie', 'pk_coach', 'pk_gyms',
+    'pk_rating', 'pk_board', 'pk_echo', 'pk_best', 'pk_asc', 'pk_ach',
+    'pk_badges', 'pk_bag', 'pk_stars', 'pk_dust', 'pk_pulls', 'pk_free',
+    'pk_grant', 'pk_boost', 'pk_raid', 'pk_login', 'pk_win', 'pk_grind',
+    'pk_lab', 'pk_seen', 'pk_stats', 'pk_run', 'pk_settings', 'pk_tasks',
+    'pk_streak', 'pk_ver',
+  ];
+  const JUNK = [
+    '{broken', '42', '"str"', 'true', '[]', '{}', '[1,"x",null]',
+    '{"n":"x"}', '1e999', '{"day":42,"n":[1],"team":"x"}', 'null', '',
+  ];
+  const now = Date.now();
+  const READERS: [string, () => unknown][] = [
+    ['dexIds', () => dexIds()], ['shinyIds', () => shinyIds()],
+    ['unlockedAch', () => unlockedAch()], ['coachDone', () => coachDone()],
+    ['best', () => best()], ['gymBadges', () => gymBadges()],
+    ['rating', () => rating()], ['tier', () => tier()], ['board', () => board()],
+    ['taskState', () => taskState()], ['streakDaily', () => streakDaily(now)],
+    ['streakWins', () => streakWins()], ['runSave', () => runSave()],
+    ['stars', () => stars()], ['dust', () => dust()], ['pullCount', () => pullCount()],
+    ['labLevel', () => labLevel('hp')], ['starterGrant', () => starterGrant()],
+    ['starBoost', () => starBoost(now)], ['boostLeft', () => boostLeft(now)],
+    ['raidDoneToday', () => raidDoneToday(now)], ['loginToday', () => loginToday(now)],
+    ['streakRisky', () => streakRisky(now)], ['bagStock', () => bagStock()],
+    ['settings', () => settings()], ['freePullLeft', () => freePullLeft(now)],
+    ['nextDexReward', () => nextDexReward()], ['nextRookie', () => nextRookie()],
+    ['helpSeen', () => helpSeen()], ['statsDump', () => statsDump()],
+    ['ascPick', () => ascPick()], ['taskViews-d', () => taskViews('daily', now)],
+    ['taskViews-w', () => taskViews('weekly', now)], ['featuredPull', () => featuredPull(now)],
+    ['raidPick', () => raidPick(now)], ['dealPick', () => dealPick(now)],
+    ['tasksReady', () => tasksReady(now)], ['taskResetsIn', () => taskResetsIn('daily', now)],
+  ];
+  const throwers = new Map<string, number>();
+  let badReads = 0;
+  for (const k of KEYS) {
+    for (const j of JUNK) {
+      localStorage.setItem(k, j);
+      for (const [name, fn] of READERS) {
+        try {
+          fn();
+        } catch {
+          throwers.set(name, (throwers.get(name) ?? 0) + 1);
+        }
+      }
+      try {
+        // shape assertions on the values readers can leak
+        if (!Number.isFinite(stars()) || !Number.isFinite(dust()) || !Number.isFinite(rating()) || !Number.isFinite(pullCount())) badReads++;
+        if (!Array.isArray(dexIds()) || !Array.isArray(board()) || !Array.isArray(taskState().dsel)) badReads++;
+        const rs = runSave();
+        if (rs !== null && (!Array.isArray(rs.team) || !Number.isFinite(rs.seed))) badReads++;
+        const st = settings();
+        if (!(st.master >= 0 && st.master <= 1) || !['high', 'medium', 'low'].includes(st.quality)) badReads++;
+      } catch {
+        badReads++;
+      }
+    }
+    localStorage.removeItem(k);
+  }
+  const threw = [...throwers.values()].reduce((a, b) => a + b, 0);
+  ok(throwers.size === 0, `fuzz: ${KEYS.length} keys x ${JUNK.length} junk blobs — throws: ${[...throwers.entries()].map(([n, c]) => `${n}×${c}`).join(' ') || 'none'}`);
+  ok(badReads === 0, `fuzz: readers stayed sane under junk — ${badReads} bad reads`);
+  // the suite's mem copies survived the fuzz — real state still reads back
+  ok(Number.isFinite(stars()) && Array.isArray(dexIds()), 'memory copies cover a wiped store');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
