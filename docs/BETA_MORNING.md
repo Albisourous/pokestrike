@@ -129,6 +129,24 @@ og/manifest/icons correctly; the final push re-deploys this build.
    beta as-is, and if it gathers traction, do the reskin** — it's the
    only option that survives a takedown.
 
+## Addendum — settings UX retune (`0716008`)
+
+Your mockups were already the anatomy the modal used — it was just too
+small. The panel now fills the screen (y 38→838, was a 580px floating
+card): rail pills 64→78px with icon circles, band 44→56, slider rows
+~92px with 14px pokeball thumbs and pixel `%` readouts, 60×30 toggles,
+28px seg tracks. `GRAPHICS` no longer bleeds past its pill (fitFont).
+Hit rects re-derived from the same geometry, all rows ≥44px. Verified
+against live screenshots of all four tabs.
+
+Warning: a second session was editing this repo at the same time —
+uncommitted `pk_sets`/SHOP work in `data.ts`/`meta.ts`/`screens.ts` is
+theirs and was left untouched. One cosmetic line of mine (scrim 0.82→
+0.9 in `drawSettings`) is deliberately uncommitted so it lands with
+their next green commit instead of dragging half-built code into mine.
+If the worktree errors you see (`DEAL_BTN`, `pullN`, `SETS_BTN`,
+`tabPressT`) persist, they're mid-feature — committed HEAD is clean.
+
 ## Questions for the morning
 
 1. Are you OK shipping the beta publicly under Pokémon branding, or
