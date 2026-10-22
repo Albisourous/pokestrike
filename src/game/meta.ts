@@ -101,6 +101,59 @@ export function nextDexReward(): { at: number; pay: number } | null {
   return DEX_REWARDS[dexRwN()] ?? null;
 }
 
+// --- rookie board: the first-session ladder ---------------------------------
+// pk_rookie { n } counts ordered steps done — same one-counter pattern as
+// pk_dexrw. Every step reads pure meta state so a check can run anywhere
+// (boot, run end, a pull, a task claim) and pay the moment it lands.
+export const ROOKIE_STEPS: { id: string; label: string; pay: number }[] = [
+  { id: 'run', label: 'PLAY A CLIMB', pay: 15 },
+  { id: 'stage', label: 'REACH STAGE 3', pay: 25 },
+  { id: 'pull', label: 'HATCH A MON', pay: 50 },
+  { id: 'task', label: 'CLAIM A TASK', pay: 60 },
+  { id: 'win', label: 'WIN A CLIMB', pay: 100 },
+];
+let memRookie = 0;
+
+const rookieN = (): number => {
+  const raw = load<Partial<{ n: number }>>('pk_rookie');
+  const n = raw && typeof raw === 'object' && typeof raw.n === 'number' && Number.isFinite(raw.n) ? raw.n : memRookie;
+  return Math.max(0, Math.floor(n));
+};
+
+const rookieMet = (id: string): boolean => {
+  switch (id) {
+    case 'run': return best().runs >= 1;
+    case 'stage': return best().stage >= 3;
+    case 'pull': return pullCount() >= 1;
+    case 'task': { const s = taskState(); return s.dclaim.length + s.wclaim.length > 0; }
+    case 'win': return best().wins >= 1;
+    default: return false;
+  }
+};
+
+// Pays each newly-met step in order — idempotent, so callers fire it freely.
+export function rookieCheck(): { label: string; pay: number }[] {
+  const out: { label: string; pay: number }[] = [];
+  let n = rookieN();
+  while (n < ROOKIE_STEPS.length && rookieMet(ROOKIE_STEPS[n].id)) {
+    addStars(ROOKIE_STEPS[n].pay);
+    out.push(ROOKIE_STEPS[n]);
+    n++;
+  }
+  if (out.length) {
+    memRookie = n;
+    store('pk_rookie', { n });
+  }
+  return out;
+}
+
+// what the ladder wants next — null once the board's cleared
+export function nextRookie(): { label: string; pay: number; n: number } | null {
+  const n = rookieN();
+  const step = ROOKIE_STEPS[n];
+  return step ? { ...step, n } : null;
+}
+
 // First-run coaching: set once the first wave clears — quit mid-run and the
 // ghost pull comes back next launch.
 export const coachDone = () => load<boolean>('pk_coach') ?? memCoach;
@@ -741,7 +794,20 @@ export function migrateSaves() {
   if (v !== SAVE_VER) store('pk_ver', SAVE_VER);
   starterGrant(); // unversioned — a promo, not a shape; pk_grant self-gates
   loginCheck(); // same family — once-per-UTC-day self-gate
+  rookieCheck(); // a returning player's old progress may already clear steps
 }
+
+// pk_seen marks a booted player — the first launch opens the help deck so
+// the tutorial reads itself instead of waiting to be found
+let memSeen = false;
+export const helpSeen = (): boolean => {
+  const raw = load<Partial<{ v: boolean }>>('pk_seen');
+  return (raw && typeof raw === 'object' && raw.v === true) || memSeen;
+};
+export const markHelpSeen = (): void => {
+  memSeen = true;
+  store('pk_seen', { v: true });
+};
 
 // --- decision telemetry ------------------------------------------------------
 // MegaCrit balanced StS off pick rates and where runs die, logged per

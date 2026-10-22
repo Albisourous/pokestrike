@@ -10,7 +10,7 @@ import { genRegion, routePath } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull } from '../src/game/meta';
+import { dexIds, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
@@ -2487,6 +2487,57 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     (kb as any).texts.some((tx: any) => tx.text === 'TASK: BATTLE TESTED ✓'),
     'crossing a task goal pings mid-fight, not at the report',
   );
+  localStorage.removeItem('pk_tasks');
+}
+
+// --- the rookie ladder + the first-boot help flag --------------------------
+{
+  const bestSave = localStorage.getItem('pk_best'); // the real record goes back
+  const pullSave = localStorage.getItem('pk_pulls');
+  // {n:0} beats removeItem — the memRookie fallback would resurrect any
+  // earlier suite claim under a missing blob
+  localStorage.setItem('pk_rookie', JSON.stringify({ n: 0 }));
+  ok(
+    ROOKIE_STEPS.length === 5 && ROOKIE_STEPS.every((r, i) => r.pay > 0 && (i === 0 || true)),
+    `rookie board: ${ROOKIE_STEPS.length} steps, every pay > 0`,
+  );
+  ok(nextRookie()?.label === 'PLAY A CLIMB', 'the ladder starts at PLAY A CLIMB');
+
+  // a first run that reached stage 3 clears steps in order — earlier suite
+  // pulls may have already armed 'HATCH A MON', so assert order not count
+  localStorage.setItem('pk_best', JSON.stringify({ score: 100, stage: 3, wins: 0, runs: 1 }));
+  const sR = stars();
+  const gotR = rookieCheck();
+  ok(
+    gotR.length >= 2 && gotR[0].label === 'PLAY A CLIMB' && gotR[1].label === 'REACH STAGE 3',
+    `one run clears the ladder in order (${gotR.map((r) => r.label).join(' / ')})`,
+  );
+  ok(stars() === sR + gotR.reduce((s, r) => s + r.pay, 0), `each step banks its pay (+${stars() - sR})`);
+  ok(rookieCheck().length === 0, 'a cleared step never pays twice');
+
+  // whatever's left — hatch → task claim → win — finishes the board
+  bumpPulls();
+  saveTaskState({ day: dayKey(Date.now()), dp: {}, dsel: [], dclaim: ['d-kos'], week: weekKey(Date.now()), wp: {}, wsel: [], wclaim: [] });
+  localStorage.setItem('pk_best', JSON.stringify({ score: 100, stage: 9, wins: 1, runs: 1 }));
+  const sR2 = stars();
+  const gotR2 = rookieCheck();
+  ok(
+    stars() === sR2 + gotR2.reduce((s, r) => s + r.pay, 0) && nextRookie() === null,
+    `pull + claim + win finish the board (+${stars() - sR2})`,
+  );
+  ok(rookieCheck().length === 0, 'a finished ladder stays finished');
+
+  // first-boot help: unseen until marked, stays marked
+  localStorage.removeItem('pk_seen');
+  ok(!helpSeen(), 'a fresh store has never opened the deck');
+  markHelpSeen();
+  ok(helpSeen(), 'markHelpSeen sticks');
+
+  if (bestSave == null) localStorage.removeItem('pk_best');
+  else localStorage.setItem('pk_best', bestSave);
+  if (pullSave == null) localStorage.removeItem('pk_pulls');
+  else localStorage.setItem('pk_pulls', pullSave);
+  localStorage.removeItem('pk_rookie');
   localStorage.removeItem('pk_tasks');
 }
 

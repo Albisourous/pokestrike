@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds } from './game/data';
 import type { SpeciesDef, StageDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -185,6 +185,7 @@ let hatch: HatchState = { phase: 'idle', t: 0, results: [], i: 0, sparkScroll: 0
 // second tap inside the window spends the dust
 let sparkArm = { id: -1, t: -10 };
 let hatchFlash = { text: '', t: -10 }; // transient gold line under the pity bar — milestone payouts name themselves
+let taskFlash = { text: '', t: -10 }; // same flash, on the chores board
 let dexDrag: { y0: number; s0: number; moved: boolean } | null = null;
 let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
 let result: RunResult | null = null;
@@ -657,6 +658,7 @@ const doPull = (n: number) => {
   }
   hatch.results = results;
   hatch.dexPay = dexPay;
+  hatch.rookiePay = rookieCheck().reduce((s, r) => s + r.pay, 0); // 'HATCH A MON' clears here
   hatch.i = 0;
   hatch.t = 0;
   hatch.phase = 'shake'; // the ball rocks before the first reveal
@@ -683,6 +685,8 @@ const sparkBuy = (def: SpeciesDef) => {
   recordCapture([def.id]);
   const dexPay = pullMilestones(); // a dust buy can cross a tier too
   if (dexPay) hatchFlash = { text: `DEX MILESTONE +${dexPay} ★`, t };
+  const rookie = rookieCheck(); // a spark buy is a hatch for the rookie board
+  if (rookie.length) hatchFlash = { text: `ROOKIE +${rookie.reduce((s, r) => s + r.pay, 0)} ★`, t };
   playJingle('catch');
 };
 
@@ -881,8 +885,11 @@ canvas.addEventListener('pointerdown', (e) => {
     if (hit?.kind === 'claim' && hit.i != null) {
       const v = taskViews(tasksTab)[hit.i];
       // taskRowHit fires on any slap of the slab — done pays, the rest deny
-      if (v?.done && claimTask(v.id)) playJingle('task'); // the bag pays out
-      else sfx('ui', 0.6);
+      if (v?.done && claimTask(v.id)) {
+        playJingle('task'); // the bag pays out
+        const rookie = rookieCheck(); // 'CLAIM A TASK' clears on this tap
+        if (rookie.length) taskFlash = { text: `ROOKIE +${rookie.reduce((s, r) => s + r.pay, 0)} ★`, t };
+      } else sfx('ui', 0.6);
       return;
     }
     return;
@@ -1730,6 +1737,7 @@ function update(dt: number) {
         stars: battle.starsRun, // the run's banked star pieces — the report's +N row
         starsBonus: won ? firstWinBonus() : 0, // once-a-day clear bonus — banks before the report draws it
         grind: grindBonus(), // every finished run today pays a little more
+        rookie: rookieCheck(), // run/stage/win steps clear when the run banks
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
       const trophy = (id: string) => {
@@ -1955,7 +1963,7 @@ function render() {
   }
   if (helpOpen) drawHelp(ctx, helpPage);
   if (settingsOpen) drawSettings(ctx, settingsCat, settings());
-  if (tasksOpen) drawTasks(ctx, taskViews(tasksTab), tasksTab, t);
+  if (tasksOpen) drawTasks(ctx, taskViews(tasksTab), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
   // playtester lifeline: you can't see their console — a crash paints
   // itself with the run's seed and build, so one screenshot is the report
   if (crash) {
@@ -2016,8 +2024,12 @@ Promise.all([
   .then(() => {
     scene = 'title';
     titleSave = runSave();
-    // no forced manual: first-run coaching lives in the battle itself —
-    // the ? chip is there for anyone who wants the reference
+    // first boot opens the help deck — the kinetic coach then teaches the
+    // pull itself inside run one. Later boots leave it under the ? chip
+    if (!helpSeen()) {
+      helpOpen = true;
+      markHelpSeen();
+    }
     startLoop(update, render);
   })
   .catch((err) => {

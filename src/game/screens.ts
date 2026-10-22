@@ -8,7 +8,7 @@ import { drawBackdrop } from './bg';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, type Settings } from './meta';
+import { dexIds, shinyIds, best, shinyCharm, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rating, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevel, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, type Settings } from './meta';
 import { taskViews, tasksReady, taskResetsIn, raidPick, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -47,6 +47,7 @@ export interface RunResult {
   starsBonus?: number; // the once-a-day first-clear drop — its own findings row
   grind?: { n: number; pay: number }; // nth finished run today — the session pays out
   dexPay?: number; // dex-milestone stars this run banked — its own findings row
+  rookie?: { label: string; pay: number }[]; // rookie steps this run cleared — one row each
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -835,7 +836,8 @@ export function drawTitle(
     cd: '#c8a44d',
     tc: '#2a2440',
     label: cont ? 'CONTINUE' : 'START CLIMB',
-    sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : undefined,
+    // fresh trainers see the ladder's next step on the front door itself
+    sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : nextRookie() ? `ROOKIE ${nextRookie()!.n + 1}/${ROOKIE_STEPS.length} · ${nextRookie()!.label}` : undefined,
   });
   pill(ctx, DAILY_BTN, dailyArmed
     ? { c: '#e03c34', cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
@@ -1837,6 +1839,7 @@ export interface HatchState {
   sparkScroll: number; // SPARK grid scroll — only live while phase is 'idle'
   label?: string; // the summary's header — 'RAID CLEARED' rides the same cards
   dexPay?: number; // dex-milestone stars this pull banked — the summary names the payout
+  rookiePay?: number; // rookie-ladder stars this pull banked — same line
 }
 
 const HATCH_PANEL = DEX_PANEL;
@@ -2279,7 +2282,7 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
   ctx.textAlign = 'center';
   ctx.font = fontB(9);
   ctx.fillStyle = '#aab4dd';
-  ctx.fillText(`${news} NEW${dust ? ` · +${dust} DUST` : ''}${s.dexPay ? ` · DEX +${s.dexPay}★` : ''}`, cx, m.y + m.h - 40);
+  ctx.fillText(`${news} NEW${dust ? ` · +${dust} DUST` : ''}${s.dexPay ? ` · DEX +${s.dexPay}★` : ''}${s.rookiePay ? ` · ROOKIE +${s.rookiePay}★` : ''}`, cx, m.y + m.h - 40);
   ctx.font = fontB(8);
   ctx.fillStyle = '#8890b8';
   ctx.fillText('TAP TO COLLECT', cx, m.y + m.h - 24);
@@ -3456,6 +3459,7 @@ export function drawResult(
   if (res.starsBonus) findings.push(['FIRST WIN TODAY', `+${res.starsBonus}`, '#ffd84d']);
   if (res.grind) findings.push([`RUN ${res.grind.n} TODAY`, `+${res.grind.pay}`, '#ffd84d']);
   if (res.dexPay) findings.push(['DEX MILESTONES', `+${res.dexPay}`, '#c9a8ff']);
+  res.rookie?.forEach((s) => findings.push([`ROOKIE: ${s.label}`, `+${s.pay}`, '#c9a8ff']));
   if (res.rating) {
     const r = res.rating;
     findings.push([
@@ -4122,7 +4126,7 @@ export function taskRowHit(p: Vec, tab: 'daily' | 'weekly'): TasksHit | null {
   return null; // dead panel space is still modal
 }
 
-export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab: 'daily' | 'weekly', t: number) {
+export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab: 'daily' | 'weekly', t: number, flash?: string) {
   ctx.fillStyle = 'rgba(6,10,22,0.82)';
   ctx.fillRect(0, 0, W, H);
   roundRect(ctx, TASKS_PANEL.x, TASKS_PANEL.y, TASKS_PANEL.w, TASKS_PANEL.h, 10);
@@ -4153,8 +4157,10 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
   ctx.fillText('TASKS', TASKS_BAND.x + 14, TASKS_BAND.y + 25);
   ctx.font = fontB(7);
   ctx.globalAlpha = 0.75;
-  ctx.fillText('rewards land in your bag', TASKS_BAND.x + 14, TASKS_BAND.y + 38);
+  ctx.fillStyle = flash ? '#ffe89d' : '#2a2440';
+  ctx.fillText(flash ?? 'rewards land in your bag', TASKS_BAND.x + 14, TASKS_BAND.y + 38);
   ctx.globalAlpha = 1;
+  ctx.fillStyle = '#2a2440';
 
   if (!views.length) {
     ctx.textAlign = 'center';
