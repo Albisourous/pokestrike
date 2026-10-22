@@ -36,6 +36,8 @@ import {
   DAILY_BTN,
   RAID_BTN,
   ASC_BTN,
+  hitAscCell,
+  noteAscDeny,
   HELP_BTN,
   HELP_CHIP_HIT,
   GEAR_BTN,
@@ -1093,11 +1095,16 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     if (homeTab === 'town' && inRect(p.x, p.y, ASC_BTN)) {
-      // the heat dial — a tap cycles the pick 0..cap; grayed at zero wins
-      const cap = Math.min(best().wins, 9);
-      if (cap > 0) {
-        setAsc((ascPick() + 1) % (cap + 1));
-        sfx('ui');
+      // the rung ladder — a tap sets the heat directly; locked rungs deny
+      const i = hitAscCell(p.x, p.y);
+      if (i >= 0) {
+        if (i <= Math.min(best().wins, 9)) {
+          setAsc(i);
+          sfx('ui');
+        } else {
+          noteAscDeny(i, t);
+          sfx('ui', 0.6); // a denied tap still answers
+        }
       }
       return;
     }
