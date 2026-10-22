@@ -14,22 +14,42 @@ let memEcho: { id: number; lvl: number }[] | null = null;
 let memBest: Best | null = null;
 let memCoach = false;
 
+// meta readers run ~10-15 keys a frame on the title screen — cache each
+// key's parse against its raw string: identical raw (incl. both null) skips
+// the re-parse, a changed raw (own store() writes, another tab) re-reads.
+const loadCache = new Map<string, { raw: string | null; val: unknown }>();
+
 const load = <T>(key: string): T | null => {
+  let raw: string | null;
   try {
-    const raw = localStorage.getItem(key);
-    if (raw != null) return JSON.parse(raw) as T;
+    raw = localStorage.getItem(key);
   } catch {
-    /* private mode or a corrupt value — memory copy covers it */
+    return null; // private mode — memory copy covers it; the entry stays uncached
   }
-  return null;
+  const hit = loadCache.get(key);
+  if (hit && hit.raw === raw) return hit.val as T | null;
+  let val: T | null = null;
+  if (raw != null) {
+    try {
+      val = JSON.parse(raw) as T;
+    } catch {
+      /* a corrupt value reads as absent — memory copy covers it */
+    }
+  }
+  loadCache.set(key, { raw, val });
+  return val;
 };
 
 const store = (key: string, value: unknown) => {
+  const raw = JSON.stringify(value);
   try {
-    localStorage.setItem(key, JSON.stringify(value));
+    localStorage.setItem(key, raw);
   } catch {
     /* memory copy still covers the session */
   }
+  // cache the write even when setItem threw — a getItem that disagrees
+  // self-corrects into a re-parse on the next load
+  loadCache.set(key, { raw, val: value });
 };
 
 export function dexIds(): number[] {
@@ -327,6 +347,7 @@ export function clearEcho() {
   } catch {
     /* nothing to clear */
   }
+  loadCache.delete('pk_echo');
 }
 
 // --- records: the "one more run" ledger ---
@@ -914,7 +935,10 @@ const stats = (): Stats => {
 export function statOffer(kind: 'draft' | 'perks' | 'perkban', offered: (string | number)[], taken: string | number | null) {
   const s = stats(); // every ledger key is normalized inside stats()
   for (const id of offered) {
-    const e = (s[kind][id] ??= [0, 0]);
+    // a stored entry that isn't a [taken, offered] pair ({"25": 5}) re-seats
+    // as a clean counter — corruption is a wiped tally, not a TypeError
+    let e = s[kind][id];
+    if (!Array.isArray(e)) e = s[kind][id] = [0, 0];
     e[1]++;
     if (id === taken) e[0]++;
   }
@@ -925,7 +949,8 @@ export function statOffer(kind: 'draft' | 'perks' | 'perkban', offered: (string 
 // one call per hatched pull — pull volume and the dupe rate audit the economy
 export function statPull(id: number, dupe: boolean) {
   const s = stats(); // every ledger key is normalized inside stats()
-  const e = (s.pulls[id] ??= [0, 0]);
+  let e = s.pulls[id];
+  if (!Array.isArray(e)) e = s.pulls[id] = [0, 0]; // same corrupt-entry re-seat as statOffer
   e[1]++;
   if (dupe) e[0]++;
   memStats = s;
@@ -1056,13 +1081,17 @@ export function clearRun() {
   } catch {
     /* nothing to clear */
   }
+  loadCache.delete('pk_run');
 }
 
 export function statRunEnd(stage: number, won: boolean) {
   const s = stats();
   s.runs++;
   if (won) s.wins++;
-  else s.deaths[stage] = (s.deaths[stage] ?? 0) + 1;
+  else {
+    const d = s.deaths[stage];
+    s.deaths[stage] = (typeof d === 'number' && Number.isFinite(d) ? d : 0) + 1; // a corrupt stored count re-seats
+  }
   memStats = s;
   store('pk_stats', s);
 }
@@ -1109,40 +1138,22 @@ const SETTING_DEFAULTS: Settings = {
 };
 let memSettings: Settings = { ...SETTING_DEFAULTS };
 
-// settings() runs per-frame (the loop's battery check) — JSON.parse every
-// call would be the hot spot, so the parsed blob caches by raw string and
-// only re-parses when the stored text changes; setSetting invalidates.
-let settingsRaw: string | null | undefined; // undefined = not read yet
-let settingsParsed: Partial<Settings> | null = null;
-
-const settingsBlob = (): Partial<Settings> | null => {
-  let raw: string | null = null;
-  try {
-    raw = localStorage.getItem('pk_settings');
-  } catch {
-    /* private mode — memory copy covers it */
-  }
-  if (raw !== settingsRaw) {
-    settingsRaw = raw;
-    settingsParsed = null;
-    if (raw != null) {
-      try {
-        settingsParsed = JSON.parse(raw) as Partial<Settings>;
-      } catch {
-        /* corrupt blob — defaults cover it */
-      }
-    }
-  }
-  return settingsParsed;
-};
+// settings() runs per-frame (the loop's battery check) and per-hit
+// (addShake/addPunch) — load() already caches the blob's parse by raw
+// string, and the merged object itself holds while the blob identity does.
+// setSetting's store() writes a fresh blob, so the next read re-merges on
+// its own — no explicit invalidation needed.
+let settingsSrc: Partial<Settings> | null | undefined; // blob the merged copy was built from — undefined = not merged yet
+let settingsMerged: Settings | null = null;
 
 // no stored blob yet: the OS reduced-motion flag seeds shake/flash defaults —
 // once pk_settings exists it stays authoritative
 const OS_REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function settings(): Settings {
+  const raw = load<Partial<Settings>>('pk_settings');
+  if (settingsMerged && settingsSrc === raw) return settingsMerged;
   const s = { ...memSettings };
-  const raw = settingsBlob();
   if (raw == null && OS_REDUCED) {
     s.shake = 0;
     s.flash = false;
@@ -1164,6 +1175,8 @@ export function settings(): Settings {
     if (raw.quality === 'high' || raw.quality === 'medium' || raw.quality === 'low') s.quality = raw.quality;
     if (raw.pickupFx === 'complete' || raw.pickupFx === 'simple') s.pickupFx = raw.pickupFx;
   }
+  settingsSrc = raw;
+  settingsMerged = s;
   return s;
 }
 
@@ -1171,8 +1184,7 @@ export function setSetting<K extends keyof Settings>(k: K, v: Settings[K]): void
   const s = settings();
   s[k] = v;
   memSettings = s;
-  store('pk_settings', s);
-  settingsRaw = undefined; // force the next read to re-parse the fresh blob
+  store('pk_settings', s); // the write lands a new blob — the merge cache re-runs on identity alone
 }
 
 // --- daily/weekly tasks: rotating seeded chores that pay bag items ---------

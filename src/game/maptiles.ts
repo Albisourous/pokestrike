@@ -6,12 +6,16 @@ export type TileRect = readonly [number, number, number, number];
 // Terrain fills — the ~52px blocks at the atlas's bottom-left.
 export const TILE_WATER: TileRect = [145, 361, 16, 16]; // dark sea, faint wave streaks
 export const TILE_PATH: TileRect = [74, 648, 52, 52];
-export const TILE_MOUNTAIN: TileRect = [129, 648, 50, 52];
 export const TILE_GRASS: TileRect = [183, 648, 52, 52];
 
 // Stop icons — drawn ~2 cells, so bigger landmark slices.
 export const TILE_TOWN: TileRect = [1172, 353, 87, 80]; // green-roofed house
-export const TILE_GYM: TileRect = [392, 2, 74, 57]; // red-roofed center
+export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left trunk sliver trimmed)
+
+// Town-tab buildings — whole structures sliced from the atlas's top band.
+export const TILE_MART: TileRect = [476, 2, 68, 68]; // blue MART-signed shop (right-edge sliver of the tan tower trimmed)
+export const TILE_GYMHQ: TileRect = [543, 0, 88, 86]; // tan-roofed GYM-signed hall
+export const TILE_TOWER: TileRect = [826, 0, 110, 130]; // star-bunting trophy tower
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand

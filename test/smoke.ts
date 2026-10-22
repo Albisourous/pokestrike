@@ -637,6 +637,34 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   localStorage.removeItem('pk_stats');
 }
 
+// --- load() cache: writes invalidate, corrupt stat entries re-seat ----------
+{
+  const star0 = localStorage.getItem('pk_stars');
+  localStorage.setItem('pk_stars', '41'); // an outside write — same shape, new raw
+  ok(stars() === 41, 'load() re-parses when the raw blob changes');
+  addStars(1);
+  ok(stars() === 42, 'a store() write reads back v2 — the cache never serves stale');
+  if (star0 == null) localStorage.removeItem('pk_stars');
+  else localStorage.setItem('pk_stars', star0);
+
+  // a ledger entry that isn't a [taken, offered] pair re-seats, not throws
+  localStorage.setItem(
+    'pk_stats',
+    JSON.stringify({ draft: { '25': 5 }, perks: { x: 1 }, pulls: { '7': 'y' }, deaths: { '9': 'x' }, wins: 0, runs: 0 }),
+  );
+  let threw = false;
+  try {
+    statOffer('draft', [25, 4], 25);
+    statPull(7, false);
+    statRunEnd(9, false);
+  } catch {
+    threw = true;
+  }
+  const cs = statsDump();
+  ok(!threw && cs.draft['25']?.[1] === 1 && cs.deaths['9'] === 1, 'corrupt stat entries re-seat instead of throwing');
+  localStorage.removeItem('pk_stats');
+}
+
 // --- settings: defaults cover garbage, writes persist immediately ----------
 {
   localStorage.setItem('pk_settings', '{broken');
@@ -2118,6 +2146,23 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(taskResetsIn('daily', t0) === 'IN 12H', `daily reset reads as hours (${taskResetsIn('daily', t0)})`);
   ok(taskResetsIn('weekly', t0) === 'IN 7D', `weekly reset reads as days (${taskResetsIn('weekly', t0)})`);
   localStorage.removeItem('pk_tasks'); // leave the store clean for the next run
+}
+
+// --- daily picks: memo'd on the day seed — same day hits, new day re-rolls --
+{
+  const DAY = 86400000;
+  const t0 = Date.UTC(2024, 5, 10, 12); // Monday noon UTC
+  const r0 = raidPick(t0);
+  ok(raidPick(t0 + 3600000).id === r0.id, 'same UTC day hits the memo\'d raid pick');
+  ok(featuredPull(t0).id === featuredPull(t0 + 3600000).id, 'same UTC day hits the memo\'d rate-up');
+  const team0 = raidTeam(t0).map((d) => d.id).join();
+  ok(raidTeam(t0 + 3600000).map((d) => d.id).join() === team0, 'same UTC day hits the memo\'d loaner team');
+  const t1 = raidTeam(t0);
+  t1[0].lvl = 99; // callers get fresh copies — mutating one mustn't taint the memo
+  ok(raidTeam(t0)[0].lvl === 30, 'raidTeam still hands out fresh lvl-30 copies');
+  let reRolled = false;
+  for (let d = 1; d <= 30 && !reRolled; d++) reRolled = raidPick(t0 + d * DAY).id !== r0.id;
+  ok(reRolled, 'a new day seed re-rolls the raid pick');
 }
 
 // --- streaks: the daily chain counts fresh UTC days, wins count finishes ---

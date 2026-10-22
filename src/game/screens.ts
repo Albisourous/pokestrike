@@ -5,6 +5,8 @@ import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
+import { drawTile } from './map';
+import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_TOWN, TILE_GYM as TILE_PC, TILE_MART, TILE_GYMHQ, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -12,6 +14,10 @@ import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlock
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
+import {
+  INK, INK_SOFT, INK_FAINT, PAPER, PAPER_HI, PARCH, GOLD, GOLD_HI, ACCENT, DANGER,
+  font, fontB,
+} from './ui';
 
 export const W = 540;
 export const H = 960;
@@ -250,19 +256,10 @@ export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.closePath();
 }
 
-// DESIGN.md "GBA authentic" — light paper faces in navy frames, dark ink
-// text, gold reserved for the one CTA and rims. Chrome is only ever
-// PAPER/INK/gold; color lives in content (sprites, type chips), never fills.
-const GOLD = '#c8a44d';
-const PARCH = '#f0e6c8'; // light text — dark chrome and field only, never on PAPER
-const PAPER = '#f8f8f0';
-const PAPER_HI = '#ffffff';
-const INK = '#283058';
-const INK_SOFT = '#586070';
-const INK_FAINT = '#989aa8';
-const GOLD_HI = '#ffd848'; // the CTA face
-const ACCENT = '#2a68c8'; // highlighted secondary text on paper (was #9df0ff cyan)
-const DANGER = '#d04840';
+// palette + fonts + the menu-window chrome live in ./ui — the single
+// source so every surface shares the same ink/paper/gold vocabulary.
+// DESIGN.md "GBA authentic": light paper faces in navy frames, gold
+// reserved for the one CTA and rims; color lives in content, never fills.
 
 // speaker glyph + slash — shared by the title badge and the mid-run chip.
 // color/muted default to the live mute state; the settings tab overrides both.
@@ -740,13 +737,9 @@ export function pill(
 
 // --- title screen: mottled grass pitch, stadium ring of mons, arched wordmark ---
 
-// UI font: Press Start 2P — the Gen-3 handheld look — vendored in
-// public/fonts; Roboto Condensed and monospace are the failure fallbacks.
-const PIXEL_FONT = 'ps2p, rc, monospace';
-const FONT_SCALE = 1.4;
-export const font = (px: number) => `400 ${Math.round(px * FONT_SCALE)}px ${PIXEL_FONT}`;
-// dense small print stays in the narrow face — the pixel font runs ~1.7x wider
-export const fontB = (px: number) => `700 ${Math.round(px * FONT_SCALE)}px rc, monospace`;
+// font()/fontB() moved to ./ui with the rest of the chrome kit — re-exported
+// here so existing callers keep working.
+export { font, fontB };
 
 // --- ambient title: today's offers ----------------------------------------
 // The pitch between the wordmark and the buttons is scenery, not a demo —
@@ -1736,113 +1729,78 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   }
 }
 
-// --- TOWN: the meta loop — lab, tasks, trophies, board, the asc dial ------
-// band icons — quick-scan glyphs, all strokes in the band's ink color
-function townIcon(ctx: CanvasRenderingContext2D, kind: 'lab' | 'tasks' | 'cup' | 'podium' | 'flame', cx: number, cy: number) {
-  const c = INK;
-  ctx.strokeStyle = c;
-  ctx.fillStyle = c;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  if (kind === 'lab') {
-    // flask: neck, shoulders, belly — liquid line inside
-    ctx.moveTo(cx - 3, cy - 9);
-    ctx.lineTo(cx + 3, cy - 9);
-    ctx.lineTo(cx + 3, cy - 2);
-    ctx.lineTo(cx + 8, cy + 8);
-    ctx.lineTo(cx - 8, cy + 8);
-    ctx.lineTo(cx - 3, cy - 2);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.fillRect(cx - 5.5, cy + 3.5, 11, 4.5);
-  } else if (kind === 'tasks') {
-    // checklist: two ticks + lines
-    for (let i = 0; i < 2; i++) {
-      const y = cy - 6 + i * 9;
-      ctx.moveTo(cx - 8, y);
-      ctx.lineTo(cx - 5.5, y + 2.5);
-      ctx.lineTo(cx - 2, y - 2.5);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx, y);
-      ctx.lineTo(cx + 8, y);
-      ctx.stroke();
-      ctx.beginPath();
-    }
-  } else if (kind === 'cup') {
-    // trophy: bowl + stem + base + ears
-    ctx.fillRect(cx - 6, cy - 9, 12, 8);
-    ctx.moveTo(cx - 6, cy - 7);
-    ctx.arc(cx - 8, cy - 6, 3, Math.PI / 2, Math.PI * 1.5);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx + 6, cy - 7);
-    ctx.arc(cx + 8, cy - 6, 3, -Math.PI / 2, Math.PI / 2);
-    ctx.stroke();
-    ctx.fillRect(cx - 1.5, cy - 1, 3, 5);
-    ctx.fillRect(cx - 5, cy + 4, 10, 3);
-  } else if (kind === 'podium') {
-    // podium: three bars, center tallest
-    ctx.fillRect(cx - 9, cy - 2, 5, 10);
-    ctx.fillRect(cx - 2.5, cy - 8, 5, 16);
-    ctx.fillRect(cx + 4, cy + 2, 5, 6);
-  } else {
-    // flame: the ascension dial's heat — two licks, not a teardrop
-    ctx.moveTo(cx + 1, cy - 9);
-    ctx.quadraticCurveTo(cx + 8, cy - 4, cx + 6, cy + 4);
-    ctx.quadraticCurveTo(cx + 5, cy + 9, cx, cy + 9);
-    ctx.quadraticCurveTo(cx - 8, cy + 9, cx - 6, cy + 2);
-    ctx.quadraticCurveTo(cx - 5, cy - 2, cx - 2, cy - 4);
-    ctx.quadraticCurveTo(cx - 2, cy - 1, cx + 1, cy - 9);
-    ctx.fill();
-  }
+// --- TOWN: a real little town — the buildings ARE the menu; tap a door ----
+// Structures + scenery are gracidea tileset slices (the RSE canon), villagers
+// from the npcs atlas. Signs posted at each door carry the stats the old
+// cards did. The gym's rung board anchors the bottom edge.
+
+// a door sign — paper plaque on a post, name + one stat line
+function townSign(ctx: CanvasRenderingContext2D, cx: number, y: number, w: number, name: string, sub: string) {
+  ctx.fillStyle = '#8a6238';
+  ctx.fillRect(cx - 2, y + 28, 4, 10);
+  const r = { x: cx - w / 2, y, w, h: 32 };
+  ctx.fillStyle = 'rgba(40,48,88,0.3)';
+  roundRect(ctx, r.x + 1, r.y + 3, r.w, r.h, 7);
+  ctx.fill();
+  roundRect(ctx, r.x, r.y, r.w, r.h, 7);
+  ctx.fillStyle = PAPER;
+  ctx.fill();
+  rim(ctx, r, 7, INK, 2);
+  ctx.textAlign = 'center';
+  ctx.font = font(7);
+  ctx.fillStyle = INK;
+  ctx.fillText(name, cx, y + 14);
+  ctx.font = fontB(7);
+  ctx.fillStyle = INK_SOFT;
+  ctx.fillText(sub, cx, y + 26);
 }
 
 function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
-  // card chrome + a banded title + one fat stat + one quiet line
-  const townCard = (
-    r: { x: number; y: number; w: number; h: number },
-    band: string,
-    icon: 'lab' | 'tasks' | 'cup' | 'podium' | 'flame',
-    title: string,
-    stat: string,
-    sub: string,
-    sub2?: string,
-  ) => {
-    menuCard(ctx, r, 10);
-    stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 30 }, band);
-    ctx.textAlign = 'left';
-    fitFont(ctx, title, 9, r.w - 60);
-    ctx.fillStyle = INK;
-    ctx.fillText(title, r.x + 14, r.y + 23);
-    townIcon(ctx, icon, r.x + r.w - 24, r.y + 18);
-    ctx.font = font(11);
-    ctx.fillStyle = INK;
-    ctx.fillText(stat, r.x + 14, r.y + 76);
-    ctx.font = fontB(8);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(sub, r.x + 14, r.y + 100);
-    if (sub2) ctx.fillText(sub2, r.x + 14, r.y + 122);
-  };
+  // grass slab under the tab body — the interior tile at 1.5× reads as
+  // chunky GBA ground. Starts under the chrome band: the wallet bar and
+  // corner badges draw before the body, so the tiles would bury them.
+  for (let gy = 68; gy < H; gy += 66) for (let gx = 0; gx < W; gx += 66) drawTile(ctx, TILE_GRASSF, gx, gy, 66, 66);
 
-  // one pk_lab parse covers both reads — the same caching labLevelMap does
+  // the treeline — the classic GBA town wall, three canopies trading places
+  for (let i = 0; i < 11; i++) drawTile(ctx, [TREE_ROUND, TREE_PINE, TREE_TEAL][i % 3], 20 + i * 46, 118, 40, 42);
+  // a couple hugging the flanks so the wall doesn't read as a cornice
+  drawTile(ctx, TREE_PINE, 0, 190, 38, 40);
+  drawTile(ctx, TREE_ROUND, 508, 200, 38, 40);
+
+  // the main road: bordered path blocks straight across mid-town
+  const ROAD_Y = 352;
+  for (let gx = 0; gx < W; gx += 52) drawTile(ctx, TILE_PATH, gx, ROAD_Y, 52, 52);
+
+  // doorstep paths — sand strips joining each building's door to the road
+  const stub = (cx: number, y0: number, y1 = ROAD_Y) => {
+    for (let y = y0; y < y1; y += 32) drawTile(ctx, TILE_SAND, cx - 16, y, 32, 32);
+  };
+  stub(110, 310);
+  stub(272, 316);
+  stub(434, 312);
+
+  // north row — the lab, the hall, the trophy tower
+  drawTile(ctx, TILE_TOWN, 48, 196, 124, 114);
+  drawTile(ctx, TILE_PC, 200, 204, 140, 117);
+  drawTile(ctx, TILE_TOWER, 372, 170, 124, 145);
+
+  // south row — the mart with its job board, and the gym
+  drawTile(ctx, TILE_MART, 56, 430, 136, 132);
+  drawTile(ctx, TILE_GYMHQ, 322, 556, 152, 146);
+
+  // door signs — what the old cards said, now posted at each doorstep
   const lvls = labLevelMap();
   const trained = LAB_UPGRADES.filter((u) => (lvls.get(u.id) ?? 0) > 0).length;
-  const nextCost = Math.min(...LAB_UPGRADES.map((u) => u.costs[lvls.get(u.id) ?? 0] ?? Infinity));
-  townCard(
-    LAB_BTN,
-    '#3a8cff',
-    'lab',
-    'THE LAB',
-    `${trained}/${LAB_UPGRADES.length} TRAINED`,
-    'PERMANENT UPGRADES',
-    nextCost === Infinity ? 'ALL MAXED' : `NEXT LV ★${nextCost}`,
-  );
-  townCard(TASKS_BTN, '#e03c34', 'tasks', 'TASKS', taskN > 0 ? `${taskN} READY` : 'NONE READY', `RESETS ${taskResetsIn('daily')}`);
-  // a claimable task pins the red count pip on the card corner — the same
-  // badge the chip row wore
+  const b = best();
+  const runs = board().length;
+  townSign(ctx, 110, 316, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
+  townSign(ctx, 272, 322, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
+  townSign(ctx, 434, 320, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
+  townSign(ctx, 126, 574, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
+  // a claimable task pins the red count pip on the sign's corner — the same
+  // badge the old card corner wore
   if (taskN > 0) {
-    const bx = TASKS_BTN.x + TASKS_BTN.w - 4, by = TASKS_BTN.y + 4;
+    const bx = 126 + 55, by = 574;
     ctx.beginPath();
     ctx.arc(bx, by, 9, 0, Math.PI * 2);
     ctx.fillStyle = '#e03c34';
@@ -1855,63 +1813,42 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     ctx.fillStyle = PAPER;
     ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
   }
-  townCard(ACH_BTN, GOLD, 'cup', 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`, 'FEATS EARNED');
-  const b = best();
-  const runs = board().length;
-  townCard(
-    BOARD_BTN,
-    '#9a6cff',
-    'podium',
-    'TOP RUNS',
-    `BEST ${b.score.toLocaleString('en-US')}`,
-    b.stage ? `PEAK STAGE ${b.stage}` : 'NO CLIMB YET',
-    runs ? `${runs} RUNS LOGGED` : undefined,
-  );
 
-  // the ascension ladder — StS's rung chain, laid flat like a trophy road:
-  // every level visible on one track, locked rungs dimmed, the pick gold
-  // with its modifier spelled out underneath. Taps hit cells, not the card.
-  const ascCap = Math.min(b.wins, 9);
-  drawAscLadder(ctx, t, ASC_BTN, ascCap, ascPick());
+  // villagers — feet on the grass by their doors; the gym leader waits in
+  // his doorway, and one youngster paces the road with a walk cycle
+  drawNpc(ctx, 'scientist_down_0', 172, 342, 30);
+  drawNpc(ctx, 'lass_down_0', 338, 344, 30);
+  drawNpc(ctx, 'gentleman_down_0', 472, 340, 30);
+  drawNpc(ctx, 'shopkeeper_m_down_0', 194, 584, 30);
+  drawNpc(ctx, 'norman_down_0', 400, 706, 32);
+  const walk = (t * 60) % 840;
+  const wx = walk <= 420 ? 60 + walk : 480 - (walk - 420);
+  drawNpc(ctx, `youngster_${walk <= 420 ? 'right' : 'left'}_${[0, 1, 0, 2][Math.floor(t * 6) % 4]}`, wx, 398, 30);
 
-  // HALL OF FAME — the board's podium on the tab itself; tap → full board
-  const hb = HALL_BTN;
-  menuCard(ctx, hb, 10);
-  stripeBand(ctx, { x: hb.x + 3, y: hb.y + 3, w: hb.w - 6, h: 30 }, GOLD);
-  ctx.textAlign = 'left';
-  ctx.font = font(9);
-  ctx.fillStyle = INK;
-  ctx.fillText('HALL OF FAME', hb.x + 14, hb.y + 23);
-  ctx.textAlign = 'right';
-  ctx.font = fontB(7);
-  ctx.fillText(`${b.wins} CLEAR${b.wins === 1 ? '' : 'S'} · ${runs} RUN${runs === 1 ? '' : 'S'}`, hb.x + hb.w - 14, hb.y + 22);
-  const top = board().slice(0, 3);
-  ctx.textAlign = 'left';
-  if (!top.length) {
-    ctx.font = fontB(9);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText('WIN A CLIMB — YOUR NAME ETCHES HERE', hb.x + 14, hb.y + 84);
-  }
-  const medal = [GOLD, INK_SOFT, '#c88a5a'];
-  top.forEach((e, i) => {
-    const ry = hb.y + 52 + i * 26;
-    ctx.font = font(9);
-    ctx.fillStyle = medal[i];
-    ctx.fillText(`#${i + 1}`, hb.x + 14, ry);
-    ctx.font = fontB(9);
-    ctx.fillStyle = INK;
-    ctx.fillText(e.s.toLocaleString('en-US'), hb.x + 52, ry);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`STAGE ${e.st}${e.w ? ' · ★' : ''}${e.asc ? ` · ASC${e.asc}` : ''}`, hb.x + 170, ry);
-    // the run's lineup rides the row's tail — three tiny faces
-    e.team.slice(0, 3).forEach((id, k) => {
-      try {
-        drawMon(ctx, id, hb.x + hb.w - 88 + k * 30, ry - 6, 26);
-      } catch {
-        void loadSprite(id);
-      }
-    });
-  });
+  // the south pond — sand shore ring, water inset, a boulder sunning itself
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(140, 648, 105, 40, 0, 0, Math.PI * 2);
+  ctx.clip();
+  for (let y = 600; y < 696; y += 32) for (let x = 30; x < 260; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
+  ctx.beginPath();
+  ctx.ellipse(140, 645, 88, 29, 0, 0, Math.PI * 2);
+  ctx.clip();
+  for (let y = 600; y < 686; y += 32) for (let x = 50; x < 250; x += 32) drawTile(ctx, TILE_WATER, x, y, 32, 32);
+  ctx.restore();
+  drawTile(ctx, TILE_ROCK, 42, 606, 40, 43);
+  drawTile(ctx, TREE_ROUND, 262, 652, 38, 38);
+  drawTile(ctx, ROCK_SMALL, 480, 636, 44, 32);
+  drawTile(ctx, FLOWER_YB, 266, 592, 26, 22);
+  drawTile(ctx, FLOWER_PK, 500, 700, 26, 22);
+  // the village green — a shady tree and flowerbeds filling the mid gap
+  drawTile(ctx, TREE_TEAL, 300, 448, 52, 50);
+  drawTile(ctx, FLOWER_YB, 360, 520, 26, 22);
+  drawTile(ctx, FLOWER_PK, 250, 540, 26, 22);
+
+  // the gym's challenge board — StS's rung chain under its roofline; the
+  // building's door taps ping this card, the rungs themselves pick the heat
+  drawAscLadder(ctx, t, ASC_BTN, Math.min(b.wins, 9), ascPick());
 }
 
 // The crash-receipt instructions, in a card — the game collects no
@@ -2428,12 +2365,15 @@ export const DEX_BTN = { x: 30, y: 230, w: W - 60, h: 120 };
 export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
 // the catches strip is decorative — no hit rect needed
 const CATCH_STRIP = { x: 30, y: SETS_BTN.y + SETS_BTN.h + 16, w: W - 60, h: 160 };
-const TOWN_COL = (W - 60 - 16) / 2; // 232 — two columns on a 16px gutter
-export const LAB_BTN = { x: 30, y: 230, w: TOWN_COL, h: 150 };
-export const TASKS_BTN = { x: LAB_BTN.x + TOWN_COL + 16, y: LAB_BTN.y, w: TOWN_COL, h: 150 };
-export const ACH_BTN = { x: 30, y: LAB_BTN.y + LAB_BTN.h + 16, w: TOWN_COL, h: 150 };
-export const BOARD_BTN = { x: TASKS_BTN.x, y: ACH_BTN.y, w: TOWN_COL, h: 150 };
-export const ASC_BTN = { x: 30, y: ACH_BTN.y + ACH_BTN.h + 16, w: W - 60, h: 130 };
+// TOWN's hit rects are building footprints — door + roof + its sign, so a
+// tap anywhere on a structure opens its overlay. GYM sits above the asc
+// card; its door taps ping the ladder below rather than open a screen.
+export const LAB_BTN = { x: 44, y: 192, w: 132, h: 156 };
+export const TASKS_BTN = { x: 48, y: 426, w: 156, h: 182 };
+export const ACH_BTN = { x: 362, y: 164, w: 142, h: 158 };
+export const BOARD_BTN = { x: 194, y: 198, w: 156, h: 156 };
+export const GYM_HIT = { x: 316, y: 552, w: 164, h: 156 };
+export const ASC_BTN = { x: 30, y: 708, w: W - 60, h: 122 };
 
 // ASCENSION's rung track — cells 0..9 (0 = the base climb) in one row.
 // StS names each rung's new modifier under the pick; locked rungs stay
@@ -2458,9 +2398,20 @@ let ascDeny = { i: -1, t: -10 };
 export function noteAscDeny(i: number, t: number) {
   ascDeny = { i, t };
 }
+// a gym-door tap pings the board — a gold rim pulse says the rungs answer
+let ascPingT = -10;
+export function noteAscPing(t: number) {
+  ascPingT = t;
+}
 
 function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number; y: number; w: number; h: number }, cap: number, pick: number) {
   menuCard(ctx, r, 12);
+  if (t - ascPingT < 0.9) {
+    ctx.save();
+    ctx.globalAlpha = 0.45 + 0.35 * Math.sin(t * 12);
+    rim(ctx, r, 12, GOLD, 3);
+    ctx.restore();
+  }
   stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 30 }, '#f08030'); // fire — the heat dial
   ctx.textAlign = 'left';
   ctx.font = font(9);
@@ -2525,8 +2476,8 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
     ctx.fillText(m.desc.toUpperCase(), r.x + r.w / 2, r.y + 114);
   }
 }
-// the leaderboard's front three, visible on the tab — tap opens the board
-export const HALL_BTN = { x: 30, y: ASC_BTN.y + ASC_BTN.h + 16, w: W - 60, h: 128 };
+// the hall IS the Poké Center building — same door as TOP RUNS, same board
+export const HALL_BTN = BOARD_BTN;
 // RAID: one boss card — today's shiny fight + its loaner trio — then the
 // FIGHT pill the tab's tap target rides on
 export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };

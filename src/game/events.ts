@@ -74,6 +74,7 @@ const gridWave = (b: Battle, ids: number[]): WaveSpawn[] =>
 // the climb map is battle-private — the seer reads it like smoke does,
 // never touching the roll stream
 const nextGym = (b: Battle) => {
+  // shortcut: puns into battle-private state — upgrade = Battle exports region publicly
   const nodes = (b as unknown as { region: RegionMap }).region.nodes;
   const row = nodes[b.mapNode]?.row ?? -1;
   return nodes.find((n) => n.kind === 'gym' && n.row > row);

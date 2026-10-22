@@ -86,12 +86,29 @@ const COUNT: Record<TaskPeriod, number> = { daily: 3, weekly: 4 };
 export const dayKey = (now = Date.now()): string => new Date(now).toISOString().slice(0, 10);
 export const daySeed = (now = Date.now()): number => Math.floor(now / 86400000);
 
+// the title screen re-reads the daily picks every frame — memo on the day
+// seed (never the Date object) so a same-day call skips the re-roll and a
+// new UTC day rolls fresh
+const dayMemo = <T>(roll: (seed: number) => T): ((now?: number) => T) => {
+  let seed = -1; // daySeed is >= 0 — the sentinel forces a first roll
+  let val: T | undefined;
+  return (now = Date.now()) => {
+    const s = daySeed(now);
+    if (s !== seed) {
+      seed = s;
+      val = roll(s);
+    }
+    return val!;
+  };
+};
+
+// seed → a `now` inside the same UTC day — sibling picks ride the same memo
+const dayMs = (seed: number) => seed * 86400000;
+
 // Today's hatcher rate-up species — seeded off the day so everyone sees the
 // same mon. Rare+ pool only: a featured Rattata is a bad ad. Lives here, not
 // in data.ts, because daySeed does (data → tasks → meta → data would cycle).
-export function featuredPull(now = Date.now()): SpeciesDef {
-  return pullSpecies(mulberry32(daySeed(now)), { rarePlus: true });
-}
+export const featuredPull = dayMemo((seed) => pullSpecies(mulberry32(seed), { rarePlus: true }));
 
 // --- the daily chroma raid ---------------------------------------------------
 // One seeded epic boss per UTC day, same for everyone — the share link is
@@ -100,9 +117,9 @@ export function featuredPull(now = Date.now()): SpeciesDef {
 // featuredPull's bare daySeed) so the boss, the loaner team and the rate-up
 // mon roll off three different streams.
 
-export function raidPick(now = Date.now()): SpeciesDef {
-  const rng = mulberry32(daySeed(now) * 31 + 7);
-  const feat = featuredPull(now).id; // the raid boss can't double as the hatcher ad
+export const raidPick = dayMemo((seed) => {
+  const rng = mulberry32(seed * 31 + 7);
+  const feat = featuredPull(dayMs(seed)).id; // the raid boss can't double as the hatcher ad
   // the seeded sequence is fixed, so looping to the first epic-bucket hit
   // stays deterministic — rarePlus makes every draw rare or epic. The cap is
   // paranoia: if the epic bucket ever emptied, the last draw stands in
@@ -111,13 +128,13 @@ export function raidPick(now = Date.now()): SpeciesDef {
   for (let i = 0; i < 999 && ((tierOf(d) < 3 && !INVADER_IDS.has(d.id)) || d.id === feat); i++)
     d = pullSpecies(rng, { rarePlus: true });
   return d;
-}
+});
 
-export function raidTeam(now = Date.now()): SpeciesDef[] {
-  const rng = mulberry32(daySeed(now) * 31 + 19);
+const raidTeamRoll = dayMemo((seed) => {
+  const rng = mulberry32(seed * 31 + 19);
   // boss and rate-up ids sit in the skip set too — a loaner that mirrors the
   // raid boss (or the hatcher ad) reads as a bug, ~2 days a month by chance
-  const seen = new Set<number>([raidPick(now).id, featuredPull(now).id]);
+  const seen = new Set<number>([raidPick(dayMs(seed)).id, featuredPull(dayMs(seed)).id]);
   const out: SpeciesDef[] = [];
   // capped: if the rare+ pool ever shrank under 3 loaners the last draw pads
   // the slots — a duplicate teammate beats a hung tab
@@ -127,26 +144,30 @@ export function raidTeam(now = Date.now()): SpeciesDef[] {
     last = d;
     if (seen.has(d.id)) continue;
     seen.add(d.id);
-    // pullSpecies hands out shared pool entries — clone before setting the
-    // loaner level, never mutate the roster
-    out.push({ ...d, lvl: 30 });
+    out.push(d);
   }
-  while (out.length < 3) out.push({ ...last!, lvl: 30 });
+  while (out.length < 3) out.push(last!);
   return out;
+});
+
+export function raidTeam(now = Date.now()): SpeciesDef[] {
+  // pullSpecies hands out shared pool entries — clone before setting the
+  // loaner level, never mutate the roster (or the memo)
+  return raidTeamRoll(now).map((d) => ({ ...d, lvl: 30 }));
 }
 
 // --- the daily deal ---------------------------------------------------------
 // One seeded rare+ spark mon at 25% off dust — the rotating reason to open
 // the exchange. Its own salt so it can't collide with the raid or rate-up.
-export function dealPick(now = Date.now()): SpeciesDef {
-  const rng = mulberry32(daySeed(now) * 31 + 43);
-  const seen = new Set<number>([raidPick(now).id, featuredPull(now).id]);
+export const dealPick = dayMemo((seed) => {
+  const rng = mulberry32(seed * 31 + 43);
+  const seen = new Set<number>([raidPick(dayMs(seed)).id, featuredPull(dayMs(seed)).id]);
   // capped like raidPick — a skip-set covering the whole rare+ pool would
   // spin forever otherwise; the last draw stands in
   let d: SpeciesDef = pullSpecies(rng, { rarePlus: true });
   for (let i = 0; i < 999 && seen.has(d.id); i++) d = pullSpecies(rng, { rarePlus: true });
   return d;
-}
+});
 
 export function dealCost(d: SpeciesDef, now = Date.now()): number {
   const base = dustCost(d);

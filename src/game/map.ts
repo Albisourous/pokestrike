@@ -313,7 +313,10 @@ export function drawTile(
     const d = id.data;
     for (let i = 0; i < d.length; i += 4) {
       const r = d[i], gg = d[i + 1], b = d[i + 2];
-      if (r > 140 && b > 110 && gg < 120 && r - gg > 50 && b - gg > 40) d[i + 3] = 0;
+      // g<150 (not 120): lossy webp bleeds magenta into sprite edges —
+      // dirty pinks like (220,140,220) still key while true lavenders
+      // (r-g<50) stay safe
+      if (r > 140 && b > 110 && gg < 150 && r - gg > 50 && b - gg > 40) d[i + 3] = 0;
     }
     g.putImageData(id, 0, 0);
     tileCache.set(k, c);

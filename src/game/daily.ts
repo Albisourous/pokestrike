@@ -35,9 +35,17 @@ export const DAILY_MODS: DailyMod[] = [
 // hashed off the UTC date key — the same 'YYYY-MM-DD' the daily seed rides
 // (main.ts dailySeed). The hash stops consecutive days walking the list in
 // a fixed rotation, so neighbors differ in kind, not just in number.
+// The title re-reads the card every frame — memo on the day key, not the Date.
+let modDay = '';
+let modPick: DailyMod | undefined;
+
 export function dailyMod(now = Date.now()): DailyMod {
   const key = new Date(now).toISOString().slice(0, 10);
-  let h = 0;
-  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) | 0;
-  return DAILY_MODS[(h >>> 0) % DAILY_MODS.length];
+  if (key !== modDay) {
+    modDay = key;
+    let h = 0;
+    for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) | 0;
+    modPick = DAILY_MODS[(h >>> 0) % DAILY_MODS.length];
+  }
+  return modPick!;
 }

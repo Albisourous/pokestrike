@@ -9,7 +9,16 @@ let mGain: GainNode | null = null;
 let mFilter: BiquadFilterNode | null = null; // music-bus lowpass — softens square-wave edge
 let mWet: GainNode | null = null; // echo send level — per-track depth
 let gBus: WaveShaperNode | null = null; // guitar drive bus — tanh soft-clip dirt
-let muted = localStorage.getItem('pk-mute') === '1';
+// storage can be blocked outright (private mode, locked-down webviews) — an
+// unguarded getItem at module eval would sink the whole import graph
+let muted = (() => {
+  try {
+    // pk-mute is the pre-rename key — read it as a fallback, write only pk_mute
+    return (localStorage.getItem('pk_mute') ?? localStorage.getItem('pk-mute')) === '1';
+  } catch {
+    return false;
+  }
+})();
 const MASTER_VOL = 0.3; // the one loudness knob — 0.5 was hot
 
 export function isMuted() {
@@ -18,7 +27,11 @@ export function isMuted() {
 
 export function toggleMute() {
   muted = !muted;
-  localStorage.setItem('pk-mute', muted ? '1' : '0');
+  try {
+    localStorage.setItem('pk_mute', muted ? '1' : '0');
+  } catch {
+    /* a throw inside a pointer handler latches the crash card — the session toggle still works */
+  }
   if (master) master.gain.value = muted ? 0 : MASTER_VOL * settings().master;
 }
 
@@ -232,21 +245,11 @@ interface JNote {
   w?: OscillatorType; // default square — the bright chiptune voice
 }
 
-export type JingleKind = 'win' | 'lose' | 'catch' | 'task' | 'gym' | 'item'
+export type JingleKind = 'lose' | 'catch' | 'task' | 'gym' | 'item'
   | 'clear' | 'fail' | 'hatch' | 'rest'
   | 'gym_forge' | 'gym_shade' | 'gym_earth' | 'gym_gale' | 'invade';
 
 const JINGLES: Record<JingleKind, JNote[]> = {
-  win: [ // rising fanfare in C — five-note run, full-chord bloom on top
-    { m: 67, t: 0,    d: 0.1,  v: 0.1 },
-    { m: 72, t: 0.1,  d: 0.1,  v: 0.1 },
-    { m: 76, t: 0.2,  d: 0.1,  v: 0.1 },
-    { m: 79, t: 0.3,  d: 0.1,  v: 0.11 },
-    { m: 81, t: 0.4,  d: 0.09, v: 0.11 },
-    { m: 84, t: 0.52, d: 0.6,  v: 0.13 },
-    { m: 79, t: 0.52, d: 0.55, v: 0.05, w: 'triangle' }, // G+E pad under the C6
-    { m: 76, t: 0.52, d: 0.55, v: 0.05, w: 'triangle' },
-  ],
   lose: [ // somber Am descent — settles on low E under its own octave
     { m: 64, t: 0,   d: 0.2,  v: 0.12, w: 'triangle' },
     { m: 60, t: 0.2, d: 0.2,  v: 0.12, w: 'triangle' },

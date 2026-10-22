@@ -37,6 +37,8 @@ import {
   ASC_BTN,
   hitAscCell,
   noteAscDeny,
+  noteAscPing,
+  GYM_HIT,
   HELP_BTN,
   HELP_CHIP_HIT,
   GEAR_BTN,
@@ -89,6 +91,7 @@ import {
   drawSettings,
   settingsRowHit,
   settingsSliderSet,
+  settingsSliderFlush,
   settingsToggleFlip,
   TASKS_BTN,
   TASKS_TABS,
@@ -123,6 +126,78 @@ import { dailyMod, DAILY_MODS, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
 
 type Scene = 'loading' | 'title' | 'draft' | 'charm' | 'battle' | 'result';
+
+// crash hooks land before canvas setup — a dead 2d context throws during
+// module eval, and listeners parked at file bottom would never hear it.
+// first error wins — the root cause, not the cascade behind it
+let crash: string | null = null;
+// a rejected boot paints this once — a later resize() wipes the bitmap, so
+// resize() repaints the fail card while this is set
+let bootFail: string | null = null;
+const BOOT_RETRY = { x: W / 2 - 100, y: H / 2 + 44, w: 200, h: 46 };
+
+// one card face for both failure modes — dark slab, red rim, wrapped detail
+const drawFailCard = (c: CanvasRenderingContext2D, title: string, msg: string, retry: boolean) => {
+  c.fillStyle = 'rgba(11,14,26,0.94)';
+  c.fillRect(16, H / 2 - 110, W - 32, 220);
+  c.strokeStyle = '#ff6b6b';
+  c.lineWidth = 2;
+  c.strokeRect(16, H / 2 - 110, W - 32, 220);
+  c.textAlign = 'center';
+  c.font = font(11);
+  c.fillStyle = '#ff6b6b';
+  c.fillText(title, W / 2, H / 2 - 76);
+  c.font = fontB(9);
+  c.fillStyle = '#f8d030';
+  let seed = 0;
+  try {
+    seed = runSeed;
+  } catch {
+    /* module eval died before the seed line ran */
+  }
+  c.fillText(`seed ${seed} · ${__BUILD__}`, W / 2, H / 2 - 48);
+  c.font = fontB(8);
+  c.fillStyle = '#fff';
+  // crude mid-word wrap — detail beats pretty on a fail card
+  const m = msg.slice(0, 150);
+  for (let i = 0; i < Math.ceil(m.length / 50); i++) c.fillText(m.slice(i * 50, (i + 1) * 50), W / 2, H / 2 - 22 + i * 14);
+  if (retry) {
+    c.fillStyle = '#f8d030';
+    c.fillRect(BOOT_RETRY.x, BOOT_RETRY.y, BOOT_RETRY.w, BOOT_RETRY.h);
+    c.font = font(10);
+    c.fillStyle = '#0b0e1a';
+    c.fillText('TAP TO RETRY', W / 2, BOOT_RETRY.y + BOOT_RETRY.h / 2 + 7);
+  }
+};
+
+// the loop may never start (dead ctx, module-eval throw) — paint immediately
+// in raw pixels instead of waiting for a render() that isn't coming
+const paintCrash = () => {
+  try {
+    const el = document.getElementById('game') as HTMLCanvasElement | null;
+    const c = el?.getContext('2d');
+    if (!el || !c || !crash) return;
+    const s = Math.min(el.width / W, el.height / H) || 1;
+    c.save();
+    c.setTransform(s, 0, 0, s, (el.width - W * s) / 2, (el.height - H * s) / 2);
+    drawFailCard(c, 'CRASHED — SCREENSHOT THIS', crash, false);
+    c.restore();
+  } catch {
+    /* no context — nothing to paint on */
+  }
+};
+// the fail card draws on the game's own ctx — its letterbox transform is
+// already live, and resize() re-calls this after every bitmap wipe
+const paintBootFail = () => drawFailCard(ctx, 'FAILED TO LOAD', bootFail ?? '', true);
+
+addEventListener('error', (e) => {
+  crash ??= String(e.message || e.error || 'unknown');
+  paintCrash();
+});
+addEventListener('unhandledrejection', (e) => {
+  crash ??= String(e.reason);
+  paintCrash();
+});
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -238,6 +313,10 @@ let inputLockT = 0;
 let scale = 1;
 let ox = 0;
 let oy = 0;
+// the canvas is fixed full-viewport — its rect only moves on resize, so
+// pointer math reads a cached left/top instead of forcing layout per event
+let rectL = 0;
+let rectT = 0;
 
 function resize() {
   // use the visible viewport, not 100vh — mobile URL bars overlap the latter
@@ -259,6 +338,10 @@ function resize() {
   // URL bar collapses; remap only between waves where spawnWave re-layouts
   if (battle && ['map', 'reward', 'won', 'lost'].includes(battle.phase)) Object.assign(battle.arena, arenaRect());
   ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * ox, dpr * oy);
+  const r = canvas.getBoundingClientRect(); // one forced layout per resize, not per pointer event
+  rectL = r.left;
+  rectT = r.top;
+  if (bootFail) paintBootFail(); // a resized canvas wipes — redraw the fail card
 }
 addEventListener('resize', resize);
 window.visualViewport?.addEventListener('resize', resize);
@@ -283,8 +366,7 @@ if (new URLSearchParams(location.search).has('dev'))
   };
 
 function toLogical(e: PointerEvent) {
-  const r = canvas.getBoundingClientRect();
-  return vec((e.clientX - r.left - ox) / scale, (e.clientY - r.top - oy) / scale);
+  return vec((e.clientX - rectL - ox) / scale, (e.clientY - rectT - oy) / scale);
 }
 
 // Wordle-style emoji grid for sharing results.
@@ -454,7 +536,7 @@ let dailyConfirmT0 = -10;
 
 function newRun(daily = false) {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
-  const hasForced = Number.isFinite(forced) && forced > 0;
+  const hasForced = Number.isInteger(forced) && forced > 0;
   runSeed = hasForced ? forced : daily ? dailySeed() : randSeed();
   runIsDaily = daily && !hasForced;
   runMod = runIsDaily ? modForSeed(runSeed) : null;
@@ -485,6 +567,7 @@ document.addEventListener('visibilitychange', () => {
   // every later tap out, so dump all drag state like a pointercancel
   activeId = null;
   helpDrag = dexDrag = boxDrag = settingsDrag = null;
+  settingsSliderFlush(); // bank a mid-drag slider value the dropped up would have
   battle?.pointerCancel();
 });
 
@@ -908,6 +991,7 @@ canvas.addEventListener('pointerdown', (e) => {
     if (inRect(p.x, p.y, SETTINGS_CLOSE) || !inRect(p.x, p.y, SETTINGS_PANEL)) {
       settingsOpen = false;
       settingsDrag = null;
+      settingsSliderFlush();
       sfx('ui');
       return;
     }
@@ -1083,6 +1167,13 @@ canvas.addEventListener('pointerdown', (e) => {
       startDraft();
       scene = 'draft';
       sceneMusic();
+      return;
+    }
+    if (homeTab === 'town' && inRect(p.x, p.y, GYM_HIT)) {
+      // the gym's door has no screen of its own — its rung board below is
+      // the picker, so the tap just pulses the card to point there
+      noteAscPing(t);
+      sfx('ui');
       return;
     }
     if (homeTab === 'town' && inRect(p.x, p.y, ASC_BTN)) {
@@ -1377,6 +1468,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (e.pointerType === 'mouse' && !e.buttons) {
     activeId = null;
     helpDrag = dexDrag = boxDrag = settingsDrag = null;
+    settingsSliderFlush();
     if (scene === 'battle') battle?.pointerCancel();
     return;
   }
@@ -1425,6 +1517,7 @@ canvas.addEventListener('pointerup', (e) => {
   activeId = null;
   if (settingsDrag) {
     settingsDrag = null;
+    settingsSliderFlush(); // drag values are write-throttled — bank the last x
     syncVolumes(); // a tap-set never saw a pointermove — flush the volume here
     sfx('ui'); // one click on release, not a stream while dragging
     return;
@@ -1523,6 +1616,7 @@ addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       settingsOpen = false;
       settingsDrag = null;
+      settingsSliderFlush();
       sfx('ui');
     }
     return;
@@ -1624,6 +1718,7 @@ canvas.addEventListener('pointercancel', (e) => {
   dexDrag = null;
   boxDrag = null;
   settingsDrag = null;
+  settingsSliderFlush();
   // an interrupt isn't a release — drop the drag, don't fire the shot
   if (scene === 'battle') battle?.pointerCancel();
 });
@@ -1965,6 +2060,14 @@ function update(dt: number) {
   }
 }
 
+// per-frame scratch for the draw calls — map() per call was throwing away
+// 3-5 arrays a frame; these get refilled and never escape render()
+const pickDefs: SpeciesDef[] = [];
+const offerDefs: SpeciesDef[] = [];
+const menuDefs: SpeciesDef[] = [];
+const menuHps: number[] = [];
+const menuLvls: number[] = [];
+
 function render() {
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2003,17 +2106,23 @@ function render() {
       if (labOpen) drawLab(ctx, labScroll, stars());
       break;
     case 'charm':
+      pickDefs.length = draft.picked.length;
+      for (let i = 0; i < pickDefs.length; i++) pickDefs[i] = draftDef(draft.picked[i]);
       drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM',
         charmBonus ? (charmPicks > 1 ? 'ASCENSION III BONUS — take two charms' : 'one more — ascension pays')
                    : 'one held item starts the climb',
-        t, draft.picked.map(draftDef));
+        t, pickDefs);
       break;
     case 'draft': {
       const idx = draftOffers();
+      offerDefs.length = idx.length;
+      pickDefs.length = draft.picked.length;
+      for (let i = 0; i < idx.length; i++) offerDefs[i] = draftDef(idx[i]);
+      for (let i = 0; i < draft.picked.length; i++) pickDefs[i] = draftDef(draft.picked[i]);
       drawDraft(
         ctx,
-        idx.map(draftDef),
-        draft.picked.map(draftDef),
+        offerDefs,
+        pickDefs,
         stage.name,
         t,
         draft.rerolls,
@@ -2046,32 +2155,27 @@ function render() {
             battle.perkIds,
           );
           if (!menuOpen && !battle.evoChoice) drawToolRow(ctx, battle.tools, battle.banArmed, t);
-          // the capture ritual renders inside battle's own pass, so the
-          // reward dim swallows it — replay the ball layer on top. Its
-          // anchor sits under the cards (catchAnchor = arena.y+120), so
-          // clamp each ball into the open band under the tool row for this
-          // pass only. shortcut: reaches the private pass structurally —
-          // upgrade = battle exports a public drawBalls(ctx).
-          {
-            const rit = battle as unknown as {
-              balls: { y: number }[];
-              drawCatchBalls(c: CanvasRenderingContext2D): void;
-            };
-            const ys = rit.balls.map((b) => b.y);
-            for (const b of rit.balls) b.y = Math.min(Math.max(b.y, 690), 830);
-            rit.drawCatchBalls(ctx);
-            rit.balls.forEach((b, i) => (b.y = ys[i]));
-          }
+          // the capture ritual renders inside battle's own pass — the reward
+          // dim swallows it, so replay the ball layer clamped into the open
+          // band under the tool row (its anchor sits under the cards)
+          battle.drawBalls(ctx, 690, 830);
         }
-        if (menuOpen && (battle.phase === 'map' || battle.phase === 'reward'))
+        if (menuOpen && (battle.phase === 'map' || battle.phase === 'reward')) {
+          const ps = battle.players;
+          menuDefs.length = menuHps.length = menuLvls.length = ps.length;
+          for (let i = 0; i < ps.length; i++) {
+            menuDefs[i] = ps[i].def;
+            menuHps[i] = ps[i].maxHp ? ps[i].hp / ps[i].maxHp : 0;
+            menuLvls[i] = ps[i].lvl;
+          }
           drawTeamMenu(
             ctx,
             battle.box,
             battle.boxHp,
             battle.boxLvl,
-            battle.players.map((p) => p.def),
-            battle.players.map((p) => (p.maxHp ? p.hp / p.maxHp : 0)),
-            battle.players.map((p) => p.lvl),
+            menuDefs,
+            menuHps,
+            menuLvls,
             battle.boxSel,
             battle.teamSel,
             boxScroll,
@@ -2079,6 +2183,7 @@ function render() {
             battle.heldItems,
             battle.masterArmed,
           );
+        }
       }
       break;
     case 'result':
@@ -2111,26 +2216,7 @@ function render() {
   if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
   // playtester lifeline: you can't see their console — a crash paints
   // itself with the run's seed and build, so one screenshot is the report
-  if (crash) {
-    ctx.fillStyle = 'rgba(11,14,26,0.94)';
-    ctx.fillRect(16, H / 2 - 110, W - 32, 220);
-    ctx.strokeStyle = '#ff6b6b';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(16, H / 2 - 110, W - 32, 220);
-    ctx.textAlign = 'center';
-    ctx.font = font(11);
-    ctx.fillStyle = '#ff6b6b';
-    ctx.fillText('CRASHED — SCREENSHOT THIS', W / 2, H / 2 - 76);
-    ctx.font = fontB(9);
-    ctx.fillStyle = '#f8d030';
-    ctx.fillText(`seed ${runSeed} · ${__BUILD__}`, W / 2, H / 2 - 48);
-    ctx.font = fontB(8);
-    ctx.fillStyle = '#fff';
-    // crude mid-word wrap — detail beats pretty on a crash card
-    const msg = crash.slice(0, 150);
-    for (let i = 0; i < Math.ceil(msg.length / 50); i++)
-      ctx.fillText(msg.slice(i * 50, (i + 1) * 50), W / 2, H / 2 - 22 + i * 14);
-  }
+  if (crash) drawFailCard(ctx, 'CRASHED — SCREENSHOT THIS', crash, false);
   // SHOW FPS: dim counter in the bottom-right corner — letterbox on tall
   // screens, the box's bottom edge otherwise; clear of the chips up top
   if (settings().fps) {
@@ -2141,11 +2227,6 @@ function render() {
   }
   ctx.restore();
 }
-
-// first error wins — the root cause, not the cascade behind it
-let crash: string | null = null;
-addEventListener('error', (e) => (crash ??= String(e.message || e.error || 'unknown')));
-addEventListener('unhandledrejection', (e) => (crash ??= String(e.reason)));
 
 // upgrade any legacy pk_* saves before the game reads them
 migrateSaves();
@@ -2163,8 +2244,10 @@ Promise.all([
   loadItem('amulet-coin'), // the lab's earnings-upgrade icon
   ...PERKS.map((p) => loadItem(p.item)),
   ...BADGES.map((b) => loadItem(`badges/${b.icon}`)),
-  document.fonts.load('700 10px rc').catch(() => console.warn('rc font failed, using monospace')),
-  document.fonts.load('10px ps2p').catch(() => console.warn('ps2p font failed, using rc')),
+  // no Font Loading API → load() throws synchronously building this array,
+  // bypassing .catch — resolve() keeps the boot going on a fallback face
+  document.fonts?.load('700 10px rc')?.catch(() => console.warn('rc font failed, using monospace')) ?? Promise.resolve(),
+  document.fonts?.load('10px ps2p')?.catch(() => console.warn('ps2p font failed, using rc')) ?? Promise.resolve(),
 ])
   .then(() => {
     scene = 'title';
@@ -2181,10 +2264,17 @@ Promise.all([
   .catch((err) => {
     scene = 'loading';
     console.error(err);
-    ctx.fillStyle = '#fff';
-    ctx.font = font(10);
-    ctx.fillText(`failed to load: ${err.message}`, 20, H / 2);
+    bootFail = String(err?.message ?? err);
+    paintBootFail();
   });
+
+// a failed boot leaves the retry card up — the tap reloads (the fetch was
+// probably transient); gated on bootFail so live taps never reach it
+canvas.addEventListener('pointerdown', (e) => {
+  if (!bootFail) return;
+  const p = toLogical(e);
+  if (inRect(p.x, p.y, BOOT_RETRY)) location.reload();
+});
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});

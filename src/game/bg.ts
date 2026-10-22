@@ -44,6 +44,14 @@ const GLOW: Record<Theme, [number, number, number, number]> = {
 const PAINT = 'rgba(255,246,220,0.12)';
 const TAU = Math.PI * 2;
 
+// light-pool gradients keyed by center+radius+color — static per arena,
+// so the radial bake isn't re-created every frame
+const poolGrads = new Map<string, CanvasGradient>();
+
+// face-tile patterns keyed on the baked face canvas — the cliff-face fill
+// is identical every frame
+const facePatterns = new Map<HTMLCanvasElement, CanvasPattern>();
+
 // A wall prop is a tile rect plus an optional source-atop tint baked into its
 // cached slice — themes darken rocks/dead wood without new art.
 export interface PropSpec {
@@ -304,7 +312,12 @@ export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: numbe
     rrp(ctx, a.x - FACE_D, a.y - FACE_D, a.w + FACE_D * 2, a.h + FACE_D * 2, 34);
     rrp(ctx, a.x + 2, a.y + 2, a.w - 4, a.h - 4, 16);
     ctx.clip('evenodd');
-    ctx.fillStyle = ctx.createPattern(ft, 'repeat')!;
+    let pat = facePatterns.get(ft);
+    if (!pat) {
+      pat = ctx.createPattern(ft, 'repeat')!;
+      facePatterns.set(ft, pat);
+    }
+    ctx.fillStyle = pat;
     ctx.fillRect(a.x - FACE_D, a.y - FACE_D, a.w + FACE_D * 2, a.h + FACE_D * 2);
     // vertical shading per side: lit where the face leaves the rim, dark as
     // it falls — the gradient vectors point outward
@@ -493,10 +506,18 @@ export function drawBackdrop(
   if (pool) {
     const [gr, gg, gb, ga] = GLOW[theme];
     const px = x + pool.nx * w, py = y + pool.ny * h;
-    const a = ga * (0.85 + 0.15 * Math.sin(t * 1.2));
-    const gd = ctx.createRadialGradient(px, py, 0, px, py, m * 0.42);
-    gd.addColorStop(0, `rgba(${gr},${gg},${gb},${a})`);
-    gd.addColorStop(1, `rgba(${gr},${gg},${gb},0)`);
+    const pr = m * 0.42;
+    // the gradient is static per arena+pool — the pulse rides on
+    // globalAlpha so the color stops bake once instead of per frame
+    const pk = `${gr},${gg},${gb}|${px},${py},${pr}`;
+    let gd = poolGrads.get(pk);
+    if (!gd) {
+      gd = ctx.createRadialGradient(px, py, 0, px, py, pr);
+      gd.addColorStop(0, `rgba(${gr},${gg},${gb},1)`);
+      gd.addColorStop(1, `rgba(${gr},${gg},${gb},0)`);
+      poolGrads.set(pk, gd);
+    }
+    ctx.globalAlpha = ga * (0.85 + 0.15 * Math.sin(t * 1.2));
     ctx.fillStyle = gd;
     ctx.fillRect(x, y, w, h);
   }

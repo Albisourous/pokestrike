@@ -20,8 +20,6 @@ import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
 
-// SPIKE ?mark=a|b|c — team-readability mockups, not shipping UI
-const MARK = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('mark');
 import {
   playerHp,
   enemyHp,
@@ -293,6 +291,16 @@ const DECOR: Record<Theme, { n: number; s: [number, number]; alpha?: number; pro
   sky: { n: 7, s: [26, 44], alpha: 0.5, props: [{ r: MT.TILE_DRIFT }] },
 };
 
+// ambient drift keyed to the court — petals ride the grove breeze, dust
+// hangs in cavern shafts, embers climb and flicker in the volcano, snow
+// slants through the sky court
+const AMBIENT: Record<Theme, { n: number; col: string; vx: number; vy: number; r: number; tw: number; wob: number }> = {
+  grove: { n: 16, col: '#cfe898', vx: 18, vy: 16, r: 2.1, tw: 0.1, wob: 26 }, // petals fall on the breeze
+  cavern: { n: 12, col: '#8a94c0', vx: 6, vy: 8, r: 1.7, tw: 0.16, wob: 12 }, // dust hangs in the light shafts
+  volcano: { n: 20, col: '#ff9d4d', vx: 10, vy: -34, r: 2.0, tw: 0.3, wob: 18 }, // embers climb, flicker hard
+  sky: { n: 16, col: '#ffffff', vx: -16, vy: 24, r: 1.9, tw: 0.12, wob: 20 }, // snow slants downwind
+};
+
 // theme → its sky: groves rain, caverns swirl sand, the volcano bakes
 // under sun, the heights blow. ~Half of rolled courts get weather.
 const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
@@ -401,6 +409,20 @@ function resolveZone(u: Ball, hz: Hazard): boolean {
 const nearest = (foes: Unit[], p: Vec) => foes.slice().sort((a, b) => dist(p, a) - dist(p, b))[0];
 const farthest = (foes: Unit[], p: Vec) => foes.slice().sort((a, b) => dist(p, b) - dist(p, a))[0];
 
+// order-preserving in-place compaction — a filter() that doesn't realloc a
+// fresh array per frame; writes only start once the first dead element drops
+const cull = <T>(arr: T[], keep: (e: T) => boolean) => {
+  let w = 0;
+  for (let i = 0; i < arr.length; i++) {
+    const e = arr[i];
+    if (keep(e)) {
+      if (w !== i) arr[w] = e;
+      w++;
+    }
+  }
+  arr.length = w;
+};
+
 // four-point star: an 8-vertex polygon pinching at `pinch` of the radius —
 // the weak-point marker and the spark particle share the shape
 const starPath = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, pinch: number) => {
@@ -416,6 +438,97 @@ const starPath = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number
   ctx.lineTo(x - k, y - k);
   ctx.closePath();
 };
+
+// prebuilt unit-radius star paths — the shiny twinkle, weak marker and
+// spark stars fill() a Path2D instead of re-pathing 8 vertices per frame.
+// Pinches seen below: 0.4 (markers) and 0.28 (spark particles)
+const mkStar = (pinch: number): Path2D | null => {
+  if (typeof Path2D === 'undefined') return null;
+  const p = new Path2D();
+  p.moveTo(0, -1);
+  p.lineTo(pinch, -pinch);
+  p.lineTo(1, 0);
+  p.lineTo(pinch, pinch);
+  p.lineTo(0, 1);
+  p.lineTo(-pinch, pinch);
+  p.lineTo(-1, 0);
+  p.lineTo(-pinch, -pinch);
+  p.closePath();
+  return p;
+};
+const STAR_4 = mkStar(0.4);
+const STAR_28 = mkStar(0.28);
+// fill (and optionally stroke, at device-space width strokeW) a 4-point
+// star of radius s at (x, y)
+const drawStar = (ctx: CanvasRenderingContext2D, x: number, y: number, s: number, pinch: number, strokeW = 0) => {
+  const p = pinch === 0.28 ? STAR_28 : STAR_4;
+  if (p) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    ctx.fill(p);
+    if (strokeW) {
+      ctx.lineWidth = strokeW / s; // the scale would thicken the caller's width
+      ctx.stroke(p);
+    }
+    ctx.restore();
+    return;
+  }
+  starPath(ctx, x, y, s, pinch);
+  ctx.fill();
+  if (strokeW) ctx.stroke();
+};
+
+// shadowBlur is a full blur pass per draw per frame — bake each glow once
+// into a small canvas and blit it instead (same recipe as silCache/slice)
+const orbGlows = new Map<string, HTMLCanvasElement>();
+const orbGlow = (color: string) => {
+  let c = orbGlows.get(color);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = c.height = 80; // the 12px orb + its 22px halo, centered
+    const g = c.getContext('2d')!;
+    g.shadowColor = color;
+    g.shadowBlur = 22;
+    g.fillStyle = color;
+    g.beginPath();
+    g.arc(40, 40, 12, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = '#ffffff';
+    g.beginPath();
+    g.arc(36.5, 36.5, 4.5, 0, Math.PI * 2);
+    g.fill();
+    orbGlows.set(color, c);
+  }
+  return c;
+};
+// the evolution white-out: blur halo baked once per silhouette, keyed on
+// the cached sprite itself — from/to forms each bake a single entry
+const WHITE_GLOW_PAD = 36; // blur 24 + bleed
+const whiteGlows = new Map<HTMLCanvasElement, HTMLCanvasElement>();
+const whiteGlow = (img: HTMLCanvasElement) => {
+  let c = whiteGlows.get(img);
+  if (!c) {
+    c = document.createElement('canvas');
+    c.width = img.width + WHITE_GLOW_PAD * 2;
+    c.height = img.height + WHITE_GLOW_PAD * 2;
+    const g = c.getContext('2d')!;
+    g.shadowColor = '#ffffff';
+    g.shadowBlur = 24;
+    g.drawImage(img, WHITE_GLOW_PAD, WHITE_GLOW_PAD);
+    whiteGlows.set(img, c);
+  }
+  return c;
+};
+
+// map-phase chrome never changes: the edge sheers and the island vignette
+// are built once, not per frame (the top one's window scales with `over`)
+let mapTopG: CanvasGradient | null = null;
+let mapBotG: CanvasGradient | null = null;
+let mapVig: CanvasGradient | null = null;
+// the wipe-pressure vignette: same baked gradient every frame, the pulse
+// rides on globalAlpha instead of a rebuilt color stop
+let dangerG: CanvasGradient | null = null;
 
 // one shared context for text metrics — FloatTexts measure once at push,
 // not every frame; measureText only ever reads the font string
@@ -479,11 +592,19 @@ export class Battle {
   private waves: Wave[] = [];
   private dashes: Dash[] = [];
   private delays: { t: number; fn: () => void }[] = []; // staggered super hits
+  private dueQ: { t: number; fn: () => void }[] = []; // scratch for the update sweep — the due list isn't a per-frame alloc
+  private aliveP: Unit[] = []; // scratch: living players snapshotted at stepEnemyMovement's top — a mid-pass death still targets the body
   private flashes: ScreenFlash[] = [];
   private balls: BallDrop[] = []; // live capture rituals — ball drops, rocks, clicks or bursts
   private pickups: Pickup[] = []; // touch to collect while the ball flies
   private scars: Scar[] = []; // impact craters scarring the court
   private hazards: Hazard[] = []; // this wave's court gimmicks
+  private powerHz: Hazard[] = []; // cached 'power' zones — rebuilt only when the hazards list swaps or grows
+  private powerRef: Hazard[] | null = null;
+  private powerLen = -1;
+  private tauntFoe: Unit | null = null; // cached first live magnet mon — rescanned on death or roster change
+  private tauntRef: Unit[] | null = null;
+  private tauntLen = -1;
   private beams: Beam[] = []; // boss hyper-beam afterglow
   private waveSpecial: string | null = null; // banner override (invade)
   private curMod: string | null = null; // this wave's rolled affix — hexed/tailwind ride it
@@ -1610,6 +1731,16 @@ export class Battle {
 
   // --- simulation ---
 
+  // every stamp on the shared clock — pad/hazard cooldowns, the bump
+  // throttle, ricochet + per-shooter hit windows — moves with the pause
+  private agePause(u: Unit, dt: number) {
+    u.warpT += dt;
+    u.boostT += dt;
+    u.hzT += dt;
+    u.lastBump += dt;
+    for (const [k, v] of u.lastHit) u.lastHit.set(k, v + dt);
+  }
+
   update(dt0: number) {
     if (this.paused) {
       this.time += dt0; // the overlay still breathes
@@ -1621,13 +1752,8 @@ export class Battle {
       // bump throttle, ricochet + per-shooter hit windows, the ult arm
       this.lastContact.t += dt0;
       this.ultArmT += dt0;
-      for (const u of [...this.players, ...this.enemies]) {
-        u.warpT += dt0;
-        u.boostT += dt0;
-        u.hzT += dt0;
-        u.lastBump += dt0;
-        for (const [k, v] of u.lastHit) u.lastHit.set(k, v + dt0);
-      }
+      for (const u of this.players) this.agePause(u, dt0);
+      for (const u of this.enemies) this.agePause(u, dt0);
       return;
     }
     // scene music follows the phase: ambient on the map, the calm theme over
@@ -1665,10 +1791,10 @@ export class Battle {
       this.wasGold = inGold;
     }
     for (const t of this.texts) t.t -= dt;
-    this.texts = this.texts.filter((t) => t.t > 0);
+    cull(this.texts, (t) => t.t > 0);
     if (this.texts.length > 40) this.texts.splice(0, this.texts.length - 40); // a huge burst shouldn't stack 100 labels
     for (const f of this.flashes) f.t -= dt;
-    this.flashes = this.flashes.filter((f) => f.t > 0);
+    cull(this.flashes, (f) => f.t > 0);
     // capture rituals tick in any phase — a tick lands on each swing's far
     // tilt, then the click/burst fires the site's deferred payoff once
     for (const b of this.balls) {
@@ -1684,7 +1810,7 @@ export class Battle {
         r();
       }
     }
-    this.balls = this.balls.filter((b) => b.t > 0);
+    cull(this.balls, (b) => b.t > 0);
     // evolution cinematics tick with the fight — the payoff (burst, sfx)
     // lands the moment the flicker resolves, not when the dupe was absorbed
     for (const f of this.evoFx) {
@@ -1696,12 +1822,12 @@ export class Battle {
         sfx('caught');
       }
     }
-    this.evoFx = this.evoFx.filter((f) => f.t < 1.35);
+    cull(this.evoFx, (f) => f.t < 1.35);
     for (const p of this.pickups) p.t += dt;
     for (const s of this.scars) s.t += dt;
-    this.scars = this.scars.filter((s) => s.t < s.life);
+    cull(this.scars, (s) => s.t < s.life);
     for (const bm of this.beams) bm.t -= dt;
-    this.beams = this.beams.filter((bm) => bm.t > 0);
+    cull(this.beams, (bm) => bm.t > 0);
     for (const f of this.fx) {
       f.t -= dt;
       const damp = Math.exp(-3.2 * dt);
@@ -1712,18 +1838,21 @@ export class Battle {
       f.y += f.vy * dt;
       if (f.sway) f.x += Math.sin(this.time * 6 + f.spin * 7) * f.sway * dt;
     }
-    this.fx = this.fx.filter((f) => f.t > 0);
+    cull(this.fx, (f) => f.t > 0);
     for (const p of this.pops) p.t -= dt;
-    this.pops = this.pops.filter((p) => p.t > 0);
+    cull(this.pops, (p) => p.t > 0);
     this.shake *= Math.exp(-6 * dt);
     this.punch *= Math.exp(-9 * dt);
     if (this.waveBanner > 0) this.waveBanner -= dt;
     if (this.endT > 0) this.endT -= dt;
     if (this.mapMsgT > 0) this.mapMsgT -= dt;
     if (this.inspect) {
-      this.inspect.t -= dt;
-      const alive = [...this.enemies, ...this.players].some((e) => e.uid === this.inspect!.uid && !e.dead);
-      if (this.inspect.t <= 0 || !alive) this.inspect = null;
+      const ins = this.inspect;
+      ins.t -= dt;
+      let alive = false;
+      for (const e of this.enemies) if (e.uid === ins.uid && !e.dead) { alive = true; break; }
+      if (!alive) for (const p of this.players) if (p.uid === ins.uid && !p.dead) { alive = true; break; }
+      if (ins.t <= 0 || !alive) this.inspect = null;
     }
     // an armed ult nobody confirms stands itself down — once, audibly
     if (this.ultArmUid !== -1 && this.time - this.ultArmT >= 2) {
@@ -1744,9 +1873,20 @@ export class Battle {
     if (this.phase === 'map' && this.mapWalk) this.stepMapWalk(dt);
     if (this.phase === 'map') this.mapCam += (this.mapCamTarget() - this.mapCam) * Math.min(1, dt * 4.5);
     for (const d of this.delays) d.t -= dt;
-    const due = this.delays.filter((d) => d.t <= 0);
-    this.delays = this.delays.filter((d) => d.t > 0);
-    for (const d of due) d.fn();
+    // compact survivors in place and run the due callbacks in order after
+    // the sweep — a callback that re-queues via later() must not fire this
+    // pass or get clobbered by the compaction
+    const dq = this.dueQ;
+    dq.length = 0;
+    {
+      let w = 0;
+      for (const d of this.delays) {
+        if (d.t <= 0) dq.push(d);
+        else this.delays[w++] = d;
+      }
+      this.delays.length = w;
+    }
+    for (const d of dq) d.fn();
     if (this.phase === 'shot' || this.phase === 'aim' || this.phase === 'enemy') {
       this.stepEnemyMovement(dt);
     }
@@ -1908,7 +2048,9 @@ export class Battle {
       if (u.dead) break;
       // snapshot: strikeEnemy→hurt can summon boss adds mid-loop — fresh
       // minions don't get struck in the pass that spawned them
-      for (const e of wave.slice()) {
+      const waveN = wave.length;
+      for (let ei = 0; ei < waveN; ei++) {
+        const e = wave[ei];
         if (this.enemies !== wave) break;
         if (e.dead) continue;
         // pierce mons phase through enemies — hit once, keep the line
@@ -1941,7 +2083,7 @@ export class Battle {
         }
       }
     }
-    this.enemies = this.enemies.filter((e) => !e.dead);
+    cull(this.enemies, (e) => !e.dead);
     if (u.dead) {
       this.endShot();
       return;
@@ -1961,10 +2103,17 @@ export class Battle {
 
   // Enemies creep toward the nearest player; knockback velocity decays fast.
   private stepEnemyMovement(dt: number) {
-    const alive = this.players.filter((p) => !p.dead);
+    // snapshot once at the top — a mid-pass KO still reads as a target for
+    // the creeps behind it (the old filter() gave the same frozen roster)
+    const alive = this.aliveP;
+    alive.length = 0;
+    for (const p of this.players) if (!p.dead) alive.push(p);
     // snapshot: thorns→hurt can summon boss adds mid-loop — fresh minions
     // don't drift or shove in the pass that spawned them
-    for (const e of this.enemies.slice()) {
+    const wave = this.enemies;
+    const wn = wave.length;
+    for (let i = 0; i < wn; i++) {
+      const e = wave[i];
       if (e.dead) continue; // corpses don't drift, lunge, or shove
       if (e.boss) e.weakA += dt * 0.45; // the weak face drifts — watch it before you commit
       const kn = Math.exp(-4 * dt);
@@ -1973,15 +2122,23 @@ export class Battle {
       e.x += e.vx * dt;
       e.y += e.vy * dt;
       if (alive.length > 0) {
-        const target = alive.reduce((a, b) => (dist(e, a) < dist(e, b) ? a : b));
-        const d = dist(e, target);
-        const dir = norm({ x: target.x - e.x, y: target.y - e.y });
+        // nearest living player — squared scan, one sqrt for the whole pick
+        let target: Unit = alive[0];
+        let best = Infinity;
+        for (const p of alive) {
+          const pdx = p.x - e.x, pdy = p.y - e.y;
+          const q = pdx * pdx + pdy * pdy;
+          if (q < best) { best = q; target = p; }
+        }
+        const d = Math.sqrt(best);
+        const nx = (target.x - e.x) / (d || 1);
+        const ny = (target.y - e.y) / (d || 1);
         if (e.lunging > 0) {
           // melee attack in flight: steer hard at the target, hit on contact
           e.lunging -= dt;
           const sp = 520 + e.def.stats.spe * 3;
-          e.x += dir.x * sp * dt;
-          e.y += dir.y * sp * dt;
+          e.x += nx * sp * dt;
+          e.y += ny * sp * dt;
           if (d < e.r + target.r + 4 || e.lunging <= 0) {
             e.lunging = 0;
             if (d < e.r + target.r + 8) {
@@ -2000,8 +2157,8 @@ export class Battle {
             e.wMul = this.rng() < 0.22 ? 2.4 : 0.5 + this.rng();
           }
           if (d > e.r + target.r + 6) {
-            e.x += (dir.x * 0.55 + e.wx * e.wMul) * e.drift * dt;
-            e.y += (dir.y * 0.55 + e.wy * e.wMul) * e.drift * dt;
+            e.x += (nx * 0.55 + e.wx * e.wMul) * e.drift * dt;
+            e.y += (ny * 0.55 + e.wy * e.wMul) * e.drift * dt;
           }
         }
       }
@@ -2031,24 +2188,27 @@ export class Battle {
   // Push mover m out of static circle o.
   private separate(m: Unit, o: { x: number; y: number; r: number }) {
     const rr = m.r + o.r;
-    const d = dist(m, o);
-    if (d >= rr || d === 0) return;
-    const n = norm({ x: m.x - o.x, y: m.y - o.y });
-    m.x = o.x + n.x * rr;
-    m.y = o.y + n.y * rr;
+    const dx = m.x - o.x, dy = m.y - o.y;
+    if (dx * dx + dy * dy >= rr * rr) return;
+    const d = Math.hypot(dx, dy);
+    if (d === 0) return;
+    m.x = o.x + (dx / d) * rr;
+    m.y = o.y + (dy / d) * rr;
   }
 
   // Push two movers apart, splitting the correction.
   private separatePair(a: Unit, b: Unit) {
     const rr = a.r + b.r;
-    const d = dist(a, b);
-    if (d >= rr || d === 0) return;
-    const n = norm({ x: b.x - a.x, y: b.y - a.y });
+    const dx = b.x - a.x, dy = b.y - a.y;
+    if (dx * dx + dy * dy >= rr * rr) return;
+    const d = Math.hypot(dx, dy);
+    if (d === 0) return;
+    const nx = dx / d, ny = dy / d;
     const push = (rr - d) / 2;
-    a.x -= n.x * push;
-    a.y -= n.y * push;
-    b.x += n.x * push;
-    b.y += n.y * push;
+    a.x -= nx * push;
+    a.y -= ny * push;
+    b.x += nx * push;
+    b.y += ny * push;
   }
 
   // Homing orbs from water bump attacks — and boss orbs that hunt you.
@@ -2092,7 +2252,7 @@ export class Battle {
         o.t = 0;
       }
     }
-    this.orbs = this.orbs.filter((o) => o.t > 0);
+    cull(this.orbs, (o) => o.t > 0);
   }
 
   private later(t: number, fn: () => void) {
@@ -2108,14 +2268,17 @@ export class Battle {
       if (!w.onHit) continue;
       // snapshot: onHit→hurt can summon boss adds mid-loop — fresh minions
       // don't eat the ring in the pass that spawned them
-      for (const e of (w.hostile ? this.players : this.enemies).slice()) {
+      const pool = w.hostile ? this.players : this.enemies;
+      const poolN = pool.length;
+      for (let ei = 0; ei < poolN; ei++) {
+        const e = pool[ei];
         if (e.dead || w.hits.has(e.uid)) continue;
         if (dist(w, e) > w.r + e.r * 0.5) continue;
         w.hits.add(e.uid);
         w.onHit(e);
       }
     }
-    this.waves = this.waves.filter((w) => w.t > 0);
+    cull(this.waves, (w) => w.t > 0);
   }
 
   // Quick-attack lunges: the ally streaks to its target, lands the hit,
@@ -2146,7 +2309,7 @@ export class Battle {
       for (const b of this.blocks) resolveBlock(d.u, b); // dashes respect the stones too
       this.hitSolid(d.u); // and the solid prop zones
     }
-    this.dashes = this.dashes.filter((d) => !d.done);
+    cull(this.dashes, (d) => !d.done);
   }
 
   // A stone slab: slate body under a boulder skin tiled from the gracidea
@@ -2301,7 +2464,28 @@ export class Battle {
 
   // Static fields silence keyword triggers and bump supers inside them.
   private inStatic(x: number, y: number) {
-    return this.hazards.some((hz) => hz.kind === 'static' && dist({ x, y }, hz) < hz.r);
+    for (const hz of this.hazards) {
+      if (hz.kind !== 'static') continue;
+      const dx = x - hz.x, dy = y - hz.y;
+      if (dx * dx + dy * dy < hz.r * hz.r) return true;
+    }
+    return false;
+  }
+
+  // The 'power' mutator's ATK field: hits landed while the ball's inside it
+  // carry the field's charge. The zone list caches — only a hazards swap or
+  // push (new wave, mutator spawn) rebuilds it.
+  private inPower(x: number, y: number) {
+    if (this.powerRef !== this.hazards || this.powerLen !== this.hazards.length) {
+      this.powerRef = this.hazards;
+      this.powerLen = this.hazards.length;
+      this.powerHz = this.hazards.filter((hz) => hz.kind === 'power');
+    }
+    for (const hz of this.powerHz) {
+      const dx = x - hz.x, dy = y - hz.y;
+      if (dx * dx + dy * dy < hz.r * hz.r) return true;
+    }
+    return false;
   }
 
   // Field pickups — the MS heart/sword/hourglass: heal, damage, cooldown.
@@ -2359,17 +2543,18 @@ export class Battle {
   // Push moving unit out of a static circle and reflect its velocity.
   private collide(u: Unit, o: { x: number; y: number; r: number }): boolean {
     const rr = u.r + o.r;
-    const d = dist(u, o);
-    if (d >= rr) return false;
+    const dx = o.x - u.x, dy = o.y - u.y;
+    if (dx * dx + dy * dy >= rr * rr) return false;
+    const d = Math.hypot(dx, dy);
     // dead-center overlap: norm() is 0/0 — pop apart on a fixed axis or the
     // pair stays stacked forever
-    const n = d > 0 ? norm({ x: o.x - u.x, y: o.y - u.y }) : { x: 0, y: -1 };
-    u.x = o.x - n.x * rr;
-    u.y = o.y - n.y * rr;
-    const vn = u.vx * n.x + u.vy * n.y;
+    const nx = d > 0 ? dx / d : 0, ny = d > 0 ? dy / d : -1;
+    u.x = o.x - nx * rr;
+    u.y = o.y - ny * rr;
+    const vn = u.vx * nx + u.vy * ny;
     if (vn > 0) {
-      u.vx -= (1 + UNIT_REST) * vn * n.x;
-      u.vy -= (1 + UNIT_REST) * vn * n.y;
+      u.vx -= (1 + UNIT_REST) * vn * nx;
+      u.vy -= (1 + UNIT_REST) * vn * ny;
     }
     return true;
   }
@@ -2691,8 +2876,14 @@ export class Battle {
     this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 1.7, t: 0.2, life: 0.2, color: TYPE_COLOR[at] ?? '#ffffff', hits: new Set() });
     const rico = this.ricochet(e.uid);
     // taunt toll-booth: while a magnet mon lives, contact damage routes
-    // through it — pierce still passes, it just can't hurt anything else
-    const taunter = this.enemies.find((x) => !x.dead && x.def.taunt);
+    // through it — pierce still passes, it just can't hurt anything else.
+    // The scan caches: death or a roster change (summon, cull) rescans it
+    let taunter = this.tauntFoe;
+    if (this.tauntRef !== this.enemies || this.tauntLen !== this.enemies.length || (taunter && taunter.dead)) {
+      this.tauntRef = this.enemies;
+      this.tauntLen = this.enemies.length;
+      taunter = this.tauntFoe = this.enemies.find((x) => !x.dead && x.def.taunt) ?? null;
+    }
     if (taunter && e !== taunter) {
       this.pushText({ x: e.x, y: e.y - e.r - 8, text: 'BLOCKED', t: 0.7, color: '#8a90a8', big: false });
       return;
@@ -2730,7 +2921,7 @@ export class Battle {
         (weak ? 3 : 1) *
         // power zone: hits landed while the ball's inside the ATK field
         // carry the field's charge
-        (this.hazards.some((hz) => hz.kind === 'power' && Math.hypot(shooter.x - hz.x, shooter.y - hz.y) < hz.r) ? 1.5 : 1) *
+        (this.inPower(shooter.x, shooter.y) ? 1.5 : 1) *
         (shooter.giant ? 2 : 1) *
         Math.pow(0.9, hitN),
     );
@@ -3606,7 +3797,7 @@ export class Battle {
     if (p.role === 'MEDIC') {
       this.tryHeal(this.players, (pl) => Math.max(1, Math.round(pl.maxHp * 0.15)));
     }
-    this.enemies = this.enemies.filter((e) => !e.dead);
+    cull(this.enemies, (e) => !e.dead);
     if (this.enemies.length === 0 && this.phase !== 'won') this.waveCleared();
 
     // TEAM COMBO: every living ally fired its super in this one shot
@@ -3903,7 +4094,7 @@ export class Battle {
     // hurt() marks kills but doesn't chain the wave check — close it out
     // after the last beam lands
     this.later(0.15 + targets.length * 0.09, () => {
-      this.enemies = this.enemies.filter((e) => !e.dead);
+      cull(this.enemies, (e) => !e.dead);
       if (!this.enemies.length && this.phase !== 'won' && this.phase === 'aim') this.waveCleared();
     });
   }
@@ -4561,7 +4752,7 @@ export class Battle {
         }
       }
     }
-    this.lootCoins = this.lootCoins.filter((c) => c.r > 0);
+    cull(this.lootCoins, (c) => c.r > 0);
     if (this.lootT <= 0 || !this.lootCoins.length) {
       this.lootCoins = [];
       this.waveSpecial = null;
@@ -4928,7 +5119,7 @@ export class Battle {
         sfx('heal');
       }
     }
-    this.enemies = this.enemies.filter((e) => !e.dead);
+    cull(this.enemies, (e) => !e.dead);
     // chain payout: a 4+ link shot cashes out on the spot — the bigger the
     // pinball line, the bigger the bonus, and it reads as earned
     if (this.shotCombo >= 4) {
@@ -5035,7 +5226,16 @@ export class Battle {
   }
 
   private nearestPlayer(e: Unit) {
-    return this.playersByDist(e)[0];
+    // min-scan — the sorted list exists for multi-target attacks; the
+    // per-frame telegraph only ever wants the closest one
+    let best: Unit | undefined;
+    let bd = Infinity;
+    for (const p of this.players) {
+      if (p.dead) continue;
+      const d = dist(e, p);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best;
   }
 
   // Each boss has a signature attack on its countdown; invaders and
@@ -5540,12 +5740,6 @@ export class Battle {
     // hangs in cavern shafts, embers climb and flicker in the volcano, snow
     // slants through the sky court. Still rooms shouldn't read dead.
     {
-      const AMBIENT: Record<Theme, { n: number; col: string; vx: number; vy: number; r: number; tw: number; wob: number }> = {
-        grove: { n: 16, col: '#cfe898', vx: 18, vy: 16, r: 2.1, tw: 0.1, wob: 26 }, // petals fall on the breeze
-        cavern: { n: 12, col: '#8a94c0', vx: 6, vy: 8, r: 1.7, tw: 0.16, wob: 12 }, // dust hangs in the light shafts
-        volcano: { n: 20, col: '#ff9d4d', vx: 10, vy: -34, r: 2.0, tw: 0.3, wob: 18 }, // embers climb, flicker hard
-        sky: { n: 16, col: '#ffffff', vx: -16, vy: 24, r: 1.9, tw: 0.12, wob: 20 }, // snow slants downwind
-      };
       const amb = AMBIENT[this.theme];
       const ambN = Math.max(1, Math.round(amb.n * QUALITY_FX[settings().quality]));
       ctx.fillStyle = amb.col;
@@ -5768,11 +5962,10 @@ export class Battle {
           const ph = Math.min(1, Math.max(0, (f.t - 0.15) / 0.85));
           const period = 0.16 - 0.11 * ph; // swaps speed up as it resolves
           const which = f.t < 0.15 ? 0 : Math.floor((f.t - 0.15) / period) % 2;
-          ctx.save();
-          ctx.shadowColor = '#ffffff';
-          ctx.shadowBlur = 24;
-          ctx.drawImage(whiteSprite(which ? f.to : f.from), u.x - size / 2, u.y - size / 2, size, size);
-          ctx.restore();
+          const img = whiteSprite(which ? f.to : f.from);
+          const gs = whiteGlow(img);
+          const gk = size / img.width;
+          ctx.drawImage(gs, u.x - size / 2 - WHITE_GLOW_PAD * gk, u.y - size / 2 - WHITE_GLOW_PAD * gk, gs.width * gk, gs.height * gk);
           ctx.strokeStyle = '#ffd84d';
           ctx.lineWidth = 3;
           ctx.globalAlpha = 0.5 + ph * 0.5;
@@ -5847,18 +6040,7 @@ export class Battle {
 
 
     for (const o of this.orbs) {
-      ctx.save();
-      ctx.shadowColor = o.color;
-      ctx.shadowBlur = 22;
-      ctx.fillStyle = o.color;
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, 12, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(o.x - 3.5, o.y - 3.5, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+      ctx.drawImage(orbGlow(o.color), o.x - 40, o.y - 40);
     }
 
 
@@ -5910,9 +6092,13 @@ export class Battle {
           ctx.save();
           ctx.translate(f.x, f.y);
           ctx.rotate(f.spin * (f.life - f.t));
+          ctx.scale(s, s);
           ctx.fillStyle = f.color;
-          starPath(ctx, 0, 0, s, 0.28);
-          ctx.fill();
+          if (STAR_28) ctx.fill(STAR_28);
+          else {
+            starPath(ctx, 0, 0, 1, 0.28);
+            ctx.fill();
+          }
           ctx.restore();
         } else if (f.shape === 'leaf') {
           ctx.save();
@@ -6021,22 +6207,28 @@ export class Battle {
     // wipe pressure: a nearly-dead team breathes a red vignette — the danger
     // is felt at the edges before anyone reads a health bar
     if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') {
-      const alive = this.players.filter((p) => !p.dead);
-      if (alive.length) {
-        const avg = alive.reduce((s, p) => s + p.hp / p.maxHp, 0) / alive.length;
-        if (alive.length === 1 || avg < 0.35) {
+      let alive = 0, hpSum = 0;
+      for (const p of this.players) if (!p.dead) { alive++; hpSum += p.hp / p.maxHp; }
+      if (alive) {
+        const avg = hpSum / alive;
+        if (alive === 1 || avg < 0.35) {
           const pulse = 0.10 + Math.sin(this.time * 4) * 0.05;
-          const g = ctx.createRadialGradient(270, 480, 220, 270, 480, 560);
-          g.addColorStop(0, 'rgba(200,30,30,0)');
-          g.addColorStop(1, `rgba(200,30,30,${pulse})`);
-          ctx.fillStyle = g;
+          if (!dangerG) {
+            dangerG = ctx.createRadialGradient(270, 480, 220, 270, 480, 560);
+            dangerG.addColorStop(0, 'rgba(200,30,30,0)');
+            dangerG.addColorStop(1, 'rgba(200,30,30,1)');
+          }
+          ctx.globalAlpha = pulse;
+          ctx.fillStyle = dangerG;
           ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
+          ctx.globalAlpha = 1;
         }
       }
     }
 
     // foes remaining, top-right — the wave's progress bar
-    const left = this.enemies.filter((e) => !e.dead).length;
+    let left = 0;
+    for (const e of this.enemies) if (!e.dead) left++;
     if ((this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') && left > 0) {
       ctx.font = font(9);
       ctx.textAlign = 'right';
@@ -6278,10 +6470,28 @@ export class Battle {
     }
   }
 
+  // Same ritual, clamped into a band: main.ts replays the ball layer over
+  // the reward board (its anchor sits under the cards) and needs it inside
+  // the open strip under the tool row. b.y is always restored, even if a
+  // sprite draw throws mid-pass.
+  drawBalls(ctx: CanvasRenderingContext2D, yMin: number, yMax: number) {
+    const ys: number[] = [];
+    for (const b of this.balls) {
+      ys.push(b.y);
+      b.y = Math.min(Math.max(b.y, yMin), yMax);
+    }
+    try {
+      this.drawCatchBalls(ctx);
+    } finally {
+      const bs = this.balls;
+      for (let i = 0; i < ys.length && i < bs.length; i++) bs[i].y = ys[i];
+    }
+  }
+
   // The scout card: tapping a foe (instead of pulling) answers "what is
   // that thing about to do" — name, bulk, type, and its attack countdown.
   private drawInspect(ctx: CanvasRenderingContext2D) {
-    const e = [...this.enemies, ...this.players].find((x) => x.uid === this.inspect!.uid);
+    const e = this.enemies.find((x) => x.uid === this.inspect!.uid) ?? this.players.find((x) => x.uid === this.inspect!.uid);
     if (!e || e.dead) return;
     const foe = e.side === 'enemy';
     const a = this.arena;
@@ -6381,9 +6591,13 @@ export class Battle {
     if (this.shots === 0) {
       // the gesture itself on loop: elastic pull + fingertip ring, flight
       // dotted the other way — aimed at the nearest foe so it also aims
-      const tgt = this.enemies
-        .filter((e) => !e.dead)
-        .sort((x, y) => Math.hypot(x.x - u.x, x.y - u.y) - Math.hypot(y.x - u.x, y.y - u.y))[0];
+      let tgt: Unit | null = null;
+      let tq = Infinity;
+      for (const e of this.enemies) {
+        if (e.dead) continue;
+        const edx = e.x - u.x, edy = e.y - u.y, q = edx * edx + edy * edy;
+        if (q < tq) { tq = q; tgt = e; }
+      }
       let px = 0, py = 1;
       if (tgt) {
         const d = Math.hypot(u.x - tgt.x, u.y - tgt.y) || 1;
@@ -6747,21 +6961,34 @@ export class Battle {
     ctx.strokeRect(ox - 8, oy - 8, MAP_W * cell + 16, view * cell + 16);
     // sheers at both edges sell the scroll — the island keeps going; the
     // top one runs deep over the overhang so rooftops slide out of shadow
-    const topG = ctx.createLinearGradient(0, oy - over * cell - 6, 0, oy + cell * 1.4);
-    topG.addColorStop(0, 'rgba(10,14,28,0.97)');
-    topG.addColorStop(1, 'rgba(10,14,28,0)');
-    ctx.fillStyle = topG;
-    ctx.fillRect(ox - 8, oy - over * cell - 6, MAP_W * cell + 16, over * cell + cell * 1.4 + 6);
-    const botG = ctx.createLinearGradient(0, oy + view * cell, 0, oy + view * cell - cell * 1.6);
-    botG.addColorStop(0, 'rgba(10,14,28,0.7)');
-    botG.addColorStop(1, 'rgba(10,14,28,0)');
-    ctx.fillStyle = botG;
+    if (!mapTopG) {
+      mapTopG = ctx.createLinearGradient(0, oy - 6, 0, oy + cell * 1.4);
+      mapTopG.addColorStop(0, 'rgba(10,14,28,0.97)');
+      mapTopG.addColorStop(1, 'rgba(10,14,28,0)');
+    }
+    ctx.save();
+    // `over` stretches the top edge as the island overhangs — scaling the
+    // cached gradient's window from its fixed bottom anchor is exact
+    ctx.translate(0, oy + cell * 1.4);
+    ctx.scale(1, (over * cell + cell * 1.4 + 6) / (cell * 1.4 + 6));
+    ctx.translate(0, -(oy + cell * 1.4));
+    ctx.fillStyle = mapTopG;
+    ctx.fillRect(ox - 8, oy - 6, MAP_W * cell + 16, cell * 1.4 + 6);
+    ctx.restore();
+    if (!mapBotG) {
+      mapBotG = ctx.createLinearGradient(0, oy + view * cell, 0, oy + view * cell - cell * 1.6);
+      mapBotG.addColorStop(0, 'rgba(10,14,28,0.7)');
+      mapBotG.addColorStop(1, 'rgba(10,14,28,0)');
+    }
+    ctx.fillStyle = mapBotG;
     ctx.fillRect(ox - 4, oy + view * cell - cell * 1.6, MAP_W * cell + 8, cell * 1.6);
     // soft vignette keeps the eye on the island
-    const vg = ctx.createRadialGradient(270, oy + view * cell / 2, 200, 270, oy + view * cell / 2, 520);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.45)');
-    ctx.fillStyle = vg;
+    if (!mapVig) {
+      mapVig = ctx.createRadialGradient(270, oy + view * cell / 2, 200, 270, oy + view * cell / 2, 520);
+      mapVig.addColorStop(0, 'rgba(0,0,0,0)');
+      mapVig.addColorStop(1, 'rgba(0,0,0,0.45)');
+    }
+    ctx.fillStyle = mapVig;
     ctx.fillRect(0, 0, 540, 960);
 
     // the field log docks along the viewport's bottom edge — cleared island
@@ -7277,33 +7504,6 @@ export class Battle {
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.82, u.r * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
-    // SPIKE A — team base ring: gold yours, red theirs
-    if (MARK === 'a') {
-      ctx.strokeStyle = u.side === 'player' ? '#ffd84d' : '#e05050';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.95, u.r * 0.38, 0, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    // SPIKE C — overhead marker: pokeball yours, red chevron theirs
-    if (MARK === 'c') {
-      const my = u.y - u.r - 30;
-      if (u.side === 'player') {
-        const pb = itemSprite('poke-ball');
-        if (pb) ctx.drawImage(pb, u.x - 7, my - 7, 14, 14);
-      } else {
-        ctx.fillStyle = '#e05050';
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(u.x - 6, my - 5);
-        ctx.lineTo(u.x + 6, my - 5);
-        ctx.lineTo(u.x, my + 5);
-        ctx.closePath();
-        ctx.fill();
-        ctx.stroke();
-      }
-    }
     // READY aura — a charged super rings its mon in type color
     if (u.side === 'player' && u.cd <= 0) {
       ctx.save();
@@ -7352,17 +7552,7 @@ export class Battle {
         const sy = u.y + Math.sin(a) * u.r * 0.7 - u.r * 0.2;
         const s = 4 + Math.sin(this.time * 5 + k * 1.7) * 1.6;
         if (s <= 0.5) continue;
-        ctx.beginPath();
-        ctx.moveTo(sx, sy - s);
-        ctx.lineTo(sx + s * 0.4, sy - s * 0.4);
-        ctx.lineTo(sx + s, sy);
-        ctx.lineTo(sx + s * 0.4, sy + s * 0.4);
-        ctx.lineTo(sx, sy + s);
-        ctx.lineTo(sx - s * 0.4, sy + s * 0.4);
-        ctx.lineTo(sx - s, sy);
-        ctx.lineTo(sx - s * 0.4, sy - s * 0.4);
-        ctx.closePath();
-        ctx.fill();
+        drawStar(ctx, sx, sy, s, 0.4);
       }
     }
 
@@ -7371,17 +7561,11 @@ export class Battle {
     const pct = Math.max(u.hp / u.maxHp, 0);
     ctx.fillStyle = '#000a';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw, 5);
-    // enemies read hostile flat red; allies keep the health ramp — or flat
-    // green + a ball chip under the ?mark=b spike
+    // enemies read hostile flat red; allies keep the health ramp
     ctx.fillStyle =
       u.side === 'enemy' ? '#e05050'
-        : MARK === 'b' ? '#6fdc6f'
         : pct > 0.5 ? '#6fdc6f' : pct > 0.25 ? '#ffd84d' : '#ff6b6b';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * pct, 5);
-    if (MARK === 'b' && u.side === 'player') {
-      const pb = itemSprite('poke-ball');
-      if (pb) ctx.drawImage(pb, u.x - bw / 2 - 11, u.y + u.r + 1, 11, 11);
-    }
 
     if (u.side === 'enemy') {
       // aegis ward: a cyan bubble eats the next hit entirely
@@ -7425,10 +7609,7 @@ export class Battle {
         const s = 7 + Math.sin(this.time * 6) * 2;
         ctx.fillStyle = '#ffd84d';
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        starPath(ctx, wx, wy, s, 0.4);
-        ctx.fill();
-        ctx.stroke();
+        drawStar(ctx, wx, wy, s, 0.4, 2);
         // minion guard: while summoned adds live, a shield ring orbits —
         // the fight's order of operations at a glance
         if (this.enemies.some((m) => m.minion && !m.dead)) {
@@ -7576,10 +7757,15 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
     const nx = bx + bw * frac;
-    ctx.save();
     if (lit) {
-      ctx.shadowColor = '#ffd84d';
-      ctx.shadowBlur = 12;
+      // halo pass standing in for shadowBlur — one wide faint stamp
+      ctx.globalAlpha = 0.32;
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillRect(nx - 6, by - 5, 12, bh + 10);
+      ctx.beginPath();
+      ctx.arc(nx, by - 5, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
     ctx.fillStyle = lit ? '#ffd84d' : color;
     ctx.fillRect(nx - 2, by - 2, 4, bh + 4);
@@ -7587,7 +7773,6 @@ export class Battle {
     ctx.arc(nx, by - 5, lit ? 4 : 3, 0, Math.PI * 2);
     ctx.fillStyle = lit ? '#fff2c0' : '#ffffff';
     ctx.fill();
-    ctx.restore();
   }
 
   private drawAim(ctx: CanvasRenderingContext2D) {
@@ -7614,21 +7799,24 @@ export class Battle {
     if (maxed) {
       const pr = u.r + 7 + Math.sin(this.time * 18) * 2.5;
       ctx.save();
-      ctx.globalAlpha = 0.75;
+      // a wide faint pass under the crisp ring stands in for the blur halo
+      ctx.globalAlpha = 0.25;
       ctx.strokeStyle = '#ffd84d';
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = '#ffd84d';
-      ctx.shadowBlur = 10;
+      ctx.lineWidth = 8;
       ctx.beginPath();
       ctx.arc(u.x, u.y, pr, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y, pr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = '#fff2c0';
       for (let k = 0; k < 2; k++) {
         const a0 = this.time * 5 + k * Math.PI;
         const sx2 = u.x + Math.cos(a0) * pr;
         const sy2 = u.y + Math.sin(a0) * pr;
-        starPath(ctx, sx2, sy2, 3.5, 0.4);
-        ctx.fillStyle = '#fff2c0';
-        ctx.fill();
+        drawStar(ctx, sx2, sy2, 3.5, 0.4);
       }
       ctx.restore();
     }
@@ -7765,10 +7953,7 @@ export class Battle {
             const s = 6;
             ctx.fillStyle = '#ffd84d';
             ctx.strokeStyle = '#000';
-            ctx.lineWidth = 1.5;
-            starPath(ctx, hx, hy, s, 0.4);
-            ctx.fill();
-            ctx.stroke();
+            drawStar(ctx, hx, hy, s, 0.4, 1.5);
           }
         }
       }
@@ -7798,10 +7983,20 @@ export class Battle {
       ctx.lineTo(u.x + Math.cos(ea) * (rr + 5), u.y + Math.sin(ea) * (rr + 5));
       ctx.stroke();
     }
-    ctx.save();
     if (maxed) {
-      ctx.shadowColor = '#ffd84d';
-      ctx.shadowBlur = 12;
+      // ghost pass standing in for shadowBlur — a fat halo under the sweep
+      const na0 = a0 + Math.PI * 2 * frac;
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = '#ffd84d';
+      ctx.lineWidth = 13;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y, rr, a0, na0);
+      ctx.stroke();
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath();
+      ctx.arc(u.x + Math.cos(na0) * rr, u.y + Math.sin(na0) * rr, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
     }
     ctx.strokeStyle = maxed ? '#ffd84d' : color;
     ctx.lineWidth = 5;
@@ -7814,16 +8009,32 @@ export class Battle {
     ctx.arc(u.x + Math.cos(na) * rr, u.y + Math.sin(na) * rr, maxed ? 5 : 3.5, 0, Math.PI * 2);
     ctx.fillStyle = maxed ? '#fff2c0' : '#ffffff';
     ctx.fill();
-    ctx.restore();
 
     // launch arrow: unit -> opposite direction, length + glow from charge
     if (settings().aimGuide) {
       const ex = u.x + dir.x * (50 + frac * 160);
       const ey = u.y + dir.y * (50 + frac * 160);
-      ctx.save();
+      const hs = 14;
+      const px = -dir.y;
+      const py = dir.x;
       if (maxed) {
-        ctx.shadowColor = '#ffd84d';
-        ctx.shadowBlur = 16;
+        // ghost pass standing in for shadowBlur on the gold read
+        ctx.globalAlpha = 0.3;
+        ctx.strokeStyle = '#ffd84d';
+        ctx.lineWidth = 12;
+        ctx.setLineDash(u.def.pierce ? [8, 6] : []);
+        ctx.beginPath();
+        ctx.moveTo(u.x, u.y);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#ffd84d';
+        ctx.beginPath();
+        ctx.moveTo(ex + dir.x * hs * 1.5, ey + dir.y * hs * 1.5);
+        ctx.lineTo(ex + px * hs * 0.95, ey + py * hs * 0.95);
+        ctx.lineTo(ex - px * hs * 0.95, ey - py * hs * 0.95);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
       ctx.strokeStyle = color;
       ctx.lineWidth = 4;
@@ -7834,16 +8045,12 @@ export class Battle {
       ctx.lineTo(ex, ey);
       ctx.stroke();
       ctx.setLineDash([]);
-      const hs = 14;
-      const px = -dir.y;
-      const py = dir.x;
       ctx.fillStyle = color;
       ctx.beginPath();
       ctx.moveTo(ex + dir.x * hs, ey + dir.y * hs);
       ctx.lineTo(ex + px * hs * 0.6, ey + py * hs * 0.6);
       ctx.lineTo(ex - px * hs * 0.6, ey - py * hs * 0.6);
       ctx.fill();
-      ctx.restore();
     }
   }
 
@@ -7857,16 +8064,24 @@ export class Battle {
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
     ctx.fill();
-    // glowing rim
-    ctx.globalAlpha = alpha;
-    ctx.shadowColor = w.color;
-    ctx.shadowBlur = 26;
+    // glowing rim — stacked strokes fake the blur falloff; a real
+    // shadowBlur here was a blur pass per ring per frame
     ctx.strokeStyle = w.color;
+    ctx.globalAlpha = alpha * 0.24;
+    ctx.lineWidth = 32;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = alpha * 0.5;
+    ctx.lineWidth = 18;
+    ctx.beginPath();
+    ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = alpha;
     ctx.lineWidth = 11;
     ctx.beginPath();
     ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.shadowBlur = 0;
     // hot white leading edge — the anime energy front
     ctx.globalAlpha = alpha * 0.85;
     ctx.strokeStyle = '#ffffff';

@@ -1,4 +1,4 @@
-const CACHE = 'pokestrike-v10';
+const CACHE = 'pokestrike-v10'; // STAMPED at build by scripts/stamp-sw.mjs
 const CORE = ['./', 'index.html', 'manifest.webmanifest'];
 
 self.addEventListener('install', (e) => {
@@ -30,7 +30,14 @@ self.addEventListener('fetch', (e) => {
           }
           return res;
         })
-        .catch(() => caches.match(e.request)),
+        // ?seed=/?dev URLs never precache — ignore the query, then fall back
+        // to the cached shell so offline reloads still boot.
+        .catch(() =>
+          caches
+            .match(e.request, { ignoreSearch: true })
+            .then((hit) => hit || caches.match('./'))
+            .then((hit) => hit || Response.error()),
+        ),
     );
     return;
   }
