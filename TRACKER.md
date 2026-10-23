@@ -34,6 +34,24 @@ Roadmap, in order: bond payoff inside the run (needs balance thought first)
 | 2026-10-22 | `a5cef29` | dex | register draws only the visible band (was uiRow+sprite ×649/frame) + gold scroll thumb on a 40-screen list | `git revert a5cef29` |
 | 2026-10-22 | `ebf0d9b` | mons | `nextGoal` negative-countdown fix: a crossed-but-unclaimed tier reads `+N★ MILESTONE READY`, not `-210 TO +30★` | `git revert ebf0d9b` |
 | 2026-10-23 | `8dfd349` | audit | full-screen crawl (27 shots, 0 console errors): raid `TAP A MON` hint moved off the loaner name row → LOANERS header; hatcher pity line lowered 4px clear of the pull pills' ink lip | `git revert 8dfd349` |
+| 2026-10-23 | `5b6376a` | a11y | pinch-zoom restored (`user-scalable=no`/`maximum-scale` dropped — ux lint critical), `color-scheme: dark` + `touch-action: manipulation` keep double-tap delay out; `__dbg.ui()` exposes tab/overlay state for playtest crawls | `git revert 5b6376a` |
+
+## Audit notes (2026-10-23, HIG rubric crawl — assessed, mostly no change)
+
+Second full-screen pass under the new global skill `designing-with-hig`
+(~/.config/devin/skills): contract → per-screen screenshots → 8-dimension
+rubric → fix → re-shoot → `ux lint`. 30+ states: five tabs, hatcher/pull
+theatre/results, spark deal, dex+detail, sets/partners/team, lab/board/
+trophies/tasks/gym/ascension, raid card+arena, help deck ×3, settings,
+draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
+
+- **Fixed**: viewport `user-scalable=no` (critical) → pinch-zoom restored,
+  `touch-action: manipulation` keeps double-tap delay out; `color-scheme: dark`.
+- **Assessed, kept**: dex/Hall-of-Fame sparse states (footers carry the
+  next-goal guidance); `N LEFT` inside the arena rim + SHOTS/SCORE chip
+  tuck are deliberate placements; `?dev` `__dbg.song` console.logs are dev
+  tooling; wheel listener must stay non-passive (`preventDefault`);
+  build hash peeking under modals is the diagnostic affordance working.
 
 ## Audit notes (2026-10-23, playwright crawl — assessed, no change)
 
