@@ -16,7 +16,7 @@ import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 import {
   INK, INK_SOFT, INK_FAINT, PAPER, PAPER_HI, PARCH, GOLD, GOLD_HI, ACCENT, DANGER,
-  font, fontB, uiWindow, uiPanel, uiRow, uiClose, cursorTri, scrim,
+  font, fontB, uiWindow, uiBand, uiPanel, uiRow, uiClose, cursorTri, scrim,
 } from './ui';
 
 export const W = 540;
@@ -1197,12 +1197,8 @@ function drawTabBar(
       roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
       ctx.fillStyle = 'rgba(248,248,240,0.07)';
       ctx.fill();
-      if (hero) {
-        // even at rest the front door keeps its gold outline
-        ctx.strokeStyle = GOLD;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
+      // hero at rest gets no rim — the 12px raise is the door affordance,
+      // and a gold outline reads as "selected" against the active tab
     }
 
     const icY = hero ? cell.y + 19 : cell.y + 25;
@@ -2216,42 +2212,28 @@ export const HELP_TUT = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + 12, w: 96, h: 
 
 export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed = false, welcome = false) {
   const r = HELP_PANEL;
-  ctx.fillStyle = 'rgba(6,10,22,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 14);
+  scrim(ctx);
+  uiPanel(ctx, r, 'HOW TO PLAY', { rad: 14 });
 
   ctx.textAlign = 'center';
-  ctx.font = font(17);
-  ctx.fillStyle = GOLD;
-  ctx.fillText('HOW TO PLAY', r.x + r.w / 2, r.y + 42);
   if (welcome) {
     ctx.font = fontB(9);
-    ctx.fillStyle = '#9fb0d8';
-    ctx.fillText('your first fight teaches the pull — this deck is the manual', r.x + r.w / 2, r.y + 60);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText('your first fight teaches the pull — this deck is the manual', r.x + r.w / 2, r.y + 56);
   }
 
-  ctx.strokeStyle = INK_FAINT;
-  ctx.lineWidth = 2;
-  const cx = HELP_CLOSE.x + HELP_CLOSE.w / 2, cy = HELP_CLOSE.y + HELP_CLOSE.h / 2;
-  ctx.beginPath();
-  ctx.moveTo(cx - 7, cy - 7);
-  ctx.lineTo(cx + 7, cy + 7);
-  ctx.moveTo(cx + 7, cy - 7);
-  ctx.lineTo(cx - 7, cy + 7);
-  ctx.stroke();
+  uiClose(ctx, HELP_CLOSE);
 
-  // TUTORIAL pill — re-arms the in-battle coach (ghost pull + field beats)
+  // TUTORIAL pill — re-arms the in-battle coach (ghost pull + field beats).
+  // It rides the title band like the X chip: dark chip, parch edge.
   roundRect(ctx, HELP_TUT.x, HELP_TUT.y, HELP_TUT.w, HELP_TUT.h, 10);
-  ctx.fillStyle = coachArmed ? '#16301c' : '#e8e8e0';
+  ctx.fillStyle = coachArmed ? '#16301c' : INK;
   ctx.fill();
-  ctx.strokeStyle = coachArmed ? '#6fdc6f' : '#4a5480';
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = coachArmed ? '#6fdc6f' : PARCH;
+  ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.font = fontB(9);
-  ctx.fillStyle = coachArmed ? '#9fe89f' : INK;
+  ctx.fillStyle = coachArmed ? '#9fe89f' : PARCH;
   ctx.fillText(coachArmed ? 'COACH ON' : '▶ TUTORIAL', HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 25);
 
   // two roomy cards per page — bigger demos than the old scroll ever showed
@@ -2260,15 +2242,13 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
     const sy = r.y + HELP_HEAD + 14 + slot * 336;
     const dx = r.x + 22, dw = r.w - 44;
     ctx.font = font(11);
-    ctx.fillStyle = GOLD;
+    ctx.fillStyle = INK;
     ctx.fillText(s.title, r.x + r.w / 2, sy + 12);
 
     const dy = sy + 20;
-    roundRect(ctx, dx, dy, dw, 210, 10);
-    ctx.fillStyle = PAPER_HI;
-    ctx.fill();
+    uiWindow(ctx, { x: dx, y: dy, w: dw, h: 210 }, { shadow: false });
     ctx.save();
-    roundRect(ctx, dx, dy, dw, 210, 10);
+    roundRect(ctx, dx, dy, dw, 210, 8);
     ctx.clip();
     s.demo(ctx, dx, dy, dw, 210);
     ctx.restore();
@@ -2278,14 +2258,14 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
     s.lines.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, dy + 234 + li * 16));
   });
 
-  // footer nav: ‹ › arrows flank the page dots
+  // footer nav: ‹ › arrows flank the page dots — same dots, new chrome
   ctx.font = font(14);
-  ctx.fillStyle = page > 0 ? INK : '#3a4066';
+  ctx.fillStyle = page > 0 ? INK : INK_FAINT;
   ctx.fillText('‹', HELP_PREV.x + HELP_PREV.w / 2, HELP_PREV.y + 22);
-  ctx.fillStyle = page < HELP_PAGE_COUNT - 1 ? INK : '#3a4066';
+  ctx.fillStyle = page < HELP_PAGE_COUNT - 1 ? INK : INK_FAINT;
   ctx.fillText('›', HELP_NEXT.x + HELP_NEXT.w / 2, HELP_NEXT.y + 22);
   for (let i = 0; i < HELP_PAGE_COUNT; i++) {
-    ctx.fillStyle = i === page ? GOLD : '#3a4066';
+    ctx.fillStyle = i === page ? GOLD : INK_FAINT;
     ctx.beginPath();
     ctx.arc(r.x + r.w / 2 + (i - (HELP_PAGE_COUNT - 1) / 2) * 16, HELP_PREV.y + 16, 4, 0, Math.PI * 2);
     ctx.fill();
@@ -2346,21 +2326,13 @@ export function noteAscPing(t: number) {
 }
 
 function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number; y: number; w: number; h: number }, cap: number, pick: number) {
-  menuCard(ctx, r, 12);
+  uiPanel(ctx, r, 'ASCENSION', { rad: 12, sub: cap ? `LV ${cap}/9` : 'LOCKED' });
   if (t - ascPingT < 0.9) {
     ctx.save();
     ctx.globalAlpha = 0.45 + 0.35 * Math.sin(t * 12);
     rim(ctx, r, 12, GOLD, 3);
     ctx.restore();
   }
-  stripeBand(ctx, { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 30 }, '#f08030'); // fire — the heat dial
-  ctx.textAlign = 'left';
-  ctx.font = font(9);
-  ctx.fillStyle = INK;
-  ctx.fillText('ASCENSION', r.x + 14, r.y + 23);
-  ctx.textAlign = 'right';
-  ctx.font = fontB(7);
-  ctx.fillText(cap ? `LV ${cap}/9 UNLOCKED` : 'CLEAR A CLIMB TO UNLOCK', r.x + r.w - 14, r.y + 22);
 
   // the track behind the rungs
   const c0 = ascCellRect(0), cN = ascCellRect(ASC_NCELLS - 1);
@@ -2374,16 +2346,13 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
     const locked = i > cap;
     ctx.save();
     if (sel) ctx.translate(0, -3); // the picked rung rides proud of the track
-    roundRect(ctx, cr.x, cr.y, cr.w, cr.h, 7);
-    ctx.fillStyle = sel ? GOLD_HI : locked ? '#e0e0d8' : PAPER_HI;
-    ctx.fill();
-    ctx.strokeStyle = sel || i === denied ? INK : locked ? '#d0d0c8' : INK_FAINT;
-    ctx.lineWidth = sel ? 2.5 : 1.5;
-    ctx.stroke();
+    if (locked) ctx.globalAlpha = 0.45; // locked rungs dim to ghost windows
+    uiWindow(ctx, cr, { rad: 7, shadow: false, ...(sel ? { tint: GOLD } : {}) });
     ctx.font = font(8);
     ctx.textAlign = 'center';
     ctx.fillStyle = locked ? INK_FAINT : INK;
-    ctx.fillText(`${i}`, cr.x + cr.w / 2, cr.y + cr.h / 2 + 5);
+    ctx.fillText(`${i}`, cr.x + cr.w / 2 + (sel ? 4 : 0), cr.y + cr.h / 2 + 5);
+    if (sel) cursorTri(ctx, cr.x + 6, cr.y + cr.h / 2, t);
     ctx.restore();
     if (i === denied) {
       ctx.save();
@@ -2424,9 +2393,11 @@ export const HALL_BTN = BOARD_BTN;
 export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };
 export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
-const DEX_COLS = 6;
-const DEX_CELL = (DEX_PANEL.w - 40) / DEX_COLS;
-const DEX_HEAD = 60;
+// the dex is a one-entry-per-row register now — dexScrollMax's math is
+// frozen, so these consts describe a row: 1 entry per row, 44px tall
+const DEX_COLS = 1;
+const DEX_CELL = 44;
+const DEX_HEAD = 66;
 
 export function dexScrollMax() {
   const rows = Math.ceil(dexIds().length / DEX_COLS);
@@ -2437,20 +2408,15 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   const r = DEX_PANEL;
   const dexList = dexIds(); // one parse a frame — seen count + charm both read it
   const dexN = dexList.length;
-  ctx.fillStyle = 'rgba(6,10,22,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 14);
+  scrim(ctx);
+  uiPanel(ctx, r, `POKÉDEX ${dexN}/${CATCHABLE}`, { rad: 14 });
+  // tap-anywhere still closes — the chip is the invite, not the mechanism
+  uiClose(ctx, { x: r.x + r.w - 48, y: r.y + 12, w: 40, h: 40 });
 
-  ctx.textAlign = 'center';
-  ctx.font = font(17);
-  ctx.fillStyle = GOLD;
-  ctx.fillText(`POKÉDEX ${dexN}/${CATCHABLE}`, r.x + r.w / 2, r.y + 40);
   // second header fact: set-bounty progress — gold when a claim waits
   const setsN = setsReady().length;
   const linesDone = setProgress().filter((p) => p.have === p.need).length;
+  ctx.textAlign = 'center';
   ctx.font = fontB(8);
   ctx.fillStyle = setsN ? GOLD : INK_FAINT;
   ctx.fillText(
@@ -2459,27 +2425,41 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     r.y + 57,
   );
 
+  // the register: Gen-3 dex canon — a scrolling list, icon + name left,
+  // dex number and typing right. One entry per row; DEX_CELL is the row pitch.
   const seen = new Set(dexList);
   const shinies = new Set(shinyIds());
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, r.h - DEX_HEAD - 36);
   ctx.clip();
-  ctx.font = fontB(7);
   DEX_ALL.filter((def) => seen.has(def.id)).forEach((def, i) => {
-    const cx = r.x + 20 + (i % DEX_COLS) * DEX_CELL + DEX_CELL / 2;
-    const cy = r.y + DEX_HEAD + 8 + Math.floor(i / DEX_COLS) * DEX_CELL - scroll + DEX_CELL / 2;
-    drawMon(ctx, def.id, cx, cy, DEX_CELL - 20);
-    ctx.fillStyle = INK;
-    ctx.fillText(def.name.toUpperCase(), cx, cy + DEX_CELL / 2 - 8);
+    const y = r.y + DEX_HEAD + i * DEX_CELL - scroll;
+    const row = { x: r.x + 16, y, w: r.w - 32, h: DEX_CELL - 6 };
+    drawMon(ctx, def.id, row.x + 22, row.y + row.h / 2 + 2, 30);
+    uiRow(
+      ctx,
+      { x: row.x + 44, y: row.y, w: row.w - 44, h: row.h },
+      def.name.toUpperCase(),
+      { right: `#${def.id} · ${`${def.type}${def.type2 ? `/${def.type2}` : ''}`.toUpperCase()}` },
+    );
     if (shinies.has(def.id)) { // a caught shiny earns the gold star
+      ctx.textAlign = 'center';
+      ctx.font = fontB(10);
       ctx.fillStyle = GOLD;
-      ctx.fillText('★', cx + DEX_CELL / 2 - 12, cy - DEX_CELL / 2 + 14);
+      ctx.fillText('★', row.x + 38, row.y + 13);
     }
+    ctx.strokeStyle = 'rgba(90,98,136,0.25)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(row.x + 6, y + DEX_CELL - 5);
+    ctx.lineTo(row.x + row.w - 6, y + DEX_CELL - 5);
+    ctx.stroke();
   });
   ctx.restore();
   if (!seen.size) {
     ctx.font = font(10);
+    ctx.textAlign = 'center';
     ctx.fillStyle = INK_FAINT;
     ctx.fillText('NO CATCHES YET', r.x + r.w / 2, r.y + r.h / 2);
   }
@@ -2503,20 +2483,14 @@ const BOARD_HEAD = 84;
 
 export function drawBoard(ctx: CanvasRenderingContext2D) {
   const r = DEX_PANEL;
-  ctx.fillStyle = 'rgba(6,10,22,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 14);
+  scrim(ctx);
+  uiPanel(ctx, r, 'HALL OF FAME', { rad: 14 });
+  uiClose(ctx, { x: r.x + r.w - 48, y: r.y + 12, w: 40, h: 40 });
 
   ctx.textAlign = 'center';
-  ctx.font = font(17);
-  ctx.fillStyle = GOLD;
-  ctx.fillText('HALL OF FAME', r.x + r.w / 2, r.y + 40);
   ctx.font = fontB(8);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('the top climbs logged on this device — score rules all', r.x + r.w / 2, r.y + 58);
+  ctx.fillText('the top climbs logged on this device — score rules all', r.x + r.w / 2, r.y + 57);
 
   const list = board();
   if (!list.length) {
@@ -2531,28 +2505,15 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
   list.forEach((e, i) => {
     const y = r.y + BOARD_HEAD + i * BOARD_ROW;
     const rx = r.x + 14, rw = r.w - 28;
-    roundRect(ctx, rx, y, rw, BOARD_ROW - 10, 8);
-    ctx.fillStyle = i === 0 ? '#e8e8e0' : PAPER_HI;
-    ctx.fill();
-    ctx.strokeStyle = i === 0 ? GOLD : '#d0d0c8';
-    ctx.lineWidth = i === 0 ? 2 : 1;
-    ctx.stroke();
-    // rank plate — gold for the leader
-    ctx.font = font(11);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = i === 0 ? GOLD : INK_FAINT;
-    ctx.fillText(`#${i + 1}`, rx + 14, y + 30);
-    ctx.font = font(11);
-    ctx.fillStyle = '#f0e6c8';
-    ctx.fillText(e.s.toLocaleString('en-US'), rx + 62, y + 30);
-    ctx.font = fontB(9);
-    ctx.fillStyle = INK_FAINT;
+    // the leader's row wears the gold slab — the medal stays content
     const line = `${e.w ? 'CLEARED' : `STAGE ${e.st}/${TOTAL_STAGES}`}${e.asc ? ` · ASC ${e.asc}` : ''}`;
-    ctx.fillText(line, rx + 62, y + 50);
     const d = new Date(e.when);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, rx + rw - 12, y + 16);
+    uiRow(
+      ctx,
+      { x: rx, y, w: rw, h: BOARD_ROW - 10 },
+      `#${i + 1}  ${e.s.toLocaleString('en-US')}`,
+      { hot: i === 0, sub: `${line} · ${d.getMonth() + 1}/${d.getDate()}` },
+    );
     // the run's lineup marches the right edge — the plaque's face
     e.team.slice(0, 4).forEach((id, ti) => {
       try {
@@ -2561,6 +2522,14 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
         /* sprite not warmed */
       }
     });
+    if (i) { // the ledger rule under idle rows
+      ctx.strokeStyle = 'rgba(90,98,136,0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(rx + 6, y + BOARD_ROW - 10);
+      ctx.lineTo(rx + rw - 6, y + BOARD_ROW - 10);
+      ctx.stroke();
+    }
     ctx.textAlign = 'center';
   });
   ctx.restore();
@@ -2587,18 +2556,13 @@ export function achScrollMax() {
 
 export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   const r = DEX_PANEL;
-  ctx.fillStyle = 'rgba(6,10,22,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 14);
+  scrim(ctx);
 
   const got = unlockedAch();
+  uiPanel(ctx, r, `TROPHIES ${got.size}/${ACHIEVEMENTS.length}`, { rad: 14 });
+  uiClose(ctx, { x: r.x + r.w - 48, y: r.y + 12, w: 40, h: 40 });
+
   ctx.textAlign = 'center';
-  ctx.font = font(17);
-  ctx.fillStyle = GOLD;
-  ctx.fillText(`TROPHIES ${got.size}/${ACHIEVEMENTS.length}`, r.x + r.w / 2, r.y + 40);
 
   // the badge case: one canon badge per leader, mounted on a dark
   // octagon socket — earned glyphs light in their badge color
@@ -2650,6 +2614,8 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ACHIEVEMENTS.forEach((a, i) => {
     const y = r.y + ACH_HEAD + 8 + i * ACH_ROW - scroll;
     const has = got.has(a.id);
+    ctx.save();
+    if (!has) ctx.globalAlpha = 0.5; // locked trophies read as ghosted rows
     // the medallion: lit star when earned, hollow ring when not
     ctx.strokeStyle = has ? GOLD : '#3a4370';
     ctx.lineWidth = 2;
@@ -2666,15 +2632,10 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
         fillStar(ctx, r.x + 34, y + ACH_ROW / 2 - 4, 8);
       }
     }
-    ctx.textAlign = 'left';
-    ctx.font = font(10);
-    ctx.fillStyle = has ? GOLD : INK_FAINT;
-    ctx.fillText(a.name, r.x + 58, y + 18);
-    ctx.font = fontB(8);
-    ctx.fillStyle = has ? INK : INK_FAINT;
-    ctx.fillText(a.desc, r.x + 58, y + 36);
+    uiRow(ctx, { x: r.x + 50, y: y - 2, w: r.w - 70, h: ACH_ROW - 8 }, a.name, { sub: a.desc });
+    ctx.restore();
     const prog = !has && progress[a.id];
-    if (prog) {
+    if (prog) { // live fractions stay legible — the goal-gradient on open loops
       ctx.textAlign = 'right';
       ctx.font = fontB(9);
       ctx.fillStyle = prog[0] >= prog[1] * 0.7 ? GOLD : INK_FAINT; // close loops read gold
@@ -2743,10 +2704,8 @@ function balanceChip(
   starN: number,
   dust?: number,
 ) {
-  roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
-  ctx.fillStyle = INK;
-  ctx.fill();
-  rim(ctx, r, r.h / 2, GOLD, 1.5);
+  // the wallet is a small dark window-chip — same frame language as the panel
+  uiWindow(ctx, r, { dark: true, rad: r.h / 2, shadow: false });
   void loadItem('star-piece');
   const star = itemSprite('star-piece');
   if (star) {
@@ -2777,23 +2736,24 @@ function balanceChip(
   }
 }
 
-// a dust price — small cyan diamond + count, laid out as one centered unit
+// a dust price — a tiny dark window-chip: cyan diamond + count, centered
 function dustTag(ctx: CanvasRenderingContext2D, cx: number, cy: number, n: number, textColor: string) {
   ctx.font = fontB(7);
   const label = `${n}`;
   const tw = ctx.measureText(label).width;
-  const x0 = cx - (tw + 10) / 2;
+  const x0 = cx - (tw + 20) / 2;
+  uiWindow(ctx, { x: x0, y: cy - 12, w: tw + 20, h: 18 }, { dark: true, rad: 9, shadow: false });
   ctx.fillStyle = ACCENT;
   ctx.beginPath();
-  ctx.moveTo(x0 + 3.5, cy - 7);
-  ctx.lineTo(x0 + 7, cy - 3);
-  ctx.lineTo(x0 + 3.5, cy + 1);
-  ctx.lineTo(x0, cy - 3);
+  ctx.moveTo(x0 + 8.5, cy - 7);
+  ctx.lineTo(x0 + 12, cy - 3);
+  ctx.lineTo(x0 + 8.5, cy + 1);
+  ctx.lineTo(x0 + 5, cy - 3);
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = textColor;
   ctx.textAlign = 'left';
-  ctx.fillText(label, x0 + 10, cy);
+  ctx.fillText(label, x0 + 15, cy);
 }
 
 // the price INSIDE a pull pill — a dark plaque: star icon + count, or the
@@ -2810,9 +2770,8 @@ function pricePlaque(
   const pw = ctx.measureText(label).width + (cost == null ? 20 : 32);
   const px = b.x + b.w / 2 - pw / 2;
   const py = b.y + b.h - 28;
-  roundRect(ctx, px, py, pw, 20, 10);
-  ctx.fillStyle = 'rgba(40,48,88,0.75)';
-  ctx.fill();
+  // a tiny dark window — the afford rim traces the frame's inner edge
+  uiWindow(ctx, { x: px, y: py, w: pw, h: 20 }, { dark: true, rad: 10, shadow: false });
   rim(ctx, { x: px, y: py, w: pw, h: 20 }, 10, ok ? '#ffe89d' : '#ff6b6b', 1);
   let tx = px + 10;
   if (cost != null) {
@@ -4064,13 +4023,11 @@ export function drawDraft(
 ) {
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
 
+  // the draft board is one big menu window — the INK band carries the
+  // title and the stage, everything below lives on the window's paper
+  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 738 }, `DRAFT: PICK ${picked.length + 1} OF 4`, { sub: stageName });
+
   ctx.textAlign = 'center';
-  ctx.font = font(18);
-  ctx.fillStyle = '#f8d030';
-  ctx.fillText(`DRAFT: PICK ${picked.length + 1} OF 4`, W / 2, 120);
-  ctx.font = font(9);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText(stageName, W / 2, 155);
   ctx.font = fontB(9);
   ctx.fillStyle = INK;
   const spinning = spin.age < REEL_STOPS[REEL_STOPS.length - 1];
@@ -4089,17 +4046,16 @@ export function drawDraft(
   const dex = new Set(dexIds()); // kind chips read dex membership per card — parse once a frame
   offers.forEach((def, i) => {
     const r = draftCardRect(i);
-    // lifted-card shadow, then the face
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
-    ctx.fill();
-    cardFace(ctx, r, def.type);
-    cardFrame(ctx, r, 10);
+    // menu-window chrome around a content face: uiWindow carries the
+    // frame/rim/shadow, cardFace paints the type-tinted paper inside the rim
+    uiWindow(ctx, r, { rad: 10 });
+    cardFace(ctx, { x: r.x + 6, y: r.y + 6, w: r.w - 12, h: r.h - 12 }, def.type);
     if (def.shiny) rim(ctx, r, 10, GOLD, 2);
 
     // same anatomy as the relic cards: a type-tinted header band carries
-    // the sprite — the reel plays inside it
-    const band = { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: 106 };
+    // the sprite — the reel plays inside it. Inset past the window rim so
+    // the double-frame reads all the way around
+    const band = { x: r.x + 7, y: r.y + 7, w: r.w - 14, h: 103 };
 
     // slot reel: pool faces scroll past until the reel brakes onto the offer
     const stopAt = REEL_STOPS[i] ?? REEL_STOPS[REEL_STOPS.length - 1];
@@ -4264,11 +4220,7 @@ export function drawDraft(
   for (let i = 0; i < 4; i++) {
     const sx = W / 2 - 4 * 44 + i * 88;
     const sr = { x: sx, y: 660, w: 76, h: 90 };
-    roundRect(ctx, sr.x, sr.y, sr.w, sr.h, 10);
-    ctx.fillStyle = PAPER;
-    ctx.fill();
-    rim(ctx, sr, 10, '#d0d0c8', 1);
-    edge(ctx, sr, 10);
+    uiWindow(ctx, sr, { rad: 10 });
     const def = picked[i];
     if (def) {
       (def.shiny ? drawShiny : drawMon)(ctx, def.id, sx + 38, 692, 48);
@@ -4334,17 +4286,13 @@ export function drawPerkCard(
   spin?: { age: number; i: number },
   opts?: { owned?: boolean; idx?: number },
 ) {
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 10);
-  ctx.fill();
-  roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 10);
+  // the offer card is a menu window — the rarity band is content color,
+  // inset past the window rim so the double-frame reads all the way around
+  uiWindow(ctx, r, { rad: 10 });
 
   // pokebonk anatomy: a rarity header band carries the icon — the reel
   // plays inside it too
-  const band = { x: r.x + 4, y: r.y + 4, w: r.w - 8, h: 72 };
+  const band = { x: r.x + 7, y: r.y + 7, w: r.w - 14, h: 69 };
   const stopAt = spin ? (REEL_STOPS[spin.i] ?? REEL_STOPS[REEL_STOPS.length - 1]) : 0;
   if (spin && spin.age < stopAt) {
     // slot reel: item icons scroll past inside the band until it brakes
@@ -4476,23 +4424,15 @@ export function drawReward(
   spin: number, // reel age in seconds — counts up from the deal
   perkIds?: string[], // the run's granted perks — repeat offers tag as DUPE
 ) {
-  ctx.fillStyle = '#0b0e1ad8';
-  ctx.fillRect(0, 0, W, H);
+  scrim(ctx, 0.85);
 
   ctx.textAlign = 'center';
-  // a fresh catch gets the hero slot: a gold-framed card with a breathing
+  // a fresh catch gets the hero slot: a gold-rimmed window with a breathing
   // sprite — and it IS the swap button now, tapping opens the team panel
   if (recruit) {
     const r = REWARD_CATCH;
-    ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    roundRect(ctx, r.x + 3, r.y + 5, r.w, r.h, 12);
-    ctx.fill();
-    roundRect(ctx, r.x, r.y, r.w, r.h, 12);
-    ctx.fillStyle = PAPER;
-    ctx.fill();
-    ctx.strokeStyle = GOLD;
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    uiWindow(ctx, r, { rad: 12 });
+    rim(ctx, r, 12, GOLD, 2);
     const pulse = 1 + Math.sin(spin * 5) * 0.05;
     drawMon(ctx, recruit.id, r.x + 52, r.y + r.h / 2, 56 * pulse);
     ctx.textAlign = 'left';
@@ -4508,9 +4448,10 @@ export function drawReward(
     ctx.textAlign = 'center';
   }
 
-  ctx.font = font(20);
-  ctx.fillStyle = '#f8d030';
-  ctx.fillText('CHOOSE AN ITEM', W / 2, 300);
+  // the reward board is one menu window — band carries the title, the
+  // stage/score readouts and the offer cards all live on its paper
+  uiPanel(ctx, { x: 14, y: 262, w: W - 28, h: 608 }, 'CHOOSE AN ITEM');
+
   ctx.font = font(10);
   ctx.fillStyle = INK;
   ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 356);
@@ -4578,19 +4519,15 @@ export function drawReward(
 
   // a split evolution blocks the reward pick until its form is chosen
   if (evo) {
-    ctx.fillStyle = 'rgba(4,6,16,0.78)';
-    ctx.fillRect(0, 0, W, H);
+    scrim(ctx, 0.78);
     ctx.textAlign = 'center';
     ctx.fillStyle = GOLD;
     fitFont(ctx, `${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, 13, W - 60);
     ctx.fillText(`${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, W / 2, 372);
     evo.options.forEach((opt, i) => {
       const r = evoCardRect(i, evo.options.length);
-      roundRect(ctx, r.x, r.y, r.w, r.h, 10);
-      ctx.fillStyle = PAPER;
-      ctx.fill();
-      rim(ctx, r, 10, i === 0 ? GOLD : GOLD, 2);
-      edge(ctx, r, 10);
+      uiWindow(ctx, r, { rad: 10 });
+      rim(ctx, r, 10, GOLD, 2);
       // split strip sells the dual-type at a glance
       ctx.fillStyle = TYPE_COLOR[opt.type];
       ctx.fillRect(r.x + 8, r.y + 8, opt.type2 ? (r.w - 16) / 2 : r.w - 16, 4);
@@ -4652,6 +4589,8 @@ export function drawToolRow(
     sub: banArmed ? 'culls it all run' : HAS_KEYS ? '[Z]' : undefined,
     disabled: tools.ban <= 0,
   });
+  // the armed cursor — the handheld's ▶ parked on the hot row
+  if (banArmed) cursorTri(ctx, TOOL_BAN.x + 13, TOOL_BAN.y + TOOL_BAN.h / 2 - 1, t, '#fff');
   ctx.restore();
 }
 
@@ -4711,16 +4650,9 @@ function drawRoster(
     const sel = i === selBox;
     const dy = sel ? -3 : 0; // the pick lifts its card off the strip
     const card = { x: r.x, y: r.y + dy, w: r.w, h: r.h };
-    if (sel) {
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      roundRect(ctx, r.x + 2, r.y + 6, r.w, r.h, 10);
-      ctx.fill();
-    }
-    roundRect(ctx, card.x, card.y, card.w, card.h, 10);
-    ctx.fillStyle = PAPER;
-    ctx.fill();
-    rim(ctx, card, 10, sel ? GOLD : '#d0d0c8', sel ? 2.5 : 1);
-    edge(ctx, card, 10);
+    // window cells: the picked catch goes dark (the menu's on-look), and
+    // while a teammate is armed the whole box turns gold — hot swap targets
+    uiWindow(ctx, card, { rad: 10, dark: sel, tint: !sel && selTeam >= 0 ? GOLD_HI : undefined });
     const ko = (boxHp[i] ?? 1) <= 0;
     ctx.globalAlpha = ko ? 0.3 : 1;
     (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, card.y + 25, 36);
@@ -4777,16 +4709,10 @@ function drawRoster(
     const sel = i === selTeam;
     const dy = sel ? -3 : 0; // same lift as the box strip — the armed card raises
     const card = { x: r.x, y: r.y + dy, w: r.w, h: r.h };
-    if (sel) {
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      roundRect(ctx, r.x + 2, r.y + 6, r.w, r.h, 10);
-      ctx.fill();
-    }
-    roundRect(ctx, card.x, card.y, card.w, card.h, 10);
-    ctx.fillStyle = PAPER;
-    ctx.fill();
-    rim(ctx, card, 10, sel ? GOLD : selBox >= 0 ? GOLD : '#d0d0c8', sel ? 2.5 : selBox >= 0 ? 1.5 : 1);
-    edge(ctx, card, 10);
+    // window cells: armed pick goes INK-dark + ▶; while a catch waits in
+    // the box every teammate tints gold — the row of hot swap targets
+    uiWindow(ctx, card, { rad: 10, dark: sel, tint: !sel && selBox >= 0 ? GOLD_HI : undefined });
+    if (sel) cursorTri(ctx, card.x + 9, card.y + card.h / 2 + 2, performance.now() / 1000, PARCH);
     // type hairline + draft-card chips: type tag left, level tag right —
     // a shiny's level rides in gold
     ctx.fillStyle = TYPE_COLOR[def.type];
@@ -4795,11 +4721,9 @@ function drawRoster(
       ctx.fillStyle = TYPE_COLOR[def.type2];
       ctx.fillRect(card.x + 6 + (card.w - 12) / 2, card.y + 5, (card.w - 12) / 2, 3);
     }
-    chip(ctx, card.x + 6, card.y + 12, def.type.toUpperCase(), {
-      bg: INK,
-      fg: mixHex(TYPE_COLOR[def.type], INK, 0.45),
-      fontPx: 6,
-    });
+    chip(ctx, card.x + 6, card.y + 12, def.type.toUpperCase(), sel
+      ? { bg: 'rgba(240,230,200,0.16)', fg: TYPE_COLOR[def.type], fontPx: 6 }
+      : { bg: INK, fg: mixHex(TYPE_COLOR[def.type], INK, 0.45), fontPx: 6 });
     const lvl = teamLvl[i] ?? 1;
     const lt = def.shiny ? `✦${lvl}` : `Lv${lvl}`;
     ctx.font = fontB(7);
@@ -4825,7 +4749,7 @@ function drawRoster(
     }
     hpBar(ctx, card.x + 8, card.y + 74, card.w - 16, teamHp[i] ?? 1);
     ctx.font = fontB(8);
-    ctx.fillStyle = ko ? INK_FAINT : INK;
+    ctx.fillStyle = ko ? INK_FAINT : sel ? PARCH : INK;
     ctx.fillText(def.name.slice(0, 12), card.x + card.w / 2, card.y + 87);
     // the role rides as a caption under the card — the 92px face is full
     ctx.font = fontB(6);
@@ -4875,20 +4799,10 @@ export function drawTeamMenu(
   heldItems: string[],
   masterArmed: boolean,
 ) {
-  ctx.fillStyle = 'rgba(4,6,16,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, TEAM_PANEL.x, TEAM_PANEL.y, TEAM_PANEL.w, TEAM_PANEL.h, 10);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, TEAM_PANEL, 10, GOLD, 2);
-  edge(ctx, TEAM_PANEL, 10);
+  scrim(ctx, 0.82);
+  // the roster drawer is a menu window — the INK band carries the title
+  uiPanel(ctx, TEAM_PANEL, 'TEAM & ITEMS');
   ctx.textAlign = 'center';
-  // the same striped band the offer cards wear — gold for the run's loadout
-  const band = { x: TEAM_PANEL.x + 4, y: TEAM_PANEL.y + 4, w: TEAM_PANEL.w - 8, h: 42 };
-  stripeBand(ctx, band, GOLD);
-  ctx.font = font(15);
-  ctx.fillStyle = INK;
-  ctx.fillText('TEAM & ITEMS', W / 2, band.y + band.h / 2 + 6);
 
   // held items — the run's build, card rows like the bag list: rarity notch,
   // icon, name and what it does
@@ -4910,11 +4824,8 @@ export function drawTeamMenu(
   }
   shown.forEach((item, i) => {
     const r = { x: TEAM_PANEL.x + 16, y: 336 + i * 34, w: TEAM_PANEL.w - 32, h: 30 };
-    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
-    ctx.fillStyle = PAPER;
-    ctx.fill();
-    rim(ctx, r, 8, '#d0d0c8', 1);
-    edge(ctx, r, 8);
+    // list cells, not floating cards — flat windows, no shadow
+    uiWindow(ctx, r, { rad: 8, shadow: false });
     const perk = PERKS.find((p) => p.item === item);
     ctx.fillStyle = perk ? RARITY_COLOR[perk.rarity] : '#d0d0c8';
     ctx.fillRect(r.x + 4, r.y + 5, 3, r.h - 10);
@@ -4961,13 +4872,13 @@ export function drawPerkPick(
 ) {
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
   ctx.textAlign = 'center';
-  ctx.font = font(20);
-  ctx.fillStyle = '#f8d030';
-  ctx.fillText(title, W / 2, 280);
+  const four = offers.length >= 4; // the lab's FOURTH OPTION hits the charm board too
+  // the charm board is a menu window — the 2×2 board's second row pushes the
+  // squad below the window's floor, where it floats on the sky like before
+  uiPanel(ctx, { x: 14, y: 252, w: W - 28, h: four ? 596 : 540 }, title);
   ctx.font = fontB(9);
   ctx.fillStyle = INK_FAINT;
   ctx.fillText(sub, W / 2, 315);
-  const four = offers.length >= 4; // the lab's FOURTH OPTION hits the charm board too
   offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i, offers.length), p, undefined, { idx: i }));
   // declining pays score instead — a dead offer still has a price
   pill(ctx, CHARM_SKIP, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP +200 PTS' });
@@ -5024,8 +4935,7 @@ export function drawResult(
   share: ShareGrid | null,
   t = 0,
 ) {
-  ctx.fillStyle = '#0b0e1add';
-  ctx.fillRect(0, 0, W, H);
+  scrim(ctx, 0.87);
   if (res.won) confetti(ctx, t);
 
   // badge chips wrap four to a row — counted up front, they size the card
@@ -5105,11 +5015,9 @@ export function drawResult(
   const ix = panel.x + 16; // interior left edge (index gutter)
   const vx = panel.x + panel.w - 16; // findings values right-align here
 
-  roundRect(ctx, panel.x, panel.y, panel.w, panel.h, 10);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, panel, 10, GOLD, 2);
-  edge(ctx, panel, 10);
+  // the report is a menu window — double-frame, hard shadow; the manual's
+  // crop ticks and the rubber stamp stay, they're the report's own flavor
+  uiWindow(ctx, panel, { rad: 10 });
 
   // registration marks — the manual's crop ticks on every corner
   ctx.save();
@@ -5131,16 +5039,13 @@ export function drawResult(
   }
   ctx.restore();
 
-  const band = { x: panel.x + 4, y: panel.y + 4, w: panel.w - 8, h: 44 };
-  stripeBand(ctx, band, GOLD);
+  // the INK title band carries the report's name; the subtitle drops to a
+  // dim line between the band and the CASE index
+  uiBand(ctx, panel, 'FIELD REPORT');
   ctx.textAlign = 'left';
-  ctx.font = font(13);
-  ctx.fillStyle = INK;
-  ctx.fillText('FIELD REPORT', band.x + 14, band.y + 25);
   ctx.font = fontB(7);
-  ctx.globalAlpha = 0.75;
-  ctx.fillText('post-climb debrief — filed for the record', band.x + 14, band.y + 38);
-  ctx.globalAlpha = 1;
+  ctx.fillStyle = INK_FAINT;
+  ctx.fillText('post-climb debrief — filed for the record', ix, panel.y + 50);
 
   // the CASE line is the file's index card — run number when main files
   // one, otherwise the seed carries the reference
@@ -5184,9 +5089,9 @@ export function drawResult(
     ctx.font = fontB(8);
     ctx.fillStyle = '#464e6e';
     ctx.fillText(String(i + 1).padStart(2, '0'), ix, fy);
-    ctx.font = font(8);
-    ctx.fillStyle = INK_SOFT;
-    ctx.fillText(label, ix + 36, fy);
+    // each finding is a menu list row — the value keeps its semantic ink
+    // (gold payouts, accent dex), so it draws over uiRow's right slot
+    uiRow(ctx, { x: ix + 28, y: fy - rowH / 2 - 4, w: vx - ix - 28, h: rowH }, label);
     ctx.font = fontB(10);
     ctx.fillStyle = color;
     ctx.textAlign = 'right';
@@ -5319,11 +5224,13 @@ let scoreStrN = -1;
 let scoreStr = '';
 
 export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1, t = 0) {
-  ctx.fillStyle = INK_FAINT;
   ctx.font = fontB(9);
+  // a tiny dark window keeps the stage tag legible over any arena floor
+  uiWindow(ctx, { x: 46, y: 30, w: measureW(ctx, stageName) + 18, h: 20 }, { dark: true, shadow: false });
+  ctx.fillStyle = INK_FAINT;
   ctx.textAlign = 'left';
   // right of the pause chip (x 14..44) — the chip would eat the first letter
-  ctx.fillText(stageName, 52, 44);
+  ctx.fillText(stageName, 54, 44);
   // run map in miniature: a pip per stage, gyms as diamonds — the whole
   // 9-stage climb is visible from the first fight
   const gap = 22;
@@ -5347,15 +5254,19 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
       ctx.fill();
     }
   }
+  if (score !== scoreStrN) {
+    scoreStrN = score;
+    scoreStr = score.toLocaleString('en-US'); // a string the frame can reuse — the score barely moves
+  }
+  // SHOTS/SCORE ride one dark chip — sized to whichever string runs wider
+  ctx.font = font(8);
+  const rw = Math.max(measureW(ctx, `SHOTS ${shots}`), measureW(ctx, `SCORE ${scoreStr}`)) + 30;
+  uiWindow(ctx, { x: W - 22 - rw, y: 28, w: rw, h: 40 }, { dark: true, shadow: false });
   ctx.textAlign = 'right';
   ctx.fillStyle = '#fff';
   ctx.fillText(`SHOTS ${shots}`, W - 30, 44);
   ctx.font = font(8);
   ctx.fillStyle = GOLD;
-  if (score !== scoreStrN) {
-    scoreStrN = score;
-    scoreStr = score.toLocaleString('en-US'); // a string the frame can reuse — the score barely moves
-  }
   ctx.fillText(`SCORE ${scoreStr}`, W - 30, 60);
   // streak + ult share a second row under the stage name — a third right
   // row would land inside the arena rim and get drawn over
