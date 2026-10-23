@@ -2395,4 +2395,9 @@ canvas.addEventListener('pointerdown', (e) => {
 
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
+  // a deploy's new SW claims the page but the old bundle stays in memory —
+  // reload so the fix actually reaches an already-open client. Attached only
+  // when already controlled: the first-install claim isn't an update.
+  if (navigator.serviceWorker.controller)
+    navigator.serviceWorker.addEventListener('controllerchange', () => location.reload());
 }
