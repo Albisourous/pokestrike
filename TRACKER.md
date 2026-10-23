@@ -34,3 +34,11 @@ Roadmap, in order: bond payoff inside the run (needs balance thought first)
 | 2026-10-22 | `a5cef29` | dex | register draws only the visible band (was uiRow+sprite ×649/frame) + gold scroll thumb on a 40-screen list | `git revert a5cef29` |
 | 2026-10-22 | `ebf0d9b` | mons | `nextGoal` negative-countdown fix: a crossed-but-unclaimed tier reads `+N★ MILESTONE READY`, not `-210 TO +30★` | `git revert ebf0d9b` |
 | 2026-10-23 | `8dfd349` | audit | full-screen crawl (27 shots, 0 console errors): raid `TAP A MON` hint moved off the loaner name row → LOANERS header; hatcher pity line lowered 4px clear of the pull pills' ink lip | `git revert 8dfd349` |
+
+## Audit notes (2026-10-23, playwright crawl — assessed, no change)
+
+- **60 FPS held**: rAF-delta probe mid-fight = 60.3 avg / 59.9 p95. Battery saver already halves rate; dpr capped at 2. No pooling work filed — particles are bounded spawn objects, and `dexIds()` per-frame filter+Set is ~µs of garbage against measured headroom. Re-profile if jank is ever felt on real touch hardware.
+- **Loop is throw-safe**: `loop.ts` schedules rAF before update/render; a draw crash can't kill the game. dt clamped at 1/30 — fixed-timestep decoupling not needed at this sim complexity.
+- **HUD on exact 16:9**: map/reward phases draw the run HUD under the map panel when `viewPad` is 0 — visible only on taller-than-16:9 screens (i.e. every phone). Map phase is self-sufficient (own stage header); left as designed.
+- **Tasks/HOF empty states**: WEEKLY tab and empty HALL OF FAME leave a large dead mid-panel — acceptable whitespace, consistent with the window kit.
+- **Retention layer already covers the directive**: near-miss `shortOfBest` line, rival echo, streak risk, daily/login calendar, first-win bonus, pity, bond LV-ups, rookie ladder, grind pay — no new hooks added.
