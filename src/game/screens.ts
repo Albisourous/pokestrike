@@ -10,7 +10,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TIL
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -1717,6 +1717,55 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
       }
     });
   }
+
+  // YOUR TEAM — the parked climb's lineup when a run is banked; the rival
+  // echo or the hall's top squad stand in when nothing's mid-climb
+  const tr = TEAM_BTN;
+  const parked = runSave()?.team;
+  const echo = parked ? null : echoIds();
+  const hof = !parked && !echo ? (board()[0]?.team ?? []).map((id) => ({ id, lvl: 0 })) : null;
+  const squad: { id: number; lvl: number; shiny?: boolean }[] | null = parked ?? echo ?? hof;
+  uiPanel(ctx, tr, parked ? 'YOUR CLIMB' : echo ? 'RIVAL ECHO' : 'LAST SQUAD', {
+    h: 26,
+    ...(parked
+      ? { sub: `STAGE ${runSave()!.pendingNext + 1}/${TOTAL_STAGES}` }
+      : echo
+        ? { sub: 'IT HUNTS YOU' }
+        : {}),
+  });
+  if (!squad || !squad.length) {
+    // the same ghost-ball wait as the catches strip — an empty stable, not
+    // a dead card
+    [-90, 0, 90].forEach((dx) => ballGlyph(ctx, tr.x + tr.w / 2 + dx, tr.y + 58, 1.6, 'rgba(255,255,255,0.07)'));
+    ctx.font = font(9);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText('NO SQUAD — START A CLIMB', tr.x + tr.w / 2, tr.y + tr.h / 2 + 12);
+  } else {
+    const step = Math.min(76, (tr.w - 60) / squad.length);
+    const x0 = tr.x + tr.w / 2 - ((squad.length - 1) * step) / 2;
+    squad.slice(0, 6).forEach((m, i) => {
+      const cx = x0 + i * step;
+      const cy = tr.y + 56;
+      monShadow(ctx, cx, cy + 4, 44);
+      try {
+        (m.shiny ? drawShiny : drawMon)(ctx, m.id, cx, cy + Math.sin(t * 2.2 + i * 1.7) * 2, 44);
+      } catch {
+        void loadSprite(m.id);
+      }
+      if (m.lvl) {
+        ctx.font = fontB(7);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = INK;
+        ctx.fillText(`LV${m.lvl}`, cx, tr.y + tr.h - 24);
+      }
+    });
+    // the card is a door — a parked squad taps through to CLIMB's CONTINUE
+    ctx.font = fontB(7);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText(parked ? 'TAP → CLIMB' : 'TAP TO BROWSE', tr.x + tr.w - 14, tr.y + tr.h - 10);
+  }
 }
 
 // --- TOWN: a real little town — the buildings ARE the menu; tap a door ----
@@ -2336,6 +2385,9 @@ export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 16
 // the partners strip upgrades from LATEST CATCHES once any bond exists —
 // tapping it browses the dex like the other MONS cards
 export const PARTNERS_BTN = { x: 30, y: SETS_BTN.y + SETS_BTN.h + 16, w: W - 60, h: 160 };
+// the squad strip — parked climb's team when one's banked, else the rival
+// echo or the hall's top lineup; a parked squad's tap jumps to CLIMB
+export const TEAM_BTN = { x: 30, y: PARTNERS_BTN.y + PARTNERS_BTN.h + 16, w: W - 60, h: 118 };
 // TOWN's hit rects are building footprints — door + roof + its sign, so a
 // tap anywhere on a structure opens its overlay. GYM sits above the asc
 // card; its door taps ping the ladder below rather than open a screen.

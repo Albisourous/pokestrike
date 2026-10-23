@@ -123,6 +123,7 @@ import {
   DEAL_BTN,
   SETS_BTN,
   PARTNERS_BTN,
+  TEAM_BTN,
   RAID_FIGHT,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
@@ -1130,6 +1131,19 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       dexOpen = true;
       dexScroll = 0;
+      return;
+    }
+    if (homeTab === 'mons' && inRect(p.x, p.y, TEAM_BTN)) {
+      // the squad card is a door — a parked climb jumps to CLIMB's CONTINUE
+      if (runSave()) {
+        noteTabSwap(t, homeTab);
+        homeTab = 'climb';
+        noteTabPress(t);
+      } else {
+        dexOpen = true;
+        dexScroll = 0;
+      }
+      sfx('ui');
       return;
     }
     if (homeTab === 'town' && inRect(p.x, p.y, ACH_BTN)) {
