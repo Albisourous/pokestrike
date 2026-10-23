@@ -1524,38 +1524,74 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   uiPanel(ctx, d, 'POKÉDEX', { h: 26, sub: `${dexN}/${CATCHABLE}` });
   // the dex's ball icon rides the title band's left edge
   ballGlyph(ctx, d.x + 22, d.y + 16, 1.1, '#e03c34');
+  // hero readout — the register's fill in Press Start scale, then the two
+  // side tallies (shiny count + badge case) in Roboto under it
   ctx.textAlign = 'left';
+  ctx.font = font(30);
+  ctx.fillStyle = INK;
+  ctx.fillText(`${dexN}`, d.x + 20, d.y + 100);
+  ctx.font = fontB(9);
+  ctx.fillStyle = INK_SOFT;
+  ctx.fillText(`OF ${CATCHABLE} REGISTERED`, d.x + 30 + ctx.measureText(`${dexN}`).width, d.y + 100);
+  void loadItem('shiny-charm');
+  void loadItem('badges/1');
+  fillStar(ctx, d.x + 26, d.y + 126, 7);
+  ctx.font = fontB(9);
+  ctx.fillStyle = INK;
+  ctx.fillText(`${shinyIds().length} SHINY`, d.x + 38, d.y + 130);
+  const badgeIcon = itemSprite('badges/1');
+  if (badgeIcon) ctx.drawImage(badgeIcon, d.x + 20, d.y + 142, 16, 16);
+  ctx.fillText(`${badges.size}/${BADGES.length} BADGES`, d.x + 40, d.y + 154);
+  // the chase gets a face — the shiny charm on a felt pedestal, captioned
+  // with whichever loop is nearest (charm → milestones → badges → pity)
+  const px = d.x + d.w - 104;
+  ctx.fillStyle = '#dcd8c8';
+  ctx.beginPath();
+  ctx.ellipse(px, d.y + 152, 46, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const charm = itemSprite('shiny-charm');
+  if (charm) ctx.drawImage(charm, px - 30, d.y + 86, 60, 60);
   ctx.font = fontB(8);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText(nextGoal, d.x + 18, d.y + 62);
+  ctx.textAlign = 'center';
+  ctx.fillText(nextGoal, px, d.y + 176);
+  // the register's fill — a rounded track now, percent stamped inside its
+  // far end so it reads at a glance whether the bar is early or near-full
+  const bw = d.w - 36, bx = d.x + 18, by = d.y + d.h - 52;
+  roundRect(ctx, bx, by, bw, 16, 8);
+  ctx.fillStyle = '#e8e8e0';
+  ctx.fill();
+  ctx.save();
+  ctx.beginPath();
+  roundRect(ctx, bx, by, bw, 16, 8);
+  ctx.clip();
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(bx, by, Math.max(6, (bw * dexN) / CATCHABLE), 16);
+  ctx.restore();
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 1;
+  roundRect(ctx, bx + 0.5, by + 0.5, bw - 1, 15, 8);
+  ctx.stroke();
+  ctx.font = fontB(8);
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'right';
+  ctx.fillText(`${Math.round((dexN / CATCHABLE) * 100)}%`, bx + bw - 8, by + 12);
   // a claimable set bounty advertises on the dex card too — the SETS card
   // below owns the claiming
   const readySets = setsReady().length;
   if (readySets) {
     const label = `${readySets} SET BONUS${readySets > 1 ? 'ES' : ''} READY`;
-    const chipX = d.x + 18 + ctx.measureText(nextGoal).width + 10;
     ctx.font = fontB(7);
-    roundRect(ctx, chipX, d.y + 51, ctx.measureText(label).width + 14, 15, 7);
+    roundRect(ctx, bx, d.y + d.h - 28, ctx.measureText(label).width + 14, 15, 7);
     ctx.fillStyle = GOLD;
     ctx.fill();
     ctx.fillStyle = INK;
-    ctx.fillText(label, chipX + 7, d.y + 62);
+    ctx.fillText(label, bx + 7, d.y + d.h - 17);
   }
   ctx.textAlign = 'right';
+  ctx.font = fontB(8);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('TAP TO BROWSE', d.x + d.w - 18, d.y + 62);
-  // a slim fill toward a full dex — the ladder bar's idiom, percent inside
-  const bw = d.w - 36, bx = d.x + 18, by = d.y + d.h - 28;
-  ctx.fillStyle = '#e8e8e0';
-  ctx.fillRect(bx, by, bw, 8);
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(bx, by, Math.max(3, (bw * dexN) / CATCHABLE), 8);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 1;
-  ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, 7);
-  ctx.font = fontB(7);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`${Math.round((dexN / CATCHABLE) * 100)}%`, bx + bw, by + 20);
+  ctx.fillText('TAP TO BROWSE', d.x + d.w - 18, d.y + d.h - 15);
 
   // LINE SETS — whole evolution families for a one-time star bounty. A
   // ready line turns the card into a CLAIM button; otherwise it shows the
@@ -2393,7 +2429,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 // MONS owns dex / line-sets / catches; TOWN owns the 2-col grid + ASC + HALL.
 export const HATCH_BTN = { x: 30, y: 210, w: W - 60, h: 250 };
 export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 170 };
-export const DEX_BTN = { x: 30, y: 230, w: W - 60, h: 120 };
+export const DEX_BTN = { x: 30, y: 110, w: W - 60, h: 240 };
 export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
 // the partners strip upgrades from LATEST CATCHES once any bond exists —
 // tapping it browses the dex like the other MONS cards
