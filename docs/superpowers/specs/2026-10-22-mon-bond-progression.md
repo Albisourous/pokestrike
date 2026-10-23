@@ -31,10 +31,14 @@ star's #1 replayability axis).
   top-3 bonded mons, `friend-ball` badge, 5 LV pips; the card taps open the
   dex. Dex rows append `· BOND n`; the result card gets a `BOND LV-UPS` dust
   findings row.
+- **Mon detail card** (`drawDexDetail` + `dexRowAt`): a register-row tap opens
+  the species card — portrait (shiny palette if owned), typing chips, bond
+  row, role + signature move, trait flags, canon-order stat bars + BST, and
+  the evo line with the viewed mon pinned. Detail freezes register scroll and
+  pops before the register on tap/Esc.
 
 ## Next, uncommitted
 
-- Mon detail card on dex-row tap (stats, move/super, evo line, bond).
+- TEAM card: the parked-run lineup (`pk_run`) rendered on the MONS tab.
 - A bond payoff inside the run (e.g. LV 5 partner grants +1 team luck) —
   deferred: in-run power from meta needs balance thought.
-- TEAM card: the parked-run lineup (`pk_run`) rendered on the MONS tab.

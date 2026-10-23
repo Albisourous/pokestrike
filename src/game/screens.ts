@@ -10,7 +10,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TIL
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, topBond, BOND_LEVELS, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -2526,6 +2526,159 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   }
   ctx.fillStyle = INK_FAINT;
   ctx.fillText('catch wild mons to fill the dex: they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+}
+
+// a tap on a register row resolves to its species — the detail card's door
+export function dexRowAt(x: number, y: number, scroll: number): number | null {
+  const r = DEX_PANEL;
+  if (x < r.x + 8 || x > r.x + r.w - 8 || y < r.y + DEX_HEAD || y > r.y + r.h - 36) return null;
+  const seen = new Set(dexIds());
+  const list = DEX_ALL.filter((def) => seen.has(def.id));
+  const i = Math.floor((y - r.y - DEX_HEAD + scroll) / DEX_CELL);
+  return list[i]?.id ?? null;
+}
+
+// the mon detail card — a dex row's whole story: portrait, typing, role and
+// signature move, base stats, its evolution line, and where its bond stands
+export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
+  const def = speciesById(id);
+  if (!def) return;
+  const r = { x: 44, y: 150, w: W - 88, h: 610 };
+  scrim(ctx, 0.55);
+  uiPanel(ctx, r, def.name.toUpperCase(), { rad: 14, sub: `#${id}` });
+  uiClose(ctx, { x: r.x + r.w - 48, y: r.y + 12, w: 40, h: 40 });
+  const cx = r.x + r.w / 2;
+  const shiny = shinyIds().includes(id);
+
+  // hero — sprite on a type-tinted pad; a caught shiny shows its alt palette
+  const cy = r.y + 116;
+  ctx.fillStyle = `${TYPE_COLOR[def.type]}2e`;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 44, 84, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+  monShadow(ctx, cx, cy + 38, 96);
+  try {
+    if (shiny) drawShiny(ctx, id, cx, cy, 96);
+    else drawMon(ctx, id, cx, cy, 96);
+  } catch {
+    void loadSprite(id);
+  }
+  ctx.textAlign = 'center';
+  if (shiny) {
+    ctx.font = font(14);
+    ctx.fillStyle = GOLD;
+    ctx.fillText('★', cx + 58, cy - 44);
+  }
+
+  // typing chips under the portrait
+  const types = [def.type, ...(def.type2 ? [def.type2] : [])];
+  types.forEach((ty, i) => {
+    const tx = cx - (types.length * 92 - 8) / 2 + i * 92;
+    roundRect(ctx, tx, r.y + 178, 84, 18, 9);
+    ctx.fillStyle = TYPE_COLOR[ty];
+    ctx.fill();
+    ctx.font = fontB(7);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(ty.toUpperCase(), tx + 42, r.y + 191);
+  });
+
+  // the career line — bond level, progress to the next rung, LV pips
+  void loadItem('friend-ball');
+  const pts = bondOf(id), lv = bondLv(id);
+  const fb = itemSprite('friend-ball');
+  if (fb) ctx.drawImage(fb, r.x + 24, r.y + 208, 18, 18);
+  ctx.textAlign = 'left';
+  ctx.font = fontB(8);
+  ctx.fillStyle = INK_SOFT;
+  const nxt = BOND_LEVELS[lv];
+  ctx.fillText(pts ? `BOND LV${lv} · ${nxt ? `${pts}/${nxt}` : 'MAX'} PTS` : 'FIELD IT TO BOND', r.x + 50, r.y + 222);
+  for (let p = 0; p < BOND_LEVELS.length; p++) {
+    ctx.fillStyle = p < lv ? GOLD : '#d8d8d0';
+    ctx.beginPath();
+    ctx.arc(r.x + r.w - 28 - (BOND_LEVELS.length - 1 - p) * 16, r.y + 218, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // role + signature move, with the flags that change arena behavior
+  ctx.textAlign = 'center';
+  ctx.font = font(9);
+  ctx.fillStyle = INK;
+  ctx.fillText(`${roleOf(def)} · ${moveOf(id, def.type).toUpperCase()}`, cx, r.y + 252);
+  ctx.font = fontB(7);
+  ctx.fillStyle = INK_FAINT;
+  fitFont(ctx, superDesc(id, def.type).toUpperCase(), 7, r.w - 48);
+  ctx.fillText(superDesc(id, def.type).toUpperCase(), cx, r.y + 270);
+  const traits = [
+    def.healer && 'BUMP HEALS THE TEAM',
+    def.pierce && 'PIERCES FOES',
+    def.melee && 'LUNGES AT CONTACT',
+    def.copy && "COPIES BUMPERS' SUPERS",
+    def.taunt && 'SHIELDS ALLIES',
+    def.cursed && 'DEATH SLOWS ENEMY SUPERS',
+  ].filter(Boolean) as string[];
+  if (traits.length) {
+    ctx.fillStyle = ACCENT;
+    ctx.fillText(traits.join(' · '), cx, r.y + 288);
+  }
+
+  // base stats in canon order — bars scale to ~200, a strong base read
+  const stats: [string, number][] = [
+    ['HP', def.stats.hp],
+    ['ATK', def.stats.atk],
+    ['DEF', def.stats.def],
+    ['SPA', def.stats.spa],
+    ['SPD', def.stats.spd],
+    ['SPE', def.stats.spe],
+  ];
+  stats.forEach(([name, v], i) => {
+    const y = r.y + 312 + i * 26;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(8);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText(name, r.x + 24, y + 9);
+    ctx.fillStyle = '#e8e8e0';
+    ctx.fillRect(r.x + 68, y + 2, r.w - 140, 8);
+    ctx.fillStyle = TYPE_COLOR[def.type];
+    ctx.fillRect(r.x + 68, y + 2, Math.max(3, (r.w - 140) * Math.min(1, v / 200)), 8);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = INK;
+    ctx.fillText(`${v}`, r.x + r.w - 24, y + 9);
+  });
+  ctx.font = fontB(7);
+  ctx.fillStyle = INK_FAINT;
+  ctx.fillText(`BASE TOTAL ${stats.reduce((a, s) => a + s[1], 0)}`, r.x + r.w - 24, r.y + 312 + 6 * 26 + 12);
+
+  // the family row — caught bright, the viewed mon pinned gold
+  const line = EVO_LINES.find((l) => l.ids.includes(id));
+  const ly = r.y + r.h - 96;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = INK_SOFT;
+  ctx.fillText(line ? 'EVOLUTION LINE' : 'NO EVOLUTION LINE', r.x + 24, ly);
+  if (line) {
+    const owned = new Set(dexIds());
+    line.ids.slice(0, 7).forEach((eid, i) => {
+      const ix = r.x + 44 + i * 56;
+      ctx.save();
+      ctx.globalAlpha = owned.has(eid) ? 1 : 0.22;
+      try {
+        drawMon(ctx, eid, ix, ly + 36, 40);
+      } catch {
+        void loadSprite(eid);
+      }
+      ctx.restore();
+      if (eid === id) {
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.arc(ix, ly + 62, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    });
+  }
+
+  ctx.textAlign = 'center';
+  ctx.font = fontB(7);
+  ctx.fillStyle = INK_FAINT;
+  ctx.fillText('TAP TO CLOSE', cx, r.y + r.h - 14);
 }
 
 // --- hall of fame: the top climbs this device has logged, score-ranked ---

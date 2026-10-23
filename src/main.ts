@@ -72,6 +72,8 @@ import {
   HELP_PAGE_COUNT,
   DEX_BTN,
   drawDex,
+  drawDexDetail,
+  dexRowAt,
   dexScrollMax,
   ACH_BTN,
   drawAch,
@@ -271,6 +273,7 @@ let settingsDrag: { key: SettingsSliderKey } | null = null;
 let helpPage = 0;
 let dexOpen = false;
 let dexScroll = 0;
+let dexPick: number | null = null; // a dex row's detail card — null = register view
 let achOpen = false;
 let achScroll = 0;
 let boardOpen = false;
@@ -1513,7 +1516,9 @@ canvas.addEventListener('pointermove', (e) => {
     );
     if (dexDrag.for === 'hatch') hatch.sparkScroll = s;
     else if (dexDrag.for === 'lab') labScroll = s;
-    else if (dexDrag.for === 'dex') dexScroll = s;
+    else if (dexDrag.for === 'dex') {
+      if (dexPick == null) dexScroll = s; // the detail card freezes the register
+    }
     else achScroll = s;
     return;
   }
@@ -1577,8 +1582,16 @@ canvas.addEventListener('pointerup', (e) => {
       const p = toLogical(e);
       if (hatchOpen) hatchTap(p);
       else if (labOpen) labTap(p);
-      else {
-        dexOpen = false;
+      else if (dexOpen) {
+        // detail first, then a row pick, then tap-to-close — the dex's stack
+        if (dexPick != null) dexPick = null;
+        else {
+          const pick = dexRowAt(p.x, p.y, dexScroll);
+          if (pick != null) dexPick = pick;
+          else dexOpen = false;
+        }
+        sfx('ui');
+      } else {
         achOpen = false;
         boardOpen = false;
         sfx('ui'); // tap-to-close clicks like every sibling modal
@@ -1728,6 +1741,7 @@ addEventListener('keydown', (e) => {
     }
     else if (boardOpen) boardOpen = false;
     else if (achOpen) achOpen = false;
+    else if (dexPick != null) dexPick = null;
     else dexOpen = false;
     sfx('ui');
   } else if (e.key === 'Escape' || e.key === '?') {
@@ -1763,7 +1777,7 @@ canvas.addEventListener(
       helpFlip(e.deltaY + e.deltaX > 0 ? 1 : -1);
       return;
     }
-    if (scene === 'title' && dexOpen) {
+    if (scene === 'title' && dexOpen && dexPick == null) {
       e.preventDefault();
       dexScroll = Math.min(Math.max(dexScroll + e.deltaY, 0), dexScrollMax());
       return;
@@ -2125,6 +2139,7 @@ function render() {
     case 'title':
       drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - newConfirmT0 < 3, t - dailyConfirmT0 < 3, homeTab);
       if (dexOpen) drawDex(ctx, dexScroll);
+      if (dexOpen && dexPick != null) drawDexDetail(ctx, dexPick);
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
       if (hatchOpen)
