@@ -139,17 +139,23 @@ export function uiBand(
   ctx.fillStyle = GOLD;
   ctx.fillRect(r.x + 3, r.y + 3 + h, r.w - 6, 2);
   const pa = ctx.textAlign;
+  const pb = ctx.textBaseline;
   ctx.textAlign = 'center';
+  // 'middle' centers the ink on the band's midline — ps2p's alphabetic
+  // metrics report ascent=full-em, so baseline math lands titles ~4px low
+  // and short bands (h<20) clip the glyph bottoms
+  ctx.textBaseline = 'middle';
   ctx.fillStyle = PARCH;
   ufit(ctx, title, 9, r.w - 40);
-  ctx.fillText(title, r.x + r.w / 2, r.y + 3 + h / 2 + 4);
+  ctx.fillText(title, r.x + r.w / 2, r.y + 3 + h / 2 + 1);
   if (o.sub) {
     ctx.textAlign = 'right';
     ctx.font = fontB(7);
     ctx.fillStyle = '#a8b0d0';
-    ctx.fillText(o.sub, r.x + r.w - 12, r.y + 3 + h / 2 + 3);
+    ctx.fillText(o.sub, r.x + r.w - 12, r.y + 3 + h / 2);
   }
   ctx.textAlign = pa;
+  ctx.textBaseline = pb;
   return r.y + 3 + h + 2;
 }
 

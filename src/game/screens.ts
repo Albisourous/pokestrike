@@ -5,7 +5,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
 import { drawTile } from './map';
-import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TILE_HALL, TILE_MART, TILE_GYMHQ, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
+import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TILE_HALL, TILE_MART, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -1347,28 +1347,29 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.stroke();
   ctx.font = fontB(9);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('TAP TO OPEN THE HATCHER ›', tx2, dr.y + 148);
+  ctx.fillText('TAP TO VIEW ›', tx2, dr.y + 148);
 
   // the honest cut, visible before the hatcher opens — same rarity colors
-  // the overlay's own table prints, plus the pity count
-  const orr = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 16, w: W - 60, h: 156 };
+  // the overlay's own table prints, plus the pity count. Fills down to the
+  // tab bar — a bare gap under the card read as a hole
+  const orr = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 16, w: W - 60, h: TAB_BAR.y - 20 - (DEAL_BTN.y + DEAL_BTN.h + 16) };
   uiPanel(ctx, orr, 'PULL ODDS', { sub: `RARE+ IN ${PULL_PITY - (pullCount() % PULL_PITY)} PULLS` });
   ([['COMMON', PULL_RATES.common, '#d0d0c8'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f']] as const).forEach(([label, pct, color], i) => {
-    const ry = orr.y + 52 + i * 28;
+    const ry = orr.y + 58 + i * 34;
     ctx.textAlign = 'left';
     ctx.font = fontB(8);
     ctx.fillStyle = INK_SOFT;
     ctx.fillText(label, orr.x + 18, ry + 9);
     const bx = orr.x + 92, bw = orr.w - 92 - 66;
-    roundRect(ctx, bx, ry, bw, 10, 5);
+    roundRect(ctx, bx, ry, bw, 12, 6);
     ctx.fillStyle = '#e8e8e0';
     ctx.fill();
     ctx.save();
     ctx.beginPath();
-    roundRect(ctx, bx, ry, bw, 10, 5);
+    roundRect(ctx, bx, ry, bw, 12, 6);
     ctx.clip();
     ctx.fillStyle = color;
-    ctx.fillRect(bx, ry, Math.max(4, bw * pct), 10);
+    ctx.fillRect(bx, ry, Math.max(4, bw * pct), 12);
     ctx.restore();
     ctx.textAlign = 'right';
     ctx.fillStyle = INK;
@@ -1563,10 +1564,11 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
   ctx.fillText(superDesc(boss.id, boss.type).toUpperCase(), bcx, r.y + 344);
 
   // the loaner trio as shelf cells — the dex grid's idiom, three LV30
-  // rare+ rentals standing on their own type pads
-  uiBand(ctx, { x: r.x + 16, y: r.y + 352, w: r.w - 32, h: 16 }, 'YOUR LV30 LOANERS', { h: 16, rad: 5 });
+  // rare+ rentals standing on their own type pads. Band needs h≥22 — at 16
+  // the PS2P ink rides past the gold rule into the cells below
+  uiBand(ctx, { x: r.x + 16, y: r.y + 352, w: r.w - 32, h: 22 }, 'YOUR LV30 LOANERS', { h: 22, rad: 5 });
   raidTeam().forEach((d, i) => {
-    const cell = { x: r.x + 22 + i * ((r.w - 44) / 3) + 4, y: r.y + 378, w: (r.w - 44) / 3 - 8, h: 74 };
+    const cell = { x: r.x + 22 + i * ((r.w - 44) / 3) + 4, y: r.y + 384, w: (r.w - 44) / 3 - 8, h: 74 };
     uiWindow(ctx, cell, { rad: 8, shadow: false });
     ctx.fillStyle = `${TYPE_COLOR[d.type]}26`;
     ctx.beginPath();
@@ -1622,21 +1624,25 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   // hero readout — the register's fill in Press Start scale, then the two
   // side tallies (shiny count + badge case) in Roboto under it
   ctx.textAlign = 'left';
-  ctx.font = font(30);
+  ctx.font = font(20);
   ctx.fillStyle = INK;
-  ctx.fillText(`${dexN}`, d.x + 20, d.y + 100);
+  ctx.fillText(`${dexN}`, d.x + 20, d.y + 96);
   ctx.font = fontB(9);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText(`OF ${CATCHABLE} REGISTERED`, d.x + 30 + ctx.measureText(`${dexN}`).width, d.y + 100);
+  ctx.fillText(`OF ${CATCHABLE} REGISTERED`, d.x + 26 + ctx.measureText(`${dexN}`).width, d.y + 96);
   void loadItem('shiny-charm');
   void loadItem('badges/1');
-  fillStar(ctx, d.x + 26, d.y + 126, 7);
+  ctx.fillStyle = GOLD;
+  fillStar(ctx, d.x + 27, d.y + 122, 7);
   ctx.font = fontB(9);
   ctx.fillStyle = INK;
-  ctx.fillText(`${shinyIds().length} SHINY`, d.x + 38, d.y + 130);
+  ctx.fillText(`${shinyIds().length} SHINY`, d.x + 40, d.y + 126);
   const badgeIcon = itemSprite('badges/1');
-  if (badgeIcon) ctx.drawImage(badgeIcon, d.x + 20, d.y + 142, 16, 16);
-  ctx.fillText(`${badges.size}/${BADGES.length} BADGES`, d.x + 40, d.y + 154);
+  ctx.save();
+  ctx.imageSmoothingEnabled = false; // pixel sprites upscale nearest or they mush
+  if (badgeIcon) ctx.drawImage(badgeIcon, d.x + 17, d.y + 132, 22, 22);
+  ctx.restore();
+  ctx.fillText(`${badges.size}/${BADGES.length} BADGES`, d.x + 44, d.y + 148);
   // the chase gets a face — the shiny charm on a felt pedestal, captioned
   // with whichever loop is nearest (charm → milestones → badges → pity)
   const px = d.x + d.w - 104;
@@ -1645,7 +1651,12 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   ctx.ellipse(px, d.y + 152, 46, 13, 0, 0, Math.PI * 2);
   ctx.fill();
   const charm = itemSprite('shiny-charm');
-  if (charm) ctx.drawImage(charm, px - 30, d.y + 86, 60, 60);
+  if (charm) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(charm, px - 30, d.y + 86, 60, 60);
+    ctx.restore();
+  }
   ctx.font = fontB(8);
   ctx.fillStyle = INK_SOFT;
   ctx.textAlign = 'center';
@@ -1661,7 +1672,7 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   roundRect(ctx, bx, by, bw, 16, 8);
   ctx.clip();
   ctx.fillStyle = GOLD;
-  ctx.fillRect(bx, by, Math.max(6, (bw * dexN) / CATCHABLE), 16);
+  ctx.fillRect(bx, by, dexN ? Math.max(6, (bw * dexN) / CATCHABLE) : 0, 16);
   ctx.restore();
   ctx.strokeStyle = GOLD;
   ctx.lineWidth = 1;
@@ -1919,17 +1930,17 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     for (let y = y0; y <= y1; y += 24) drawTile(ctx, TREE_TEAL, x, y, 18, 18);
   };
   plaza(32, 150, 512, 356);   // north block — lab / hall / trophies
-  plaza(30, 414, 262, 612);   // mart block
-  plaza(272, 414, 510, 648);  // gym block
+  plaza(30, 414, 262, 612);   // store block
+  plaza(272, 414, 510, 648);  // garden court
   hedgeRow(36, 494, 152);     // behind the north rooflines
   hedgeCol(30, 172, 340);
   hedgeCol(502, 172, 340);
   hedgeRow(36, 246, 406);     // south plazas, street side
   hedgeRow(288, 494, 406);
   hedgeCol(28, 430, 590);
-  hedgeRow(36, 246, 604, 126);   // mart front, gap at its door
+  hedgeRow(36, 246, 604, 126);   // store front, gap at its door
   hedgeCol(500, 430, 624);
-  hedgeRow(288, 494, 640, 425);  // gym front, gap at its door
+  hedgeRow(288, 494, 640, 425);  // garden south edge, a gate gap
 
   // the main road: bordered path blocks straight across mid-town
   const ROAD_Y = 352;
@@ -1949,12 +1960,30 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
 
   // north row — the lab, the hall, the trophy tower
   drawTile(ctx, TILE_LAB, 54, 196, 112, 112);
-  drawTile(ctx, TILE_HALL, 213, 204, 118, 104);
-  drawTile(ctx, TILE_TOWER, 384, 190, 100, 118);
+  drawTile(ctx, TILE_HALL, 211, 204, 120, 102);
+  drawTile(ctx, TILE_TOWER, 382, 188, 92, 130);
 
-  // south row — the mart with its job board, and the gym
-  drawTile(ctx, TILE_MART, 68, 436, 116, 96);
-  drawTile(ctx, TILE_GYMHQ, 356, 452, 82, 140);
+  // the storefront — its marquee door faces the job board's sign
+  drawTile(ctx, TILE_MART, 46, 446, 200, 88);
+
+  // the garden court — a pocket park where the gym used to stand: trees
+  // ringing a little pond, flowerbeds, a rock to sit on
+  drawTile(ctx, TREE_ROUND, 300, 438, 44, 46);
+  drawTile(ctx, TREE_PINE, 442, 430, 40, 44);
+  drawTile(ctx, TREE_TEAL, 476, 466, 32, 34);
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(390, 572, 56, 26, 0, 0, Math.PI * 2);
+  ctx.clip();
+  for (let y = 542; y < 602; y += 32) for (let x = 330; x < 452; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
+  ctx.beginPath();
+  ctx.ellipse(390, 570, 46, 18, 0, 0, Math.PI * 2);
+  ctx.clip();
+  for (let y = 542; y < 596; y += 32) for (let x = 340; x < 444; x += 32) drawTile(ctx, TILE_WATER, x, y, 32, 32);
+  ctx.restore();
+  drawTile(ctx, ROCK_SMALL, 300, 586, 36, 26);
+  drawTile(ctx, FLOWER_YB, 320, 528, 26, 22);
+  drawTile(ctx, FLOWER_PK, 452, 524, 24, 20);
 
   // drifting pollen — a little life over the grass, riding the same
   // ambient-sparkle opt-out as the map's sea glints
@@ -1984,12 +2013,11 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   townSign(ctx, 110, 316, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
   townSign(ctx, 272, 322, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
   townSign(ctx, 434, 320, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
-  townSign(ctx, 126, 546, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
-  townSign(ctx, 352, 604, 72, 'GYM', `ASC ${Math.min(b.wins, 9)}/9`);
+  townSign(ctx, 126, 560, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
   // a claimable task pins the red count pip on the sign's corner — the same
   // badge the old card corner wore
   if (taskN > 0) {
-    const bx = 126 + 55, by = 546;
+    const bx = 126 + 55, by = 560;
     ctx.beginPath();
     ctx.arc(bx, by, 9, 0, Math.PI * 2);
     ctx.fillStyle = '#e03c34';
@@ -2003,13 +2031,13 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
   }
 
-  // villagers — feet on the paving by their doors; the gym leader waits in
-  // his doorway, and one youngster paces the road with a walk cycle
+  // villagers — feet on the paving by their doors; Norman takes the day off
+  // in the garden, and one youngster paces the road with a walk cycle
   drawNpc(ctx, 'scientist_down_0', 172, 342, 30);
   drawNpc(ctx, 'lass_down_0', 338, 344, 30);
   drawNpc(ctx, 'gentleman_down_0', 492, 384, 30);
-  drawNpc(ctx, 'shopkeeper_m_down_0', 204, 556, 30);
-  drawNpc(ctx, 'norman_down_0', 420, 628, 32);
+  drawNpc(ctx, 'shopkeeper_m_down_0', 208, 570, 30);
+  drawNpc(ctx, 'norman_down_0', 410, 506, 32);
   const walk = (t * 60) % 840;
   const wx = walk <= 420 ? 60 + walk : 480 - (walk - 420);
   drawNpc(ctx, `youngster_${walk <= 420 ? 'right' : 'left'}_${[0, 1, 0, 2][Math.floor(t * 6) % 4]}`, wx, 398, 30);
@@ -2545,13 +2573,11 @@ export function partnersStripAt(x: number, y: number): number | null {
   return i >= 0 && i < ids.length ? ids[i] : null;
 }
 // TOWN's hit rects are building footprints — door + roof + its sign, so a
-// tap anywhere on a structure opens its overlay. The GYM's door is a door to
-// CLIMB — that's where the asc rung board lives now.
+// tap anywhere on a structure opens its overlay.
 export const LAB_BTN = { x: 44, y: 192, w: 132, h: 156 };
-export const TASKS_BTN = { x: 48, y: 426, w: 156, h: 182 };
+export const TASKS_BTN = { x: 44, y: 424, w: 210, h: 170 };
 export const ACH_BTN = { x: 362, y: 158, w: 142, h: 196 };
 export const BOARD_BTN = { x: 194, y: 198, w: 156, h: 156 };
-export const GYM_HIT = { x: 330, y: 438, w: 146, h: 210 };
 // the rung ladder lives on CLIMB now — between the TODAY card and the
 // pills, in the dead pitch band; the gym door's tap routes there
 export const ASC_BTN = { x: 30, y: 452, w: W - 60, h: 122 };
@@ -2579,20 +2605,9 @@ let ascDeny = { i: -1, t: -10 };
 export function noteAscDeny(i: number, t: number) {
   ascDeny = { i, t };
 }
-// a gym-door tap pings the board — a gold rim pulse says the rungs answer
-let ascPingT = -10;
-export function noteAscPing(t: number) {
-  ascPingT = t;
-}
 
 function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number; y: number; w: number; h: number }, cap: number, pick: number) {
   uiPanel(ctx, r, 'ASCENSION', { rad: 12, sub: cap ? `LV ${cap}/9` : 'LOCKED' });
-  if (t - ascPingT < 0.9) {
-    ctx.save();
-    ctx.globalAlpha = 0.45 + 0.35 * Math.sin(t * 12);
-    rim(ctx, r, 12, GOLD, 3);
-    ctx.restore();
-  }
 
   // the track behind the rungs
   const c0 = ascCellRect(0), cN = ascCellRect(ASC_NCELLS - 1);
