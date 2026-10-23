@@ -27,4 +27,4 @@ Roadmap, in order: bond payoff inside the run (needs balance thought first)
 | 2026-10-22 | `42cd57a` | draft | kind pill carries `·B{n}` — `OWNED·B3` reads the species career at the pick | `git revert 42cd57a` |
 | 2026-10-22 | `ed695c9` | raid | boss + loaner trio deep-link the dex detail card (`raidMonAt`), card hints the tap | `git revert ed695c9` |
 | 2026-10-22 | `6875050` | climb | pitch echo ghosts deep-link the detail card (`echoMonAt`) — every home mon is a door | `git revert 6875050` |
-| 2026-10-22 | — | battle | bond pays in-run: `teamLuck()` adds `⌊LV/2⌋` per fielded partner → gym fountain; reward line + detail card surface it; smoke asserts +1 at LV2 | `git revert HEAD` |
+| 2026-10-22 | `454a8fe` | battle | bond pays in-run: `teamLuck()` adds `⌊LV/2⌋` per fielded partner → gym fountain; reward line + detail card surface it; smoke asserts +1 at LV2 | `git revert 454a8fe` |
