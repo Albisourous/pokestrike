@@ -358,9 +358,10 @@ window.visualViewport?.addEventListener('resize', resize);
 resize();
 // ?dev also exposes the scene machine + coordinate transform for playtest probes
 if (new URLSearchParams(location.search).has('dev'))
-  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void } }).__dbg = {
+  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void; ui: () => Record<string, boolean | string> } }).__dbg = {
     scene: () => scene,
     battle: () => battle,
+    ui: () => ({ homeTab, help: helpOpen, bug: bugOpen, menu: menuOpen, settings: settingsOpen, tasks: tasksOpen, dex: dexOpen, ach: achOpen, board: boardOpen, hatch: hatchOpen, lab: labOpen }),
     xy: (x, y) => { const p = toLogical({ clientX: x, clientY: y } as PointerEvent); return { x: p.x, y: p.y }; },
     stats: statsDump, // the on-device metric server — pick rates + stage deaths
     // audition any track straight from the console — builders can't hear
