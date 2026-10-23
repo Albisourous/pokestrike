@@ -242,8 +242,8 @@ let draft: {
 };
 // the run's draft pool — roster plus captured-dex species not already in it
 let draftPool: SpeciesDef[] = [];
-// the run's bag picks — ≤2 pk_bag consumables toggled on the draft board,
-// spent the moment the last pick constructs the Battle (never earlier)
+// the run's bag picks — ≤2 pk_bag consumables auto-armed when the draft
+// deals, spent the moment the last pick constructs the Battle (never earlier)
 let bagPick = new Set<string>();
 let bagLast: string | null = null; // last tapped chip — its desc rides the row
 let stage = makeStage(randSeed());
