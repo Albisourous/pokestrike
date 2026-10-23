@@ -32,4 +32,4 @@ Roadmap, in order: bond payoff inside the run (needs balance thought first)
 | 2026-10-22 | `78913c1` | battle | `regionMap` getter retires the events+smoke region type-pun — last `shortcut:` gone | `git revert 78913c1` |
 | 2026-10-22 | `1675a48` | result | `BOND LVn ▲` tag on leveled squad sprites — the findings row lands on a face | `git revert 1675a48` |
 | 2026-10-22 | `a5cef29` | dex | register draws only the visible band (was uiRow+sprite ×649/frame) + gold scroll thumb on a 40-screen list | `git revert a5cef29` |
-| 2026-10-22 | — | mons | `nextGoal` negative-countdown fix: a crossed-but-unclaimed tier reads `+N★ MILESTONE READY`, not `-210 TO +30★` | `git revert HEAD` |
+| 2026-10-22 | `ebf0d9b` | mons | `nextGoal` negative-countdown fix: a crossed-but-unclaimed tier reads `+N★ MILESTONE READY`, not `-210 TO +30★` | `git revert ebf0d9b` |
