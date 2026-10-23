@@ -347,7 +347,8 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.boxLvl.push(3);
   const benched = (b as any).players[1].def;
   b.swapFromBox(0, 1); // the catch break carries the same roster modal
-  ok((b as any).players[1].def === boxed, 'reward-phase swap fields the box mon');
+  ok((b as any).players[1].def.id === boxed.id && (b as any).players[1].def.joined === b.waveIndex,
+    'reward-phase swap fields the box mon, joined-stamped');
   ok(b.box[0] === benched && b.boxHp[0] > 0 && b.boxLvl[0] >= 1, 'reward-phase swap benches the teammate');
   ok(b.boxSel === -1 && b.teamSel === -1, 'reward-phase swap clears both selections');
   // mid-fight the panel is shut — a stray call still can't reorder the team
@@ -2378,16 +2379,19 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const preBond = localStorage.getItem('pk_bond');
   localStorage.removeItem('pk_bond');
   const dust0 = dust();
-  const b1 = bankBond([ROSTER[0].id, ROSTER[1].id, ROSTER[0].id], 5); // a dup id banks once
+  const b1 = bankBond([{ id: ROSTER[0].id, pts: 5 }, { id: ROSTER[1].id, pts: 5 }, { id: ROSTER[0].id, pts: 5 }]); // a dup id banks once
   ok(bondOf(ROSTER[0].id) === 5 && bondLv(ROSTER[0].id) === 1 && b1.ups.length === 2,
     'a stage bank levels each lineup species once');
   ok(b1.dust === 2 * BOND_PAY && dust() === dust0 + 2 * BOND_PAY, 'each bond LV pays its dust');
-  const b2 = bankBond([ROSTER[0].id], 5);
+  ok(bondOf(ROSTER[0].id) === 5, 'the dup stint counted once, not twice');
+  const b2 = bankBond([{ id: ROSTER[0].id, pts: 5 }]);
   ok(bondOf(ROSTER[0].id) === 10 && b2.dust === 0 && b2.ups.length === 0,
     'pts under the next tier pay nothing');
-  const b3 = bankBond([ROSTER[0].id], 10); // 20 total — LV2 lands at 12
+  const b3 = bankBond([{ id: ROSTER[0].id, pts: 10 }]); // 20 total — LV2 lands at 12
   ok(bondLv(ROSTER[0].id) === 2 && b3.dust === 2 * BOND_PAY, 'crossing LV2 pays the level');
   ok(topBond(3)[0].id === ROSTER[0].id && topBond(3)[0].pts === 20, 'topBond ranks the ledger');
+  const b4 = bankBond([{ id: ROSTER[2].id, pts: 0 }]);
+  ok(b4.dust === 0 && bondOf(ROSTER[2].id) === 0, 'a stage-9 pickup banks nothing');
   // in-run payoff: a trusted partner feeds the gym fountain — ROSTER[1]
   // sits at LV1 (still +0), so the diff isolates ROSTER[0]'s LV2 point
   const plain = new Battle(arena, [ROSTER[1], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3)).teamLuck();

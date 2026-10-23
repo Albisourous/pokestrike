@@ -2024,10 +2024,11 @@ function update(dt: number) {
       const gap = prevBest - battle.score;
       // the ladder grades every run — deep runs climb, early wipes bleed
       const rr = applyRunRating(stageReached, won, battle.asc);
-      // the lineup banks bond for cleared stages — level-ups pay dust
+      // the lineup banks bond for the stages each species actually fought —
+      // a stage-8 pickup earns for the stages it fielded, not the whole run
+      const cleared = won ? TOTAL_STAGES : Math.max(0, battle.waveIndex);
       const bond = bankBond(
-        battle.players.map((p) => p.def.id),
-        won ? TOTAL_STAGES : Math.max(0, battle.waveIndex),
+        battle.players.map((p) => ({ id: p.def.id, pts: Math.max(0, cleared - (p.def.joined ?? 0)) })),
       );
       // hall of fame: log the run, keep the slot it earned (-1 = missed)
       const place = recordBoard({

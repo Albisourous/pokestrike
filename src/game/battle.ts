@@ -953,6 +953,7 @@ export class Battle {
         shiny: p.shiny || undefined,
         hp: p.hp,
         luck: p.def.luck,
+        joined: p.def.joined,
         cdMod: p.cdMod,
         cd: p.cd,
         sash: p.sash,
@@ -1033,7 +1034,7 @@ export class Battle {
       if (!t) return;
       p.hp = Math.max(0, Math.min(t.hp, p.maxHp));
       p.dead = p.hp <= 0;
-      if (t.luck != null) p.def = { ...p.def, luck: t.luck };
+      if (t.luck != null || t.joined != null) p.def = { ...p.def, luck: t.luck, joined: t.joined };
       if (t.cdMod != null) p.cdMod = t.cdMod;
       if (t.cd != null) p.cd = Math.max(0, Math.min(t.cd, p.cdMax));
       if (t.sash != null) p.sash = t.sash;
@@ -4425,7 +4426,9 @@ export class Battle {
     const role = roleOf(nd);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(nd.stats) * m.hp);
-    p.def = p.shiny || p.def.luck ? { ...nd, shiny: p.shiny || undefined, luck: p.def.luck } : nd; // markers ride the def into the box
+    // markers ride the def into the box — joined too: the evolved form keeps
+    // the family's fielded history
+    p.def = p.shiny || p.def.luck || p.def.joined != null ? { ...nd, shiny: p.shiny || undefined, luck: p.def.luck, joined: p.def.joined } : nd;
     p.role = role;
     p.pow = m.pow * lvlPow(offStat(nd.stats, nd.type), p.lvl); // earned levels survive evolution
     p.rngMul = m.range;
@@ -4446,7 +4449,9 @@ export class Battle {
     const role = roleOf(def);
     const m = ROLE_MODS[role];
     const hp = Math.round(playerHp(def.stats) * m.hp * lvlHp(def.stats.hp, lvl));
-    p.def = def;
+    // the new species starts its bond clock now — waveIndex is the stage
+    // count already cleared, so pts at run end = cleared - joined
+    p.def = { ...def, joined: this.waveIndex };
     p.role = role;
     p.lvl = lvl;
     p.shiny = !!def.shiny;

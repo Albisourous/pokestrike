@@ -850,15 +850,17 @@ export const topBond = (n = 3): { id: number; pts: number }[] =>
     .sort((a, b) => b.pts - a.pts || a.id - b.id)
     .slice(0, n);
 
-// Called once per finished run. shortcut: the whole run's stage count credits
-// the final lineup — a mon drafted on stage 8 bonds like it fought all nine;
-// per-stage crediting would need a join-depth field on RunSave.team.
-export function bankBond(ids: number[], pts: number): { ups: { id: number; lv: number }[]; dust: number } {
+// Called once per finished run — one entry per fielded species with the
+// stages it actually fought (cleared − def.joined). A dup species banks
+// once; the longest stint counts.
+export function bankBond(entries: { id: number; pts: number }[]): { ups: { id: number; lv: number }[]; dust: number } {
   const ups: { id: number; lv: number }[] = [];
-  if (pts <= 0) return { ups, dust: 0 };
+  const byId = new Map<number, number>();
+  for (const e of entries) if (e.pts > 0) byId.set(e.id, Math.max(byId.get(e.id) ?? 0, e.pts));
+  if (!byId.size) return { ups, dust: 0 };
   const cur = bondPts();
   let dust = 0;
-  for (const id of new Set(ids)) {
+  for (const [id, pts] of byId) {
     const before = BOND_LEVELS.filter((at) => (cur[id] ?? 0) >= at).length;
     cur[id] = (cur[id] ?? 0) + pts;
     const after = BOND_LEVELS.filter((at) => cur[id] >= at).length;
@@ -881,7 +883,9 @@ export function bankBond(ids: number[], pts: number): { ups: { id: number; lv: n
 // v5: team[] gains luck/cdMod, the run gains tagEchoDone/modId — all read
 // through ?? defaults, and the lost per-mon fields can't be backfilled, so
 // no transform step exists; the bump just documents the shape
-const SAVE_VER = 5;
+// v6: team[] gains joined (bond's fielded-since stage) — same ?? default,
+// no transform
+const SAVE_VER = 6;
 
 export function migrateSaves() {
   const v = load<number>('pk_ver') ?? 0;
@@ -1025,7 +1029,7 @@ export interface RunSave {
   eggIn?: number; // ?-pool egg: stops until it hatches (v3+)
   eggJustLaid?: boolean; // the laying arrival doesn't consume a tick
   modId?: string; // the daily rule card applied to this run (v4+)
-  team: { id: number; lvl: number; shiny?: boolean; hp: number; luck?: number; cdMod?: number; cd?: number; sash?: boolean }[];
+  team: { id: number; lvl: number; shiny?: boolean; hp: number; luck?: number; joined?: number; cdMod?: number; cd?: number; sash?: boolean }[];
   tagEchoDone?: boolean; // ASC 9's owed echo visit — a spent flag stays spent (v5+)
   box: { id: number; lvl?: number; shiny?: boolean; luck?: number }[];
   boxHp: number[];

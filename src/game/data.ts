@@ -19,6 +19,7 @@ export interface SpeciesDef {
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
+  joined?: number; // waveIndex the species was fielded — bond credits stages it actually fought (draft picks leave it 0)
   evolvesTo?: number | number[]; // dex id(s) — an array asks the player to pick the branch
 }
 
