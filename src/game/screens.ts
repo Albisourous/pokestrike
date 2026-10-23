@@ -2388,6 +2388,18 @@ export const PARTNERS_BTN = { x: 30, y: SETS_BTN.y + SETS_BTN.h + 16, w: W - 60,
 // the squad strip — parked climb's team when one's banked, else the rival
 // echo or the hall's top lineup; a parked squad's tap jumps to CLIMB
 export const TEAM_BTN = { x: 30, y: PARTNERS_BTN.y + PARTNERS_BTN.h + 16, w: W - 60, h: 118 };
+
+// which mon a partners-strip tap is aiming at — null below the sprite row,
+// where a tap should just browse the dex
+export function partnersStripAt(x: number, y: number): number | null {
+  const s = PARTNERS_BTN;
+  if (y < s.y + 36) return null;
+  const partners = topBond(3);
+  const ids = partners.length ? partners.map((p) => p.id) : dexRecent(3);
+  if (!ids.length) return null;
+  const i = Math.round((x - (s.x + s.w / 2)) / 150 + (ids.length - 1) / 2);
+  return i >= 0 && i < ids.length ? ids[i] : null;
+}
 // TOWN's hit rects are building footprints — door + roof + its sign, so a
 // tap anywhere on a structure opens its overlay. GYM sits above the asc
 // card; its door taps ping the ladder below rather than open a screen.
@@ -2577,7 +2589,7 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.fillText(`${SHINY_CHARM_AT - dexN} more catches for the SHINY CHARM (x2 shinies)`, r.x + r.w / 2, r.y + r.h - 26);
   }
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('catch wild mons to fill the dex: they join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+  ctx.fillText('tap a row for its card · catches join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
 // a tap on a register row resolves to its species — the detail card's door
@@ -2670,6 +2682,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;
+    fitFont(ctx, traits.join(' · '), 7, r.w - 48);
     ctx.fillText(traits.join(' · '), cx, r.y + 288);
   }
 

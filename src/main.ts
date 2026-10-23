@@ -123,6 +123,7 @@ import {
   DEAL_BTN,
   SETS_BTN,
   PARTNERS_BTN,
+  partnersStripAt,
   TEAM_BTN,
   RAID_FIGHT,
 } from './game/screens';
@@ -1113,12 +1114,17 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     if (homeTab === 'mons' && inRect(p.x, p.y, SETS_BTN)) {
-      // LINE SETS — the card sells "TAP TO CLAIM" only while a bounty waits
+      // LINE SETS — the card sells "TAP TO CLAIM" only while a bounty waits;
+      // quiet card, the footer promises "TAP TO BROWSE THE DEX" — keep it true
       const ready = setsReady();
       if (ready.length) {
         for (const root of ready) claimSet(root);
         sfx('perfect');
-      } else sfx('ui');
+      } else {
+        dexOpen = true;
+        dexScroll = 0;
+        sfx('ui');
+      }
       return;
     }
     if (homeTab === 'town' && inRect(p.x, p.y, LAB_BTN)) {
@@ -1131,6 +1137,8 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       dexOpen = true;
       dexScroll = 0;
+      // a tap on the strip aims at its mon — the rest of the card browses
+      dexPick = inRect(p.x, p.y, PARTNERS_BTN) ? partnersStripAt(p.x, p.y) : null;
       return;
     }
     if (homeTab === 'mons' && inRect(p.x, p.y, TEAM_BTN)) {
