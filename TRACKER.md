@@ -71,3 +71,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 - **HUD on exact 16:9**: map/reward phases draw the run HUD under the map panel when `viewPad` is 0 — visible only on taller-than-16:9 screens (i.e. every phone). Map phase is self-sufficient (own stage header); left as designed.
 - **Tasks/HOF empty states**: WEEKLY tab and empty HALL OF FAME leave a large dead mid-panel — acceptable whitespace, consistent with the window kit.
 - **Retention layer already covers the directive**: near-miss `shortOfBest` line, rival echo, streak risk, daily/login calendar, first-win bonus, pity, bond LV-ups, rookie ladder, grind pay — no new hooks added.
+| 2026-10-23 | `pending` | battle/hud | ×2 chip no longer eats the stage tag — tag moved right of the corner chips (x97), capped clear of the stage pips, `fitFontB` shrinks long names; `· TRAINER` suffix dropped (intro banner carries it); ULT/streak row shifted to x99 | `git revert pending` |

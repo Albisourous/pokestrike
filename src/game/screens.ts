@@ -5579,12 +5579,15 @@ let scoreStr = '';
 
 export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1, t = 0) {
   ctx.font = fontB(9);
-  // a tiny dark window keeps the stage tag legible over any arena floor
-  uiWindow(ctx, { x: 46, y: 30, w: measureW(ctx, stageName) + 18, h: 20 }, { dark: true, shadow: false });
+  // a tiny dark window keeps the stage tag legible over any arena floor.
+  // Right of the corner chips (pause+ff end at x93), capped clear of the
+  // stage pips that start at x182 — long names fit-shrink inside the cap
+  const tagW = Math.min(measureW(ctx, stageName) + 18, 79);
+  uiWindow(ctx, { x: 97, y: 30, w: tagW, h: 20 }, { dark: true, shadow: false });
   ctx.fillStyle = INK_FAINT;
   ctx.textAlign = 'left';
-  // right of the pause chip (x 14..44) — the chip would eat the first letter
-  ctx.fillText(stageName, 54, 44);
+  fitFontB(ctx, stageName, 9, tagW - 10);
+  ctx.fillText(stageName, 103, 44);
   // run map in miniature: a pip per stage, gyms as diamonds — the whole
   // 9-stage climb is visible from the first fight
   const gap = 22;
@@ -5627,7 +5630,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   ctx.font = fontB(8);
   ctx.textAlign = 'left';
   const ready = ultIn <= 0;
-  let ux = 52;
+  let ux = 99; // right of the corner chips — the ×2 chip ends at x93
   if (streak > 1) {
     ctx.fillStyle = '#f08030';
     ctx.fillText(`PERFECT ×${streak}`, ux, 60);

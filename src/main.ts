@@ -2253,7 +2253,7 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        hud(battle.hardWave ? `${battle.stage.name} · TRAINER` : battle.stage.name);
+        hud(battle.stage.name); // the intro banner carries the trainer tag — the HUD tag stays short
         battle.render(ctx);
         if (battle.phase === 'reward') {
           drawReward(
