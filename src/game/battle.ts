@@ -595,6 +595,7 @@ export class Battle {
   // flickers old↔new faster and faster, then the new form lands
   private evoFx: { u: Unit; from: number; to: number; t: number; revealed: boolean }[] = [];
   paused = false; // mid-fight freeze — the pause chip in the arena corner
+  ff = false; // ×2 chip beside it — the sim runs two steps a frame, not a stretched dt
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
@@ -1526,6 +1527,12 @@ export class Battle {
         this.paused = true;
         this.pointerCancel(); // a frozen game drops the half-pull (or the leash)
         sfx('ui');
+        return;
+      }
+      const f = { x: c.x + c.w + 4, y: c.y, w: c.w, h: c.h };
+      if (p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h) {
+        this.ff = !this.ff;
+        sfx('ui', this.ff ? 1.3 : 0.8);
         return;
       }
     }
@@ -6292,6 +6299,24 @@ export class Battle {
       ctx.fillStyle = '#8890b8';
       ctx.fillRect(c.x + c.w / 2 - 5, c.y + c.h / 2 - 7, 4, 14);
       ctx.fillRect(c.x + c.w / 2 + 2, c.y + c.h / 2 - 7, 4, 14);
+      // fast-forward chip, right of pause — lit gold while ×2 is armed
+      const f = { x: c.x + c.w + 4, y: c.y, w: c.w, h: c.h };
+      ctx.globalAlpha = this.ff ? 0.9 : 0.6;
+      ctx.fillStyle = '#101430';
+      ctx.beginPath();
+      ctx.arc(f.x + f.w / 2, f.y + f.h / 2, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = this.ff ? '#ffd84d' : '#8890b8';
+      const fx = f.x + f.w / 2, fy = f.y + f.h / 2;
+      for (const dx of [-7, 0]) {
+        ctx.beginPath();
+        ctx.moveTo(fx + dx, fy - 6);
+        ctx.lineTo(fx + dx + 7, fy);
+        ctx.lineTo(fx + dx, fy + 6);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     // boss nameplate — the gym fight reads as a real boss encounter
