@@ -304,6 +304,14 @@ const AMBIENT: Record<Theme, { n: number; col: string; vx: number; vy: number; r
 // theme → its sky: groves rain, caverns swirl sand, the volcano bakes
 // under sun, the heights blow. ~Half of rolled courts get weather.
 const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
+// block boulders take the wall ring's prop tint so cover reads as the same
+// stone as the court's edge — scorched at the volcano, iced on the summit
+const BLOCK_TINT: Record<Theme, string | undefined> = {
+  grove: undefined,
+  cavern: 'rgba(40,40,90,0.30)',
+  volcano: 'rgba(70,20,8,0.45)',
+  sky: 'rgba(150,190,230,0.45)',
+};
 
 // graphics quality → ambient/weather particle density multiplier — low
 // trims to a quarter but never to zero; a still court shouldn't read dead
@@ -2317,20 +2325,33 @@ export class Battle {
 
   // A stone slab: slate body under a boulder skin tiled from the gracidea
   // pack (Strength-rock clusters — pure Gen-3 canon), rim + top bevel.
+  // A stone slab: darkened cobble face (the wall ring's cliff look at cover
+  // scale) with real strength-boulders seated along the top edge.
   private drawBlock(ctx: CanvasRenderingContext2D, b: Rect) {
     ctx.fillStyle = 'rgba(6,8,16,0.4)';
     ctx.fillRect(b.x + 3, b.y + 5, b.w, b.h);
-    ctx.fillStyle = '#3d4358';
-    ctx.fillRect(b.x, b.y, b.w, b.h);
-    const cell = 26;
     ctx.save();
     ctx.beginPath();
     ctx.rect(b.x, b.y, b.w, b.h);
     ctx.clip();
+    const cell = 22;
     for (let ty = b.y - cell / 2; ty < b.y + b.h; ty += cell)
       for (let tx = b.x - cell / 2; tx < b.x + b.w; tx += cell)
-        drawTile(ctx, MT.TILE_ROCK, tx, ty, cell, cell);
+        drawSlice(ctx, MT.TILE_COBBLE, tx, ty, cell, cell, 'rgba(30,36,70,0.42)');
     ctx.restore();
+    // the boulders ARE the cover — a clustered row seated on the slab,
+    // overhanging its lip like the ring props, small rocks at the foot
+    for (let i = 0, tx = b.x + 4; tx < b.x + b.w - 14; i++) {
+      const j = hash(b.x * 7.1 + b.y * 3.9 + i * 11.3);
+      const bs = 38 + j * 14;
+      drawSlice(ctx, MT.TILE_ROCK, tx + (j - 0.5) * 10, b.y - bs * 0.3, bs, bs * (30 / 28), BLOCK_TINT[this.theme]);
+      tx += bs * 0.72;
+    }
+    for (let i = 0, tx = b.x + 10; tx < b.x + b.w - 12; i++) {
+      const j = hash(b.x * 3.7 + b.y * 9.2 + i * 5.5);
+      if (j > 0.55) drawSlice(ctx, MT.ROCK_SMALL, tx + (j - 0.5) * 12, b.y + b.h - 14 - j * 8, 21, 15, BLOCK_TINT[this.theme]);
+      tx += 26 + j * 18;
+    }
     ctx.strokeStyle = '#1d2338';
     ctx.lineWidth = 2;
     ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);

@@ -141,7 +141,7 @@ const FILL: Record<Theme, { r: TileRect; t?: string; s: number; wash?: string }>
   grove: { r: MT.TILE_GRASSF, s: 1.2 },
   cavern: { r: MT.TILE_COBBLE, t: 'rgba(14,14,34,0.20)', s: 1.3 },
   volcano: { r: MT.TILE_COBBLE, t: 'rgba(96,32,8,0.50)', s: 1.3 },
-  sky: { r: MT.TILE_SNOWF, s: 1.6, wash: 'rgba(130,194,232,0.55)' },
+  sky: { r: MT.TILE_SNOWF, s: 1.6, wash: 'rgba(130,194,232,0.32)' },
 };
 
 function floor(theme: Theme) {
@@ -222,18 +222,16 @@ function floor(theme: Theme) {
       g.stroke();
     }
   } else if (theme === 'sky') {
-    // cloud-banked floor: faint blue underside under each white cap
-    for (let i = 0; i < 90; i++) {
-      const hx = hash(i * 5.1) * FW, hy = hash(i * 2.3 + 8) * FH;
-      const pr = 24 + hash(i * 1.9) * 58;
-      g.fillStyle = 'rgba(70,120,170,0.08)';
-      g.beginPath();
-      g.arc(hx, hy + 12, pr, 0, TAU);
-      g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.14)';
-      g.beginPath();
-      g.arc(hx, hy, pr * (0.8 + hash(i * 4.4) * 0.4), 0, TAU);
-      g.fill();
+    // a summit court: real snow-drift patches stamped sparse over the
+    // drift floor — the atlas's own asset, not painted bubbles
+    const drift = slice(MT.TILE_DRIFT);
+    if (drift) {
+      for (let i = 0; i < 14; i++) {
+        const s = 1.5 + hash(i * 2.9 + 5) * 1.1;
+        g.globalAlpha = 0.22 + hash(i * 7.3) * 0.3;
+        g.drawImage(drift, hash(i * 5.1) * FW, hash(i * 2.3 + 8) * FH, drift.width * s, drift.height * s);
+      }
+      g.globalAlpha = 1;
     }
   }
   floors.set(theme, c);
@@ -263,7 +261,18 @@ const WALL_PROPS: Record<Theme, { hi: PropSpec[]; lo: PropSpec[]; pile?: boolean
     lo: [{ r: MT.ROCK_SMALL, t: 'rgba(70,20,8,0.45)' }, { r: MT.TILE_ROCK, t: 'rgba(70,20,8,0.45)' }],
     pile: true,
   },
-  sky: { hi: [], lo: [] }, // its ring is a painted cloud bank, not props
+  sky: {
+    // the summit court — frosted pines and rocks stand the rim; the flat
+    // drifts stay in the low rows where a mound's silhouette works
+    hi: [
+      { r: MT.TREE_ASH, t: 'rgba(150,200,240,0.55)' },
+      { r: MT.TREE_ASH2, t: 'rgba(150,200,240,0.55)' },
+      { r: MT.ROCK_SMALL, t: 'rgba(150,190,230,0.45)' },
+      { r: MT.TILE_ROCK, t: 'rgba(150,190,230,0.40)' },
+    ],
+    lo: [{ r: MT.TILE_DRIFT }, { r: MT.ROCK_SMALL, t: 'rgba(150,190,230,0.45)' }],
+    pile: true,
+  },
 };
 
 // The rim is a cliff face, not boards: a darkened cobble band falls away
@@ -271,10 +280,11 @@ const WALL_PROPS: Record<Theme, { hi: PropSpec[]; lo: PropSpec[]; pile?: boolean
 // drop line inside the rim, and the face bottoms out in darkness. `ds`
 // shrinks the 28px cobble so the face grain is finer than the floor's.
 const FACE_D = 19;
-const FACE: Partial<Record<Theme, { r: TileRect; t: string; ds: number }>> = {
+const FACE: Record<Theme, { r: TileRect; t: string; ds: number }> = {
   grove: { r: MT.TILE_COBBLE, t: 'rgba(16,40,14,0.48)', ds: 0.68 },
   cavern: { r: MT.TILE_COBBLE, t: 'rgba(8,8,30,0.45)', ds: 0.68 },
   volcano: { r: MT.TILE_COBBLE, t: 'rgba(44,10,2,0.64)', ds: 0.68 },
+  sky: { r: MT.TILE_COBBLE, t: 'rgba(130,180,225,0.55)', ds: 0.68 }, // iced mesa
 };
 // scaled-down face tile, baked once per theme next to the floor bakes
 const faceTiles = new Map<Theme, HTMLCanvasElement | null>();
@@ -282,10 +292,6 @@ function faceTile(theme: Theme): HTMLCanvasElement | null {
   const hit = faceTiles.get(theme);
   if (hit !== undefined) return hit;
   const F = FACE[theme];
-  if (!F) {
-    faceTiles.set(theme, null); // sky has no rock face — permanent miss
-    return null;
-  }
   const s = slice(F.r, F.t);
   if (!s) return null; // atlas still streaming — retry next frame, don't cache
   const c = document.createElement('canvas');
@@ -371,41 +377,6 @@ export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: numbe
     ctx.lineWidth = lw;
     rr(ctx, a.x + inset, a.y + inset, a.w - inset * 2, a.h - inset * 2, 12);
     ctx.stroke();
-  }
-  // sky's ring is a rolling cloud bank — ambience, so painted puffs are OK
-  // here. A second, darker row rides outside the first: height, like the
-  // other courts' rock face.
-  if (theme === 'sky') {
-    const bank = (bx: number, by: number, s: number, back = false) => {
-      for (let k = -1; k <= 1; k++) {
-        ctx.fillStyle = back ? 'rgba(74,108,152,0.5)' : 'rgba(120,160,205,0.45)'; // blue-gray underside
-        ctx.beginPath();
-        ctx.arc(bx + k * 13 * s, by + 6, 13 * s, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = back ? 'rgba(196,214,238,0.55)' : 'rgba(255,255,255,0.88)';
-        ctx.beginPath();
-        ctx.arc(bx + k * 13 * s, by, 13 * s * (1 - Math.abs(k) * 0.18), 0, TAU);
-        ctx.fill();
-      }
-    };
-    for (let i = 0, x = a.x + 24; x < a.x + a.w - 10; i++) {
-      bank(x + (hash(i * 7.1) - 0.5) * 16, a.y + 4 + (i % 2) * 5, 1.15 + hash(i * 3.7) * 0.3, true);
-      bank(x + (hash(i * 9.7) - 0.5) * 10, a.y + 24 + (i % 2) * 6, 1 + hash(i * 5.1) * 0.3);
-      x += 46 + hash(i * 3.3) * 14;
-    }
-    for (let i = 0, y = a.y + 84; y < a.y + a.h - 120; i++) {
-      bank(a.x - 8 + (hash(i * 6.3) - 0.5) * 4, y - 8, 1.05 + hash(i * 2.9) * 0.3, true);
-      bank(a.x + a.w + 8 + (hash(i * 4.1) - 0.5) * 4, y - 2, 1.05 + hash(i * 8.7) * 0.3, true);
-      bank(a.x + 10 + (hash(i * 8.3) - 0.5) * 4, y, 0.9 + hash(i * 4.7) * 0.3);
-      bank(a.x + a.w - 10 + (hash(i * 3.1) - 0.5) * 4, y + 6, 0.9 + hash(i * 7.7) * 0.3);
-      y += 58 + hash(i * 3.9) * 16;
-    }
-    for (let i = 0, x = a.x + 50; x < a.x + a.w - 40; i++) {
-      bank(x + (hash(i * 3.7) - 0.5) * 20, a.y + a.h + 12, 0.85 + hash(i * 9.3) * 0.3, true);
-      bank(x, a.y + a.h - 6, 0.7 + hash(i * 6.7) * 0.3);
-      x += 90 + hash(i * 5.5) * 40;
-    }
-    return;
   }
   // nothing to stamp until the atlas lands — rim + AO still carry the edge
   if (!gracidea()) return;
