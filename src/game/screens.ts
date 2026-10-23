@@ -55,6 +55,7 @@ export interface RunResult {
   grind?: { n: number; pay: number }; // nth finished run today — the session pays out
   dexPay?: number; // dex-milestone stars this run banked — its own findings row
   bondDust?: number; // dust the lineup's bond level-ups paid — its own findings row
+  bondUps?: { id: number; lv: number }[]; // which squad members crossed a bond rung — tagged on the attachment row
   rookie?: { label: string; pay: number }[]; // rookie steps this run cleared — one row each
 }
 
@@ -5456,6 +5457,12 @@ export function drawResult(
       ctx.font = fontB(6);
       ctx.fillStyle = INK_FAINT;
       ctx.fillText(roleTag(def), mx, sy + 68);
+      // a bond level-up lands on a face, not just the findings line
+      const bu = res.bondUps?.find((u) => u.id === def.id);
+      if (bu) {
+        ctx.fillStyle = '#c9a8ff';
+        ctx.fillText(`BOND LV${bu.lv} ▲`, mx, sy + 79);
+      }
     });
   }
 

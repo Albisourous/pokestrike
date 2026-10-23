@@ -2061,6 +2061,7 @@ function update(dt: number) {
         starsBonus: won ? firstWinBonus() : 0, // once-a-day clear bonus — banks before the report draws it
         grind: grindBonus(), // every finished run today pays a little more
         bondDust: bond.dust, // bond level-ups — the report's dust row
+        bondUps: bond.ups.length ? bond.ups : undefined, // who leveled — tagged on the squad attachment
         rookie: rookieCheck(), // run/stage/win steps clear when the run banks
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
