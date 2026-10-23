@@ -396,14 +396,6 @@ function rim(
   ctx.stroke();
 }
 
-// the GBA box frame: one strong INK border — no nested rims
-function cardFrame(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad: number) {
-  ctx.strokeStyle = INK;
-  ctx.lineWidth = 3;
-  roundRect(ctx, r.x + 1.5, r.y + 1.5, r.w - 3, r.h - 3, rad);
-  ctx.stroke();
-}
-
 // a star drawn as a path — the ★ glyph's bearings drift off-center in a frame
 function fillStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   ctx.beginPath();
@@ -2339,7 +2331,7 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
     uiWindow(ctx, cr, { rad: 7, shadow: false, ...(sel ? { tint: GOLD } : {}) });
     ctx.font = font(8);
     ctx.textAlign = 'center';
-    ctx.fillStyle = locked ? INK_FAINT : INK;
+    ctx.fillStyle = INK;
     ctx.fillText(`${i}`, cr.x + cr.w / 2 + (sel ? 4 : 0), cr.y + cr.h / 2 + 5);
     if (sel) cursorTri(ctx, cr.x + 6, cr.y + cr.h / 2, t);
     ctx.restore();
@@ -2915,14 +2907,15 @@ export function drawHatch(
   ctx.fillText('PULL ×10', PULL10_BTN.x + PULL10_BTN.w / 2, PULL10_BTN.y + 25);
   pricePlaque(ctx, PULL1_BTN, info.free ? null : PULL_COST, info.free || info.stars >= PULL_COST);
   pricePlaque(ctx, PULL10_BTN, PULL10_COST, info.stars >= PULL10_COST);
-  // the ten-pull's built-in discount — a corner tag inside the pill
+  // the ten-pull's built-in discount — a corner tag kept inside the pill's
+  // rounded silhouette (16px in from the edge, past the corner radius)
   ctx.font = fontB(7);
   const dv = ctx.measureText('−10%').width + 12;
-  roundRect(ctx, PULL10_BTN.x + PULL10_BTN.w - dv - 8, PULL10_BTN.y + 6, dv, 15, 7);
+  roundRect(ctx, PULL10_BTN.x + PULL10_BTN.w - dv - 16, PULL10_BTN.y + 8, dv, 15, 7);
   ctx.fillStyle = 'rgba(40,48,88,0.55)';
   ctx.fill();
   ctx.fillStyle = '#ffe89d';
-  ctx.fillText('−10%', PULL10_BTN.x + PULL10_BTN.w - dv / 2 - 8, PULL10_BTN.y + 17);
+  ctx.fillText('−10%', PULL10_BTN.x + PULL10_BTN.w - dv / 2 - 16, PULL10_BTN.y + 19);
   if (info.free) {
     ctx.save();
     ctx.globalAlpha = 0.45 + Math.sin(s.t * 5) * 0.3;
@@ -2967,6 +2960,7 @@ export function drawHatch(
   // can never drift from pullSpecies'; shiny rides every pull so it gets
   // its own cell with live odds. A payout flash borrows the slot
   if (s.phase === 'idle') {
+    uiWindow(ctx, RATE_BAND, { rad: 8, shadow: false });
     if (info.flash) {
       ctx.textAlign = 'center';
       ctx.font = fontB(9);
@@ -2980,15 +2974,11 @@ export function drawHatch(
         ['EPIC', PULL_RATES.epic, '#f0b02f'],
         [wknd ? 'SHINY ×2' : 'SHINY', shinyOdds(), GOLD],
       ];
-      roundRect(ctx, RATE_BAND.x, RATE_BAND.y, RATE_BAND.w, RATE_BAND.h, 8);
-      ctx.fillStyle = PAPER_HI;
-      ctx.fill();
-      rim(ctx, RATE_BAND, 8, '#d0d0c8', 1);
       const cw = RATE_BAND.w / cells.length;
       cells.forEach(([label, pct, color], i) => {
         const cx = RATE_BAND.x + i * cw;
         if (i) {
-          ctx.strokeStyle = '#232a4a';
+          ctx.strokeStyle = '#d0d0c8'; // hairline — dark navy shouts on paper
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(cx + 0.5, RATE_BAND.y + 8);
@@ -3013,12 +3003,12 @@ export function drawHatch(
   // The pull show covers the whole face in 0.92 black — skip the shop's
   // sprites/deal rolls entirely once the theatre takes over
   if (s.phase === 'idle') {
-  ctx.font = font(10);
+  // the shelf gets its own ink band — a window header for the section
+  uiBand(ctx, { x: SPARK_VIEW.x - 6, y: SPARK_VIEW.y - 36, w: SPARK_VIEW.w + 12, h: 16 }, 'SPARK EXCHANGE', { h: 16, rad: 5 });
+  ctx.textAlign = 'center';
+  ctx.font = fontB(6.5);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('SPARK EXCHANGE', W / 2, SPARK_VIEW.y - 24);
-  ctx.font = fontB(8);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('buy a mon outright with dust — sparked or pulled, it joins the dex', W / 2, SPARK_VIEW.y - 10);
+  ctx.fillText('buy a mon outright with dust — sparked or pulled, it joins the dex', W / 2, SPARK_VIEW.y - 4);
 
   const seen = new Set(dexIds());
   ctx.save();
@@ -3037,12 +3027,9 @@ export function drawHatch(
     const epic = spTier >= 3 || INVADER_IDS.has(def.id);
     const cell = { x: cx + 4, y: cy + 4, w: SPARK_CELL_W - 8, h: SPARK_CELL_H - 8 };
     const tcol = epic ? '#f0b02f' : spTier === 2 ? '#5a9bf0' : '#d0d0c8';
-    roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 8);
-    ctx.fillStyle = PAPER_HI;
-    ctx.fill();
-    ctx.strokeStyle = tcol;
-    ctx.lineWidth = spTier >= 2 ? 1.5 : 1;
-    ctx.stroke();
+    // each shelf item is a small window — rare+ keeps its tint as a rim trace
+    uiWindow(ctx, cell, { rad: 8, shadow: false });
+    if (spTier >= 2) rim(ctx, cell, 8, tcol, 1.5);
     // a type-tinted floor pad — the cell's mon stands on its own color
     ctx.fillStyle = `${TYPE_COLOR[def.type]}26`;
     ctx.beginPath();
@@ -3108,10 +3095,13 @@ export function drawHatch(
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
-        fitFontB(ctx, `TAP AGAIN · ◆${cost}`, 9, cell.w - 12);
+        const cue = `TAP AGAIN · ◆${cost}`;
+        fitFontB(ctx, cue, 9, cell.w - 26);
         ctx.textAlign = 'center';
         ctx.fillStyle = GOLD;
-        ctx.fillText(`TAP AGAIN · ◆${cost}`, cell.x + cell.w / 2, cell.y + 92);
+        ctx.fillText(cue, cell.x + cell.w / 2, cell.y + 92);
+        // the armed row earns the handheld ▶ — its blink is the cursor's own
+        cursorTri(ctx, cell.x + cell.w / 2 - ctx.measureText(cue).width / 2 - 11, cell.y + 88, s.t, GOLD);
         ctx.fillStyle = GOLD;
         ctx.fillRect(cell.x + 4, cell.y + cell.h - 5, (cell.w - 8) * Math.max(0, info.armedFrac ?? 0), 3);
       } else {
@@ -3145,7 +3135,7 @@ export function drawHatch(
 
   ctx.textAlign = 'center';
   ctx.font = fontB(7);
-  ctx.fillStyle = INK_FAINT;
+  ctx.fillStyle = INK_SOFT;
   ctx.fillText('pulled or sparked mons join the dex + future drafts · tap outside to close', W / 2, r.y + r.h - 14);
   }
 
@@ -3606,38 +3596,31 @@ function drawRevealScene(
 // 'results' — the whole pull laid out in the parked modal; a single pull
 // gets the hero card. The theatre's bars slide back open over the top.
 function drawPullSummary(ctx: CanvasRenderingContext2D, s: HatchState) {
-  ctx.fillStyle = 'rgba(6,10,22,0.72)';
-  ctx.fillRect(0, 0, W, H);
+  scrim(ctx, 0.72);
   const m = HATCH_MODAL;
-  ctx.fillStyle = 'rgba(0,0,0,0.4)';
-  roundRect(ctx, m.x + 3, m.y + 5, m.w, m.h, 12);
-  ctx.fill();
-  roundRect(ctx, m.x, m.y, m.w, m.h, 12);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, m, 12, GOLD, 2);
-  edge(ctx, m, 12);
+  uiPanel(ctx, m, s.label ?? 'PULL RESULTS');
   const cx = m.x + m.w / 2;
 
   // a winning queue warms the whole card — gold haze behind the header
   if (s.results.some((r) => r.shiny || r.rarity >= 2)) {
+    ctx.save();
+    roundRect(ctx, m.x + 4, m.y + 36, m.w - 8, m.h - 40, 7);
+    ctx.clip();
     const wg = ctx.createRadialGradient(cx, m.y + 90, 10, cx, m.y + 90, 240);
     wg.addColorStop(0, 'rgba(255,216,77,0.14)');
     wg.addColorStop(1, 'rgba(255,216,77,0)');
     ctx.fillStyle = wg;
     ctx.fillRect(m.x, m.y, m.w, m.h);
+    ctx.restore();
   }
-
-  ctx.textAlign = 'center';
-  ctx.font = font(11);
-  ctx.fillStyle = GOLD;
-  ctx.fillText(s.label ?? 'PULL RESULTS', cx, m.y + 36);
   if (s.results.length === 1) {
     const res = s.results[0];
     const def = res && speciesById(res.id);
     if (res && def) {
       void loadSprite(res.id);
-      // the hero card pops in like the reveal did — overshoot, then settle
+      // the hero card pops in like the reveal did — overshoot, then settle;
+      // a small window is the stage it bursts out of
+      uiWindow(ctx, { x: cx - 80, y: m.y + 94, w: 160, h: 134 }, { shadow: false });
       const k = eo(clamp01(s.t / 0.3));
       ctx.save();
       ctx.translate(cx, m.y + 170);
@@ -3677,12 +3660,9 @@ function drawPullSummary(ctx: CanvasRenderingContext2D, s: HatchState) {
       const sc = (0.4 + 0.6 * k) * (1 + 0.3 * Math.sin(Math.PI * k));
       ctx.scale(sc, sc);
       ctx.translate(-(cell.x + cell.w / 2), -(cell.y + cell.h / 2));
-      roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 7);
-      ctx.fillStyle = PAPER;
-      ctx.fill();
-      ctx.strokeStyle = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? '#5a9bf0' : '#d0d0c8';
-      ctx.lineWidth = res.rarity >= 2 ? 1.5 : 1;
-      ctx.stroke();
+      // each dealt card is a small window — rare+ keeps its tint on the rim
+      uiWindow(ctx, cell, { rad: 7, shadow: false, rim: false });
+      if (res.rarity >= 2) rim(ctx, cell, 7, res.rarity >= 3 ? '#c05df0' : '#5a9bf0', 1.5);
       // big pulls keep their win shimmer — a second rim that breathes
       if (res.shiny || res.rarity >= 3) {
         ctx.globalAlpha = 0.45 + 0.3 * Math.sin(s.t * 6 + i);
@@ -3814,13 +3794,8 @@ function drawLabCard(
 ) {
   const maxed = lvl >= u.max;
   const cost = u.costs[lvl] ?? 0;
-  ctx.fillStyle = 'rgba(0,0,0,0.35)';
-  roundRect(ctx, r.x + 2, r.y + 4, r.w, r.h, 8);
-  ctx.fill();
-  roundRect(ctx, r.x, r.y, r.w, r.h, 8);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 8);
+  // each upgrade is a small window — the tinted header band stays content
+  uiWindow(ctx, r, { rim: false });
 
   // the tinted header carries the item icon — training reads gold, tools blue
   const band = { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 38 };
@@ -3884,21 +3859,15 @@ function drawLabCard(
 export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: number) {
   const r = HATCH_PANEL;
   void loadItem('star-piece');
-  ctx.fillStyle = 'rgba(6,10,22,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 14);
+  scrim(ctx, 0.82);
+  uiPanel(ctx, r, "PROF.'S LAB");
 
+  // the strip between band and the card view — tagline left, wallet right
   ctx.textAlign = 'left';
-  ctx.font = font(15);
-  ctx.fillStyle = GOLD;
-  ctx.fillText("PROF.'S LAB", r.x + 22, r.y + 42);
   ctx.font = fontB(8);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('SPEND YOUR STAR PIECES', r.x + 22, r.y + 60);
-  balanceChip(ctx, { x: r.x + r.w - 178, y: r.y + 22, w: 160, h: 32 }, stars);
+  ctx.fillStyle = INK_SOFT;
+  ctx.fillText('SPEND YOUR STAR PIECES', r.x + 16, r.y + 60);
+  balanceChip(ctx, { x: r.x + r.w - 176, y: r.y + 42, w: 160, h: 28 }, stars);
 
   const { heads, cards } = labLayout();
   const lvls = labLevelMap();
@@ -3908,16 +3877,8 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   ctx.clip();
   for (const hd of heads) {
     const hy = LAB_VIEW.y + hd.y - scroll;
-    ctx.textAlign = 'left';
-    fitFont(ctx, hd.text, 9, LAB_VIEW.w - 8);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(hd.text, LAB_VIEW.x + 4, hy + 14);
-    ctx.strokeStyle = 'rgba(90,98,136,0.35)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(LAB_VIEW.x + 4, hy + 21);
-    ctx.lineTo(LAB_VIEW.x + LAB_VIEW.w - 4, hy + 21);
-    ctx.stroke();
+    // each section wears the same mini ink band the spark shelf does
+    uiBand(ctx, { x: LAB_VIEW.x - 4, y: hy, w: LAB_VIEW.w + 8, h: 16 }, hd.text, { h: 16, rad: 5 });
   }
   for (const c of cards) {
     const cr = { ...c.r, y: c.r.y + LAB_VIEW.y - scroll };
@@ -5476,29 +5437,16 @@ export function settingsSegSet(key: SettingsSegKey, i: number) {
 }
 
 export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, vals: Settings) {
-  ctx.fillStyle = 'rgba(4,6,16,0.9)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, SETTINGS_PANEL.x, SETTINGS_PANEL.y, SETTINGS_PANEL.w, SETTINGS_PANEL.h, 14);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, SETTINGS_PANEL, 14, GOLD, 2);
-  edge(ctx, SETTINGS_PANEL, 14);
+  const cdef = SETTINGS_CATS.find((c) => c.id === cat)!;
+  scrim(ctx, 0.75);
+  uiPanel(ctx, SETTINGS_PANEL, 'SETTINGS', { sub: cdef.tab });
 
-  ctx.textAlign = 'center';
-  ctx.font = font(12);
-  ctx.fillStyle = GOLD;
-  ctx.fillText('SETTINGS', SET_RAIL.x + SET_RAIL.w / 2, SETTINGS_PANEL.y + 34);
-
-  // category pills: icon circle + bold name + dim sub — the live category
-  // fills gold-tinted, the rest stay ink
+  // category tabs — small window cells; the live one inverts to the ink
+  // slab (uiRow's on-look). Icons keep their gold/pale circles.
   SETTINGS_CATS.forEach((c, i) => {
     const r = settingsTabRect(i);
     const on = c.id === cat;
-    roundRect(ctx, r.x, r.y, r.w, r.h, 16);
-    ctx.fillStyle = on ? INK : PAPER;
-    ctx.fill();
-    rim(ctx, r, 16, on ? GOLD : '#d0d0c8', on ? 2 : 1);
-    edge(ctx, r, 16);
+    uiWindow(ctx, r, { dark: on, rad: 16 });
     const cx = r.x + 34;
     const cy = r.y + r.h / 2;
     ctx.beginPath();
@@ -5512,40 +5460,35 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
     else gearGlyph(ctx, cx, cy, 1.15, ink);
     ctx.textAlign = 'left';
     fitFont(ctx, c.name, 9, r.w - 70);
-    ctx.fillStyle = on ? INK : INK_SOFT;
+    ctx.fillStyle = on ? PARCH : INK_SOFT;
     ctx.fillText(c.name, r.x + 62, r.y + 35);
     ctx.font = fontB(8);
-    ctx.fillStyle = INK_FAINT;
+    ctx.fillStyle = on ? '#a8b0d0' : INK_FAINT;
     ctx.fillText(c.tab, r.x + 62, r.y + 53);
   });
 
-  // the content panel — striped band names the live category
+  // the live category's header — an ink slab row under the title band.
+  // (SET_BAND's old y already clears the uiBand; the nudge keeps it so.)
   const P = SET_PANEL;
-  roundRect(ctx, P.x, P.y, P.w, P.h, 10);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, P, 10, '#d0d0c8', 1);
-  edge(ctx, P, 10);
-  stripeBand(ctx, SET_BAND, GOLD);
-  const cdef = SETTINGS_CATS.find((c) => c.id === cat)!;
-  ctx.textAlign = 'left';
-  ctx.font = font(15);
-  ctx.fillStyle = INK;
-  ctx.fillText(cdef.name, SET_BAND.x + 16, SET_BAND.y + 32);
-  ctx.font = fontB(8);
-  ctx.globalAlpha = 0.75;
-  ctx.fillText(cdef.sub, SET_BAND.x + 16, SET_BAND.y + 47);
-  ctx.globalAlpha = 1;
+  uiRow(ctx, { x: SET_ROW.x, y: SET_BAND.y + 24, w: SET_ROW.w, h: 36 }, cdef.name, {
+    on: true,
+    sub: cdef.sub,
+    px: 11,
+  });
 
   if (cat === 'trainer') {
     const sel = trainerPick();
     AVATARS.forEach((a, i) => {
       const r = avatarRect(i);
       const on = a.id === sel;
-      roundRect(ctx, r.x, r.y, r.w, r.h, 8);
-      ctx.fillStyle = on ? INK : '#0a0d18';
-      ctx.fill();
-      rim(ctx, r, 8, on ? GOLD : '#d0d0c8', on ? 2 : 1);
+      // tiny windows — the picked trainer pops ink + a gold rim
+      uiWindow(ctx, r, on ? { dark: true, rim: false, rad: 8 } : { tint: '#0a0d18', rim: false, rad: 8 });
+      if (on) {
+        ctx.strokeStyle = GOLD;
+        ctx.lineWidth = 2;
+        roundRect(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 6);
+        ctx.stroke();
+      }
       drawNpc(ctx, `${a.id}_down_0`, r.x + r.w / 2, r.y + 52, 50);
       ctx.textAlign = 'center';
       ctx.font = font(6);
