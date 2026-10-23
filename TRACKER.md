@@ -38,6 +38,7 @@ Roadmap, in order: bond payoff inside the run (needs balance thought first)
 | 2026-10-23 | `755e695` | dex/hof | register lists all `DEX_ALL` slots — unseen lines ghost `? ???` + `#N` (1/223 no longer leaves a void); ghost taps don't open cards; empty HALL OF FAME gets a `START A CLIMB` gold door → draft (supersedes the "sparse states kept" call below) | `git revert 755e695` |
 | 2026-10-23 | `7ab173a` | help | copy pass on the HOW TO PLAY deck — 7 unclear lines rewritten (power = release point, melee countdowns, READY term consistency, gold-band naming); `COACH ON` pill renamed `TUTORIAL ON` to match its own button | `git revert 7ab173a` |
 | 2026-10-23 | `8146c12` | sw | `controllerchange` → reload when already controlled: a deploy's new SW was claiming open clients while the stale bundle stayed in memory (the InvalidStateError crash report came from build `1348faa`, 13 min older than the `beafdac` fix) | `git revert 8146c12` |
+| 2026-10-23 | `e21c241` | crash | `unhandledrejection` latch skips `audio device` rejections — a benign iOS resume race shouldn't paint a fatal card over a live run (backstop to `beafdac`'s wrapped sources) | `git revert e21c241` |
 
 ## Audit notes (2026-10-23, HIG rubric crawl — assessed, mostly no change)
 
