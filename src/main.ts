@@ -127,6 +127,7 @@ import {
   TEAM_BTN,
   RAID_FIGHT,
   raidMonAt,
+  echoMonAt,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
@@ -1105,6 +1106,15 @@ canvas.addEventListener('pointerdown', (e) => {
           sfx('ui');
           return;
         }
+      }
+      // the pitch ghosts are the same door class — tap one for its card
+      const ghost = echoMonAt(p.x, p.y);
+      if (ghost != null) {
+        sfx('ui');
+        dexOpen = true;
+        dexScroll = 0;
+        dexPick = ghost;
+        return;
       }
     }
     if (homeTab === 'shop' && (inRect(p.x, p.y, HATCH_BTN) || inRect(p.x, p.y, DEAL_BTN))) {

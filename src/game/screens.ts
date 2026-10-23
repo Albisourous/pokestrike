@@ -761,6 +761,19 @@ export const TODAY_HITS: { tab: HomeTab; x: number; y: number; w: number; h: num
   h: TODAY_CARD.h,
 }));
 
+// the fallen team's ghosts haunt the pitch foot — a tap on one deep-links
+// its dex card, the same contract as PARTNERS/RAID sprites
+export function echoMonAt(x: number, y: number): number | null {
+  const echo = echoIds();
+  if (!echo?.length) return null;
+  const ids = echo.slice(0, 3);
+  for (let i = 0; i < ids.length; i++) {
+    const ex = PITCH.x + PITCH.w * (0.2 + i * 0.3);
+    if (inRect(x, y, { x: ex - 30, y: PITCH.y + PITCH.h - 100, w: 60, h: 80 })) return ids[i].id;
+  }
+  return null;
+}
+
 // Wild mons at the screen edges — the stadium crowd, clear of the pitch
 const WILD_MONS: [number, number, number][] = [
   [16, 484, 118],
