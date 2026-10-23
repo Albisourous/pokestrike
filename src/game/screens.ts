@@ -2599,10 +2599,11 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
     const cr = ascCellRect(i);
     const sel = i === pick;
     const locked = i > cap;
+    const live = !locked && !sel && i <= pick; // lower rungs stay lit — every rule stacks, StS-style
     ctx.save();
     if (sel) ctx.translate(0, -3); // the picked rung rides proud of the track
     if (locked) ctx.globalAlpha = 0.45; // locked rungs dim to ghost windows
-    uiWindow(ctx, cr, { rad: 7, shadow: false, ...(sel ? { tint: GOLD } : {}) });
+    uiWindow(ctx, cr, { rad: 7, shadow: false, ...(sel ? { tint: GOLD } : live ? { tint: '#e8d9a8' } : {}) });
     ctx.font = font(8);
     ctx.textAlign = 'center';
     ctx.fillStyle = INK;
@@ -2637,8 +2638,9 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
     ctx.fillText(`LV ${pick} · ${m.name.toUpperCase()}`, r.x + r.w / 2, r.y + 98);
     ctx.font = fontB(7);
     ctx.fillStyle = INK_SOFT;
-    fitFont(ctx, m.desc.toUpperCase(), 7, r.w - 30);
-    ctx.fillText(m.desc.toUpperCase(), r.x + r.w / 2, r.y + 114);
+    const line = `${m.desc.toUpperCase()} — STACKED ON ${pick - 1} RULE${pick > 2 ? 'S' : ''} BELOW`;
+    fitFontB(ctx, line, 7, r.w - 30);
+    ctx.fillText(line, r.x + r.w / 2, r.y + 114);
   }
 }
 // the hall IS the Poké Center building — same door as TOP RUNS, same board
@@ -4465,10 +4467,10 @@ export function drawDraft(
 
   // the draft board is one big menu window — the INK band carries the
   // title and the stage, everything below lives on the window's paper
-  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 704 }, `DRAFT: PICK ${picked.length + 1} OF 4`, { sub: stageName });
+  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 652 }, `DRAFT: PICK ${picked.length + 1} OF 4`, { sub: stageName });
 
   ctx.textAlign = 'center';
-  ctx.font = fontB(9);
+  ctx.font = fontB(10);
   ctx.fillStyle = INK;
   const spinning = spin.age < REEL_STOPS[REEL_STOPS.length - 1];
   ctx.fillText(
@@ -4476,9 +4478,9 @@ export function drawDraft(
       ? 'reels rolling — tap to skip'
       : picked.length === 3
         ? 'ace round — a veteran anchors the team'
-        : 'one of three — your picks become the balls you sling',
+        : 'your picks become the balls you sling',
     W / 2,
-    170,
+    172,
   );
 
   drawBagRow(ctx, bag.sel, bag.last);
@@ -4676,31 +4678,20 @@ export function drawDraft(
       ctx.fillText(def.type.toUpperCase(), sx + 38, 683);
     }
   }
-  // coverage strip: which types the team already brings — drafting for
-  // coverage is the real choice, so it's read at a glance
+  // coverage chips under the slots — the team's types, no caption needed
   const types = [...new Set(picked.map((d) => d.type))];
   if (types.length) {
-    ctx.font = fontB(7);
-    ctx.fillStyle = INK_SOFT;
-    ctx.fillText('COVERAGE — matching types unlock team TRAITS', W / 2, 706);
     types.forEach((ty, i) => {
-      const cx = W / 2 - (types.length * 34 - 6) / 2 + i * 34;
-      roundRect(ctx, cx, 712, 28, 12, 6);
+      const cx = W / 2 - (types.length * 40 - 8) / 2 + i * 40;
+      roundRect(ctx, cx, 698, 32, 16, 8);
       ctx.fillStyle = TYPE_COLOR[ty];
       ctx.fill();
       // color alone can't carry the info — 3-letter tag on the chip
-      ctx.font = fontB(7);
+      ctx.font = fontB(9);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(ty.slice(0, 3).toUpperCase(), cx + 14, 721.5);
+      ctx.fillText(ty.slice(0, 3).toUpperCase(), cx + 16, 710);
     });
   }
-
-  ctx.font = fontB(8);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText('tip: fly through an ally mid-shot — charged allies fire their super', W / 2, 752);
-  ctx.font = fontB(7);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText('PIERCE flies through enemies · COPY repeats the bumper\'s super · speed sets launch, power tightens the gold window', W / 2, 768);
 }
 
 export interface ShareGrid {
