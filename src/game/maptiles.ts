@@ -18,7 +18,7 @@ export const TILE_LAB: TileRect = [676, 92, 82, 88]; // domed civic hall, white 
 export const TILE_HALL: TileRect = [846, 195, 122, 98]; // columned pavilion, gold-crest door
 export const TILE_TOWER: TileRect = [1440, 555, 120, 125]; // hexagonal jewel-domed hall
 export const TILE_MART: TileRect = [481, 26, 58, 46]; // canonical blue-roofed MART
-export const TILE_GYMHQ: TileRect = [562, 330, 120, 182]; // domed department hall
+export const TILE_GYMHQ: TileRect = [612, 397, 76, 112]; // columned gym entrance + steps
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand
