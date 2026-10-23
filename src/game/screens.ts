@@ -1878,13 +1878,13 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   stub(425, 618, 642);
 
   // north row — the lab, the hall, the trophy tower
-  drawTile(ctx, TILE_LAB, 48, 196, 124, 114);
-  drawTile(ctx, TILE_HALL, 200, 204, 140, 117);
-  drawTile(ctx, TILE_TOWER, 372, 170, 124, 145);
+  drawTile(ctx, TILE_LAB, 54, 196, 112, 112);
+  drawTile(ctx, TILE_HALL, 213, 204, 118, 104);
+  drawTile(ctx, TILE_TOWER, 384, 190, 100, 118);
 
   // south row — the mart with its job board, and the gym
-  drawTile(ctx, TILE_MART, 56, 432, 140, 110);
-  drawTile(ctx, TILE_GYMHQ, 340, 448, 112, 168);
+  drawTile(ctx, TILE_MART, 68, 436, 116, 96);
+  drawTile(ctx, TILE_GYMHQ, 356, 452, 82, 140);
 
   // drifting pollen — a little life over the grass, riding the same
   // ambient-sparkle opt-out as the map's sea glints
@@ -2480,7 +2480,7 @@ export function partnersStripAt(x: number, y: number): number | null {
 // card; its door taps ping the ladder below rather than open a screen.
 export const LAB_BTN = { x: 44, y: 192, w: 132, h: 156 };
 export const TASKS_BTN = { x: 48, y: 426, w: 156, h: 182 };
-export const ACH_BTN = { x: 362, y: 164, w: 142, h: 158 };
+export const ACH_BTN = { x: 362, y: 158, w: 142, h: 196 };
 export const BOARD_BTN = { x: 194, y: 198, w: 156, h: 156 };
 export const GYM_HIT = { x: 330, y: 438, w: 146, h: 210 };
 export const ASC_BTN = { x: 30, y: 708, w: W - 60, h: 122 };

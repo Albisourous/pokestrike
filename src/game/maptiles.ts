@@ -14,11 +14,11 @@ export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left t
 
 // Town-tab buildings — whole structures sliced from the atlas's mid bands.
 // The top-band copies all touch the sheet edge (roofs clipped); these don't.
-export const TILE_LAB: TileRect = [676, 92, 82, 88]; // domed civic hall, white rose emblem
-export const TILE_HALL: TileRect = [846, 195, 122, 98]; // columned pavilion, gold-crest door
-export const TILE_TOWER: TileRect = [1440, 555, 120, 125]; // hexagonal jewel-domed hall
-export const TILE_MART: TileRect = [481, 26, 58, 46]; // canonical blue-roofed MART
-export const TILE_GYMHQ: TileRect = [612, 397, 76, 112]; // columned gym entrance + steps
+export const TILE_LAB: TileRect = [688, 93, 86, 86]; // domed civic hall, white rose emblem
+export const TILE_HALL: TileRect = [842, 195, 88, 78]; // columned pavilion, gold-crest door
+export const TILE_TOWER: TileRect = [1450, 541, 94, 110]; // hexagonal jewel-domed hall (the door is a separate atlas sprite — stacking it floats a pod)
+export const TILE_MART: TileRect = [469, 7, 68, 58]; // canonical blue-roofed MART
+export const TILE_GYMHQ: TileRect = [608, 393, 48, 86]; // columned gym entrance + steps
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand
