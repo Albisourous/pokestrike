@@ -2388,6 +2388,11 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const b3 = bankBond([ROSTER[0].id], 10); // 20 total — LV2 lands at 12
   ok(bondLv(ROSTER[0].id) === 2 && b3.dust === 2 * BOND_PAY, 'crossing LV2 pays the level');
   ok(topBond(3)[0].id === ROSTER[0].id && topBond(3)[0].pts === 20, 'topBond ranks the ledger');
+  // in-run payoff: a trusted partner feeds the gym fountain — ROSTER[1]
+  // sits at LV1 (still +0), so the diff isolates ROSTER[0]'s LV2 point
+  const plain = new Battle(arena, [ROSTER[1], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3)).teamLuck();
+  const bonded = new Battle(arena, [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]], makeStage(9, 'T'), mulberry32(3)).teamLuck();
+  ok(bonded === plain + 1, 'a LV2 partner pays +1 team luck at the fountain');
   if (preBond == null) localStorage.removeItem('pk_bond'); else localStorage.setItem('pk_bond', preBond);
 
   statPull(25, false); statPull(25, true);

@@ -11,7 +11,7 @@ import type { EventChoice, EventArt } from './events';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
 import type { Theme, PropSpec } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
@@ -4518,9 +4518,10 @@ export class Battle {
   }
 
   // fusion tally — MS luck: absorbed dupes pay out as bonus gym loot;
-  // the lab's LUCKY EGG adds flat luck on top
+  // the lab's LUCKY EGG adds flat luck on top, and a trusted partner pays
+  // a point every other bond level (LV2–3 +1, LV4–5 +2)
   teamLuck() {
-    return this.players.reduce((a, p) => a + (p.def.luck ?? 0), this.labLuck);
+    return this.players.reduce((a, p) => a + (p.def.luck ?? 0) + Math.floor(bondLv(p.def.id) / 2), this.labLuck);
   }
 
   // star pieces: every payout passes the AMULET COIN multiplier and banks

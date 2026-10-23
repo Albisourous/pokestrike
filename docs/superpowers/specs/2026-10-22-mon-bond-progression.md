@@ -37,8 +37,17 @@ star's #1 replayability axis).
   the evo line with the viewed mon pinned. Detail freezes register scroll and
   pops before the register on tap/Esc.
 
+- **Bond pays luck in-run**: `Battle.teamLuck()` adds `⌊bondLv/2⌋` per
+  fielded species (LV2–3 → +1, LV4–5 → +2) — it feeds the existing gym
+  loot fountain, surfaces in the reward screen's `TEAM LUCK` readout, and
+  composes with fusion luck instead of replacing it. A fully bonded trio
+  is +6 — under one guaranteed fountain gem, deliberately modest.
+- **Every home mon sprite is a door**: PARTNERS entries, the RAID boss +
+  loaner trio, and the CLIMB pitch's echo ghosts all deep-link the detail
+  card (`partnersStripAt`/`raidMonAt`/`echoMonAt`); the draft kind pill
+  carries `·B{n}` and roster LV chips read `Lv8·B3`.
+
 ## Next, uncommitted
 
-- TEAM card: the parked-run lineup (`pk_run`) rendered on the MONS tab.
-- A bond payoff inside the run (e.g. LV 5 partner grants +1 team luck) —
-  deferred: in-run power from meta needs balance thought.
+- Join-depth tracking so a stage-8 pickup doesn't bond like it fought all
+  nine (the `shortcut:` noted above).

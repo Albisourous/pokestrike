@@ -2686,7 +2686,8 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
   ctx.font = fontB(8);
   ctx.fillStyle = INK_SOFT;
   const nxt = BOND_LEVELS[lv];
-  ctx.fillText(pts ? `BOND LV${lv} · ${nxt ? `${pts}/${nxt}` : 'MAX'} PTS` : 'FIELD IT TO BOND', r.x + 50, r.y + 222);
+  const luckBit = Math.floor(lv / 2) ? ` · +${Math.floor(lv / 2)} LUCK` : '';
+  ctx.fillText(pts ? `BOND LV${lv} · ${nxt ? `${pts}/${nxt}` : 'MAX'} PTS${luckBit}` : 'FIELD IT TO BOND', r.x + 50, r.y + 222);
   for (let p = 0; p < BOND_LEVELS.length; p++) {
     ctx.fillStyle = p < lv ? GOLD : '#d8d8d0';
     ctx.beginPath();
@@ -4723,7 +4724,7 @@ export function drawReward(
   } else if (luck > 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#6fdc6f';
-    ctx.fillText(`TEAM LUCK ${luck} — fusion dupes feed the gym fountain`, W / 2, 372);
+    ctx.fillText(`TEAM LUCK ${luck} — fusion dupes + bond feed the gym fountain`, W / 2, 372);
   } else {
     ctx.font = fontB(8);
     ctx.fillStyle = INK_FAINT;
