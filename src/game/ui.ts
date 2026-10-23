@@ -15,6 +15,21 @@ export const GOLD_HI = '#ffd848'; // the CTA face
 export const ACCENT = '#2a68c8'; // highlighted secondary text on paper
 export const DANGER = '#d04840';
 
+// spacing scale — every chrome gap lands on the 4px grid. xx is the
+// sub-grid escape hatch (glyph shadows, optical nudges); the 3px border /
+// offset-shadow language is shape, not spacing, and stays outside SP.
+export const SP = {
+  xx: 2, // hairline nudge
+  xs: 4, // icon↔text, chip inner pad
+  sm: 8, // cell pad, pill side pad, chip↔chip
+  md: 12, // row↔row inside a card, card inner margin
+  lg: 16, // sibling component gap
+  xl: 24, // section break inside a panel
+  xxl: 40, // region break — header→body, body→footer
+} as const;
+export const PANEL_M = 14; // the window margin every big panel shares
+export const LINE_B = 11; // fontB(9) line rhythm; stat lines step ~20
+
 // --- type ---------------------------------------------------------------
 // UI font: Press Start 2P — the Gen-3 handheld look — vendored in
 // public/fonts; Roboto Condensed and monospace are the failure fallbacks.

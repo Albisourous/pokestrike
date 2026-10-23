@@ -39,6 +39,42 @@ mon sprites, `TYPE_COLOR` chips, badge art — never in frames or fills.
 - No blur shadows, no gradients on chrome, no glow rims, no 0px↔20px mixing:
   radius is 8–10px on chrome, `999` only on capsule chips.
 
+### Spacing
+
+Canvas is 540×960 logical. All chrome spacing lands on a **4px grid** —
+`SP` in `ui.ts` is the scale; reach for the token, not a literal.
+
+| Token | px | Use |
+|---|---|---|
+| `SP.xx` | 2 | hairline nudge — glyph shadows, optical alignment only |
+| `SP.xs` | 4 | icon↔text, chip inner padding |
+| `SP.sm` | 8 | cell padding, pill side padding, chip↔chip gap |
+| `SP.md` | 12 | row↔row inside a card, card inner margin |
+| `SP.lg` | 16 | sibling component gap |
+| `SP.xl` | 24 | section break inside a panel |
+| `SP.xxl` | 40 | region break — header→body, body→footer |
+
+Named constants that aren't `SP` but are canon:
+
+- `PANEL_M = 14` — the margin every big window shares (`x:14, w:W-28`)
+- `CARD_GAP = 9` — draft card lane gap (deliberate: 3-frame × 3px chrome)
+- `LINE_B = 11` — `fontB(9)` line rhythm; stat lines step ~20
+
+Rules:
+
+- New spacing is a multiple of 4. The **3px border/shadow/radius language
+  is shape, not spacing** — it never comes out of `SP`, and `SP` never
+  describes it.
+- Vertical rhythm: stat lines step 20, captions step `LINE_B`, section
+  breaks are `SP.xl` minimum. Dead bands bigger than `SP.xxl` inside a
+  panel mean the panel is too tall — shrink the panel, don't space-fill.
+- Insets are symmetric — a card pads with one token on all four sides
+  (the double frame's 6px rim + 3px border already reads as padding).
+- Siblings separate by one gap token — don't inset both sides of a joint.
+- Tap targets ≥44px where possible; pills run 40–46px tall.
+- Text smaller than `fontB(9)` is a warning sign — if it needs 7px to
+  fit, the line is decoration; cut it (show, don't tell).
+
 ## Component anatomy
 
 - **card**: `PAPER` face · 3px `INK` frame · offset shadow · `INK` header text
