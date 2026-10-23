@@ -238,7 +238,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 // --- gym stops sign their leader's type -------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(8, 'T'), mulberry32(3));
-  const gyms = (b as any).region.nodes.filter((n: any) => n.kind === 'gym');
+  const gyms = b.regionMap.nodes.filter((n) => n.kind === 'gym');
   ok(gyms.length === 3 && gyms.every((n: any) => !!n.ttype), `every gym stop wears a leader type (${gyms.map((n: any) => n.ttype).join(', ')})`);
   const stagedBoss = (b as any).stage.waves[2].find((s: any) => s.boss);
   ok(gyms.find((n: any) => n.row === 2)?.ttype === stagedBoss.def.type, 'staged gym sign matches the rolled boss');
@@ -971,7 +971,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     }
     if (b.phase === 'map') {
       // pick a linked stop — same cell math drawRegion/pointerDown use
-      const region = (b as any).region;
+      const region = b.regionMap;
       const cur = region.nodes[(b as any).mapNode];
       const n = region.nodes[cur.links[Math.floor(rng() * cur.links.length)]];
       // the map viewport scrolls — screen y is island row minus camera
@@ -1881,7 +1881,7 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
 
   const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(99));
   b.applySnapshot(s);
-  const shape = (bb: Battle) => JSON.stringify((bb as any).region.nodes.map((n: any) => [n.tx, n.ty, n.kind]));
+  const shape = (bb: Battle) => JSON.stringify(bb.regionMap.nodes.map((n) => [n.tx, n.ty, n.kind]));
   ok((b as any).mapSeed === s.mapSeed && shape(b) === shape(a), 'island regens from the saved seed');
   ok(b.players[1].hp === 7, 'battled hp restores');
   ok(b.players[0].maxHp === a.players[0].maxHp, 'perk re-applies maxHp growth');

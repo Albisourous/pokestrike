@@ -3,7 +3,6 @@
 // ambushes (alpha, thief) swap the row's wave for a scripted one that
 // still pays normal battle rewards.
 import type { Battle } from './battle';
-import type { RegionMap } from './map';
 import { pickWild } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
@@ -71,11 +70,10 @@ const gridWave = (b: Battle, ids: number[]): WaveSpawn[] =>
     return def ? [{ def, nx, ny: 0.2 + Math.floor(i / 2) * 0.3 }] : [];
   });
 
-// the climb map is battle-private — the seer reads it like smoke does,
-// never touching the roll stream
+// the climb map is battle-private — the seer reads it through regionMap's
+// read-only window, never touching the roll stream
 const nextGym = (b: Battle) => {
-  // shortcut: puns into battle-private state — upgrade = Battle exports region publicly
-  const nodes = (b as unknown as { region: RegionMap }).region.nodes;
+  const nodes = b.regionMap.nodes;
   const row = nodes[b.mapNode]?.row ?? -1;
   return nodes.find((n) => n.kind === 'gym' && n.row > row);
 };

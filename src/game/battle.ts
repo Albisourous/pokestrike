@@ -656,6 +656,11 @@ export class Battle {
   private waveType: PokeType | null = null; // the trainer squad's mono-type — tints their march
   mapSeed = 0; // region's seed — saved so a resumed run regens the same island
   private region: RegionMap; // the climb's world map — drawn between stages
+  // read-only window for the seer event + smoke — the field stays private
+  // because applySnapshot regens it mid-life
+  get regionMap(): RegionMap {
+    return this.region;
+  }
   private regionBase: HTMLCanvasElement | null = null; // baked terrain — region never changes
   private pendingNext = 0; // wave the map interstitial leads into
   private mapNote = ''; // stop-flavor line shown on the region map
