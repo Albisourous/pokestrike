@@ -14,10 +14,10 @@ export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left t
 
 // Town-tab buildings — whole structures sliced from the atlas's mid bands.
 // The top-band copies all touch the sheet edge (roofs clipped); these don't.
-export const TILE_LAB: TileRect = [1170, 350, 90, 82]; // green mansard U-mansion
+export const TILE_LAB: TileRect = [676, 92, 82, 88]; // domed civic hall, white rose emblem
 export const TILE_HALL: TileRect = [846, 195, 122, 98]; // columned pavilion, gold-crest door
 export const TILE_TOWER: TileRect = [1440, 555, 120, 125]; // hexagonal jewel-domed hall
-export const TILE_MART: TileRect = [732, 233, 93, 97]; // orange-awning storefront
+export const TILE_MART: TileRect = [481, 26, 58, 46]; // canonical blue-roofed MART
 export const TILE_GYMHQ: TileRect = [562, 330, 120, 182]; // domed department hall
 
 // Scenery + shore.

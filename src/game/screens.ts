@@ -1569,7 +1569,9 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   const nextGoal = dexN < SHINY_CHARM_AT
     ? `${SHINY_CHARM_AT - dexN} TO CHARM`
     : dexRw
-      ? `${dexRw.at - dexN} TO +${dexRw.pay}★`
+      ? dexRw.at <= dexN
+        ? `+${dexRw.pay}★ MILESTONE READY` // crossed, unpaid — a pull/run banks it
+        : `${dexRw.at - dexN} TO +${dexRw.pay}★`
       : badges.size < BADGES.length
         ? `${BADGES.length - badges.size} BADGES LEFT`
         : `PITY IN ${PULL_PITY - (pullN % PULL_PITY)}`;
@@ -1843,7 +1845,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   drawTile(ctx, TILE_TOWER, 372, 170, 124, 145);
 
   // south row — the mart with its job board, and the gym
-  drawTile(ctx, TILE_MART, 56, 430, 136, 132);
+  drawTile(ctx, TILE_MART, 56, 436, 140, 110);
   drawTile(ctx, TILE_GYMHQ, 322, 526, 142, 172);
 
   // door signs — what the old cards said, now posted at each doorstep
