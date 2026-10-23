@@ -1524,6 +1524,10 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillStyle = INK_SOFT;
     ctx.fillText(d.name.toUpperCase(), cx, r.y + 320);
   });
+  ctx.font = fontB(7);
+  ctx.fillStyle = INK_FAINT;
+  ctx.textAlign = 'right';
+  ctx.fillText('TAP A MON → ITS CARD', r.x + r.w - 12, r.y + r.h - 10);
 
   // the fight pill — chroma face; cleared, it sells tomorrow's boss instead
   pill(
@@ -2506,6 +2510,20 @@ export const HALL_BTN = BOARD_BTN;
 // FIGHT pill the tab's tap target rides on
 export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };
 export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
+// the boss and its loaners are species — a tap deep-links the dex detail
+// card, same contract as PARTNERS. Rects mirror drawRaidBody's layout.
+export function raidMonAt(x: number, y: number): number | null {
+  const r = RAID_CARD;
+  if (!inRect(x, y, r)) return null;
+  const bcx = r.x + r.w / 2;
+  if (inRect(x, y, { x: bcx - 84, y: r.y + 56, w: 168, h: 180 })) return raidPick().id;
+  const loans = raidTeam();
+  for (let i = 0; i < loans.length; i++) {
+    const cx = bcx + (i - 1) * 110;
+    if (inRect(x, y, { x: cx - 52, y: r.y + 244, w: 104, h: 88 })) return loans[i].id;
+  }
+  return null;
+}
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 // the dex is a one-entry-per-row register now — dexScrollMax's math is
 // frozen, so these consts describe a row: 1 entry per row, 44px tall

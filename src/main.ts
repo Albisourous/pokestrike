@@ -126,6 +126,7 @@ import {
   partnersStripAt,
   TEAM_BTN,
   RAID_FIGHT,
+  raidMonAt,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
@@ -1274,6 +1275,18 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       startRaid();
       return;
+    }
+    if (homeTab === 'raid') {
+      // boss/loaner sprites deep-link the dex detail card — same contract
+      // as the PARTNERS strip
+      const mid = raidMonAt(p.x, p.y);
+      if (mid != null) {
+        sfx('ui');
+        dexOpen = true;
+        dexScroll = 0;
+        dexPick = mid;
+        return;
+      }
     }
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
