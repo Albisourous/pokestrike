@@ -2151,7 +2151,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'AIM & POWER',
     lines: [
       'pull back anywhere: the dotted line is the flight path',
-      'pull distance only aims — power is the release timing on the meter',
+      'pull distance only aims — power is where you let go on the meter',
       'let go inside the gold band for a PERFECT full-power shot',
       'fast mons aim high and tight; stronger mons get a faster sweep',
       'the band drifts a little every pull — read it, don\'t memorize',
@@ -2160,7 +2160,7 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'ALLY CHAINS',
-    lines: ['fly through a teammate mid-flight — full pips fire their super', 'each pass adds damage and speed, so route through allies'],
+    lines: ['fly through a teammate mid-flight — a READY ally fires its super', 'each pass adds damage and speed, so route through allies'],
     demo: demoBump,
   },
   {
@@ -2184,7 +2184,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'ENEMIES',
     lines: [
       'a foe strikes when its number hits 0 — each shot you take ticks one down',
-      'melee mons start low, so thin them out first',
+      'melee countdowns start low — thin them out first',
       "a boss's drifting gold star is its weak face — hits there pay triple",
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
@@ -2234,7 +2234,7 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'MAP STOPS',
     lines: [
-      'rests heal and revive · chests pay an item · both still fight after',
+      'rests heal and revive · chests pay an item · a fight still follows',
       'trainer squads pay better loot but can\'t be caught',
       'ELITE doors fight deeper and pay rare+ relics',
       '??? is a surprise — heal, haul, or ambush',
@@ -2243,17 +2243,17 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'SHINIES & STREAKS',
-    lines: ['gold-tinted foes are rare: KO one and it always joins your box', 'perfect releases build a streak: every gold-zone hit pays extra'],
+    lines: ['gold-tinted foes are rare: KO one and it always joins your box', 'perfect releases build a streak — each one hits a bit harder'],
     demo: demoAim,
   },
   {
     title: 'STONE WALLS',
-    lines: ['boulder clusters wall off the lane: the ball banks right off them', 'block bounces count as wall hits: banking still pays damage'],
+    lines: ['boulder clusters wall off the lane: the ball banks right off them', 'boulder bounces count as wall hits: banking still pays damage'],
     demo: demoBump,
   },
   {
     title: 'FIELD GIMMICKS',
-    lines: ['red zones chip the ball, violet hushes supers — foes ignore both', 'warp pads teleport, green pads boost, dark wells bend the path'],
+    lines: ['red zones chip the ball, violet ones silence supers — foes ignore both', 'warp pads teleport, green pads boost, dark wells bend the path'],
     demo: demoHazards,
   },
   {
@@ -2352,7 +2352,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   ctx.stroke();
   ctx.font = fontB(9);
   ctx.fillStyle = coachArmed ? '#9fe89f' : PARCH;
-  ctx.fillText(coachArmed ? 'COACH ON' : '▶ TUTORIAL', HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 25);
+  ctx.fillText(coachArmed ? 'TUTORIAL ON' : '▶ TUTORIAL', HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 25);
 
   // two roomy cards per page — bigger demos than the old scroll ever showed
   HELP_PAGES[page].secs.forEach((si, slot) => {
@@ -2393,8 +2393,8 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   ctx.fillText(`${HELP_PAGES[page].name} — swipe or tap ‹ › · outside closes`, r.x + r.w / 2, r.y + r.h - 8);
 }
 
-// --- dex overlay: caught mons only — a real dex doesn't list what you ---
-// --- haven't caught; the count is the only hint at what's out there -------
+// --- dex overlay: the full register — caught rows draw, unseen ghost as ---
+// --- ?/??? so the dex reads as a checklist, not a wall of caught names -----
 // home-tab card rects — the same _BTN names the hit tests know, re-homed to
 // the cards the tab bodies draw. SHOP owns the hatcher hero + spark deal;
 // MONS owns dex / line-sets / catches; TOWN owns the 2-col grid + ASC + HALL.
