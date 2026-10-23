@@ -1671,7 +1671,7 @@ function townSign(ctx: CanvasRenderingContext2D, cx: number, y: number, w: numbe
   const r = { x: cx - w / 2, y, w, h: 32 };
   uiWindow(ctx, r, { rad: 6 });
   ctx.textAlign = 'center';
-  ctx.font = font(7);
+  fitFont(ctx, name, 7, w - 10);
   ctx.fillStyle = INK;
   ctx.fillText(name, cx, y + 14);
   ctx.font = fontB(7);

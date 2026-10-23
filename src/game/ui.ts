@@ -189,7 +189,7 @@ export function uiRow(
   ctx.fillText(label, cx, r.y + r.h / 2 + (o.sub ? -1 : 4));
   if (o.sub) {
     ctx.font = fontB(6.5);
-    ctx.fillStyle = o.on ? '#a8b0d0' : INK_FAINT;
+    ctx.fillStyle = o.on ? '#a8b0d0' : o.hot ? INK_SOFT : INK_FAINT;
     ctx.fillText(o.sub, cx, r.y + r.h / 2 + 12);
   }
   if (o.right) {
