@@ -404,17 +404,6 @@ function cardFrame(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: 
   ctx.stroke();
 }
 
-// home-tab card face: paper in a navy frame, lifted by a hard offset shadow
-function menuCard(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, rad = 10) {
-  ctx.fillStyle = 'rgba(40,48,88,0.35)';
-  roundRect(ctx, r.x + 2, r.y + 4, r.w, r.h, rad);
-  ctx.fill();
-  roundRect(ctx, r.x, r.y, r.w, r.h, rad);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, rad);
-}
-
 // a star drawn as a path — the ★ glyph's bearings drift off-center in a frame
 function fillStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   ctx.beginPath();
@@ -2814,44 +2803,37 @@ export function drawHatch(
   const r = HATCH_PANEL;
   void loadItem('star-piece');
   void loadItem('poke-ball');
-  ctx.fillStyle = 'rgba(6,10,22,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  cardFrame(ctx, r, 14);
+  scrim(ctx, 0.82);
 
-  // header left, wallet right — the shop reads like a counter
-  ctx.textAlign = 'left';
-  ctx.font = font(15);
-  ctx.fillStyle = GOLD;
-  ctx.fillText('THE HATCHER', r.x + 22, r.y + 42);
-  balanceChip(ctx, { x: r.x + r.w - 178, y: r.y + 22, w: 160, h: 32 }, info.stars, info.dust);
-
-  // the motivation line — pool progress sells why a pull matters; a
-  // claimable line-set bounty gets a loud gold chip on the same row
+  // the whole shop is one window — the title lives in its INK band and the
+  // pool count rides the band's right side as the sub
   const dexSet = new Set(dexIds());
   const poolFound = PULLABLE.reduce((n, d) => n + (dexSet.has(d.id) ? 1 : 0), 0);
-  ctx.font = fontB(8);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText(`${poolFound} / ${PULLABLE.length} FOUND — EVERY PULL GROWS YOUR DRAFT POOL`, r.x + 22, r.y + 66);
+  uiPanel(ctx, r, 'THE HATCHER', { sub: `${poolFound} / ${PULLABLE.length} FOUND` });
+
+  // the strip between band and featured card — a claimable line-set bounty
+  // gets the loud gold chip left; the wallet counter sits right
+  ctx.textAlign = 'left';
   const ready = setsReady();
   if (ready.length) {
     const sl = ready.length > 1 ? `${ready.length} SET BONUSES READY` : 'SET BONUS READY';
+    chip(ctx, r.x + 16, r.y + 45, sl, { bg: GOLD, fg: INK, fontPx: 8 });
+  } else {
     ctx.font = fontB(8);
-    chip(ctx, r.x + r.w - 16 - (ctx.measureText(sl).width + 14), r.y + 54, sl, {
-      bg: GOLD,
-      fg: INK,
-      fontPx: 8,
-    });
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText('EVERY PULL GROWS YOUR DRAFT POOL', r.x + 16, r.y + 58);
   }
+  balanceChip(ctx, { x: r.x + r.w - 176, y: r.y + 40, w: 160, h: 28 }, info.stars, info.dust);
 
   // the day's featured rate-up — a full-bleed band tinted by the mon's own
   // type: a bigger stage, the name up front, and what "featured" buys you
   const f = info.featured;
   const fc = f ? TYPE_COLOR[f.type] : '#8a5cff';
+  // a content card inside the window: the type tint keeps its gradient face,
+  // the frame is the double-frame canon and a hairline of the tint rings it
+  uiWindow(ctx, FEAT_BAND, { rad: 10 });
   ctx.save();
-  roundRect(ctx, FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h, 10);
+  roundRect(ctx, FEAT_BAND.x + 7, FEAT_BAND.y + 7, FEAT_BAND.w - 14, FEAT_BAND.h - 14, 5);
   ctx.clip();
   const fg = gradFor(ctx, `feat:${fc}`, (cc) => {
     const lg = cc.createLinearGradient(0, FEAT_BAND.y, 0, FEAT_BAND.y + FEAT_BAND.h);
@@ -2860,10 +2842,9 @@ export function drawHatch(
     return lg;
   });
   ctx.fillStyle = fg;
-  ctx.fillRect(FEAT_BAND.x, FEAT_BAND.y, FEAT_BAND.w, FEAT_BAND.h);
-  stripes(ctx, FEAT_BAND);
+  ctx.fillRect(FEAT_BAND.x + 7, FEAT_BAND.y + 7, FEAT_BAND.w - 14, FEAT_BAND.h - 14);
+  stripes(ctx, { x: FEAT_BAND.x + 7, y: FEAT_BAND.y + 7, w: FEAT_BAND.w - 14, h: FEAT_BAND.h - 14 });
   ctx.restore();
-  edge(ctx, FEAT_BAND, 10);
   rim(ctx, FEAT_BAND, 10, fc, 1.5);
   if (f) {
     void loadSprite(f.id);
@@ -2891,17 +2872,16 @@ export function drawHatch(
     ctx.fillStyle = INK_SOFT;
     ctx.fillText('10× ODDS IN THE RARE+ POOL', tx, FEAT_BAND.y + 84);
     // the badge — FEATURED flags the corner, 10× is the band's one number
-    chip(ctx, FEAT_BAND.x + FEAT_BAND.w - 61, FEAT_BAND.y + 10, 'FEATURED', { bg: INK, fg: INK });
-    roundRect(ctx, FEAT_BAND.x + FEAT_BAND.w - 82, FEAT_BAND.y + FEAT_BAND.h / 2 - 12, 66, 50, 10);
-    ctx.fillStyle = 'rgba(40,48,88,0.65)';
-    ctx.fill();
-    rim(ctx, { x: FEAT_BAND.x + FEAT_BAND.w - 82, y: FEAT_BAND.y + FEAT_BAND.h / 2 - 12, w: 66, h: 50 }, 10, '#ffe89d', 1);
+    chip(ctx, FEAT_BAND.x + FEAT_BAND.w - 61, FEAT_BAND.y + 10, 'FEATURED', { bg: INK, fg: PARCH });
+    const odds = { x: FEAT_BAND.x + FEAT_BAND.w - 82, y: FEAT_BAND.y + FEAT_BAND.h / 2 - 12, w: 66, h: 50 };
+    uiWindow(ctx, odds, { dark: true, rad: 10, shadow: false });
+    rim(ctx, odds, 10, '#ffe89d', 1);
     ctx.textAlign = 'center';
     ctx.font = font(11);
     ctx.fillStyle = '#ffe89d';
     ctx.fillText('10×', FEAT_BAND.x + FEAT_BAND.w - 49, FEAT_BAND.y + FEAT_BAND.h / 2 + 10);
     ctx.font = fontB(6.5);
-    ctx.fillStyle = INK;
+    ctx.fillStyle = PARCH;
     ctx.fillText('RATE-UP', FEAT_BAND.x + FEAT_BAND.w - 49, FEAT_BAND.y + FEAT_BAND.h / 2 + 27);
   } else {
     ctx.textAlign = 'center';
