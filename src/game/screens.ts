@@ -5715,8 +5715,9 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
   fitFontB(ctx, stageName, 9, tagW - 10);
   ctx.fillText(stageName, 103, 44);
   // run map in miniature: a pip per stage, gyms as diamonds — the whole
-  // 9-stage climb is visible from the first fight
-  const gap = 22;
+  // 9-stage climb is visible from the first fight. 19px gaps keep the row
+  // clear of the stage tag's right edge and the score chip's left
+  const gap = 19;
   const x0 = W / 2 - ((TOTAL_STAGES - 1) * gap) / 2;
   for (let i = 0; i < TOTAL_STAGES; i++) {
     const x = x0 + i * gap;

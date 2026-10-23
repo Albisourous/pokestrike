@@ -13,6 +13,7 @@ import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
+import { uiWindow } from './ui';
 import type { Theme, PropSpec } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
 import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND, T_GRASS } from './map';
@@ -6360,14 +6361,19 @@ export class Battle {
       }
     }
 
-    // foes remaining, top-right — the wave's progress bar
+    // foes remaining, top-right — the wave's progress bar. It rides a dark
+    // chip under the canopy line: at rim level the trees overhang it, and
+    // pale text on treeline green was unreadable
     let left = 0;
     for (const e of this.enemies) if (!e.dead) left++;
     if ((this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') && left > 0) {
+      const tag = `${left} LEFT`;
       ctx.font = font(9);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#8890b8';
-      ctx.fillText(`${left} LEFT`, a.x + a.w - 8, a.y + 16);
+      const tw = ctx.measureText(tag).width + 16;
+      uiWindow(ctx, { x: a.x + a.w - 10 - tw, y: a.y + 48, w: tw, h: 18 }, { dark: true, shadow: false, rad: 6 });
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#aab4d8';
+      ctx.fillText(tag, a.x + a.w - 10 - tw / 2, a.y + 61);
     }
     // pause chip, opposite corner — a quiet brake during the action and the
     // loot lap; the phase list mirrors the pointerDown hit-test
@@ -6451,12 +6457,16 @@ export class Battle {
     }
 
     // ascension tag — the heat marker only; the ladder on CLIMB names the
-    // stacked mods, a marquee of them here just fought the scenery
+    // stacked mods, a marquee of them here just fought the scenery. Same
+    // chip-under-canopy treatment as N LEFT
     if (this.asc > 0) {
+      const tag = `ASC ${this.asc}`;
       ctx.font = fontB(9);
-      ctx.textAlign = 'left';
+      const tw = ctx.measureText(tag).width + 16;
+      uiWindow(ctx, { x: a.x + 10, y: a.y + 48, w: tw, h: 18 }, { dark: true, shadow: false, rad: 6 });
+      ctx.textAlign = 'center';
       ctx.fillStyle = '#f0b02f';
-      ctx.fillText(`ASC ${this.asc}`, a.x + 8, a.y + 16);
+      ctx.fillText(tag, a.x + 10 + tw / 2, a.y + 61);
     }
 
     // tapped-foe scout card — floats while aiming, a pull dismisses it
