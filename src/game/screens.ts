@@ -98,7 +98,7 @@ export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
 // the hero row anchors the bottom stack: ONE primary action (the climb) with
 // RESTART as its smaller flank — a parked climb's burn-and-deal-again door,
 // drawn only while a save exists
-export const FREE_BTN = { x: 46, y: 676, w: 296, h: 72 };
+export const FREE_BTN = { x: 46, y: 604, w: 296, h: 72 };
 export const RESTART_BTN = { x: FREE_BTN.x + FREE_BTN.w + 10, y: FREE_BTN.y, w: W - 46 - (FREE_BTN.x + FREE_BTN.w + 10), h: 72 };
 // --- home tabs: the CR-style bottom nav the title's bodies hang off -------
 export type HomeTab = 'shop' | 'mons' | 'climb' | 'raid' | 'town';
@@ -976,8 +976,8 @@ function drawClimbBody(
     ctx.globalAlpha = 0.34;
     echo.slice(0, 3).forEach((e, i) => {
       const ex = PITCH.x + PITCH.w * (0.2 + i * 0.3);
-      const ey = PITCH.y + PITCH.h - 56 + Math.sin(t * 1.6 + i * 2.1) * 4;
-      monShadow(ctx, ex, PITCH.y + PITCH.h - 56, 44);
+      const ey = PITCH.y + PITCH.h + 44 + Math.sin(t * 1.6 + i * 2.1) * 4;
+      monShadow(ctx, ex, PITCH.y + PITCH.h + 44, 44);
       try {
         drawMon(ctx, e.id, ex, ey, 44);
       } catch {
@@ -989,7 +989,7 @@ function drawClimbBody(
     ctx.textAlign = 'center';
     ctx.font = fontB(7);
     ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, PITCH.y + PITCH.h - 28);
+    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, PITCH.y + PITCH.h + 78);
     ctx.restore();
   }
 
@@ -1074,7 +1074,7 @@ function drawClimbBody(
   const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
   // the dense-stat face — the pixel font's floor can't squeeze this line
   fitFontB(ctx, recFull, 8, W - 44);
-  const recY = FREE_BTN.y + FREE_BTN.h + 58;
+  const recY = FREE_BTN.y + FREE_BTN.h + 90; // clears the echo band's caption
   const recX = W / 2 - measureW(ctx, recFull) / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
@@ -1086,7 +1086,7 @@ function drawClimbBody(
   ctx.textAlign = 'center';
   // the ladder: a fill bar toward the next tier, tinted to the current one —
   // its label already rode up into the stat line above
-  const rw = 220, rx = W / 2 - rw / 2, ry = FREE_BTN.y + FREE_BTN.h + 70;
+  const rw = 220, rx = W / 2 - rw / 2, ry = FREE_BTN.y + FREE_BTN.h + 102;
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.fillRect(rx, ry, rw, 7);
   ctx.fillStyle = ld.color;
