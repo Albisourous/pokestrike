@@ -1173,6 +1173,51 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // the keep — a moat castle mid-court: gate gaps top and bottom let the
+  // ball in, the four anchors inside are the prize
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '133303331',
+    '130S0S031',
+    '130000031',
+    '130S0S031',
+    '133303331',
+    '1S0S0S0S1',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // pincer — mine claws rake both flanks; the center lane stays clean till
+  // the blast wall closes it
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '104000401',
+    '10S0S0S01',
+    '140000041',
+    '10S0S0S01',
+    '104000401',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // saltire — two triple-pillar rows make slalom lanes; banked shots thread
+  // the gaps into the tucked anchors
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '102000201',
+    '10S0S0S01',
+    '102020201',
+    '1S00S00S1',
+    '102020201',
+    '10S0S0S01',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 // Gym arenas stay open — the leader fight is the spectacle, so no
 // furniture; the entourage still enters on the anchor ring.

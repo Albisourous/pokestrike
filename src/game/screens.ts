@@ -930,11 +930,17 @@ export function drawTitle(
   cornerBadge(ctx, GEAR_BTN, { dither: 0.09 });
   gearGlyph(ctx, GEAR_BTN.x + GEAR_BTN.w / 2, GEAR_BTN.y + GEAR_BTN.h / 2, 1.5, PARCH);
 
+  // bodies rise ~12px into place on a tab swap — the same stamp that eases
+  // the outgoing card down; past 0.22s the offset is exactly zero
+  const rise = swapFrom ? (1 - clamp01((t - swapT) / 0.22)) * 12 : 0;
+  ctx.save();
+  if (rise > 0.05) ctx.translate(0, rise);
   if (tab === 'climb') drawClimbBody(ctx, t, cont, newArmed, dailyArmed);
   else if (tab === 'shop') drawShopBody(ctx, t, freeNow);
   else if (tab === 'mons') drawMonsBody(ctx, t);
   else if (tab === 'raid') drawRaidBody(ctx, t);
   else drawTownBody(ctx, t, taskN);
+  ctx.restore();
 
   // the floating nav draws last — no body should peek through under it
   drawTabBar(ctx, t, tab, freeNow, taskN);
@@ -1827,17 +1833,49 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   drawTile(ctx, TREE_PINE, 0, 190, 38, 40);
   drawTile(ctx, TREE_ROUND, 508, 200, 38, 40);
 
+  // sidewalk plazas — pale sand courts the buildings stand on, each boxed by
+  // a clipped teal hedge (the canopy tile at bush size). Door gaps open on
+  // the street side of every plaza, RSE-town style.
+  const plaza = (x0: number, y0: number, x1: number, y1: number) => {
+    for (let y = y0; y < y1; y += 32) for (let x = x0; x < x1; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
+  };
+  const hedgeRow = (x0: number, x1: number, y: number, doorCx = 0) => {
+    for (let x = x0; x <= x1; x += 24) {
+      if (doorCx && Math.abs(x + 9 - doorCx) < 26) continue;
+      drawTile(ctx, TREE_TEAL, x, y, 18, 18);
+    }
+  };
+  const hedgeCol = (x: number, y0: number, y1: number) => {
+    for (let y = y0; y <= y1; y += 24) drawTile(ctx, TREE_TEAL, x, y, 18, 18);
+  };
+  plaza(32, 150, 512, 356);   // north block — lab / hall / trophies
+  plaza(30, 414, 262, 612);   // mart block
+  plaza(272, 414, 510, 648);  // gym block
+  hedgeRow(36, 494, 152);     // behind the north rooflines
+  hedgeCol(30, 172, 340);
+  hedgeCol(502, 172, 340);
+  hedgeRow(36, 246, 406);     // south plazas, street side
+  hedgeRow(288, 494, 406);
+  hedgeCol(28, 430, 590);
+  hedgeRow(36, 246, 604, 126);   // mart front, gap at its door
+  hedgeCol(500, 430, 624);
+  hedgeRow(288, 494, 640, 425);  // gym front, gap at its door
+
   // the main road: bordered path blocks straight across mid-town
   const ROAD_Y = 352;
   for (let gx = 0; gx < W; gx += 52) drawTile(ctx, TILE_PATH, gx, ROAD_Y, 52, 52);
+  // a side street running south between the two lower blocks, down to the park
+  for (let y = ROAD_Y + 52; y < 704; y += 32) drawTile(ctx, TILE_PATH, 254, y, 32, 32);
 
-  // doorstep paths — sand strips joining each building's door to the road
+  // doorstep walks — bordered path strips at each door
   const stub = (cx: number, y0: number, y1 = ROAD_Y) => {
-    for (let y = y0; y < y1; y += 32) drawTile(ctx, TILE_SAND, cx - 16, y, 32, 32);
+    for (let y = y0; y < y1; y += 32) drawTile(ctx, TILE_PATH, cx - 16, y, 32, 32);
   };
   stub(110, 310);
   stub(272, 316);
   stub(434, 312);
+  stub(126, 580, 606);
+  stub(425, 618, 642);
 
   // north row — the lab, the hall, the trophy tower
   drawTile(ctx, TILE_LAB, 48, 196, 124, 114);
@@ -1845,8 +1883,28 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   drawTile(ctx, TILE_TOWER, 372, 170, 124, 145);
 
   // south row — the mart with its job board, and the gym
-  drawTile(ctx, TILE_MART, 56, 436, 140, 110);
-  drawTile(ctx, TILE_GYMHQ, 322, 526, 142, 172);
+  drawTile(ctx, TILE_MART, 56, 432, 140, 110);
+  drawTile(ctx, TILE_GYMHQ, 340, 448, 112, 168);
+
+  // drifting pollen — a little life over the grass, riding the same
+  // ambient-sparkle opt-out as the map's sea glints
+  if (settings().mapGlints) {
+    ctx.fillStyle = 'rgba(255,255,240,0.45)';
+    for (let i = 0; i < 9; i++) {
+      const px = (i * 97 + t * 11) % (W + 24) - 12;
+      const py = 156 + ((i * 67) % 480) + Math.sin(t * 1.2 + i * 1.9) * 7;
+      ctx.fillRect(px, py, 3, 3);
+    }
+  }
+
+  // pocket gardens — hedges and flowerbeds in the gaps between buildings
+  drawTile(ctx, TREE_TEAL, 348, 268, 22, 22);
+  drawTile(ctx, FLOWER_PK, 348, 294, 22, 18);
+  drawTile(ctx, FLOWER_YB, 178, 286, 24, 20);
+  drawTile(ctx, FLOWER_YB, 288, 520, 26, 22);
+  drawTile(ctx, FLOWER_PK, 238, 516, 24, 20);
+  drawTile(ctx, TREE_TEAL, 480, 556, 40, 42);
+  drawTile(ctx, FLOWER_PK, 478, 600, 22, 18);
 
   // door signs — what the old cards said, now posted at each doorstep
   const lvls = labLevelMap();
@@ -1856,11 +1914,12 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   townSign(ctx, 110, 316, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
   townSign(ctx, 272, 322, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
   townSign(ctx, 434, 320, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
-  townSign(ctx, 126, 574, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
+  townSign(ctx, 126, 546, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
+  townSign(ctx, 352, 604, 72, 'GYM', `ASC ${Math.min(b.wins, 9)}/9`);
   // a claimable task pins the red count pip on the sign's corner — the same
   // badge the old card corner wore
   if (taskN > 0) {
-    const bx = 126 + 55, by = 574;
+    const bx = 126 + 55, by = 546;
     ctx.beginPath();
     ctx.arc(bx, by, 9, 0, Math.PI * 2);
     ctx.fillStyle = '#e03c34';
@@ -1874,13 +1933,13 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
   }
 
-  // villagers — feet on the grass by their doors; the gym leader waits in
+  // villagers — feet on the paving by their doors; the gym leader waits in
   // his doorway, and one youngster paces the road with a walk cycle
   drawNpc(ctx, 'scientist_down_0', 172, 342, 30);
   drawNpc(ctx, 'lass_down_0', 338, 344, 30);
-  drawNpc(ctx, 'gentleman_down_0', 500, 340, 30);
-  drawNpc(ctx, 'shopkeeper_m_down_0', 194, 584, 30);
-  drawNpc(ctx, 'norman_down_0', 400, 706, 32);
+  drawNpc(ctx, 'gentleman_down_0', 492, 384, 30);
+  drawNpc(ctx, 'shopkeeper_m_down_0', 204, 556, 30);
+  drawNpc(ctx, 'norman_down_0', 420, 628, 32);
   const walk = (t * 60) % 840;
   const wx = walk <= 420 ? 60 + walk : 480 - (walk - 420);
   drawNpc(ctx, `youngster_${walk <= 420 ? 'right' : 'left'}_${[0, 1, 0, 2][Math.floor(t * 6) % 4]}`, wx, 398, 30);
@@ -1888,23 +1947,19 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // the south pond — sand shore ring, water inset, a boulder sunning itself
   ctx.save();
   ctx.beginPath();
-  ctx.ellipse(140, 648, 105, 40, 0, 0, Math.PI * 2);
+  ctx.ellipse(118, 672, 100, 32, 0, 0, Math.PI * 2);
   ctx.clip();
-  for (let y = 600; y < 696; y += 32) for (let x = 30; x < 260; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
+  for (let y = 630; y < 706; y += 32) for (let x = 10; x < 220; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
   ctx.beginPath();
-  ctx.ellipse(140, 645, 88, 29, 0, 0, Math.PI * 2);
+  ctx.ellipse(118, 670, 86, 24, 0, 0, Math.PI * 2);
   ctx.clip();
-  for (let y = 600; y < 686; y += 32) for (let x = 50; x < 250; x += 32) drawTile(ctx, TILE_WATER, x, y, 32, 32);
+  for (let y = 630; y < 700; y += 32) for (let x = 30; x < 210; x += 32) drawTile(ctx, TILE_WATER, x, y, 32, 32);
   ctx.restore();
-  drawTile(ctx, TILE_ROCK, 42, 606, 40, 43);
-  drawTile(ctx, TREE_ROUND, 262, 652, 38, 38);
-  drawTile(ctx, ROCK_SMALL, 480, 636, 44, 32);
-  drawTile(ctx, FLOWER_YB, 266, 592, 26, 22);
-  drawTile(ctx, FLOWER_PK, 500, 700, 26, 22);
-  // the village green — a shady tree and flowerbeds filling the mid gap
-  drawTile(ctx, TREE_TEAL, 300, 448, 52, 50);
-  drawTile(ctx, FLOWER_YB, 360, 520, 26, 22);
-  drawTile(ctx, FLOWER_PK, 250, 540, 26, 22);
+  drawTile(ctx, TILE_ROCK, 36, 642, 40, 43);
+  drawTile(ctx, TREE_ROUND, 234, 660, 36, 36);
+  drawTile(ctx, ROCK_SMALL, 466, 664, 44, 32);
+  drawTile(ctx, FLOWER_YB, 240, 626, 26, 22);
+  drawTile(ctx, FLOWER_PK, 486, 688, 26, 22);
 
   // the gym's challenge board — StS's rung chain under its roofline; the
   // building's door taps ping this card, the rungs themselves pick the heat
@@ -2427,7 +2482,7 @@ export const LAB_BTN = { x: 44, y: 192, w: 132, h: 156 };
 export const TASKS_BTN = { x: 48, y: 426, w: 156, h: 182 };
 export const ACH_BTN = { x: 362, y: 164, w: 142, h: 158 };
 export const BOARD_BTN = { x: 194, y: 198, w: 156, h: 156 };
-export const GYM_HIT = { x: 316, y: 522, w: 164, h: 180 };
+export const GYM_HIT = { x: 330, y: 438, w: 146, h: 210 };
 export const ASC_BTN = { x: 30, y: 708, w: W - 60, h: 122 };
 
 // ASCENSION's rung track — cells 0..9 (0 = the base climb) in one row.
@@ -3039,12 +3094,21 @@ const HATCH_MODAL = { x: 80, y: 244, w: W - 160, h: 400 };
 export const SKIP_PULL_BTN = { x: HATCH_MODAL.x + HATCH_MODAL.w - 92, y: HATCH_MODAL.y + 12, w: 80, h: 30 };
 
 // the wallet pill — star pieces buy pulls, dust buys sparks outright
+// the wallet counts chase the real numbers — a tick-up reads as paid, a
+// snap reads as a refresh. One shared pair: every chip draws the same wallet
+let chipStars = -1;
+let chipDust = -1;
+const chase = (shown: number, target: number) =>
+  shown < 0 || Math.abs(target - shown) < 0.6 ? target : shown + (target - shown) * 0.22;
+
 function balanceChip(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
   starN: number,
   dust?: number,
 ) {
+  chipStars = chase(chipStars, starN);
+  if (dust != null) chipDust = chase(chipDust, dust);
   // the wallet is a small dark window-chip — same frame language as the panel
   uiWindow(ctx, r, { dark: true, rad: r.h / 2, shadow: false });
   void loadItem('star-piece');
@@ -3059,8 +3123,8 @@ function balanceChip(
   ctx.font = fontB(9);
   let tx = r.x + 34;
   ctx.fillStyle = GOLD_HI;
-  ctx.fillText(`${starN}`, tx, r.y + r.h / 2 + 3.5);
-  tx += ctx.measureText(`${starN}`).width + 8;
+  ctx.fillText(`${Math.round(chipStars)}`, tx, r.y + r.h / 2 + 3.5);
+  tx += ctx.measureText(`${Math.round(chipStars)}`).width + 8;
   if (dust != null) {
     // the second wallet reads cool — a small diamond, not the star icon
     const mid = r.y + r.h / 2 - 1;
@@ -3073,7 +3137,7 @@ function balanceChip(
     ctx.closePath();
     ctx.fill();
     ctx.fillStyle = PAPER;
-    ctx.fillText(`${dust}`, tx + 12, r.y + r.h / 2 + 3.5);
+    ctx.fillText(`${Math.round(chipDust)}`, tx + 12, r.y + r.h / 2 + 3.5);
   }
 }
 
