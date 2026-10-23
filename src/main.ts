@@ -2289,7 +2289,7 @@ function render() {
         hud(battle.stage.name);
         battle.render(ctx);
       }
-      if (result) drawResult(ctx, result, resultExtra, share, t);
+      if (result) drawResult(ctx, result, resultExtra, share, t, t - sceneT0);
       break;
   }
   // the ? chip reads the same gate as the hit-test — dealt boards included;

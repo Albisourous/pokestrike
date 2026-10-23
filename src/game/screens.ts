@@ -5226,6 +5226,7 @@ export function drawResult(
   extra: string | null,
   share: ShareGrid | null,
   t = 0,
+  age = 99, // seconds since the report opened — rows file in staggered
 ) {
   scrim(ctx, 0.87);
   if (res.won) confetti(ctx, t);
@@ -5346,10 +5347,10 @@ export function drawResult(
   ctx.fillStyle = INK_FAINT;
   ctx.fillText(`CASE ${res.runNo ?? res.seed}${res.runNo != null ? ` · SEED ${res.seed}` : ''}`, ix, panel.y + 66);
 
-  // the verdict is stamped, not printed — tilted ink across the card's
-  // top-right edge, the only colour the report allows itself
+  // the verdict is stamped, not printed — tilted ink hanging half off the
+  // card's top-right corner; it used to sit inside and clip the band title
   ctx.save();
-  ctx.translate(panel.x + panel.w - 100, panel.y + 16);
+  ctx.translate(panel.x + panel.w - 104, panel.y - 10);
   ctx.rotate(-0.14);
   ctx.globalAlpha = 0.92;
   const stampC = res.won ? '#6fdc6f' : '#ff6b6b';
@@ -5379,6 +5380,10 @@ export function drawResult(
 
   findings.forEach(([label, value, color], i) => {
     const fy = panel.y + findingsY + i * rowH;
+    // the ledger files row by row — each finding ticks in 70ms apart
+    const rowA = clamp01((age - 0.2 - i * 0.07) / 0.18);
+    if (rowA <= 0) return;
+    ctx.globalAlpha = rowA;
     ctx.font = fontB(8);
     ctx.fillStyle = '#464e6e';
     ctx.fillText(String(i + 1).padStart(2, '0'), ix, fy);
@@ -5392,6 +5397,7 @@ export function drawResult(
     ctx.textAlign = 'left';
     ctx.fillStyle = '#e8e8e0';
     ctx.fillRect(ix, fy + 9, panel.w - 32, 1);
+    ctx.globalAlpha = 1;
   });
   let yy = panel.y + findingsY + findings.length * rowH;
 
