@@ -12,10 +12,13 @@ export const TILE_GRASS: TileRect = [183, 648, 52, 52];
 export const TILE_TOWN: TileRect = [1172, 353, 87, 80]; // green-roofed house
 export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left trunk sliver trimmed)
 
-// Town-tab buildings — whole structures sliced from the atlas's top band.
-export const TILE_MART: TileRect = [476, 2, 68, 68]; // blue MART-signed shop (right-edge sliver of the tan tower trimmed)
-export const TILE_GYMHQ: TileRect = [543, 0, 88, 86]; // tan-roofed GYM-signed hall
-export const TILE_TOWER: TileRect = [826, 0, 110, 130]; // star-bunting trophy tower
+// Town-tab buildings — whole structures sliced from the atlas's mid bands.
+// The top-band copies all touch the sheet edge (roofs clipped); these don't.
+export const TILE_LAB: TileRect = [1170, 350, 90, 82]; // green mansard U-mansion
+export const TILE_HALL: TileRect = [846, 195, 122, 98]; // columned pavilion, gold-crest door
+export const TILE_TOWER: TileRect = [1440, 555, 120, 125]; // hexagonal jewel-domed hall
+export const TILE_MART: TileRect = [732, 233, 93, 97]; // orange-awning storefront
+export const TILE_GYMHQ: TileRect = [562, 330, 120, 182]; // domed department hall
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand

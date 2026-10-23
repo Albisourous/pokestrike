@@ -6,7 +6,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
 import { drawTile } from './map';
-import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_TOWN, TILE_GYM as TILE_PC, TILE_MART, TILE_GYMHQ, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
+import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TILE_HALL, TILE_MART, TILE_GYMHQ, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -787,7 +787,9 @@ function drawField(ctx: CanvasRenderingContext2D) {
       rg.addColorStop(1, 'rgba(0,0,0,0)');
       return rg;
     });
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    // clamp to the play area — edge patches would haze the letterbox
+    const fx = Math.max(0, x - r), fy = Math.max(0, y - r);
+    ctx.fillRect(fx, fy, Math.min(x + r, W) - fx, Math.min(y + r, H) - fy);
   }
 }
 
@@ -1680,6 +1682,13 @@ function townSign(ctx: CanvasRenderingContext2D, cx: number, y: number, w: numbe
 }
 
 function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
+  // clip the whole scene to the play area — the tile loops' last column and
+  // the flank trees overrun W, and without this they paint the right pillar
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, W, H);
+  ctx.clip();
+
   // grass slab under the tab body — the interior tile at 1.5× reads as
   // chunky GBA ground. Starts under the chrome band: the wallet bar and
   // corner badges draw before the body, so the tiles would bury them.
@@ -1704,13 +1713,13 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   stub(434, 312);
 
   // north row — the lab, the hall, the trophy tower
-  drawTile(ctx, TILE_TOWN, 48, 196, 124, 114);
-  drawTile(ctx, TILE_PC, 200, 204, 140, 117);
+  drawTile(ctx, TILE_LAB, 48, 196, 124, 114);
+  drawTile(ctx, TILE_HALL, 200, 204, 140, 117);
   drawTile(ctx, TILE_TOWER, 372, 170, 124, 145);
 
   // south row — the mart with its job board, and the gym
   drawTile(ctx, TILE_MART, 56, 430, 136, 132);
-  drawTile(ctx, TILE_GYMHQ, 322, 556, 152, 146);
+  drawTile(ctx, TILE_GYMHQ, 322, 526, 142, 172);
 
   // door signs — what the old cards said, now posted at each doorstep
   const lvls = labLevelMap();
@@ -1742,7 +1751,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // his doorway, and one youngster paces the road with a walk cycle
   drawNpc(ctx, 'scientist_down_0', 172, 342, 30);
   drawNpc(ctx, 'lass_down_0', 338, 344, 30);
-  drawNpc(ctx, 'gentleman_down_0', 472, 340, 30);
+  drawNpc(ctx, 'gentleman_down_0', 500, 340, 30);
   drawNpc(ctx, 'shopkeeper_m_down_0', 194, 584, 30);
   drawNpc(ctx, 'norman_down_0', 400, 706, 32);
   const walk = (t * 60) % 840;
@@ -1773,6 +1782,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // the gym's challenge board — StS's rung chain under its roofline; the
   // building's door taps ping this card, the rungs themselves pick the heat
   drawAscLadder(ctx, t, ASC_BTN, Math.min(b.wins, 9), ascPick());
+  ctx.restore();
 }
 
 // The crash-receipt instructions, in a card — the game collects no
@@ -2274,7 +2284,7 @@ export const LAB_BTN = { x: 44, y: 192, w: 132, h: 156 };
 export const TASKS_BTN = { x: 48, y: 426, w: 156, h: 182 };
 export const ACH_BTN = { x: 362, y: 164, w: 142, h: 158 };
 export const BOARD_BTN = { x: 194, y: 198, w: 156, h: 156 };
-export const GYM_HIT = { x: 316, y: 552, w: 164, h: 156 };
+export const GYM_HIT = { x: 316, y: 522, w: 164, h: 180 };
 export const ASC_BTN = { x: 30, y: 708, w: W - 60, h: 122 };
 
 // ASCENSION's rung track — cells 0..9 (0 = the base climb) in one row.
