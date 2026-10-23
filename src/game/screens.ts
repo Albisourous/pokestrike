@@ -96,10 +96,10 @@ export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
 // the hero row anchors the bottom stack: ONE primary action (the climb) with
-// RESTART as its smaller flank — a parked climb's burn-and-deal-again door,
-// drawn only while a save exists
-export const FREE_BTN = { x: 46, y: 604, w: 296, h: 72 };
-export const RESTART_BTN = { x: FREE_BTN.x + FREE_BTN.w + 10, y: FREE_BTN.y, w: W - 46 - (FREE_BTN.x + FREE_BTN.w + 10), h: 72 };
+// RESTART sits under it full-width — a parked climb's burn-and-deal-again
+// door, drawn only while a save exists
+export const FREE_BTN = { x: 46, y: 604, w: W - 92, h: 72 };
+export const RESTART_BTN = { x: FREE_BTN.x, y: FREE_BTN.y + FREE_BTN.h + 10, w: FREE_BTN.w, h: 44 };
 // --- home tabs: the CR-style bottom nav the title's bodies hang off -------
 export type HomeTab = 'shop' | 'mons' | 'climb' | 'raid' | 'town';
 // a floating bar, not flush — its bottom edge keeps ~28px clear of the
@@ -968,16 +968,17 @@ function drawClimbBody(
   if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
   logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
 
-  // the last climb's fallen team haunts the pitch as ghosts — CR shows your
-  // deck on the home screen; ours shows the team you have to avenge
+  // ghosts haunt the field under the button stack — everything below them
+  // anchors to the lowest pill, not the pitch's conceptual bottom
+  const ctaBottom = (cont ? RESTART_BTN : FREE_BTN).y + (cont ? RESTART_BTN : FREE_BTN).h;
   const echo = echoIds();
   if (echo?.length) {
     ctx.save();
     ctx.globalAlpha = 0.34;
     echo.slice(0, 3).forEach((e, i) => {
       const ex = PITCH.x + PITCH.w * (0.2 + i * 0.3);
-      const ey = PITCH.y + PITCH.h + 44 + Math.sin(t * 1.6 + i * 2.1) * 4;
-      monShadow(ctx, ex, PITCH.y + PITCH.h + 44, 44);
+      const ey = ctaBottom + 32 + Math.sin(t * 1.6 + i * 2.1) * 4;
+      monShadow(ctx, ex, ctaBottom + 32, 44);
       try {
         drawMon(ctx, e.id, ex, ey, 44);
       } catch {
@@ -989,7 +990,7 @@ function drawClimbBody(
     ctx.textAlign = 'center';
     ctx.font = fontB(7);
     ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, PITCH.y + PITCH.h + 78);
+    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, ctaBottom + 66);
     ctx.restore();
   }
 
@@ -1074,7 +1075,7 @@ function drawClimbBody(
   const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
   // the dense-stat face — the pixel font's floor can't squeeze this line
   fitFontB(ctx, recFull, 8, W - 44);
-  const recY = FREE_BTN.y + FREE_BTN.h + 90; // clears the echo band's caption
+  const recY = ctaBottom + 90; // clears the echo band's caption
   const recX = W / 2 - measureW(ctx, recFull) / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
@@ -1086,7 +1087,7 @@ function drawClimbBody(
   ctx.textAlign = 'center';
   // the ladder: a fill bar toward the next tier, tinted to the current one —
   // its label already rode up into the stat line above
-  const rw = 220, rx = W / 2 - rw / 2, ry = FREE_BTN.y + FREE_BTN.h + 102;
+  const rw = 220, rx = W / 2 - rw / 2, ry = ctaBottom + 102;
   ctx.fillStyle = 'rgba(255,255,255,0.3)';
   ctx.fillRect(rx, ry, rw, 7);
   ctx.fillStyle = ld.color;
