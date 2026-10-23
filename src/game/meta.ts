@@ -1,5 +1,6 @@
-import { speciesById, TOTAL_STAGES, AVATARS, EVO_LINES, setPay } from './data';
+import { speciesById, TOTAL_STAGES, AVATARS, EVO_LINES, DEX_ALL, setPay } from './data';
 import { LV_CAP } from './stats';
+import { BAG_ITEMS } from './perks';
 
 // Run-to-run persistence: the caught-dex, gym-win count (which sets rank),
 // and the last losing team saved as the next run's rival "echo".
@@ -19,10 +20,17 @@ let memCoach = false;
 // the re-parse, a changed raw (own store() writes, another tab) re-reads.
 const loadCache = new Map<string, { raw: string | null; val: unknown }>();
 
+// ?debug=1 — a god-mode sandbox: every pk_* key reads/writes pk_debug_* so
+// the real save is never touched while the flag is up. debugSeed() loads it
+// once at boot; clear site data to reseed.
+const DEBUG =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('debug') === '1';
+const liveKey = (key: string) => (DEBUG ? key.replace(/^pk_/, 'pk_debug_') : key);
+
 const load = <T>(key: string): T | null => {
   let raw: string | null;
   try {
-    raw = localStorage.getItem(key);
+    raw = localStorage.getItem(liveKey(key));
   } catch {
     return null; // private mode — memory copy covers it; the entry stays uncached
   }
@@ -43,7 +51,7 @@ const load = <T>(key: string): T | null => {
 const store = (key: string, value: unknown) => {
   const raw = JSON.stringify(value);
   try {
-    localStorage.setItem(key, raw);
+    localStorage.setItem(liveKey(key), raw);
   } catch {
     /* memory copy still covers the session */
   }
@@ -343,7 +351,7 @@ export function saveEcho(mons: { id: number; lvl: number }[]) {
 export function clearEcho() {
   memEcho = null;
   try {
-    localStorage.removeItem('pk_echo');
+    localStorage.removeItem(liveKey('pk_echo'));
   } catch {
     /* nothing to clear */
   }
@@ -390,15 +398,27 @@ export function recordRun(score: number, stage: number, won: boolean) {
 // every clear raised the heat whether you asked or not.
 let memAsc: number | null = null;
 
+// ?asc=N playtest override — same class as ?seed=: lifts the unlock cap so
+// the ladder, the stored pick, and the run-start clamp all reach N
+const forcedAsc = (() => {
+  const q = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('asc') : null;
+  const n = Number(q);
+  return q != null && Number.isFinite(n) ? Math.max(0, Math.min(Math.round(n), 9)) : null;
+})();
+
+export function ascCap(): number {
+  return forcedAsc ?? Math.min(best().wins, 9);
+}
+
 export function ascPick(): number {
   const raw = load<unknown>('pk_asc');
   const stored = typeof raw === 'number' && Number.isFinite(raw) ? raw : memAsc;
   // floor at 0 — a negative stored pick would weaken foes and blank ASC_MODS
-  return Math.max(0, Math.min(stored ?? best().wins, best().wins, 9));
+  return Math.max(0, Math.min(stored ?? ascCap(), ascCap()));
 }
 
 export function setAsc(n: number): void {
-  memAsc = Math.min(Math.max(Math.round(n), 0), Math.min(best().wins, 9));
+  memAsc = Math.min(Math.max(Math.round(n), 0), ascCap());
   store('pk_asc', memAsc);
 }
 
@@ -488,8 +508,10 @@ export function gymBadges(): Set<number> {
 export function earnBadge(bossId: number): GymBadge | null {
   const b = badgeOf(bossId);
   if (!b || gymBadges().has(bossId)) return null;
-  memBadges.add(bossId);
-  store('pk_badges', [...gymBadges()]);
+  const next = new Set([...gymBadges(), ...memBadges]); // stored ∪ session —
+  next.add(bossId); // the old code stored the stale read, dropping the badge
+  memBadges = next;
+  store('pk_badges', [...next]);
   return b;
 }
 
@@ -776,16 +798,19 @@ export function grindBonus(now = Date.now()): { n: number; pay: number } {
 // battle construction; RUN TEAM rows seed per-run charges/one-shots.
 // `skip` from the Oct-20 table became `earnings` — shipped SKIP is free, so
 // charging for it would have nerfed current gameplay.
+// costs tuned against ~103★ for a full climb win: level 1 is a taste (~20%),
+// a maxed track ~2.5 wins, the marquee one-offs ~2 — the old curve charged
+// 40% of a win for entry and ~27 wins for the lab
 export const LAB_UPGRADES: { id: string; name: string; icon: string; max: number; desc: string; now: (lvl: number) => string; costs: number[] }[] = [
-  { id: 'hp', name: 'HP UP', icon: 'hp-up', max: 5, desc: '+8% team max HP /level', now: (l) => `+${8 * l}% team max HP`, costs: [40, 60, 90, 130, 180] },
-  { id: 'dmg', name: 'PROTEIN', icon: 'protein', max: 5, desc: '+5% hit damage /level', now: (l) => `+${5 * l}% hit damage`, costs: [40, 60, 90, 130, 180] },
-  { id: 'spc', name: 'CALCIUM', icon: 'calcium', max: 5, desc: '+5% super damage /level', now: (l) => `+${5 * l}% super damage`, costs: [40, 60, 90, 130, 180] },
-  { id: 'luck', name: 'LUCKY EGG', icon: 'lucky-egg', max: 4, desc: '+2 team luck /level', now: (l) => `+${2 * l} team luck`, costs: [40, 60, 90, 130] },
-  { id: 'reroll', name: 'DIRE HIT', icon: 'dire-hit', max: 3, desc: '+1 reroll charge /level', now: (l) => `${1 + l} rerolls each run`, costs: [60, 80, 120] },
-  { id: 'earnings', name: 'AMULET COIN', icon: 'amulet-coin', max: 3, desc: '+10% star earnings /level', now: (l) => `+${10 * l}% star earnings`, costs: [60, 80, 120] },
-  { id: 'ban', name: 'QUICK CLAW', icon: 'quick-claw', max: 2, desc: '+1 banish charge /level', now: (l) => `${1 + l} banishes each run`, costs: [60, 80] },
-  { id: 'fourth', name: 'MASTER BALL', icon: 'master-ball', max: 1, desc: 'perk boards offer 4 cards', now: () => 'perk boards deal 4 cards', costs: [400] },
-  { id: 'revive', name: 'REVIVE', icon: 'revive', max: 1, desc: 'first KO each run revives at 50% HP', now: () => 'first KO revives at 50%', costs: [500] },
+  { id: 'hp', name: 'HP UP', icon: 'hp-up', max: 5, desc: '+8% team max HP /level', now: (l) => `+${8 * l}% team max HP`, costs: [20, 30, 45, 65, 90] },
+  { id: 'dmg', name: 'PROTEIN', icon: 'protein', max: 5, desc: '+5% hit damage /level', now: (l) => `+${5 * l}% hit damage`, costs: [20, 30, 45, 65, 90] },
+  { id: 'spc', name: 'CALCIUM', icon: 'calcium', max: 5, desc: '+5% super damage /level', now: (l) => `+${5 * l}% super damage`, costs: [20, 30, 45, 65, 90] },
+  { id: 'luck', name: 'LUCKY EGG', icon: 'lucky-egg', max: 4, desc: '+2 team luck /level', now: (l) => `+${2 * l} team luck`, costs: [20, 30, 45, 65] },
+  { id: 'reroll', name: 'DIRE HIT', icon: 'dire-hit', max: 3, desc: '+1 reroll charge /level', now: (l) => `${1 + l} rerolls each run`, costs: [30, 45, 70] },
+  { id: 'earnings', name: 'AMULET COIN', icon: 'amulet-coin', max: 3, desc: '+10% star earnings /level', now: (l) => `+${10 * l}% star earnings`, costs: [35, 50, 75] },
+  { id: 'ban', name: 'QUICK CLAW', icon: 'quick-claw', max: 2, desc: '+1 banish charge /level', now: (l) => `${1 + l} banishes each run`, costs: [30, 45] },
+  { id: 'fourth', name: 'MASTER BALL', icon: 'master-ball', max: 1, desc: 'perk boards offer 4 cards', now: () => 'perk boards deal 4 cards', costs: [200] },
+  { id: 'revive', name: 'REVIVE', icon: 'revive', max: 1, desc: 'first KO each run revives at 50% HP', now: () => 'first KO revives at 50%', costs: [250] },
 ];
 
 let memLab: Record<string, number> = {};
@@ -1134,7 +1159,7 @@ export function runSave(): RunSave | null {
 export function clearRun() {
   memRun = null;
   try {
-    localStorage.removeItem('pk_run');
+    localStorage.removeItem(liveKey('pk_run'));
   } catch {
     /* nothing to clear */
   }
@@ -1360,4 +1385,31 @@ export function bumpStreaks(won: boolean, isDaily: boolean, now = Date.now()): v
   }
   memStreak = s;
   store('pk_streak', s);
+}
+
+// --- ?debug=1 god mode: the sandbox's one-time grant ----------------------
+// Fat wallets, the full register (shinies too), the badge case, every
+// achievement, a maxed lab, a stocked bag, and nine wins so the ascension
+// ladder tops out. Coach + help flags are preset so no first-boot overlays
+// interrupt. Everything past this point plays normally — the sandbox records
+// its own progress.
+export function debugSeed() {
+  if (!DEBUG || load('pk_seeded')) return;
+  store('pk_seeded', 1);
+  addStars(99999);
+  addDust(9999);
+  recordCapture(DEX_ALL.map((d) => d.id));
+  for (const d of DEX_ALL) recordShiny(d.id);
+  for (const b of BADGES) earnBadge(b.boss);
+  for (const a of ACHIEVEMENTS) memAch.add(a.id);
+  store('pk_ach', [...memAch]);
+  memLab = Object.fromEntries(LAB_UPGRADES.map((u) => [u.id, u.max]));
+  store('pk_lab', memLab);
+  memBest = { score: 99999, stage: TOTAL_STAGES, wins: 9, runs: 9 };
+  store('pk_best', memBest);
+  memBag = Object.fromEntries(BAG_ITEMS.map((i) => [i.id, 5]));
+  store('pk_bag', memBag);
+  markCoached();
+  markHelpSeen();
+  console.info('[debug] sandbox save seeded — real pk_* untouched; drop ?debug to play for real');
 }

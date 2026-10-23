@@ -117,9 +117,9 @@ import {
   font,
   fontB,
   TAB_CELLS,
-  TODAY_HITS,
   noteTabPress,
   noteTabSwap,
+  takeClimbSeed,
   DEAL_BTN,
   SETS_BTN,
   PARTNERS_BTN,
@@ -544,7 +544,7 @@ let restartConfirmT0 = -10;
 function newRun() {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
   const hasForced = Number.isInteger(forced) && forced > 0;
-  runSeed = hasForced ? forced : randSeed();
+  runSeed = hasForced ? forced : takeClimbSeed(); // the title's arena diorama previewed this exact stage 1
   runIsDaily = false;
   runMod = null; // daily mode is gone — parked daily saves still resume below
   runRng = mulberry32(runSeed);
@@ -1097,18 +1097,7 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
-    // TODAY's teasers are doors — a column jumps straight to the tab that
-    // sells it (rate-up + deal → SHOP, the shiny boss → RAID)
     if (homeTab === 'climb') {
-      for (const hit of TODAY_HITS) {
-        if (inRect(p.x, p.y, hit)) {
-          noteTabSwap(t, homeTab);
-          homeTab = hit.tab;
-          noteTabPress(t);
-          sfx('ui');
-          return;
-        }
-      }
       // the pitch ghosts are the same door class — tap one for its card
       const ghost = echoMonAt(p.x, p.y);
       if (ghost != null) {
@@ -2182,7 +2171,7 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - restartConfirmT0 < 3, homeTab);
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score, seed: titleSave.seed } : null, t - restartConfirmT0 < 3, homeTab);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (dexPick != null) drawDexDetail(ctx, dexPick); // solo or stacked — its own scrim
       if (achOpen) drawAch(ctx, achScroll);

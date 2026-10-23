@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay, makeStage } from './data';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
@@ -141,8 +141,10 @@ export const noteTabSwap = (t: number, from: HomeTab) => {
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // beta lifeline — a quiet link bottom-left, parked just above the tab bar
 // so the nav never covers it
-export const BUG_BTN = { x: 10, y: TAB_BAR.y - 30, w: 96, h: 18 };
-export const BUG_HIT = { x: 0, y: TAB_BAR.y - 40, w: 130, h: 40 };
+// the report link + build hash live under the nav in the dead strip at the
+// screen's very bottom — always visible, never competing with the board
+export const BUG_BTN = { x: 10, y: H - 22, w: 96, h: 16 };
+export const BUG_HIT = { x: 0, y: H - 34, w: 130, h: 34 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
 export const HELP_CHIP = { x: W - 58, y: 54, w: 40, h: 40 };
@@ -758,16 +760,16 @@ const PITCH = { x: 26, y: 268, w: W - 52, h: 396 };
 
 // TODAY's three teasers are doors, not just a poster — rate-up and deal open
 // SHOP's tab, the shiny boss RAID's
-const TODAY_CARD = { x: PITCH.x + 30, y: PITCH.y + 20, w: PITCH.w - 60, h: 152 };
-export const TODAY_HITS: { tab: HomeTab; x: number; y: number; w: number; h: number }[] = (
-  ['shop', 'raid', 'shop'] as HomeTab[]
-).map((tab, i) => ({
-  tab,
-  x: TODAY_CARD.x + (TODAY_CARD.w * i) / 3,
-  y: TODAY_CARD.y,
-  w: TODAY_CARD.w / 3,
-  h: TODAY_CARD.h,
-}));
+// the climb's centerpiece is the arena itself — a framed court window shows
+// stage 1 of the run a START tap will enter, first pack standing on it. The
+// seed pre-rolls here and newRun() consumes it, so the preview is the truth.
+const ARENA = { x: PITCH.x + 30, y: PITCH.y + 20, w: PITCH.w - 60, h: 160 };
+let climbSeed = (Math.random() * 0x7fffffff) | 0 || 1;
+export function takeClimbSeed() {
+  const s = climbSeed;
+  climbSeed = (Math.random() * 0x7fffffff) | 0 || 1;
+  return s;
+}
 
 // the fallen team's ghosts haunt the pitch foot — a tap on one deep-links
 // its dex card, the same contract as PARTNERS/RAID sprites
@@ -894,7 +896,7 @@ let loginT0 = -1;
 export function drawTitle(
   ctx: CanvasRenderingContext2D,
   t: number,
-  cont: { stage: number; score: number } | null = null,
+  cont: { stage: number; score: number; seed: number } | null = null,
   restartArmed = false, // RESTART's own two-tap — warn-red face while it's lit
   tab: HomeTab,
 ) {
@@ -956,11 +958,9 @@ export function drawTitle(
 function drawClimbBody(
   ctx: CanvasRenderingContext2D,
   t: number,
-  cont: { stage: number; score: number } | null,
+  cont: { stage: number; score: number; seed: number } | null,
   restartArmed: boolean,
 ) {
-  const raidDone = raidDoneToday();
-  const raidDef = raidPick();
   const rookie = nextRookie();
 
   // wordmark rides upper-left — the action owns the rest of the pitch
@@ -994,28 +994,32 @@ function drawClimbBody(
     ctx.restore();
   }
 
-  // TODAY card — the day's three rotating offers in one glance: the rate-up
-  // pull, the chroma raid boss, the spark deal. The home menu's one summary.
+  // ARENA — the diorama CR keeps under its trophies: the mountain's face in
+  // its own window. Court theme + the wave-1 pack at their real spawn spots;
+  // a parked run previews the seed it parked on.
   {
-    const offers: { def: SpeciesDef; tag: string; c: string }[] = [
-      { def: featuredPull(), tag: 'RATE UP', c: GOLD },
-      { def: raidDef, tag: raidDone ? '✓ CLEARED' : 'SHINY BOSS', c: '#9a6cff' },
-      { def: dealPick(), tag: 'DEAL −25%', c: ACCENT },
-    ];
-    const card = TODAY_CARD;
-    uiPanel(ctx, card, 'TODAY');
-    ctx.textAlign = 'center';
-    offers.forEach((o, i) => {
-      const cx = card.x + (card.w * (i + 0.5)) / 3;
-      monShadow(ctx, cx, card.y + 84, 54);
-      drawMon(ctx, o.def.id, cx, card.y + 84 + Math.sin(t * 2.2 + i * 1.7) * 2.5, 54);
-      ctx.font = fontB(7);
-      ctx.fillStyle = o.c;
-      ctx.fillText(o.tag, cx, card.y + 118);
-      ctx.font = fontB(8);
-      ctx.fillStyle = INK;
-      ctx.fillText(o.def.name.toUpperCase(), cx, card.y + 132);
+    const stg = makeStage(cont?.seed ?? climbSeed);
+    const card = ARENA;
+    uiWindow(ctx, card, { rad: 10 });
+    const inner = { x: card.x + 7, y: card.y + 7, w: card.w - 14, h: card.h - 14 };
+    drawBackdrop(ctx, inner, 8, stg.theme, t, null);
+    // the stage plate rides the top rail — what you're climbing into
+    chip(ctx, card.x + 12, card.y + 11, `STAGE ${cont ? cont.stage : 1} · ${stg.name.toUpperCase()}`, {
+      bg: INK,
+      fg: PAPER,
     });
+    stg.waves[0].forEach((sp, i) => {
+      const mx = inner.x + inner.w * Math.min(0.9, Math.max(0.1, sp.nx));
+      const my = inner.y + inner.h * Math.min(0.86, Math.max(0.3, sp.ny)) + 26;
+      monShadow(ctx, mx, my, 46);
+      drawMon(ctx, sp.def.id, mx, my + Math.sin(t * 2.2 + i * 1.7) * 2, 46);
+      void loadSprite(sp.def.id);
+    });
+    // foe count plate — right rail, mirrors the stage plate
+    const foes = stg.waves.flat().length;
+    const ft = `${foes} FOES`;
+    ctx.font = fontB(7);
+    chip(ctx, card.x + card.w - 12 - ctx.measureText(ft).width - 14, card.y + 11, ft, { bg: INK, fg: PAPER });
   }
 
   // the run's heat picks right on the climb screen — the ladder StS

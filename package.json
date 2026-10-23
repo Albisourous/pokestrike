@@ -8,7 +8,7 @@
     "build": "tsc --noEmit && vite build && node scripts/stamp-sw.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "smoke": "mkdir -p node_modules/.cache && rolldown test/smoke.ts -f esm -p node -o node_modules/.cache/smoke.mjs && node node_modules/.cache/smoke.mjs"
+    "smoke": "mkdir -p node_modules/.cache && rolldown test/smoke.ts -f esm -p node -o node_modules/.cache/smoke.mjs && node node_modules/.cache/smoke.mjs && rolldown test/debug.ts -f esm -p node -d node_modules/.cache/dbg && node node_modules/.cache/dbg/debug.js"
   },
   "devDependencies": {
     "playwright": "^1.63.0",
