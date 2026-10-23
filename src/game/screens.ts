@@ -84,7 +84,7 @@ const BAG_CHIP_GAP = 8;
 export const BAG_ROW = { x: 0, y: 196, w: W, h: 98 };
 export function bagChipRect(i: number, n: number) {
   const rowW = n * BAG_CHIP_W + (n - 1) * BAG_CHIP_GAP;
-  return { x: W / 2 - rowW / 2 + i * (BAG_CHIP_W + BAG_CHIP_GAP), y: BAG_ROW.y + 26, w: BAG_CHIP_W, h: BAG_CHIP_H };
+  return { x: W / 2 - rowW / 2 + i * (BAG_CHIP_W + BAG_CHIP_GAP), y: BAG_ROW.y + 12, w: BAG_CHIP_W, h: BAG_CHIP_H };
 }
 // stocked bag items in chip order — chip i ↔ items[i], so hit tests and the
 // draw both walk this one list
@@ -4298,10 +4298,10 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   ctx.fillText('lab levels persist across runs — every star buys a sure thing · tap outside to close', W / 2, r.y + r.h - 14);
 }
 
-// the BAG row — card-lite chips of stocked consumables; the first ≤2 ride
-// into the run unasked (gold rim + lift, the shiny-card selection language).
-// `last` is the last tapped chip — its desc sits on one dim line under the
-// row. Empty stock hides the whole thing — no dead UI.
+// the BAG row — card-lite chips of stocked consumables; ≤2 ride into the
+// run unasked (gold rim + lift, the shiny-card selection language). `last`
+// is the last tapped chip — its desc sits on one dim line under the row.
+// Empty stock hides the whole thing — no dead UI.
 function drawBagRow(
   ctx: CanvasRenderingContext2D,
   sel: ReadonlySet<string>,
@@ -4312,9 +4312,6 @@ function drawBagRow(
   const items = BAG_ITEMS.filter((it) => (stock[it.id] ?? 0) > 0);
   if (!items.length) return;
   ctx.textAlign = 'center';
-  ctx.font = font(8);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText(`BAG — ${Math.min(sel.size, BAG_MAX)} RIDE IN`, W / 2, BAG_ROW.y + 13);
   items.forEach((it, i) => {
     const on = sel.has(it.id);
     const r = bagChipRect(i, items.length);

@@ -696,9 +696,12 @@ function startDraft() {
     const lvl = 5 + Math.floor(Math.pow(runRng(), 1.8) * 10);
     draft.lvls.set(i, lvl);
   });
-  // the bag rides in unasked — the first ≤2 stocked consumables auto-arm;
-  // on the board those chips draw lit, and tapping one just reads its desc
-  bagPick = new Set(bagRowItems().slice(0, BAG_MAX).map((it) => it.id));
+  // the bag rides in unasked — ≤2 stocked consumables auto-arm, seeded-random
+  // so the seed still replays the run; chips draw lit, a tap reads its desc
+  const stocked = [...bagRowItems()];
+  bagPick = new Set<string>();
+  while (bagPick.size < BAG_MAX && stocked.length)
+    bagPick.add(stocked.splice(Math.floor(runRng() * stocked.length), 1)[0].id);
   bagLast = null;
   offerCache = null;
   respinDraft();
