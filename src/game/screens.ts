@@ -64,7 +64,7 @@ const CARD_W = 162;
 const CARD_H = 276;
 const CARD_GAP = 9;
 const CARDS_X = (W - (3 * CARD_W + 2 * CARD_GAP)) / 2;
-const CARDS_Y = 300;
+const CARDS_Y = 240;
 
 export function draftCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: CARDS_Y, w: CARD_W, h: CARD_H };
@@ -4465,7 +4465,7 @@ export function drawDraft(
 
   // the draft board is one big menu window — the INK band carries the
   // title and the stage, everything below lives on the window's paper
-  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 738 }, `DRAFT: PICK ${picked.length + 1} OF 4`, { sub: stageName });
+  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 704 }, `DRAFT: PICK ${picked.length + 1} OF 4`, { sub: stageName });
 
   ctx.textAlign = 'center';
   ctx.font = fontB(9);
@@ -4478,7 +4478,7 @@ export function drawDraft(
         ? 'ace round — a veteran anchors the team'
         : 'one of three — your picks become the balls you sling',
     W / 2,
-    180,
+    170,
   );
 
   drawBagRow(ctx, bag.sel, bag.last);
@@ -4557,11 +4557,12 @@ export function drawDraft(
       const shim = 0.14 + 0.09 * Math.sin(spin.age * 7 + i * 1.9);
       ctx.fillStyle = `rgba(40,48,88,${shim})`;
       const bars: [number, number][] = [
-        [r.y + 156, r.w - 56], // name
-        [r.y + 180, 92], // #id · level
-        [r.y + 202, 108], // type · role
-        [r.y + 224, 96], // super line
-        [r.y + 242, r.w - 40], // desc
+        [r.y + 132, r.w - 56], // name
+        [r.y + 154, 92], // #id · level
+        [r.y + 174, 108], // type · role
+        [r.y + 194, 96], // evo hint
+        [r.y + 218, 110], // super line
+        [r.y + 236, r.w - 40], // desc
       ];
       bars.forEach(([by, bw]) => {
         roundRect(ctx, r.x + r.w / 2 - bw / 2, by, bw, 10, 5);
@@ -4595,8 +4596,24 @@ export function drawDraft(
     (def.shiny ? drawShiny : drawMon)(ctx, def.id, band.x + band.w / 2, band.y + band.h / 2 + 2, 84 * pop);
     ctx.restore();
 
-    // evolution hint + trait tag ride the strip under the band — Magikarp
-    // is secretly Gyarados
+    // the mon's name leads the card body — sprite above it, stats below
+    ctx.textAlign = 'center';
+    fitFont(ctx, def.name, 14, r.w - 20);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 139);
+    ctx.fillStyle = INK;
+    ctx.fillText(def.name, r.x + r.w / 2, r.y + 138);
+
+    ctx.font = fontB(10);
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 158);
+
+    ctx.font = fontB(10);
+    ctx.fillStyle = TYPE_COLOR[def.type];
+    ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 178);
+
+    // evolution hint + trait tag sit with the stats — Magikarp is secretly
+    // Gyarados; PIERCE/COPY hold the right edge of the same line
     if (def.evolvesTo != null) {
       const nx = Array.isArray(def.evolvesTo)
         ? `${def.evolvesTo.length} FORMS`
@@ -4605,37 +4622,23 @@ export function drawDraft(
         ctx.textAlign = 'left';
         ctx.font = fontB(9);
         ctx.fillStyle = ACCENT;
-        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 126);
+        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 198);
       }
     }
     if (def.pierce || def.copy) {
       ctx.textAlign = 'right';
       ctx.font = font(8);
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 127);
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 199);
       ctx.fillStyle = GOLD;
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 126);
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 198);
     }
 
-    ctx.textAlign = 'center';
-    fitFont(ctx, def.name, 14, r.w - 20);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 165);
-    ctx.fillStyle = INK;
-    ctx.fillText(def.name, r.x + r.w / 2, r.y + 164);
-
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 186);
-
-    ctx.font = fontB(10);
-    ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 206);
-
     // the bump super this mon fires — a draft decision you can taste
+    ctx.textAlign = 'center';
     ctx.font = fontB(11);
     ctx.fillStyle = GOLD;
-    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 226);
+    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 222);
     ctx.font = fontB(9);
     ctx.fillStyle = '#a8b0d0';
     const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 16);
@@ -4657,20 +4660,20 @@ export function drawDraft(
   // picked team strip
   ctx.font = font(9);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('YOUR TEAM', W / 2, 650);
+  ctx.fillText('YOUR TEAM', W / 2, 586);
   for (let i = 0; i < 4; i++) {
     const sx = W / 2 - 4 * 44 + i * 88;
-    const sr = { x: sx, y: 660, w: 76, h: 90 };
+    const sr = { x: sx, y: 596, w: 76, h: 90 };
     uiWindow(ctx, sr, { rad: 10 });
     const def = picked[i];
     if (def) {
-      (def.shiny ? drawShiny : drawMon)(ctx, def.id, sx + 38, 692, 48);
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, sx + 38, 628, 48);
       ctx.font = fontB(8);
       ctx.fillStyle = INK;
-      ctx.fillText(def.name, sx + 38, 736);
+      ctx.fillText(def.name, sx + 38, 672);
       ctx.font = fontB(6);
       ctx.fillStyle = TYPE_COLOR[def.type];
-      ctx.fillText(def.type.toUpperCase(), sx + 38, 747);
+      ctx.fillText(def.type.toUpperCase(), sx + 38, 683);
     }
   }
   // coverage strip: which types the team already brings — drafting for
@@ -4679,25 +4682,25 @@ export function drawDraft(
   if (types.length) {
     ctx.font = fontB(7);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText('COVERAGE — matching types unlock team TRAITS', W / 2, 772);
+    ctx.fillText('COVERAGE — matching types unlock team TRAITS', W / 2, 706);
     types.forEach((ty, i) => {
       const cx = W / 2 - (types.length * 34 - 6) / 2 + i * 34;
-      roundRect(ctx, cx, 778, 28, 12, 6);
+      roundRect(ctx, cx, 712, 28, 12, 6);
       ctx.fillStyle = TYPE_COLOR[ty];
       ctx.fill();
       // color alone can't carry the info — 3-letter tag on the chip
       ctx.font = fontB(7);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(ty.slice(0, 3).toUpperCase(), cx + 14, 787.5);
+      ctx.fillText(ty.slice(0, 3).toUpperCase(), cx + 14, 721.5);
     });
   }
 
   ctx.font = fontB(8);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('tip: fly through an ally mid-shot — charged allies fire their super', W / 2, 810);
+  ctx.fillText('tip: fly through an ally mid-shot — charged allies fire their super', W / 2, 752);
   ctx.font = fontB(7);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('PIERCE flies through enemies · COPY repeats the bumper\'s super · speed sets launch, power tightens the gold window', W / 2, 826);
+  ctx.fillText('PIERCE flies through enemies · COPY repeats the bumper\'s super · speed sets launch, power tightens the gold window', W / 2, 768);
 }
 
 export interface ShareGrid {
