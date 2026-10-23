@@ -42,11 +42,18 @@ export function syncVolumes() {
   if (mGain) mGain.gain.value = 0.3 * settings().music;
 }
 
+// resume()/suspend() return promises — iOS rejects them with
+// InvalidStateError "Failed to start the audio device" when the call lands
+// outside a gesture (visibilitychange resume, tap racing the device start).
+// `void` discards the value but NOT the rejection — the crash card hears it.
+const tryResume = (a: AudioContext) => a.resume().catch(() => {});
+const trySuspend = (a: AudioContext) => a.suspend().catch(() => {});
+
 export function unlockAudio() {
   if (ac) {
     // just a resume — restarting the sequencer here restarts the song on
     // every tap while the old scheduled notes still ring = doubled audio
-    if (ac.state === 'suspended') ac.resume();
+    if (ac.state === 'suspended') void tryResume(ac);
     return;
   }
   try {
@@ -56,8 +63,8 @@ export function unlockAudio() {
       visBound = true;
       document.addEventListener('visibilitychange', () => {
         if (!ac) return;
-        if (document.hidden) void ac.suspend();
-        else if (!muted) void ac.resume();
+        if (document.hidden) void trySuspend(ac);
+        else if (!muted) void tryResume(ac);
       });
     }
     ac = new AudioContext();
