@@ -115,7 +115,9 @@ import {
   font,
   fontB,
   TAB_CELLS,
+  TODAY_HITS,
   noteTabPress,
+  noteTabSwap,
   DEAL_BTN,
   SETS_BTN,
   RAID_FIGHT,
@@ -1074,13 +1076,28 @@ canvas.addEventListener('pointerdown', (e) => {
       };
       return;
     }
-    // the bottom nav is shared chrome — live on every tab, ahead of the body
+    // the bottom nav is shared chrome — live on every tab, ahead of the body.
+    // cell.hit tracks the drawn pill, so the popped card's crown taps through
     for (const cell of TAB_CELLS) {
-      if (inRect(p.x, p.y, cell)) {
+      if (inRect(p.x, p.y, cell.hit)) {
+        if (homeTab !== cell.tab) noteTabSwap(t, homeTab); // old card eases back down
         homeTab = cell.tab;
         noteTabPress(t); // press-pop reads the stamp on the new active pill
         sfx('ui');
         return;
+      }
+    }
+    // TODAY's teasers are doors — a column jumps straight to the tab that
+    // sells it (rate-up + deal → SHOP, the shiny boss → RAID)
+    if (homeTab === 'climb') {
+      for (const hit of TODAY_HITS) {
+        if (inRect(p.x, p.y, hit)) {
+          noteTabSwap(t, homeTab);
+          homeTab = hit.tab;
+          noteTabPress(t);
+          sfx('ui');
+          return;
+        }
       }
     }
     if (homeTab === 'shop' && (inRect(p.x, p.y, HATCH_BTN) || inRect(p.x, p.y, DEAL_BTN))) {
@@ -1680,6 +1697,19 @@ addEventListener('keydown', (e) => {
       sfx('ui');
     }
     return;
+  }
+  // ←/→ walk the bottom nav — the desk build's tab key; overlays keep their
+  // scroll so the arrows only fire on a bare tab
+  if (scene === 'title' && !(dexOpen || achOpen || boardOpen || hatchOpen || labOpen)) {
+    const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (dir) {
+      const i = TAB_CELLS.findIndex((c) => c.tab === homeTab);
+      noteTabSwap(t, homeTab);
+      homeTab = TAB_CELLS[(i + dir + TAB_CELLS.length) % TAB_CELLS.length].tab;
+      noteTabPress(t);
+      sfx('ui');
+      return;
+    }
   }
   // Esc pops the topmost overlay first — lab paints over hatch over board
   // over ach over dex — and only reaches the manual once the screen is

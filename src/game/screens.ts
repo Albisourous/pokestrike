@@ -109,21 +109,37 @@ export type HomeTab = 'shop' | 'mons' | 'climb' | 'raid' | 'town';
 // a floating bar, not flush — its bottom edge keeps ~28px clear of the
 // iOS home-swipe zone
 export const TAB_BAR = { x: 50, y: H - 104, w: W - 100, h: 76 };
-// five cells: economy+collection left, CLIMB's hero pill raised dead-center,
-// the day's raid and the town hub to its right
-export const TAB_CELLS: { tab: HomeTab; x: number; y: number; w: number; h: number }[] =
-  (['shop', 'mons', 'climb', 'raid', 'town'] as HomeTab[]).map((tab, i) => ({
-    tab,
+// five cells: economy+collection left, CLIMB dead-center, the day's raid and
+// the town hub to its right. `hit` follows the drawn pill — the popped card
+// rides above the bar and the bare cell would leave it a dead zone
+export const TAB_CELLS: {
+  tab: HomeTab;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  hit: { x: number; y: number; w: number; h: number };
+}[] = (['shop', 'mons', 'climb', 'raid', 'town'] as HomeTab[]).map((tab, i) => {
+  const cell = {
     x: TAB_BAR.x + (TAB_BAR.w * i) / 5,
     y: TAB_BAR.y,
     w: TAB_BAR.w / 5,
     h: TAB_BAR.h,
-  }));
+  };
+  return { tab, ...cell, hit: { ...cell } };
+});
 
-// press-pop feedback — main stamps the tap time (same `t` the loop runs on)
+// press-pop feedback — main stamps the tap time (same `t` the loop runs on);
+// swap stamps the outgoing tab so its card shrinks out instead of vanishing
 let tabPressT = -9;
+let swapFrom: HomeTab | null = null;
+let swapT = -9;
 export const noteTabPress = (t: number) => {
   tabPressT = t;
+};
+export const noteTabSwap = (t: number, from: HomeTab) => {
+  swapFrom = from;
+  swapT = t;
 };
 
 export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
@@ -731,6 +747,19 @@ export { font, fontB };
 // a TODAY card sells the day's rotating offers. The sling lives in battle.
 const PITCH = { x: 26, y: 268, w: W - 52, h: 396 };
 
+// TODAY's three teasers are doors, not just a poster — rate-up and deal open
+// SHOP's tab, the shiny boss RAID's
+const TODAY_CARD = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
+export const TODAY_HITS: { tab: HomeTab; x: number; y: number; w: number; h: number }[] = (
+  ['shop', 'raid', 'shop'] as HomeTab[]
+).map((tab, i) => ({
+  tab,
+  x: TODAY_CARD.x + (TODAY_CARD.w * i) / 3,
+  y: TODAY_CARD.y,
+  w: TODAY_CARD.w / 3,
+  h: TODAY_CARD.h,
+}));
+
 // Wild mons at the screen edges — the stadium crowd, clear of the pitch
 const WILD_MONS: [number, number, number][] = [
   [16, 484, 118],
@@ -946,7 +975,7 @@ function drawClimbBody(
       { def: raidDef, tag: raidDone ? '✓ CLEARED' : 'SHINY BOSS', c: '#9a6cff' },
       { def: dealPick(), tag: 'DEAL −25%', c: ACCENT },
     ];
-    const card = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
+    const card = TODAY_CARD;
     uiPanel(ctx, card, 'TODAY');
     ctx.textAlign = 'center';
     offers.forEach((o, i) => {
@@ -1153,26 +1182,38 @@ function drawTabBar(
   for (const cell of TAB_CELLS) {
     const on = cell.tab === active;
     const cx = cell.x + cell.w / 2;
-    // CLIMB is the hero tab — its pill rides 12px proud of the bar
+    // every pill rests inside the bar — a still-raised CLIMB read as
+    // half-selected, so clicking off puts it all the way back in
     const hero = cell.tab === 'climb';
-    const rest = hero
-      ? { x: cell.x + 4, y: cell.y - 12, w: cell.w - 8, h: cell.h + 2 }
-      : { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
+    const rest = { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
     // the active tab DWARFS its cell — wider than the column and riding
-    // 14px proud of the bar so the picked tab reads from across the room
+    // proud of the bar so the picked tab reads from across the room;
+    // CLIMB pops tallest as the hero
     const big = hero
       ? { x: cell.x - 1, y: cell.y - 28, w: cell.w + 2, h: cell.h + 18 }
       : { x: cell.x - 2, y: cell.y - 16, w: cell.w + 4, h: cell.h + 10 };
     // grow-in on switch: back-out ease overshoots the pill past `big` then
-    // settles — a spring pop, not an instant swap (stamp set in main)
-    const grow = on ? bo(clamp01((t - tabPressT) / 0.24)) : 0;
+    // settles — a spring pop, not an instant swap. The outgoing card shrinks
+    // back down over ~0.18s off the stamp main sets on the swap
+    const grow = on
+      ? bo(clamp01((t - tabPressT) / 0.24))
+      : cell.tab === swapFrom
+        ? 1 - clamp01((t - swapT) / 0.18)
+        : 0;
+    const lit = on || grow > 0.01;
     const pr = {
       x: rest.x + (big.x - rest.x) * grow,
       y: rest.y + (big.y - rest.y) * grow,
       w: rest.w + (big.w - rest.w) * grow,
       h: rest.h + (big.h - rest.h) * grow,
     };
-    if (on) {
+    // the drawn pill is the tap target — a popped card rides above the bar,
+    // so the bare cell would leave its visible crown a dead zone
+    cell.hit.x = Math.min(cell.x, pr.x);
+    cell.hit.y = Math.min(cell.y, pr.y);
+    cell.hit.w = Math.max(cell.x + cell.w, pr.x + pr.w) - cell.hit.x;
+    cell.hit.h = Math.max(cell.y + cell.h, pr.y + pr.h) - cell.hit.y;
+    if (lit) {
       // the picked tab pops a paper window out of the strip — same
       // grow/spring `pr` math, the double-frame is the new crown
       uiWindow(ctx, pr, { rad: 14 });
@@ -1180,12 +1221,10 @@ function drawTabBar(
       roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
       ctx.fillStyle = 'rgba(248,248,240,0.07)';
       ctx.fill();
-      // hero at rest gets no rim — the 12px raise is the door affordance,
-      // and a gold outline reads as "selected" against the active tab
     }
 
-    const icY = hero ? cell.y + 19 : cell.y + 25;
-    const tint = on ? INK : '#8890b8';
+    const icY = cell.y + 25;
+    const tint = lit ? INK : '#8890b8';
     // press-pop — the just-tapped pill squashes for ~0.16s (stamp set in main)
     const pop = on ? Math.max(0, 1 - (t - tabPressT) / 0.16) : 0;
     // every tab icon is a real asset: ball, gym badge, star piece, shiny boss,
@@ -1199,8 +1238,8 @@ function drawTabBar(
             ? itemSprite('star-piece')
             : undefined;
     ctx.save();
-    ctx.globalAlpha = on ? 1 : 0.55;
-    const iscale = (on ? 0.9 + 0.5 * grow : 1) * (1 - 0.15 * pop); // icon rides the pill's grow — ~1.3× at rest
+    ctx.globalAlpha = 0.55 + 0.45 * clamp01(grow); // the icon fades in with the pop
+    const iscale = (1 + 0.4 * grow) * (1 - 0.15 * pop); // icon rides the pill's grow — ~1.4× lit
     if (iscale !== 1) {
       ctx.translate(cx, icY);
       ctx.scale(iscale, iscale);
@@ -1227,7 +1266,7 @@ function drawTabBar(
 
     ctx.font = fontB(10);
     ctx.textAlign = 'center';
-    ctx.fillStyle = on ? INK : '#8890b8';
+    ctx.fillStyle = lit ? INK : '#8890b8';
     ctx.fillText(cell.tab.toUpperCase(), cx, cell.y + cell.h - 14);
 
     // badge dots — the notification pull. SHOP breathes gold while the
