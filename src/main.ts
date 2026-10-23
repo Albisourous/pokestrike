@@ -205,6 +205,10 @@ addEventListener('error', (e) => {
   paintCrash();
 });
 addEventListener('unhandledrejection', (e) => {
+  // benign: iOS rejects audio resume/suspend raced outside a gesture — a
+  // silent speaker isn't worth a dead run. Sources are wrapped in audio.ts;
+  // this is the backstop for any future stray.
+  if (String(e.reason).includes('audio device')) return;
   crash ??= String(e.reason);
   paintCrash();
 });
