@@ -1532,11 +1532,6 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
   // the loaner trio — level-30 rare+ rentals, same three for everyone
   ctx.fillStyle = INK_FAINT;
   ctx.fillText('YOUR LV30 LOANERS', bcx, r.y + 254);
-  // the deep-link hint rides the header line — below the trio it collides
-  // with the right loaner's name
-  ctx.textAlign = 'right';
-  ctx.fillText('TAP A MON → ITS CARD', r.x + r.w - 16, r.y + 254);
-  ctx.textAlign = 'center';
   raidTeam().forEach((d, i) => {
     const cx = bcx + (i - 1) * 110;
     monShadow(ctx, cx, r.y + 292, 48);
@@ -2583,20 +2578,6 @@ export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 18, w: 220, h: 52 }
 // FIGHT pill the tab's tap target rides on
 export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };
 export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
-// the boss and its loaners are species — a tap deep-links the dex detail
-// card, same contract as PARTNERS. Rects mirror drawRaidBody's layout.
-export function raidMonAt(x: number, y: number): number | null {
-  const r = RAID_CARD;
-  if (!inRect(x, y, r)) return null;
-  const bcx = r.x + r.w / 2;
-  if (inRect(x, y, { x: bcx - 84, y: r.y + 56, w: 168, h: 180 })) return raidPick().id;
-  const loans = raidTeam();
-  for (let i = 0; i < loans.length; i++) {
-    const cx = bcx + (i - 1) * 110;
-    if (inRect(x, y, { x: cx - 52, y: r.y + 244, w: 104, h: 88 })) return loans[i].id;
-  }
-  return null;
-}
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 // the dex is a one-entry-per-row register now — dexScrollMax's math is
 // frozen, so these consts describe a row: 1 entry per row, 44px tall
@@ -4317,10 +4298,10 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   ctx.fillText('lab levels persist across runs — every star buys a sure thing · tap outside to close', W / 2, r.y + r.h - 14);
 }
 
-// the BAG row — card-lite chips of stocked consumables; ≤2 ride into the
-// run (gold rim + lift, the shiny-card selection language). `last` is the
-// last tapped chip — its desc sits on one dim line under the row. Empty
-// stock hides the whole thing — no dead UI.
+// the BAG row — card-lite chips of stocked consumables; the first ≤2 ride
+// into the run unasked (gold rim + lift, the shiny-card selection language).
+// `last` is the last tapped chip — its desc sits on one dim line under the
+// row. Empty stock hides the whole thing — no dead UI.
 function drawBagRow(
   ctx: CanvasRenderingContext2D,
   sel: ReadonlySet<string>,
@@ -4333,7 +4314,7 @@ function drawBagRow(
   ctx.textAlign = 'center';
   ctx.font = font(8);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText(`BAG — TAKE UP TO ${BAG_MAX}${sel.size ? ` · ${Math.min(sel.size, BAG_MAX)}/${BAG_MAX}` : ''}`, W / 2, BAG_ROW.y + 13);
+  ctx.fillText(`BAG — ${Math.min(sel.size, BAG_MAX)} RIDE IN`, W / 2, BAG_ROW.y + 13);
   items.forEach((it, i) => {
     const on = sel.has(it.id);
     const r = bagChipRect(i, items.length);

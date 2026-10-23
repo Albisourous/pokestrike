@@ -127,7 +127,6 @@ import {
   partnersStripAt,
   TEAM_BTN,
   RAID_FIGHT,
-  raidMonAt,
   echoMonAt,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
@@ -697,7 +696,9 @@ function startDraft() {
     const lvl = 5 + Math.floor(Math.pow(runRng(), 1.8) * 10);
     draft.lvls.set(i, lvl);
   });
-  bagPick.clear();
+  // the bag rides in unasked — the first ≤2 stocked consumables auto-arm;
+  // on the board those chips draw lit, and tapping one just reads its desc
+  bagPick = new Set(bagRowItems().slice(0, BAG_MAX).map((it) => it.id));
   bagLast = null;
   offerCache = null;
   respinDraft();
@@ -1292,37 +1293,15 @@ canvas.addEventListener('pointerdown', (e) => {
       startRaid();
       return;
     }
-    if (homeTab === 'raid') {
-      // boss/loaner sprites deep-link the dex detail card — same contract
-      // as the PARTNERS strip
-      const mid = raidMonAt(p.x, p.y);
-      if (mid != null) {
-        sfx('ui');
-        dexOpen = true;
-        dexScroll = 0;
-        dexPick = mid;
-        return;
-      }
-    }
   } else if (scene === 'draft') {
     if (draft.picked.length >= DRAFT_ROUNDS) return;
-    // bag chips are their own control — a tap toggles the pick and never
-    // fast-forwards the reels (and the row sits clear of the offer cards)
+    // bag chips ride in auto — a tap only answers "what does this one do?"
     if (inRect(p.x, p.y, BAG_ROW)) {
       const items = bagRowItems();
       for (let i = 0; i < items.length; i++) {
         if (!inRect(p.x, p.y, bagChipRect(i, items.length))) continue;
-        const id = items[i].id;
-        bagLast = id; // even a denied tap shows what the item does
-        if (bagPick.has(id)) {
-          bagPick.delete(id);
-          sfx('ui');
-        } else if (bagPick.size < BAG_MAX) {
-          bagPick.add(id);
-          sfx('ui');
-        } else {
-          sfx('ui', 0.6); // third pick denied — a low thud, no shake
-        }
+        bagLast = items[i].id;
+        sfx('ui');
         return;
       }
     }
@@ -1818,6 +1797,9 @@ addEventListener('keydown', (e) => {
     battle.paused = !battle.paused;
     if (battle.paused) battle.pointerCancel(); // a frozen game drops the half-pull
     sfx('ui');
+  } else if ((e.key === 'f' || e.key === 'F') && battle && (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy' || battle.phase === 'loot')) {
+    battle.ff = !battle.ff; // same gate as the pause chip phases
+    sfx('ui', battle.ff ? 1.3 : 0.8);
   } else if (e.key === 'm' || e.key === 'M') {
     toggleMute();
   }
@@ -1945,6 +1927,14 @@ function update(dt: number) {
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
+    // ×2 is fight-phases only — a second full step, never a stretched dt, so
+    // physics can't tunnel; map/reward stay single-step (the chip's own gate)
+    if (
+      battle.ff &&
+      !battle.paused &&
+      (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy' || battle.phase === 'loot')
+    )
+      battle.update(dt);
     // the item reels deal when the reward screen opens
     const itemStep = battle.phase === 'reward';
     if (itemStep && !wasReward) {
@@ -2180,6 +2170,10 @@ function update(dt: number) {
   }
 }
 
+// scene-change fade — stamped on the first frame a new scene paints
+let lastSceneDrawn: Scene | null = null;
+let sceneT0 = -10;
+
 // per-frame scratch for the draw calls — map() per call was throwing away
 // 3-5 arrays a frame; these get refilled and never escape render()
 const pickDefs: SpeciesDef[] = [];
@@ -2340,6 +2334,16 @@ function render() {
   if (crash) drawFailCard(ctx, 'CRASHED — SCREENSHOT THIS', crash, false);
   // SHOW FPS: dim counter in the bottom-right corner — letterbox on tall
   // screens, the box's bottom edge otherwise; clear of the chips up top
+  // a fast lift out of black on every scene change — hard cuts read as bugs
+  if (scene !== lastSceneDrawn) {
+    lastSceneDrawn = scene;
+    sceneT0 = t;
+  }
+  const lift = 1 - Math.min(1, (t - sceneT0) / 0.28);
+  if (lift > 0.01) {
+    ctx.fillStyle = `rgba(11,14,26,${(lift * 0.9).toFixed(3)})`;
+    ctx.fillRect(0, -viewPad, W, H + viewPad * 2);
+  }
   if (settings().fps) {
     ctx.textAlign = 'right';
     ctx.font = fontB(9);
