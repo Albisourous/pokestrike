@@ -2522,6 +2522,8 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
 }
 // the hall IS the Poké Center building — same door as TOP RUNS, same board
 export const HALL_BTN = BOARD_BTN;
+// the empty ledger's door — a dead hall still owes you the climb
+export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 18, w: 220, h: 52 };
 // RAID: one boss card — today's shiny fight + its loaner trio — then the
 // FIGHT pill the tab's tap target rides on
 export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };
@@ -2543,13 +2545,11 @@ export function raidMonAt(x: number, y: number): number | null {
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 // the dex is a one-entry-per-row register now — dexScrollMax's math is
 // frozen, so these consts describe a row: 1 entry per row, 44px tall
-const DEX_COLS = 1;
 const DEX_CELL = 44;
 const DEX_HEAD = 66;
 
 export function dexScrollMax() {
-  const rows = Math.ceil(dexIds().length / DEX_COLS);
-  return Math.max(0, rows * DEX_CELL - (DEX_PANEL.h - DEX_HEAD - 36));
+  return Math.max(0, DEX_ALL.length * DEX_CELL - (DEX_PANEL.h - DEX_HEAD - 36));
 }
 
 export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
@@ -2577,7 +2577,7 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   // dex number and typing right. One entry per row; DEX_CELL is the row pitch.
   const seen = new Set(dexList);
   const shinies = new Set(shinyIds());
-  const rows = DEX_ALL.filter((def) => seen.has(def.id)); // dexRowAt filters the same way — indexes must match
+  const rows = DEX_ALL; // the register is the full checklist — unseen lines ghost as ???
   const viewH = r.h - DEX_HEAD - 36;
   ctx.save();
   ctx.beginPath();
@@ -2591,19 +2591,33 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     const def = rows[i];
     const y = r.y + DEX_HEAD + i * DEX_CELL - scroll;
     const row = { x: r.x + 16, y, w: r.w - 32, h: DEX_CELL - 6 };
-    drawMon(ctx, def.id, row.x + 22, row.y + row.h / 2 + 2, 30);
-    const bl = bondLv(def.id);
-    uiRow(
-      ctx,
-      { x: row.x + 44, y: row.y, w: row.w - 44, h: row.h },
-      def.name.toUpperCase(),
-      { right: `#${def.id} · ${`${def.type}${def.type2 ? `/${def.type2}` : ''}`.toUpperCase()}${bl ? ` · BOND ${bl}` : ''}` },
-    );
-    if (shinies.has(def.id)) { // a caught shiny earns the gold star
+    if (seen.has(def.id)) {
+      drawMon(ctx, def.id, row.x + 22, row.y + row.h / 2 + 2, 30);
+      const bl = bondLv(def.id);
+      uiRow(
+        ctx,
+        { x: row.x + 44, y: row.y, w: row.w - 44, h: row.h },
+        def.name.toUpperCase(),
+        { right: `#${def.id} · ${`${def.type}${def.type2 ? `/${def.type2}` : ''}`.toUpperCase()}${bl ? ` · BOND ${bl}` : ''}` },
+      );
+      if (shinies.has(def.id)) { // a caught shiny earns the gold star
+        ctx.textAlign = 'center';
+        ctx.font = fontB(10);
+        ctx.fillStyle = GOLD;
+        ctx.fillText('★', row.x + 38, row.y + 13);
+      }
+    } else {
+      // a ghost keeps the slot honest: number known, name and typing hidden
       ctx.textAlign = 'center';
-      ctx.font = fontB(10);
-      ctx.fillStyle = GOLD;
-      ctx.fillText('★', row.x + 38, row.y + 13);
+      ctx.font = font(9);
+      ctx.fillStyle = INK_FAINT;
+      ctx.fillText('?', row.x + 22, row.y + row.h / 2 + 6);
+      ctx.textAlign = 'left';
+      ctx.font = fontB(9);
+      ctx.fillText('???', row.x + 52, row.y + row.h / 2 + 4);
+      ctx.textAlign = 'right';
+      ctx.font = fontB(8);
+      ctx.fillText(`#${def.id}`, row.x + row.w - 8, row.y + row.h / 2 + 3);
     }
     ctx.strokeStyle = 'rgba(90,98,136,0.25)';
     ctx.lineWidth = 1;
@@ -2628,10 +2642,11 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.fill();
   }
   if (!seen.size) {
-    ctx.font = font(10);
+    // zero catches — the ghosts already show what the register wants
+    ctx.font = fontB(8);
     ctx.textAlign = 'center';
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('NO CATCHES YET', r.x + r.w / 2, r.y + r.h / 2);
+    ctx.fillText('catch wilds mid-run to fill the register', r.x + r.w / 2, r.y + r.h / 2 - 24);
   }
 
   // the completion milestone is the promise that keeps hunters grinding
@@ -2647,14 +2662,14 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText('tap a row for its card · catches join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
-// a tap on a register row resolves to its species — the detail card's door
+// a tap on a register row resolves to its species — the detail card's door.
+// Ghost rows don't open cards.
 export function dexRowAt(x: number, y: number, scroll: number): number | null {
   const r = DEX_PANEL;
   if (x < r.x + 8 || x > r.x + r.w - 8 || y < r.y + DEX_HEAD || y > r.y + r.h - 36) return null;
   const seen = new Set(dexIds());
-  const list = DEX_ALL.filter((def) => seen.has(def.id));
-  const i = Math.floor((y - r.y - DEX_HEAD + scroll) / DEX_CELL);
-  return list[i]?.id ?? null;
+  const def = DEX_ALL[Math.floor((y - r.y - DEX_HEAD + scroll) / DEX_CELL)];
+  return def && seen.has(def.id) ? def.id : null;
 }
 
 // the mon detail card — a dex row's whole story: portrait, typing, role and
@@ -2821,7 +2836,8 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
   if (!list.length) {
     fitFont(ctx, 'NO RUNS YET — CLIMB AND CLAIM A SPOT', 10, r.w - 40);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('NO RUNS YET — CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + r.h / 2);
+    ctx.fillText('NO RUNS YET — CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + r.h / 2 - 14);
+    pill(ctx, HOF_CLIMB, { c: GOLD_HI, cd: GOLD, tc: INK, label: 'START A CLIMB' });
   }
   ctx.save();
   ctx.beginPath();

@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS } from './game/data';
 import type { SpeciesDef, StageDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -97,6 +97,7 @@ import {
   settingsToggleFlip,
   TASKS_BTN,
   TASKS_TABS,
+  HOF_CLIMB,
   drawTasks,
   taskRowHit,
   settingsSegSet,
@@ -1637,9 +1638,25 @@ canvas.addEventListener('pointerup', (e) => {
           else dexOpen = false;
         }
         sfx('ui');
+      } else if (boardOpen) {
+        // the empty ledger's one live cell — START A CLIMB leaves for the draft
+        if (!board().length && inRect(p.x, p.y, HOF_CLIMB)) {
+          boardOpen = false;
+          sfx('ui');
+          if (titleSave) {
+            const s = titleSave;
+            titleSave = null;
+            resumeRun(s);
+          } else {
+            newRun();
+            startDraft();
+            scene = 'draft';
+          }
+          sceneMusic();
+        } else boardOpen = false;
+        sfx('ui');
       } else {
         achOpen = false;
-        boardOpen = false;
         sfx('ui'); // tap-to-close clicks like every sibling modal
       }
     }
