@@ -5499,15 +5499,10 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
 
   SET_ROWS[cat].forEach((row, i) => {
     const r = settingsRowRect(i, cat);
-    ctx.textAlign = 'left';
-    ctx.font = font(10);
-    ctx.fillStyle = INK;
-    ctx.fillText(row.label, r.x + 2, r.y + (row.sub || row.kind !== 'toggle' ? 18 : r.h / 2 + 5));
-    if (row.sub) {
-      ctx.font = fontB(8);
-      ctx.fillStyle = INK_FAINT;
-      ctx.fillText(row.sub, r.x + 2, r.y + 32);
-    }
+    // the label rides a uiRow strip — a lone toggle centers in its row;
+    // sliders/segs/subs pin theirs to the top 36px, controls below
+    const stripH = row.kind === 'toggle' && !row.sub ? r.h : 36;
+    uiRow(ctx, { x: r.x, y: r.y, w: r.w, h: stripH }, row.label, { sub: row.sub, px: 10 });
     if (row.kind === 'slider') {
       // a throttled write keeps the thumb live from the pending value —
       // vals[] only catches up at the ~4Hz flush
@@ -5616,7 +5611,10 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
   ctx.fillStyle = INK_FAINT;
   ctx.fillText('saved when you leave', P.x + P.w / 2, P.y + P.h - 14);
 
-  pill(ctx, SETTINGS_CLOSE, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'CLOSE' });
+  // the × chip rides centered on the wide close rect — the tap zone
+  // (SETTINGS_CLOSE) is bigger than the mark on purpose
+  const cc = SETTINGS_CLOSE;
+  uiClose(ctx, { x: cc.x + cc.w / 2 - cc.h / 2, y: cc.y, w: cc.h, h: cc.h });
   if (HAS_KEYS) keyHint(ctx, SETTINGS_CLOSE, '[esc]');
 }
 
@@ -5672,40 +5670,32 @@ export function taskRowHit(p: Vec, views: TaskView[]): TasksHit | null {
 }
 
 export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab: 'daily' | 'weekly', t: number, flash?: string) {
-  ctx.fillStyle = 'rgba(6,10,22,0.82)';
-  ctx.fillRect(0, 0, W, H);
-  roundRect(ctx, TASKS_PANEL.x, TASKS_PANEL.y, TASKS_PANEL.w, TASKS_PANEL.h, 10);
-  ctx.fillStyle = PAPER;
-  ctx.fill();
-  rim(ctx, TASKS_PANEL, 10, GOLD, 2);
-  edge(ctx, TASKS_PANEL, 10);
+  scrim(ctx, 0.75);
+  uiWindow(ctx, TASKS_PANEL);
 
-  // period tabs — the live one fills dark with a gold rim, the rail's look
+  // period tabs — small window cells; the live one inverts to the ink slab.
+  // Their rects overlap the title-band zone (geometry is hit law), so the
+  // band draws OVER them — the tabs read as hanging off the title rail —
+  // and their labels re-print below the band's bottom edge.
+  TASKS_TABS.forEach((id, i) => {
+    const r = tasksTabRect(i);
+    uiWindow(ctx, r, { dark: id === tab, rad: 14 });
+  });
+  uiBand(ctx, TASKS_PANEL, 'TASKS', { sub: `NEW TASKS ${taskResetsIn(tab)}` });
   TASKS_TABS.forEach((id, i) => {
     const r = tasksTabRect(i);
     const on = id === tab;
-    roundRect(ctx, r.x, r.y, r.w, r.h, 14);
-    ctx.fillStyle = on ? INK : PAPER;
-    ctx.fill();
-    rim(ctx, r, 14, on ? GOLD : '#d0d0c8', on ? 2 : 1);
-    edge(ctx, r, 14);
     ctx.font = font(10);
     ctx.textAlign = 'center';
-    ctx.fillStyle = on ? PAPER : INK_SOFT;
-    ctx.fillText(id.toUpperCase(), r.x + r.w / 2, r.y + r.h / 2 + 6);
+    ctx.fillStyle = on ? PARCH : INK_SOFT;
+    ctx.fillText(id.toUpperCase(), r.x + r.w / 2, r.y + r.h - 7);
   });
 
-  stripeBand(ctx, TASKS_BAND, GOLD);
+  // the strip under the tabs is the modal's voice — claim flash or promise
   ctx.textAlign = 'left';
-  ctx.font = font(13);
-  ctx.fillStyle = INK;
-  ctx.fillText('TASKS', TASKS_BAND.x + 14, TASKS_BAND.y + 25);
-  ctx.font = fontB(7);
-  ctx.globalAlpha = 0.75;
-  ctx.fillStyle = flash ? '#ffe89d' : INK;
-  ctx.fillText(flash ?? 'rewards land in your bag', TASKS_BAND.x + 14, TASKS_BAND.y + 38);
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = INK;
+  ctx.font = fontB(8);
+  ctx.fillStyle = flash ? GOLD : INK_FAINT;
+  ctx.fillText(flash ?? 'rewards land in your bag', TASKS_BAND.x + 10, TASKS_BAND.y + TASKS_BAND.h / 2 + 3);
 
   if (!views.length) {
     ctx.textAlign = 'center';
@@ -5717,37 +5707,36 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
   views.forEach((v, i) => {
     const r = taskRowRect(i);
     const ready = v.done && !v.claimed;
-    // a claimable row lights like the board's leader row — the rest stay ink
-    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
-    ctx.fillStyle = ready ? '#fdf0c8' : PAPER_HI;
-    ctx.fill();
-    ctx.strokeStyle = ready ? GOLD : '#d0d0c8';
-    ctx.lineWidth = ready ? 2 : 1;
-    ctx.stroke();
+    // a claimable row is the armed uiRow — GOLD slab + blinking ▶; the rest
+    // stay bare list rows with a hairline seam under each
+    if (ready) uiRow(ctx, r, '', { hot: true, t });
+    ctx.fillStyle = 'rgba(40,48,88,0.12)';
+    ctx.fillRect(r.x + 8, r.y + r.h + 2, r.w - 16, 1);
 
     const cr = taskClaimRect(r);
     const ix = cr.x - 12 - 28; // the reward icon rides just left of the slot
-    const textW = ix - 16 - (r.x + 12); // label + bar share this width
+    const tx = r.x + 20; // the ▶ claims the left edge — text starts past it
+    const textW = ix - 16 - tx; // label + bar share this width
 
     ctx.textAlign = 'left';
     fitFont(ctx, v.label, 9, textW - (v.done ? 56 : 0));
     ctx.fillStyle = v.claimed ? INK_FAINT : INK;
-    ctx.fillText(v.label, r.x + 12, r.y + 17);
+    ctx.fillText(v.label, tx, r.y + 17);
     ctx.font = fontB(7);
-    ctx.fillStyle = v.claimed ? '#464e6e' : INK_FAINT;
-    ctx.fillText(v.desc.toUpperCase(), r.x + 12, r.y + 28);
+    ctx.fillStyle = v.claimed ? '#464e6e' : ready ? INK_SOFT : INK_FAINT;
+    ctx.fillText(v.desc.toUpperCase(), tx, r.y + 28);
     if (v.done) {
       // the counter rides the label line once the slot holds CLAIM/CLAIMED;
       // unfinished rows wear it in the slot instead (the dimmed '0/15' state)
       ctx.font = fontB(9);
       ctx.textAlign = 'right';
-      ctx.fillStyle = v.claimed ? INK_FAINT : GOLD;
-      ctx.fillText(`${v.have}/${v.n}`, r.x + 12 + textW, r.y + 17);
+      ctx.fillStyle = v.claimed ? INK_FAINT : ready ? INK : GOLD;
+      ctx.fillText(`${v.have}/${v.n}`, tx + textW, r.y + 17);
       ctx.textAlign = 'left';
     }
 
     // the progress track is the settings slider's groove + gold ramp
-    const br = { x: r.x + 12, y: r.y + 36, w: textW, h: 9 };
+    const br = { x: tx, y: r.y + 36, w: textW, h: 9 };
     roundRect(ctx, br.x, br.y, br.w, br.h, 5);
     ctx.fillStyle = '#0a0d18';
     ctx.fill();
@@ -5785,11 +5774,12 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     }
 
     if (ready) {
-      // the armed claim pulses — the pull that this modal exists for
+      // the armed claim pulses — a dark ink pill on the gold slab is the
+      // loudest contrast in the kit; this modal exists for this tap
       ctx.save();
       ctx.shadowColor = GOLD;
       ctx.shadowBlur = 6 + (Math.sin(t * 4) * 0.5 + 0.5) * 8;
-      pill(ctx, cr, { c: GOLD, cd: '#c8a44d', tc: INK, label: 'CLAIM' });
+      pill(ctx, cr, { c: '#1b2140', cd: INK, tc: GOLD_HI, label: 'CLAIM' });
       ctx.restore();
     } else if (v.claimed) {
       ctx.font = fontB(7);
@@ -5825,12 +5815,7 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     const cx = TASKS_PANEL.x + 16 + (i % 3) * (cw + 8);
     const cy = bagY + 18 + Math.floor(i / 3) * 44;
     const r = { x: cx, y: cy, w: cw, h: 38 };
-    roundRect(ctx, r.x, r.y, r.w, r.h, 8);
-    ctx.fillStyle = PAPER_HI;
-    ctx.fill();
-    ctx.strokeStyle = '#d0d0c8';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    uiWindow(ctx, r, { rad: 8, rim: false, shadow: false });
     const img = itemSprite(it.item);
     void loadItem(it.item);
     if (img) {
@@ -5847,11 +5832,9 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     ctx.fillText(`×${stock[it.id]}`, r.x + 30, r.y + 27);
   });
 
-  ctx.textAlign = 'center';
-  ctx.font = fontB(8);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`NEW TASKS ${taskResetsIn(tab)}`, TASKS_PANEL.x + TASKS_PANEL.w / 2, TASKS_CLOSE.y - 10);
-
-  pill(ctx, TASKS_CLOSE, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'CLOSE' });
+  // the × chip rides centered on the wide close rect — the tap zone
+  // (TASKS_CLOSE) is bigger than the mark on purpose
+  const cc = TASKS_CLOSE;
+  uiClose(ctx, { x: cc.x + cc.w / 2 - cc.h / 2, y: cc.y, w: cc.h, h: cc.h });
   if (HAS_KEYS) keyHint(ctx, TASKS_CLOSE, '[esc]');
 }
