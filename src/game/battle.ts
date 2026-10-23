@@ -312,6 +312,15 @@ const BLOCK_TINT: Record<Theme, string | undefined> = {
   volcano: 'rgba(70,20,8,0.45)',
   sky: 'rgba(150,190,230,0.45)',
 };
+// the slab face keys to the court too — mossy stone, deep indigo, ember
+// dark, steel-blue on the summit (still darker than the floor so the
+// cover silhouette never washes out)
+const BLOCK_FACE: Record<Theme, string> = {
+  grove: 'rgba(22,38,24,0.48)',
+  cavern: 'rgba(30,36,70,0.42)',
+  volcano: 'rgba(54,22,12,0.52)',
+  sky: 'rgba(95,120,155,0.72)',
+};
 
 // graphics quality → ambient/weather particle density multiplier — low
 // trims to a quarter but never to zero; a still court shouldn't read dead
@@ -2337,7 +2346,7 @@ export class Battle {
     const cell = 22;
     for (let ty = b.y - cell / 2; ty < b.y + b.h; ty += cell)
       for (let tx = b.x - cell / 2; tx < b.x + b.w; tx += cell)
-        drawSlice(ctx, MT.TILE_COBBLE, tx, ty, cell, cell, 'rgba(30,36,70,0.42)');
+        drawSlice(ctx, MT.TILE_COBBLE, tx, ty, cell, cell, BLOCK_FACE[this.theme]);
     ctx.restore();
     // the boulders ARE the cover — a clustered row seated on the slab,
     // overhanging its lip like the ring props, small rocks at the foot
