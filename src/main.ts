@@ -1077,12 +1077,12 @@ canvas.addEventListener('pointerdown', (e) => {
   if (scene === 'title') {
     // every open overlay swallows the tap into a scroll drag — a drag that
     // never moved resolves as a tap on pointerup
-    if (dexOpen || achOpen || boardOpen || hatchOpen || labOpen) {
+    if (dexOpen || dexPick != null || achOpen || boardOpen || hatchOpen || labOpen) {
       dexDrag = {
         y0: p.y,
         s0: hatchOpen ? hatch.sparkScroll : labOpen ? labScroll : dexOpen ? dexScroll : achScroll,
         moved: false,
-        for: hatchOpen ? 'hatch' : labOpen ? 'lab' : dexOpen ? 'dex' : achOpen ? 'ach' : 'board',
+        for: hatchOpen ? 'hatch' : labOpen ? 'lab' : dexOpen || dexPick != null ? 'dex' : achOpen ? 'ach' : 'board',
       };
       return;
     }
@@ -1148,10 +1148,12 @@ canvas.addEventListener('pointerdown', (e) => {
     }
     if (homeTab === 'mons' && (inRect(p.x, p.y, DEX_BTN) || inRect(p.x, p.y, PARTNERS_BTN))) {
       sfx('ui');
-      dexOpen = true;
+      // a sprite tap opens just that mon's card — no register stacked under
+      // it; the rest of the card browses the register as before
+      const strip = inRect(p.x, p.y, PARTNERS_BTN) ? partnersStripAt(p.x, p.y) : null;
+      dexOpen = strip == null;
       dexScroll = 0;
-      // a tap on the strip aims at its mon — the rest of the card browses
-      dexPick = inRect(p.x, p.y, PARTNERS_BTN) ? partnersStripAt(p.x, p.y) : null;
+      dexPick = strip;
       return;
     }
     if (homeTab === 'mons' && inRect(p.x, p.y, TEAM_BTN)) {
@@ -1592,7 +1594,7 @@ canvas.addEventListener('pointerup', (e) => {
       const p = toLogical(e);
       if (hatchOpen) hatchTap(p);
       else if (labOpen) labTap(p);
-      else if (dexOpen) {
+      else if (dexOpen || dexPick != null) {
         // detail first, then a row pick, then tap-to-close — the dex's stack
         if (dexPick != null) dexPick = null;
         else {
@@ -2183,7 +2185,7 @@ function render() {
     case 'title':
       drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - restartConfirmT0 < 3, homeTab);
       if (dexOpen) drawDex(ctx, dexScroll);
-      if (dexOpen && dexPick != null) drawDexDetail(ctx, dexPick);
+      if (dexPick != null) drawDexDetail(ctx, dexPick); // solo or stacked — its own scrim
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
       if (hatchOpen)
