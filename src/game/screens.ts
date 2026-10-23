@@ -9,7 +9,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TIL
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -175,10 +175,7 @@ export function drawHelpChip(ctx: CanvasRenderingContext2D) {
   cornerBadge(ctx, HELP_CHIP, { bg: '#283058cc', lw: 1.5 });
   ctx.font = font(12);
   ctx.fillStyle = PARCH;
-  ctx.textAlign = 'center';
-  // PS2P '?' has right side-bearing and sits ~0.9em above the baseline —
-  // nudge right and drop the baseline so the ink lands on the box center
-  ctx.fillText('?', cx + 2, cy + 11);
+  inkCenter(ctx, '?', cx, cy);
 }
 export const MUTE_CHIP = { x: W - 100, y: 54, w: 40, h: 40 };
 export const MUTE_CHIP_HIT = { x: MUTE_CHIP.x - 2, y: MUTE_CHIP.y - 2, w: 44, h: 44 };
@@ -277,9 +274,25 @@ export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w
 // DESIGN.md "GBA authentic": light paper faces in navy frames, gold
 // reserved for the one CTA and rims; color lives in content, never fills.
 
+// PS2P glyphs carry side-bearings and sit high in the em box, so a centered
+// fillText lands their ink off the box center. Measure the real ink box and
+// draw so it centers at (cx, cy) — the corner-badge '?' uses this.
+function inkCenter(ctx: CanvasRenderingContext2D, ch: string, cx: number, cy: number) {
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  const m = ctx.measureText(ch);
+  const l = m.actualBoundingBoxLeft ?? 0;
+  const inkW = l + (m.actualBoundingBoxRight ?? m.width);
+  const asc = m.actualBoundingBoxAscent ?? 0;
+  const desc = m.actualBoundingBoxDescent ?? 0;
+  ctx.fillText(ch, cx - l - inkW / 2, cy + (asc - desc) / 2);
+}
+
 // speaker glyph + slash — shared by the title badge and the mid-run chip.
 // color/muted default to the live mute state; the settings tab overrides both.
+// The cone + arcs span [-8s, +12s]; shifting 2s left centers the ink on cx.
 function speakerGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: number, muted = isMuted(), color = PARCH) {
+  cx -= 2 * s;
   ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(cx - 8 * s, cy - 3 * s);
@@ -331,18 +344,18 @@ function gearGlyph(ctx: CanvasRenderingContext2D, cx: number, cy: number, s: num
   for (let i = 0; i < 8; i++) {
     ctx.save();
     ctx.rotate((i * Math.PI) / 4);
-    ctx.fillRect(-1.5 * s, -9.5 * s, 3 * s, 3.8 * s);
+    ctx.fillRect(-1.9 * s, -10.4 * s, 3.8 * s, 4.4 * s);
     ctx.restore();
   }
   ctx.restore();
   ctx.strokeStyle = color;
-  ctx.lineWidth = 2.4 * s;
+  ctx.lineWidth = 2.6 * s;
   ctx.beginPath();
-  ctx.arc(cx, cy, 5.8 * s, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 6 * s, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(cx, cy, 1.8 * s, 0, Math.PI * 2);
+  ctx.arc(cx, cy, 2 * s, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -907,16 +920,16 @@ export function drawTitle(
 
   // the wallet rides top-center like a Clash Royale gold bar — stars and
   // dust on the title mean the economy is visible before any overlay opens
-  balanceChip(ctx, { x: W / 2 - 92, y: 28, w: 184, h: 36 }, starN, dust());
+  // center 44 matches the corner badges' (22 + 44/2)
+  balanceChip(ctx, { x: W / 2 - 92, y: 26, w: 184, h: 36 }, starN, dust());
 
 
   // corner badges are chrome, not body — they ride every tab: how-to-play,
   // mute, settings
   cornerBadge(ctx, HELP_BTN, { dither: 0.09 });
-  ctx.textAlign = 'center';
-  ctx.font = font(16);
+  ctx.font = font(18);
   ctx.fillStyle = PARCH;
-  ctx.fillText('?', HELP_BTN.x + HELP_BTN.w / 2 + 3, HELP_BTN.y + HELP_BTN.h / 2 + 14);
+  inkCenter(ctx, '?', HELP_BTN.x + HELP_BTN.w / 2, HELP_BTN.y + HELP_BTN.h / 2);
   const mcx = MUTE_BTN.x + MUTE_BTN.w / 2, mcy = MUTE_BTN.y + MUTE_BTN.h / 2;
   cornerBadge(ctx, MUTE_BTN, { dither: 0.09 });
   speakerGlyph(ctx, mcx, mcy, 1);
@@ -1006,7 +1019,7 @@ function drawClimbBody(
 
   // the run's heat picks right on the climb screen — the ladder StS
   // players expect before the door, parked in the dead pitch band
-  drawAscLadder(ctx, t, ASC_BTN, Math.min(best().wins, 9), ascPick());
+  drawAscLadder(ctx, t, ASC_BTN, ascCap(), ascPick());
 
   // one hero pill — RESTART rides its flank, but only while a save waits.
   // The raid isn't a door here anymore; its tab carries the boss face + dot.
@@ -3141,19 +3154,25 @@ function balanceChip(
   // the wallet is a small dark window-chip — same frame language as the panel
   uiWindow(ctx, r, { dark: true, rad: r.h / 2, shadow: false });
   void loadItem('star-piece');
+  ctx.textAlign = 'left';
+  ctx.font = fontB(9);
+  const starTxt = `${Math.round(chipStars)}`;
+  const dustTxt = `${Math.round(chipDust)}`;
+  // center the whole cluster — icon + counts — not just the first glyph
+  const contentW =
+    18 + 6 + ctx.measureText(starTxt).width + (dust != null ? 8 + 12 + ctx.measureText(dustTxt).width : 0);
+  let tx = r.x + (r.w - contentW) / 2;
   const star = itemSprite('star-piece');
   if (star) {
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(star, r.x + 10, r.y + r.h / 2 - 9, 18, 18);
+    ctx.drawImage(star, tx, r.y + r.h / 2 - 9, 18, 18);
     ctx.restore();
   }
-  ctx.textAlign = 'left';
-  ctx.font = fontB(9);
-  let tx = r.x + 34;
+  tx += 24;
   ctx.fillStyle = GOLD_HI;
-  ctx.fillText(`${Math.round(chipStars)}`, tx, r.y + r.h / 2 + 3.5);
-  tx += ctx.measureText(`${Math.round(chipStars)}`).width + 8;
+  ctx.fillText(starTxt, tx, r.y + r.h / 2 + 3.5);
+  tx += ctx.measureText(starTxt).width + 8;
   if (dust != null) {
     // the second wallet reads cool — a small diamond, not the star icon
     const mid = r.y + r.h / 2 - 1;
@@ -4773,10 +4792,9 @@ export function drawPerkCard(
     ctx.drawImage(img, band.x + band.w / 2 - 22 * pop, band.y + band.h / 2 - 22 * pop, 44 * pop, 44 * pop);
     ctx.restore();
   } else {
-    ctx.textAlign = 'center';
     ctx.font = font(16);
     ctx.fillStyle = INK;
-    ctx.fillText('?', band.x + band.w / 2 + 3, band.y + band.h / 2 + 12);
+    inkCenter(ctx, '?', band.x + band.w / 2, band.y + band.h / 2);
   }
   ctx.textAlign = 'center';
   fitFont(ctx, perk.name, 9, r.w - 12);
@@ -5557,6 +5575,9 @@ export function drawResult(
       edge(ctx, br, 5);
       ctx.font = fontB(8);
       ctx.fillStyle = RARITY_COLOR[b.rarity];
+      // x is the chip's center — realign, or the note block's 'left' spill
+      // shifts the name half a width past the rim
+      ctx.textAlign = 'center';
       ctx.fillText(b.name, bx + ws[i] / 2, by + 14);
       bx += ws[i] + 8;
     });
