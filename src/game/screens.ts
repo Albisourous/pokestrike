@@ -2575,11 +2575,18 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   // dex number and typing right. One entry per row; DEX_CELL is the row pitch.
   const seen = new Set(dexList);
   const shinies = new Set(shinyIds());
+  const rows = DEX_ALL.filter((def) => seen.has(def.id)); // dexRowAt filters the same way — indexes must match
+  const viewH = r.h - DEX_HEAD - 36;
   ctx.save();
   ctx.beginPath();
-  ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, r.h - DEX_HEAD - 36);
+  ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, viewH);
   ctx.clip();
-  DEX_ALL.filter((def) => seen.has(def.id)).forEach((def, i) => {
+  // the clip already hides off-band rows — draw only the visible index
+  // range instead of a uiRow + sprite per caught species per frame
+  const lo = Math.max(0, Math.floor(scroll / DEX_CELL) - 1);
+  const hi = Math.min(rows.length - 1, Math.ceil((scroll + viewH) / DEX_CELL));
+  for (let i = lo; i <= hi; i++) {
+    const def = rows[i];
     const y = r.y + DEX_HEAD + i * DEX_CELL - scroll;
     const row = { x: r.x + 16, y, w: r.w - 32, h: DEX_CELL - 6 };
     drawMon(ctx, def.id, row.x + 22, row.y + row.h / 2 + 2, 30);
@@ -2602,8 +2609,22 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.moveTo(row.x + 6, y + DEX_CELL - 5);
     ctx.lineTo(row.x + row.w - 6, y + DEX_CELL - 5);
     ctx.stroke();
-  });
+  }
   ctx.restore();
+  // scroll thumb — a 649-row register needs a position read, same idiom as
+  // the completion bars: a slim rail in the row/panel margin, gold thumb
+  const total = rows.length * DEX_CELL;
+  if (total > viewH) {
+    const rail = { x: r.x + r.w - 11, y: r.y + DEX_HEAD + 4, w: 4, h: viewH - 8 };
+    ctx.fillStyle = 'rgba(12,16,32,0.4)';
+    roundRect(ctx, rail.x, rail.y, rail.w, rail.h, 2);
+    ctx.fill();
+    const th = Math.max(24, (viewH / total) * rail.h);
+    const ty = rail.y + (scroll / dexScrollMax()) * (rail.h - th);
+    ctx.fillStyle = GOLD;
+    roundRect(ctx, rail.x, ty, rail.w, th, 2);
+    ctx.fill();
+  }
   if (!seen.size) {
     ctx.font = font(10);
     ctx.textAlign = 'center';
