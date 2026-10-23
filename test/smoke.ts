@@ -126,6 +126,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (gym as any).spawnWave(2);
   const boss = (gym as any).enemies.find((e: any) => e.boss);
   ok(boss?.enraged === true, 'ASC 6 gym leaders arrive enraged');
+
+  // StS stacking: rung 9 keeps every lower rule live in the same fight —
+  // fast wind-up (2), rolled sky (8) on a fodder wave, then enraged boss
+  // (6) + frenzied drift (7) when the gym lands
+  const stack = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  stack.asc = 9;
+  (stack as any).spawnWave(0);
+  const sTimer = (stack as any).enemies.find((e: any) => !e.def.melee)?.timer;
+  ok(sTimer !== undefined && t0 !== undefined && sTimer < t0, 'ASC 9 still winds up fast (rung 2 live)');
+  ok((stack as any).weather != null, 'ASC 9 keeps rung 8: fodder wave rolled weather');
+  (stack as any).spawnWave(2);
+  const sBoss = (stack as any).enemies.find((e: any) => e.boss);
+  ok(sBoss?.enraged === true && sBoss.drift > (boss?.drift ?? 0), 'ASC 9 keeps 6+7: enraged + frenzied');
 }
 
 // --- designed opener: clustered first pack + breathing room -------------
@@ -359,6 +372,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   b.boxLvl.push(1);
   b.swapFromBox(1, 0);
   ok(b.box.length === 2 && b.box[1] === stray && (b as any).players[0].def === ROSTER[0], 'mid-fight swap stays refused');
+}
+
+// --- reward sequencing: the roster seats before the item pick ------------
+{
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  (b as any).enterReward();
+  ok(b.wantMenu === false, 'empty box — the reward skips the roster step');
+  b.box.push(ROSTER[7]);
+  b.boxHp.push(1);
+  b.boxLvl.push(2);
+  (b as any).enterReward();
+  ok(b.wantMenu === true && b.phase === 'reward', 'stocked box — the roster seats before the item pick');
 }
 
 // --- reward flow: the pick (or decline) goes straight to the map -----------

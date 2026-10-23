@@ -307,7 +307,8 @@ function faceTile(theme: Theme): HTMLCanvasElement | null {
 // Prop ring with depth: a dark seat + thin rim keeps the physics edge
 // readable, an inner AO ring is the cliff-shadow, and hash-jittered props
 // hang over the rim into the court — balls sliding under them is the look.
-export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: number; w: number; h: number }, theme: Theme) {
+// `seed` re-dresses the ring per fight — same theme, different treeline.
+export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: number; w: number; h: number }, theme: Theme, seed = 0) {
   // cliff face — the textured rock band outside the rim, drawn under the
   // seat shadow so the mesa edge still grounds the court. The even-odd
   // ring clip keeps the band's corners concentric with the arena's.
@@ -392,35 +393,36 @@ export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: numbe
     drawSlice(ctx, p.r, bx - w / 2, by - h, w, h, p.t);
   };
   // top treeline — dense, jittered, canopies overhanging the rim
+  const j = seed * 61.7;
   for (let i = 0, x = a.x + 24; x < a.x + a.w - 10; i++) {
-    const p = P.hi[Math.floor(hash(i * 7.3 + 2) * P.hi.length)];
-    const s = 1.0 + hash(i * 5.1 + 4) * 0.45;
-    stamp(p, x + (hash(i * 9.7) - 0.5) * 10, a.y + 46 + (i % 2) * 9, s);
-    x += 42 + hash(i * 3.3) * 13;
+    const p = P.hi[Math.floor(hash(i * 7.3 + 2 + j) * P.hi.length)];
+    const s = 1.0 + hash(i * 5.1 + 4 + j) * 0.45;
+    stamp(p, x + (hash(i * 9.7 + j) - 0.5) * 10, a.y + 46 + (i % 2) * 9, s);
+    x += 42 + hash(i * 3.3 + j) * 13;
   }
   // side edges — same upright props stepping down; they stop short of the
   // bottom strip so the team's row stays clear
   for (let i = 0, y = a.y + 74; y < a.y + a.h - 120; i++) {
-    const p = P.hi[Math.floor(hash(i * 6.1 + 40) * P.hi.length)];
-    const s = 1.0 + hash(i * 4.7 + 9) * 0.45;
-    stamp(p, a.x + 11 + (hash(i * 8.3) - 0.5) * 6, y, s);
-    const p2 = P.hi[Math.floor(hash(i * 5.9 + 80) * P.hi.length)];
-    const s2 = 1.0 + hash(i * 7.7 + 3) * 0.45;
-    stamp(p2, a.x + a.w - 11 + (hash(i * 3.1) - 0.5) * 6, y + (hash(i * 2.3) - 0.5) * 8, s2);
+    const p = P.hi[Math.floor(hash(i * 6.1 + 40 + j) * P.hi.length)];
+    const s = 1.0 + hash(i * 4.7 + 9 + j) * 0.45;
+    stamp(p, a.x + 11 + (hash(i * 8.3 + j) - 0.5) * 6, y, s);
+    const p2 = P.hi[Math.floor(hash(i * 5.9 + 80 + j) * P.hi.length)];
+    const s2 = 1.0 + hash(i * 7.7 + 3 + j) * 0.45;
+    stamp(p2, a.x + a.w - 11 + (hash(i * 3.1 + j) - 0.5) * 6, y + (hash(i * 2.3 + j) - 0.5) * 8, s2);
     if (P.pile) {
       // a second loose lump turns each boulder into a little cairn —
       // borrows the theme's low-prop tint so volcano rocks stay scorched
       stamp({ r: MT.ROCK_SMALL, t: P.lo[0].t }, a.x + 27, y - 6, s * 0.7);
       stamp({ r: MT.ROCK_SMALL, t: P.lo[0].t }, a.x + a.w - 27, y + 2, s2 * 0.7);
     }
-    y += 44 + hash(i * 3.9) * 12;
+    y += 44 + hash(i * 3.9 + j) * 12;
   }
   // bottom strip — sparse low cover; nothing tall may hide the team
   for (let i = 0, x = a.x + 40; x < a.x + a.w - 30; i++) {
-    const p = P.lo[Math.floor(hash(i * 8.9 + 60) * P.lo.length)];
-    const s = 0.9 + hash(i * 6.7) * 0.5;
-    stamp(p, x + (hash(i * 4.3) - 0.5) * 14, a.y + a.h - 7, s);
-    x += 72 + hash(i * 5.5) * 38;
+    const p = P.lo[Math.floor(hash(i * 8.9 + 60 + j) * P.lo.length)];
+    const s = 0.9 + hash(i * 6.7 + j) * 0.5;
+    stamp(p, x + (hash(i * 4.3 + j) - 0.5) * 14, a.y + a.h - 7, s);
+    x += 72 + hash(i * 5.5 + j) * 38;
   }
 }
 

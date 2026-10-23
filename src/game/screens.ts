@@ -44,7 +44,7 @@ export interface RunResult {
   mvpIdx: number; // highest-level mon — crowned on the team row
   shortOfBest: number; // pts shy of the record, when it was close
   newAch: string[]; // trophy names this run just unlocked
-  rating: { delta: number; tier: string; color: string; up: boolean }; // ladder movement this run
+  rating: { delta: number; tier: string; color: string; up: boolean; down?: boolean }; // ladder movement this run
   place: number; // hall-of-fame slot earned (0-based), -1 = off the board
   seed: number; // the run's roll — a shared seed replays this climb
   runNo?: number; // lifetime run count — the report's CASE no; the seed stands in till main.ts fills it
@@ -2347,7 +2347,7 @@ const HELP_SECTIONS: HelpSection[] = [
     lines: [
       'each wave seeds a pickup — the colored ring and tag name it',
       'berry heals the team, protein buffs the shot, elixir charges pips',
-      'roll the ball through to collect on touch',
+      'fly through the glowing item to collect on touch',
       'one spawns each wave, two when something big lurks',
     ],
     demo: demoPickups,
@@ -2442,7 +2442,7 @@ const HELP_SECTIONS: HelpSection[] = [
     get lines() {
       return [
         `not a per-mon super — one shared meter · every shot banks a pip, ${ULT_SHOTS} pips arm it`,
-        'when the gauge floods gold, TAP any glowing mon — its type picks the nuke',
+        'when the gauge floods gold, TAP a glowing mon — tap it again to fire · its type picks the nuke',
         'all foes take the hit · bosses shrug off most of it · charge resets each fight',
         // key affordances hide on touch — same (pointer: fine) gate as the [1]/[R] hints
         ...(HAS_KEYS ? ['on keys: ? help · P pause · M mute · arrows turn pages'] : []),
@@ -4466,9 +4466,10 @@ function drawBagRow(
   // last tap answers "what does this one do?" — one dim line, order-free
   const li = items.findIndex((it) => it.id === last);
   if (li >= 0) {
-    ctx.font = fontB(7);
     ctx.fillStyle = INK_SOFT;
     ctx.textAlign = 'center';
+    // a long desc used to ink past the row's edges — fit it like the rest
+    fitFontB(ctx, items[li].desc.toUpperCase(), 7, W - 40);
     ctx.fillText(items[li].desc.toUpperCase(), W / 2, BAG_ROW.y + 92);
   }
 }
@@ -4898,7 +4899,7 @@ export function drawReward(
     ctx.fillText(recruit.name.toUpperCase() + (recruit.lvl && recruit.lvl > 1 ? ` LV${recruit.lvl}` : ''), r.x + 98, r.y + 46);
     ctx.font = fontB(8);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('in your box — tap to open TEAM · ITEMS', r.x + 98, r.y + 64);
+    ctx.fillText('in your box — swap first, then pick an item', r.x + 98, r.y + 64);
     ctx.textAlign = 'center';
   }
 
@@ -5255,11 +5256,17 @@ export function drawTeamMenu(
   catchPct: number,
   heldItems: string[],
   masterArmed: boolean,
+  rewardStep = false, // the reward break seats this first — swap, THEN items
 ) {
   scrim(ctx, 0.82);
   // the roster drawer is a menu window — the INK band carries the title
-  uiPanel(ctx, TEAM_PANEL, 'TEAM & ITEMS');
+  uiPanel(ctx, TEAM_PANEL, rewardStep ? 'SET THE LINEUP FIRST' : 'TEAM & ITEMS');
   ctx.textAlign = 'center';
+  if (rewardStep) {
+    ctx.font = fontB(9);
+    ctx.fillStyle = GOLD;
+    ctx.fillText('FIX YOUR SQUAD — THE ITEM BOARD WAITS BEHIND THIS', W / 2, TEAM_PANEL.y + 52);
+  }
 
   // held items — the run's build, card rows like the bag list: rarity notch,
   // icon, name and what it does
@@ -5293,27 +5300,27 @@ export function drawTeamMenu(
       ctx.drawImage(img, r.x + 12, r.y + 4, 22, 22);
       ctx.restore();
     }
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(r.x + 40, r.y, r.w - 50, r.h);
-    ctx.clip();
     ctx.textAlign = 'left';
     ctx.font = fontB(9);
-    const name = (perk ? perk.name : item).toUpperCase();
+    let name = (perk ? perk.name : item).toUpperCase();
+    while (name.length > 3 && ctx.measureText(name + '…').width > r.w - 50) name = name.slice(0, -1);
     const nw = ctx.measureText(name).width;
     ctx.fillStyle = INK;
     ctx.fillText(name, r.x + 42, r.y + 19);
     if (perk) {
       ctx.font = fontB(8);
       ctx.fillStyle = INK_FAINT;
-      ctx.fillText(`— ${perk.desc}`, r.x + 48 + nw, r.y + 19);
+      // ellipsize, not hard-clip — a cut glyph reads as text spilling off the row
+      let dsc = `— ${perk.desc}`;
+      const dscW = r.x + r.w - 10 - (r.x + 48 + nw);
+      while (dsc.length > 3 && ctx.measureText(dsc + '…').width > dscW) dsc = dsc.slice(0, -1);
+      ctx.fillText(dsc, r.x + 48 + nw, r.y + 19);
     }
-    ctx.restore();
     ctx.textAlign = 'center';
   });
 
   drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct, masterArmed);
-  pill(ctx, MENU_CLOSE, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'CLOSE' });
+  pill(ctx, MENU_CLOSE, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: rewardStep ? 'DONE → ITEMS' : 'CLOSE' });
   // the quiet out — dark like evo KEEP; the parked pk_run is what CONTINUE resumes
   pill(ctx, MENU_QUIT, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'QUIT TO TITLE' });
 }
@@ -5424,7 +5431,7 @@ export function drawResult(
     const r = res.rating;
     findings.push([
       'RATING',
-      `${r.delta >= 0 ? '+' : ''}${r.delta} ${r.tier}${r.up ? ' ★ RANK UP' : ''}${res.place >= 0 ? ` · HOF #${res.place + 1}` : ''}`,
+      `${r.delta >= 0 ? '+' : ''}${r.delta} ${r.tier}${r.up ? ' ★ RANK UP' : r.down ? ' ▼ RANK DOWN' : ''}${res.place >= 0 ? ` · HOF #${res.place + 1}` : ''}`,
       r.color,
     ]);
   }

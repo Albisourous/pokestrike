@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, ASC_MODS } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -351,10 +351,10 @@ const BALL_TAIL = 0.25; // linger after the click/burst before fading
 const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
 // every pickup gets a color + one-word tag so the drop reads before the
 // ball reaches it
-const PICKUP_META: Record<PickupKind, { label: string; color: string }> = {
-  'oran-berry': { label: 'HEAL', color: '#6fdc6f' },
-  protein: { label: 'ATK UP', color: '#f08030' },
-  elixir: { label: 'CD -1', color: '#9ecbff' },
+const PICKUP_META: Record<PickupKind, { name: string; label: string; color: string }> = {
+  'oran-berry': { name: 'ORAN BERRY', label: 'HEAL 15%', color: '#6fdc6f' },
+  protein: { name: 'PROTEIN', label: 'ATK +50%', color: '#f08030' },
+  elixir: { name: 'ELIXIR', label: 'SUPER +1', color: '#9ecbff' },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 // star pieces — the meta wallet paid by run progress (Oct-20/21 specs;
@@ -587,6 +587,9 @@ export class Battle {
   // second tap inside the window fires — anything else stands it down
   private ultArmUid = -1;
   private ultArmT = -9;
+  // the fired ult gets a letterboxed cinema beat — banner + type-tinted
+  // vignette over the fight while the map-wide attack lands
+  private ultFx = { text: '', color: '#ffd84d', t: 0, life: 1.15 };
   // branching evolution: a dupe-fed split waits on the reward screen's pick —
   // unit for a fielded mon, boxDef for a boxed one (re-found at pick time so
   // a mid-queue box swap can't evolve the wrong entry)
@@ -642,6 +645,7 @@ export class Battle {
   private shotGold = false; // gold-zone release — MS gauge shot: +20% contact this shot
   ultIn = ULT_SHOTS; // shots until the map-wide ultimate — a team charge, tap any teammate to spend it
   private gaugeJit = 0; // per-pull variance: shifts the gold band and sweep pace
+  private gaugeJit2 = 0; // per-pull variance: the band's width breathes too
   private gaugeStart = 0; // per-pull variance: where on the cycle the needle starts
   shinyRate = 1; // 2 with the Shiny Charm dex milestone
   scoreMult = 1; // lucky egg: score amplifies
@@ -718,6 +722,7 @@ export class Battle {
   boxLvl: number[] = []; // each boxed mon's level — benching keeps earned levels
   boxPing = false; // a fresh catch waits in the box — the map's TEAM · ITEMS ball bounces until you look
   boxGain: SpeciesDef | null = null; // newest box member — the reward banner names it
+  wantMenu = false; // reward asks main to open the roster first — swap comes before the item pick
   // run stats for end-of-run badges — RNGdle-style "what did this run earn"
   score = 0; // run score — total damage dealt to enemies
   maxCombo = 0; // best pass-chain in a single shot
@@ -814,11 +819,11 @@ export class Battle {
     // bought levels announce themselves — the field log names what the lab
     // is actually doing this run so a purchase never feels dead
     const labBits = [
-      labLevel('hp') && `+${LAB_HP_LV * labLevel('hp') * 100}%HP`,
-      labLevel('dmg') && `+${LAB_DMG_LV * labLevel('dmg') * 100}%DMG`,
-      labLevel('spc') && `+${LAB_SPC_LV * labLevel('spc') * 100}%SPC`,
+      labLevel('hp') && `+${Math.round(LAB_HP_LV * labLevel('hp') * 100)}%HP`,
+      labLevel('dmg') && `+${Math.round(LAB_DMG_LV * labLevel('dmg') * 100)}%DMG`,
+      labLevel('spc') && `+${Math.round(LAB_SPC_LV * labLevel('spc') * 100)}%SPC`,
       labLevel('luck') && `+${LAB_LUCK_LV * labLevel('luck')}LUCK`,
-      labLevel('earnings') && `+${LAB_EARN_LV * labLevel('earnings') * 100}%★`,
+      labLevel('earnings') && `+${Math.round(LAB_EARN_LV * labLevel('earnings') * 100)}%★`,
     ].filter(Boolean);
     if (labBits.length) this.log(`LAB ${labBits.join(' · ')}`);
     const n = team.length;
@@ -1590,6 +1595,7 @@ export class Battle {
     // every pull re-rolls the gauge's rhythm — the band and sweep don't sit
     // where muscle memory left them
     this.gaugeJit = this.rng() * 2 - 1;
+    this.gaugeJit2 = this.rng() * 2 - 1;
     this.gaugeStart = this.rng();
 
     this.dragStart = { ...p };
@@ -1744,7 +1750,7 @@ export class Battle {
   // The pace and needle start re-roll every pull, so the window is never
   // the same shot twice.
   private charge() {
-    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.14);
+    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.2);
     const ph = (this.dragT + this.gaugeStart * 2 * P) % (2 * P);
     return ph < P ? ph / P : 2 - ph / P;
   }
@@ -1763,9 +1769,11 @@ export class Battle {
   private sweetSpot() {
     const n = Math.min(this.active.def.stats.spe / 120, 1);
     const d = this.gaugeDifficulty();
-    const hw = Math.max(0.09 - 0.05 * n - 0.04 * d, 0.025);
+    // the window itself breathes ±30% pull to pull — some releases are
+    // generous, some ask for precision; it never lands on the same spec twice
+    const hw = Math.max((0.09 - 0.05 * n - 0.04 * d) * (1 + this.gaugeJit2 * 0.3), 0.022);
     const drift = Math.max(d - 0.5, 0) * 0.16 * Math.sin(this.dragT * 2.4);
-    const c = Math.min(Math.max(0.68 + 0.27 * n + drift + this.gaugeJit * 0.09, hw), 1 - hw);
+    const c = Math.min(Math.max(0.68 + 0.27 * n + drift + this.gaugeJit * 0.13, hw), 1 - hw);
     return { c, hw };
   }
 
@@ -1835,6 +1843,7 @@ export class Battle {
     if (this.texts.length > 40) this.texts.splice(0, this.texts.length - 40); // a huge burst shouldn't stack 100 labels
     for (const f of this.flashes) f.t -= dt;
     cull(this.flashes, (f) => f.t > 0);
+    if (this.ultFx.t > 0) this.ultFx.t -= dt; // hit-stop stretches the cinema beat
     // capture rituals tick in any phase — a tick lands on each swing's far
     // tilt, then the click/burst fires the site's deferred payoff once
     for (const b of this.balls) {
@@ -2120,7 +2129,14 @@ export class Battle {
       }
       for (let j = this.pickups.length - 1; j >= 0; j--) {
         const pk = this.pickups[j];
-        if (dist(u, pk) < u.r + 22) {
+        const dd = dist(u, pk);
+        // soft magnet — a ball that just misses still drifts into the drop,
+        // so threading a lane to loot feels generous, not pixel-perfect
+        if (dd < u.r + 64 && dd > 1) {
+          u.vx += ((pk.x - u.x) / dd) * 260 * dt;
+          u.vy += ((pk.y - u.y) / dd) * 260 * dt;
+        }
+        if (dd < u.r + 30) {
           this.pickups.splice(j, 1);
           this.grabPickup(pk);
         }
@@ -3885,6 +3901,7 @@ export class Battle {
     this.hitStop = Math.max(this.hitStop, 0.55);
     this.screenFlash('#ffffff', 0.3);
     this.screenFlash(color, 0.28);
+    this.ultFx = { text: moveOf(u.def.id, u.def.type), color, t: 1.15, life: 1.15 };
     this.impact(u.x, u.y, color, 2.4);
     this.burst(u.x, u.y, color, 34, 720, 1.5);
     // the eruption ring sweeps the court — pure spectacle, beams do the work
@@ -4622,6 +4639,9 @@ export class Battle {
     }
     this.phase = 'reward';
     if (!this.waveHadGym) playJingle('clear'); // gyms already played their badge stab
+    // fix the lineup before the item — main opens the roster over the board
+    // once; only worth the interruption when there's a mon to swap in
+    this.wantMenu = this.box.length > 0;
     // a queued split evolution asks its question on the reward screen
     if (!this.evoChoice) this.evoChoice = this.evoPending.shift() ?? null;
   }
@@ -5743,9 +5763,15 @@ export class Battle {
       ctx.translate(-cx, -cy);
     }
 
-    // arena: theme-tinted backdrop + prop-lined rim
-    drawBackdrop(ctx, a, 18, this.theme, this.time);
-    drawWall(ctx, a, this.theme);
+    // arena: theme-tinted backdrop + prop-lined rim — the wave seed moves
+    // the light pool and re-dresses the wall ring, so two grove courts in
+    // a row don't share one treeline
+    const wallSeed = this.waveIndex * 13.7 + this.depth * 3.1;
+    drawBackdrop(ctx, a, 18, this.theme, this.time, {
+      nx: 0.45 + hash(wallSeed) * 0.4,
+      ny: 0.08 + hash(wallSeed + 9) * 0.24,
+    });
+    drawWall(ctx, a, this.theme, wallSeed);
 
     // grove courts get 1-2 squashed dirt patches under the dressing —
     // wave-seeded like the scatter, so each fight's court varies
@@ -5840,13 +5866,19 @@ export class Battle {
       }
       const img = itemSprite(pk.kind);
       if (img) ctx.drawImage(img, pk.x - 13, pk.y - 13 + bob, 26, 26);
-      ctx.font = fontB(7);
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      ctx.strokeText(meta.label, pk.x, pk.y + 27);
+      // the item's name rides above the icon, its payoff below — reads as a
+      // real Pokémon drop, not an anonymous orb
+      ctx.font = fontB(6.5);
+      ctx.strokeText(meta.name, pk.x, pk.y - 19 + bob);
+      ctx.fillStyle = '#f4f6ff';
+      ctx.fillText(meta.name, pk.x, pk.y - 19 + bob);
+      ctx.font = fontB(7);
+      ctx.strokeText(meta.label, pk.x, pk.y + 28);
       ctx.fillStyle = meta.color;
-      ctx.fillText(meta.label, pk.x, pk.y + 27);
+      ctx.fillText(meta.label, pk.x, pk.y + 28);
     }
 
     // victory loot — each kind reads at a glance: gold coins, cyan gems,
@@ -6265,6 +6297,47 @@ export class Battle {
       ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
     }
     ctx.globalAlpha = 1;
+    // the ult's cinema beat — letterbox bars drop in, the arena edges take
+    // the move's type color, and its name hammers the center. Sits over the
+    // flashes so it still reads through the white-out
+    if (this.ultFx.t > 0) {
+      const u = this.ultFx;
+      const el = u.life - u.t;
+      const k = Math.min(1, el * 7) * Math.min(1, Math.max(0, u.t) * 3.5);
+      // type-colored vignette bleeding in from every edge
+      ctx.globalAlpha = 0.5 * k;
+      const vg = ctx.createRadialGradient(270, 480, 200, 270, 480, 640);
+      vg.addColorStop(0, 'rgba(0,0,0,0)');
+      vg.addColorStop(1, u.color);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 960);
+      ctx.globalAlpha = k;
+      const bh = 40 * Math.min(1, el * 8);
+      ctx.fillStyle = '#05070f';
+      ctx.fillRect(0, 0, W_CANVAS_FALLBACK, bh);
+      ctx.fillRect(0, 960 - bh, W_CANVAS_FALLBACK, bh);
+      // banner: ULTIMATE kicker, then the move's name slammed in its color
+      const cy = a.y + a.h * 0.4;
+      const pop = 1 + Math.max(0, 0.18 - el) * 3;
+      ctx.textAlign = 'center';
+      ctx.font = font(12);
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 4;
+      ctx.strokeText('U L T I M A T E', 270, cy - 34);
+      ctx.fillStyle = '#ffd84d';
+      ctx.fillText('U L T I M A T E', 270, cy - 34);
+      ctx.font = font(Math.round(24 * pop));
+      ctx.lineWidth = 6;
+      ctx.strokeText(u.text, 270, cy);
+      ctx.fillStyle = u.color;
+      ctx.fillText(u.text, 270, cy);
+      ctx.font = fontB(9);
+      ctx.lineWidth = 3;
+      ctx.strokeText('MAP-WIDE — EVERY FOE TAKES THE HIT', 270, cy + 26);
+      ctx.fillStyle = '#e8ecf8';
+      ctx.fillText('MAP-WIDE — EVERY FOE TAKES THE HIT', 270, cy + 26);
+      ctx.globalAlpha = 1;
+    }
     // wipe pressure: a nearly-dead team breathes a red vignette — the danger
     // is felt at the edges before anyone reads a health bar
     if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') {
@@ -6377,19 +6450,13 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
-    // ascension tag — why the mobs feel bulkier today, and which
-    // named modifiers are stacked on
+    // ascension tag — the heat marker only; the ladder on CLIMB names the
+    // stacked mods, a marquee of them here just fought the scenery
     if (this.asc > 0) {
-      const mods = [`ASC ${this.asc}`];
-      for (let i = 0; i < Math.min(this.asc, ASC_MODS.length); i++) mods.push(ASC_MODS[i].name);
-      const tag = mods.join(' · ');
-      // the full stack runs wide at high heat — shrink fontB until it fits
-      let px = 9;
-      ctx.font = fontB(px);
-      while (px > 6 && ctx.measureText(tag).width > a.w - 16) ctx.font = fontB(--px);
+      ctx.font = fontB(9);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#f0b02f';
-      ctx.fillText(tag, a.x + 8, a.y + 16);
+      ctx.fillText(`ASC ${this.asc}`, a.x + 8, a.y + 16);
     }
 
     // tapped-foe scout card — floats while aiming, a pull dismisses it
@@ -6731,7 +6798,7 @@ export class Battle {
         ctx.arc(ally.x, ally.y, ally.r + 8, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        line('FLY THROUGH A TEAMMATE — THE PASS SPEEDS THE BALL UP');
+        line('FLY THROUGH A TEAMMATE — THEY FIRE THEIR SUPER');
       }
     } else {
       // beats past the pull itself: teach what the field offers — first one
@@ -6751,11 +6818,11 @@ export class Battle {
       } else if (this.balls.length) {
         const b = this.balls[0];
         glow(b.x, b.y, 22, '#e8ecf8');
-        line('A BALL DROPPED — CLICKS SHUT MEANS THE CATCH IS YOURS');
+        line('A BALL DROPPED — IF IT CLICKS SHUT, THE CATCH IS YOURS');
       } else if (this.pickups.length) {
         const pk = this.pickups[0];
         glow(pk.x, pk.y, 18);
-        line('ROLL THE BALL THROUGH THE RING — THE PICKUP IS YOURS');
+        line('FLY THROUGH THE GLOWING ITEM — THE PICKUP IS YOURS');
       }
     }
     const threat = this.enemies.find((e) => !e.dead && e.timer <= 1);
@@ -7093,7 +7160,11 @@ export class Battle {
       tail.forEach((line, i) => {
         ctx.globalAlpha = i === tail.length - 1 ? 1 : i === tail.length - 2 ? 0.6 : 0.35;
         ctx.fillStyle = '#e8ecf8';
-        ctx.fillText(line, lx + 10, ly + 22 + i * 11);
+        // a runaway note used to ink past the dock's right edge — cap it
+        let t2 = line;
+        while (t2.length > 3 && ctx.measureText(t2 + '…').width > lw - 20) t2 = t2.slice(0, -1);
+        if (t2 !== line) t2 += '…';
+        ctx.fillText(t2, lx + 10, ly + 22 + i * 11);
       });
       ctx.globalAlpha = 1;
       ctx.textAlign = 'center';
@@ -7836,7 +7907,7 @@ export class Battle {
     ctx.fillRect(zx + zw / 2 - 7, by + bh + 1, 7, 2);
     // the needle — a bright hand sweeping the track, trailing ghosts
     // behind it (dir re-derived from the same phase math as charge())
-    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.14);
+    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.2);
     const ph = (this.dragT + this.gaugeStart * 2 * P) % (2 * P);
     const dir = ph < P ? 1 : -1;
     for (const [g, al] of [[0.028, 0.14], [0.014, 0.3]] as const) {

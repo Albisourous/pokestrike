@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS } from './game/data';
 import type { SpeciesDef, StageDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -36,8 +36,6 @@ import {
   ASC_BTN,
   hitAscCell,
   noteAscDeny,
-  noteAscPing,
-  GYM_HIT,
   HELP_BTN,
   HELP_CHIP_HIT,
   GEAR_BTN,
@@ -129,7 +127,7 @@ import {
   echoMonAt,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
-import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
+import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealPick, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
 import { dailyMod, DAILY_MODS, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
 
@@ -504,7 +502,7 @@ const draftPick = (i: number) => {
   menuOpen = false;
   battle.coach = !coachDone(); // first-ever run teaches by doing
   battle.rank = rank();
-  battle.asc = Math.min(ascPick(), best().wins, 9); // the title's heat dial, capped by clears
+  battle.asc = Math.min(ascPick(), ascCap()); // the title's heat dial, capped by clears
   battle.bestScore = best().score; // crossing it mid-run pops NEW BEST!
   battle.shinyRate = shinyCharm() ? 2 : 1; // dex milestone doubles the gold
   // the daily's rule card applies like a bag item — after the metagame sets
@@ -1108,7 +1106,14 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
-    if (homeTab === 'shop' && (inRect(p.x, p.y, HATCH_BTN) || inRect(p.x, p.y, DEAL_BTN))) {
+    if (homeTab === 'shop' && inRect(p.x, p.y, DEAL_BTN)) {
+      // the bargain's face opens its own card — the hatcher's spark shop
+      // still sells it; the card tap is "what am I buying?", not checkout
+      sfx('ui');
+      dexPick = dealPick().id;
+      return;
+    }
+    if (homeTab === 'shop' && inRect(p.x, p.y, HATCH_BTN)) {
       sfx('ui');
       hatchOpen = true;
       hatch = { phase: 'idle', t: 0, tMax: 0, results: [], i: 0, sparkScroll: 0 };
@@ -1198,21 +1203,11 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       return;
     }
-    if (homeTab === 'town' && inRect(p.x, p.y, GYM_HIT)) {
-      // the gym's door has no screen of its own — its rung board lives on
-      // CLIMB now, so the tap walks you there and pulses the ladder
-      noteTabSwap(t, homeTab);
-      homeTab = 'climb';
-      noteTabPress(t);
-      noteAscPing(t);
-      sfx('ui');
-      return;
-    }
     if (homeTab === 'climb' && inRect(p.x, p.y, ASC_BTN)) {
       // the rung ladder — a tap sets the heat directly; locked rungs deny
       const i = hitAscCell(p.x, p.y);
       if (i >= 0) {
-        if (i <= Math.min(best().wins, 9)) {
+        if (i <= ascCap()) {
           setAsc(i);
           sfx('ui');
         } else {
@@ -1914,6 +1909,13 @@ function update(dt: number) {
       rewardLanded = 0;
     }
     wasReward = itemStep;
+    // reward sequencing: the roster opens over the item board once — swap
+    // first, then the pick. An evo card still outranks it on the frame.
+    if (battle.phase === 'reward' && battle.wantMenu && !menuOpen && !battle.evoChoice && !battle.mapModal) {
+      battle.wantMenu = false;
+      menuOpen = true;
+      battle.boxSel = battle.teamSel = -1;
+    }
     if (battle.phase !== 'reward' && !(battle.phase === 'map' && menuOpen)) boxScroll = 0;
     if (battle.phase !== 'map' && battle.phase !== 'reward') menuOpen = false;
     // a resolved stop banks the run — the climb survives a closed tab
@@ -2037,7 +2039,7 @@ function update(dt: number) {
         mvpIdx: battle.players.indexOf(mvp),
         shortOfBest: !newBest && gap > 0 && gap <= 500 ? gap : 0,
         newAch: [],
-        rating: { delta: rr.delta, tier: rr.tier.name, color: rr.tier.color, up: rr.promoted },
+        rating: { delta: rr.delta, tier: rr.tier.name, color: rr.tier.color, up: rr.promoted, down: rr.demoted },
         place,
         seed: runSeed,
         stars: battle.starsRun, // the run's banked star pieces — the report's +N row
@@ -2221,8 +2223,10 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        hud(battle.stage.name); // the intro banner carries the trainer tag — the HUD tag stays short
         battle.render(ctx);
+        // HUD on top — the arena's cliff face extends 19px above the rim
+        // and would bury the score chip's lower row
+        hud(battle.stage.name); // the intro banner carries the trainer tag — the HUD tag stays short
         if (battle.phase === 'reward') {
           drawReward(
             ctx,
@@ -2268,6 +2272,7 @@ function render() {
             battle.captureChance,
             battle.heldItems,
             battle.masterArmed,
+            battle.phase === 'reward', // the reward break seats swaps first
           );
         }
       }
@@ -2276,8 +2281,8 @@ function render() {
       if (battle) {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
-        hud(battle.stage.name);
         battle.render(ctx);
+        hud(battle.stage.name);
       }
       if (result) drawResult(ctx, result, resultExtra, share, t, t - sceneT0);
       break;
