@@ -24,7 +24,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - Log decisions, not vibes: `statOffer` records taken-vs-shown per board,
   `statRunEnd` records stage-keyed deaths (late pools are pre-filtered —
   condition on stage). `__dbg.stats()` under `?dev` dumps `pk_stats`.
-- DAILY = one UTC `YYYYMMDD` seed for everyone; the share link is the replay.
+- No daily mode — runs are `randSeed()`/`?seed=` only; `pk_run`'s `daily`/`modId` fields linger so parked daily saves still resume.
 - Profile only jank you feel; no preemptive perf tooling.
 - Nintendo has no fan-content policy — public distribution is the open legal
   risk. The content layer is data-driven (`data.ts` + vendored sprites) so a

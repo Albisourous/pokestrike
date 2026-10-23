@@ -1,7 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { isMuted } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay } from './data';
-import { dailyMod as todaysMod } from './daily';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
@@ -10,7 +9,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TIL
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -97,15 +96,10 @@ export const RETRY_BTN = { x: W / 2 - 110, y: 620, w: 220, h: 64 };
 export const SHARE_BTN = { x: W / 2 - 110, y: 700, w: 220, h: 54 };
 export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
 // the hero row anchors the bottom stack: ONE primary action (the climb) with
-// the daily as its smaller flank — the raid lives on its own tab, so the row
-// carries two doors, not three competing CTAs
+// RESTART as its smaller flank — a parked climb's burn-and-deal-again door,
+// drawn only while a save exists
 export const FREE_BTN = { x: 46, y: 676, w: 296, h: 72 };
-export const DAILY_BTN = { x: FREE_BTN.x + FREE_BTN.w + 10, y: FREE_BTN.y, w: W - 46 - (FREE_BTN.x + FREE_BTN.w + 10), h: 72 };
-// only visible while a saved run waits — slips under the hero row
-export const NEW_BTN = { x: W / 2 - 130, y: FREE_BTN.y + FREE_BTN.h + 4, w: 260, h: 24 };
-// the drawn link stays a 24px sliver guarding CONTINUE; the live target is
-// a 34px slab top-aligned on it so it can't ride into the pills above
-export const NEW_HIT = { x: NEW_BTN.x, y: FREE_BTN.y + FREE_BTN.h + 1, w: NEW_BTN.w, h: 34 };
+export const RESTART_BTN = { x: FREE_BTN.x + FREE_BTN.w + 10, y: FREE_BTN.y, w: W - 46 - (FREE_BTN.x + FREE_BTN.w + 10), h: 72 };
 // --- home tabs: the CR-style bottom nav the title's bodies hang off -------
 export type HomeTab = 'shop' | 'mons' | 'climb' | 'raid' | 'town';
 // a floating bar, not flush — its bottom edge keeps ~28px clear of the
@@ -210,7 +204,7 @@ export const GEAR_BTN = { x: HELP_BTN.x - 54, y: 22, w: 44, h: 44 };
 export const inRect = (x: number, y: number, r: { x: number; y: number; w: number; h: number }) =>
   x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
-// invisible hit margin around a drawn target — the NEW_BTN/NEW_HIT pattern
+// invisible hit margin around a drawn target — the drawn-vs-live rect pattern
 // for one-offs; only safe where no sibling hit-rect sits within `n` px
 export const slop = (r: { x: number; y: number; w: number; h: number }, n: number) => ({
   x: r.x - n,
@@ -751,7 +745,7 @@ const PITCH = { x: 26, y: 268, w: W - 52, h: 396 };
 
 // TODAY's three teasers are doors, not just a poster — rate-up and deal open
 // SHOP's tab, the shiny boss RAID's
-const TODAY_CARD = { x: PITCH.x + 30, y: PITCH.y + 120, w: PITCH.w - 60, h: 152 };
+const TODAY_CARD = { x: PITCH.x + 30, y: PITCH.y + 20, w: PITCH.w - 60, h: 152 };
 export const TODAY_HITS: { tab: HomeTab; x: number; y: number; w: number; h: number }[] = (
   ['shop', 'raid', 'shop'] as HomeTab[]
 ).map((tab, i) => ({
@@ -888,8 +882,7 @@ export function drawTitle(
   ctx: CanvasRenderingContext2D,
   t: number,
   cont: { stage: number; score: number } | null = null,
-  newArmed = false, // new-climb link's two-tap confirm is lit — red warn label
-  dailyArmed = false, // DAILY's own two-tap — warn-red face while it's lit
+  restartArmed = false, // RESTART's own two-tap — warn-red face while it's lit
   tab: HomeTab,
 ) {
   // meta getters each hit localStorage + JSON.parse — one read each per frame
@@ -935,7 +928,7 @@ export function drawTitle(
   const rise = swapFrom ? (1 - clamp01((t - swapT) / 0.22)) * 12 : 0;
   ctx.save();
   if (rise > 0.05) ctx.translate(0, rise);
-  if (tab === 'climb') drawClimbBody(ctx, t, cont, newArmed, dailyArmed);
+  if (tab === 'climb') drawClimbBody(ctx, t, cont, restartArmed);
   else if (tab === 'shop') drawShopBody(ctx, t, freeNow);
   else if (tab === 'mons') drawMonsBody(ctx, t);
   else if (tab === 'raid') drawRaidBody(ctx, t);
@@ -951,8 +944,7 @@ function drawClimbBody(
   ctx: CanvasRenderingContext2D,
   t: number,
   cont: { stage: number; score: number } | null,
-  newArmed: boolean,
-  dailyArmed: boolean,
+  restartArmed: boolean,
 ) {
   const raidDone = raidDoneToday();
   const raidDef = raidPick();
@@ -1012,8 +1004,12 @@ function drawClimbBody(
     });
   }
 
-  // one hero pill — the daily rides its flank at the same height. The raid
-  // isn't a door here anymore; its tab carries the boss face + chroma dot.
+  // the run's heat picks right on the climb screen — the ladder StS
+  // players expect before the door, parked in the dead pitch band
+  drawAscLadder(ctx, t, ASC_BTN, Math.min(best().wins, 9), ascPick());
+
+  // one hero pill — RESTART rides its flank, but only while a save waits.
+  // The raid isn't a door here anymore; its tab carries the boss face + dot.
   pill(ctx, FREE_BTN, {
     c: GOLD_HI,
     cd: '#c8a44d',
@@ -1022,76 +1018,24 @@ function drawClimbBody(
     // fresh trainers see the ladder's next step on the front door itself
     sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : rookie ? `ROOKIE ${rookie.n + 1}/${ROOKIE_STEPS.length} · ${rookie.label}` : undefined,
   });
-  pill(ctx, DAILY_BTN, dailyArmed
-    ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
-    : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'DAILY', sub: `RESETS ${taskResetsIn('daily')}` });
-  // armed two-tap — the blinking ▶ rides beside the warn label
-  if (dailyArmed) {
-    const label = 'DROP SAVED RUN?';
-    fitFont(ctx, label, 10, DAILY_BTN.w - 24);
-    const tw = measureW(ctx, label);
-    cursorTri(
-      ctx,
-      DAILY_BTN.x + DAILY_BTN.w / 2 - tw / 2 - 14,
-      DAILY_BTN.y + (DAILY_BTN.h - 4) / 2,
-      t,
-      '#ffe8e8',
-    );
-  }
-  // a live daily streak pins a pip on the corner — the tasksReady red pip's
-  // family, gold while banked and warn-red when the chain dies at midnight
-  const dStreak = streakDaily();
-  const risky = streakRisky();
-  if (dStreak > 0) {
-    const bx = DAILY_BTN.x + DAILY_BTN.w - 4, by = DAILY_BTN.y + 4;
-    ctx.beginPath();
-    ctx.arc(bx, by, 9, 0, Math.PI * 2);
-    ctx.fillStyle = risky ? '#e03c34' : GOLD;
-    ctx.fill();
-    ctx.strokeStyle = '#0a0d18';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.font = fontB(7);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = INK;
-    ctx.fillText(dStreak > 9 ? '9+' : `${dStreak}`, bx, by + 3.5);
-  }
-  // today's seeded rule gets one line under DAILY — name + rule on a single
-  // row; a dying streak claims the next one in warn-red
-  if (!cont) {
-    const dm = todaysMod();
-    ctx.save();
-    ctx.font = fontB(7);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = PARCH;
-    ctx.fillText(`TODAY: ${dm.name} — ${dm.desc}`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 11);
-    if (risky) {
-      ctx.fillStyle = '#e03c34';
-      ctx.fillText(`STREAK ${risky} DIES TONIGHT`, DAILY_BTN.x + DAILY_BTN.w - 2, DAILY_BTN.y + DAILY_BTN.h + 21);
-    }
-    ctx.restore();
-  }
   if (cont) {
-    // a parked climb still needs the escape hatch — text link under the
-    // pair; the hairline underline is the press affordance. Armed by a
-    // first tap, it turns warn-red and asks for the second that burns it.
-    const msg = newArmed
-      ? 'ABANDON THE SAVED CLIMB? TAP AGAIN'
-      : `or start a new climb · saved at ${cont.score.toLocaleString('en-US')} pts`;
-    const col = newArmed ? '#e03c34' : '#aab4dd';
-    ctx.font = fontB(10);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = col;
-    ctx.fillText(msg, W / 2, NEW_BTN.y + NEW_BTN.h - 2);
-    const tw = ctx.measureText(msg).width;
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(W / 2 - tw / 2, NEW_BTN.y + NEW_BTN.h);
-    ctx.lineTo(W / 2 + tw / 2, NEW_BTN.y + NEW_BTN.h);
-    ctx.stroke();
-    // armed — the ▶ marks the link as a live confirm, blinking off `t`
-    if (newArmed) cursorTri(ctx, W / 2 - tw / 2 - 14, NEW_BTN.y + NEW_BTN.h - 8, t, col);
+    // parked climb's escape hatch, promoted from the old sliver link to a
+    // real pill — two-tap armed, warn-red face while it's lit
+    pill(ctx, RESTART_BTN, restartArmed
+      ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
+      : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'RESTART', sub: `SAVED ${cont.score.toLocaleString('en-US')}` });
+    if (restartArmed) {
+      const label = 'DROP SAVED RUN?';
+      fitFont(ctx, label, 10, RESTART_BTN.w - 24);
+      const tw = measureW(ctx, label);
+      cursorTri(
+        ctx,
+        RESTART_BTN.x + RESTART_BTN.w / 2 - tw / 2 - 14,
+        RESTART_BTN.y + (RESTART_BTN.h - 4) / 2,
+        t,
+        '#ffe8e8',
+      );
+    }
   }
 
   // the echo's haunt lives on the pitch itself now — spectral mons beat a caption line
@@ -1158,7 +1102,7 @@ function drawClimbBody(
       }
       bw += 40;
       const bh = back ? 56 : 38;
-      const br = { x: W / 2 - bw / 2, y: 325 - bh / 2, w: bw, h: bh };
+      const br = { x: W / 2 - bw / 2, y: 264 - bh / 2, w: bw, h: bh };
       uiWindow(ctx, br, { dark: true, rad: 6, rim: false });
       ctx.textAlign = 'center';
       ctx.fillStyle = GOLD_HI;
@@ -1939,6 +1883,8 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const wx = walk <= 420 ? 60 + walk : 480 - (walk - 420);
   drawNpc(ctx, `youngster_${walk <= 420 ? 'right' : 'left'}_${[0, 1, 0, 2][Math.floor(t * 6) % 4]}`, wx, 398, 30);
 
+  // (the asc rung board moved to CLIMB — the strip below the pond is field)
+
   // the south pond — sand shore ring, water inset, a boulder sunning itself
   ctx.save();
   ctx.beginPath();
@@ -1956,9 +1902,6 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   drawTile(ctx, FLOWER_YB, 240, 626, 26, 22);
   drawTile(ctx, FLOWER_PK, 486, 688, 26, 22);
 
-  // the gym's challenge board — StS's rung chain under its roofline; the
-  // building's door taps ping this card, the rungs themselves pick the heat
-  drawAscLadder(ctx, t, ASC_BTN, Math.min(b.wins, 9), ascPick());
   ctx.restore();
 }
 
@@ -2471,14 +2414,16 @@ export function partnersStripAt(x: number, y: number): number | null {
   return i >= 0 && i < ids.length ? ids[i] : null;
 }
 // TOWN's hit rects are building footprints — door + roof + its sign, so a
-// tap anywhere on a structure opens its overlay. GYM sits above the asc
-// card; its door taps ping the ladder below rather than open a screen.
+// tap anywhere on a structure opens its overlay. The GYM's door is a door to
+// CLIMB — that's where the asc rung board lives now.
 export const LAB_BTN = { x: 44, y: 192, w: 132, h: 156 };
 export const TASKS_BTN = { x: 48, y: 426, w: 156, h: 182 };
 export const ACH_BTN = { x: 362, y: 158, w: 142, h: 196 };
 export const BOARD_BTN = { x: 194, y: 198, w: 156, h: 156 };
 export const GYM_HIT = { x: 330, y: 438, w: 146, h: 210 };
-export const ASC_BTN = { x: 30, y: 708, w: W - 60, h: 122 };
+// the rung ladder lives on CLIMB now — between the TODAY card and the
+// pills, in the dead pitch band; the gym door's tap routes there
+export const ASC_BTN = { x: 30, y: 452, w: W - 60, h: 122 };
 
 // ASCENSION's rung track — cells 0..9 (0 = the base climb) in one row.
 // StS names each rung's new modifier under the pick; locked rungs stay

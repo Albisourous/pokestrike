@@ -32,8 +32,7 @@ import {
   SHARE_BTN,
   TITLE_BTN,
   FREE_BTN,
-  NEW_HIT,
-  DAILY_BTN,
+  RESTART_BTN,
   ASC_BTN,
   hitAscCell,
   noteAscDeny,
@@ -222,9 +221,6 @@ const arenaRect = () => ({ x: 24, y: 72 - viewPad, w: W - 48, h: H - 92 + viewPa
 
 // seeds stay in 1..2^31 so they survive the ?seed= round-trip in a share link
 const randSeed = () => ((Math.random() * 2 ** 31) >>> 0) || 1;
-// the daily climb: one UTC date seed — same climb for everyone, everywhere
-const dailySeed = () => Number(new Date().toISOString().slice(0, 10).replaceAll('-', ''));
-
 let scene: Scene = 'loading';
 let battle: Battle | null = null;
 let draft: {
@@ -538,23 +534,19 @@ const draftPick = (i: number) => {
 // isn't already in it — catching mons is how new faces join future drafts.
 // draftOrder only deals roster indices, so the extras get shuffled into the
 // deal here or they'd never be offered.
-// one run setup shared by START CLIMB, DAILY and REMATCH — ?seed=NNN
-// always wins (debug/sharing), else the daily date seed or a fresh roll
+// one run setup shared by START CLIMB, RESTART and REMATCH — ?seed=NNN
+// always wins (debug/sharing), else a fresh roll
 let titleSave: RunSave | null = null; // pk_run peek for the title's CONTINUE button
-// the new-climb link is a 13px sliver 1px under CONTINUE — the first tap arms
-// a 3s confirm window (link turns red), only a second tap inside it burns the
-// parked run. -10 keeps it cold at boot (t starts at 0).
-let newConfirmT0 = -10;
-// DAILY gets the same two-tap arm while a climb is parked — its control is a
-// full pill, so the armed state redraws the face warn-red instead
-let dailyConfirmT0 = -10;
+// RESTART carries the old two-tap arm — the first tap lights the warn-red
+// face, only a second inside 3s burns the parked run. -10 = cold at boot.
+let restartConfirmT0 = -10;
 
-function newRun(daily = false) {
+function newRun() {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
   const hasForced = Number.isInteger(forced) && forced > 0;
-  runSeed = hasForced ? forced : daily ? dailySeed() : randSeed();
-  runIsDaily = daily && !hasForced;
-  runMod = runIsDaily ? modForSeed(runSeed) : null;
+  runSeed = hasForced ? forced : randSeed();
+  runIsDaily = false;
+  runMod = null; // daily mode is gone — parked daily saves still resume below
   runRng = mulberry32(runSeed);
   stage = makeStage(runSeed);
   clearRun(); // a fresh climb drops the old one
@@ -1215,32 +1207,17 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       return;
     }
-    if (homeTab === 'climb' && titleSave && inRect(p.x, p.y, NEW_HIT)) {
-      // start over — the parked climb is dropped for a fresh seed. Two-tap
-      // confirm: a stray-low finger on CONTINUE lands in this sliver, so the
-      // first tap only arms the warn label; the second inside 3s is the deed.
-      if (t - newConfirmT0 >= 3) {
-        newConfirmT0 = t;
-        sfx('ui', 0.6); // warn pitch — nothing was dropped yet
-        return;
-      }
-      newConfirmT0 = -10;
-      sfx('ui');
-      newRun();
-      titleSave = null;
-      startDraft();
-      scene = 'draft';
-      sceneMusic();
-      return;
-    }
     if (homeTab === 'town' && inRect(p.x, p.y, GYM_HIT)) {
-      // the gym's door has no screen of its own — its rung board below is
-      // the picker, so the tap just pulses the card to point there
+      // the gym's door has no screen of its own — its rung board lives on
+      // CLIMB now, so the tap walks you there and pulses the ladder
+      noteTabSwap(t, homeTab);
+      homeTab = 'climb';
+      noteTabPress(t);
       noteAscPing(t);
       sfx('ui');
       return;
     }
-    if (homeTab === 'town' && inRect(p.x, p.y, ASC_BTN)) {
+    if (homeTab === 'climb' && inRect(p.x, p.y, ASC_BTN)) {
       // the rung ladder — a tap sets the heat directly; locked rungs deny
       const i = hitAscCell(p.x, p.y);
       if (i >= 0) {
@@ -1268,18 +1245,18 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (homeTab === 'climb' && inRect(p.x, p.y, DAILY_BTN)) {
-      // same date seed for everyone — the climb itself is the share.
-      // Two-tap like NEW: starting drops the parked run, so a live save arms
-      // the warn pill first; with no save there's nothing to lose — go.
-      if (titleSave && t - dailyConfirmT0 >= 3) {
-        dailyConfirmT0 = t;
+    if (homeTab === 'climb' && titleSave && inRect(p.x, p.y, RESTART_BTN)) {
+      // burn the parked climb, deal a fresh seed — the old sliver link's
+      // deed on a real pill now. Two-tap: first arms the warn face, the
+      // second inside 3s does it.
+      if (t - restartConfirmT0 >= 3) {
+        restartConfirmT0 = t;
         sfx('ui', 0.6); // warn pitch — nothing was dropped yet
         return;
       }
-      dailyConfirmT0 = -10;
+      restartConfirmT0 = -10;
       sfx('ui');
-      newRun(true);
+      newRun();
       titleSave = null;
       startDraft();
       scene = 'draft';
@@ -2204,7 +2181,7 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - newConfirmT0 < 3, t - dailyConfirmT0 < 3, homeTab);
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score } : null, t - restartConfirmT0 < 3, homeTab);
       if (dexOpen) drawDex(ctx, dexScroll);
       if (dexOpen && dexPick != null) drawDexDetail(ctx, dexPick);
       if (achOpen) drawAch(ctx, achScroll);
