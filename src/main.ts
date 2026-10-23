@@ -2006,7 +2006,6 @@ function update(dt: number) {
         runs: 1,
         wins: won ? 1 : 0,
         maxstage: stageReached,
-        dailies: runIsDaily ? 1 : 0, // a finished daily feeds the COMMUTER task
       });
       // streaks bump once per finished run — a lost daily still counts the day
       bumpStreaks(won, runIsDaily);
