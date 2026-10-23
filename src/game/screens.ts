@@ -1526,6 +1526,11 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
   // the loaner trio — level-30 rare+ rentals, same three for everyone
   ctx.fillStyle = INK_FAINT;
   ctx.fillText('YOUR LV30 LOANERS', bcx, r.y + 254);
+  // the deep-link hint rides the header line — below the trio it collides
+  // with the right loaner's name
+  ctx.textAlign = 'right';
+  ctx.fillText('TAP A MON → ITS CARD', r.x + r.w - 16, r.y + 254);
+  ctx.textAlign = 'center';
   raidTeam().forEach((d, i) => {
     const cx = bcx + (i - 1) * 110;
     monShadow(ctx, cx, r.y + 292, 48);
@@ -1538,11 +1543,6 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillStyle = INK_SOFT;
     ctx.fillText(d.name.toUpperCase(), cx, r.y + 320);
   });
-  ctx.font = fontB(7);
-  ctx.fillStyle = INK_FAINT;
-  ctx.textAlign = 'right';
-  ctx.fillText('TAP A MON → ITS CARD', r.x + r.w - 12, r.y + r.h - 10);
-
   // the fight pill — chroma face; cleared, it sells tomorrow's boss instead
   pill(
     ctx,
@@ -3013,7 +3013,7 @@ export const HATCH_PANEL = DEX_PANEL;
 const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 76, w: HATCH_PANEL.w - 32, h: 110 };
 export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 198, w: 218, h: 64 };
 export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 198, w: 218, h: 64 };
-const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 284, w: HATCH_PANEL.w - 32, h: 18 };
+const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 288, w: HATCH_PANEL.w - 32, h: 18 };
 const RATE_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 314, w: HATCH_PANEL.w - 32, h: 54 };
 const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 406, w: HATCH_PANEL.w - 32, h: 394 };
 const SPARK_COLS = 4;
@@ -3280,7 +3280,7 @@ export function drawHatch(
   ctx.fillText(
     info.pityIn <= 1 ? 'NEXT PULL IS A GUARANTEED RARE+' : `${info.pityIn} MORE PULLS TO A GUARANTEED RARE+`,
     W / 2,
-    PITY_BAR.y - 9,
+    PITY_BAR.y - 6, // glyph tops stay clear of the pull pills' ink lip
   );
   const pgap = 4;
   const pseg = (PITY_BAR.w - pgap * (PULL_PITY - 1)) / PULL_PITY;
