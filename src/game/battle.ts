@@ -596,7 +596,8 @@ export class Battle {
   // flickers old↔new faster and faster, then the new form lands
   private evoFx: { u: Unit; from: number; to: number; t: number; revealed: boolean }[] = [];
   paused = false; // mid-fight freeze — the pause chip in the arena corner
-  ff = false; // ×2 chip beside it — the sim runs two steps a frame, not a stretched dt
+  static ffPref = false; // ×2 rides the session — a new Battle spawn inherits it
+  ff = Battle.ffPref; // ×2 chip beside it — the sim runs two steps a frame, not a stretched dt
   private pendingAttacks: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
@@ -1537,7 +1538,7 @@ export class Battle {
       }
       const f = { x: c.x + c.w + 4, y: c.y, w: c.w, h: c.h };
       if (p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h) {
-        this.ff = !this.ff;
+        this.ff = Battle.ffPref = !this.ff;
         sfx('ui', this.ff ? 1.3 : 0.8);
         return;
       }

@@ -1801,7 +1801,7 @@ addEventListener('keydown', (e) => {
     if (battle.paused) battle.pointerCancel(); // a frozen game drops the half-pull
     sfx('ui');
   } else if ((e.key === 'f' || e.key === 'F') && battle && (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy' || battle.phase === 'loot')) {
-    battle.ff = !battle.ff; // same gate as the pause chip phases
+    battle.ff = Battle.ffPref = !battle.ff; // same gate as the pause chip phases; rides the session
     sfx('ui', battle.ff ? 1.3 : 0.8);
   } else if (e.key === 'm' || e.key === 'M') {
     toggleMute();
@@ -1930,12 +1930,13 @@ function update(dt: number) {
   if (scene === 'battle' && battle && !helpOpen) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
-    // ×2 is fight-phases only — a second full step, never a stretched dt, so
-    // physics can't tunnel; map/reward stay single-step (the chip's own gate)
+    // ×2 is watch-phases only — a second full step, never a stretched dt, so
+    // physics can't tunnel; loot stays 1× (the leash is real-time — halving
+    // the 6s grab window would be a tax, not a speedup)
     if (
       battle.ff &&
       !battle.paused &&
-      (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy' || battle.phase === 'loot')
+      (battle.phase === 'aim' || battle.phase === 'shot' || battle.phase === 'enemy')
     )
       battle.update(dt);
     // the item reels deal when the reward screen opens
