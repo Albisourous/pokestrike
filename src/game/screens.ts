@@ -2560,13 +2560,16 @@ export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 18, w: 220, h: 52 }
 export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };
 export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
-// the dex is a one-entry-per-row register now — dexScrollMax's math is
-// frozen, so these consts describe a row: 1 entry per row, 44px tall
-const DEX_CELL = 44;
+// the register is a card shelf now — the SPARK grid's idiom: 4 cols of small
+// windows, sprite on a type-tinted pad, name + dex number below. Uncaught
+// slots stay sealed ? cards so the checklist still shows its own shape
+const DEX_COLS = 4;
+const DEX_CELL_W = (DEX_PANEL.w - 32) / DEX_COLS;
+const DEX_CELL_H = 104;
 const DEX_HEAD = 66;
 
 export function dexScrollMax() {
-  return Math.max(0, DEX_ALL.length * DEX_CELL - (DEX_PANEL.h - DEX_HEAD - 36));
+  return Math.max(0, Math.ceil(DEX_ALL.length / DEX_COLS) * DEX_CELL_H - (DEX_PANEL.h - DEX_HEAD - 36));
 }
 
 export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
@@ -2590,63 +2593,78 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     r.y + 57,
   );
 
-  // the register: Gen-3 dex canon — a scrolling list, icon + name left,
-  // dex number and typing right. One entry per row; DEX_CELL is the row pitch.
+  // the shelf: small windows in a 4-wide grid — caught mons stand on a
+  // type-tinted pad with name + number; sealed slots keep the ? face and
+  // only leak their dex number
   const seen = new Set(dexList);
   const shinies = new Set(shinyIds());
-  const rows = DEX_ALL; // the register is the full checklist — unseen lines ghost as ???
+  const rows = DEX_ALL; // the register is the full checklist — unseen slots stay sealed
   const viewH = r.h - DEX_HEAD - 36;
   ctx.save();
   ctx.beginPath();
   ctx.rect(r.x + 8, r.y + DEX_HEAD, r.w - 16, viewH);
   ctx.clip();
-  // the clip already hides off-band rows — draw only the visible index
-  // range instead of a uiRow + sprite per caught species per frame
-  const lo = Math.max(0, Math.floor(scroll / DEX_CELL) - 1);
-  const hi = Math.min(rows.length - 1, Math.ceil((scroll + viewH) / DEX_CELL));
+  // the clip already hides off-band cells — draw only the visible index
+  // range instead of a window + sprite per slot per frame
+  const lo = Math.max(0, Math.floor(scroll / DEX_CELL_H) * DEX_COLS - DEX_COLS);
+  const hi = Math.min(rows.length - 1, Math.ceil((scroll + viewH) / DEX_CELL_H) * DEX_COLS - 1);
   for (let i = lo; i <= hi; i++) {
     const def = rows[i];
-    const y = r.y + DEX_HEAD + i * DEX_CELL - scroll;
-    const row = { x: r.x + 16, y, w: r.w - 32, h: DEX_CELL - 6 };
-    if (seen.has(def.id)) {
-      drawMon(ctx, def.id, row.x + 22, row.y + row.h / 2 + 2, 30);
-      const bl = bondLv(def.id);
-      uiRow(
-        ctx,
-        { x: row.x + 44, y: row.y, w: row.w - 44, h: row.h },
-        def.name.toUpperCase(),
-        { right: `#${def.id} · ${`${def.type}${def.type2 ? `/${def.type2}` : ''}`.toUpperCase()}${bl ? ` · BOND ${bl}` : ''}` },
-      );
-      if (shinies.has(def.id)) { // a caught shiny earns the gold star
-        ctx.textAlign = 'center';
-        ctx.font = fontB(10);
-        ctx.fillStyle = GOLD;
-        ctx.fillText('★', row.x + 38, row.y + 13);
+    const cx = r.x + 16 + (i % DEX_COLS) * DEX_CELL_W;
+    const cy = r.y + DEX_HEAD + Math.floor(i / DEX_COLS) * DEX_CELL_H - scroll;
+    const cell = { x: cx + 3, y: cy + 3, w: DEX_CELL_W - 6, h: DEX_CELL_H - 6 };
+    const owned = seen.has(def.id);
+    const spTier = tierOf(def);
+    const epic = spTier >= 3 || INVADER_IDS.has(def.id);
+    const tcol = epic ? '#f0b02f' : spTier === 2 ? '#5a9bf0' : '#d0d0c8';
+    uiWindow(ctx, cell, { rad: 8, shadow: false });
+    if (owned && spTier >= 2) rim(ctx, cell, 8, tcol, 1.5);
+    // a type-tinted floor pad — the cell's mon stands on its own color
+    ctx.fillStyle = owned ? `${TYPE_COLOR[def.type]}26` : '#e4e4da';
+    ctx.beginPath();
+    ctx.ellipse(cell.x + cell.w / 2, cell.y + 56, 36, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (owned) {
+      void loadSprite(def.id);
+      try {
+        drawMon(ctx, def.id, cell.x + cell.w / 2, cell.y + 30, 50);
+      } catch {
+        /* sprite still warming */
       }
     } else {
-      // a ghost keeps the slot honest: number known, name and typing hidden
       ctx.textAlign = 'center';
-      ctx.font = font(9);
+      ctx.font = font(14);
       ctx.fillStyle = INK_FAINT;
-      ctx.fillText('?', row.x + 22, row.y + row.h / 2 + 6);
-      ctx.textAlign = 'left';
-      ctx.font = fontB(9);
-      ctx.fillText('???', row.x + 52, row.y + row.h / 2 + 4);
-      ctx.textAlign = 'right';
-      ctx.font = fontB(8);
-      ctx.fillText(`#${def.id}`, row.x + row.w - 8, row.y + row.h / 2 + 3);
+      ctx.fillText('?', cell.x + cell.w / 2, cell.y + 52);
     }
-    ctx.strokeStyle = 'rgba(90,98,136,0.25)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(row.x + 6, y + DEX_CELL - 5);
-    ctx.lineTo(row.x + row.w - 6, y + DEX_CELL - 5);
-    ctx.stroke();
+    // rare+ stock wears its tier as a corner flag — the rim color made words
+    if (owned && spTier >= 2) {
+      ctx.font = fontB(6);
+      const tl = epic ? 'EPIC' : 'RARE';
+      const tw = ctx.measureText(tl).width + 8;
+      ctx.fillStyle = tcol;
+      ctx.fillRect(cell.x, cell.y, tw, 12);
+      ctx.textAlign = 'left';
+      ctx.fillStyle = PAPER_HI;
+      ctx.fillText(tl, cell.x + 4, cell.y + 9);
+    }
+    ctx.textAlign = 'center';
+    fitFontB(ctx, owned ? def.name.toUpperCase() : '???', 8, cell.w - 10);
+    ctx.fillStyle = owned ? INK : INK_FAINT;
+    ctx.fillText(owned ? def.name.toUpperCase() : '???', cell.x + cell.w / 2, cell.y + 74);
+    ctx.font = fontB(7);
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText(`#${def.id}`, cell.x + cell.w / 2, cell.y + 88);
+    if (owned && shinies.has(def.id)) { // a caught shiny earns the gold star
+      ctx.font = fontB(10);
+      ctx.fillStyle = GOLD;
+      ctx.fillText('★', cell.x + cell.w - 10, cell.y + 14);
+    }
   }
   ctx.restore();
-  // scroll thumb — a 649-row register needs a position read, same idiom as
-  // the completion bars: a slim rail in the row/panel margin, gold thumb
-  const total = rows.length * DEX_CELL;
+  // scroll thumb — a 163-row shelf needs a position read, same idiom as the
+  // completion bars: a slim rail in the cell/panel margin, gold thumb
+  const total = Math.ceil(rows.length / DEX_COLS) * DEX_CELL_H;
   if (total > viewH) {
     const rail = { x: r.x + r.w - 11, y: r.y + DEX_HEAD + 4, w: 4, h: viewH - 8 };
     ctx.fillStyle = 'rgba(12,16,32,0.4)';
@@ -2679,13 +2697,15 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.fillText('tap a row for its card · catches join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
 }
 
-// a tap on a register row resolves to its species — the detail card's door.
-// Ghost rows don't open cards.
+// a tap on a shelf cell resolves to its species — the detail card's door.
+// Sealed ? cells don't open cards.
 export function dexRowAt(x: number, y: number, scroll: number): number | null {
   const r = DEX_PANEL;
-  if (x < r.x + 8 || x > r.x + r.w - 8 || y < r.y + DEX_HEAD || y > r.y + r.h - 36) return null;
+  if (x < r.x + 16 || x > r.x + r.w - 16 || y < r.y + DEX_HEAD || y > r.y + r.h - 36) return null;
   const seen = new Set(dexIds());
-  const def = DEX_ALL[Math.floor((y - r.y - DEX_HEAD + scroll) / DEX_CELL)];
+  const col = Math.floor((x - r.x - 16) / DEX_CELL_W);
+  const row = Math.floor((y - r.y - DEX_HEAD + scroll) / DEX_CELL_H);
+  const def = col >= 0 && col < DEX_COLS ? DEX_ALL[row * DEX_COLS + col] : undefined;
   return def && seen.has(def.id) ? def.id : null;
 }
 
