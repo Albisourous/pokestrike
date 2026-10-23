@@ -4368,8 +4368,9 @@ export function drawDraft(
       bg: INK,
       fg: mixHex(TYPE_COLOR[def.type], INK, 0.45),
     });
-    // kind pill top-right — SHINY trumps the dex tag
-    const kind = def.shiny ? 'SHINY' : dex.has(def.id) ? 'OWNED' : 'NEW';
+    // kind pill top-right — SHINY trumps the dex tag; a bonded offer shows
+    // its level so the pick can chase LV5 or spread to a fresh partner
+    const kind = `${def.shiny ? 'SHINY' : dex.has(def.id) ? 'OWNED' : 'NEW'}${bondLv(def.id) ? `·B${bondLv(def.id)}` : ''}`;
     ctx.font = fontB(7);
     chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, def.shiny
       ? { bg: GOLD, fg: INK }
