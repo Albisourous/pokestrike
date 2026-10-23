@@ -10,7 +10,7 @@ import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet } from '../src/game/meta';
+import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
@@ -2374,6 +2374,22 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(labbed.fieldLog.some((l) => l.startsWith('LAB')), 'bought levels announce on the field log');
   if (preLab == null) localStorage.removeItem('pk_lab'); else localStorage.setItem('pk_lab', preLab);
 
+  // bond: cleared stages bank per-species pts, each level crossed pays dust once
+  const preBond = localStorage.getItem('pk_bond');
+  localStorage.removeItem('pk_bond');
+  const dust0 = dust();
+  const b1 = bankBond([ROSTER[0].id, ROSTER[1].id, ROSTER[0].id], 5); // a dup id banks once
+  ok(bondOf(ROSTER[0].id) === 5 && bondLv(ROSTER[0].id) === 1 && b1.ups.length === 2,
+    'a stage bank levels each lineup species once');
+  ok(b1.dust === 2 * BOND_PAY && dust() === dust0 + 2 * BOND_PAY, 'each bond LV pays its dust');
+  const b2 = bankBond([ROSTER[0].id], 5);
+  ok(bondOf(ROSTER[0].id) === 10 && b2.dust === 0 && b2.ups.length === 0,
+    'pts under the next tier pay nothing');
+  const b3 = bankBond([ROSTER[0].id], 10); // 20 total — LV2 lands at 12
+  ok(bondLv(ROSTER[0].id) === 2 && b3.dust === 2 * BOND_PAY, 'crossing LV2 pays the level');
+  ok(topBond(3)[0].id === ROSTER[0].id && topBond(3)[0].pts === 20, 'topBond ranks the ledger');
+  if (preBond == null) localStorage.removeItem('pk_bond'); else localStorage.setItem('pk_bond', preBond);
+
   statPull(25, false); statPull(25, true);
   const pullsLog = (statsDump() as { pulls?: Record<string, [number, number]> }).pulls;
   ok(pullsLog?.[25]?.[0] === 1 && pullsLog[25][1] === 2, 'pull telemetry tallies total + dupes');
@@ -2685,7 +2701,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     'pk_badges', 'pk_bag', 'pk_stars', 'pk_dust', 'pk_pulls', 'pk_free',
     'pk_grant', 'pk_boost', 'pk_raid', 'pk_login', 'pk_win', 'pk_grind',
     'pk_lab', 'pk_seen', 'pk_stats', 'pk_run', 'pk_settings', 'pk_tasks',
-    'pk_streak', 'pk_ver', 'pk_trainer', 'pk_sets',
+    'pk_streak', 'pk_ver', 'pk_trainer', 'pk_sets', 'pk_bond',
   ];
   const JUNK = [
     '{broken', '42', '"str"', 'true', '[]', '{}', '[1,"x",null]',
@@ -2709,6 +2725,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     ['nextDexReward', () => nextDexReward()], ['nextRookie', () => nextRookie()],
     ['helpSeen', () => helpSeen()], ['statsDump', () => statsDump()],
     ['ascPick', () => ascPick()], ['trainerPick', () => trainerPick()],
+    ['bondOf', () => bondOf(25)], ['topBond', () => topBond(3)],
     ['taskViews-d', () => taskViews('daily', now)],
     ['taskViews-w', () => taskViews('weekly', now)], ['featuredPull', () => featuredPull(now)],
     ['raidPick', () => raidPick(now)], ['dealPick', () => dealPick(now)],

@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS } from './game/data';
 import type { SpeciesDef, StageDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -120,6 +120,7 @@ import {
   noteTabSwap,
   DEAL_BTN,
   SETS_BTN,
+  PARTNERS_BTN,
   RAID_FIGHT,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
@@ -1122,7 +1123,7 @@ canvas.addEventListener('pointerdown', (e) => {
       labScroll = 0;
       return;
     }
-    if (homeTab === 'mons' && inRect(p.x, p.y, DEX_BTN)) {
+    if (homeTab === 'mons' && (inRect(p.x, p.y, DEX_BTN) || inRect(p.x, p.y, PARTNERS_BTN))) {
       sfx('ui');
       dexOpen = true;
       dexScroll = 0;
@@ -1964,6 +1965,11 @@ function update(dt: number) {
       const gap = prevBest - battle.score;
       // the ladder grades every run — deep runs climb, early wipes bleed
       const rr = applyRunRating(stageReached, won, battle.asc);
+      // the lineup banks bond for cleared stages — level-ups pay dust
+      const bond = bankBond(
+        battle.players.map((p) => p.def.id),
+        won ? TOTAL_STAGES : Math.max(0, battle.waveIndex),
+      );
       // hall of fame: log the run, keep the slot it earned (-1 = missed)
       const place = recordBoard({
         s: battle.score,
@@ -1994,6 +2000,7 @@ function update(dt: number) {
         stars: battle.starsRun, // the run's banked star pieces — the report's +N row
         starsBonus: won ? firstWinBonus() : 0, // once-a-day clear bonus — banks before the report draws it
         grind: grindBonus(), // every finished run today pays a little more
+        bondDust: bond.dust, // bond level-ups — the report's dust row
         rookie: rookieCheck(), // run/stage/win steps clear when the run banks
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)

@@ -10,7 +10,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TIL
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, streakRisky, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, topBond, BOND_LEVELS, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -54,6 +54,7 @@ export interface RunResult {
   starsBonus?: number; // the once-a-day first-clear drop — its own findings row
   grind?: { n: number; pay: number }; // nth finished run today — the session pays out
   dexPay?: number; // dex-milestone stars this run banked — its own findings row
+  bondDust?: number; // dust the lineup's bond level-ups paid — its own findings row
   rookie?: { label: string; pay: number }[]; // rookie steps this run cleared — one row each
 }
 
@@ -1657,11 +1658,17 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillText('TAP TO BROWSE THE DEX', sr.x + 14, sr.y + sr.h - 12);
   }
 
-  // latest catches — the dex's newest faces; decorative, no hit test
-  const s = CATCH_STRIP;
-  uiPanel(ctx, s, 'LATEST CATCHES', { h: 26 });
-  const recent = dexRecent(3);
-  if (!recent.length) {
+  // the strip casts whoever the career ledger says matters: top-bonded
+  // partners once any exist, the dex's latest catches until then
+  const s = PARTNERS_BTN;
+  const partners = topBond(3);
+  void loadItem('friend-ball');
+  uiPanel(ctx, s, partners.length ? 'PARTNERS' : 'LATEST CATCHES', {
+    h: 26,
+    ...(partners.length ? { sub: 'BOND LVS PAY DUST' } : {}),
+  });
+  const ids = partners.length ? partners.map((p) => p.id) : dexRecent(3);
+  if (!ids.length) {
     // ghost ball silhouettes behind the empty line — the strip reads as a
     // stage waiting for its cast, not a dead card
     [-90, 0, 90].forEach((dx) => ballGlyph(ctx, s.x + s.w / 2 + dx, s.y + 76, 1.6, 'rgba(255,255,255,0.07)'));
@@ -1671,9 +1678,9 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillText('CATCHES LAND HERE', s.x + s.w / 2, s.y + s.h / 2 + 14);
   } else {
     const shinies = new Set(shinyIds());
-    recent.forEach((id, i) => {
-      const cx = s.x + s.w / 2 + (i - (recent.length - 1) / 2) * 150;
-      const cy = s.y + 84;
+    ids.forEach((id, i) => {
+      const cx = s.x + s.w / 2 + (i - (ids.length - 1) / 2) * 150;
+      const cy = s.y + (partners.length ? 78 : 84);
       const cdef = speciesById(id);
       // type-tinted floor pad — each catch lands on its own color
       if (cdef) {
@@ -1691,10 +1698,22 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
       ctx.font = fontB(7);
       ctx.textAlign = 'center';
       ctx.fillStyle = INK;
-      ctx.fillText(cdef ? cdef.name.toUpperCase() : `#${id}`, cx, s.y + s.h - 22);
+      ctx.fillText(cdef ? cdef.name.toUpperCase() : `#${id}`, cx, s.y + s.h - (partners.length ? 30 : 22));
       if (shinies.has(id)) {
         ctx.fillStyle = GOLD;
         ctx.fillText('★', cx + 30, cy - 24);
+      }
+      if (partners.length) {
+        // friend ball + LV pips: the bond read is canon, not invented
+        const fball = itemSprite('friend-ball');
+        if (fball) ctx.drawImage(fball, cx - 46, cy - 30, 18, 18);
+        const lv = bondLv(id);
+        for (let p = 0; p < BOND_LEVELS.length; p++) {
+          ctx.fillStyle = p < lv ? GOLD : '#d8d8d0';
+          ctx.beginPath();
+          ctx.arc(cx - 24 + p * 12, s.y + s.h - 14, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     });
   }
@@ -2314,8 +2333,9 @@ export const HATCH_BTN = { x: 30, y: 210, w: W - 60, h: 250 };
 export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 170 };
 export const DEX_BTN = { x: 30, y: 230, w: W - 60, h: 120 };
 export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
-// the catches strip is decorative — no hit rect needed
-const CATCH_STRIP = { x: 30, y: SETS_BTN.y + SETS_BTN.h + 16, w: W - 60, h: 160 };
+// the partners strip upgrades from LATEST CATCHES once any bond exists —
+// tapping it browses the dex like the other MONS cards
+export const PARTNERS_BTN = { x: 30, y: SETS_BTN.y + SETS_BTN.h + 16, w: W - 60, h: 160 };
 // TOWN's hit rects are building footprints — door + roof + its sign, so a
 // tap anywhere on a structure opens its overlay. GYM sits above the asc
 // card; its door taps ping the ladder below rather than open a screen.
@@ -2467,11 +2487,12 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     const y = r.y + DEX_HEAD + i * DEX_CELL - scroll;
     const row = { x: r.x + 16, y, w: r.w - 32, h: DEX_CELL - 6 };
     drawMon(ctx, def.id, row.x + 22, row.y + row.h / 2 + 2, 30);
+    const bl = bondLv(def.id);
     uiRow(
       ctx,
       { x: row.x + 44, y: row.y, w: row.w - 44, h: row.h },
       def.name.toUpperCase(),
-      { right: `#${def.id} · ${`${def.type}${def.type2 ? `/${def.type2}` : ''}`.toUpperCase()}` },
+      { right: `#${def.id} · ${`${def.type}${def.type2 ? `/${def.type2}` : ''}`.toUpperCase()}${bl ? ` · BOND ${bl}` : ''}` },
     );
     if (shinies.has(def.id)) { // a caught shiny earns the gold star
       ctx.textAlign = 'center';
@@ -4950,6 +4971,7 @@ export function drawResult(
   if (res.starsBonus) findings.push(['FIRST WIN TODAY', `+${res.starsBonus}`, GOLD]);
   if (res.grind) findings.push([`RUN ${res.grind.n} TODAY`, `+${res.grind.pay}`, GOLD]);
   if (res.dexPay) findings.push(['DEX MILESTONES', `+${res.dexPay}`, '#c9a8ff']);
+  if (res.bondDust) findings.push(['BOND LV-UPS', `+${res.bondDust} DUST`, '#c9a8ff']);
   res.rookie?.forEach((s) => findings.push([`ROOKIE: ${s.label}`, `+${s.pay}`, '#c9a8ff']));
   if (res.rating) {
     const r = res.rating;

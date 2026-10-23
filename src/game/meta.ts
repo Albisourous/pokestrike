@@ -818,6 +818,59 @@ export function buyLab(id: string): boolean {
   return true;
 }
 
+// --- bond: per-species career progress -------------------------------------
+// The dex tracks collection breadth; bond tracks depth — a species you field
+// in the climb banks points per cleared stage, and each level reached pays
+// dust (a play-earned source next to dupe pulls, feeding the spark shop).
+// Same unversioned-blob pattern as pk_lab: absent reads as {}, memBond covers
+// private mode, corrupt entries drop on read.
+export const BOND_LEVELS = [5, 12, 24, 45, 80]; // cumulative pts → LV 1..5
+export const BOND_PAY = 5; // dust per level reached, × the level — 75 total to max
+
+let memBond: Record<string, number> = {};
+
+export const bondPts = (): Record<string, number> => {
+  const raw = load<unknown>('pk_bond');
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>))
+      if (Number.isFinite(+k) && typeof v === 'number' && Number.isFinite(v) && v > 0) out[k] = Math.floor(v);
+    return out;
+  }
+  return { ...memBond };
+};
+
+export const bondOf = (id: number): number => bondPts()[id] ?? 0;
+export const bondLv = (id: number): number => BOND_LEVELS.filter((at) => bondOf(id) >= at).length;
+
+// highest-bonded species, ties broken by id so the PARTNERS card is stable
+export const topBond = (n = 3): { id: number; pts: number }[] =>
+  Object.entries(bondPts())
+    .map(([k, pts]) => ({ id: +k, pts }))
+    .sort((a, b) => b.pts - a.pts || a.id - b.id)
+    .slice(0, n);
+
+// Called once per finished run. shortcut: the whole run's stage count credits
+// the final lineup — a mon drafted on stage 8 bonds like it fought all nine;
+// per-stage crediting would need a join-depth field on RunSave.team.
+export function bankBond(ids: number[], pts: number): { ups: { id: number; lv: number }[]; dust: number } {
+  const ups: { id: number; lv: number }[] = [];
+  if (pts <= 0) return { ups, dust: 0 };
+  const cur = bondPts();
+  let dust = 0;
+  for (const id of new Set(ids)) {
+    const before = BOND_LEVELS.filter((at) => (cur[id] ?? 0) >= at).length;
+    cur[id] = (cur[id] ?? 0) + pts;
+    const after = BOND_LEVELS.filter((at) => cur[id] >= at).length;
+    for (let l = before + 1; l <= after; l++) dust += BOND_PAY * l;
+    if (after > before) ups.push({ id, lv: after });
+  }
+  memBond = cur;
+  store('pk_bond', cur);
+  if (dust) addDust(dust);
+  return { ups, dust };
+}
+
 // --- save versioning: migrate once at boot so readers stay dumb ------------
 // pk_ver stamps the save schema — bump SAVE_VER and add a step whenever a
 // pk_* shape changes, instead of coercing old data on every read.
