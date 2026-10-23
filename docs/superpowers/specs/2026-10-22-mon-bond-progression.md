@@ -21,10 +21,10 @@ star's #1 replayability axis).
 ## What shipped
 
 - `pk_bond`: `Record<speciesId, pts>` — same unversioned shape-checked blob
-  pattern as `pk_lab`. Run end banks `+clearedStages` for each unique species
-  in `battle.players`.
-  - shortcut: join depth isn't tracked — a mon drafted on stage 8 bonds like
-    it fought all nine. Upgrade path: a join-depth field on `RunSave.team`.
+  pattern as `pk_lab`. Run end banks `cleared − def.joined` pts per fielded
+  species — `def.joined` stamps at field time (`applyDef`: box swaps and
+  wonder-trade), survives evo, snapshot and resume (`RunSave.team[].joined`,
+  saves v6). A stage-8 pickup bonds for what it fought, not all nine.
 - `BOND_LEVELS = [5, 12, 24, 45, 80]` → LV 1–5; each level crossed pays
   `BOND_PAY × lv` dust (75 total to max one species vs 80–320 spark prices).
 - MONS tab: LATEST CATCHES strip flips to **PARTNERS** once any bond exists —
@@ -49,5 +49,5 @@ star's #1 replayability axis).
 
 ## Next, uncommitted
 
-- Join-depth tracking so a stage-8 pickup doesn't bond like it fought all
-  nine (the `shortcut:` noted above).
+- Bench-and-return re-stamps `joined` — a re-fielded mon loses its earlier
+  stint's credit (conservative: under-pays, never over-pays).
