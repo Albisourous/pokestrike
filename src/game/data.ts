@@ -1219,6 +1219,9 @@ export const ROOM_LAYOUTS: string[][] = [
     '111111111',
   ],
 ];
+// the keep/pincer/saltire tail is the hard tier — it only rides in from
+// depth 2 (stage ~5 up); append new mid-pool rooms before this tail
+export const ROOM_HARD = 3;
 // Gym arenas stay open — the leader fight is the spectacle, so no
 // furniture; the entourage still enters on the anchor ring.
 export const ROOM_BOSS: string[] = [

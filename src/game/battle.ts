@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, pickWild, bst, FLOATERS, speciesById, ASC_MODS } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, ASC_MODS } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -108,6 +108,7 @@ interface Unit {
   airborne?: boolean; // SKY wave mod — the pack takes wing: creeps cross moats/boulders
   warpT: number; // last warp ride — cooldown stops portal ping-pong
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
+  hpLag?: number; // display-only wound trail — drains toward hp so hits read
 }
 
 interface FloatText {
@@ -1204,7 +1205,12 @@ export class Battle {
     let li = 0;
     if (!bossWave) {
       if (i === 0) li = Math.floor(this.rng() * 3); // gentle openers
-      else if (this.inTrainer || this.rng() < 0.8) li = 1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1));
+      else if (this.inTrainer || this.rng() < 0.8) {
+        // the hard tail (keep/pincer/saltire) rides in from depth 2 — the
+        // early climb keeps the mid pool
+        const hi = this.depth >= 2 ? ROOM_LAYOUTS.length : ROOM_LAYOUTS.length - ROOM_HARD;
+        li = 1 + Math.floor(this.rng() * (hi - 1));
+      }
     }
     const room = buildRoom(
       gymFurnished ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))] : bossWave ? ROOM_BOSS : ROOM_LAYOUTS[li],
@@ -1899,6 +1905,9 @@ export class Battle {
     // squash impulses relax — sprites spring back after impacts
     for (const p of this.players) p.sq *= Math.exp(-9 * dt);
     for (const e of this.enemies) e.sq *= Math.exp(-9 * dt);
+    // wound bars drain after the hit — heals snap, damage bleeds off
+    for (const p of this.players) { const l = p.hpLag ?? p.hp; p.hpLag = l > p.hp ? Math.max(p.hp, l - p.maxHp * 1.6 * dt) : p.hp; }
+    for (const e of this.enemies) { const l = e.hpLag ?? e.hp; e.hpLag = l > e.hp ? Math.max(e.hp, l - e.maxHp * 1.6 * dt) : e.hp; }
 
     this.stepOrbs(dt);
     this.stepWaves(dt);
@@ -6602,6 +6611,11 @@ export class Battle {
     // hp bar — the number players actually scout for
     ctx.fillStyle = '#2a3050';
     ctx.fillRect(cx + 50, cy + 24, w - 62, 7);
+    const eLag = Math.max((e.hpLag ?? e.hp) / e.maxHp, 0);
+    if (eLag > e.hp / e.maxHp) {
+      ctx.fillStyle = '#fff9';
+      ctx.fillRect(cx + 50, cy + 24, (w - 62) * eLag, 7);
+    }
     ctx.fillStyle = e.hp / e.maxHp > 0.3 ? '#6fdc6f' : '#ff6b6b';
     ctx.fillRect(cx + 50, cy + 24, (w - 62) * Math.max(0, e.hp / e.maxHp), 7);
     ctx.font = fontB(9);
@@ -7630,6 +7644,12 @@ export class Battle {
     const pct = Math.max(u.hp / u.maxHp, 0);
     ctx.fillStyle = '#000a';
     ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw, 5);
+    // the wound trail — a pale slice bleeds down to the new hp so hits read
+    const lagPct = Math.max((u.hpLag ?? u.hp) / u.maxHp, 0);
+    if (lagPct > pct) {
+      ctx.fillStyle = '#fff9';
+      ctx.fillRect(u.x - bw / 2, u.y + u.r + 4, bw * lagPct, 5);
+    }
     // enemies read hostile flat red; allies keep the health ramp
     ctx.fillStyle =
       u.side === 'enemy' ? '#e05050'
