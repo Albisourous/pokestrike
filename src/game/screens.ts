@@ -1446,47 +1446,94 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
   const raidDone = raidDoneToday();
   const boss = raidPick();
   const r = RAID_CARD;
-  uiPanel(ctx, r, 'CHROMA RAID', { sub: raidDone ? '✓ CLEARED' : undefined });
+  uiPanel(ctx, r, 'CHROMA RAID', { sub: raidDone ? '✓ CLEARED' : `RESETS ${taskResetsIn('daily')}` });
 
-  // the boss stands center on a chroma stage — shiny palette, slow hover
-  const bcx = r.x + r.w / 2, bcy = r.y + 122;
-  ctx.fillStyle = '#9a6cff30';
+  // the boss's den — a chroma crater ringed by an orbit of sparkles. Shiny
+  // canon IS the star burst, so the stage performs it: six fillStars riding
+  // a slow ellipse, twinkling out of phase with each other
+  const bcx = r.x + r.w / 2, bcy = r.y + 128;
+  ctx.fillStyle = '#9a6cff22';
   ctx.beginPath();
-  ctx.ellipse(bcx, bcy + 54, 96, 20, 0, 0, Math.PI * 2);
+  ctx.ellipse(bcx, bcy + 66, 130, 26, 0, 0, Math.PI * 2);
   ctx.fill();
+  ctx.fillStyle = '#9a6cff40';
+  ctx.beginPath();
+  ctx.ellipse(bcx, bcy + 62, 96, 18, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#9a6cff66';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(bcx, bcy + 62, 96, 18, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  for (let i = 0; i < 6; i++) {
+    const a = t * 0.9 + (i * Math.PI) / 3;
+    const sx = bcx + Math.cos(a) * 118;
+    const sy = bcy + 40 + Math.sin(a) * 40;
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 3 + i * 1.9);
+    ctx.fillStyle = '#c9a7ff';
+    fillStar(ctx, sx, sy, 4.5 + (i % 2));
+    ctx.restore();
+  }
   monShadow(ctx, bcx, bcy + 4, 120);
   const bob = Math.sin(t * 2.2) * 3;
   try {
-    drawShiny(ctx, boss.id, bcx, bcy + bob, 120);
+    drawShiny(ctx, boss.id, bcx, bcy + bob, 128);
   } catch {
     try {
-      drawMon(ctx, boss.id, bcx, bcy + bob, 120);
+      drawMon(ctx, boss.id, bcx, bcy + bob, 128);
     } catch {
       void loadSprite(boss.id);
     }
   }
+
+  // the boss's plate — name, typing chips, level + the move it leads with,
+  // the dex card's own idiom so the fight reads before you commit
   ctx.textAlign = 'center';
-  fitFont(ctx, boss.name.toUpperCase(), 12, r.w - 40);
+  fitFont(ctx, boss.name.toUpperCase(), 13, r.w - 60);
   ctx.fillStyle = INK;
-  ctx.fillText(boss.name.toUpperCase(), bcx, bcy + 88);
+  ctx.fillText(boss.name.toUpperCase(), bcx, r.y + 262);
   ctx.font = fontB(8);
   ctx.fillStyle = '#9a6cff';
-  ctx.fillText('SHINY BOSS · ONE PER DAY', bcx, bcy + 106);
-
-  // the loaner trio — level-30 rare+ rentals, same three for everyone
+  ctx.fillText(`SHINY BOSS · LV 30 · ${roleOf(boss)}`, bcx, r.y + 280);
+  const types = boss.type2 ? [boss.type, boss.type2] : [boss.type];
+  const tcw = types.map((tp) => ctx.measureText(tp.toUpperCase()).width + 18);
+  let tx = bcx - (tcw.reduce((a, b) => a + b, 0) + (types.length - 1) * 8) / 2;
+  types.forEach((tp, i) => {
+    roundRect(ctx, tx, r.y + 292, tcw[i], 18, 9);
+    ctx.fillStyle = TYPE_COLOR[tp];
+    ctx.fill();
+    ctx.fillStyle = PAPER_HI;
+    ctx.fillText(tp.toUpperCase(), tx + tcw[i] / 2, r.y + 305);
+    tx += tcw[i] + 8;
+  });
+  ctx.fillStyle = INK;
+  fitFont(ctx, moveOf(boss.id, boss.type).toUpperCase(), 9, r.w - 60);
+  ctx.fillText(moveOf(boss.id, boss.type).toUpperCase(), bcx, r.y + 330);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('YOUR LV30 LOANERS', bcx, r.y + 254);
+  fitFontB(ctx, superDesc(boss.id, boss.type).toUpperCase(), 7, r.w - 40);
+  ctx.fillText(superDesc(boss.id, boss.type).toUpperCase(), bcx, r.y + 344);
+
+  // the loaner trio as shelf cells — the dex grid's idiom, three LV30
+  // rare+ rentals standing on their own type pads
+  uiBand(ctx, { x: r.x + 16, y: r.y + 352, w: r.w - 32, h: 16 }, 'YOUR LV30 LOANERS', { h: 16, rad: 5 });
   raidTeam().forEach((d, i) => {
-    const cx = bcx + (i - 1) * 110;
-    monShadow(ctx, cx, r.y + 292, 48);
+    const cell = { x: r.x + 22 + i * ((r.w - 44) / 3) + 4, y: r.y + 378, w: (r.w - 44) / 3 - 8, h: 74 };
+    uiWindow(ctx, cell, { rad: 8, shadow: false });
+    ctx.fillStyle = `${TYPE_COLOR[d.type]}26`;
+    ctx.beginPath();
+    ctx.ellipse(cell.x + cell.w / 2, cell.y + 52, 36, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
     try {
-      drawMon(ctx, d.id, cx, r.y + 288 + Math.sin(t * 2.2 + i * 1.7) * 2, 48);
+      drawMon(ctx, d.id, cell.x + cell.w / 2, cell.y + 26 + Math.sin(t * 2.2 + i * 1.7) * 2, 44);
     } catch {
       void loadSprite(d.id);
     }
     ctx.font = fontB(7);
-    ctx.fillStyle = INK_SOFT;
-    ctx.fillText(d.name.toUpperCase(), cx, r.y + 320);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = INK;
+    fitFontB(ctx, d.name.toUpperCase(), 7, cell.w - 8);
+    ctx.fillText(d.name.toUpperCase(), cell.x + cell.w / 2, cell.y + 70);
   });
   // the fight pill — chroma face; cleared, it sells tomorrow's boss instead
   pill(
@@ -1500,7 +1547,7 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
           label: 'CLEARED',
           sub: `TMRW: ${raidPick(Date.now() + 86400000).name.toUpperCase()}`,
         }
-      : { c: '#9a6cff', cd: '#6b4ac0', tc: PAPER, label: 'FIGHT', sub: 'FREE RETRIES · SHINY DEX + ★ ON WIN' },
+      : { c: '#9a6cff', cd: '#6b4ac0', tc: PAPER, label: 'FIGHT', sub: 'FREE RETRIES · SHINY DEX + ★40 ON WIN' },
   );
 }
 
@@ -2557,7 +2604,7 @@ export const HALL_BTN = BOARD_BTN;
 export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 18, w: 220, h: 52 };
 // RAID: one boss card — today's shiny fight + its loaner trio — then the
 // FIGHT pill the tab's tap target rides on
-export const RAID_CARD = { x: 30, y: 230, w: W - 60, h: 340 };
+export const RAID_CARD = { x: 30, y: 210, w: W - 60, h: 470 };
 export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 // the register is a card shelf now — the SPARK grid's idiom: 4 cols of small
