@@ -4902,8 +4902,9 @@ function drawRoster(
     ctx.fillStyle = ko ? INK_FAINT : TYPE_COLOR[def.type];
     ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, card.y + 58);
     const lvl = boxLvl[i] ?? 1;
-    if (lvl > 1) {
-      chip(ctx, r.x + 3, card.y + 3, `Lv${lvl}`, { bg: 'rgba(12,16,32,0.85)', fg: ACCENT });
+    const bl = bondLv(def.id);
+    if (lvl > 1 || bl) {
+      chip(ctx, r.x + 3, card.y + 3, `Lv${lvl}${bl ? `·B${bl}` : ''}`, { bg: 'rgba(12,16,32,0.85)', fg: ACCENT });
       ctx.textAlign = 'center';
     }
   }
@@ -4954,7 +4955,8 @@ function drawRoster(
       ? { bg: 'rgba(240,230,200,0.16)', fg: TYPE_COLOR[def.type], fontPx: 6 }
       : { bg: INK, fg: mixHex(TYPE_COLOR[def.type], INK, 0.45), fontPx: 6 });
     const lvl = teamLvl[i] ?? 1;
-    const lt = def.shiny ? `✦${lvl}` : `Lv${lvl}`;
+    const bl = bondLv(def.id);
+    const lt = `${def.shiny ? `✦${lvl}` : `Lv${lvl}`}${bl ? `·B${bl}` : ''}`;
     ctx.font = fontB(7);
     const lw = ctx.measureText(lt).width + 14;
     chip(
@@ -4988,9 +4990,10 @@ function drawRoster(
   // the selected mon's super reads here — swapping is a move pick too
   const selDef = selBox >= 0 ? box[selBox] : selTeam >= 0 ? team[selTeam] : null;
   if (selDef) {
+    const sbl = bondLv(selDef.id);
     ctx.font = fontB(8);
     ctx.fillStyle = GOLD;
-    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}`, W / 2, 748); // under the role captions
+    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}${sbl ? ` · BOND ${sbl}` : ''}`, W / 2, 748); // under the role captions
   }
   const hint =
     selTeam >= 0
