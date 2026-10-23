@@ -1343,6 +1343,36 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.font = fontB(9);
   ctx.fillStyle = INK_SOFT;
   ctx.fillText('TAP TO OPEN THE HATCHER ›', tx2, dr.y + 148);
+
+  // the honest cut, visible before the hatcher opens — same rarity colors
+  // the overlay's own table prints, plus the pity count
+  const orr = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 16, w: W - 60, h: 156 };
+  uiPanel(ctx, orr, 'PULL ODDS', { sub: `RARE+ IN ${PULL_PITY - (pullCount() % PULL_PITY)} PULLS` });
+  ([['COMMON', PULL_RATES.common, '#d0d0c8'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f']] as const).forEach(([label, pct, color], i) => {
+    const ry = orr.y + 52 + i * 28;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(8);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText(label, orr.x + 18, ry + 9);
+    const bx = orr.x + 92, bw = orr.w - 92 - 66;
+    roundRect(ctx, bx, ry, bw, 10, 5);
+    ctx.fillStyle = '#e8e8e0';
+    ctx.fill();
+    ctx.save();
+    ctx.beginPath();
+    roundRect(ctx, bx, ry, bw, 10, 5);
+    ctx.clip();
+    ctx.fillStyle = color;
+    ctx.fillRect(bx, ry, Math.max(4, bw * pct), 10);
+    ctx.restore();
+    ctx.textAlign = 'right';
+    ctx.fillStyle = INK;
+    ctx.fillText(`${Math.round(pct * 100)}%`, orr.x + orr.w - 18, ry + 9);
+  });
+  ctx.textAlign = 'center';
+  ctx.font = fontB(7);
+  ctx.fillStyle = INK_FAINT;
+  ctx.fillText('rate-up day pays ×10 on the featured mon inside the rare+ pool', orr.x + orr.w / 2, orr.y + orr.h - 14);
 }
 
 // the hatcher's hero card — featured pull on its type stage, pity, prices
@@ -5759,7 +5789,7 @@ type SettingsRow =
   | { kind: 'toggle'; key: SettingsToggleKey; label: string; sub?: string; invert?: boolean }
   | { kind: 'seg'; key: SettingsSegKey; label: string; sub?: string };
 
-export const SETTINGS_PANEL = { x: 22, y: 38, w: W - 44, h: 800 };
+export const SETTINGS_PANEL = { x: 22, y: 38, w: W - 44, h: 720 };
 export const SETTINGS_CLOSE = { x: W / 2 - 100, y: SETTINGS_PANEL.y + SETTINGS_PANEL.h - 64, w: 200, h: 46 };
 
 export const SETTINGS_CATS: { id: SettingsCat; name: string; tab: string; sub: string }[] = [
