@@ -35,6 +35,7 @@ Roadmap, in order: bond payoff inside the run (needs balance thought first)
 | 2026-10-22 | `ebf0d9b` | mons | `nextGoal` negative-countdown fix: a crossed-but-unclaimed tier reads `+N★ MILESTONE READY`, not `-210 TO +30★` | `git revert ebf0d9b` |
 | 2026-10-23 | `8dfd349` | audit | full-screen crawl (27 shots, 0 console errors): raid `TAP A MON` hint moved off the loaner name row → LOANERS header; hatcher pity line lowered 4px clear of the pull pills' ink lip | `git revert 8dfd349` |
 | 2026-10-23 | `5b6376a` | a11y | pinch-zoom restored (`user-scalable=no`/`maximum-scale` dropped — ux lint critical), `color-scheme: dark` + `touch-action: manipulation` keep double-tap delay out; `__dbg.ui()` exposes tab/overlay state for playtest crawls | `git revert 5b6376a` |
+| 2026-10-23 | `755e695` | dex/hof | register lists all `DEX_ALL` slots — unseen lines ghost `? ???` + `#N` (1/223 no longer leaves a void); ghost taps don't open cards; empty HALL OF FAME gets a `START A CLIMB` gold door → draft (supersedes the "sparse states kept" call below) | `git revert 755e695` |
 
 ## Audit notes (2026-10-23, HIG rubric crawl — assessed, mostly no change)
 
