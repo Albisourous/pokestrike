@@ -33,3 +33,4 @@ Roadmap, in order: bond payoff inside the run (needs balance thought first)
 | 2026-10-22 | `1675a48` | result | `BOND LVn ▲` tag on leveled squad sprites — the findings row lands on a face | `git revert 1675a48` |
 | 2026-10-22 | `a5cef29` | dex | register draws only the visible band (was uiRow+sprite ×649/frame) + gold scroll thumb on a 40-screen list | `git revert a5cef29` |
 | 2026-10-22 | `ebf0d9b` | mons | `nextGoal` negative-countdown fix: a crossed-but-unclaimed tier reads `+N★ MILESTONE READY`, not `-210 TO +30★` | `git revert ebf0d9b` |
+| 2026-10-23 | `8dfd349` | audit | full-screen crawl (27 shots, 0 console errors): raid `TAP A MON` hint moved off the loaner name row → LOANERS header; hatcher pity line lowered 4px clear of the pull pills' ink lip | `git revert 8dfd349` |
