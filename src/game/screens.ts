@@ -6430,9 +6430,16 @@ const TASKS_TAB_H = 44;
 const TASKS_TAB_GAP = 8;
 const TASKS_BAND = { x: TASKS_PANEL.x + 4, y: TASKS_PANEL.y + 14 + TASKS_TAB_H + 10, w: TASKS_PANEL.w - 8, h: 44 };
 const TASKS_ROWS_Y = TASKS_BAND.y + TASKS_BAND.h + 12;
-const TASKS_ROW_H = 62; // 56px card + gutter — a thumb never aims smaller
+// the board splits in two: task cards share the upper room evenly (3 dailies
+// breathe as much as 4 weeklies), the bag shelf anchors the bottom
+const TASKS_ROWS_BOT = TASKS_CLOSE.y - 270;
+const BAG_BAND_Y = TASKS_ROWS_BOT + 12;
+const BAG_GRID_Y = BAG_BAND_Y + 28;
+const BAG_COLS = 4;
+const BAG_CELL_H = 50;
+const BAG_CELL_GAP = 8;
 const TASKS_CLAIM_W = 96;
-const TASKS_CLAIM_H = 44;
+const TASKS_CLAIM_H = 48;
 
 // two equal pills across the panel top — the rail, squashed into a row
 export function tasksTabRect(i: number) {
@@ -6440,14 +6447,20 @@ export function tasksTabRect(i: number) {
   return { x: TASKS_PANEL.x + 14 + i * (w + TASKS_TAB_GAP), y: TASKS_PANEL.y + 14, w, h: TASKS_TAB_H };
 }
 
-function taskRowRect(i: number) {
-  return { x: TASKS_PANEL.x + 14, y: TASKS_ROWS_Y + i * TASKS_ROW_H, w: TASKS_PANEL.w - 28, h: 56 };
+function taskRowRect(i: number, n: number) {
+  // the pitch divides the shared room by the board's size — hit-testing uses
+  // the same math as the draw, so the geometry stays law on both tabs
+  const pitch = Math.min(118, Math.floor((TASKS_ROWS_BOT - TASKS_ROWS_Y) / n));
+  return { x: TASKS_PANEL.x + 14, y: TASKS_ROWS_Y + i * pitch, w: TASKS_PANEL.w - 28, h: pitch - 8 };
 }
 
 // the reward icon + claim control share the row's right edge — the claim
 // slab stays ≥44px so the live hitbox is already thumb-sized
 function taskClaimRect(row: { x: number; y: number; w: number; h: number }) {
-  return { x: row.x + row.w - TASKS_CLAIM_W - 10, y: row.y + (row.h - TASKS_CLAIM_H) / 2, w: TASKS_CLAIM_W, h: TASKS_CLAIM_H };
+  // centered in the content zone above the card's foot bar — a short weekly
+  // card shrinks the slab rather than let it ride the track
+  const h = Math.min(TASKS_CLAIM_H, row.h - 44);
+  return { x: row.x + row.w - TASKS_CLAIM_W - 10, y: row.y + (row.h - 38 - h) / 2, w: TASKS_CLAIM_W, h };
 }
 
 // what a point inside the panel touches — tabs and CLOSE always answer;
@@ -6460,7 +6473,7 @@ export function taskRowHit(p: Vec, views: TaskView[]): TasksHit | null {
     if (inRect(p.x, p.y, tasksTabRect(i))) return { kind: 'tab', i };
   }
   for (let i = 0; i < views.length; i++) {
-    if (inRect(p.x, p.y, taskClaimRect(taskRowRect(i)))) return { kind: 'claim', i };
+    if (inRect(p.x, p.y, taskClaimRect(taskRowRect(i, views.length)))) return { kind: 'claim', i };
   }
   return null; // dead panel space is still modal
 }
@@ -6501,45 +6514,45 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
   }
 
   views.forEach((v, i) => {
-    const r = taskRowRect(i);
+    const r = taskRowRect(i, views.length);
     const ready = v.done && !v.claimed;
-    // a claimable row is the armed uiRow — GOLD slab + blinking ▶; the rest
-    // stay bare list rows with a hairline seam under each
-    if (ready) uiRow(ctx, r, '', { hot: true, t });
-    ctx.fillStyle = 'rgba(40,48,88,0.12)';
-    ctx.fillRect(r.x + 8, r.y + r.h + 2, r.w - 16, 1);
-
-    const cr = taskClaimRect(r);
-    const ix = cr.x - 12 - 28; // the reward icon rides just left of the slot
-    const tx = r.x + 20; // the ▶ claims the left edge — text starts past it
-    const textW = ix - 16 - tx; // label + bar share this width
-
-    ctx.textAlign = 'left';
-    fitFont(ctx, v.label, 9, textW - (v.done ? 56 : 0));
-    ctx.fillStyle = v.claimed ? INK_FAINT : INK;
-    ctx.fillText(v.label, tx, r.y + 17);
-    ctx.font = fontB(7);
-    ctx.fillStyle = v.claimed ? '#464e6e' : ready ? INK_SOFT : INK_FAINT;
-    ctx.fillText(v.desc.toUpperCase(), tx, r.y + 28);
-    if (v.done) {
-      // the counter rides the label line once the slot holds CLAIM/CLAIMED;
-      // unfinished rows wear it in the slot instead (the dimmed '0/15' state)
-      ctx.font = fontB(9);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = v.claimed ? INK_FAINT : ready ? INK : GOLD;
-      ctx.fillText(`${v.have}/${v.n}`, tx + textW, r.y + 17);
-      ctx.textAlign = 'left';
+    // each task is its own paper card — a claimable one wears the gold rim
+    // and the blinking ▶, the rest stay quiet list windows
+    uiWindow(ctx, r, { rad: 8 });
+    if (ready) {
+      rim(ctx, r, 8, GOLD, 2);
+      cursorTri(ctx, r.x + 8, r.y + r.h / 2 - 16, t, INK);
     }
 
-    // the progress track is the settings slider's groove + gold ramp
-    const br = { x: tx, y: r.y + 36, w: textW, h: 9 };
-    roundRect(ctx, br.x, br.y, br.w, br.h, 5);
+    const cr = taskClaimRect(r);
+    const rx = cr.x - 14 - 84; // the reward cell's column between text and claim
+    const tx = r.x + 20; // the ▶ claims the left edge — text starts past it
+    const textW = rx - 14 - tx; // label + bar share this width
+
+    ctx.textAlign = 'left';
+    fitFont(ctx, v.label, 9, textW - 52);
+    ctx.fillStyle = v.claimed ? INK_FAINT : INK;
+    ctx.fillText(v.label, tx, r.y + 22);
+    ctx.font = fontB(7);
+    ctx.fillStyle = v.claimed ? '#464e6e' : ready ? INK_SOFT : INK_FAINT;
+    ctx.fillText(v.desc.toUpperCase(), tx, r.y + 35);
+    // the counter rides the label line — the claim slot is for the button
+    ctx.font = fontB(8);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = v.claimed ? INK_FAINT : ready ? INK : GOLD;
+    ctx.fillText(`${v.have}/${v.n}`, tx + textW, r.y + 22);
+    ctx.textAlign = 'left';
+
+    // the progress track is the card's foot — a full-width groove with the
+    // gold ramp and the percent inked inside it
+    const br = { x: tx, y: r.y + r.h - 26, w: r.w - 38, h: 14 };
+    roundRect(ctx, br.x, br.y, br.w, br.h, 6);
     ctx.fillStyle = '#0a0d18';
     ctx.fill();
     const frac = Math.min(1, v.have / v.n);
     if (frac > 0) {
       ctx.save();
-      roundRect(ctx, br.x, br.y, br.w, br.h, 5);
+      roundRect(ctx, br.x, br.y, br.w, br.h, 6);
       ctx.clip();
       const g = ctx.createLinearGradient(0, br.y, 0, br.y + br.h);
       g.addColorStop(0, '#ffe76a');
@@ -6549,25 +6562,40 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
       ctx.fillRect(br.x, br.y, Math.max(br.h, br.w * frac), br.h);
       ctx.restore();
     }
-    roundRect(ctx, br.x, br.y, br.w, br.h, 5);
+    roundRect(ctx, br.x, br.y, br.w, br.h, 6);
     ctx.strokeStyle = '#d0d0c8';
     ctx.lineWidth = 1;
     ctx.stroke();
+    ctx.font = fontB(7);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = frac >= 0.45 ? '#1b2140' : PAPER_HI;
+    ctx.fillText(`${Math.round(frac * 100)}%`, br.x + br.w / 2, br.y + 10);
+    ctx.textAlign = 'left';
 
-    // reward icon — ghosted until earned, spent grey once claimed
+    // the reward cell — icon + name centered in the content zone, ghosted
+    // until earned, spent grey once claimed; short cards shrink the icon
     const spr = BAG_ITEMS.find((it) => it.id === v.reward)?.item ?? v.reward;
     void loadItem(spr);
     const img = itemSprite(spr);
+    const iconSz = Math.min(40, r.h - 54);
+    const iconY = r.y + Math.max(4, (r.h - 40 - iconSz) / 2);
     if (img) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = v.claimed ? 0.3 : v.done ? 1 : 0.6;
+      ctx.globalAlpha = v.claimed ? 0.3 : v.done ? 1 : 0.55;
       ctx.shadowColor = 'rgba(0,0,0,0.5)';
       ctx.shadowBlur = 5;
       ctx.shadowOffsetY = 2;
-      ctx.drawImage(img, ix, r.y + (r.h - 28) / 2, 28, 28);
+      ctx.drawImage(img, rx + 42 - iconSz / 2, iconY, iconSz, iconSz);
       ctx.restore();
     }
+    ctx.font = fontB(6.5);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = v.claimed ? INK_FAINT : ready ? GOLD : INK_SOFT;
+    const rewardName = (BAG_ITEMS.find((it) => it.id === v.reward)?.name ?? v.reward).toUpperCase();
+    fitFontB(ctx, rewardName, 6.5, 82);
+    ctx.fillText(rewardName, rx + 42, iconY + iconSz + 12);
+    ctx.textAlign = 'left';
 
     if (ready) {
       // the armed claim pulses — a dark ink pill on the gold slab is the
@@ -6583,50 +6611,44 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
       chip(ctx, cr.x + (cr.w - cw) / 2, cr.y + (cr.h - 16) / 2, 'CLAIMED', { bg: '#d0d0c8', fg: INK_FAINT });
     } else {
       // not done — the slot holds the dimmed target where a button would be
-      ctx.font = fontB(9);
+      ctx.font = fontB(7);
       ctx.textAlign = 'center';
       ctx.fillStyle = INK_FAINT;
-      ctx.fillText(`${v.have}/${v.n}`, cr.x + cr.w / 2, cr.y + cr.h / 2 + 4);
+      ctx.fillText('IN THE FIELD', cr.x + cr.w / 2, cr.y + cr.h / 2 + 3);
     }
   });
 
-  // the bag preview — the screen's other half; claims land here
+  // the bag shelf — the screen's other half; claims land here. Every slot
+  // draws: stocked cells bright, empties ghosted so the shelf never voids
+  uiBand(ctx, { x: TASKS_PANEL.x + 14, y: BAG_BAND_Y, w: TASKS_PANEL.w - 28, h: 20 }, 'YOUR BAG · TAKE 2 INTO A RUN', { h: 20, rad: 5 });
   const stock = bagStock();
-  const stocked = BAG_ITEMS.filter((it) => (stock[it.id] ?? 0) > 0);
-  const bagY = TASKS_CLOSE.y - 116;
-  ctx.textAlign = 'left';
-  ctx.font = font(8);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText('YOUR BAG', TASKS_PANEL.x + 16, bagY);
-  ctx.font = fontB(6);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('TAKE 2 INTO A RUN', TASKS_PANEL.x + 16, bagY + 11);
-  if (!stocked.length) {
-    ctx.font = fontB(7);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText('EMPTY — CLAIM TASKS TO STOCK IT', TASKS_PANEL.x + 16, bagY + 42);
-  }
-  stocked.slice(0, 6).forEach((it, i) => {
-    const cw = 74;
-    const cx = TASKS_PANEL.x + 16 + (i % 3) * (cw + 8);
-    const cy = bagY + 18 + Math.floor(i / 3) * 44;
-    const r = { x: cx, y: cy, w: cw, h: 38 };
+  const cellW = (TASKS_PANEL.w - 28 - (BAG_COLS - 1) * BAG_CELL_GAP) / BAG_COLS;
+  const slots = BAG_COLS * Math.ceil(BAG_ITEMS.length / BAG_COLS);
+  for (let i = 0; i < slots; i++) {
+    const cx = TASKS_PANEL.x + 14 + (i % BAG_COLS) * (cellW + BAG_CELL_GAP);
+    const cy = BAG_GRID_Y + Math.floor(i / BAG_COLS) * (BAG_CELL_H + BAG_CELL_GAP);
+    const r = { x: cx, y: cy, w: cellW, h: BAG_CELL_H };
+    const it = BAG_ITEMS[i];
+    const n = it ? (stock[it.id] ?? 0) : 0;
     uiWindow(ctx, r, { rad: 8, rim: false, shadow: false });
+    if (!it) continue; // trailing slots stay bare shelf
     const img = itemSprite(it.item);
     void loadItem(it.item);
     if (img) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(img, r.x + 4, r.y + 8, 22, 22);
+      ctx.globalAlpha = n > 0 ? 1 : 0.3;
+      ctx.drawImage(img, r.x + 8, r.y + (r.h - 26) / 2, 26, 26);
       ctx.restore();
     }
-    ctx.font = fontB(6);
-    ctx.fillStyle = INK_SOFT;
+    ctx.font = fontB(6.5);
     ctx.textAlign = 'left';
-    ctx.fillText(it.name.split(' ')[0], r.x + 30, r.y + 16);
-    ctx.fillStyle = GOLD;
-    ctx.fillText(`×${stock[it.id]}`, r.x + 30, r.y + 27);
-  });
+    ctx.fillStyle = n > 0 ? INK_SOFT : INK_FAINT;
+    fitFontB(ctx, it.name.toUpperCase(), 6.5, r.w - 44);
+    ctx.fillText(it.name.toUpperCase(), r.x + 38, r.y + 21);
+    ctx.fillStyle = n > 0 ? GOLD : INK_FAINT;
+    ctx.fillText(n > 0 ? `×${n}` : '—', r.x + 38, r.y + 34);
+  }
 
   // the × chip rides centered on the wide close rect — the tap zone
   // (TASKS_CLOSE) is bigger than the mark on purpose
