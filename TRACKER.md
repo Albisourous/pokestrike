@@ -105,3 +105,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-24 | pending | climb/ladder | rank bar: washed-out white 7px strip → dark inset capsule w/ quartile ticks + sheened tier fill, capped by the rung's real ball icons (poke→great→ultra→master, star-piece at CHAMPION) | `git revert <ladder-bar-commit>` |
 | 2026-10-24 | pending | title/wilds | top-right Pidgey ambient pulled — it floated over the RAID card's field; the two bottom wilds stay | `git revert <wilds-commit>` |
 | 2026-10-24 | `13860f7` | charm board | tall window owns the column (no dead top field, no clipped card 4); SKIP follows board size; rarity chip visible — was INK-on-INK | `git revert 13860f7` |
+| 2026-10-24 | `61a1f2f` | charm board | 3-offer window centered; squad sprites no longer cover YOUR TEAM | `git revert 61a1f2f` |
