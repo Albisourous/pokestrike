@@ -5911,7 +5911,11 @@ export class Battle {
   // poisoned or burned lands half again. The trap: dotting it speeds the
   // kill but sharpens the reprisal
   private foeAtk(e: Unit) {
-    return e.def.stats.atk * (e.def.guts && (e.dotTicks > 0 || e.burnT > 0) ? 1.5 : 1);
+    return e.def.stats.atk
+      * (e.def.guts && (e.dotTicks > 0 || e.burnT > 0) ? 1.5 : 1)
+      // pack alpha: a living leader rallies every packmate's hits — the
+      // leader itself doesn't march under its own flag
+      * (!e.def.alpha && this.enemies.some((a) => !a.dead && a.def.alpha) ? 1.3 : 1);
   }
 
   private foeZap(e: Unit, target: Unit) {
@@ -7436,6 +7440,7 @@ export class Battle {
       e.def.trap && 'arena trap — the ball can\'t flee its neighborhood',
       e.def.skyFor && `summons ${e.def.skyFor} — its sky rides the whole wave`,
       e.def.counter && 'counter — returns a third of contact damage',
+      e.def.alpha && 'pack leader — rallies packmates\' hits while it lives',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8828,6 +8833,7 @@ export class Battle {
         u.def.trap && 'TRAP',
         u.def.skyFor && 'SKY',
         u.def.counter && 'COUNTER',
+        u.def.alpha && 'ALPHA',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

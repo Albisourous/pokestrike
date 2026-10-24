@@ -53,6 +53,7 @@ export interface SpeciesDef {
   trap?: boolean; // Arena Trap: the ball can't flee its neighborhood while it lives
   skyFor?: Weather; // Drought/Drizzle/Sand Stream: its arrival summons this sky
   counter?: boolean; // Counter: returns a third of contact damage to the striker
+  alpha?: boolean; // pack leader: rallying cry — packmates hit harder while it lives
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -374,7 +375,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 413, name: 'Wormadam', type: 'grass', stats: st(60, 59, 85, 79, 105, 36) },
   { id: 414, name: 'Mothim', type: 'flying', stats: st(70, 94, 50, 94, 50, 66) },
   { id: 415, name: 'Combee', type: 'flying', stats: st(30, 30, 42, 30, 42, 70), split: true, evolvesTo: 416 },
-  { id: 416, name: 'Vespiquen', type: 'flying', stats: st(70, 80, 102, 80, 102, 40) },
+  { id: 416, name: 'Vespiquen', type: 'flying', stats: st(70, 80, 102, 80, 102, 40), alpha: true },
   { id: 420, name: 'Cherubi', type: 'grass', stats: st(45, 35, 45, 62, 53, 35), evolvesTo: 421 },
   { id: 421, name: 'Cherrim', type: 'grass', stats: st(70, 60, 70, 87, 78, 85) },
   { id: 422, name: 'Shellos', type: 'water', type2: 'rock', stats: st(76, 48, 48, 57, 62, 34), evolvesTo: 423 },
@@ -504,7 +505,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 426, name: 'Drifblim', type: 'ghost', type2: 'flying', stats: st(150, 80, 44, 90, 54, 80), cursed: true },
   { id: 428, name: 'Lopunny', type: 'normal', stats: st(65, 76, 84, 54, 96, 105), pierce: true },
   { id: 429, name: 'Mismagius', type: 'ghost', stats: st(60, 60, 60, 105, 105, 105), healer: true },
-  { id: 430, name: 'Honchkrow', type: 'flying', type2: 'ghost', stats: st(100, 125, 52, 105, 52, 71), pierce: true },
+  { id: 430, name: 'Honchkrow', type: 'flying', type2: 'ghost', stats: st(100, 125, 52, 105, 52, 71), pierce: true, alpha: true },
   { id: 432, name: 'Purugly', type: 'normal', stats: st(71, 82, 64, 64, 59, 112) },
   { id: 435, name: 'Skuntank', type: 'poison', type2: 'ghost', stats: st(103, 93, 67, 71, 61, 84), melee: true },
   { id: 437, name: 'Bronzong', type: 'rock', type2: 'psychic', stats: st(67, 89, 116, 79, 116, 33), taunt: true },
@@ -585,7 +586,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 617, name: 'Accelgor', type: 'grass', stats: st(80, 70, 40, 100, 60, 145), pierce: true },
   { id: 620, name: 'Mienshao', type: 'fighting', stats: st(65, 125, 60, 95, 60, 105), melee: true },
   { id: 623, name: 'Golurk', type: 'rock', type2: 'ghost', stats: st(89, 124, 80, 55, 80, 55), melee: true, cursed: true },
-  { id: 625, name: 'Bisharp', type: 'ghost', type2: 'rock', stats: st(65, 125, 100, 60, 70, 70), melee: true },
+  { id: 625, name: 'Bisharp', type: 'ghost', type2: 'rock', stats: st(65, 125, 100, 60, 70, 70), melee: true, alpha: true },
   { id: 628, name: 'Braviary', type: 'normal', type2: 'flying', stats: st(100, 123, 75, 57, 75, 80), melee: true },
   { id: 630, name: 'Mandibuzz', type: 'ghost', type2: 'flying', stats: st(110, 65, 105, 55, 95, 80), taunt: true },
   { id: 635, name: 'Hydreigon', type: 'ghost', type2: 'flying', stats: st(92, 105, 90, 125, 90, 98), melee: true },

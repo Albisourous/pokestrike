@@ -770,6 +770,23 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.hp = striker.maxHp;
   e.def = eDef;
 
+  // pack alpha: a living leader rallies packmate hits
+  const boss = (b as any).enemies[1];
+  const bossDef = boss.def;
+  boss.def = { ...bossDef, alpha: true };
+  boss.dead = false;
+  boss.hp = boss.maxHp;
+  (b as any).orbs.length = 0;
+  (b as any).foeZap(e, p0);
+  const alphaZap = (b as any).orbs[0].dmg;
+  boss.dead = true;
+  (b as any).orbs.length = 0;
+  (b as any).foeZap(e, p0);
+  const soloZap = (b as any).orbs[0].dmg;
+  ok(alphaZap > soloZap && Math.abs(alphaZap / soloZap - 1.3) < 0.08, `alpha rallies the pack (${alphaZap} vs ${soloZap})`);
+  boss.dead = false;
+  boss.def = bossDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

@@ -2419,6 +2419,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'TRAP foes leash the court — the ball can\'t flee while they live',
       'SKY callers summon weather — Torkoal brings the drought',
       'COUNTER foes return a third of contact — chip, don\'t crit',
+      'ALPHA foes rally the pack — kill the leader first',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
