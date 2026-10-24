@@ -269,6 +269,20 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).waveShots = 1;
   (b as any).waveCleared();
   ok((b as any).sweepStreak === 2 && (b as any).score - s0 >= 120, `sweep x2 pays the streak bonus (${s0} -> ${(b as any).score})`);
+
+  // untouched waves pay the flawless carrot; one hit forfeits it
+  (b as any).phase = 'aim';
+  (b as any).rewardPending = false;
+  (b as any).waveShots = 3;
+  const s1 = (b as any).score;
+  (b as any).waveCleared();
+  ok((b as any).waveSpecial.includes('FLAWLESS') && (b as any).score - s1 >= 50, `flawless clear pays (${s1} -> ${(b as any).score})`);
+  (b as any).phase = 'aim';
+  (b as any).rewardPending = false;
+  (b as any).waveShots = 3;
+  (b as any).waveFlawless = false; // took a hit this wave
+  (b as any).waveCleared();
+  ok(!(b as any).waveSpecial.includes('FLAWLESS'), 'a hit forfeits the flawless carrot');
 }
 
 // the ball swats hostile orbs mid-flight — cover for the parked team

@@ -778,6 +778,7 @@ export class Battle {
   eggJustLaid = false; // the laying arrival doesn't consume a tick
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
   private sweepStreak = 0; // consecutive one-shot clears — the streak pays
+  private waveFlawless = true; // no hit taken this wave — the clear ribbon pays it out
   private splashing = false; // psychic trait re-entry guard
   private mapCam = -1; // island-row the viewport starts at — lerps toward mapCamTarget
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
@@ -1139,6 +1140,7 @@ export class Battle {
     this.eliteWave = elite;
     this.inEvent = false;
     this.waveShots = 0;
+    this.waveFlawless = true;
     this.ultIn = ULT_SHOTS; // the ult is per-fight — no banking a charge into the next stop
     this.boxGain = null;
     this.refreshTraits();
@@ -4455,11 +4457,14 @@ export class Battle {
     // back-to-back one-shot clears streak into a score bonus
     this.sweepStreak = this.waveShots === 1 ? this.sweepStreak + 1 : 0;
     if (this.sweepStreak > 1) this.score += 60 * this.sweepStreak;
+    // flawless carrot — an untouched wave pays a depth-scaled bonus
+    if (this.waveFlawless) this.score += 50 + this.depth * 15;
     this.waveSpecial =
       (this.waveIndex + 1 >= this.waveCount ? 'STAGE CLEAR!' : 'WAVE CLEAR!') +
       (this.waveShots === 1
         ? this.sweepStreak > 1 ? ` · SWEEP x${this.sweepStreak}!` : ' · SWEEP!'
-        : ` · ${this.waveShots} SHOTS`);
+        : ` · ${this.waveShots} SHOTS`) +
+      (this.waveFlawless ? ' · FLAWLESS!' : '');
     this.waveBanner = 1.1;
     sfx('wave');
     // a raid is the whole fight — the win beat is short and never rolls the
@@ -5841,6 +5846,7 @@ export class Battle {
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
     }
     p.hp -= dmg;
+    if (dmg > 0) this.waveFlawless = false;
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
     // the map early-returns before texts draw — a stray orb hit there
