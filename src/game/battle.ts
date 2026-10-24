@@ -1798,7 +1798,7 @@ export class Battle {
     this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
     this.shotGold = gold;
-    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (u.paraT > 0 ? 0.65 : 1) * (0.4 + 0.6 * (gold ? 1 : charge));
+    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (u.paraT > 0 ? 0.65 : 1) * (0.4 + 0.6 * (gold ? 1 : charge)) * this.swiftMult(u);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.sq = 1; // launch pop — the ball stretches off the sling
@@ -5938,6 +5938,13 @@ export class Battle {
   // guts: a statused brawler gets angrier — every attack it throws while
   // poisoned or burned lands half again. The trap: dotting it speeds the
   // kill but sharpens the reprisal
+  // swift swim / chlorophyll / sand rush: a ball that matches the sky
+  // launches a touch faster — drafting into the weather pays twice
+  private swiftMult(u: Unit) {
+    const want = this.weather ? { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying' }[this.weather] : undefined;
+    return want && (u.def.type === want || u.def.type2 === want) ? 1.12 : 1;
+  }
+
   private foeAtk(e: Unit) {
     return e.def.stats.atk
       * (e.def.guts && (e.dotTicks > 0 || e.burnT > 0) ? 1.5 : 1)
@@ -9098,7 +9105,7 @@ export class Battle {
     if (sig !== this.aimCache.sig) {
       this.aimCache.sig = sig;
       const speed =
-        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (0.4 + 0.6 * (maxed ? 1 : frac));
+        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (0.4 + 0.6 * (maxed ? 1 : frac)) * this.swiftMult(u);
       let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
       const dots: Vec[] = [];
       let hit: Unit | null = null;

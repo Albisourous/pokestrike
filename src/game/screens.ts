@@ -2418,6 +2418,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'BEAM foes lock a lane — the dashed line telegraphs the burn',
       'TRAP foes leash the court — the ball can\'t flee while they live',
       'SKY callers summon weather — Torkoal brings the drought',
+      'a ball matching the sky launches faster — draft into the weather',
       'COUNTER foes return a third of contact — chip, don\'t crit',
       'ALPHA foes rally the pack — kill the leader first',
       'SHED foes shrug off poison, burns and sleep — burst them',
