@@ -1347,15 +1347,15 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.stroke();
   ctx.font = fontB(9);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('TAP TO VIEW ›', tx2, dr.y + 148);
+  ctx.fillText('TAP TO VIEW ›', tx2, dr.y + 170);
 
   // the honest cut, visible before the hatcher opens — same rarity colors
   // the overlay's own table prints, plus the pity count. Fills down to the
   // tab bar — a bare gap under the card read as a hole
   const orr = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 16, w: W - 60, h: TAB_BAR.y - 20 - (DEAL_BTN.y + DEAL_BTN.h + 16) };
   uiPanel(ctx, orr, 'PULL ODDS', { sub: `RARE+ IN ${PULL_PITY - (pullCount() % PULL_PITY)} PULLS` });
-  ([['COMMON', PULL_RATES.common, '#d0d0c8'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f']] as const).forEach(([label, pct, color], i) => {
-    const ry = orr.y + 58 + i * 34;
+  ([['COMMON', PULL_RATES.common, '#d0d0c8'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f'], ['SHINY', shinyOdds(), '#ffd848']] as const).forEach(([label, pct, color], i) => {
+    const ry = orr.y + 62 + i * 38;
     ctx.textAlign = 'left';
     ctx.font = fontB(8);
     ctx.fillStyle = INK_SOFT;
@@ -2556,7 +2556,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 // the cards the tab bodies draw. SHOP owns the hatcher hero + spark deal;
 // MONS owns dex / line-sets / catches; TOWN owns the 2-col grid + ASC + HALL.
 export const HATCH_BTN = { x: 30, y: 110, w: W - 60, h: 250 };
-export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 170 };
+export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 190 };
 export const DEX_BTN = { x: 30, y: 110, w: W - 60, h: 240 };
 export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
 // the partners strip upgrades from LATEST CATCHES once any bond exists —
@@ -6163,7 +6163,6 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
   // (SETTINGS_CLOSE) is bigger than the mark on purpose
   const cc = SETTINGS_CLOSE;
   uiClose(ctx, { x: cc.x + cc.w / 2 - cc.h / 2, y: cc.y, w: cc.h, h: cc.h });
-  if (HAS_KEYS) keyHint(ctx, SETTINGS_CLOSE, '[esc]');
 }
 
 // --- tasks modal: daily/weekly missions — the settings anatomy (dim -----
@@ -6384,5 +6383,4 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
   // (TASKS_CLOSE) is bigger than the mark on purpose
   const cc = TASKS_CLOSE;
   uiClose(ctx, { x: cc.x + cc.w / 2 - cc.h / 2, y: cc.y, w: cc.h, h: cc.h });
-  if (HAS_KEYS) keyHint(ctx, TASKS_CLOSE, '[esc]');
 }
