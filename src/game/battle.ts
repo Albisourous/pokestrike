@@ -1213,6 +1213,12 @@ export class Battle {
     }
     this.curSpawns = spawns; // rival/invade overrides still feed the recruit roll
     if (!this.waveSpecial && this.mapNote) this.waveSpecial = this.mapNote;
+    // a species pod names itself — three-plus of one species is a flock,
+    // not a coincidence. Shared flags make the wave one focused puzzle.
+    if (!this.waveSpecial && !spawns.some((s) => s.boss) && spawns.length >= 3
+        && spawns.every((s) => s.def === spawns[0].def)) {
+      this.waveSpecial = `A PACK OF ${spawns[0].def.name.toUpperCase()}!`;
+    }
     // whatever the banner says — trainer, rival, invade or event note — is the trail line
     if (this.waveSpecial) this.log(this.waveSpecial);
     // Archero room pull: the wave's court is one hand-authored template —

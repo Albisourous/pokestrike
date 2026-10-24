@@ -145,3 +145,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `960016d` | battle | RESTLESS pre-warning at shot 8 — anti-stall ramp telegraphed 3 shots early | `git revert <this commit>` |
 | 2026-10-25 | `6ef035e` | battle | VOLLEY foe flag — Octillery fans orbs across 3 mons, no tank-soak | `git revert <this commit>` |
 | 2026-10-25 | `95d9ff2` | battle | hazards herd the pack — gust lanes sweep creeps, wells clump swimmers | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | species pods — ~12% of waves are one-species packs, banner names the flock | `git revert <this commit>` |

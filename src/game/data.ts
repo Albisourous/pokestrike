@@ -1380,11 +1380,14 @@ export function rollWave(rng: () => number, depth: number, theme?: Theme, bossTy
     const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
+  // ~12% of plain waves are a species pod — a Doduo flock, a Geodude den —
+  // the pack's shared flags turn the wave into one focused puzzle
+  const pod = depth >= 1 && rng() < 0.12 ? fodder[Math.floor(rng() * fodder.length)] : null;
   const add = () => ({
     // deeper waves mix in capturable elites — odds and tier cap both ramp
-    def: depth > 0 && rng() < 0.15 + depth * 0.05
+    def: pod ?? (depth > 0 && rng() < 0.15 + depth * 0.05
       ? eliteAt(rng, depth)
-      : fodder[Math.floor(rng() * fodder.length)],
+      : fodder[Math.floor(rng() * fodder.length)]),
     ...slot(),
   });
   // a gym stop's sign calls the leader's type — honor it when the wave

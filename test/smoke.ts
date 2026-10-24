@@ -1096,6 +1096,14 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     for (const w of rollWave(mulberry32(s), 6, 'grove')) if (!w.boss && tierOf(w.def) >= 3) deep++;
   }
   ok(deep > 0, `deep waves roll 560+ elites (${deep})`);
+  // ~12% of waves are species pods — over 60 seeds at least one all-same
+  // pack rolls, and pods never come with a boss riding along
+  let pods = 0;
+  for (let s = 1; s <= 60; s++) {
+    const w = rollWave(mulberry32(s), 2, 'grove');
+    if (!w.some((x) => x.boss) && w.length >= 3 && w.every((x) => x.def === w[0].def)) pods++;
+  }
+  ok(pods > 0 && pods < 20, `species pods roll occasionally (${pods}/60)`);
   // trainers obey the same gate — a stage-2 squad tops out at tier 2
   let tmax = 0;
   for (let s = 1; s <= 30; s++) {
