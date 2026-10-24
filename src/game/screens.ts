@@ -10,7 +10,7 @@ import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
 import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
-import { tasksReady, taskResetsIn, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, featuredPull, dealPick, dealCost } from './tasks';
+import { tasksReady, taskResetsIn, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 import {
@@ -1353,7 +1353,7 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
 
   // the day's −25% spark bargain — its own window so the deal sells itself
   const dr = DEAL_BTN;
-  uiPanel(ctx, dr, 'SPARK DEAL −25%');
+  uiPanel(ctx, dr, `SPARK DEAL −${dealOff()}%`);
   const deal = dealPick();
   // a type-tinted pad — the bargain stands on its own color like the rest
   const dcx = dr.x + 82, dcy = dr.y + 102;
@@ -3177,7 +3177,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     ctx.lineWidth = 2;
     ctx.stroke();
     ctx.restore();
-    const label = armed ? `TAP AGAIN · ◆${cost}` : `${def.id === dealPick().id ? 'DEAL −25% · ' : ''}BUY · ◆${cost}`;
+    const label = armed ? `TAP AGAIN · ◆${cost}` : `${def.id === dealPick().id ? `DEAL −${dealOff()}% · ` : ''}BUY · ◆${cost}`;
     fitFontB(ctx, label, 9, buy.w - 24);
     ctx.fillStyle = afford ? INK : PAPER_HI;
     ctx.fillText(label, cx, buy.y + 21);
@@ -3826,9 +3826,8 @@ export function drawHatch(
       ctx.fillText('IN DEX', ox + ow / 2 + 4, cell.y + 96);
     } else {
       const isDeal = def.id === deal.id;
-      // dealCost's −25% inlined against the frame's hoisted deal — calling
-      // it per cell re-rolled dealPick (raidPick + featuredPull inside) 16×
-      const cost = isDeal ? Math.ceil(dustCost(def) * 0.75) : dustCost(def);
+      // the day's cut is memo'd, so per-cell dealCost is a lookup not a roll
+      const cost = dealCost(def);
       const armed = info.armedId === def.id;
       if (armed) {
         // two-tap confirm: pulse the rim, spend the price line on the cue,
@@ -3872,7 +3871,7 @@ export function drawHatch(
         ctx.textAlign = 'center';
         ctx.font = fontB(7);
         ctx.fillStyle = INK;
-        ctx.fillText('−25%', cell.x + cell.w - 18, cell.y + 10);
+        ctx.fillText(`−${dealOff()}%`, cell.x + cell.w - 18, cell.y + 10);
       }
     }
   }

@@ -12,7 +12,7 @@ import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
 import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
-import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealCost } from '../src/game/tasks';
+import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
@@ -3422,12 +3422,14 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(g5.pay === Math.ceil(40 * boostNow), 'the session payout caps at 40');
   ok(grindBonus(base + DAY_MS).n === 1, 'the counter resets on a new day');
 
-  // the daily deal: one seeded rare+ mon, 25% off, same for everyone today
+  // the daily deal: one seeded rare+ mon at a seeded deep cut, same for everyone today
   const deal = dealPick();
   ok(dealPick().id === deal.id, 'deal pick is deterministic within the day');
   ok(tierOf(deal) >= 2 || INVADER_IDS.has(deal.id), 'the deal is rare-or-better');
   ok(deal.id !== raidPick().id && deal.id !== featuredPull().id, 'the deal never mirrors the raid or rate-up');
-  ok(dealCost(deal) === Math.ceil(dustCost(deal) * 0.75), 'the deal species prices at 25% off');
+  ok(dealOff() >= 50 && dealOff() <= 75, `the day's cut stays a deep bargain (${dealOff()}% off)`);
+  ok(dealCost(deal) === Math.ceil(dustCost(deal) * (1 - dealOff() / 100)), 'the deal species prices at the day\'s cut');
+  ok(dealOff() === dealOff(Date.now() + 3600000), 'same UTC day hits the memo\'d deal cut');
   const offDeal = PULLABLE.find((d) => d.id !== deal.id)!;
   ok(dealCost(offDeal) === dustCost(offDeal), 'every other species keeps list price');
 

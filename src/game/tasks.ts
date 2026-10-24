@@ -175,9 +175,13 @@ export const dealPick = dayMemo((seed) => {
   return d;
 });
 
+// the day's cut rides the same memo — 50–75% off, seeded beside the pick so
+// everyone haggling today sees the same bargain
+export const dealOff = dayMemo((seed) => 50 + Math.floor(mulberry32(seed * 31 + 47)() * 26));
+
 export function dealCost(d: SpeciesDef, now = Date.now()): number {
   const base = dustCost(d);
-  return d.id === dealPick(now).id ? Math.ceil(base * 0.75) : base;
+  return d.id === dealPick(now).id ? Math.ceil(base * (1 - dealOff(now) / 100)) : base;
 }
 
 // ISO-8601: the week holding the year's first Thursday; the Thursday's year
