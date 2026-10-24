@@ -650,7 +650,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).fireEnemy(lazy);
   const busyTimer = lazy.timer;
   ok(lazyTimer > 0 && Math.abs(busyTimer * 2 - lazyTimer) < 0.001, `truant loafs a full round (${lazyTimer} vs ${busyTimer})`);
+
+  // speed boost: each attack re-arms a touch faster
+  lazy.def = { ...lazyDef, boost: true };
+  lazy.boostN = 0;
+  lazy.timer = 0;
+  (b as any).fireEnemy(lazy);
+  const boost0 = lazy.timer;
+  lazy.timer = 0;
+  (b as any).fireEnemy(lazy);
+  const boost1 = lazy.timer;
+  ok(boost1 < boost0 && Math.abs(boost1 / boost0 - 0.85) < 0.01, `speed boost re-arms faster (${boost1} vs ${boost0})`);
   lazy.def = lazyDef;
+  lazy.boostN = 0;
 
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };

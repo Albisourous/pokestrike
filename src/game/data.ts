@@ -45,6 +45,7 @@ export interface SpeciesDef {
   guts?: boolean; // Guts: statused hits harder — don't poison it, kill it clean
   absorb?: PokeType; // Water/Volt Absorb, Flash Fire: same-type hits heal it
   truant?: boolean; // Truant: fires then loafs a full round — huge stats, half the uptime
+  boost?: boolean; // Speed Boost: every attack re-arms a touch faster — kill it early
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -446,7 +447,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 197, name: 'Umbreon', type: 'ghost', stats: st(95, 65, 110, 60, 130, 65), taunt: true },
   { id: 212, name: 'Scizor', type: 'fighting', stats: st(70, 130, 100, 55, 80, 65), pierce: true, melee: true },
   { id: 229, name: 'Houndoom', type: 'fire', type2: 'ghost', stats: st(75, 90, 50, 110, 80, 95) },
-  { id: 257, name: 'Blaziken', type: 'fire', type2: 'fighting', stats: st(80, 120, 70, 110, 70, 80), melee: true },
+  { id: 257, name: 'Blaziken', type: 'fire', type2: 'fighting', stats: st(80, 120, 70, 110, 70, 80), melee: true, boost: true },
   { id: 282, name: 'Gardevoir', type: 'psychic', type2: 'normal', stats: st(68, 65, 65, 125, 115, 80), healer: true },
   { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true, truant: true },
   { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true },
@@ -545,7 +546,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 534, name: 'Conkeldurr', type: 'fighting', stats: st(105, 140, 95, 55, 65, 45), melee: true },
   { id: 537, name: 'Seismitoad', type: 'water', type2: 'rock', stats: st(105, 95, 75, 85, 75, 74) },
   { id: 542, name: 'Leavanny', type: 'grass', stats: st(75, 103, 80, 70, 80, 92) },
-  { id: 545, name: 'Scolipede', type: 'grass', type2: 'poison', stats: st(60, 100, 89, 55, 69, 112) },
+  { id: 545, name: 'Scolipede', type: 'grass', type2: 'poison', stats: st(60, 100, 89, 55, 69, 112), boost: true },
   { id: 547, name: 'Whimsicott', type: 'grass', type2: 'normal', stats: st(60, 67, 85, 77, 75, 116) },
   { id: 549, name: 'Lilligant', type: 'grass', stats: st(70, 60, 75, 110, 75, 90) },
   { id: 553, name: 'Krookodile', type: 'rock', type2: 'ghost', stats: st(95, 117, 80, 65, 70, 92), melee: true },
@@ -709,7 +710,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },
   { id: 305, name: 'Lairon', type: 'rock', stats: st(60, 90, 140, 50, 50, 40), evolvesTo: 306 },
   { id: 310, name: 'Manectric', type: 'electric', stats: st(70, 75, 60, 105, 60, 105), shock: true },
-  { id: 319, name: 'Sharpedo', type: 'water', stats: st(70, 120, 40, 95, 40, 95), melee: true },
+  { id: 319, name: 'Sharpedo', type: 'water', stats: st(70, 120, 40, 95, 40, 95), melee: true, boost: true },
   { id: 329, name: 'Vibrava', type: 'rock', type2: 'flying', stats: st(50, 70, 50, 50, 50, 70) },
   { id: 332, name: 'Cacturne', type: 'grass', type2: 'ghost', stats: st(70, 115, 60, 115, 60, 55), melee: true },
   { id: 342, name: 'Crawdaunt', type: 'water', type2: 'ghost', stats: st(63, 120, 85, 90, 55, 55), melee: true },

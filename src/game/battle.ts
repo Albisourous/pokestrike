@@ -117,6 +117,7 @@ interface Unit {
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
   hpLag?: number; // display-only wound trail — drains toward hp so hits read
   blinkT: number; // BLINK foes: countdown to the next teleport — shimmer tells first
+  boostN: number; // SPEED BOOST foes: attacks launched — each re-arm winds it tighter
 }
 
 interface FloatText {
@@ -903,6 +904,7 @@ export class Battle {
         warpT: -9,
         boostT: -9,
         blinkT: 0,
+        boostN: 0,
       });
     });
     // bag items field after the team does — persistent consumables earned
@@ -1587,6 +1589,7 @@ export class Battle {
       warpT: -9,
       boostT: -9,
       blinkT: s.def.blink ? 4 + this.rng() * 2.5 : 0,
+      boostN: 0,
     };
   }
 
@@ -5868,7 +5871,10 @@ export class Battle {
   private fireEnemy(e: Unit) {
     if (e.dead) return; // killed during the windup — the corpse stays down
     {
-      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1) * (e.def.truant ? 2 : 1);
+      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1) * (e.def.truant ? 2 : 1)
+        // speed boost: every launch winds it tighter — floor at half so
+        // it never blurs into an unreadable machine gun
+        * (e.def.boost ? Math.max(0.5, Math.pow(0.85, e.boostN++)) : 1);
       if (e.boss) {
         this.bossAttack(e);
       } else if (e.def.fuse) {
@@ -7291,6 +7297,7 @@ export class Battle {
       e.def.guts && 'guts — hits 50% harder while statused',
       e.def.absorb && `${e.def.absorb} hits heal it — absorb`,
       e.def.truant && 'truant — loiters a round after each attack',
+      e.def.boost && 'speed boost — re-arms faster every attack',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8675,6 +8682,7 @@ export class Battle {
         u.def.guts && 'GUTS',
         u.def.absorb && `DRAIN:${u.def.absorb.toUpperCase().slice(0, 3)}`,
         u.def.truant && 'LOAF',
+        u.def.boost && 'BOOST',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

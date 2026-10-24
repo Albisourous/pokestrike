@@ -2411,6 +2411,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'GUTS foes hit harder while statused — kill them clean',
       'DRAIN foes absorb their element — same-type hits heal them',
       'LOAF foes truant — they fire once, then loiter a round',
+      'BOOST foes speed up every attack — kill them early',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
