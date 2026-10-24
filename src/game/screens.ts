@@ -2414,6 +2414,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'BOOST foes speed up every attack — kill them early',
       'SPORE hides scatter a random ailment on contact',
       'SYNC foes echo their status — burn one and it burns you back',
+      'PRESSURE halves your super charge — legends bend the economy',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

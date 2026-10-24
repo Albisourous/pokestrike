@@ -48,6 +48,7 @@ export interface SpeciesDef {
   boost?: boolean; // Speed Boost: every attack re-arms a touch faster — kill it early
   spore?: boolean; // Effect Spore: contact scatters a random ailment — poison, shock, or sleep
   sync?: boolean; // Synchronize: contact echoes its ailments back onto the striker
+  pressure?: boolean; // Pressure: while it lives, bump supers charge at half speed
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -526,7 +527,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 474, name: 'Porygon-Z', type: 'normal', stats: st(85, 80, 70, 135, 75, 90) },
   { id: 475, name: 'Gallade', type: 'psychic', type2: 'fighting', stats: st(68, 125, 65, 65, 115, 80), melee: true },
   { id: 476, name: 'Probopass', type: 'rock', stats: st(60, 55, 145, 75, 150, 40), taunt: true, repel: true },
-  { id: 477, name: 'Dusknoir', type: 'ghost', stats: st(45, 100, 135, 65, 135, 45) },
+  { id: 477, name: 'Dusknoir', type: 'ghost', stats: st(45, 100, 135, 65, 135, 45), pressure: true },
   { id: 478, name: 'Froslass', type: 'ghost', type2: 'water', stats: st(70, 80, 70, 80, 70, 110), pierce: true },
   { id: 479, name: 'Rotom', type: 'electric', type2: 'ghost', stats: st(50, 50, 77, 95, 77, 91), cursed: true },
   // --- gen 5 (unova) ---
@@ -594,9 +595,9 @@ export const INVADERS: SpeciesDef[] = [
   { id: 144, name: 'Articuno', type: 'flying', type2: 'water', stats: st(90, 85, 100, 95, 125, 85) },
   { id: 145, name: 'Zapdos', type: 'electric', type2: 'flying', stats: st(90, 90, 85, 125, 90, 100), pierce: true },
   { id: 146, name: 'Moltres', type: 'fire', type2: 'flying', stats: st(90, 100, 90, 125, 85, 90) },
-  { id: 243, name: 'Raikou', type: 'electric', stats: st(90, 85, 75, 115, 100, 115), pierce: true },
-  { id: 244, name: 'Entei', type: 'fire', stats: st(115, 115, 85, 90, 75, 100), melee: true },
-  { id: 245, name: 'Suicune', type: 'water', stats: st(100, 75, 115, 90, 115, 85) },
+  { id: 243, name: 'Raikou', type: 'electric', stats: st(90, 85, 75, 115, 100, 115), pierce: true, pressure: true },
+  { id: 244, name: 'Entei', type: 'fire', stats: st(115, 115, 85, 90, 75, 100), melee: true, pressure: true },
+  { id: 245, name: 'Suicune', type: 'water', stats: st(100, 75, 115, 90, 115, 85), pressure: true },
   { id: 151, name: 'Mew', type: 'psychic', stats: st(100, 100, 100, 100, 100, 100), copy: true },
   { id: 251, name: 'Celebi', type: 'grass', type2: 'psychic', stats: st(100, 100, 100, 100, 100, 100), healer: true },
   { id: 377, name: 'Regirock', type: 'rock', stats: st(80, 100, 200, 50, 100, 50), taunt: true },

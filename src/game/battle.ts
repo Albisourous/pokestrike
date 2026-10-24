@@ -648,6 +648,7 @@ export class Battle {
   private beams: Beam[] = []; // boss hyper-beam afterglow
   private waveSpecial: string | null = null; // banner override (invade)
   private curMod: string | null = null; // this wave's rolled affix — hexed/tailwind ride it
+  private pressureN = 0; // parity gate — every other charge tick dies under PRESSURE
   private gustSounded = false; // wind whoosh once per entry
   private shotPhys = 1; // protein pickup: contact damage this shot
   private healCd = 0; // shots until another in-battle mend can land
@@ -5571,6 +5572,9 @@ export class Battle {
   // one notch of super charge — burst + sound when it flips to READY so the
   // moment reads whether it came from a shot or a KO
   private chargeUp(p: Unit) {
+    // pressure: a living legend bends the super economy — every other
+    // charge tick is eaten, so bump supers recharge at half speed
+    if (this.enemies.some((e) => !e.dead && e.def.pressure) && (this.pressureN = (this.pressureN + 1) % 2)) return;
     if (p.cd <= 0) return;
     p.cd--;
     if (p.cd === 0 && !p.dead) {
@@ -7323,6 +7327,7 @@ export class Battle {
       e.def.boost && 'speed boost — re-arms faster every attack',
       e.def.spore && 'effect spore — contact scatters a random ailment',
       e.def.sync && 'synchronize — contact echoes its ailments to you',
+      e.def.pressure && 'pressure — supers charge at half speed while it lives',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8710,6 +8715,7 @@ export class Battle {
         u.def.boost && 'BOOST',
         u.def.spore && 'SPORE',
         u.def.sync && 'SYNC',
+        u.def.pressure && 'PRESSURE',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

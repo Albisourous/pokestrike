@@ -697,6 +697,26 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e.dotDmg = 0;
   e.def = eDef;
 
+  // pressure: every other super-charge tick is eaten while it lives
+  const legend = (b as any).enemies[1];
+  const legendDef = legend.def;
+  legend.def = { ...legendDef, pressure: true };
+  legend.dead = false;
+  legend.hp = legend.maxHp;
+  const p0 = (b as any).players[0];
+  p0.cd = 8;
+  (b as any).pressureN = 0;
+  (b as any).chargeUp(p0);
+  (b as any).chargeUp(p0);
+  ok(p0.cd === 7, `pressure eats every other tick (cd ${p0.cd} after 2)`);
+  legend.dead = true;
+  (b as any).chargeUp(p0);
+  (b as any).chargeUp(p0);
+  ok(p0.cd === 5, `dead legend frees the economy (cd ${p0.cd})`);
+  p0.cd = 0;
+  legend.dead = false;
+  legend.def = legendDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
