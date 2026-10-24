@@ -2340,14 +2340,16 @@ export class Battle {
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
-      // court chip: lava burns anyone standing in it — fire types bathe,
-      // flyers and the sky-modded sail over. The other zones are ball-only.
-      if (!e.dead && !e.airborne && !flies(e.def) && e.def.type !== 'fire' && e.def.type2 !== 'fire' && this.time - e.hzT > 0.8) {
+      // court chip: lava burns whatever stands in it, the spike strip
+      // nicks the grounded — fire types bathe, flyers sail over both.
+      if (!e.dead && !e.airborne && !flies(e.def) && this.time - e.hzT > 0.8) {
         for (const hz of this.hazards) {
-          if (hz.kind !== 'lava' || dist(e, hz) > hz.r + e.r) continue;
-          e.hzT = this.time;
-          this.hurt(e, Math.max(1, Math.round(e.maxHp * 0.04)), '#f08030');
-          break;
+          if (hz.kind === 'lava' && (e.def.type === 'fire' || e.def.type2 === 'fire')) continue;
+          if ((hz.kind === 'lava' || hz.kind === 'spikes') && dist(e, hz) <= hz.r + e.r) {
+            e.hzT = this.time;
+            this.hurt(e, Math.max(1, Math.round(e.maxHp * 0.04)), hz.kind === 'lava' ? '#f08030' : '#b8b8d0');
+            break;
+          }
         }
       }
     }

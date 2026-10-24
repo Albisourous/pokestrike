@@ -318,6 +318,11 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const hp0 = e.hp;
   (b as any).stepEnemyMovement(0.05);
   ok(e.hp < hp0, `lava chips the standing foe (${hp0} -> ${e.hp})`);
+  e.hzT = -9;
+  (b as any).hazards = [{ kind: 'spikes', x: e.x, y: e.y, r: 60 }];
+  const hp1 = e.hp;
+  (b as any).stepEnemyMovement(0.05);
+  ok(e.hp < hp1, `spike strip nicks the grounded foe (${hp1} -> ${e.hp})`);
 }
 
 {
