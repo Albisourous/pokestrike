@@ -538,7 +538,7 @@ export function fitFont(ctx: CanvasRenderingContext2D, label: string, px: number
 }
 
 // fitFont's dense-face twin — spark-grid names shrink in half-px steps
-function fitFontB(ctx: CanvasRenderingContext2D, label: string, px: number, maxW: number) {
+export function fitFontB(ctx: CanvasRenderingContext2D, label: string, px: number, maxW: number) {
   let size = px;
   ctx.font = fontB(size);
   while (size > 5 && measureW(ctx, label) > maxW) ctx.font = fontB((size -= 0.5));

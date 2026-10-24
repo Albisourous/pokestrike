@@ -45,7 +45,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, roundRect, button, pill, wrap2, MAP_MENU } from './screens';
+import { font, fontB, fitFont, fitFontB, roundRect, button, pill, wrap2, MAP_MENU } from './screens';
 
 export interface Rect {
   x: number;
@@ -6940,9 +6940,25 @@ export class Battle {
     const e = this.enemies.find((x) => x.uid === this.inspect!.uid) ?? this.players.find((x) => x.uid === this.inspect!.uid);
     if (!e || e.dead) return;
     const foe = e.side === 'enemy';
+    // the scout card names the counters — the kw tag shows the flag, these
+    // lines say what it does. First two read; the rest is fieldwork.
+    const tells = foe ? ([
+      e.def.melee && 'lunges into your team',
+      e.def.volley && 'fans its shot across three',
+      e.def.shielded && 'shell glances hits — flank pays',
+      e.def.spiky && 'bites the ball on contact',
+      e.def.regen && 'mends over time',
+      e.def.split && 'divides when KO\'d',
+      e.def.rage && 'enrages when wounded',
+      e.def.sleepy && 'dozes — the wake-up hit lands big',
+      (e.def.repel || e.repelR) && 'repels the ball',
+      e.def.raider && 'steals field drops',
+      e.def.taunt && 'blocks hits on its allies',
+      e.def.cursed && 'its KO taxes your supers',
+    ].filter(Boolean) as string[]) : [];
     const a = this.arena;
-    const w = 176;
-    const h = foe ? 76 : 100; // teammates get two lines for what the super does
+    const w = 200; // dual-type tags need the room a 176 card never had
+    const h = foe ? 76 + (tells.length > 1 ? 10 : 0) : 100; // teammates get two lines for what the super does
     const cx = Math.min(Math.max(e.x - w / 2, a.x + 6), a.x + a.w - w - 6);
     const cy = Math.max(a.y + 8, e.y - e.r - h - 16);
     ctx.save();
@@ -6973,8 +6989,12 @@ export class Battle {
     ctx.fillText(typeStr, cx + w - 10, cy + 16);
     ctx.textAlign = 'left';
     ctx.fillStyle = '#f0e6c8';
-    const nameStr = `${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}  LV${e.lvl}`;
-    fitFont(ctx, nameStr, 9, w - 60 - typeW - 8);
+    let nameStr = `${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}  LV${e.lvl}`;
+    // the LV drops before the name eats the type tag — fitFont floors at 6px
+    if (fitFont(ctx, nameStr, 9, w - 60 - typeW - 8) <= 6 && ctx.measureText(nameStr).width > w - 60 - typeW - 8) {
+      nameStr = `${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}`;
+      fitFont(ctx, nameStr, 9, w - 60 - typeW - 8);
+    }
     ctx.fillText(nameStr, cx + 50, cy + 16);
     // hp bar — the number players actually scout for
     ctx.fillStyle = '#2a3050';
@@ -7008,25 +7028,13 @@ export class Battle {
       fitFont(ctx, tag, 8, w - 60);
       ctx.fillText(tag, cx + 50, cy + 58);
       ctx.fillStyle = '#8890b8';
-      ctx.font = fontB(7);
-      // the scout card names the counters — the kw tag shows the flag, this
-      // line says what it does. First two flags read; the rest is fieldwork.
-      const tells = [
-        e.def.melee && 'lunges into your team',
-        e.def.volley && 'fans its shot across three',
-        e.def.shielded && 'shell glances hits — flank pays',
-        e.def.spiky && 'bites the ball on contact',
-        e.def.regen && 'mends over time',
-        e.def.split && 'divides when KO\'d',
-        e.def.rage && 'enrages when wounded',
-        e.def.sleepy && 'dozes — the wake-up hit lands big',
-        (e.def.repel || e.repelR) && 'repels the ball',
-        e.def.raider && 'steals field drops',
-        e.def.taunt && 'blocks hits on its allies',
-        e.def.cursed && 'its KO taxes your supers',
-      ].filter(Boolean) as string[];
-      fitFont(ctx, tells.length ? tells.slice(0, 2).join(' · ') : 'fires a projectile', 7, w - 60);
-      ctx.fillText(tells.length ? tells.slice(0, 2).join(' · ') : 'fires a projectile', cx + 50, cy + 70);
+      const line0 = tells.length ? tells[0] : 'fires a projectile';
+      fitFontB(ctx, line0, 7, w - 60);
+      ctx.fillText(line0, cx + 50, cy + 70);
+      if (tells.length > 1) {
+        fitFontB(ctx, tells[1], 7, w - 60);
+        ctx.fillText(tells[1], cx + 50, cy + 80);
+      }
     } else {
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
