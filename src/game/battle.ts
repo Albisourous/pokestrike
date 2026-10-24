@@ -6006,7 +6006,8 @@ export class Battle {
     for (const p of this.players) {
       if (p.dead) continue;
       if (p.def.taunt) return p;
-      const d = e.def.hunter ? p.hp : dist(e, p);
+      // snipers pick the FARTHEST mon — camping the back row stops working
+      const d = e.def.hunter ? p.hp : e.def.snipe ? -dist(e, p) : dist(e, p);
       if (d < bd) { bd = d; best = p; }
     }
     return best;
@@ -7814,6 +7815,7 @@ export class Battle {
       e.def.moxie && 'moxie — every KO it lands sharpens its bite',
       e.def.veil && 'sand veil — strikes whiff in a sandstorm',
       e.def.filter && 'filter — super-effective hits lose their edge',
+      e.def.snipe && 'sniper — marks your farthest mon',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9259,6 +9261,7 @@ export class Battle {
         u.def.moxie && 'MOXIE',
         u.def.veil && 'VEIL',
         u.def.filter && 'FILTER',
+        u.def.snipe && 'SNIPE',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

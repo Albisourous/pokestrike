@@ -83,6 +83,7 @@ export interface SpeciesDef {
   moxie?: boolean; // Moxie: each KO it causes sharpens its own attacks
   veil?: Weather; // Sand Veil: strikes whiff a quarter of the time in its sky
   filter?: boolean; // Filter/Solid Rock: super-effective hits deal 70%
+  snipe?: boolean; // Sniper: its attacks mark your farthest mon
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -764,13 +765,13 @@ export const EVOS: SpeciesDef[] = [
   { id: 87, name: 'Dewgong', type: 'water', stats: st(90, 70, 80, 70, 95, 70) },
   { id: 91, name: 'Cloyster', type: 'water', stats: st(50, 95, 180, 85, 45, 70), shielded: true },
   { id: 106, name: 'Hitmonlee', type: 'fighting', stats: st(50, 120, 53, 35, 110, 87), melee: true, counter: true },
-  { id: 117, name: 'Seadra', type: 'water', stats: st(55, 65, 95, 95, 45, 85), toxic: true, evolvesTo: 230 },
+  { id: 117, name: 'Seadra', type: 'water', stats: st(55, 65, 95, 95, 45, 85), toxic: true, snipe: true, evolvesTo: 230 },
   { id: 166, name: 'Ledian', type: 'flying', stats: st(55, 35, 50, 55, 110, 85), melee: true },
   { id: 168, name: 'Ariados', type: 'poison', stats: st(70, 90, 70, 60, 60, 40), melee: true },
   { id: 188, name: 'Skiploom', type: 'grass', type2: 'flying', stats: st(55, 45, 50, 45, 65, 80), evolvesTo: 189 },
   { id: 189, name: 'Jumpluff', type: 'grass', type2: 'flying', stats: st(75, 55, 70, 55, 95, 110) },
   { id: 192, name: 'Sunflora', type: 'grass', stats: st(75, 75, 55, 105, 85, 30) },
-  { id: 224, name: 'Octillery', type: 'water', stats: st(75, 105, 75, 105, 75, 45), pierce: true, volley: true },
+  { id: 224, name: 'Octillery', type: 'water', stats: st(75, 105, 75, 105, 75, 45), pierce: true, volley: true, snipe: true },
   { id: 247, name: 'Pupitar', type: 'rock', stats: st(70, 84, 70, 65, 70, 51), evolvesTo: 248 },
   { id: 266, name: 'Silcoon', type: 'grass', stats: st(50, 35, 55, 25, 25, 15), evolvesTo: 267 },
   { id: 267, name: 'Beautifly', type: 'flying', stats: st(60, 70, 50, 100, 50, 65) },
