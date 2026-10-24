@@ -5906,6 +5906,12 @@ export class Battle {
     }
     p.hp -= dmg;
     if (dmg > 0) this.waveFlawless = false;
+    // leech foes feed on the hit — the wound pays them back a sip of HP
+    if (src?.def.leech && !src.dead && dmg > 0) {
+      const sip = Math.max(1, Math.round(dmg * 0.5));
+      src.hp = Math.min(src.maxHp, src.hp + sip);
+      this.pushText({ x: src.x, y: src.y - src.r - 8, text: `+${sip}`, t: 0.8, color: '#6fdc6f', big: false });
+    }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
     // the map early-returns before texts draw — a stray orb hit there
@@ -7116,6 +7122,7 @@ export class Battle {
       e.def.mirror && 'transformed into your strongest mon',
       e.def.fuse && 'detonates at zero — blast hits everything',
       e.def.hunter && 'hunts your weakest mon',
+      e.def.leech && 'heals off every hit it lands',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8439,6 +8446,7 @@ export class Battle {
         u.def.mirror && 'MIRROR',
         u.def.fuse && 'FUSE',
         u.def.hunter && 'HUNTER',
+        u.def.leech && 'LEECH',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

@@ -29,6 +29,7 @@ export interface SpeciesDef {
   mirror?: boolean; // Transform: copies the strongest standing mon's typing + stats (keeps its own HP)
   fuse?: boolean; // self-destructs when its countdown ends — the blast hits BOTH sides; kill it fast or bait it into the pack
   hunter?: boolean; // pack predator — targets the weakest mon, not the nearest; guard the low one
+  leech?: boolean; // Leech Life: its hits mend its own wounds — bursts beat chip trades
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -226,7 +227,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), melee: true, evolvesTo: 67 },
   { id: 21, name: 'Spearow', type: 'flying', type2: 'normal', stats: st(40, 60, 30, 31, 31, 70), melee: true, evolvesTo: 22 },
   { id: 163, name: 'Hoothoot', type: 'flying', type2: 'normal', stats: st(60, 30, 30, 36, 56, 50), melee: true, evolvesTo: 164 },
-  { id: 46, name: 'Paras', type: 'grass', type2: 'poison', stats: st(35, 70, 55, 45, 55, 25), melee: true, evolvesTo: 47 },
+  { id: 46, name: 'Paras', type: 'grass', type2: 'poison', stats: st(35, 70, 55, 45, 55, 25), melee: true, leech: true, evolvesTo: 47 },
   { id: 48, name: 'Venonat', type: 'poison', stats: st(60, 55, 50, 40, 55, 45), evolvesTo: 49 },
   { id: 69, name: 'Bellsprout', type: 'grass', type2: 'poison', stats: st(50, 75, 35, 70, 30, 40), evolvesTo: 70 },
   { id: 102, name: 'Exeggcute', type: 'grass', type2: 'psychic', stats: st(60, 40, 80, 60, 45, 40), split: true, evolvesTo: 103 },
@@ -641,7 +642,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 42, name: 'Golbat', type: 'poison', type2: 'flying', stats: st(75, 80, 70, 65, 75, 90), melee: true, evolvesTo: 169 },
   { id: 44, name: 'Gloom', type: 'grass', type2: 'poison', stats: st(60, 65, 70, 85, 75, 40), evolvesTo: [45, 182] },
   { id: 45, name: 'Vileplume', type: 'grass', type2: 'poison', stats: st(75, 80, 85, 110, 90, 50), regen: true },
-  { id: 47, name: 'Parasect', type: 'grass', type2: 'poison', stats: st(60, 95, 80, 60, 80, 30), melee: true },
+  { id: 47, name: 'Parasect', type: 'grass', type2: 'poison', stats: st(60, 95, 80, 60, 80, 30), melee: true, leech: true },
   { id: 49, name: 'Venomoth', type: 'poison', stats: st(70, 65, 60, 90, 75, 90) },
   { id: 51, name: 'Dugtrio', type: 'rock', stats: st(35, 100, 50, 50, 70, 120), melee: true },
   { id: 53, name: 'Persian', type: 'normal', stats: st(65, 70, 60, 65, 65, 115), pierce: true, raider: true },

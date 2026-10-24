@@ -422,6 +422,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     }
   }
 
+  // leech foes sip back the wounds they deal
+  e.def = { ...e.def, leech: true };
+  e.hp = Math.max(1, e.maxHp - 30);
+  const leechHp0 = e.hp;
+  const victim = (b as any).players.find((p: any) => !p.dead);
+  (b as any).damagePlayer(victim, 10, e);
+  ok(e.hp > leechHp0, `leech mends off the hit (${leechHp0} -> ${e.hp})`);
+  e.def = { ...e.def, leech: undefined };
+  e.hp = e.maxHp;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
