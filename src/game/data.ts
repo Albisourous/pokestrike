@@ -81,6 +81,7 @@ export interface SpeciesDef {
   friendGuard?: boolean; // Friend Guard: living carrier softens hits on teammates
   weakArmor?: boolean; // Weak Armor: each hit speeds it up and softens it
   moxie?: boolean; // Moxie: each KO it causes sharpens its own attacks
+  veil?: Weather; // Sand Veil: strikes whiff a quarter of the time in its sky
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -746,7 +747,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 310, name: 'Manectric', type: 'electric', stats: st(70, 75, 60, 105, 60, 105), shock: true },
   { id: 319, name: 'Sharpedo', type: 'water', stats: st(70, 120, 40, 95, 40, 95), melee: true, boost: true },
   { id: 329, name: 'Vibrava', type: 'rock', type2: 'flying', stats: st(50, 70, 50, 50, 50, 70) },
-  { id: 332, name: 'Cacturne', type: 'grass', type2: 'ghost', stats: st(70, 115, 60, 115, 60, 55), melee: true },
+  { id: 332, name: 'Cacturne', type: 'grass', type2: 'ghost', stats: st(70, 115, 60, 115, 60, 55), melee: true, veil: 'sand' },
   { id: 342, name: 'Crawdaunt', type: 'water', type2: 'ghost', stats: st(63, 120, 85, 90, 55, 55), melee: true },
   { id: 354, name: 'Banette', type: 'ghost', stats: st(64, 115, 65, 83, 63, 65), pierce: true, bond: true },
   { id: 356, name: 'Dusclops', type: 'ghost', stats: st(40, 70, 130, 60, 130, 25), taunt: true, evolvesTo: 477 },
@@ -756,7 +757,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 12, name: 'Butterfree', type: 'flying', stats: st(60, 45, 50, 90, 80, 70), confuse: true },
   { id: 14, name: 'Kakuna', type: 'poison', stats: st(45, 25, 50, 25, 25, 35), shielded: true, evolvesTo: 15 },
   { id: 15, name: 'Beedrill', type: 'poison', stats: st(65, 90, 40, 45, 80, 75), melee: true, venom: true },
-  { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true, spiky: true },
+  { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true, spiky: true, veil: 'sand' },
   { id: 30, name: 'Nidorina', type: 'poison', stats: st(70, 62, 67, 55, 55, 56), evolvesTo: 31 },
   { id: 31, name: 'Nidoqueen', type: 'poison', type2: 'rock', stats: st(90, 92, 87, 75, 85, 76), melee: true },
   { id: 87, name: 'Dewgong', type: 'water', stats: st(90, 70, 80, 70, 95, 70) },

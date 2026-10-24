@@ -3490,6 +3490,13 @@ export class Battle {
       sfx('bounce');
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
+    // sand veil: in its own weather the carrier's a mirage — the strike
+    // whiffs clean (the collider still bounces the ball off its body)
+    if (e.def.veil === this.weather && this.rng() < 0.25) {
+      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'MISS!', t: 0.7, color: '#c8b88a', big: false });
+      sfx('bounce');
+      return;
+    }
     // wonder guard shrugs off anything that isn't super-effective — the
     // shove still lands, so walls and lava stay on the table
     if (e.def.wguard && mult <= 1 && !shooter.def.breaker) {
@@ -7773,6 +7780,7 @@ export class Battle {
       e.def.chameleon && 'color change — its hide becomes the type that hit it',
       e.def.weakArmor && 'weak armor — hits crack it: faster but softer',
       e.def.moxie && 'moxie — every KO it lands sharpens its bite',
+      e.def.veil && 'sand veil — strikes whiff in a sandstorm',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9216,6 +9224,7 @@ export class Battle {
         u.def.chameleon && 'CAMO',
         u.def.weakArmor && 'W-ARMOR',
         u.def.moxie && 'MOXIE',
+        u.def.veil && 'VEIL',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

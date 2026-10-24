@@ -251,3 +251,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `b522503` | battle | FRIEND GUARD — Cleffa/Igglybuff soften hits on teammates while alive | `git revert <this commit>` |
 | 2026-10-25 | `8deacb8` | battle | WEAK ARMOR — Vanillite/Magcargo crack on hit: faster but softer | `git revert <this commit>` |
 | 2026-10-25 | `da38ebb` | battle | MOXIE — Krookodile/Mightyena sharpen their bite per KO they cause | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | SAND VEIL — Sandslash/Cacturne whiff strikes inside a sandstorm | `git revert <this commit>` |
