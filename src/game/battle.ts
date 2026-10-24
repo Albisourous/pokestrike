@@ -3475,7 +3475,7 @@ export class Battle {
     }
     // supersonic: the shriek scrambles the next launch — the ghost wobbles
     // honestly, but tight banks get dicey for a round
-    if (e.def.confuse && !shooter.dead && this.rng() < 0.3) {
+    if (e.def.confuse && !shooter.dead && !shooter.def.tempo && this.rng() < 0.3) {
       shooter.confuseT = 1;
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'CONFUSED!', t: 0.9, color: '#c8a8f8', big: false });
     }

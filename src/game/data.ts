@@ -70,6 +70,7 @@ export interface SpeciesDef {
   lay?: boolean; // lobs spike patches into your half instead of attacking
   confuse?: boolean; // Supersonic: contact can rattle the striker's next aim
   anchor?: boolean; // too heavy to shove — knockback and blast leave it planted
+  tempo?: boolean; // Own Tempo: it keeps its head — confusion can't stick
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -123,7 +124,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 298, name: 'Azurill', type: 'normal', stats: st(50, 20, 40, 20, 40, 20), healer: true, evolvesTo: 183 },
   { id: 300, name: 'Skitty', type: 'normal', stats: st(50, 45, 45, 35, 35, 50), evolvesTo: 301, charm: true },
   { id: 307, name: 'Meditite', type: 'fighting', type2: 'psychic', stats: st(30, 40, 55, 40, 55, 60), melee: true, evolvesTo: 308 },
-  { id: 325, name: 'Spoink', type: 'psychic', stats: st(60, 25, 35, 70, 80, 60), evolvesTo: 326 },
+  { id: 325, name: 'Spoink', type: 'psychic', stats: st(60, 25, 35, 70, 80, 60), tempo: true, evolvesTo: 326 },
   { id: 360, name: 'Wynaut', type: 'psychic', stats: st(95, 23, 48, 23, 48, 23), evolvesTo: 202 },
   { id: 371, name: 'Bagon', type: 'flying', stats: st(45, 75, 60, 40, 30, 50), melee: true, evolvesTo: 372 },
   { id: 374, name: 'Beldum', type: 'psychic', stats: st(40, 55, 80, 35, 60, 30), evolvesTo: 375 },
@@ -132,7 +133,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 158, name: 'Totodile', type: 'water', stats: st(50, 65, 64, 44, 48, 43), evolvesTo: 159 },
   { id: 252, name: 'Treecko', type: 'grass', stats: st(40, 45, 35, 65, 55, 70), evolvesTo: 253 },
   { id: 255, name: 'Torchic', type: 'fire', stats: st(45, 60, 40, 70, 50, 45), evolvesTo: 256 },
-  { id: 258, name: 'Mudkip', type: 'water', stats: st(50, 70, 50, 50, 50, 40), evolvesTo: 259 },
+  { id: 258, name: 'Mudkip', type: 'water', stats: st(50, 70, 50, 50, 50, 40), damp: true, evolvesTo: 259 },
   { id: 173, name: 'Cleffa', type: 'normal', stats: st(50, 25, 28, 45, 55, 15), healer: true, evolvesTo: 35 },
   { id: 175, name: 'Togepi', type: 'normal', stats: st(35, 20, 65, 40, 65, 20), healer: true, grace: true, evolvesTo: 176 },
   { id: 161, name: 'Sentret', type: 'normal', stats: st(35, 46, 34, 35, 45, 20), evolvesTo: 162 },
