@@ -76,6 +76,7 @@ export interface SpeciesDef {
   breaker?: boolean; // Mold Breaker: its hits ignore Wonder Guard + Multiscale
   healBlock?: boolean; // Heal Block: while it lives, your team can't mend
   bond?: boolean; // Destiny Bond: a direct KO takes the striker down too
+  armor?: boolean; // Battle/Shell Armor: critical hits glance to normal
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -300,7 +301,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 128, name: 'Tauros', type: 'normal', stats: st(75, 100, 95, 40, 70, 110), melee: true, rage: true, charge: true },
   { id: 137, name: 'Porygon', type: 'normal', stats: st(65, 60, 70, 85, 75, 40), beam: true },
   { id: 138, name: 'Omanyte', type: 'water', type2: 'rock', stats: st(35, 40, 100, 90, 55, 35), evolvesTo: 139 },
-  { id: 140, name: 'Kabuto', type: 'rock', type2: 'water', stats: st(30, 80, 90, 55, 45, 55), evolvesTo: 141 },
+  { id: 140, name: 'Kabuto', type: 'rock', type2: 'water', stats: st(30, 80, 90, 55, 45, 55), evolvesTo: 141, armor: true },
   { id: 147, name: 'Dratini', type: 'flying', stats: st(41, 64, 45, 50, 50, 50), evolvesTo: 148 },
   { id: 177, name: 'Natu', type: 'flying', type2: 'psychic', stats: st(40, 50, 45, 70, 45, 70), blink: true, evolvesTo: 178 },
   { id: 198, name: 'Murkrow', type: 'ghost', type2: 'flying', stats: st(60, 85, 42, 85, 42, 91), melee: true, evolvesTo: 430, prank: true },
@@ -534,7 +535,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 445, name: 'Garchomp', type: 'rock', type2: 'flying', stats: st(108, 130, 95, 80, 85, 102), melee: true, pierce: true },
   { id: 448, name: 'Lucario', type: 'fighting', stats: st(70, 110, 70, 115, 70, 90), melee: true, pierce: true },
   { id: 450, name: 'Hippowdon', type: 'rock', stats: st(108, 112, 118, 68, 72, 47), taunt: true, skyFor: 'sand' },
-  { id: 452, name: 'Drapion', type: 'poison', type2: 'ghost', stats: st(70, 90, 110, 60, 75, 95), melee: true },
+  { id: 452, name: 'Drapion', type: 'poison', type2: 'ghost', stats: st(70, 90, 110, 60, 75, 95), melee: true, armor: true },
   { id: 454, name: 'Toxicroak', type: 'poison', type2: 'fighting', stats: st(83, 106, 65, 86, 65, 85), melee: true, spiky: true },
   { id: 460, name: 'Abomasnow', type: 'grass', type2: 'water', stats: st(90, 92, 75, 92, 85, 60), taunt: true },
   { id: 461, name: 'Weavile', type: 'ghost', type2: 'water', stats: st(70, 120, 65, 45, 85, 125), pierce: true, melee: true },
@@ -718,7 +719,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 279, name: 'Pelipper', type: 'flying', type2: 'water', stats: st(60, 50, 100, 95, 70, 65) },
   { id: 334, name: 'Altaria', type: 'flying', stats: st(75, 70, 90, 70, 105, 80) },
   { id: 80, name: 'Slowbro', type: 'psychic', type2: 'water', stats: st(95, 75, 110, 100, 80, 30) },
-  { id: 99, name: 'Kingler', type: 'water', stats: st(55, 130, 115, 50, 50, 75), melee: true },
+  { id: 99, name: 'Kingler', type: 'water', stats: st(55, 130, 115, 50, 50, 75), melee: true, armor: true },
   { id: 119, name: 'Seaking', type: 'water', stats: st(80, 92, 65, 65, 80, 68) },
   { id: 139, name: 'Omastar', type: 'water', type2: 'rock', stats: st(70, 60, 125, 115, 70, 55) },
   { id: 141, name: 'Kabutops', type: 'rock', type2: 'water', stats: st(60, 115, 105, 65, 70, 80), melee: true },

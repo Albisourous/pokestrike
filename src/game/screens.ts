@@ -2430,6 +2430,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'ANCHOR foes cannot be shoved — no herding them into hazards',
       'H-BLOCK foes stop your heals — kill the blocker to mend',
       'BOND foes drag down whoever lands the KO — finish them with hazards or a catch',
+      'ARMOR foes shrug off crits — out-muscle them straight',
       'P-HEAL foes mend off your poison — burn them instead',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],

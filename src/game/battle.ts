@@ -3023,8 +3023,14 @@ export class Battle {
     if (e.boss) d *= 1 + this.bossSlayer;
     let crit = false;
     if (this.critCh > 0 && this.rng() < this.critCh) {
-      crit = true;
-      d *= 2;
+      if (e.def.armor) {
+        // battle armor: the crit glances off the shell — crit-built teams
+        // get a counter, and the tag warns before you commit the angle
+        this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'SHELL ARMOR!', t: 0.8, color: '#9aa7b8', big: false });
+      } else {
+        crit = true;
+        d *= 2;
+      }
     }
     d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1));
     // aegis ward: a shielded foe eats the whole hit — crack the guardian
@@ -7719,6 +7725,7 @@ export class Battle {
       e.def.forecast && 'forecast — its type wears the sky',
       e.def.healBlock && 'heal block — your team can\'t mend while it lives',
       e.def.bond && 'destiny bond — a direct KO takes the striker with it',
+      e.def.armor && 'shell armor — critical hits glance off',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9158,6 +9165,7 @@ export class Battle {
         u.def.forecast && 'FORECAST',
         u.def.healBlock && 'H-BLOCK',
         u.def.bond && 'BOND',
+        u.def.armor && 'ARMOR',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
