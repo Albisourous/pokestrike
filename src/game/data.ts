@@ -151,7 +151,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 406, name: 'Budew', type: 'grass', stats: st(40, 30, 35, 50, 70, 55), evolvesTo: 315, toxic: true },
   { id: 408, name: 'Cranidos', type: 'rock', stats: st(67, 125, 40, 30, 30, 58), melee: true, evolvesTo: 409 },
   { id: 410, name: 'Shieldon', type: 'rock', stats: st(30, 42, 118, 42, 88, 30), shielded: true, evolvesTo: 411 },
-  { id: 417, name: 'Pachirisu', type: 'electric', stats: st(60, 45, 70, 45, 90, 95), pierce: true },
+  { id: 417, name: 'Pachirisu', type: 'electric', stats: st(60, 45, 70, 45, 90, 95), pierce: true, taunt: true },
   { id: 418, name: 'Buizel', type: 'water', stats: st(55, 65, 35, 60, 30, 85), pierce: true, evolvesTo: 419 },
   { id: 425, name: 'Drifloon', type: 'ghost', stats: st(90, 50, 34, 60, 44, 70), cursed: true, evolvesTo: 426 },
   { id: 427, name: 'Buneary', type: 'normal', stats: st(55, 66, 44, 44, 56, 85), pierce: true, limber: true, evolvesTo: 428 },

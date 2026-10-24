@@ -5872,11 +5872,13 @@ export class Battle {
     // min-scan — the sorted list exists for multi-target attacks; the
     // per-frame telegraph only ever wants the closest one. Pack hunters
     // smell blood instead: they track the weakest link, and the leash
-    // telegraph rides the same pick so the warning stays honest
+    // telegraph rides the same pick so the warning stays honest. A living
+    // bait mon (Follow Me) pulls every lock — even hunters take the bait
     let best: Unit | undefined;
     let bd = Infinity;
     for (const p of this.players) {
       if (p.dead) continue;
+      if (p.def.taunt) return p;
       const d = e.def.hunter ? p.hp : dist(e, p);
       if (d < bd) { bd = d; best = p; }
     }
