@@ -215,3 +215,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `78b98ad` | battle | PICKUP ability — scavenger mons nose out bag consumables post-wave | `git revert <this commit>` |
 | 2026-10-25 | `f33950e` | battle | THICK FAT half lava chip + LIMBER para-immune — player flags | `git revert <this commit>` |
 | 2026-10-25 | `dd86210` | battle | player-side STATIC/POISON PT + foe paralysis eats attacks | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | player FLAME BODY + foe burns now chip and dull attacks | `git revert <this commit>` |

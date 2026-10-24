@@ -5684,6 +5684,10 @@ export class Battle {
         if (e.def.pheal) e.hp = Math.min(e.maxHp, e.hp + e.dotDmg);
         else this.hurt(e, e.dotDmg, '#a040a0');
       }
+      if (e.burnT > 0 && !e.dead) {
+        e.burnT--;
+        this.hurt(e, Math.max(1, Math.round(e.maxHp * 0.04)), '#f08030');
+      }
     }
     // venom works both ways — a poisoned mon bleeds out the same ticks,
     // and a burned one singes until the flame wears out
@@ -5971,6 +5975,7 @@ export class Battle {
 
   private foeAtk(e: Unit) {
     return e.def.stats.atk
+      * (e.burnT > 0 ? 0.75 : 1) // a singed foe swings dulled — same burn rule the ball plays by
       * (e.def.guts && (e.dotTicks > 0 || e.burnT > 0) ? 1.5 : 1)
       // pack alpha: a living leader rallies every packmate's hits — the
       // leader itself doesn't march under its own flag
@@ -6214,6 +6219,10 @@ export class Battle {
         src.dotTicks = Math.max(src.dotTicks, 4);
         src.dotDmg = Math.max(src.dotDmg, Math.ceil(src.maxHp * 0.06));
         this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'POISON PT!', t: 0.9, color: '#a040a0', big: false });
+      }
+      if (p.def.flame && this.rng() < 0.3) {
+        src.burnT = Math.max(src.burnT, 5);
+        this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'FLAME BODY!', t: 0.9, color: '#f08030', big: false });
       }
     }
     if (settings().dmgNums)

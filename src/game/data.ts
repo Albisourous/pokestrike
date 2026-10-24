@@ -200,7 +200,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 599, name: 'Klink', type: 'rock', stats: st(40, 55, 70, 45, 60, 30), split: true, evolvesTo: 600 },
   { id: 602, name: 'Tynamo', type: 'electric', stats: st(35, 55, 40, 45, 40, 60), evolvesTo: 603 },
   { id: 605, name: 'Elgyem', type: 'psychic', stats: st(55, 55, 55, 85, 55, 30), evolvesTo: 606 },
-  { id: 607, name: 'Litwick', type: 'ghost', type2: 'fire', stats: st(50, 30, 55, 65, 55, 20), evolvesTo: 608, cursed: true },
+  { id: 607, name: 'Litwick', type: 'ghost', type2: 'fire', stats: st(50, 30, 55, 65, 55, 20), evolvesTo: 608, cursed: true, flame: true },
   { id: 610, name: 'Axew', type: 'flying', stats: st(46, 87, 60, 30, 40, 57), evolvesTo: 611, melee: true },
   { id: 613, name: 'Cubchoo', type: 'water', stats: st(55, 70, 40, 60, 40, 40), evolvesTo: 614, melee: true },
   { id: 616, name: 'Shelmet', type: 'grass', stats: st(50, 40, 85, 40, 65, 25), evolvesTo: 617 },
@@ -210,7 +210,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 627, name: 'Rufflet', type: 'normal', type2: 'flying', stats: st(70, 83, 50, 37, 50, 60), evolvesTo: 628, melee: true },
   { id: 629, name: 'Vullaby', type: 'ghost', type2: 'flying', stats: st(70, 55, 75, 45, 65, 60), evolvesTo: 630 },
   { id: 633, name: 'Deino', type: 'ghost', type2: 'flying', stats: st(52, 65, 50, 45, 50, 38), evolvesTo: 634, melee: true },
-  { id: 636, name: 'Larvesta', type: 'grass', type2: 'fire', stats: st(55, 85, 55, 50, 55, 60), evolvesTo: 637 },
+  { id: 636, name: 'Larvesta', type: 'grass', type2: 'fire', stats: st(55, 85, 55, 50, 55, 60), evolvesTo: 637, flame: true },
 
 ];
 

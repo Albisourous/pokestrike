@@ -3007,6 +3007,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.limber && 'LIMBER — NO PARALYSIS',
     def.shock && 'STATIC — HITS JOLT BACK',
     def.toxic && 'POISON POINT — HITS VENOM BACK',
+    def.flame && 'FLAME BODY — HITS SINGE BACK',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;
