@@ -8538,6 +8538,18 @@ export class Battle {
             ctx.beginPath();
             ctx.arc(hx, hy, 6 + Math.sin(this.time * 8) * 1.5, 0, Math.PI * 2);
             ctx.stroke();
+            // the matchup badge rides the ring — the aim phase is when
+            // the type chart can still change your mind
+            const eff = typeMult(strikeType(u.def, foeHit!.def), foeHit!.def);
+            if (eff > 1.01 || eff < 0.99) {
+              const tag = eff > 1.01 ? 'SE' : 'NVE';
+              ctx.font = font(8);
+              ctx.lineWidth = 3;
+              ctx.strokeStyle = '#000';
+              ctx.strokeText(tag, hx, hy - 12);
+              ctx.fillStyle = eff > 1.01 ? '#9df0ff' : '#ff6b6b';
+              ctx.fillText(tag, hx, hy - 12);
+            }
             // rebound leg: the ball banks off the foe's face the way
             // circle-contact does — second target plans before the pull
             if (foeHit && !u.def.pierce) {
