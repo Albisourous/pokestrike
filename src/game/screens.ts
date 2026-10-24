@@ -82,8 +82,10 @@ const BAG_CHIP_H = 46;
 const BAG_CHIP_GAP = 8;
 export const BAG_ROW = { x: 0, y: 178, w: W, h: 62 };
 export function bagChipRect(i: number, n: number) {
-  const rowW = n * BAG_CHIP_W + (n - 1) * BAG_CHIP_GAP;
-  return { x: W / 2 - rowW / 2 + i * (BAG_CHIP_W + BAG_CHIP_GAP), y: BAG_ROW.y + 12, w: BAG_CHIP_W, h: BAG_CHIP_H };
+  // a stocked-everything save can carry 7+ — shrink chips before bleeding off-screen
+  const cw = Math.min(BAG_CHIP_W, Math.floor((W - 24 - (n - 1) * BAG_CHIP_GAP) / n));
+  const rowW = n * cw + (n - 1) * BAG_CHIP_GAP;
+  return { x: W / 2 - rowW / 2 + i * (cw + BAG_CHIP_GAP), y: BAG_ROW.y + 12, w: cw, h: BAG_CHIP_H };
 }
 // stocked bag items in chip order — chip i ↔ items[i], so hit tests and the
 // draw both walk this one list
@@ -4450,19 +4452,24 @@ function drawBagRow(
     if (on) rim(ctx, cr, 8, GOLD, 2);
     void loadItem(it.item);
     const img = itemSprite(it.item);
+    const iconOnly = cr.w < 60; // crowded rows go icon+badge — the desc line names it
     if (img) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       ctx.shadowColor = 'rgba(0,0,0,0.5)';
       ctx.shadowBlur = 5;
       ctx.shadowOffsetY = 2;
-      ctx.drawImage(img, cr.x + cr.w / 2 - 11, cr.y + 5, 22, 22);
+      const iw = iconOnly ? 26 : 22;
+      ctx.drawImage(img, cr.x + cr.w / 2 - iw / 2, cr.y + (iconOnly ? 9 : 5), iw, iw);
       ctx.restore();
     }
-    ctx.font = fontB(7);
-    ctx.fillStyle = on ? INK : INK_SOFT;
-    ctx.textAlign = 'center';
-    ctx.fillText(it.name.toUpperCase(), cr.x + cr.w / 2, cr.y + 37);
+    if (!iconOnly) {
+      ctx.font = fontB(7);
+      ctx.fillStyle = on ? INK : INK_SOFT;
+      ctx.textAlign = 'center';
+      fitFontB(ctx, it.name.toUpperCase(), 7, cr.w - 6);
+      ctx.fillText(it.name.toUpperCase(), cr.x + cr.w / 2, cr.y + 37);
+    }
     // ×n stock badge top-right — gold-lit when the chip is picked
     const n = `×${stock[it.id] ?? 0}`;
     ctx.font = fontB(7);
@@ -4644,6 +4651,9 @@ export function drawDraft(
 
     // evolution hint + trait tag sit with the stats — Magikarp is secretly
     // Gyarados; PIERCE/COPY hold the right edge of the same line
+    const tagW = def.pierce || def.copy
+      ? (() => { ctx.font = font(8); return ctx.measureText(def.pierce ? 'PIERCE' : 'COPY').width + 8; })()
+      : 0;
     if (def.evolvesTo != null) {
       const nx = Array.isArray(def.evolvesTo)
         ? `${def.evolvesTo.length} FORMS`
@@ -4652,6 +4662,7 @@ export function drawDraft(
         ctx.textAlign = 'left';
         ctx.font = fontB(9);
         ctx.fillStyle = ACCENT;
+        fitFontB(ctx, `→ ${nx}`, 9, r.w - 22 - tagW);
         ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 198);
       }
     }
