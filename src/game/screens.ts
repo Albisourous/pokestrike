@@ -2394,6 +2394,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'SOS callers cry for backup — silence them before the field floods',
       'mirror blobs transform into your strongest — feed them a weak lead',
       'FUSE foes detonate at zero — kill fast, or bait the blast into its pack',
+      'HUNTER foes stalk your weakest — park a tank between them',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

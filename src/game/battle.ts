@@ -5623,12 +5623,14 @@ export class Battle {
 
   private nearestPlayer(e: Unit) {
     // min-scan — the sorted list exists for multi-target attacks; the
-    // per-frame telegraph only ever wants the closest one
+    // per-frame telegraph only ever wants the closest one. Pack hunters
+    // smell blood instead: they track the weakest link, and the leash
+    // telegraph rides the same pick so the warning stays honest
     let best: Unit | undefined;
     let bd = Infinity;
     for (const p of this.players) {
       if (p.dead) continue;
-      const d = dist(e, p);
+      const d = e.def.hunter ? p.hp : dist(e, p);
       if (d < bd) { bd = d; best = p; }
     }
     return best;
@@ -7113,6 +7115,7 @@ export class Battle {
       e.def.summon && 'calls for help instead of attacking',
       e.def.mirror && 'transformed into your strongest mon',
       e.def.fuse && 'detonates at zero — blast hits everything',
+      e.def.hunter && 'hunts your weakest mon',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8435,6 +8438,7 @@ export class Battle {
         u.def.summon && 'SOS',
         u.def.mirror && 'MIRROR',
         u.def.fuse && 'FUSE',
+        u.def.hunter && 'HUNTER',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

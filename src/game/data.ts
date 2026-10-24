@@ -28,6 +28,7 @@ export interface SpeciesDef {
   summon?: boolean; // SOS caller: cries for a weak kid instead of attacking — kill it before the field floods
   mirror?: boolean; // Transform: copies the strongest standing mon's typing + stats (keeps its own HP)
   fuse?: boolean; // self-destructs when its countdown ends — the blast hits BOTH sides; kill it fast or bait it into the pack
+  hunter?: boolean; // pack predator — targets the weakest mon, not the nearest; guard the low one
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -261,7 +262,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 216, name: 'Teddiursa', type: 'normal', stats: st(60, 80, 50, 50, 50, 40), melee: true, evolvesTo: 217 },
   { id: 228, name: 'Houndour', type: 'fire', type2: 'ghost', stats: st(45, 60, 30, 80, 50, 65), evolvesTo: 229 },
   { id: 231, name: 'Phanpy', type: 'rock', stats: st(90, 60, 60, 40, 40, 40), melee: true, evolvesTo: 232 },
-  { id: 261, name: 'Poochyena', type: 'ghost', stats: st(35, 55, 35, 30, 30, 35), melee: true, evolvesTo: 262 },
+  { id: 261, name: 'Poochyena', type: 'ghost', stats: st(35, 55, 35, 30, 30, 35), melee: true, hunter: true, evolvesTo: 262 },
   { id: 263, name: 'Zigzagoon', type: 'normal', stats: st(38, 30, 41, 30, 41, 60), melee: true, raider: true, evolvesTo: 264 },
   { id: 270, name: 'Lotad', type: 'grass', type2: 'water', stats: st(40, 30, 30, 40, 50, 30), evolvesTo: 271 },
   { id: 273, name: 'Seedot', type: 'grass', type2: 'ghost', stats: st(40, 40, 50, 30, 30, 30), evolvesTo: 274 },
@@ -682,7 +683,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },
   { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true },
   { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true },
-  { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true },
+  { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true, hunter: true },
   { id: 271, name: 'Lombre', type: 'grass', type2: 'water', stats: st(60, 50, 50, 60, 70, 50) },
   { id: 274, name: 'Nuzleaf', type: 'grass', type2: 'ghost', stats: st(70, 70, 40, 60, 40, 60) },
   { id: 277, name: 'Swellow', type: 'flying', type2: 'normal', stats: st(60, 85, 60, 50, 50, 125), melee: true },

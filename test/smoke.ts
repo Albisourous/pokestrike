@@ -407,6 +407,21 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e.vy = 0;
   (b as any).blocks = [];
 
+  // hunters track the weakest link, not the nearest body
+  {
+    const ps = (b as any).players.filter((p: any) => !p.dead);
+    if (ps.length >= 2) {
+      const [near, far] = ps;
+      near.x = e.x + 30; near.y = e.y; near.hp = near.maxHp;
+      far.x = e.x + 300; far.y = e.y; far.hp = 1;
+      e.def = { ...e.def, hunter: true };
+      ok((b as any).nearestPlayer(e) === far, 'hunter picks the weakest mon over the nearest');
+      e.def = { ...e.def, hunter: undefined };
+      near.hp = near.maxHp;
+      far.hp = far.maxHp;
+    }
+  }
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

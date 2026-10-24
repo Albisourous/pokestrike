@@ -167,3 +167,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `65d11dc` | battle | contact knockback — hits shove foes along the shot line into hazards | `git revert <this commit>` |
 | 2026-10-25 | `e5f4073` | battle | billiard collisions — shoved foes slam packmates, momentum + chip | `git revert <this commit>` |
 | 2026-10-25 | `8ad88c2` | battle | wall-slam — flung foes chip on rocks and shorelines | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | HUNTER foes track the weakest mon — Poochyena/Mightyena carry it | `git revert <this commit>` |
