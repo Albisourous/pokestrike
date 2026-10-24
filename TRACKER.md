@@ -230,4 +230,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `2426dfb` | battle | SPIKER foes lob spike patches into your half — court denial | `git revert <this commit>` |
 | 2026-10-25 | `96ded43` | battle | SONIC foes confuse on contact — next launch veers ±10°, ghost wobbles | `git revert <this commit>` |
 | 2026-10-25 | `47ad812` | draft | offer cards now show the ability row (HUGE·GUTS·TAUNT…) — pick informed | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | ANCHOR foes can't be shoved — Snorlax + Aggron stay planted | `git revert <this commit>` |
+| 2026-10-25 | `322d9cf` | battle | ANCHOR foes can't be shoved — Snorlax + Aggron stay planted | `git revert <this commit>` |
