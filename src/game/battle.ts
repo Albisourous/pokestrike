@@ -2945,7 +2945,10 @@ export class Battle {
       // Trainer mons stay with their owner — the ball never comes out.
       const master = this.masterArmed && !this.inTrainer;
       // shinies never break out — KO'ing one always lands it in the box
-      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0));
+      // the KO shot's combo feeds the roll — a pinball kill tires the mon
+      // out like a proper weaken-first. (Dots and orbs from this same shot
+      // still read this shot's chain — the right value.)
+      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0) + Math.min(0.12, this.shotCombo * 0.015));
       if (master) {
         this.masterArmed = false;
         this.pushText({ x: e.x, y: e.y - e.r - 58, text: '★ MASTER BALL!', t: 1.5, color: '#c96bff', big: true });

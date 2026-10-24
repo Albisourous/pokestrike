@@ -130,3 +130,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `1de6cd8` | battle | WHIFF callout — a shot landing no contact/bump/loot says so instead of ending silent | `git revert <this commit>` |
 | 2026-10-25 | `af351b5` | battle | SWAT — the flying ball intercepts lingering hostile orbs (+10 score) | `git revert <this commit>` |
 | 2026-10-25 | `f88baa1` | battle | ARMORED wave mutator — the whole pack rolls plated, cloned defs keep the DB row clean | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | KO-shot chain feeds the catch roll — pinball kills tire the mon (+1.5%/link, cap +12%) | `git revert <this commit>` |

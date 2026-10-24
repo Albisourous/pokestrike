@@ -283,6 +283,19 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(!(b as any).orbs.some((o: any) => o.t > 0) && (b as any).score - sc0 >= 10, `ball swats a hostile orb (${sc0} -> ${(b as any).score})`);
 }
 
+// a KO mid-combo tires the mon — the shot's chain feeds the catch roll
+{
+  const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(7));
+  (b as any).spawnWave(0);
+  const e = (b as any).enemies[0];
+  b.captureChance = 0;
+  (b as any).inTrainer = false;
+  (b as any).shotCombo = 100; // cap the +0.12 chain bonus
+  (b as any).rng = () => 0.1; // 0.1 < 0.12 → lands; flat 0% odds never would
+  (b as any).hurt(e, e.hp + 1, '#fff');
+  ok((b as any).balls.at(-1)?.ok === true, 'a pinball KO tires the mon into the ball');
+}
+
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));
   (b as any).spawnWave(0);
