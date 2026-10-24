@@ -150,3 +150,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `d346d92` | battle | scout card explains foe flags — kw names what it does | `git revert <this commit>` |
 | 2026-10-25 | `651d979` | battle | live pass — scout card 200w + 2-line tells + LV drop; countdown swell verified | `git revert <this commit>` |
 | 2026-10-25 | `560096a` | battle | enrage embers — flickering collar keeps berserkers marked after the pop | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | venom status reads — rising poison bubbles + VENOM kw tag | `git revert <this commit>` |

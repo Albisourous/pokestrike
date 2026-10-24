@@ -8038,6 +8038,23 @@ export class Battle {
       }
     }
 
+    // envenomed — poison bubbles rise off the sprite while ticks remain
+    if (u.side === 'enemy' && u.dotTicks > 0) {
+      ctx.fillStyle = '#a040a0';
+      for (let k = 0; k < 3; k++) {
+        const ph = (this.time * 0.7 + k * 0.34) % 1;
+        ctx.globalAlpha = 0.55 * (1 - ph);
+        ctx.beginPath();
+        ctx.arc(
+          u.x + (k - 1) * u.r * 0.5 + Math.sin(this.time * 3 + k * 2.1) * 4,
+          u.y - u.r * 0.3 - ph * u.r * 1.3,
+          3.5 - ph * 1.8, 0, Math.PI * 2,
+        );
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // shinies twinkle — three gold four-point stars drift around the sprite
     if (u.shiny) {
       ctx.fillStyle = '#ffe76a';
@@ -8163,6 +8180,7 @@ export class Battle {
         u.def.repel && 'REPEL',
         u.def.raider && 'RAIDER',
         u.def.volley && 'VOLLEY',
+        u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);
