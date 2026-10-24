@@ -56,6 +56,7 @@ export interface SpeciesDef {
   alpha?: boolean; // pack leader: rallying cry — packmates hit harder while it lives
   shed?: boolean; // Shed Skin: each tick it may slough off every ailment
   charge?: boolean; // stampede: paws a beat, then rams across the court at a mon
+  prank?: boolean; // Prankster: its opening attack comes early
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -284,7 +285,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 140, name: 'Kabuto', type: 'rock', type2: 'water', stats: st(30, 80, 90, 55, 45, 55), evolvesTo: 141 },
   { id: 147, name: 'Dratini', type: 'flying', stats: st(41, 64, 45, 50, 50, 50), evolvesTo: 148 },
   { id: 177, name: 'Natu', type: 'flying', type2: 'psychic', stats: st(40, 50, 45, 70, 45, 70), blink: true, evolvesTo: 178 },
-  { id: 198, name: 'Murkrow', type: 'ghost', type2: 'flying', stats: st(60, 85, 42, 85, 42, 91), melee: true, evolvesTo: 430 },
+  { id: 198, name: 'Murkrow', type: 'ghost', type2: 'flying', stats: st(60, 85, 42, 85, 42, 91), melee: true, evolvesTo: 430, prank: true },
   { id: 200, name: 'Misdreavus', type: 'ghost', stats: st(60, 60, 60, 85, 85, 85), pierce: true, evolvesTo: 429 },
   { id: 216, name: 'Teddiursa', type: 'normal', stats: st(60, 80, 50, 50, 50, 40), melee: true, evolvesTo: 217 },
   { id: 228, name: 'Houndour', type: 'fire', type2: 'ghost', stats: st(45, 60, 30, 80, 50, 65), evolvesTo: 229 },
@@ -320,7 +321,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 265, name: 'Wurmple', type: 'grass', stats: st(45, 45, 35, 20, 30, 20), evolvesTo: [266, 268] },
   { id: 283, name: 'Surskit', type: 'water', stats: st(40, 30, 32, 50, 52, 65), evolvesTo: 284 },
   { id: 299, name: 'Nosepass', type: 'rock', stats: st(30, 45, 135, 45, 90, 30), repel: true, evolvesTo: 476 },
-  { id: 302, name: 'Sableye', type: 'ghost', stats: st(50, 75, 75, 65, 65, 50), melee: true },
+  { id: 302, name: 'Sableye', type: 'ghost', stats: st(50, 75, 75, 65, 65, 50), melee: true, prank: true },
   { id: 313, name: 'Volbeat', type: 'grass', stats: st(65, 73, 55, 47, 75, 85) },
   { id: 314, name: 'Illumise', type: 'grass', stats: st(65, 47, 55, 73, 75, 85) },
   { id: 315, name: 'Roselia', type: 'grass', stats: st(50, 60, 45, 100, 80, 65), healer: true, evolvesTo: 407 },
@@ -557,7 +558,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 537, name: 'Seismitoad', type: 'water', type2: 'rock', stats: st(105, 95, 75, 85, 75, 74) },
   { id: 542, name: 'Leavanny', type: 'grass', stats: st(75, 103, 80, 70, 80, 92) },
   { id: 545, name: 'Scolipede', type: 'grass', type2: 'poison', stats: st(60, 100, 89, 55, 69, 112), boost: true },
-  { id: 547, name: 'Whimsicott', type: 'grass', type2: 'normal', stats: st(60, 67, 85, 77, 75, 116) },
+  { id: 547, name: 'Whimsicott', type: 'grass', type2: 'normal', stats: st(60, 67, 85, 77, 75, 116), prank: true },
   { id: 549, name: 'Lilligant', type: 'grass', stats: st(70, 60, 75, 110, 75, 90) },
   { id: 553, name: 'Krookodile', type: 'rock', type2: 'ghost', stats: st(95, 117, 80, 65, 70, 92), melee: true },
   { id: 555, name: 'Darmanitan', type: 'fire', stats: st(105, 140, 55, 30, 55, 95) },

@@ -1562,7 +1562,7 @@ export class Battle {
       r,
       hp: ehp,
       maxHp: ehp,
-      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() + (wi === 0 ? 1 : 0),
+      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (s.def.prank ? 0.55 : 1) + (wi === 0 ? 1 : 0),
       // ASC 7 FRENZY: foes press harder — approach speed ×1.25
       drift: enemyDrift(def.stats) * (s.boss ? 0.55 : 1) * (this.asc >= 7 ? 1.25 : 1),
       wx: 0,
@@ -7495,6 +7495,7 @@ export class Battle {
       e.def.alpha && 'pack leader — rallies packmates\' hits while it lives',
       e.def.shed && 'shed skin — may slough off every ailment each tick',
       e.def.charge && 'stampede — paws the ground, then rams across the court',
+      e.def.prank && 'prankster — its opening attack comes early',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8903,6 +8904,7 @@ export class Battle {
         u.def.alpha && 'ALPHA',
         u.def.shed && 'SHED',
         u.def.charge && 'CHARGE',
+        u.def.prank && 'PRANK',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
