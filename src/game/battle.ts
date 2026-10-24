@@ -9068,9 +9068,17 @@ export class Battle {
       sim: for (let i = 0; i < 60; i++) {
         if (bounced) break;
         const step = 1 / 30;
-        const damp = Math.exp(-FRICTION * step);
+        const onIce = this.hazards.some((hz) => hz.kind === 'ice' && Math.hypot(sx - hz.x, sy - hz.y) < hz.r + u.r);
+        const damp = Math.exp(-FRICTION * this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * (onIce ? 0.1 : 1) * step);
         svx *= damp;
         svy *= damp;
+        // the same field forces live play applies — a ghost that ignores
+        // gust lanes and drag patches promises banks the ball can't keep
+        for (const hz of this.hazards) {
+          if (Math.hypot(sx - hz.x, sy - hz.y) >= hz.r + u.r) continue;
+          if (hz.kind === 'gust') svx += (hz.dir ?? 1) * 480 * step;
+          else if (hz.kind === 'grass') { svx *= Math.exp(-8 * step); svy *= Math.exp(-8 * step); }
+        }
         sx += svx * step;
         sy += svy * step;
         if (len({ x: svx, y: svy }) < 90) break;

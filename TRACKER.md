@@ -200,3 +200,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `6fe2473` | battle | ALPHA leaders rally packmate hits — kill-order flag | `git revert <this commit>` |
 | 2026-10-25 | `7f25b3f` | battle | SHED foes slough ailments each tick — anti-dot flag | `git revert <this commit>` |
 | 2026-10-25 | `f934c61` | battle | ice slick tile (8) + glacier room — shots keep speed crossing | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | aim ghost honors ice, slick, gust + grass — stops lying on field rooms | `git revert <this commit>` |
