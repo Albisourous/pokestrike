@@ -2408,6 +2408,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'STURDY foes hang on at 1 HP — the first kill shot only wounds',
       'CHARM hides lull the striker — contact can put it to sleep',
       'SCALE hides half damage at full HP — chip it open first',
+      'GUTS foes hit harder while statused — kill them clean',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

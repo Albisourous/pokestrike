@@ -2383,7 +2383,7 @@ export class Battle {
           if (d < e.r + target.r + 4 || e.lunging <= 0) {
             e.lunging = 0;
             if (d < e.r + target.r + 8) {
-              this.damagePlayer(target, physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower * 1.3), e);
+              this.damagePlayer(target, physDamage(this.foeAtk(e), target.def.stats.def, 1, zapPower * 1.3), e);
               if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
             }
           }
@@ -5835,11 +5835,18 @@ export class Battle {
   // is visible, hunts its mark and lands when it connects, same as the
   // boss kit. Damage matches the hit it replaces; thorns still prick the
   // caster for committing to the attack.
+  // guts: a statused brawler gets angrier — every attack it throws while
+  // poisoned or burned lands half again. The trap: dotting it speeds the
+  // kill but sharpens the reprisal
+  private foeAtk(e: Unit) {
+    return e.def.stats.atk * (e.def.guts && (e.dotTicks > 0 || e.burnT > 0) ? 1.5 : 1);
+  }
+
   private foeZap(e: Unit, target: Unit) {
     sfx('zap');
     this.orbs.push({
       x: e.x, y: e.y, target,
-      dmg: Math.round(physDamage(e.def.stats.atk, target.def.stats.def, 1, zapPower)),
+      dmg: Math.round(physDamage(this.foeAtk(e), target.def.stats.def, 1, zapPower)),
       t: 2.5, wob: e.uid * 1.7, color: '#ff6b6b', hostile: true, src: e,
     });
     if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
@@ -5864,7 +5871,7 @@ export class Battle {
         sfx('hit', 0.7);
         for (const p of this.players) {
           if (!p.dead && dist(e, p) < 130) {
-            this.damagePlayer(p, Math.round(physDamage(e.def.stats.atk, p.def.stats.def, 1, zapPower) * 1.8), e);
+            this.damagePlayer(p, Math.round(physDamage(this.foeAtk(e), p.def.stats.def, 1, zapPower) * 1.8), e);
           }
         }
         for (const f of [...this.enemies]) {
@@ -5946,7 +5953,7 @@ export class Battle {
         for (const p of this.playersByDist(e).slice(0, 3)) {
           this.orbs.push({
             x: e.x, y: e.y, target: p,
-            dmg: Math.round(physDamage(e.def.stats.atk, p.def.stats.def, 1, zapPower) * 0.55),
+            dmg: Math.round(physDamage(this.foeAtk(e), p.def.stats.def, 1, zapPower) * 0.55),
             t: 2.5, wob: e.uid * 1.7, color: '#ff9a30', hostile: true, src: e,
           });
         }
@@ -7268,6 +7275,7 @@ export class Battle {
       e.def.sturdy && 'sturdy — hangs on at 1 HP once',
       e.def.charm && 'cute charm — contact can lull the ball to sleep',
       e.def.scale && 'multiscale — half damage while its hide is whole',
+      e.def.guts && 'guts — hits 50% harder while statused',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8649,6 +8657,7 @@ export class Battle {
         u.def.sturdy && u.sash && 'STURDY',
         u.def.charm && 'CHARM',
         u.def.scale && u.hp >= u.maxHp && 'SCALE',
+        u.def.guts && 'GUTS',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

@@ -42,6 +42,7 @@ export interface SpeciesDef {
   sturdy?: boolean; // Sturdy: hangs on at 1 HP through the first lethal hit
   charm?: boolean; // Cute Charm: a smitten striker nods off — it loses a launch
   scale?: boolean; // Multiscale: halved damage while at full HP — chip it open first
+  guts?: boolean; // Guts: statused hits harder — don't poison it, kill it clean
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -418,7 +419,7 @@ export const ENEMY_DB: SpeciesDef[] = [
 export const ELITES: SpeciesDef[] = [
   { id: 94, name: 'Gengar', type: 'ghost', type2: 'poison', stats: st(60, 65, 60, 130, 75, 110), pierce: true, cursed: true },
   { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30), taunt: true },
-  { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55), melee: true },
+  { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55), melee: true, guts: true },
   { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95), menace: true },
   { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
   { id: 3, name: 'Venusaur', type: 'grass', type2: 'poison', stats: st(80, 82, 83, 100, 100, 80), healer: true },
@@ -455,7 +456,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 186, name: 'Politoed', type: 'water', stats: st(90, 75, 75, 90, 100, 70), healer: true },
   { id: 202, name: 'Wobbuffet', type: 'psychic', stats: st(190, 33, 58, 33, 58, 33), taunt: true },
   { id: 210, name: 'Granbull', type: 'normal', stats: st(90, 120, 75, 60, 60, 45), melee: true },
-  { id: 214, name: 'Heracross', type: 'fighting', stats: st(80, 125, 75, 40, 95, 85), melee: true },
+  { id: 214, name: 'Heracross', type: 'fighting', stats: st(80, 125, 75, 40, 95, 85), melee: true, guts: true },
   { id: 230, name: 'Kingdra', type: 'water', type2: 'flying', stats: st(75, 95, 95, 95, 95, 85), pierce: true },
   { id: 241, name: 'Miltank', type: 'normal', stats: st(95, 80, 105, 40, 70, 100), healer: true },
   { id: 242, name: 'Blissey', type: 'normal', stats: st(255, 10, 10, 75, 135, 55), healer: true },
@@ -694,7 +695,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 180, name: 'Flaaffy', type: 'electric', stats: st(70, 55, 55, 80, 60, 45), evolvesTo: 181 },
   { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true },
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },
-  { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true },
+  { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true, guts: true },
   { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true },
   { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true, hunter: true },
   { id: 271, name: 'Lombre', type: 'grass', type2: 'water', stats: st(60, 50, 50, 60, 70, 50) },

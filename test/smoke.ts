@@ -607,6 +607,23 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const chipHit = before - e.hp;
   ok(fullHit < chipHit && Math.abs(fullHit / chipHit - 0.5) < 0.2, `multiscale halves at full HP (${fullHit} vs ${chipHit})`);
 
+  // guts: a statused brawler hits half again — don't dot it
+  e.def = { ...eDef, guts: true };
+  e.dead = false;
+  e.hp = e.maxHp;
+  const zapTarget = (b as any).players[0];
+  e.dotTicks = 0;
+  (b as any).orbs.length = 0;
+  (b as any).foeZap(e, zapTarget);
+  const zapBase = (b as any).orbs[0].dmg;
+  e.dotTicks = 3;
+  (b as any).orbs.length = 0;
+  (b as any).foeZap(e, zapTarget);
+  const zapGuts = (b as any).orbs[0].dmg;
+  ok(zapGuts > zapBase && Math.abs(zapGuts / zapBase - 1.5) < 0.1, `guts hits harder while statused (${zapGuts} vs ${zapBase})`);
+  e.dotTicks = 0;
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
