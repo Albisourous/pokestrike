@@ -5391,6 +5391,10 @@ export class Battle {
                   revived++;
                 }
                 p.hp = Math.round(p.maxHp * healTo);
+                // the center's full course — status washes off too
+                p.asleep = false;
+                p.dotTicks = 0;
+                p.burnT = 0;
               }
               playJingle('rest'); // the center motif — gentle triad, homage not the tune
               return {
