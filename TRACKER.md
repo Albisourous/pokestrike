@@ -201,4 +201,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `7f25b3f` | battle | SHED foes slough ailments each tick — anti-dot flag | `git revert <this commit>` |
 | 2026-10-25 | `f934c61` | battle | ice slick tile (8) + glacier room — shots keep speed crossing | `git revert <this commit>` |
 | 2026-10-25 | `e5db01e` | battle | aim ghost honors ice, slick, gust + grass — stops lying on field rooms | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | shoved foes skate on ice — rink is a bowling lane | `git revert <this commit>` |
+| 2026-10-25 | `92be12e` | battle | shoved foes skate on ice — rink is a bowling lane | `git revert <this commit>` |
