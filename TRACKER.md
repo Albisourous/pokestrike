@@ -110,4 +110,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `b42891b` | battle | first-contact aim preview: the pull's ghost ray rides to the first foe (gold ring marks the opening target) or wall/slab (dashed ghost leg shows the bank angle) — teaches bank shots, aimGuide toggle respected | `git revert <this commit>` |
 | 2026-10-24 | `f06b28d` | map header | drawHud slimmed on the region map — no duped tag/pip rows; SCORE chip moves to free top-left | `git revert f06b28d` |
 | 2026-10-25 | `f96d58d` | battle | barbed-foe flag: Qwilfish/Maractus/Ferroseed/Toxicroak/Tentacruel/Sandslash chip the ball ~6% HP per contact (SPIKED! + SPIKY kw tag) — grazing the pack bleeds the run; smoke asserts 60→54 | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | wave-clear ribbon reports the shot count — 'WAVE CLEAR! · 4 SHOTS', 'SWEEP!' on a one-shot clear: the speed goal reads every fight | `git revert <this commit>` |
+| 2026-10-25 | `adbcacb` | battle | wave-clear ribbon reports the shot count — 'WAVE CLEAR! · 4 SHOTS', 'SWEEP!' on a one-shot clear: the speed goal reads every fight | `git revert <this commit>` |
