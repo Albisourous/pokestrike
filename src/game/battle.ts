@@ -5652,6 +5652,26 @@ export class Battle {
           const target = this.nearestPlayer(e);
           if (target) this.foeZap(e, target);
         }
+      } else if (e.def.raider && this.pickups.length) {
+        // raiders ditch the fight for the loot — each turn they dash at the
+        // nearest field drop; in reach they swallow it and mend. Route the
+        // ball through the drop first or thin the thief out.
+        const pk = this.pickups.reduce((a, b) => (dist(e, a) < dist(e, b) ? a : b));
+        const dd = dist(e, pk);
+        if (dd < e.r + 34) {
+          this.pickups.splice(this.pickups.indexOf(pk), 1);
+          e.hp = Math.min(e.maxHp, e.hp + Math.max(1, Math.round(e.maxHp * 0.08)));
+          this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'SNATCHED!', t: 1, color: '#ffd84d', big: true });
+          this.burst(pk.x, pk.y, '#ffd84d', 8, 280);
+          sfx('heal');
+        } else {
+          const d = norm({ x: pk.x - e.x, y: pk.y - e.y });
+          const at = this.unstick(e.x + d.x * Math.min(dd, 120), e.y + d.y * Math.min(dd, 120), e.r + 2);
+          e.sq = 0.7; // the lunge crouch — same tell the melee dash wears
+          e.x = at.x;
+          e.y = at.y;
+          sfx('launch');
+        }
       } else if (e.def.melee) {
         // melee enemies lunge instead of zapping — the dash plays out over
         // the next moments while you're lining up your shot
@@ -8022,6 +8042,7 @@ export class Battle {
         u.def.split && 'SPLIT',
         u.def.rage && 'RAGE',
         u.def.repel && 'REPEL',
+        u.def.raider && 'RAIDER',
       ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);

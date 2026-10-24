@@ -23,6 +23,7 @@ export interface SpeciesDef {
   rage?: boolean; // under 30% HP it enrages — attack cycle drops a third
   sleepy?: boolean; // dozes until hit — timer frozen, +35% to hits on it
   repel?: boolean; // a repulsor field shoves the ball away — bank in or burn through
+  raider?: boolean; // ignores the fight to steal field pickups — kill it before the loot's gone
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -43,7 +44,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 7, name: 'Squirtle', type: 'water', stats: st(44, 48, 65, 50, 64, 43), evolvesTo: 8 },
   { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55), evolvesTo: [134, 135, 136, 196] },
   { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20), healer: true, evolvesTo: 40 },
-  { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90), pierce: true, evolvesTo: 53 },
+  { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90), pierce: true, raider: true, evolvesTo: 53 },
   { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55), evolvesTo: 55 },
   { id: 95, name: 'Onix', type: 'rock', stats: st(35, 45, 160, 30, 45, 70), evolvesTo: 208 },
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), evolvesTo: 67 },
@@ -208,7 +209,7 @@ export function draftOrder(rng: () => number): number[] {
 // 'Ground-ish' mons (Diglett, Cubone, Rhyhorn, ...) ride the rock type —
 // PokeType has no ground.
 export const ENEMY_DB: SpeciesDef[] = [
-  { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72), melee: true, evolvesTo: 20 },
+  { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72), melee: true, raider: true, evolvesTo: 20 },
   { id: 16, name: 'Pidgey', type: 'flying', type2: 'normal', stats: st(40, 45, 40, 35, 35, 56), melee: true, evolvesTo: 17 },
   { id: 41, name: 'Zubat', type: 'poison', type2: 'flying', stats: st(40, 45, 35, 30, 40, 55), melee: true, evolvesTo: 42 },
   { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20), evolvesTo: 75 },
@@ -256,7 +257,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 228, name: 'Houndour', type: 'fire', type2: 'ghost', stats: st(45, 60, 30, 80, 50, 65), evolvesTo: 229 },
   { id: 231, name: 'Phanpy', type: 'rock', stats: st(90, 60, 60, 40, 40, 40), melee: true, evolvesTo: 232 },
   { id: 261, name: 'Poochyena', type: 'ghost', stats: st(35, 55, 35, 30, 30, 35), melee: true, evolvesTo: 262 },
-  { id: 263, name: 'Zigzagoon', type: 'normal', stats: st(38, 30, 41, 30, 41, 60), melee: true, evolvesTo: 264 },
+  { id: 263, name: 'Zigzagoon', type: 'normal', stats: st(38, 30, 41, 30, 41, 60), melee: true, raider: true, evolvesTo: 264 },
   { id: 270, name: 'Lotad', type: 'grass', type2: 'water', stats: st(40, 30, 30, 40, 50, 30), evolvesTo: 271 },
   { id: 273, name: 'Seedot', type: 'grass', type2: 'ghost', stats: st(40, 40, 50, 30, 30, 30), evolvesTo: 274 },
   { id: 276, name: 'Taillow', type: 'flying', type2: 'normal', stats: st(40, 55, 30, 30, 30, 85), melee: true, evolvesTo: 277 },
@@ -313,7 +314,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 213, name: 'Shuckle', type: 'rock', stats: st(20, 10, 230, 10, 230, 5), taunt: true },
   { id: 215, name: 'Sneasel', type: 'ghost', type2: 'water', stats: st(55, 95, 55, 35, 75, 115), pierce: true, melee: true, evolvesTo: 461 },
   { id: 234, name: 'Stantler', type: 'normal', stats: st(73, 95, 62, 85, 65, 85) },
-  { id: 264, name: 'Linoone', type: 'normal', stats: st(78, 70, 61, 50, 61, 100) },
+  { id: 264, name: 'Linoone', type: 'normal', stats: st(78, 70, 61, 50, 61, 100), raider: true },
   { id: 268, name: 'Cascoon', type: 'poison', stats: st(50, 35, 55, 25, 25, 15), evolvesTo: 269 },
   { id: 269, name: 'Dustox', type: 'poison', stats: st(60, 50, 70, 50, 90, 65) },
   { id: 272, name: 'Ludicolo', type: 'water', type2: 'grass', stats: st(80, 70, 70, 90, 100, 70) },
@@ -623,7 +624,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 8, name: 'Wartortle', type: 'water', stats: st(59, 63, 80, 65, 80, 58), evolvesTo: 9 },
   { id: 17, name: 'Pidgeotto', type: 'flying', type2: 'normal', stats: st(63, 60, 55, 50, 50, 71), melee: true, evolvesTo: 18 },
   { id: 18, name: 'Pidgeot', type: 'flying', type2: 'normal', stats: st(83, 80, 75, 70, 70, 101), melee: true },
-  { id: 20, name: 'Raticate', type: 'normal', stats: st(55, 81, 60, 50, 70, 97), melee: true },
+  { id: 20, name: 'Raticate', type: 'normal', stats: st(55, 81, 60, 50, 70, 97), melee: true, raider: true },
   { id: 22, name: 'Fearow', type: 'flying', stats: st(65, 90, 65, 61, 61, 100), melee: true },
   { id: 26, name: 'Raichu', type: 'electric', stats: st(60, 90, 55, 90, 80, 110), pierce: true },
   { id: 33, name: 'Nidorino', type: 'poison', stats: st(61, 72, 57, 55, 55, 65), melee: true, evolvesTo: 34 },
@@ -636,7 +637,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 47, name: 'Parasect', type: 'grass', type2: 'poison', stats: st(60, 95, 80, 60, 80, 30), melee: true },
   { id: 49, name: 'Venomoth', type: 'poison', stats: st(70, 65, 60, 90, 75, 90) },
   { id: 51, name: 'Dugtrio', type: 'rock', stats: st(35, 100, 50, 50, 70, 120), melee: true },
-  { id: 53, name: 'Persian', type: 'normal', stats: st(65, 70, 60, 65, 65, 115), pierce: true },
+  { id: 53, name: 'Persian', type: 'normal', stats: st(65, 70, 60, 65, 65, 115), pierce: true, raider: true },
   { id: 55, name: 'Golduck', type: 'water', stats: st(80, 82, 78, 95, 80, 85) },
   { id: 57, name: 'Primeape', type: 'fighting', stats: st(65, 105, 60, 60, 70, 95), melee: true, rage: true },
   { id: 61, name: 'Poliwhirl', type: 'water', stats: st(65, 65, 65, 50, 50, 90), evolvesTo: [62, 186] },

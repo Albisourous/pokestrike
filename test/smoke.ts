@@ -296,6 +296,22 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok((b as any).balls.at(-1)?.ok === true, 'a pinball KO tires the mon into the ball');
 }
 
+// raiders ditch the fight for the drop — in reach they swallow it, far they dash
+{
+  const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(6));
+  (b as any).spawnWave(0);
+  const e = (b as any).enemies[0];
+  e.def = { ...e.def, raider: true };
+  e.hp = Math.floor(e.maxHp / 2);
+  (b as any).pickups = [{ x: e.x + 10, y: e.y, kind: 'protein', t: 0 }];
+  (b as any).fireEnemy(e);
+  ok((b as any).pickups.length === 0 && e.hp > Math.floor(e.maxHp / 2), 'raider swallows the drop in reach');
+  (b as any).pickups = [{ x: e.x + 300, y: e.y, kind: 'protein', t: 0 }];
+  const ex = e.x;
+  (b as any).fireEnemy(e);
+  ok(Math.abs(e.x - ex) > 40, `raider dashes at the far drop (${ex.toFixed(0)} -> ${e.x.toFixed(0)})`);
+}
+
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));
   (b as any).spawnWave(0);
