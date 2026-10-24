@@ -234,4 +234,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `87939f9` | battle | kw ribbon capped at 3 tags (+N) — stacked vets no longer spill | `git revert <this commit>` |
 | 2026-10-25 | `1fbb5c4` | test | smoke coverage for follow-me, thief, damp, spiker, anchor (982→989) | `git revert <this commit>` |
 | 2026-10-25 | `a8ba5cf` | battle | OWN TEMPO (Spoink) shrugs off confusion + Mudkip picks up canon Damp | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | FLANK foes approach on an arc — Zoroark + Absol drift wide | `git revert <this commit>` |
+| 2026-10-25 | `fc3dcdc` | battle | FLANK foes approach on an arc — Zoroark + Absol drift wide | `git revert <this commit>` |
