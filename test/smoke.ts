@@ -457,6 +457,64 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     }
   }
 
+  // follow me: a living bait mon pulls every foe lock — even hunters
+  {
+    const ps = (b as any).players.filter((p: any) => !p.dead);
+    if (ps.length >= 2) {
+      const bait = ps[1];
+      bait.def = { ...bait.def, taunt: true };
+      e.def = { ...e.def, hunter: true }; // even a bloodhound takes the bait
+      ok((b as any).nearestPlayer(e) === bait, 'follow me pulls the foe lock');
+      e.def = { ...e.def, hunter: undefined };
+      bait.def = { ...bait.def, taunt: false };
+    }
+  }
+
+  // a thief pockets a touched drop and its corpse coughs it back up
+  e.def = { ...e.def, thief: true };
+  e.vx = 0; e.vy = 0;
+  (b as any).pickups = [{ x: e.x + 5, y: e.y, kind: 'protein', t: 0 }];
+  (b as any).stepEnemyMovement(0.05);
+  ok((b as any).pickups.length === 0 && e.stolen === 'protein', 'thief pockets a touched drop');
+  (b as any).hurt(e, e.hp + 1, '#fff');
+  ok((b as any).pickups.some((pk: any) => pk.kind === 'protein'), 'a dead thief re-drops the loot');
+  e.stolen = undefined;
+  e.def = { ...e.def, thief: undefined };
+
+  // damp: a living carrier keeps the bomber's powder wet — no blast
+  e.dead = false; e.hp = e.maxHp; e.lastHit = new Map();
+  e.def = { ...e.def, fuse: true };
+  const damper = (b as any).players[0];
+  damper.def = { ...damper.def, damp: true };
+  const php = damper.hp;
+  (b as any).fireEnemy(e);
+  ok(!e.dead && damper.hp === php, 'damp fizzles the fuse — bomber survives, mon unhurt');
+  damper.def = { ...damper.def, damp: false };
+  e.lastHit = new Map();
+  (b as any).fireEnemy(e);
+  ok(e.dead, 'the fuse still blows once the damp mon is gone');
+  e.dead = false; e.hp = e.maxHp;
+  e.def = { ...e.def, fuse: undefined };
+
+  // spikers seed the player half — the patch lands south of mid-court
+  e.def = { ...e.def, lay: true };
+  const hz0 = (b as any).hazards.length;
+  (b as any).fireEnemy(e);
+  const laid = (b as any).hazards[(b as any).hazards.length - 1];
+  ok((b as any).hazards.length === hz0 + 1 && laid.kind === 'spikes' && laid.y > arena.y + arena.h * 0.5, 'spiker lobs a patch into the player half');
+  (b as any).hazards = (b as any).hazards.slice(0, hz0);
+  e.def = { ...e.def, lay: undefined };
+
+  // anchor: knockback can't shift the planted foe
+  e.def = { ...e.def, anchor: true };
+  e.lastHit = new Map();
+  e.vx = 0;
+  const act4 = (b as any).active;
+  act4.vx = 800; act4.vy = 0;
+  (b as any).strikeEnemy(act4, e);
+  ok(e.vx < 50, `anchored foe ignores the shove (vx ${e.vx.toFixed(0)})`);
+  e.def = { ...e.def, anchor: undefined };
+
   // leech foes sip back the wounds they deal
   e.def = { ...e.def, leech: true };
   e.hp = Math.max(1, e.maxHp - 30);
