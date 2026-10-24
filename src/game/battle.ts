@@ -215,7 +215,7 @@ interface BallDrop {
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
-type PickupKind = 'oran-berry' | 'protein' | 'elixir' | 'lum-berry';
+type PickupKind = 'oran-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb';
 interface Pickup {
   x: number;
   y: number;
@@ -367,6 +367,7 @@ const PICKUP_META: Record<PickupKind, { name: string; label: string; color: stri
   protein: { name: 'PROTEIN', label: 'ATK +50%', color: '#f08030' },
   elixir: { name: 'ELIXIR', label: 'SUPER +1', color: '#9ecbff' },
   'lum-berry': { name: 'LUM BERRY', label: 'CURE ALL', color: '#b8f8f8' },
+  'revival-herb': { name: 'REVIVAL HERB', label: 'REVIVE', color: '#f8d030' },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 // star pieces — the meta wallet paid by run progress (Oct-20/21 specs;
@@ -1445,6 +1446,10 @@ export class Battle {
     // never crowds out the heal/atk drops on a clean wave, and keeps the
     // seeded stream identical on threat-free waves
     const ailThreat = this.enemies.some((e) => e.def.venom || e.def.para || e.def.burn || e.def.drowsy || e.def.shock || e.def.toxic || e.def.flame);
+    // a revival herb only rolls when there's a body to raise — dead mons
+    // carry over between waves, so the drop appears the wave after a loss;
+    // corpse-free waves skip the extra draw and keep the seeded stream
+    const deadMate = this.players.some((p) => p.dead);
     for (let k = 0; k < npk; k++) {
       const at = this.unstick(
         this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
@@ -1454,9 +1459,11 @@ export class Battle {
       this.pickups.push({
         x: at.x,
         y: at.y,
-        kind: ailThreat && this.rng() < 0.35
-          ? 'lum-berry'
-          : PICKUP_KINDS[Math.floor(this.rng() * 3)],
+        kind: deadMate && this.rng() < 0.4
+          ? 'revival-herb'
+          : ailThreat && this.rng() < 0.35
+            ? 'lum-berry'
+            : PICKUP_KINDS[Math.floor(this.rng() * 3)],
         t: this.rng() * 6,
       });
     }
@@ -2865,6 +2872,16 @@ export class Battle {
           x: pk.x, y: pk.y - 12,
           text: cured ? 'CURED!' : 'FRESH', t: 0.9, color: '#b8f8f8', big: cured,
         });
+        break;
+      }
+      case 'revival-herb': {
+        const corpse = this.players.find((p) => p.dead);
+        if (!corpse) break; // the drop was rolled at spawn — the team mended since
+        corpse.dead = false;
+        corpse.hp = Math.max(1, Math.round(corpse.maxHp * 0.25));
+        sfx('heal');
+        this.burst(corpse.x, corpse.y, '#f8d030', 12, 300);
+        this.pushText({ x: corpse.x, y: corpse.y - corpse.r - 14, text: 'BACK IN!', t: 1.1, color: '#f8d030', big: true });
         break;
       }
     }

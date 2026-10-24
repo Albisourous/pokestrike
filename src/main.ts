@@ -71,6 +71,7 @@ import {
   DEX_BTN,
   drawDex,
   drawDexDetail,
+  dexBuyRect,
   dexRowAt,
   dexScrollMax,
   ACH_BTN,
@@ -1580,14 +1581,21 @@ canvas.addEventListener('pointerup', (e) => {
       if (hatchOpen) hatchTap(p);
       else if (labOpen) labTap(p);
       else if (dexOpen || dexPick != null) {
-        // detail first, then a row pick, then tap-to-close — the dex's stack
-        if (dexPick != null) dexPick = null;
-        else {
+        // the detail card's buy pill first — it spends dust, so a tap there
+        // sells instead of closing; then a row pick, then tap-to-close
+        const buyR = dexPick != null ? dexBuyRect(dexPick) : null;
+        if (buyR && inRect(p.x, p.y, buyR) && dexPick != null) {
+          const d = speciesById(dexPick);
+          if (d) sparkBuy(d);
+        } else if (dexPick != null) {
+          dexPick = null;
+          sfx('ui');
+        } else {
           const pick = dexRowAt(p.x, p.y, dexScroll);
           if (pick != null) dexPick = pick;
           else dexOpen = false;
+          sfx('ui');
         }
-        sfx('ui');
       } else if (boardOpen) {
         // the empty ledger's one live cell — START A CLIMB leaves for the draft
         if (!board().length && inRect(p.x, p.y, HOF_CLIMB)) {
@@ -2176,7 +2184,7 @@ function render() {
     case 'title':
       drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score, seed: titleSave.seed } : null, t - restartConfirmT0 < 3, homeTab);
       if (dexOpen) drawDex(ctx, dexScroll);
-      if (dexPick != null) drawDexDetail(ctx, dexPick); // solo or stacked — its own scrim
+      if (dexPick != null) drawDexDetail(ctx, dexPick, t, sparkArm.id === dexPick && t - sparkArm.t < SPARK_ARM_T); // solo or stacked — its own scrim
       if (achOpen) drawAch(ctx, achScroll);
       if (boardOpen) drawBoard(ctx);
       if (hatchOpen)
@@ -2342,6 +2350,8 @@ Promise.all([
   loadItem('oran-berry'),
   loadItem('protein'),
   loadItem('elixir'),
+  loadItem('lum-berry'),
+  loadItem('revival-herb'),
   loadItem('star-piece'), // the hatcher/lab wallet icon — blanks harmlessly if unvendored
   loadItem('amulet-coin'), // the lab's earnings-upgrade icon
   ...PERKS.map((p) => loadItem(p.item)),

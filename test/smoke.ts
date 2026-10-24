@@ -565,6 +565,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).grabPickup({ kind: 'lum-berry', x: 100, y: 100, t: 0 });
   ok(striker.dotTicks === 0 && striker.burnT === 0 && striker.paraT === 0 && !striker.asleep, 'lum berry cures the whole slate');
 
+  // revival herb raises the first fallen teammate at a quarter health
+  const bench = (b as any).players.find((p) => p !== striker);
+  bench.dead = true; bench.hp = 0;
+  (b as any).grabPickup({ kind: 'revival-herb', x: 100, y: 100, t: 0 });
+  ok(!bench.dead && bench.hp === Math.max(1, Math.round(bench.maxHp * 0.25)), `revival herb raises a teammate (hp ${bench.hp})`);
+
   // intimidate: a living menace shaves a fifth off the team's hits
   const menace = (b as any).enemies[1];
   menace.def = { ...menace.def, menace: true };
