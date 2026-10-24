@@ -1415,7 +1415,8 @@ function drawShopBody(
     const col = i % 7, row = (i / 7) | 0;
     const cx = ur.x + 34 + col * 47;
     const cy = ur.y + 62 + row * 50;
-    ctx.globalAlpha = itemTier(it.id) > 0 ? 1 : 0.55;
+    // ghosted = none in the bag — its tier just waits for stock to land
+    ctx.globalAlpha = (bagStock()[it.id] ?? 0) > 0 ? 1 : 0.55;
     const spr = itemSprite(it.item);
     void loadItem(it.item);
     if (spr) {
