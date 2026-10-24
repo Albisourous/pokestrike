@@ -1220,10 +1220,40 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // moat-gate — a water wall splits the court; dry gates at the edges and
+  // middle force banked entries while anchors hold the far courtyard
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '103303301',
+    '1S00000S1',
+    '103303301',
+    '1S0S0S0S1',
+    '100000001',
+    '10S0S0S01',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // sluice — a broken rock spine runs the middle; S lanes snake around it
+  // and mine tips guard the elbow turns
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100020001',
+    '1S00000S1',
+    '104020401',
+    '1S00000S1',
+    '100020001',
+    '10S0S0S01',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
-// the keep/pincer/saltire tail is the hard tier — it only rides in from
-// depth 2 (stage ~5 up); append new mid-pool rooms before this tail
-export const ROOM_HARD = 3;
+// the keep/pincer/saltire/moat-gate/sluice tail is the hard tier — it only
+// rides in from depth 2 (stage ~5 up); append new mid-pool rooms before it
+export const ROOM_HARD = 5;
 // Gym arenas stay open — the leader fight is the spectacle, so no
 // furniture; the entourage still enters on the anchor ring.
 export const ROOM_BOSS: string[] = [

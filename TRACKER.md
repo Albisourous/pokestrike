@@ -115,3 +115,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `0061d28` | battle | aim ghost marks ally passes: teammates the launch ray crosses get a ring (cyan = super ready, gray = cooling) — the bump chain reads before the pull | `git revert <this commit>` |
 | 2026-10-25 | `32500f6` | battle | aim ghost colors the first-contact ring by shield outcome on shelled foes — red opening = plate (glance), cyan = back door (flank) | `git revert <this commit>` |
 | 2026-10-25 | `4329cf0` | battle | kw tag composite (SHELL·SPIKY etc.) so dual-trait foes never hide a mechanic; Ferroseed double-flagged — flank it without grazing | `git revert <this commit>` |
+| 2026-10-25 | pending | data | hard-room pool 3→5: moat-gate (water walls, dry gates at edges+middle) and sluice (broken rock spine, mine elbows) — both validator-clean, depth-2 gated | `git revert <this commit>` |
