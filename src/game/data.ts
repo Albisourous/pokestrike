@@ -52,6 +52,7 @@ export interface SpeciesDef {
   beam?: boolean; // Signal Beam: locks a lane, telegraphs, then burns the channel
   trap?: boolean; // Arena Trap: the ball can't flee its neighborhood while it lives
   skyFor?: Weather; // Drought/Drizzle/Sand Stream: its arrival summons this sky
+  counter?: boolean; // Counter: returns a third of contact damage to the striker
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -463,7 +464,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 122, name: 'Mr. Mime', type: 'psychic', stats: st(40, 45, 65, 100, 120, 90), taunt: true },
   { id: 127, name: 'Pinsir', type: 'fighting', stats: st(65, 125, 100, 55, 70, 85), melee: true },
   { id: 186, name: 'Politoed', type: 'water', stats: st(90, 75, 75, 90, 100, 70), healer: true, skyFor: 'rain' },
-  { id: 202, name: 'Wobbuffet', type: 'psychic', stats: st(190, 33, 58, 33, 58, 33), taunt: true },
+  { id: 202, name: 'Wobbuffet', type: 'psychic', stats: st(190, 33, 58, 33, 58, 33), taunt: true, counter: true },
   { id: 210, name: 'Granbull', type: 'normal', stats: st(90, 120, 75, 60, 60, 45), melee: true },
   { id: 214, name: 'Heracross', type: 'fighting', stats: st(80, 125, 75, 40, 95, 85), melee: true, guts: true },
   { id: 230, name: 'Kingdra', type: 'water', type2: 'flying', stats: st(75, 95, 95, 95, 95, 85), pierce: true },
@@ -484,7 +485,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 226, name: 'Mantine', type: 'water', type2: 'flying', stats: st(85, 40, 70, 80, 140, 70) },
   { id: 233, name: 'Porygon2', type: 'normal', stats: st(85, 80, 90, 105, 95, 60), beam: true },
   { id: 237, name: 'Hitmontop', type: 'fighting', stats: st(50, 95, 95, 35, 110, 70), melee: true },
-  { id: 107, name: 'Hitmonchan', type: 'fighting', stats: st(50, 105, 79, 35, 110, 76), melee: true },
+  { id: 107, name: 'Hitmonchan', type: 'fighting', stats: st(50, 105, 79, 35, 110, 76), melee: true, counter: true },
   { id: 330, name: 'Flygon', type: 'rock', type2: 'flying', stats: st(80, 100, 80, 80, 80, 100) },
   { id: 321, name: 'Wailord', type: 'water', stats: st(170, 90, 45, 90, 45, 60), taunt: true },
   { id: 369, name: 'Relicanth', type: 'water', type2: 'rock', stats: st(100, 90, 130, 45, 65, 55), taunt: true },
@@ -733,7 +734,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 31, name: 'Nidoqueen', type: 'poison', type2: 'rock', stats: st(90, 92, 87, 75, 85, 76), melee: true },
   { id: 87, name: 'Dewgong', type: 'water', stats: st(90, 70, 80, 70, 95, 70) },
   { id: 91, name: 'Cloyster', type: 'water', stats: st(50, 95, 180, 85, 45, 70), shielded: true },
-  { id: 106, name: 'Hitmonlee', type: 'fighting', stats: st(50, 120, 53, 35, 110, 87), melee: true },
+  { id: 106, name: 'Hitmonlee', type: 'fighting', stats: st(50, 120, 53, 35, 110, 87), melee: true, counter: true },
   { id: 117, name: 'Seadra', type: 'water', stats: st(55, 65, 95, 95, 45, 85), toxic: true, evolvesTo: 230 },
   { id: 166, name: 'Ledian', type: 'flying', stats: st(55, 35, 50, 55, 110, 85), melee: true },
   { id: 168, name: 'Ariados', type: 'poison', stats: st(70, 90, 70, 60, 60, 40), melee: true },

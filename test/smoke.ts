@@ -758,6 +758,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(p0.hp < p0.maxHp, `beam burns the channel (hp ${p0.hp})`);
   caster.def = casterDef;
 
+  // counter: a third of contact damage fires straight back
+  e.def = { ...eDef, counter: true };
+  e.dead = false;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  striker.hp = striker.maxHp;
+  striker.lastHit = new Map();
+  (b as any).strikeEnemy(striker, e);
+  ok(striker.hp < striker.maxHp, `counter returns the hit (hp ${striker.hp})`);
+  striker.hp = striker.maxHp;
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

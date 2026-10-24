@@ -3367,6 +3367,12 @@ export class Battle {
       this.hurt(e, -Math.round(e.maxHp * 0.25), color);
     } else {
       this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+      // counter: whatever lands comes back a third as strong — feed it a
+      // crit and it feeds you one. Chip it open with the small shots
+      if (e.def.counter && !e.dead && dmg > 0 && !shooter.dead) {
+        this.damagePlayer(shooter, Math.max(1, Math.round(dmg * 0.3)), e);
+        this.pushText({ x: e.x, y: e.y - e.r - 46, text: 'COUNTER!', t: 0.9, color: '#f85888', big: false });
+      }
     }
     // knockback: the ball's momentum shoves the foe along the shot's line —
     // bank a hit to push a raider off the loot, split a taunter from its
@@ -7429,6 +7435,7 @@ export class Battle {
       e.def.beam && 'signal beam — locks a lane, then burns the channel',
       e.def.trap && 'arena trap — the ball can\'t flee its neighborhood',
       e.def.skyFor && `summons ${e.def.skyFor} — its sky rides the whole wave`,
+      e.def.counter && 'counter — returns a third of contact damage',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8820,6 +8827,7 @@ export class Battle {
         u.def.beam && 'BEAM',
         u.def.trap && 'TRAP',
         u.def.skyFor && 'SKY',
+        u.def.counter && 'COUNTER',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
