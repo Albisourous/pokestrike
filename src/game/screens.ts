@@ -2401,6 +2401,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'WISP flames burn — the victim singes and hits softer',
       'JOLT waves paralyze — the shocked mon\'s launch limps',
       'TOXIC hides poison the ball on contact — kill them with banks',
+      'STATIC hides paralyze on contact — touch once, hard',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

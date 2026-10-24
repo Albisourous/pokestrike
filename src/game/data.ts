@@ -35,6 +35,7 @@ export interface SpeciesDef {
   burn?: boolean; // Will-O-Wisp: hits can burn — the victim hits softer and singes each round
   para?: boolean; // Thunder Wave: hits can paralyze — the victim's launch limps a few rounds
   toxic?: boolean; // Poison Point: merely striking the hide can poison the ball — graze it wide
+  shock?: boolean; // Static: striking the crackling hide can paralyze the ball — the launch limps
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -399,7 +400,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 6, name: 'Charizard', type: 'fire', type2: 'flying', stats: st(78, 84, 78, 109, 85, 100) },
   { id: 3, name: 'Venusaur', type: 'grass', type2: 'poison', stats: st(80, 82, 83, 100, 100, 80), healer: true },
   { id: 94, name: 'Gengar', type: 'ghost', type2: 'poison', stats: st(60, 65, 60, 130, 75, 110), pierce: true },
-  { id: 125, name: 'Electabuzz', type: 'electric', stats: st(65, 83, 57, 95, 85, 105) },
+  { id: 125, name: 'Electabuzz', type: 'electric', stats: st(65, 83, 57, 95, 85, 105), shock: true },
   { id: 112, name: 'Rhydon', type: 'rock', stats: st(105, 130, 120, 45, 45, 40), melee: true },
   { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true },
   { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60), split: true },
@@ -698,7 +699,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 294, name: 'Loudred', type: 'normal', stats: st(84, 71, 43, 71, 43, 48) },
   { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },
   { id: 305, name: 'Lairon', type: 'rock', stats: st(60, 90, 140, 50, 50, 40), evolvesTo: 306 },
-  { id: 310, name: 'Manectric', type: 'electric', stats: st(70, 75, 60, 105, 60, 105) },
+  { id: 310, name: 'Manectric', type: 'electric', stats: st(70, 75, 60, 105, 60, 105), shock: true },
   { id: 319, name: 'Sharpedo', type: 'water', stats: st(70, 120, 40, 95, 40, 95), melee: true },
   { id: 329, name: 'Vibrava', type: 'rock', type2: 'flying', stats: st(50, 70, 50, 50, 50, 70) },
   { id: 332, name: 'Cacturne', type: 'grass', type2: 'ghost', stats: st(70, 115, 60, 115, 60, 55), melee: true },

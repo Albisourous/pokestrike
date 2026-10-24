@@ -3313,6 +3313,12 @@ export class Battle {
       shooter.dotDmg = Math.max(shooter.dotDmg, Math.ceil(shooter.maxHp * 0.06));
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'POISONED!', t: 0.9, color: '#a040a0', big: false });
     }
+    // static: the crackling hide can discharge into the striker — the
+    // next launch limps, so touch it once with a hard kill or not at all
+    if (e.def.shock && !shooter.dead && this.rng() < 0.3 && shooter.paraT <= 0) {
+      shooter.paraT = 3;
+      this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'STATIC!', t: 0.9, color: '#f8d030', big: false });
+    }
     // barbed foes bite back — every contact costs the ball a chip of its
     // own HP, so sloppy grazes through the pack bleed the run
     if (e.def.spiky && !shooter.dead) {
@@ -7191,6 +7197,7 @@ export class Battle {
       e.def.burn && 'its hits can burn — singes and softens',
       e.def.para && 'its hits can paralyze — launches limp',
       e.def.toxic && 'contact can poison the ball',
+      e.def.shock && 'contact can paralyze the ball',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8564,6 +8571,7 @@ export class Battle {
         u.def.burn && 'WISP',
         u.def.para && 'JOLT',
         u.def.toxic && 'TOXIC',
+        u.def.shock && 'STATIC',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

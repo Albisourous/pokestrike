@@ -501,6 +501,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.dotDmg = 0;
   e.def = { ...e.def, toxic: undefined };
 
+  // static: striking the crackling hide can paralyze the ball
+  e.def = { ...e.def, shock: true };
+  striker.paraT = 0;
+  striker.lastHit = new Map();
+  e.lastHit = new Map();
+  (b as any).rng = () => 0.1;
+  (b as any).strikeEnemy(striker, e);
+  (b as any).rng = rng3;
+  ok(striker.paraT > 0, `static discharge jolts the striker (para ${striker.paraT})`);
+  striker.paraT = 0;
+  e.def = { ...e.def, shock: undefined };
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
