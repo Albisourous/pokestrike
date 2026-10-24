@@ -135,3 +135,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `verify` | battle | live pass — sleepy zZ, repel halo, gust chevrons, SE matchup badge all confirmed rendering mid-fight | n/a |
 | 2026-10-25 | `db00306` | battle+data | RAIDER foes ditch the fight for field drops — dash at pickups, swallow in reach, mend on the bite; Meowth/Rattata/Zigzagoon lines | `git revert <this commit>` |
 | 2026-10-25 | `7e3940f` | battle | SLUMBER wave mutator — the whole pack dozes; assassinate quietly or wake a bad night | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | multi-KO callouts — DOUBLE/TRIPLE/N KO pops mid-flight on the pinball line | `git revert <this commit>` |

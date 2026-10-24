@@ -614,6 +614,7 @@ export class Battle {
   private shotCombo = 0; // pass-through links chained this shot
   private shotDmg = 0; // running damage tally this shot — read under the COMBO meter
   private shotLoot = 0; // pickups grabbed this shot — a loot run isn't a whiff
+  private shotKOs = 0; // kills this shot — multi-KOs name themselves mid-flight
   private comboLabel = ''; // COMBO meter string — rebuilt only when the counters move
   private comboLabelN = -1;
   private dmgLabel = '';
@@ -1746,6 +1747,7 @@ export class Battle {
     this.shotCombo = 0;
     this.shotDmg = 0;
     this.shotLoot = 0;
+    this.shotKOs = 0;
     this.kosThisShot = 0;
     u.wallN = 0;
     this.shotPhys = 1;
@@ -2879,6 +2881,18 @@ export class Battle {
     // styler loop wraps the target — every hit is another circle
     if (e.hp <= 0) {
       e.dead = true;
+      this.shotKOs++;
+      // multi-kills name themselves mid-flight — the pinball line earns the pop
+      if (this.shotKOs === 2) {
+        this.pushText({ x: e.x, y: e.y - e.r - 42, text: 'DOUBLE KO!', t: 1.1, color: '#ffd84d', big: true });
+        sfx('perfect', 0.8);
+      } else if (this.shotKOs === 3) {
+        this.pushText({ x: e.x, y: e.y - e.r - 42, text: 'TRIPLE KO!', t: 1.1, color: '#ffd84d', big: true });
+        sfx('perfect', 1);
+      } else if (this.shotKOs > 3) {
+        this.pushText({ x: e.x, y: e.y - e.r - 42, text: `${this.shotKOs} KO!`, t: 1.1, color: '#ffd84d', big: true });
+        sfx('perfect', 1.1);
+      }
       this.scar(e.x, e.y, e.boss ? 20 : 12); // a KO scorches the court
       // the KO pop is the game's biggest beat — flash frame, star shower,
       // shockwave and a camera lunge all at once
