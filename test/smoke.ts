@@ -111,6 +111,30 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(String((caller as any).waveSpecial ?? '').includes('DROUGHT'), 'the banner names the sky it brought');
 }
 
+// --- swift swim / chlorophyll: carriers press 1.5x in their own sky --------
+{
+  const drifted = (sky: 'rain' | null) => {
+    const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(4));
+    (b as any).spawnWave(0);
+    const e = (b as any).enemies[0];
+    e.def = { ...e.def, swift: 'rain', sleepy: undefined, blink: undefined };
+    e.x = arena.x + arena.w / 2;
+    e.y = arena.y + 40;
+    for (const p of b.players) {
+      p.x = arena.x + arena.w / 2;
+      p.y = arena.y + arena.h - 40;
+    }
+    (b as any).pickups = []; // a thief would chase loot instead of the pack
+    (b as any).weather = sky;
+    b.phase = 'aim'; // drift only ticks while the fight's live
+    const x0 = e.x, y0 = e.y;
+    for (let i = 0; i < 30; i++) b.update(1 / 60);
+    return Math.hypot(e.x - x0, e.y - y0);
+  };
+  const wet = drifted('rain'), dry = drifted(null);
+  ok(dry > 0 && wet > dry * 1.3, `swift carrier presses harder in its sky (${dry.toFixed(1)} -> ${wet.toFixed(1)})`);
+}
+
 // --- ascension modifiers: named tiers on top of the bulk ------------------
 {
   const base = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(1));

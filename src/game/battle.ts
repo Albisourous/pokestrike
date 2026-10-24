@@ -2511,8 +2511,11 @@ export class Battle {
             e.wMul = this.rng() < 0.22 ? 2.4 : 0.5 + this.rng();
           }
           if (d > e.r + target.r + 6) {
-            e.x += (nx * 0.55 + e.wx * e.wMul) * e.drift * dt;
-            e.y += (ny * 0.55 + e.wy * e.wMul) * e.drift * dt;
+            // swift swim / chlorophyll: in its own sky the carrier presses
+            // at 1.5× — a caller's weather makes the whole pack faster
+            const swim = e.def.swift === this.weather ? 1.5 : 1;
+            e.x += (nx * 0.55 + e.wx * e.wMul) * e.drift * swim * dt;
+            e.y += (ny * 0.55 + e.wy * e.wMul) * e.drift * swim * dt;
           }
         }
       }
@@ -7819,6 +7822,7 @@ export class Battle {
       e.def.filter && 'filter — super-effective hits lose their edge',
       e.def.snipe && 'sniper — marks your farthest mon',
       e.def.unaware && 'unaware — your attack buffs wash off at its hide',
+      e.def.swift && 'swift swim — presses 1.5× in its own sky',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9266,6 +9270,7 @@ export class Battle {
         u.def.filter && 'FILTER',
         u.def.snipe && 'SNIPE',
         u.def.unaware && 'UNAWARE',
+        u.def.swift && 'SWIFT',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

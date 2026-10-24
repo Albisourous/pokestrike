@@ -85,6 +85,7 @@ export interface SpeciesDef {
   filter?: boolean; // Filter/Solid Rock: super-effective hits deal 70%
   snipe?: boolean; // Sniper: its attacks mark your farthest mon
   unaware?: boolean; // Unaware: ignores the striker's attack buffs
+  swift?: Weather; // Swift Swim/Chlorophyll: presses 1.5x in its own weather
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -378,7 +379,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 264, name: 'Linoone', type: 'normal', stats: st(78, 70, 61, 50, 61, 100), raider: true, thief: true },
   { id: 268, name: 'Cascoon', type: 'poison', stats: st(50, 35, 55, 25, 25, 15), evolvesTo: 269 },
   { id: 269, name: 'Dustox', type: 'poison', stats: st(60, 50, 70, 50, 90, 65) },
-  { id: 272, name: 'Ludicolo', type: 'water', type2: 'grass', stats: st(80, 70, 70, 90, 100, 70) },
+  { id: 272, name: 'Ludicolo', type: 'water', type2: 'grass', stats: st(80, 70, 70, 90, 100, 70), swift: 'rain' },
   { id: 275, name: 'Shiftry', type: 'grass', type2: 'ghost', stats: st(90, 100, 60, 90, 60, 80) },
   { id: 287, name: 'Slakoth', type: 'normal', stats: st(60, 60, 60, 35, 35, 30), sleepy: true, evolvesTo: 288 },
   { id: 288, name: 'Vigoroth', type: 'normal', stats: st(80, 80, 80, 55, 55, 90), melee: true, evolvesTo: 289 },
@@ -498,7 +499,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 202, name: 'Wobbuffet', type: 'psychic', stats: st(190, 33, 58, 33, 58, 33), taunt: true, counter: true },
   { id: 210, name: 'Granbull', type: 'normal', stats: st(90, 120, 75, 60, 60, 45), melee: true },
   { id: 214, name: 'Heracross', type: 'fighting', stats: st(80, 125, 75, 40, 95, 85), melee: true, guts: true },
-  { id: 230, name: 'Kingdra', type: 'water', type2: 'flying', stats: st(75, 95, 95, 95, 95, 85), pierce: true },
+  { id: 230, name: 'Kingdra', type: 'water', type2: 'flying', stats: st(75, 95, 95, 95, 95, 85), pierce: true, swift: 'rain' },
   { id: 241, name: 'Miltank', type: 'normal', stats: st(95, 80, 105, 40, 70, 100), healer: true },
   { id: 242, name: 'Blissey', type: 'normal', stats: st(255, 10, 10, 75, 135, 55), healer: true },
   { id: 248, name: 'Tyranitar', type: 'rock', type2: 'ghost', stats: st(100, 134, 110, 95, 100, 61), melee: true, skyFor: 'sand' },
@@ -530,7 +531,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 407, name: 'Roserade', type: 'grass', type2: 'poison', stats: st(60, 70, 65, 125, 105, 90), healer: true },
   { id: 409, name: 'Rampardos', type: 'rock', stats: st(97, 165, 60, 65, 50, 58), melee: true },
   { id: 411, name: 'Bastiodon', type: 'rock', stats: st(60, 52, 168, 47, 138, 30), taunt: true },
-  { id: 419, name: 'Floatzel', type: 'water', stats: st(85, 105, 55, 85, 50, 115) },
+  { id: 419, name: 'Floatzel', type: 'water', stats: st(85, 105, 55, 85, 50, 115), swift: 'rain' },
   { id: 424, name: 'Ambipom', type: 'normal', stats: st(75, 100, 66, 60, 66, 115), melee: true },
   { id: 426, name: 'Drifblim', type: 'ghost', type2: 'flying', stats: st(150, 80, 44, 90, 54, 80), cursed: true },
   { id: 428, name: 'Lopunny', type: 'normal', stats: st(65, 76, 84, 54, 96, 105), pierce: true },
