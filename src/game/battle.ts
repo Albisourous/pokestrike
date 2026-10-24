@@ -9362,6 +9362,8 @@ export class Battle {
       const dots: Vec[] = [];
       let hit: Unit | null = null;
       let bounced = false;
+      let boostT = -1;
+      let warpT = -1;
       const cache = this.aimCache;
       const sb: Ball = { x: 0, y: 0, r: u.r, vx: 0, vy: 0 };
       sim: for (let i = 0; i < 60; i++) {
@@ -9377,6 +9379,22 @@ export class Battle {
           if (Math.hypot(sx - hz.x, sy - hz.y) >= hz.r + u.r) continue;
           if (hz.kind === 'gust') svx += (hz.dir ?? 1) * 480 * step;
           else if (hz.kind === 'grass') { svx *= Math.exp(-8 * step); svy *= Math.exp(-8 * step); }
+          else if (hz.kind === 'well' && !this.slowImmune) {
+            const d = Math.max(50, Math.hypot(sx - hz.x, sy - hz.y));
+            svx += ((hz.x - sx) / d) * 1400 * step;
+            svy += ((hz.y - sy) / d) * 1400 * step;
+          } else if (hz.kind === 'boost' && i / 30 - boostT > 0.4) {
+            const sp = Math.hypot(svx, svy);
+            if (sp > 60 && sp < 2400) { svx *= 1.35; svy *= 1.35; boostT = i / 30; }
+          } else if (hz.kind === 'warp' && i / 30 - warpT > 0.45) {
+            const twin = this.hazards.find((w) => w !== hz && w.kind === 'warp' && w.pair === hz.pair);
+            if (twin) {
+              warpT = i / 30;
+              const sp = Math.max(60, Math.hypot(svx, svy));
+              sx = twin.x + (svx / sp) * (twin.r + u.r + 6);
+              sy = twin.y + (svy / sp) * (twin.r + u.r + 6);
+            }
+          }
         }
         sx += svx * step;
         sy += svy * step;
