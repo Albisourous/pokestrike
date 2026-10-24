@@ -117,4 +117,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `4329cf0` | battle | kw tag composite (SHELL·SPIKY etc.) so dual-trait foes never hide a mechanic; Ferroseed double-flagged — flank it without grazing | `git revert <this commit>` |
 | 2026-10-25 | `0b660b5` | data | hard-room pool 3→5: moat-gate (water walls, dry gates at edges+middle) and sluice (broken rock spine, mine elbows) — both validator-clean, depth-2 gated | `git revert <this commit>` |
 | 2026-10-25 | `401a063` | battle | regen-foe flag: Tangela/Tangrowth/Gastrodon/Slowking/Vileplume/Alomomola mend ~3%/s (green puff throttle + REGEN kw tag) — burst them, don't whittle; smoke asserts 82→87 over a sim second | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | split-foe flag: Exeggcute/Doduo/Combee/Klink/Weezing divide on KO into two 35%/0.7r kids (def-cloned, no recursion) + SPLIT kw tag; smoke 3→5 | `git revert <this commit>` |
+| 2026-10-25 | `abee525` | battle | split-foe flag: Exeggcute/Doduo/Combee/Klink/Weezing divide on KO into two 35%/0.7r kids (def-cloned, no recursion) + SPLIT kw tag; smoke 3→5 | `git revert <this commit>` |
