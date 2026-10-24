@@ -5,7 +5,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, hash } from './bg';
 import { drawTile } from './map';
-import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TILE_HALL, TILE_MART, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
+import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, TILE_HALL, TILE_CAFE, TILE_GAZEBO, TILE_BUSH, TILE_FENCE, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_PINK, FLOWER_WILD, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -2050,13 +2050,13 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     for (let y = y0; y < y1; y += 32) for (let x = x0; x < x1; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
   };
   const hedgeRow = (x0: number, x1: number, y: number, doorCx = 0) => {
-    for (let x = x0; x <= x1; x += 24) {
+    for (let x = x0; x <= x1; x += 22) {
       if (doorCx && Math.abs(x + 9 - doorCx) < 26) continue;
-      drawTile(ctx, TREE_TEAL, x, y, 18, 18);
+      drawTile(ctx, TILE_BUSH, x, y - 4, 24, 30);
     }
   };
   const hedgeCol = (x: number, y0: number, y1: number) => {
-    for (let y = y0; y <= y1; y += 24) drawTile(ctx, TREE_TEAL, x, y, 18, 18);
+    for (let y = y0; y <= y1; y += 22) drawTile(ctx, TILE_BUSH, x - 3, y - 4, 24, 30);
   };
 
   // the street plan: a north street under the civic row (lab + hall), a
@@ -2073,9 +2073,9 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   hedgeCol(502, 170, 340);
   hedgeCol(30, 452, 620);
   hedgeCol(502, 452, 620);
-  hedgeRow(36, 232, 366, 135); // street-edge hedges, gapped at each door walk
+  hedgeRow(36, 232, 366, 183); // street-edge hedges, gapped at each door walk
   hedgeRow(306, 504, 366, 406);
-  hedgeRow(36, 232, 638, 135);
+  hedgeRow(36, 232, 638, 136);
   hedgeRow(306, 504, 638, 406);
 
   for (let gx = 0; gx < W; gx += 52) {
@@ -2091,18 +2091,19 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const stub = (cx: number, y0: number, y1: number) => {
     for (let y = y0; y < y1; y += 30) drawTile(ctx, TILE_PATH, cx - 16, y, 32, 32);
   };
-  stub(135, 316, NORTH_Y);
+  stub(183, 312, NORTH_Y); // the institute's door lands right-of-center in the slice
   stub(406, 304, NORTH_Y);
-  stub(136, 560, SOUTH_Y);
+  stub(136, 578, SOUTH_Y);
   stub(406, 572, SOUTH_Y);
 
-  // civic row — the lab west, the hall east, doors on the north street.
-  // Every facade centers on its lot: drawn size keeps the sprite's own
-  // aspect so nothing squashes or clips at the edges
-  drawTile(ctx, TILE_LAB, 135 - 60, 196, 120, 113);
+  // civic row — the institute west, the hall east, doors on the north
+  // street. Drawn size keeps each sprite's own aspect; the museum's dome
+  // tower + columned entrance nearly fills its lot — an institute should loom
+  drawTile(ctx, TILE_MUSEUM, 135 - 86, 190, 172, 142);
   drawTile(ctx, TILE_HALL, 406 - 63, 198, 126, 106);
-  // commerce row — the mart west, the trophy tower east, doors on the south
-  drawTile(ctx, TILE_MART, 135 - 100, 482, 200, 66);
+  // commerce row — the café hall west (its own patio paves the doorstep),
+  // the trophy tower east, doors on the south street
+  drawTile(ctx, TILE_CAFE, 135 - 68, 444, 136, 133);
   drawTile(ctx, TILE_TOWER, 406 - 48, 452, 96, 108);
 
   // drifting pollen — a little life over the grass, riding the same
@@ -2116,18 +2117,25 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     }
   }
 
-  // flowerbeds dress the lane's ends and the park's approach
-  drawTile(ctx, FLOWER_YB, 262, 346, 24, 20);
-  drawTile(ctx, FLOWER_PK, 254, 432, 22, 18);
-  drawTile(ctx, FLOWER_YB, 214, 618, 24, 20);
-  drawTile(ctx, FLOWER_PK, 300, 618, 24, 20);
+  // flowerbeds dress the lane's ends and the lot corners — real wildflower
+  // clusters, not blob daubs
+  drawTile(ctx, FLOWER_WILD, 262, 346, 34, 24);
+  drawTile(ctx, FLOWER_PINK, 254, 432, 30, 26);
+  drawTile(ctx, FLOWER_WILD, 214, 618, 34, 24);
+  drawTile(ctx, FLOWER_PINK, 300, 618, 30, 26);
+  drawTile(ctx, FLOWER_PINK, 44, 330, 28, 24);
+  drawTile(ctx, FLOWER_WILD, 478, 330, 30, 24);
+  drawTile(ctx, FLOWER_WILD, 46, 560, 30, 24);
+  drawTile(ctx, FLOWER_PINK, 480, 596, 28, 24);
+  drawTile(ctx, TILE_ROCK, 218, 322, 26, 28);
+  drawTile(ctx, ROCK_SMALL, 310, 566, 30, 24);
 
   // door signs — what the old cards said, now posted at each doorstep
   const lvls = labLevelMap();
   const trained = LAB_UPGRADES.filter((u) => (lvls.get(u.id) ?? 0) > 0).length;
   const b = best();
   const runs = board().length;
-  townSign(ctx, 135, 322, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
+  townSign(ctx, 183, 320, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
   townSign(ctx, 406, 316, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
   townSign(ctx, 406, 580, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
   townSign(ctx, 136, 596, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
@@ -2173,8 +2181,16 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   drawTile(ctx, TREE_ROUND, 84, 784, 36, 38);
   drawTile(ctx, TILE_ROCK, 182, 746, 40, 43);
   drawTile(ctx, ROCK_SMALL, 468, 776, 40, 30);
-  drawTile(ctx, FLOWER_YB, 236, 730, 26, 22);
-  drawTile(ctx, FLOWER_PK, 306, 800, 26, 22);
+  drawTile(ctx, FLOWER_PINK, 236, 730, 28, 24);
+  drawTile(ctx, FLOWER_WILD, 306, 800, 30, 24);
+  // the gazebo watches the pond from the northeast shore — Norman's stroll
+  // runs the south shore, well clear of its deck
+  drawTile(ctx, TILE_GAZEBO, 348, 692, 48, 79);
+  // iron rails fence the pond's north shore, gapped where the lane runs in
+  for (let x = 152; x <= 330; x += 27) {
+    if (x > 222 && x < 296) continue;
+    drawTile(ctx, TILE_FENCE, x, 736, 29, 14);
+  }
 
   ctx.restore();
 }

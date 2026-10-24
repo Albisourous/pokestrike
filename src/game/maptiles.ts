@@ -14,10 +14,15 @@ export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left t
 
 // Town-tab buildings — whole structures sliced from the atlas's mid bands.
 // The top-band copies all touch the sheet edge (roofs clipped); these don't.
-export const TILE_LAB: TileRect = [684, 93, 90, 85]; // domed civic hall, white rose emblem — wing edges at 684/774, door base lands 177
+export const TILE_MUSEUM: TileRect = [570, 346, 182, 150]; // the institute — dome tower + columned facade + glass wing; the deck and second dome past x752 are neighbors, not the building. Door ~x710
 export const TILE_HALL: TileRect = [847, 200, 90, 76]; // columned pavilion: marquee lip at 200, stone base ends 276 — the orange behind is a neighbor, not the hall
 export const TILE_TOWER: TileRect = [1441, 556, 87, 98]; // hexagonal jewel-domed tower — dome cap at 556, pillar base ends 654
-export const TILE_MART: TileRect = [1585, 395, 160, 53]; // blue storefront facade — emblem + awnings + marquee, 1585..1745; the bench row above and the orange tower left are neighbors
+export const TILE_CAFE: TileRect = [855, 342, 143, 144]; // the job hall — red roof, striped awning, flower boxes, teal patio with stools; door centered ~x927
+export const TILE_GAZEBO: TileRect = [788, 355, 52, 85]; // wooden gazebo with a domed cap on a deck run — a park centerpiece
+export const TILE_BUSH: TileRect = [1918, 92, 50, 63]; // round garden bush on a dirt base — a hedge that reads grown, not blobbed
+export const TILE_FENCE: TileRect = [1664, 214, 58, 28]; // iron railing segment — a pond-side fence
+export const FLOWER_PINK: TileRect = [1706, 90, 28, 26]; // pink wildflower cluster
+export const FLOWER_WILD: TileRect = [1736, 92, 40, 26]; // white-and-yellow bed
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand
