@@ -2291,8 +2291,15 @@ export class Battle {
       }
       for (const p of this.players) {
         // pass through teammates — each pass is a link-bump combo tick
-        if (!p.dead && !p.asleep && p !== u && dist(u, p) < u.r + p.r && u.vx * u.vx + u.vy * u.vy > 1600)
-          this.bumpAlly(p, u);
+        if (p.dead || p === u || dist(u, p) >= u.r + p.r || u.vx * u.vx + u.vy * u.vy <= 1600) continue;
+        if (p.asleep) {
+          // a hard nudge shakes the sleeper out of it — no super, but the
+          // bump buys back its turn before the pack closes in
+          p.asleep = false;
+          this.pushText({ x: p.x, y: p.y - p.r - 10, text: 'WOKE!', t: 0.8, color: '#f8f8f8', big: false });
+          continue;
+        }
+        this.bumpAlly(p, u);
       }
       for (let j = this.pickups.length - 1; j >= 0; j--) {
         const pk = this.pickups[j];

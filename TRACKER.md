@@ -220,3 +220,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `7907cd8` | battle | player INTIMIDATE dulls pack + SERENE GRACE 2× contact odds | `git revert <this commit>` |
 | 2026-10-25 | `23b0dd5` | battle | DAMP — living carrier fizzles fuses, softens blasts | `git revert <this commit>` |
 | 2026-10-25 | `a0bd6f2` | battle | player SYNCHRONIZE — ailments echo onto the striker | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | bumping a sleeping ally wakes it (WOKE!) — no super | `git revert <this commit>` |
