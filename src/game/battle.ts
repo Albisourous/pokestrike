@@ -889,7 +889,7 @@ export class Battle {
         cdMax: cd,
         lastBump: -1,
         role,
-        sash: false,
+        sash: !!def.sturdy, // sturdy species hang on natively — no item needed
         lvl,
         pow: m.pow * lvlPow(offStat(def.stats, def.type), lvl),
         rngMul: m.range,
@@ -6149,7 +6149,7 @@ export class Battle {
       // focus sash: hang on at 1 HP
       p.sash = false;
       dmg = p.hp - 1;
-      this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
+      this.pushText({ x: p.x, y: p.y - p.r - 20, text: p.def.sturdy ? 'STURDY!' : 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
     }
     p.hp -= dmg;
     if (dmg > 0) this.waveFlawless = false;
