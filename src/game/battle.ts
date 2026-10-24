@@ -79,6 +79,7 @@ interface Unit {
   dotTicks: number; // poison ticks remaining
   dotDmg: number;
   burnT: number; // burn rounds left — softens hits and singes each round
+  paraT: number; // paralysis rounds left — the launch limps while it lasts
   cd: number; // player bump-super recharge in shots; 0 = ready
   cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
@@ -874,6 +875,7 @@ export class Battle {
         dotTicks: 0,
         dotDmg: 0,
         burnT: 0,
+        paraT: 0,
         cd,
         cdMax: cd,
         lastBump: -1,
@@ -1550,6 +1552,7 @@ export class Battle {
       dotTicks: 0,
       dotDmg: 0,
       burnT: 0,
+      paraT: 0,
       cd: 0,
       cdMax: 1,
       lastBump: -1,
@@ -1764,7 +1767,7 @@ export class Battle {
     this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
     this.shotGold = gold;
-    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
+    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (u.paraT > 0 ? 0.65 : 1) * (0.4 + 0.6 * (gold ? 1 : charge));
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.sq = 1; // launch pop — the ball stretches off the sling
@@ -5395,6 +5398,7 @@ export class Battle {
                 p.asleep = false;
                 p.dotTicks = 0;
                 p.burnT = 0;
+                p.paraT = 0;
               }
               playJingle('rest'); // the center motif — gentle triad, homage not the tune
               return {
@@ -5517,6 +5521,7 @@ export class Battle {
         p.burnT--;
         this.damagePlayer(p, Math.max(1, Math.ceil(p.maxHp * 0.04)), undefined);
       }
+      if (p.paraT > 0) p.paraT--;
     }
     // zombie loop: a linked foe rises unless its partner fell too — the
     // pair only stays down if both die inside the same shot
@@ -5947,6 +5952,11 @@ export class Battle {
     if (src?.def.burn && !p.dead && dmg > 0 && this.rng() < 0.7) {
       p.burnT = Math.max(p.burnT, 6);
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'BURNED!', t: 1, color: '#f08030', big: false });
+    }
+    // thunder wave: the shock locks the sling — launches limp a few rounds
+    if (src?.def.para && !p.dead && dmg > 0 && this.rng() < 0.6) {
+      p.paraT = Math.max(p.paraT, 5);
+      this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'PARALYZED!', t: 1, color: '#f8d030', big: false });
     }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
@@ -7172,6 +7182,7 @@ export class Battle {
       e.def.drowsy && 'its hits can put a mon to sleep',
       e.def.venom && 'its sting leaves a bleeding wound',
       e.def.burn && 'its hits can burn — singes and softens',
+      e.def.para && 'its hits can paralyze — launches limp',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8326,6 +8337,25 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
+    // a paralyzed mon crackles — static sparks jitter while the launch limps
+    if (u.paraT > 0 && !u.dead) {
+      ctx.strokeStyle = '#f8d030';
+      ctx.lineWidth = 1.5;
+      for (let k = 0; k < 2; k++) {
+        const ph = this.time * 6 + k * 2.4;
+        const px = u.x + Math.sin(ph) * u.r * 0.8;
+        const py = u.y - u.r * 0.5 + Math.cos(ph * 1.3) * u.r * 0.5;
+        ctx.globalAlpha = 0.35 + Math.abs(Math.sin(ph * 2)) * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(px - 4, py - 4);
+        ctx.lineTo(px + 2, py);
+        ctx.lineTo(px - 2, py + 2);
+        ctx.lineTo(px + 4, py + 6);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // a burned mon flickers embers — the wisp's mark while it singes
     if (u.burnT > 0 && !u.dead) {
       ctx.fillStyle = '#f08030';
@@ -8524,6 +8554,7 @@ export class Battle {
         u.def.drowsy && 'SLEEP',
         u.def.venom && 'STING',
         u.def.burn && 'WISP',
+        u.def.para && 'JOLT',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

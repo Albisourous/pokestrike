@@ -33,6 +33,7 @@ export interface SpeciesDef {
   drowsy?: boolean; // Sleep Powder: hits can put a mon to sleep — it loses a turn and can't bump
   venom?: boolean; // poison sting: its hits leave the victim bleeding a tick a round
   burn?: boolean; // Will-O-Wisp: hits can burn — the victim hits softer and singes each round
+  para?: boolean; // Thunder Wave: hits can paralyze — the victim's launch limps a few rounds
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -246,7 +247,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 218, name: 'Slugma', type: 'fire', type2: 'rock', stats: st(40, 40, 40, 70, 40, 20), evolvesTo: 219 },
   { id: 111, name: 'Rhyhorn', type: 'rock', stats: st(80, 85, 95, 30, 30, 25), melee: true, evolvesTo: 112 },
   { id: 100, name: 'Voltorb', type: 'electric', stats: st(40, 30, 50, 55, 55, 100), fuse: true, evolvesTo: 101 },
-  { id: 170, name: 'Chinchou', type: 'electric', type2: 'water', stats: st(75, 38, 38, 56, 56, 67), evolvesTo: 171 },
+  { id: 170, name: 'Chinchou', type: 'electric', type2: 'water', stats: st(75, 38, 38, 56, 56, 67), para: true, evolvesTo: 171 },
   { id: 72, name: 'Tentacool', type: 'water', type2: 'poison', stats: st(40, 40, 35, 50, 100, 70), summon: true, evolvesTo: 73 },
   { id: 84, name: 'Doduo', type: 'flying', type2: 'normal', stats: st(35, 85, 45, 35, 35, 75), melee: true, split: true, evolvesTo: 85 },
   { id: 278, name: 'Wingull', type: 'flying', type2: 'water', stats: st(40, 30, 30, 55, 30, 85), melee: true, evolvesTo: 279 },
@@ -272,7 +273,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 273, name: 'Seedot', type: 'grass', type2: 'ghost', stats: st(40, 40, 50, 30, 30, 30), evolvesTo: 274 },
   { id: 276, name: 'Taillow', type: 'flying', type2: 'normal', stats: st(40, 55, 30, 30, 30, 85), melee: true, evolvesTo: 277 },
   { id: 296, name: 'Makuhita', type: 'fighting', stats: st(72, 60, 30, 20, 30, 25), melee: true, evolvesTo: 297 },
-  { id: 309, name: 'Electrike', type: 'electric', stats: st(40, 45, 40, 65, 40, 65), evolvesTo: 310 },
+  { id: 309, name: 'Electrike', type: 'electric', stats: st(40, 45, 40, 65, 40, 65), para: true, evolvesTo: 310 },
   { id: 318, name: 'Carvanha', type: 'water', type2: 'ghost', stats: st(45, 90, 20, 65, 20, 65), melee: true, evolvesTo: 319 },
   { id: 331, name: 'Cacnea', type: 'grass', type2: 'ghost', stats: st(50, 85, 40, 85, 40, 35), evolvesTo: 332 },
   { id: 341, name: 'Corphish', type: 'water', stats: st(43, 80, 65, 50, 35, 35), melee: true, evolvesTo: 342 },

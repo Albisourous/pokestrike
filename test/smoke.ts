@@ -471,6 +471,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   burnee.burnT = 0;
   e.def = { ...e.def, burn: undefined };
 
+  // thunder wave paralyzes — the launch limps while it lasts
+  e.def = { ...e.def, para: true };
+  const jolted = (b as any).players.find((p: any) => !p.dead);
+  jolted.paraT = 0;
+  const rng2 = (b as any).rng;
+  (b as any).rng = () => 0.1;
+  (b as any).damagePlayer(jolted, 5, e);
+  (b as any).rng = rng2;
+  ok(jolted.paraT > 0, `thunder wave paralyzes (${jolted.paraT} rounds)`);
+  jolted.paraT = 0;
+  e.def = { ...e.def, para: undefined };
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

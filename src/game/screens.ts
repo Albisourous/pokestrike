@@ -2399,6 +2399,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'SLEEP powder drops a mon a whole turn — sleepers can\'t bump either',
       'VENOM stings leave a wound that bleeds a tick a round',
       'WISP flames burn — the victim singes and hits softer',
+      'JOLT waves paralyze — the shocked mon\'s launch limps',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
