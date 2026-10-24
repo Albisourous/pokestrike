@@ -201,6 +201,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   shooter.y = e3.y;
   (b as any).strikeEnemy(shooter, e3);
   ok(shooter.hp < php, `spiked contact chips the ball (${php} -> ${shooter.hp})`);
+
+  // regen foes mend — a wounded one gains HP over a sim second
+  e1.def = { ...e1.def, regen: true };
+  e1.hp = Math.floor(e1.maxHp / 2);
+  (b as any).stepEnemyMovement(1);
+  ok(e1.hp > Math.floor(e1.maxHp / 2), `regen foe mends (${Math.floor(e1.maxHp / 2)} -> ${e1.hp})`);
 }
 
 {

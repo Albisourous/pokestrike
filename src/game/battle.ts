@@ -99,6 +99,7 @@ interface Unit {
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
   weakA: number; // boss weak point angle — rotating gold face, ×3 contact
   shieldA: number; // shelled foes: the shell's facing — front hits glance, back hits flank
+  regenT: number; // regen foes: sparkle throttle — a green puff every ~1.5s of mending
   minion?: boolean; // summoned add — while any live, the boss is guarded
   volatile?: boolean; // VOLATILE wave mod — a KO bursts, splashing neighbors
   supp?: 'medic' | 'aegis'; // support foe — heals or shields the pack on its turn
@@ -873,6 +874,7 @@ export class Battle {
         cdMod: m.cdMod,
         lastHit: new Map(),
         wallN: 0,
+        regenT: 0,
         hzT: -9,
         sq: 0,
         sumStage: 0,
@@ -1495,6 +1497,7 @@ export class Battle {
       atkN: 0,
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
       shieldA: s.def.shielded ? this.rng() * Math.PI * 2 : 0,
+      regenT: 0,
       shieldN: 0,
       revives: 0,
       gravR: 0,
@@ -2182,6 +2185,15 @@ export class Battle {
       if (e.dead) continue; // corpses don't drift, lunge, or shove
       if (e.boss) e.weakA += dt * 0.45; // the weak face drifts — watch it before you commit
       if (e.def.shielded) e.shieldA += dt * 0.22; // the shell turns slower — the flank window roams the rim
+      // regen foes mend steadily — a slow fight is a losing fight vs these
+      if (e.def.regen && e.hp < e.maxHp) {
+        e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.03 * dt);
+        e.regenT += dt;
+        if (e.regenT > 1.5) {
+          e.regenT = 0;
+          this.burst(e.x, e.y - e.r, '#a0e060', 3, 140, 0.6);
+        }
+      }
       const kn = Math.exp(-4 * dt);
       e.vx *= kn;
       e.vy *= kn;
@@ -7859,11 +7871,12 @@ export class Battle {
         u.def.cursed && 'CURSE',
         u.def.shielded && 'SHELL',
         u.def.spiky && 'SPIKY',
+        u.def.regen && 'REGEN',
       ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);
         ctx.strokeText(kw, u.x, u.y + u.r + 14);
-        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.shielded ? '#9aa7b8' : '#f85888';
+        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.regen ? '#a0e060' : u.def.shielded ? '#9aa7b8' : '#f85888';
         ctx.fillText(kw, u.x, u.y + u.r + 14);
       }
     } else {
