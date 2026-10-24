@@ -141,13 +141,22 @@ export function loadNpcs(): Promise<void> {
 }
 
 // Draw an NPC sprite feet-anchored at x,y scaled to `h` px tall. The atlas
-// is already transparent — no keying pass needed.
-export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number, y: number, h: number) {
+// is already transparent — no keying pass needed. `flip` mirrors for the
+// families that only ship one horizontal direction (norman lacks right_*).
+export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number, y: number, h: number, flip = false) {
   const f = npcFrames[frame];
   if (!npcsImg || !f) return;
   ctx.imageSmoothingEnabled = false;
   if (!f.rot) {
     const w = (h / f.h) * f.w;
+    if (flip) {
+      ctx.save();
+      ctx.translate(x + w / 2, y - h);
+      ctx.scale(-1, 1);
+      ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, 0, 0, w, h);
+      ctx.restore();
+      return;
+    }
     ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, x - w / 2, y - h, w, h); // feet stand on y
     return;
   }
@@ -155,8 +164,9 @@ export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number,
   // feet's left corner, turn the canvas so the sprite lands upright
   ctx.save();
   const uw = (h / f.w) * f.h;
-  ctx.translate(x - uw / 2, y);
+  ctx.translate(x + (flip ? uw : -uw) / 2, y);
   ctx.rotate(-Math.PI / 2);
+  if (flip) ctx.scale(1, -1);
   ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, 0, 0, h, uw);
   ctx.restore();
 }

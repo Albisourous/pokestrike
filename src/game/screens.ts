@@ -3,7 +3,7 @@ import { isMuted } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay, makeStage, FLOATERS } from './data';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
-import { drawBackdrop } from './bg';
+import { drawBackdrop, hash } from './bg';
 import { drawTile } from './map';
 import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TILE_HALL, TILE_MART, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
@@ -1949,6 +1949,63 @@ function townSign(ctx: CanvasRenderingContext2D, cx: number, y: number, w: numbe
   ctx.fillText(sub, cx, y + 26);
 }
 
+// the town's villagers each stroll a bounded beat: every leg picks a spot in
+// the box, walks it cardinally — GBA npcs never cut diagonals — then idles a
+// beat at the far end. Leg length ≥ the longest possible walk + 1.5s idle, so
+// walks always finish inside their leg and the t-keyed math never teleports
+// anyone. Pure function of t — no walker state, replays stay deterministic.
+export interface TownStroll {
+  id: string;             // npc-atlas frame prefix
+  seed: number;           // decorrelates the hash picks
+  hx: number; hy: number; // home post — leg 0 walks out of it; inside the box
+  x0: number; y0: number; x1: number; y1: number; // wander box, feet coords
+  speed: number;          // px/s
+  h: number;              // sprite height
+  noRight?: boolean;      // atlas lacks right_* — draw the left frames flipped
+}
+
+export const TOWN_FOLK: TownStroll[] = [
+  { id: 'scientist',    seed: 3.1, hx: 172, hy: 344, x0: 52,  y0: 330, x1: 228, y1: 360, speed: 26, h: 30 }, // lab lawn
+  { id: 'lass',         seed: 7.7, hx: 348, hy: 402, x0: 302, y0: 388, x1: 496, y1: 420, speed: 30, h: 30 }, // north street, east half
+  { id: 'gentleman',    seed: 5.3, hx: 476, hy: 676, x0: 302, y0: 660, x1: 500, y1: 694, speed: 20, h: 30 }, // south street, east half
+  { id: 'shopkeeper_m', seed: 9.9, hx: 214, hy: 592, x0: 46,  y0: 566, x1: 228, y1: 634, speed: 26, h: 30 }, // mart front
+  { id: 'norman',       seed: 4.2, hx: 356, hy: 840, x0: 160, y0: 828, x1: 400, y1: 850, speed: 24, h: 32, noRight: true }, // park's south shore
+  { id: 'youngster',    seed: 8.8, hx: 60,  hy: 402, x0: 44,  y0: 388, x1: 496, y1: 420, speed: 55, h: 30 }, // sprints the whole north street
+];
+
+type NpcDir = 'down' | 'up' | 'left' | 'right';
+
+// where villager w stands at t — feet {x,y}, the atlas frame name, and a flip
+// flag for the npc families missing a right_* set
+export function townStrollAt(w: TownStroll, t: number): { x: number; y: number; frame: string; flip: boolean } {
+  const legT = Math.hypot(w.x1 - w.x0, w.y1 - w.y0) / w.speed + 1.5;
+  const k = Math.floor(t / legT);
+  let tau = t - k * legT;
+  const pt = (j: number): [number, number] => (j <= 0
+    ? [w.hx, w.hy]
+    : [w.x0 + hash(w.seed + j * 13.7) * (w.x1 - w.x0), w.y0 + hash(w.seed + j * 7.3 + 4) * (w.y1 - w.y0)]);
+  const [ax, ay] = pt(k), [bx, by] = pt(k + 1);
+  // the leg walks x-then-y or y-then-x, seeded per leg
+  const segs: [number, number][] = hash(w.seed + k * 3.1 + 9) < 0.5 ? [[bx - ax, 0], [0, by - ay]] : [[0, by - ay], [bx - ax, 0]];
+  let x = ax, y = ay, dir: NpcDir = 'down', walking = false;
+  for (const [dx, dy] of segs) {
+    const dur = Math.abs(dx || dy) / w.speed;
+    if (tau < dur) {
+      const u = tau / dur;
+      x += dx * u; y += dy * u;
+      dir = dx ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+      walking = true;
+      break;
+    }
+    tau -= dur;
+    x += dx; y += dy;
+    if (dx || dy) dir = dx ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+  }
+  const flip = !!w.noRight && dir === 'right';
+  const fr = walking ? [0, 1, 0, 2][Math.floor(t * 6) % 4] : 0;
+  return { x, y, frame: `${w.id}_${flip ? 'left' : dir}_${fr}`, flip };
+}
+
 function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // clip the whole scene to the play area — the tile loops' last column and
   // the flank trees overrun W, and without this they paint the right pillar
@@ -2072,16 +2129,12 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
   }
 
-  // villagers — feet on the paving by their doors; Norman takes the day off
-  // in the park, and one youngster paces the north street with a walk cycle
-  drawNpc(ctx, 'scientist_down_0', 172, 344, 30);
-  drawNpc(ctx, 'lass_down_0', 348, 402, 30);
-  drawNpc(ctx, 'gentleman_down_0', 476, 676, 30);
-  drawNpc(ctx, 'shopkeeper_m_down_0', 214, 592, 30);
-  drawNpc(ctx, 'norman_down_0', 356, 750, 32);
-  const walk = (t * 60) % 840;
-  const wx = walk <= 420 ? 60 + walk : 480 - (walk - 420);
-  drawNpc(ctx, `youngster_${walk <= 420 ? 'right' : 'left'}_${[0, 1, 0, 2][Math.floor(t * 6) % 4]}`, wx, 402, 30);
+  // villagers stroll their beats — Norman takes the day off on the park's
+  // south shore, the youngster sprints the whole north street
+  for (const w of TOWN_FOLK) {
+    const s = townStrollAt(w, t);
+    drawNpc(ctx, s.frame, s.x, s.y, w.h, s.flip);
+  }
 
   // the park — the lane's south end opens on the pond: sand shore ring,
   // water inset, trees ringing it, a boulder sunning itself

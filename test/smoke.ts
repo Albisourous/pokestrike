@@ -2,7 +2,7 @@
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst } from '../src/game/data';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
@@ -14,6 +14,7 @@ import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coac
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
+import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -3544,6 +3545,32 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   else localStorage.setItem('pk_pulls', pullSave);
   localStorage.removeItem('pk_rookie');
   localStorage.removeItem('pk_tasks');
+}
+
+// --- town villagers stroll their beats -------------------------------------
+// The t-keyed wander must stay inside each box, move continuously (a leg's
+// walk always completes inside its window, so boundaries can't teleport), and
+// only name frames the npc atlas actually ships — norman flips left_* for
+// right because the pack never drew his right side.
+{
+  const atlas = JSON.parse(readFileSync('public/sprites/gracidea/npcs.json', 'utf8')) as { frames: Record<string, unknown> };
+  let inBox = true, cont = true, realFrame = true, roams = 0;
+  for (const w of TOWN_FOLK) {
+    let px = w.hx, py = w.hy, minX = Infinity, maxX = -Infinity;
+    for (let t = 0; t <= 240; t += 0.06) {
+      const s = townStrollAt(w, t);
+      if (s.x < w.x0 - 0.01 || s.x > w.x1 + 0.01 || s.y < w.y0 - 0.01 || s.y > w.y1 + 0.01) inBox = false;
+      if (Math.hypot(s.x - px, s.y - py) > w.speed * 0.06 + 0.5) cont = false;
+      if (!atlas.frames[s.frame]) realFrame = false;
+      minX = Math.min(minX, s.x); maxX = Math.max(maxX, s.x);
+      px = s.x; py = s.y;
+    }
+    if (maxX - minX > 30) roams++;
+  }
+  ok(inBox, 'villager strolls stay inside their beat boxes');
+  ok(cont, 'villager walks are continuous — no leg-boundary teleports');
+  ok(realFrame, 'every stroll frame exists in the npc atlas');
+  ok(roams === TOWN_FOLK.length, `all ${TOWN_FOLK.length} villagers actually roam (${roams} ranged >30px)`);
 }
 
 // --- fuzz: garbage in any pk_* key can't throw or NaN a reader -------------
