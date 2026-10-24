@@ -8097,6 +8097,16 @@ export class Battle {
       }
     }
 
+    // focus sash — the white headband reads on both sides: a one-shot plan
+    // should be visible before the shot commits, not after the pop
+    if (u.sash) {
+      ctx.strokeStyle = '#f0f0e8';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y - u.r * 0.3 + bob - lift, u.r * 0.62, Math.PI * 1.12, Math.PI * 1.88);
+      ctx.stroke();
+    }
+
     // volatile — a sputtering ember crown: this one bursts when it falls
     if (u.side === 'enemy' && u.volatile) {
       const fl = 0.55 + Math.sin(this.time * 13 + u.uid * 1.7) * 0.35;
