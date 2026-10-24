@@ -3293,6 +3293,8 @@ export class Battle {
         (1 + this.shotVolleyBoost) *
         (rico ? 1 + this.ricoMult : 1) *
         (shooter.burnT > 0 ? 0.7 : 1) * // a burned striker pulls its punches
+        // intimidate: a living menace cowes the whole team — kill it first
+        (this.enemies.some((m) => !m.dead && m.def.menace) ? 0.8 : 1) *
         (weak ? 3 : 1) *
         (guarded ? 0.3 : flanked ? 1.5 : 1) *
         // power zone: hits landed while the ball's inside the ATK field
@@ -6532,6 +6534,21 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // menace pressure — a slow violet ring that breathes while the
+    // intimidator lives; your hits lose a fifth until it falls
+    for (const e of this.enemies) {
+      if (e.dead || !e.def.menace) continue;
+      ctx.globalAlpha = 0.16 + Math.sin(this.time * 2.2 + e.uid) * 0.08;
+      ctx.strokeStyle = '#7038f8';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([2, 7]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 9 + Math.sin(this.time * 2.2 + e.uid) * 3, this.time * 0.9, this.time * 0.9 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+
     // repulsor fields — a pale gold halo, dashes streaming outward
     for (const e of this.enemies) {
       if (e.dead || !e.repelR) continue;
@@ -7227,6 +7244,7 @@ export class Battle {
       e.def.toxic && 'contact can poison the ball',
       e.def.shock && 'contact can paralyze the ball',
       e.def.flame && 'contact can burn the ball',
+      e.def.menace && 'intimidates — your hits lose a fifth while it lives',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8602,6 +8620,7 @@ export class Battle {
         u.def.toxic && 'TOXIC',
         u.def.shock && 'STATIC',
         u.def.flame && 'FLAME',
+        u.def.menace && 'MENACE',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

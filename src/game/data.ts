@@ -37,6 +37,7 @@ export interface SpeciesDef {
   toxic?: boolean; // Poison Point: merely striking the hide can poison the ball — graze it wide
   shock?: boolean; // Static: striking the crackling hide can paralyze the ball — the launch limps
   flame?: boolean; // Flame Body: striking the hide can burn the ball — its hits lose heat
+  menace?: boolean; // Intimidate: while it lives the team's hits lose a fifth — kill it first
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -414,7 +415,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 94, name: 'Gengar', type: 'ghost', type2: 'poison', stats: st(60, 65, 60, 130, 75, 110), pierce: true, cursed: true },
   { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30), taunt: true },
   { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55), melee: true },
-  { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
+  { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95), menace: true },
   { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
   { id: 3, name: 'Venusaur', type: 'grass', type2: 'poison', stats: st(80, 82, 83, 100, 100, 80), healer: true },
   { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120), pierce: true, blink: true },
@@ -443,7 +444,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true },
   { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true },
   { id: 350, name: 'Milotic', type: 'water', stats: st(95, 60, 79, 100, 125, 81), healer: true },
-  { id: 373, name: 'Salamence', type: 'flying', stats: st(95, 135, 80, 110, 80, 100), melee: true },
+  { id: 373, name: 'Salamence', type: 'flying', stats: st(95, 135, 80, 110, 80, 100), melee: true, menace: true },
   { id: 121, name: 'Starmie', type: 'water', type2: 'psychic', stats: st(60, 75, 85, 100, 85, 115), pierce: true },
   { id: 122, name: 'Mr. Mime', type: 'psychic', stats: st(40, 45, 65, 100, 120, 90), taunt: true },
   { id: 127, name: 'Pinsir', type: 'fighting', stats: st(65, 125, 100, 55, 70, 85), melee: true },
@@ -473,7 +474,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 330, name: 'Flygon', type: 'rock', type2: 'flying', stats: st(80, 100, 80, 80, 80, 100) },
   { id: 321, name: 'Wailord', type: 'water', stats: st(170, 90, 45, 90, 45, 60), taunt: true },
   { id: 369, name: 'Relicanth', type: 'water', type2: 'rock', stats: st(100, 90, 130, 45, 65, 55), taunt: true },
-  { id: 303, name: 'Mawile', type: 'fighting', stats: st(50, 85, 85, 55, 55, 50), melee: true },
+  { id: 303, name: 'Mawile', type: 'fighting', stats: st(50, 85, 85, 55, 55, 50), melee: true, menace: true },
   { id: 335, name: 'Zangoose', type: 'normal', stats: st(73, 115, 60, 60, 60, 90), melee: true, rage: true },
   { id: 389, name: 'Torterra', type: 'grass', type2: 'rock', stats: st(95, 109, 105, 75, 85, 56), taunt: true },
   { id: 392, name: 'Infernape', type: 'fire', type2: 'fighting', stats: st(76, 104, 71, 104, 71, 108), melee: true, pierce: true },

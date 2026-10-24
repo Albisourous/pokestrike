@@ -2403,6 +2403,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'TOXIC hides poison the ball on contact — kill them with banks',
       'STATIC hides paralyze on contact — touch once, hard',
       'FLAME hides burn on contact — seared hits lose heat',
+      'MENACE foes intimidate — your hits lose a fifth while they live',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

@@ -530,6 +530,27 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).grabPickup({ kind: 'lum-berry', x: 100, y: 100, t: 0 });
   ok(striker.dotTicks === 0 && striker.burnT === 0 && striker.paraT === 0 && !striker.asleep, 'lum berry cures the whole slate');
 
+  // intimidate: a living menace shaves a fifth off the team's hits
+  const menace = (b as any).enemies[1];
+  menace.def = { ...menace.def, menace: true };
+  menace.dead = false;
+  menace.hp = menace.maxHp;
+  e.dead = false;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  striker.lastHit = new Map();
+  const hpMen = e.hp;
+  (b as any).strikeEnemy(striker, e);
+  const menHit = hpMen - e.hp;
+  menace.dead = true;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  striker.lastHit = new Map();
+  const hpFree = e.hp;
+  (b as any).strikeEnemy(striker, e);
+  const freeHit = hpFree - e.hp;
+  ok(menHit < freeHit && Math.abs(menHit / freeHit - 0.8) < 0.12, `intimidate shaves a fifth (${menHit} vs ${freeHit})`);
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
