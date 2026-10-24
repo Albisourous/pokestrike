@@ -2259,7 +2259,7 @@ export class Battle {
           // Field zones (static/power/well) must not land here: they work
           // by being entered, and chip turned them into disguised lava.
           u.hzT = this.time;
-          this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.04)));
+          this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.04 * (hz.kind === 'lava' && u.def.thickFat ? 0.5 : 1))));
           sfx('sizzle');
         }
       }
@@ -3417,7 +3417,7 @@ export class Battle {
     }
     // static: the crackling hide can discharge into the striker — the
     // next launch limps, so touch it once with a hard kill or not at all
-    if (e.def.shock && !shooter.dead && this.rng() < 0.3 && shooter.paraT <= 0) {
+    if (e.def.shock && !shooter.dead && !shooter.def.limber && this.rng() < 0.3 && shooter.paraT <= 0) {
       shooter.paraT = 3;
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'STATIC!', t: 0.9, color: '#f8d030', big: false });
     }
@@ -3441,7 +3441,7 @@ export class Battle {
         shooter.dotTicks = Math.max(shooter.dotTicks, 4);
         shooter.dotDmg = Math.max(shooter.dotDmg, Math.ceil(shooter.maxHp * 0.06));
       } else if (sporeRoll < 0.7) {
-        shooter.paraT = Math.max(shooter.paraT, 3);
+        if (!shooter.def.limber) shooter.paraT = Math.max(shooter.paraT, 3);
       } else if (!shooter.def.sleepless) {
         shooter.asleep = true;
       }
@@ -3453,7 +3453,7 @@ export class Battle {
       let synced = false;
       if (e.dotTicks > 0) { shooter.dotTicks = Math.max(shooter.dotTicks, e.dotTicks); shooter.dotDmg = Math.max(shooter.dotDmg, e.dotDmg); synced = true; }
       if (e.burnT > 0) { shooter.burnT = Math.max(shooter.burnT, e.burnT); synced = true; }
-      if (e.paraT > 0) { shooter.paraT = Math.max(shooter.paraT, e.paraT); synced = true; }
+      if (e.paraT > 0 && !shooter.def.limber) { shooter.paraT = Math.max(shooter.paraT, e.paraT); synced = true; }
       if (synced) this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SYNCED!', t: 0.9, color: '#f85888', big: false });
     }
     // barbed foes bite back — every contact costs the ball a chip of its
@@ -6191,7 +6191,7 @@ export class Battle {
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'BURNED!', t: 1, color: '#f08030', big: false });
     }
     // thunder wave: the shock locks the sling — launches limp a few rounds
-    if (src?.def.para && !p.dead && dmg > 0 && this.rng() < 0.6) {
+    if (src?.def.para && !p.dead && !p.def.limber && dmg > 0 && this.rng() < 0.6) {
       p.paraT = Math.max(p.paraT, 5);
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'PARALYZED!', t: 1, color: '#f8d030', big: false });
     }

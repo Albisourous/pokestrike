@@ -61,6 +61,8 @@ export interface SpeciesDef {
   pheal?: boolean; // Poison Heal: venom ticks mend instead of bleed
   sleepless?: boolean; // Insomnia/Vital Spirit: sleep effects wash off
   pickup?: boolean; // Pickup: may nose out a bag consumable after each wave
+  thickFat?: boolean; // Thick Fat: lava's bite lands at half heat
+  limber?: boolean; // Limber: paralysis can't hold the limbs
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -104,7 +106,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 328, name: 'Trapinch', type: 'rock', stats: st(45, 100, 45, 45, 45, 10), evolvesTo: 329 },
   { id: 349, name: 'Feebas', type: 'water', stats: st(20, 15, 20, 10, 55, 80), evolvesTo: 350 },
   { id: 361, name: 'Snorunt', type: 'water', stats: st(50, 50, 50, 50, 50, 50), evolvesTo: [362, 478] },
-  { id: 363, name: 'Spheal', type: 'water', stats: st(70, 40, 50, 55, 50, 25), evolvesTo: 364 },
+  { id: 363, name: 'Spheal', type: 'water', stats: st(70, 40, 50, 55, 50, 25), evolvesTo: 364, thickFat: true },
   { id: 172, name: 'Pichu', type: 'electric', stats: st(20, 40, 15, 35, 35, 60), evolvesTo: 25 },
   { id: 174, name: 'Igglybuff', type: 'normal', stats: st(90, 30, 15, 40, 20, 15), healer: true, evolvesTo: 39 },
   { id: 191, name: 'Sunkern', type: 'grass', stats: st(30, 30, 30, 30, 30, 30), evolvesTo: 192 },
@@ -135,7 +137,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 23, name: 'Ekans', type: 'poison', stats: st(35, 60, 44, 40, 54, 55), evolvesTo: 24 },
   { id: 96, name: 'Drowzee', type: 'psychic', stats: st(60, 48, 45, 43, 90, 42), sleepy: true, sleepless: true, evolvesTo: 97 },
   { id: 83, name: "Farfetch'd", type: 'flying', type2: 'normal', stats: st(52, 90, 55, 58, 62, 60), melee: true },
-  { id: 220, name: 'Swinub', type: 'water', type2: 'rock', stats: st(50, 50, 40, 30, 30, 50), evolvesTo: 221 },
+  { id: 220, name: 'Swinub', type: 'water', type2: 'rock', stats: st(50, 50, 40, 30, 30, 50), evolvesTo: 221, thickFat: true },
   { id: 120, name: 'Staryu', type: 'water', stats: st(30, 45, 55, 70, 55, 85), evolvesTo: 121 },
   { id: 387, name: 'Turtwig', type: 'grass', stats: st(55, 68, 64, 45, 55, 31), healer: true, evolvesTo: 388 },
   { id: 390, name: 'Chimchar', type: 'fire', stats: st(44, 58, 44, 58, 44, 61), melee: true, evolvesTo: 391 },
@@ -149,15 +151,15 @@ export const ROSTER: SpeciesDef[] = [
   { id: 417, name: 'Pachirisu', type: 'electric', stats: st(60, 45, 70, 45, 90, 95), pierce: true },
   { id: 418, name: 'Buizel', type: 'water', stats: st(55, 65, 35, 60, 30, 85), pierce: true, evolvesTo: 419 },
   { id: 425, name: 'Drifloon', type: 'ghost', stats: st(90, 50, 34, 60, 44, 70), cursed: true, evolvesTo: 426 },
-  { id: 427, name: 'Buneary', type: 'normal', stats: st(55, 66, 44, 44, 56, 85), pierce: true, evolvesTo: 428 },
-  { id: 431, name: 'Glameow', type: 'normal', stats: st(49, 55, 42, 42, 37, 85), evolvesTo: 432 },
+  { id: 427, name: 'Buneary', type: 'normal', stats: st(55, 66, 44, 44, 56, 85), pierce: true, limber: true, evolvesTo: 428 },
+  { id: 431, name: 'Glameow', type: 'normal', stats: st(49, 55, 42, 42, 37, 85), evolvesTo: 432, limber: true },
   { id: 433, name: 'Chingling', type: 'psychic', stats: st(45, 30, 50, 65, 50, 45), healer: true, evolvesTo: 358 },
   { id: 436, name: 'Bronzor', type: 'rock', stats: st(57, 24, 86, 24, 86, 23), taunt: true, evolvesTo: 437 },
   { id: 438, name: 'Bonsly', type: 'rock', stats: st(50, 80, 95, 10, 45, 10), taunt: true, sturdy: true, evolvesTo: 185 },
   { id: 439, name: 'Mime Jr.', type: 'psychic', stats: st(20, 25, 45, 70, 90, 60), evolvesTo: 122 },
   { id: 440, name: 'Happiny', type: 'normal', stats: st(100, 5, 5, 15, 65, 30), healer: true, evolvesTo: 113 },
   { id: 443, name: 'Gible', type: 'rock', stats: st(58, 70, 45, 40, 45, 42), melee: true, evolvesTo: 444 },
-  { id: 446, name: 'Munchlax', type: 'normal', stats: st(135, 85, 40, 40, 85, 5), taunt: true, pickup: true, evolvesTo: 143 },
+  { id: 446, name: 'Munchlax', type: 'normal', stats: st(135, 85, 40, 40, 85, 5), taunt: true, pickup: true, thickFat: true, evolvesTo: 143 },
   { id: 447, name: 'Riolu', type: 'fighting', stats: st(40, 70, 40, 35, 40, 60), melee: true, evolvesTo: 448 },
   { id: 451, name: 'Skorupi', type: 'poison', stats: st(40, 50, 90, 30, 55, 65), melee: true, evolvesTo: 452 },
   { id: 453, name: 'Croagunk', type: 'poison', stats: st(48, 61, 40, 61, 40, 50), melee: true, evolvesTo: 454 },
