@@ -178,4 +178,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `2df16f2` | battle | TOXIC hides poison the ball on contact — Nidorans/Seadra | `git revert <this commit>` |
 | 2026-10-25 | `5045321` | battle | STATIC hides paralyze the striker — Electabuzz/Manectric | `git revert <this commit>` |
 | 2026-10-25 | `6ab7ad5` | battle | FLAME hides burn the striker — Ponyta/Slugma/Magmar | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | LUM BERRY drops vs status packs — full team cleanse | `git revert <this commit>` |
+| 2026-10-25 | `1d2d472` | battle | LUM BERRY drops vs status packs — full team cleanse | `git revert <this commit>` |
