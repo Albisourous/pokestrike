@@ -8038,6 +8038,19 @@ export class Battle {
       }
     }
 
+    // volatile — a sputtering ember crown: this one bursts when it falls
+    if (u.side === 'enemy' && u.volatile) {
+      const fl = 0.55 + Math.sin(this.time * 13 + u.uid * 1.7) * 0.35;
+      ctx.fillStyle = '#ff9a30';
+      ctx.globalAlpha = fl;
+      drawStar(ctx, u.x + u.r * 0.6, u.y - u.r - 4, 4.5 + Math.sin(this.time * 17 + u.uid) * 1.5, 0.45);
+      ctx.globalAlpha = fl * 0.5;
+      ctx.beginPath();
+      ctx.arc(u.x + u.r * 0.6, u.y - u.r - 4, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
     // envenomed — poison bubbles rise off the sprite while ticks remain
     if (u.side === 'enemy' && u.dotTicks > 0) {
       ctx.fillStyle = '#a040a0';
