@@ -40,6 +40,7 @@ export interface SpeciesDef {
   menace?: boolean; // Intimidate: while it lives the team's hits lose a fifth — kill it first
   wguard?: boolean; // Wonder Guard: only super-effective hits land — slam it, burn it, or hit SE
   sturdy?: boolean; // Sturdy: hangs on at 1 HP through the first lethal hit
+  charm?: boolean; // Cute Charm: a smitten striker nods off — it loses a launch
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -445,7 +446,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 282, name: 'Gardevoir', type: 'psychic', type2: 'normal', stats: st(68, 65, 65, 125, 115, 80), healer: true },
   { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true },
   { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true },
-  { id: 350, name: 'Milotic', type: 'water', stats: st(95, 60, 79, 100, 125, 81), healer: true },
+  { id: 350, name: 'Milotic', type: 'water', stats: st(95, 60, 79, 100, 125, 81), healer: true, charm: true },
   { id: 373, name: 'Salamence', type: 'flying', stats: st(95, 135, 80, 110, 80, 100), melee: true, menace: true },
   { id: 121, name: 'Starmie', type: 'water', type2: 'psychic', stats: st(60, 75, 85, 100, 85, 115), pierce: true },
   { id: 122, name: 'Mr. Mime', type: 'psychic', stats: st(40, 45, 65, 100, 120, 90), taunt: true },
@@ -733,7 +734,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 266, name: 'Silcoon', type: 'grass', stats: st(50, 35, 55, 25, 25, 15), evolvesTo: 267 },
   { id: 267, name: 'Beautifly', type: 'flying', stats: st(60, 70, 50, 100, 50, 65) },
   { id: 284, name: 'Masquerain', type: 'flying', stats: st(70, 60, 62, 100, 82, 80) },
-  { id: 301, name: 'Delcatty', type: 'normal', stats: st(70, 65, 65, 55, 55, 90) },
+  { id: 301, name: 'Delcatty', type: 'normal', stats: st(70, 65, 65, 55, 55, 90), charm: true },
   { id: 308, name: 'Medicham', type: 'fighting', type2: 'psychic', stats: st(60, 60, 75, 60, 75, 80), melee: true },
   { id: 323, name: 'Camerupt', type: 'fire', stats: st(70, 100, 70, 105, 75, 40), melee: true },
   { id: 326, name: 'Grumpig', type: 'psychic', stats: st(80, 45, 65, 90, 110, 80) },

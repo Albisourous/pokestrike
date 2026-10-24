@@ -3356,6 +3356,12 @@ export class Battle {
       shooter.burnT = Math.max(shooter.burnT, 4);
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'BURNED!', t: 0.9, color: '#f08030', big: false });
     }
+    // cute charm: the smitten striker nods off — a grazed shot can cost
+    // the team its next launch, so finish the charm carrier from range
+    if (e.def.charm && !shooter.dead && !shooter.asleep && this.rng() < 0.3) {
+      shooter.asleep = true;
+      this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SMITTEN!', t: 0.9, color: '#f8b8d0', big: false });
+    }
     // barbed foes bite back — every contact costs the ball a chip of its
     // own HP, so sloppy grazes through the pack bleed the run
     if (e.def.spiky && !shooter.dead) {
@@ -7257,6 +7263,7 @@ export class Battle {
       e.def.menace && 'intimidates — your hits lose a fifth while it lives',
       e.def.wguard && 'wonder guard — only super-effective hits land',
       e.def.sturdy && 'sturdy — hangs on at 1 HP once',
+      e.def.charm && 'cute charm — contact can lull the ball to sleep',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8636,6 +8643,7 @@ export class Battle {
         u.def.menace && 'MENACE',
         u.def.wguard && 'W-GUARD',
         u.def.sturdy && u.sash && 'STURDY',
+        u.def.charm && 'CHARM',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

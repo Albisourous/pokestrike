@@ -577,6 +577,20 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).hurt(e, e.maxHp + 50);
   ok(e.hp === 1 && !e.dead && !e.sash, `sturdy hangs on at 1 HP (hp ${e.hp})`);
 
+  // cute charm: a smitten striker nods off mid-contact
+  e.def = { ...eDef, charm: true };
+  e.dead = false;
+  e.hp = e.maxHp;
+  striker.asleep = false;
+  striker.lastHit = new Map();
+  e.lastHit = new Map();
+  (b as any).rng = () => 0.1;
+  (b as any).strikeEnemy(striker, e);
+  (b as any).rng = rng3;
+  ok(striker.asleep, 'cute charm lulls the striker');
+  striker.asleep = false;
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
