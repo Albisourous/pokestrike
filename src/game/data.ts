@@ -64,6 +64,7 @@ export interface SpeciesDef {
   thickFat?: boolean; // Thick Fat: lava's bite lands at half heat
   limber?: boolean; // Limber: paralysis can't hold the limbs
   grace?: boolean; // Serene Grace: its contact abilities fire at double odds
+  damp?: boolean; // Damp: while it lives, fuses fizzle and blasts soften
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -86,20 +87,20 @@ export const ROSTER: SpeciesDef[] = [
   { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55), evolvesTo: [134, 135, 136, 196] },
   { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20), healer: true, charm: true, evolvesTo: 40 },
   { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90), pierce: true, raider: true, pickup: true, evolvesTo: 53 },
-  { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55), evolvesTo: 55 },
+  { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55), damp: true, evolvesTo: 55 },
   { id: 95, name: 'Onix', type: 'rock', stats: st(35, 45, 160, 30, 45, 70), evolvesTo: 208, sturdy: true },
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), evolvesTo: 67, guts: true },
   { id: 132, name: 'Ditto', type: 'normal', stats: st(48, 48, 48, 48, 48, 48), copy: true },
   { id: 32, name: 'Nidoran♂', type: 'poison', stats: st(46, 57, 40, 40, 40, 50), evolvesTo: 33 },
   { id: 35, name: 'Clefairy', type: 'normal', stats: st(70, 45, 48, 60, 65, 35), healer: true, charm: true, evolvesTo: 36 },
   { id: 37, name: 'Vulpix', type: 'fire', stats: st(38, 41, 40, 50, 65, 65), evolvesTo: 38 },
-  { id: 60, name: 'Poliwag', type: 'water', stats: st(40, 50, 40, 40, 40, 90), evolvesTo: 61 },
+  { id: 60, name: 'Poliwag', type: 'water', stats: st(40, 50, 40, 40, 40, 90), damp: true, evolvesTo: 61 },
   { id: 92, name: 'Gastly', type: 'ghost', type2: 'poison', stats: st(30, 35, 30, 100, 35, 80), pierce: true, evolvesTo: 93 },
   { id: 104, name: 'Cubone', type: 'rock', stats: st(50, 50, 95, 40, 50, 35), melee: true, evolvesTo: 105 },
   { id: 129, name: 'Magikarp', type: 'water', stats: st(20, 10, 55, 15, 20, 80), evolvesTo: 130 },
   { id: 179, name: 'Mareep', type: 'electric', stats: st(55, 40, 40, 65, 45, 35), evolvesTo: 180, shock: true },
   { id: 183, name: 'Marill', type: 'water', type2: 'normal', stats: st(70, 20, 50, 20, 50, 40), healer: true, evolvesTo: 184 },
-  { id: 194, name: 'Wooper', type: 'water', type2: 'rock', stats: st(55, 45, 45, 25, 25, 15), evolvesTo: 195 },
+  { id: 194, name: 'Wooper', type: 'water', type2: 'rock', stats: st(55, 45, 45, 25, 25, 15), damp: true, evolvesTo: 195 },
   { id: 280, name: 'Ralts', type: 'psychic', type2: 'normal', stats: st(28, 25, 25, 45, 35, 40), evolvesTo: 281 },
   { id: 285, name: 'Shroomish', type: 'grass', stats: st(60, 40, 60, 40, 60, 35), evolvesTo: 286, pheal: true },
   { id: 293, name: 'Whismur', type: 'normal', stats: st(64, 51, 23, 51, 23, 28), evolvesTo: 294 },

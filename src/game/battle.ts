@@ -2188,7 +2188,7 @@ export class Battle {
               e.vy += ((e.y - hz.y) / d) * 520;
             }
           }
-          this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.05)));
+          this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * 0.05 * (u.def.damp ? 0.5 : 1))));
           sfx('boom');
           continue;
         }
@@ -3270,7 +3270,7 @@ export class Battle {
       }
       // VOLATILE mod: the KO detonates — a chunk of its max hp splashes
       // onto every neighbor, and volatile kills can chain
-      if (e.volatile) {
+      if (e.volatile && !this.players.some((p) => !p.dead && p.def.damp)) {
         const BR = 110;
         this.waves.push({ x: e.x, y: e.y, r: 0, maxR: BR, t: 0.3, life: 0.3, color: '#ff9a30', hits: new Set() });
         this.burst(e.x, e.y, '#ff9a30', 18, 520, 1.2);
@@ -6008,6 +6008,12 @@ export class Battle {
         // sides — kill it before the zero, or herd it next to its pack and
         // let the explosion do your work. First in the chain: a bomber
         // with a support role still answers its fuse.
+        if (this.players.some((p) => !p.dead && p.def.damp)) {
+          // damp: a living carrier keeps the powder wet — the whole
+          // detonation fizzles and the bomber's turn is spent
+          this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'DAMP!', t: 1, color: '#6890f0', big: false });
+          sfx('bounce');
+        } else {
         this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'BOOM!', t: 1.1, color: '#ff9a30', big: true });
         this.burst(e.x, e.y, '#ff9a30', 22, 460, 1.1);
         this.waves.push({ x: e.x, y: e.y, r: 0, maxR: 130, t: 0.4, life: 0.4, color: '#ff9a30', hits: new Set() });
@@ -6024,6 +6030,7 @@ export class Battle {
           if (!f.dead && f !== e && dist(e, f) < 130) this.hurt(f, Math.max(20, Math.round(e.maxHp * 0.55)), '#ff9a30');
         }
         this.hurt(e, e.maxHp + 999, '#ff9a30'); // the bomber never survives its own fuse
+        }
       } else if (e.supp === 'aegis') {
         // guardians ward their weakest ally — the bubble eats one whole
         // hit, so the pack keeps its bodies until the ward is broken
