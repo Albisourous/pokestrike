@@ -3001,7 +3001,7 @@ export class Battle {
   }
 
   // Central damage path so every source (contact, bump, orb, dot) behaves alike.
-  private hurt(e: Unit, dmg: number, color: string, suffix = '') {
+  private hurt(e: Unit, dmg: number, color: string, suffix = '', src?: Unit) {
     if (e.dead) return;
     // absorb: a matching element feeds the hide instead of hurting it —
     // the heal signal travels as negative damage through this one seam
@@ -3144,6 +3144,14 @@ export class Battle {
     // styler loop wraps the target — every hit is another circle
     if (e.hp <= 0) {
       e.dead = true;
+      // destiny bond: a direct hit that finishes the carrier drags the
+      // striker down with it — hazards, splashes, catches and bump supers
+      // (no src) are the safe ways to close a bond foe
+      if (e.def.bond && src && !src.dead) {
+        this.pushText({ x: src.x, y: src.y - src.r - 34, text: 'DESTINY BOND!', t: 1.3, color: '#a868c8', big: true });
+        // bond damage ignores mitigation — only sash/revive cheat it
+        this.damagePlayer(src, src.maxHp * 9, e);
+      }
       this.shotKOs++;
       // multi-kills name themselves mid-flight — the pinball line earns the pop
       if (this.shotKOs === 2) {
@@ -3463,7 +3471,7 @@ export class Battle {
     } else if (e.def.absorb === at) {
       this.hurt(e, -Math.round(e.maxHp * 0.25), color);
     } else {
-      this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+      this.hurt(e, dmg, color, mult > 1 ? '!' : '', shooter);
       // counter: whatever lands comes back a third as strong — feed it a
       // crit and it feeds you one. Chip it open with the small shots
       if (e.def.counter && !e.dead && dmg > 0 && !shooter.dead) {
@@ -7684,6 +7692,7 @@ export class Battle {
       e.def.flank && 'flanks the pack — it drifts wide before it closes',
       e.def.forecast && 'forecast — its type wears the sky',
       e.def.healBlock && 'heal block — your team can\'t mend while it lives',
+      e.def.bond && 'destiny bond — a direct KO takes the striker with it',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9111,6 +9120,7 @@ export class Battle {
         u.def.flank && 'FLANK',
         u.def.forecast && 'FORECAST',
         u.def.healBlock && 'H-BLOCK',
+        u.def.bond && 'BOND',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

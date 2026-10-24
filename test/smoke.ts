@@ -213,6 +213,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).strikeEnemy(shooter, e3);
   ok(shooter.hp < php, `spiked contact chips the ball (${php} -> ${shooter.hp})`);
 
+  // destiny bond: the strike that finishes a bond carrier faints the shooter —
+  // hazards and indirect damage stay the safe answer
+  const eBond = e3;
+  eBond.def = { ...eBond.def, bond: true, spiky: false };
+  eBond.hp = 1;
+  eBond.lastHit.clear(); // the spiky poke just ate the hit cooldown
+  const shooterAlive = shooter.dead;
+  (b as any).strikeEnemy(shooter, eBond);
+  ok(eBond.dead && !shooterAlive && shooter.dead, `destiny bond takes the striker down (${eBond.def.name})`);
+  shooter.dead = false; shooter.hp = shooter.maxHp; // the next asserts still need it
+
   // regen foes mend — a wounded one gains HP over a sim second
   e1.def = { ...e1.def, regen: true };
   e1.hp = Math.floor(e1.maxHp / 2);

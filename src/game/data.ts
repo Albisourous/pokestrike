@@ -75,6 +75,7 @@ export interface SpeciesDef {
   forecast?: boolean; // its type becomes whatever the sky is — weather chameleon
   breaker?: boolean; // Mold Breaker: its hits ignore Wonder Guard + Multiscale
   healBlock?: boolean; // Heal Block: while it lives, your team can't mend
+  bond?: boolean; // Destiny Bond: a direct KO takes the striker down too
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -553,7 +554,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 475, name: 'Gallade', type: 'psychic', type2: 'fighting', stats: st(68, 125, 65, 65, 115, 80), melee: true },
   { id: 476, name: 'Probopass', type: 'rock', stats: st(60, 55, 145, 75, 150, 40), taunt: true, repel: true },
   { id: 477, name: 'Dusknoir', type: 'ghost', stats: st(45, 100, 135, 65, 135, 45), pressure: true },
-  { id: 478, name: 'Froslass', type: 'ghost', type2: 'water', stats: st(70, 80, 70, 80, 70, 110), pierce: true },
+  { id: 478, name: 'Froslass', type: 'ghost', type2: 'water', stats: st(70, 80, 70, 80, 70, 110), pierce: true, bond: true },
   { id: 479, name: 'Rotom', type: 'electric', type2: 'ghost', stats: st(50, 50, 77, 95, 77, 91), cursed: true },
   // --- gen 5 (unova) ---
   { id: 497, name: 'Serperior', type: 'grass', stats: st(75, 75, 95, 75, 95, 113) },
@@ -742,7 +743,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 329, name: 'Vibrava', type: 'rock', type2: 'flying', stats: st(50, 70, 50, 50, 50, 70) },
   { id: 332, name: 'Cacturne', type: 'grass', type2: 'ghost', stats: st(70, 115, 60, 115, 60, 55), melee: true },
   { id: 342, name: 'Crawdaunt', type: 'water', type2: 'ghost', stats: st(63, 120, 85, 90, 55, 55), melee: true },
-  { id: 354, name: 'Banette', type: 'ghost', stats: st(64, 115, 65, 83, 63, 65), pierce: true },
+  { id: 354, name: 'Banette', type: 'ghost', stats: st(64, 115, 65, 83, 63, 65), pierce: true, bond: true },
   { id: 356, name: 'Dusclops', type: 'ghost', stats: st(40, 70, 130, 60, 130, 25), taunt: true, evolvesTo: 477 },
   { id: 362, name: 'Glalie', type: 'water', stats: st(80, 80, 80, 80, 80, 80) },
   { id: 364, name: 'Sealeo', type: 'water', stats: st(90, 60, 70, 75, 70, 45) },
