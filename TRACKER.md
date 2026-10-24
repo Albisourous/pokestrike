@@ -146,3 +146,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `6ef035e` | battle | VOLLEY foe flag — Octillery fans orbs across 3 mons, no tank-soak | `git revert <this commit>` |
 | 2026-10-25 | `95d9ff2` | battle | hazards herd the pack — gust lanes sweep creeps, wells clump swimmers | `git revert <this commit>` |
 | 2026-10-25 | `6862018` | battle | species pods — ~12% of waves are one-species packs, banner names the flock | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | countdown urgency ramp — amber at 2, throbbing swell on the last tick | `git revert <this commit>` |

@@ -8099,14 +8099,16 @@ export class Battle {
           ctx.globalAlpha = 1;
         }
       }
-      // attack countdown — ★ marks a signature attack, red when it fires next
-      ctx.font = font(11);
+      // attack countdown — ★ marks a signature attack; urgency reads in
+      // color AND size: amber at 2, a throbbing red swell on the last tick
+      const urgent = u.timer <= 1 || u.enraged;
+      ctx.font = font(u.timer <= 1 ? 11 + Math.sin(this.time * 10) * 1.5 + 1.5 : 11);
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
       const tag = u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(u.timer)}` : `${Math.ceil(u.timer)}`;
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
-      ctx.fillStyle = u.timer <= 1 || u.enraged ? '#ff6b6b' : '#fff';
+      ctx.fillStyle = urgent ? '#ff6b6b' : u.timer <= 2 ? '#ffb84d' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       // keyword flags — the counter-mechanics read at a glance
       // keyword flags — composite so a dual-trait foe never hides a mechanic
