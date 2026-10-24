@@ -8407,6 +8407,22 @@ export class Battle {
             ctx.beginPath();
             ctx.arc(hx, hy, 6 + Math.sin(this.time * 8) * 1.5, 0, Math.PI * 2);
             ctx.stroke();
+            // rebound leg: the ball banks off the foe's face the way
+            // circle-contact does — second target plans before the pull
+            if (foeHit && !u.def.pierce) {
+              const nx2 = (hx - foeHit.x) / (u.r + foeHit.r);
+              const ny2 = (hy - foeHit.y) / (u.r + foeHit.r);
+              const d = dir.x * nx2 + dir.y * ny2;
+              const rx = dir.x - 2 * d * nx2;
+              const ry = dir.y - 2 * d * ny2;
+              ctx.setLineDash([4, 5]);
+              ctx.strokeStyle = color;
+              ctx.beginPath();
+              ctx.moveTo(hx, hy);
+              ctx.lineTo(hx + rx * 55, hy + ry * 55);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
           } else {
             // ghost leg banks off the surface the way the ball will
             ctx.beginPath();
