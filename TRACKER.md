@@ -205,4 +205,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `0c46898` | battle | CHARGE foes paw then ram across the court — new attack shape | `git revert <this commit>` |
 | 2026-10-25 | `114a8ea` | verify | live probe: ice band, CHARGE/SHED/ALPHA tags, ram dash — all read | — |
 | 2026-10-25 | `245c2be` | battle | REVIVAL HERB pickup — raises a fallen teammate, corpse-gated roll | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | swift-swim launch — same-sky balls launch +12% faster | `git revert <this commit>` |
+| 2026-10-25 | `fd9a0ab` | battle | swift-swim launch — same-sky balls launch +12% faster | `git revert <this commit>` |
