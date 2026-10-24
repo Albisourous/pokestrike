@@ -60,6 +60,7 @@ export interface SpeciesDef {
   huge?: boolean; // Huge Power / Pure Power: doubled contact damage
   pheal?: boolean; // Poison Heal: venom ticks mend instead of bleed
   sleepless?: boolean; // Insomnia/Vital Spirit: sleep effects wash off
+  pickup?: boolean; // Pickup: may nose out a bag consumable after each wave
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -81,7 +82,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 7, name: 'Squirtle', type: 'water', stats: st(44, 48, 65, 50, 64, 43), evolvesTo: 8 },
   { id: 133, name: 'Eevee', type: 'normal', stats: st(55, 55, 50, 45, 65, 55), evolvesTo: [134, 135, 136, 196] },
   { id: 39, name: 'Jigglypuff', type: 'normal', stats: st(115, 45, 20, 45, 25, 20), healer: true, evolvesTo: 40 },
-  { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90), pierce: true, raider: true, evolvesTo: 53 },
+  { id: 52, name: 'Meowth', type: 'normal', stats: st(40, 45, 35, 40, 40, 90), pierce: true, raider: true, pickup: true, evolvesTo: 53 },
   { id: 54, name: 'Psyduck', type: 'water', stats: st(50, 52, 48, 65, 50, 55), evolvesTo: 55 },
   { id: 95, name: 'Onix', type: 'rock', stats: st(35, 45, 160, 30, 45, 70), evolvesTo: 208, sturdy: true },
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), evolvesTo: 67, guts: true },
@@ -127,7 +128,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 173, name: 'Cleffa', type: 'normal', stats: st(50, 25, 28, 45, 55, 15), healer: true, evolvesTo: 35 },
   { id: 175, name: 'Togepi', type: 'normal', stats: st(35, 20, 65, 40, 65, 20), healer: true, evolvesTo: 176 },
   { id: 161, name: 'Sentret', type: 'normal', stats: st(35, 46, 34, 35, 45, 20), evolvesTo: 162 },
-  { id: 190, name: 'Aipom', type: 'normal', stats: st(55, 70, 55, 40, 55, 85), evolvesTo: 424 },
+  { id: 190, name: 'Aipom', type: 'normal', stats: st(55, 70, 55, 40, 55, 85), evolvesTo: 424, pickup: true },
   { id: 235, name: 'Smeargle', type: 'normal', stats: st(55, 20, 35, 20, 45, 75), copy: true },
   { id: 239, name: 'Elekid', type: 'electric', stats: st(45, 63, 37, 65, 55, 95), evolvesTo: 125, sleepless: true },
   { id: 238, name: 'Smoochum', type: 'psychic', type2: 'water', stats: st(45, 30, 15, 85, 65, 65), evolvesTo: 124 },
@@ -156,7 +157,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 439, name: 'Mime Jr.', type: 'psychic', stats: st(20, 25, 45, 70, 90, 60), evolvesTo: 122 },
   { id: 440, name: 'Happiny', type: 'normal', stats: st(100, 5, 5, 15, 65, 30), healer: true, evolvesTo: 113 },
   { id: 443, name: 'Gible', type: 'rock', stats: st(58, 70, 45, 40, 45, 42), melee: true, evolvesTo: 444 },
-  { id: 446, name: 'Munchlax', type: 'normal', stats: st(135, 85, 40, 40, 85, 5), taunt: true, evolvesTo: 143 },
+  { id: 446, name: 'Munchlax', type: 'normal', stats: st(135, 85, 40, 40, 85, 5), taunt: true, pickup: true, evolvesTo: 143 },
   { id: 447, name: 'Riolu', type: 'fighting', stats: st(40, 70, 40, 35, 40, 60), melee: true, evolvesTo: 448 },
   { id: 451, name: 'Skorupi', type: 'poison', stats: st(40, 50, 90, 30, 55, 65), melee: true, evolvesTo: 452 },
   { id: 453, name: 'Croagunk', type: 'poison', stats: st(48, 61, 40, 61, 40, 50), melee: true, evolvesTo: 454 },
@@ -168,7 +169,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 498, name: 'Tepig', type: 'fire', stats: st(65, 63, 45, 45, 45, 45), evolvesTo: 499, melee: true },
   { id: 501, name: 'Oshawott', type: 'water', stats: st(55, 55, 45, 63, 45, 45), evolvesTo: 502 },
   { id: 504, name: 'Patrat', type: 'normal', stats: st(45, 55, 39, 35, 39, 42), evolvesTo: 505 },
-  { id: 506, name: 'Lillipup', type: 'normal', stats: st(45, 60, 45, 25, 45, 55), evolvesTo: 507 },
+  { id: 506, name: 'Lillipup', type: 'normal', stats: st(45, 60, 45, 25, 45, 55), evolvesTo: 507, pickup: true },
   { id: 509, name: 'Purrloin', type: 'ghost', stats: st(41, 50, 37, 50, 37, 66), evolvesTo: 510 },
   { id: 519, name: 'Pidove', type: 'normal', type2: 'flying', stats: st(50, 55, 50, 36, 30, 43), evolvesTo: 520 },
   { id: 529, name: 'Drilbur', type: 'rock', stats: st(60, 85, 40, 30, 45, 68), evolvesTo: 530, melee: true },

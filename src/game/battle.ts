@@ -4658,6 +4658,15 @@ export class Battle {
     if (this.sweepStreak > 1) this.score += 60 * this.sweepStreak;
     // flawless carrot — an untouched wave pays a depth-scaled bonus
     if (this.waveFlawless) this.score += 50 + this.depth * 15;
+    // pickup ability: scavengers root through the arena after the fight —
+    // a living carrier may nose out a consumable for the run's bag
+    for (const p of this.players) {
+      if (p.dead || !p.def.pickup || this.rng() < 0.85) continue;
+      const found = BAG_ITEMS[Math.floor(this.rng() * BAG_ITEMS.length)];
+      bankBag(found.id);
+      this.pushText({ x: p.x, y: p.y - p.r - 30, text: `FOUND ${found.name.toUpperCase()}!`, t: 1.4, color: '#ffd84d', big: false });
+      sfx('heal');
+    }
     this.waveSpecial =
       (this.waveIndex + 1 >= this.waveCount ? 'STAGE CLEAR!' : 'WAVE CLEAR!') +
       (this.waveShots === 1
