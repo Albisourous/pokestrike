@@ -40,8 +40,6 @@ const GLOW: Record<Theme, [number, number, number, number]> = {
   volcano: [255, 116, 40, 0.16],
   sky: [255, 255, 255, 0.14],
 };
-// court paint stays faint so sprites read over it
-const PAINT = 'rgba(255,246,220,0.12)';
 const TAU = Math.PI * 2;
 
 // light-pool gradients keyed by center+radius+color — static per arena,
@@ -143,6 +141,14 @@ const FILL: Record<Theme, { r: TileRect; t?: string; s: number; wash?: string }>
   volcano: { r: MT.TILE_COBBLE, t: 'rgba(96,32,8,0.50)', s: 1.3 },
   sky: { r: MT.TILE_SNOWF, s: 1.6, wash: 'rgba(130,194,232,0.32)' },
 };
+// worn ground stamped into the bake — scuffed dirt / darker stone / basalt /
+// deeper drifts; kills the flat single-tile field without painted markings
+const PATCH: Record<Theme, { r: TileRect; t?: string }> = {
+  grove: { r: MT.TILE_PATH },
+  cavern: { r: MT.TILE_COBBLE, t: 'rgba(0,0,0,0.35)' },
+  volcano: { r: MT.TILE_COBBLE, t: 'rgba(30,8,2,0.55)' },
+  sky: { r: MT.TILE_DRIFT },
+};
 
 function floor(theme: Theme) {
   const hit = floors.get(theme);
@@ -190,6 +196,27 @@ function floor(theme: Theme) {
       }
     }
     g.globalAlpha = 1;
+  }
+  // worn ground — squashed patches of the theme's terrain tile break the
+  // flat field so the court reads scuffed earth, not a sports pitch
+  {
+    const pt = slice(PATCH[theme].r, PATCH[theme].t);
+    if (pt) {
+      for (let i = 0; i < 5; i++) {
+        const pw = 60 + hash(i * 17.1 + theme.length * 31) * 95;
+        const ph = pw * (0.35 + hash(i * 7.3 + theme.length * 5) * 0.3);
+        const px = 40 + hash(i * 11.9 + theme.length * 13) * (FW - 80 - pw) + pw / 2;
+        const py = 50 + hash(i * 9.4 + theme.length * 7) * (FH - 160 - ph) + ph / 2;
+        g.save();
+        g.globalAlpha = 0.26 + hash(i * 5.9 + 2) * 0.22;
+        g.beginPath();
+        g.ellipse(px, py, pw / 2, ph / 2, hash(i * 3.7) * 0.5 - 0.25, 0, TAU);
+        g.clip();
+        g.imageSmoothingEnabled = false;
+        g.drawImage(pt, px - pw / 2, py - ph / 2, pw, ph);
+        g.restore();
+      }
+    }
   }
   if (FILL[theme].wash) {
     g.fillStyle = FILL[theme].wash;
@@ -444,42 +471,11 @@ export function drawBackdrop(
   ctx.lineWidth = 12;
   rr(ctx, x, y, w, h, r);
   ctx.stroke();
-  // painted court lines — inset clear of the rim + hairline above
-  const cx = x + w / 2, cy = y + h / 2, m = Math.min(w, h);
-  const ix = x + 18, iy = y + 18, iw = w - 36, ih = h - 36;
-  ctx.strokeStyle = PAINT;
-  ctx.fillStyle = PAINT;
-  ctx.lineWidth = 4;
-  rr(ctx, ix, iy, iw, ih, Math.max(0, r - 6));
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(ix, cy);
-  ctx.lineTo(ix + iw, cy);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx, cy, m * 0.17, 0, TAU);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx, cy, 4, 0, TAU);
-  ctx.fill();
-  const cr = m * 0.1;
-  ctx.beginPath();
-  ctx.arc(ix, iy, cr, 0, TAU / 4);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(ix + iw, iy, cr, TAU / 4, TAU / 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(ix + iw, iy + ih, cr, TAU / 2, TAU * 0.75);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(ix, iy + ih, cr, TAU * 0.75, TAU);
-  ctx.stroke();
   // soft light pool, gently pulsing; screens pass null to skip it
   if (pool) {
     const [gr, gg, gb, ga] = GLOW[theme];
     const px = x + pool.nx * w, py = y + pool.ny * h;
-    const pr = m * 0.42;
+    const pr = Math.min(w, h) * 0.42;
     // the gradient is static per arena+pool — the pulse rides on
     // globalAlpha so the color stops bake once instead of per frame
     const pk = `${gr},${gg},${gb}|${px},${py},${pr}`;

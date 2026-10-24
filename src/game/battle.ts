@@ -2767,10 +2767,10 @@ export class Battle {
   // scale) with real strength-boulders seated along the top edge.
   private drawBlock(ctx: CanvasRenderingContext2D, b: Rect) {
     ctx.fillStyle = 'rgba(6,8,16,0.4)';
-    ctx.fillRect(b.x + 3, b.y + 5, b.w, b.h);
+    roundRect(ctx, b.x + 3, b.y + 5, b.w, b.h, 8);
+    ctx.fill();
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(b.x, b.y, b.w, b.h);
+    roundRect(ctx, b.x, b.y, b.w, b.h, 8);
     ctx.clip();
     const cell = 22;
     for (let ty = b.y - cell / 2; ty < b.y + b.h; ty += cell)
@@ -2790,15 +2790,16 @@ export class Battle {
       if (j > 0.55) drawSlice(ctx, MT.ROCK_SMALL, tx + (j - 0.5) * 12, b.y + b.h - 14 - j * 8, 21, 15, BLOCK_TINT[this.theme]);
       tx += 26 + j * 18;
     }
-    ctx.strokeStyle = '#1d2338';
+    ctx.strokeStyle = 'rgba(29,35,56,0.9)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(b.x + 1, b.y + 1, b.w - 2, b.h - 2);
-    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    roundRect(ctx, b.x + 1, b.y + 1, b.w - 2, b.h - 2, 8);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(b.x + 2, b.y + b.h - 2);
-    ctx.lineTo(b.x + 2, b.y + 2);
-    ctx.lineTo(b.x + b.w - 2, b.y + 2);
+    ctx.moveTo(b.x + 2, b.y + b.h - 6);
+    ctx.lineTo(b.x + 2, b.y + 8);
+    ctx.lineTo(b.x + b.w - 8, b.y + 8);
     ctx.stroke();
   }
 
@@ -6777,25 +6778,6 @@ export class Battle {
       ny: 0.08 + hash(wallSeed + 9) * 0.24,
     });
     drawWall(ctx, a, this.theme, wallSeed);
-
-    // grove courts get 1-2 squashed dirt patches under the dressing —
-    // wave-seeded like the scatter, so each fight's court varies
-    if (this.theme === 'grove') {
-      const pn = 1 + Math.floor(hash(this.waveIndex * 3.3 + 7) * 2);
-      for (let i = 0; i < pn; i++) {
-        const pw = 62 + hash(this.waveIndex * 5.9 + i * 9.1 + 1) * 38; // 62-100
-        const ph = pw * (0.42 + hash(this.waveIndex * 4.3 + i * 7.7 + 2) * 0.22);
-        const px = a.x + 70 + pw / 2 + hash(this.waveIndex * 11.1 + i * 5.7 + 20) * (a.w - 140 - pw);
-        const py = a.y + 110 + ph / 2 + hash(this.waveIndex * 7.7 + i * 3.3 + 31) * (a.h - 240 - ph);
-        ctx.save();
-        ctx.globalAlpha = 0.5;
-        ctx.beginPath();
-        ctx.ellipse(px, py, pw / 2, ph / 2, 0, 0, Math.PI * 2);
-        ctx.clip();
-        drawSlice(ctx, MT.TILE_PATH, px - pw / 2, py - ph / 2, pw, ph);
-        ctx.restore();
-      }
-    }
 
     // floor scatter — hash-seeded per wave so the court's dressing is
     // stable for the whole fight; props stay small and under everything
