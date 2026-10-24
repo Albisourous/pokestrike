@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay, makeStage } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay, makeStage, FLOATERS } from './data';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop } from './bg';
@@ -2998,7 +2998,6 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.pierce && 'PIERCES FOES',
     def.melee && 'LUNGES AT CONTACT',
     def.copy && "COPIES BUMPERS' SUPERS",
-    def.taunt && 'SHIELDS ALLIES',
     def.cursed && 'DEATH SLOWS ENEMY SUPERS',
     def.huge && 'HUGE POWER — 2× CONTACT',
     def.sturdy && 'STURDY — SURVIVES ONE HIT',
@@ -4812,6 +4811,24 @@ export function drawDraft(
     ctx.fillStyle = '#a8b0d0';
     const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 16);
     dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 238 + li * 11));
+
+    // the ability row — the flags that change how the pick actually plays
+    // sit above the fold: a draft is a bet, so the card shows its hand
+    const flags = [
+      def.melee && 'MELEE', def.healer && 'HEALER', FLOATERS.has(def.id) && 'LEVITATE',
+      def.huge && 'HUGE', def.guts && 'GUTS', def.toxic && 'TOXIC',
+      def.shock && 'STATIC', def.flame && 'FLAME', def.charm && 'CHARM',
+      def.spore && 'SPORE', def.sync && 'SYNC', def.menace && 'MENACE',
+      def.grace && 'GRACE', def.damp && 'DAMP', def.taunt && 'BAIT',
+      def.sturdy && 'STURDY', def.sleepless && 'AWAKE', def.limber && 'LIMBER',
+      def.thickFat && 'THICK', def.pickup && 'PICKUP', def.pheal && 'P-HEAL',
+    ].filter(Boolean).join('·');
+    if (flags) {
+      ctx.font = fontB(8);
+      ctx.fillStyle = ACCENT;
+      fitFontB(ctx, flags, 8, r.w - 16);
+      ctx.fillText(flags, r.x + r.w / 2, r.y + 267);
+    }
 
     if (HAS_KEYS) keyHint(ctx, r, `[${i + 1}]`); // [1]/[2]/[3] — desktop keys pick cards
   });
