@@ -3263,6 +3263,15 @@ export class Battle {
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+    // knockback: the ball's momentum shoves the foe along the shot's line —
+    // bank a hit to push a raider off the loot, split a taunter from its
+    // pack, or feed the whole crowd to the lava. Bosses stay planted.
+    if (!e.dead && spd > 120) {
+      const kb = Math.min(300, spd * 0.35) * (e.boss ? 0.25 : 1);
+      const n = norm({ x: shooter.vx, y: shooter.vy });
+      e.vx += n.x * kb;
+      e.vy += n.y * kb;
+    }
     // barbed foes bite back — every contact costs the ball a chip of its
     // own HP, so sloppy grazes through the pack bleed the run
     if (e.def.spiky && !shooter.dead) {

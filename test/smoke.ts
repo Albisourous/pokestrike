@@ -373,6 +373,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(mir.def.mirror && mir.def.stats.atk === lead.def.stats.atk && mir.def.stats.hp === 48, `mirror copies the lead's stats but keeps blob HP (atk ${mir.def.stats.atk})`);
   mir.dead = true; // test spawn, not a wave member
 
+  // knockback: a fast hit shoves the foe along the shot's line
+  e.dead = false;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  const act3 = (b as any).active;
+  act3.vx = 800; act3.vy = 0;
+  const ex0 = e.x;
+  (b as any).strikeEnemy(act3, e);
+  ok(e.vx > 100, `knockback shoves the foe along the shot (vx ${e.vx.toFixed(0)})`);
+  e.vx = 0;
+  e.vy = 0;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
