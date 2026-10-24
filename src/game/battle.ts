@@ -98,6 +98,7 @@ interface Unit {
   giant?: boolean; // GIGA ROMP'd — swollen hitbox until its shot ends, ×2 contact
   relic?: string; // held-item sprite name — gym bosses roll one quirk each
   sq: number; // squash impulse 0..1 — decays in update, flattens the sprite
+  flashT: number; // hit-flash clock — the sprite redraws white-hot on impact
   sumStage: number; // boss phase summons fired (0..2 — at 2/3 and 1/3 hp)
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
   weakA: number; // boss weak point angle — rotating gold face, ×3 contact
@@ -903,6 +904,7 @@ export class Battle {
         regenT: 0,
         hzT: -9,
         sq: 0,
+        flashT: 0,
         sumStage: 0,
         atkN: 0,
         weakA: 0,
@@ -1607,6 +1609,7 @@ export class Battle {
       wallN: 0,
       hzT: -9,
       sq: 0,
+      flashT: 0,
       sumStage: 0,
       atkN: 0,
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
@@ -2075,8 +2078,8 @@ export class Battle {
       }
     }
     // squash impulses relax — sprites spring back after impacts
-    for (const p of this.players) p.sq *= Math.exp(-9 * dt);
-    for (const e of this.enemies) e.sq *= Math.exp(-9 * dt);
+    for (const p of this.players) { p.sq *= Math.exp(-9 * dt); p.flashT = Math.max(0, p.flashT - dt); }
+    for (const e of this.enemies) { e.sq *= Math.exp(-9 * dt); e.flashT = Math.max(0, e.flashT - dt); }
     // wound bars drain after the hit — heals snap, damage bleeds off
     for (const p of this.players) { const l = p.hpLag ?? p.hp; p.hpLag = l > p.hp ? Math.max(p.hp, l - p.maxHp * 1.6 * dt) : p.hp; }
     for (const e of this.enemies) { const l = e.hpLag ?? e.hp; e.hpLag = l > e.hp ? Math.max(e.hp, l - e.maxHp * 1.6 * dt) : e.hp; }
@@ -3040,6 +3043,7 @@ export class Battle {
     // hit wakes it, so the ambush is one clean swing per fight
     if (e.asleep) d = Math.max(1, Math.round(d * 1.35));
     e.hp -= d;
+    e.flashT = 0.12; // the sprite burns white for a beat — every hit confirms
     if (e.asleep && e.hp > 0) {
       e.asleep = false;
       this.pushText({ x: e.x, y: e.y - e.r - 22, text: 'IT WOKE UP!', t: 1, color: '#c8d0e8', big: false });
@@ -6302,7 +6306,7 @@ export class Battle {
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: p.def.sturdy ? 'STURDY!' : 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
     }
     p.hp -= dmg;
-    if (dmg > 0) this.waveFlawless = false;
+    if (dmg > 0) { p.flashT = 0.12; this.waveFlawless = false; }
     // leech foes feed on the hit — the wound pays them back a sip of HP
     if (src?.def.leech && !src.dead && dmg > 0) {
       const sip = Math.max(1, Math.round(dmg * 0.5));
@@ -8860,6 +8864,17 @@ export class Battle {
       }
     }
     if (blinking) ctx.globalAlpha = 1;
+
+    // hit flash — the sprite burns out white for a tenth of a second;
+    // 'lighter' doubles the sprite on itself so the silhouette goes hot
+    if (u.flashT > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = Math.min(1, u.flashT * 8);
+      if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob - lift, u.r * 2.6 * grow);
+      else drawMon(ctx, u.def.id, u.x, u.y + bob - lift, u.r * 2.6 * grow);
+      ctx.restore();
+    }
 
     // protein-fed shot — the buffed ball burns orange until it parks
     if (u === this.active && this.phase === 'shot' && this.shotPhys > 1) {
