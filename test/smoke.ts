@@ -178,8 +178,20 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const shooter = (b as any).active;
   shooter.vx = 500;
   shooter.vy = 0;
+
+  shooter.x = e1.x + e1.r + 10; // arriving from the shell side → guarded
+  shooter.y = e1.y;
   const hp1 = e1.hp;
-  (b as any).strikeEnemy(shooter, { ...e1 }); // spread keeps uid/pos? no — need the real unit
+  (b as any).strikeEnemy(shooter, e1);
+  const guardedDmg = hp1 - e1.hp;
+
+  shooter.x = e2.x - e2.r - 10; // arriving from the far side → flanked
+  shooter.y = e2.y;
+  const hp2 = e2.hp;
+  (b as any).strikeEnemy(shooter, e2);
+  const flankDmg = hp2 - e2.hp;
+
+  ok(guardedDmg > 0 && flankDmg > 0 && flankDmg / guardedDmg > 3, `shell face glances, back flanks (${guardedDmg} -> ${flankDmg})`);
 }
 
 {

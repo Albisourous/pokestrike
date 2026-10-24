@@ -106,3 +106,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-24 | pending | title/wilds | top-right Pidgey ambient pulled — it floated over the RAID card's field; the two bottom wilds stay | `git revert <wilds-commit>` |
 | 2026-10-24 | `13860f7` | charm board | tall window owns the column (no dead top field, no clipped card 4); SKIP follows board size; rarity chip visible — was INK-on-INK | `git revert 13860f7` |
 | 2026-10-24 | `61a1f2f` | charm board | 3-offer window centered; squad sprites no longer cover YOUR TEAM | `git revert 61a1f2f` |
+| 2026-10-25 | `4f46631` | battle | shelled-foe mechanic: `shielded` species flag (Shellder/Pineco/Metapod/Kakuna/Cloyster/Shieldon) — a slow-drifting plate arcs the rim; front hits glance to 30% (GUARDED), back hits pay ×1.5 (FLANKED!) + SHELL kw tag + help line. Smoke asserts guarded→flank 3→29 | `git revert 4f46631 -- src/game/battle.ts src/game/data.ts` |
