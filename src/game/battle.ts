@@ -7009,7 +7009,24 @@ export class Battle {
       ctx.fillText(tag, cx + 50, cy + 58);
       ctx.fillStyle = '#8890b8';
       ctx.font = fontB(7);
-      ctx.fillText(e.def.melee ? 'melee — lunges into your team' : 'ranged — fires a projectile', cx + 50, cy + 70);
+      // the scout card names the counters — the kw tag shows the flag, this
+      // line says what it does. First two flags read; the rest is fieldwork.
+      const tells = [
+        e.def.melee && 'lunges into your team',
+        e.def.volley && 'fans its shot across three',
+        e.def.shielded && 'shell glances hits — flank pays',
+        e.def.spiky && 'bites the ball on contact',
+        e.def.regen && 'mends over time',
+        e.def.split && 'divides when KO\'d',
+        e.def.rage && 'enrages when wounded',
+        e.def.sleepy && 'dozes — the wake-up hit lands big',
+        (e.def.repel || e.repelR) && 'repels the ball',
+        e.def.raider && 'steals field drops',
+        e.def.taunt && 'blocks hits on its allies',
+        e.def.cursed && 'its KO taxes your supers',
+      ].filter(Boolean) as string[];
+      fitFont(ctx, tells.length ? tells.slice(0, 2).join(' · ') : 'fires a projectile', 7, w - 60);
+      ctx.fillText(tells.length ? tells.slice(0, 2).join(' · ') : 'fires a projectile', cx + 50, cy + 70);
     } else {
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
