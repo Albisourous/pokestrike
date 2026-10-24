@@ -6394,6 +6394,13 @@ export class Battle {
       }
       p.hp = 0;
       p.dead = true;
+      // grudge: a cursed mon's faint hexes the pack — every living foe's
+      // next attack winds up a beat slower. Mirrors the foe-side curse
+      // that taxes your supers on its KO.
+      if (p.def.cursed) {
+        for (const e of this.enemies) if (!e.dead) e.timer += 1;
+        this.pushText({ x: p.x, y: p.y - p.r - 44, text: 'GRUDGE!', t: 1.1, color: '#a868c8', big: true });
+      }
       this.killer = src?.def.name ?? 'the hazards'; // who lands the wipe — the result screen names it
       this.refreshTraits(); // a faint drops its type from the team bonus
       this.impact(p.x, p.y, '#ff6b6b', 1.5);

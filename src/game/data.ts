@@ -15,7 +15,7 @@ export interface SpeciesDef {
   pierce?: boolean; // ball passes through enemies instead of bouncing off
   copy?: boolean; // bump super replays the bumper's super (Ditto)
   taunt?: boolean; // while it lives, contact hits vs other enemies are blocked
-  cursed?: boolean; // on KO, all ally supers gain +1 cooldown pip
+  cursed?: boolean; // Grudge: its death taxes the other side — foe KO'd: your supers +1 pip; player faints: foe timers +1s
   shielded?: boolean; // a shell face drifts the rim: front hits glance to 30%, back hits pay a 50% flank
   spiky?: boolean; // contact bites the ball — grazing through the pack costs ~6% of the shooter's HP
   regen?: boolean; // mends ~3% HP a second — must be burst down, not whittled
