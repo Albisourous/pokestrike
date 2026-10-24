@@ -123,4 +123,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `bbbb2a7` | battle | tap settles a dribbling shot (<260 u/s) — 'TAP TO SKIP THE DRIBBLE' surfaces after 1.2s of crawl; live ricochets can't be cut | `git revert <this commit>` |
 | 2026-10-25 | `c521a98` | battle+data | SLEEPY foes doze till hit — countdown frozen (zZ tag), wake-up hit lands +35% and wakes it; Drowzee/Slowpoke/Slakoth/Hypno/Musharna | `git revert <this commit>` |
 | 2026-10-25 | `853a7b3` | data | dormant gust/spikes/grass hazards wired into rooms — '5'/'6'/'7' tiles + bramble & crosswind hard-tier layouts | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | STORM & THORNS wave mutators — converging gust lanes / seeded spike fields ride the power-zone spawn pattern | `git revert <this commit>` |
+| 2026-10-25 | `bc31f2d` | battle | STORM & THORNS wave mutators — converging gust lanes / seeded spike fields ride the power-zone spawn pattern | `git revert <this commit>` |
