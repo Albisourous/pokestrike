@@ -3026,6 +3026,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.shed && 'SHED SKIN — SLAYS OFF ILLS',
     def.regen && 'REGENERATOR — MENDS EACH TURN',
     def.friendGuard && 'FRIEND GUARD — SHIELDS TEAM',
+    def.absorb && `${def.absorb.toUpperCase()} HITS HEAL IT`,
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;

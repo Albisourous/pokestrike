@@ -6352,6 +6352,16 @@ export class Battle {
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: 'MISS!', t: 0.8, color: '#a890f0', big: false });
       return;
     }
+    // absorb on your side: a same-type hit feeds the hide — mirrored on the
+    // foe seam as a heal through hurt(); here it's a direct sip
+    if (p.def.absorb && src && !src.dead && dmg > 0 && (src.def.type === p.def.absorb || src.def.type2 === p.def.absorb)) {
+      const sip = Math.max(1, Math.round(p.maxHp * 0.15));
+      p.hp = Math.min(p.maxHp, p.hp + sip);
+      this.pushText({ x: p.x, y: p.y - p.r - 8, text: `ABSORBED +${sip}`, t: 0.9, color: '#6fdc6f', big: false });
+      this.burst(p.x, p.y, '#6fdc6f', 5, 200, 0.7);
+      sfx('heal');
+      return;
+    }
     // foes hit harder the deeper the run goes — depth 6 lands ~1.7x;
     // +15% base pressure, +8% per wave so wave 3 actually threatens.
     // rock trait shaves every hit; the waveShots ramp is the anti-stall —

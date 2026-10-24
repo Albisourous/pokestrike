@@ -210,7 +210,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 574, name: 'Gothita', type: 'psychic', stats: st(45, 30, 50, 55, 65, 45), evolvesTo: 575 },
   { id: 577, name: 'Solosis', type: 'psychic', stats: st(45, 30, 40, 105, 50, 20), evolvesTo: 578 },
   { id: 580, name: 'Ducklett', type: 'water', type2: 'flying', stats: st(62, 44, 50, 44, 50, 55), evolvesTo: 581 },
-  { id: 585, name: 'Deerling', type: 'normal', type2: 'grass', stats: st(60, 60, 50, 40, 50, 75), evolvesTo: 586 },
+  { id: 585, name: 'Deerling', type: 'normal', type2: 'grass', stats: st(60, 60, 50, 40, 50, 75), evolvesTo: 586, absorb: 'grass' },
   { id: 587, name: 'Emolga', type: 'electric', type2: 'flying', stats: st(55, 75, 60, 75, 60, 103), shock: true },
   { id: 590, name: 'Foongus', type: 'grass', type2: 'poison', stats: st(69, 55, 45, 55, 55, 15), evolvesTo: 591, spore: true, regen: true },
   { id: 592, name: 'Frillish', type: 'water', type2: 'ghost', stats: st(55, 40, 50, 65, 85, 40), evolvesTo: 593, cursed: true },
