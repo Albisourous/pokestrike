@@ -218,14 +218,17 @@ export const slop = (r: { x: number; y: number; w: number; h: number }, n: numbe
 // FOURTH OPTION upgrade) can't squeeze another column into 540px — it goes
 // 2×2 around the tool row: row 1 keeps the 3-card band, the TOOL_* pills
 // stay parked, row 2 lands under them.
-export function perkCardRect(i: number, n = 3) {
+export function perkCardRect(i: number, n = 3, dy = 0) {
   if (n >= 4) {
     const gx = (W - (2 * CARD_W + CARD_GAP)) / 2;
-    return { x: gx + (i % 2) * (CARD_W + CARD_GAP), y: 376 + Math.floor(i / 2) * 266, w: CARD_W, h: 200 };
+    return { x: gx + (i % 2) * (CARD_W + CARD_GAP), y: 376 + dy + Math.floor(i / 2) * 266, w: CARD_W, h: 200 };
   }
-  return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380, w: CARD_W, h: 200 };
+  return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380 + dy, w: CARD_W, h: 200 };
 }
-export const CHARM_SKIP = { x: W / 2 - 90, y: 592, w: 180, h: 40 };
+export function charmSkipRect(n: number) {
+  // rides under the board — the 2×2's second row pushes it past the 3-card slot
+  return { x: W / 2 - 90, y: n >= 4 ? 716 : 456, w: 180, h: 40 };
+}
 export const REWARD_TEAM = { x: W / 2 - 95, y: 872, w: 190, h: 40 };
 // the NEW CATCH card doubles as a button — it opens the team panel
 export const REWARD_CATCH = { x: W / 2 - 190, y: 158, w: 380, h: 78 };
@@ -4835,9 +4838,9 @@ export function drawPerkCard(
   const pop = spin ? 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15) : 1;
 
   stripeBand(ctx, band, RARITY_COLOR[perk.rarity]);
-  // rarity pill top-left (light), kind pill top-right (dark) — our perks
-  // re-apply/stack, so a repeat is DUPE not UPGRADE
-  chip(ctx, r.x + 9, r.y + 9, perk.rarity.toUpperCase(), { bg: INK, fg: INK });
+  // rarity pill top-left, kind pill top-right — our perks re-apply/stack,
+  // so a repeat is DUPE not UPGRADE
+  chip(ctx, r.x + 9, r.y + 9, perk.rarity.toUpperCase(), { bg: INK, fg: RARITY_COLOR[perk.rarity] });
   const kind = opts?.owned ? 'DUPE' : 'NEW';
   ctx.font = fontB(7);
   chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, {
@@ -5355,33 +5358,31 @@ export function drawPerkPick(
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
   ctx.textAlign = 'center';
   const four = offers.length >= 4; // the lab's FOURTH OPTION hits the charm board too
-  // the charm board is a menu window — the 2×2 board's second row pushes the
-  // squad below the window's floor, where it floats on the sky like before
-  uiPanel(ctx, { x: 14, y: 252, w: W - 28, h: four ? 596 : 540 }, title);
+  // a tall menu window owns the whole column — the squad rides inside it now
+  uiPanel(ctx, { x: 14, y: 84, w: W - 28, h: four ? 856 : 580 }, title);
   ctx.font = fontB(9);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText(sub, W / 2, 315);
-  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i, offers.length), p, undefined, { idx: i }));
+  ctx.fillText(sub, W / 2, 156);
+  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i, offers.length, -140), p, undefined, { idx: i }));
   // declining pays score instead — a dead offer still has a price
-  pill(ctx, CHARM_SKIP, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP +200 PTS' });
-  // the drafted squad rides under the offers — pick the item for THESE mons.
-  // The 2×2 board's second row pushes the squad to the bottom seam, shrunk.
+  pill(ctx, charmSkipRect(offers.length), { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP +200 PTS' });
+  // the drafted squad rides under the offers — pick the item for THESE mons
   if (team.length) {
-    const labelY = four ? 854 : 664;
-    const monY = four ? 884 : 702;
-    const monS = four ? 44 : 62;
+    const labelY = four ? 780 : 520;
+    const monY = four ? 798 : 540;
+    const monS = four ? 48 : 62;
     ctx.font = font(9);
     ctx.fillStyle = INK_FAINT;
     ctx.fillText('YOUR TEAM', W / 2, labelY);
     team.forEach((def, i) => {
-      const mx = W / 2 + (i - (team.length - 1) / 2) * (four ? 76 : 92);
+      const mx = W / 2 + (i - (team.length - 1) / 2) * (four ? 82 : 92);
       (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, monY, monS);
       ctx.font = fontB(8);
       ctx.fillStyle = INK;
-      ctx.fillText(def.name.toUpperCase(), mx, monY + (four ? 32 : 34));
-      ctx.font = fontB(6);
+      ctx.fillText(def.name.toUpperCase(), mx, monY + (four ? 36 : 34));
+      ctx.font = fontB(7);
       ctx.fillStyle = TYPE_COLOR[def.type];
-      ctx.fillText(def.type.toUpperCase(), mx, monY + (four ? 44 : 46));
+      ctx.fillText(def.type.toUpperCase(), mx, monY + (four ? 48 : 46));
     });
   }
 }

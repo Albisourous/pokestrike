@@ -55,7 +55,7 @@ import {
   drawBugCard,
   BUG_HIT,
   drawPerkPick,
-  CHARM_SKIP,
+  charmSkipRect,
   TOOL_ROLL,
   TOOL_BAN,
   drawToolRow,
@@ -1289,7 +1289,7 @@ canvas.addEventListener('pointerdown', (e) => {
       }
     }
   } else if (scene === 'charm') {
-    if (inRect(p.x, p.y, slop(CHARM_SKIP, 4))) {
+    if (inRect(p.x, p.y, slop(charmSkipRect(startOffers.length), 4))) {
       // declining the charm pays score instead — dead offers have a price
       sfx('ui');
       statOffer('perks', startOffers.map((p) => p.id), null);
@@ -1301,7 +1301,7 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     for (let i = 0; i < startOffers.length; i++) {
-      if (inRect(p.x, p.y, perkCardRect(i, startOffers.length))) {
+      if (inRect(p.x, p.y, perkCardRect(i, startOffers.length, -140))) {
         charmPick(i);
         return;
       }
