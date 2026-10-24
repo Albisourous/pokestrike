@@ -208,4 +208,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `fd9a0ab` | battle | swift-swim launch — same-sky balls launch +12% faster | `git revert <this commit>` |
 | 2026-10-25 | `57d0381` | battle | PRANK foes open early — ambush first attack | `git revert <this commit>` |
 | 2026-10-25 | `d7fdddb` | battle | HUGE POWER — Azumarill/Medicham deal 2× contact (first player flag) | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | player-side STURDY — Onix/Bonsly hang on natively + STURDY! pop | `git revert <this commit>` |
+| 2026-10-25 | `1c52088` | battle | player-side STURDY — Onix/Bonsly hang on natively + STURDY! pop | `git revert <this commit>` |
