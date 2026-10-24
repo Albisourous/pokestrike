@@ -257,3 +257,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `8643472` | battle | FILTER — Aggron/Camerupt blunt super-effective hits; Mold Breaker pierces | `git revert <this commit>` |
 | 2026-10-25 | `6d2702b` | battle | SNIPE — Seadra/Octillery mark your farthest mon, punishing the back row | `git revert <this commit>` |
 | 2026-10-25 | `397ed3a` | battle | UNAWARE — Quagsire/Bibarel shrug off your attack buffs | `git revert <this commit>` |
+| 2026-10-25 | `32c2f29` | battle | SWIFT SWIM/CHLOROPHYLL — carriers press 1.5× in their sky (Ludicolo/Kingdra/Floatzel); scout line, SWIFT tag, dex trait, help line, smoke drift assert | `git revert 32c2f29` |
