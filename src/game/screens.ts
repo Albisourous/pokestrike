@@ -9,7 +9,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TIL
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -6057,7 +6057,8 @@ export type SettingsHit =
   | { kind: 'slider'; key: SettingsSliderKey }
   | { kind: 'toggle'; key: SettingsToggleKey }
   | { kind: 'seg'; key: SettingsSegKey; i: number }
-  | { kind: 'avatar'; i: number };
+  | { kind: 'avatar'; i: number }
+  | { kind: 'avatarRoll' };
 
 // a settings row — the draw pass and the hit test read the same list. The
 // `invert` toggle lamp reads !stored (REDUCE FLASHES on = flash off); the
@@ -6163,6 +6164,14 @@ const avatarRect = (i: number) => {
     h: AV_CELL.h,
   };
 };
+// the wardrobe pull — a star-priced roll for a random locked look, parked in
+// the dead space under the grid's last row
+export const AVATAR_ROLL = {
+  x: SET_ROW.x + 14,
+  y: SET_ROWS_Y + 4 + Math.ceil(AVATARS.length / AV_COLS) * (AV_CELL.h + AV_CELL.gap) + 16,
+  w: SET_ROW.w - 28,
+  h: 46,
+};
 
 // what a point inside the panel touches: a rail pill, a slider's drag slab
 // (the track ±23px — a thumb hit gets >=22px of grace), or a toggle's row
@@ -6171,6 +6180,7 @@ export function settingsRowHit(p: { x: number; y: number }, cat: SettingsCat): S
     if (inRect(p.x, p.y, settingsTabRect(i))) return { kind: 'tab', i };
   }
   if (cat === 'trainer') {
+    if (inRect(p.x, p.y, AVATAR_ROLL)) return { kind: 'avatarRoll' };
     for (let i = 0; i < AVATARS.length; i++)
       if (inRect(p.x, p.y, avatarRect(i))) return { kind: 'avatar', i };
     return null;
@@ -6235,7 +6245,13 @@ export function settingsSegSet(key: SettingsSegKey, i: number) {
   setSetting(key, opts[Math.min(opts.length - 1, Math.max(0, i))] as Settings[typeof key]);
 }
 
-export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, vals: Settings) {
+export function drawSettings(
+  ctx: CanvasRenderingContext2D,
+  cat: SettingsCat,
+  vals: Settings,
+  t: number,
+  roll: { armed: boolean; flash?: string } = { armed: false },
+) {
   const cdef = SETTINGS_CATS.find((c) => c.id === cat)!;
   scrim(ctx, 0.75);
   uiPanel(ctx, SETTINGS_PANEL, 'SETTINGS', { sub: cdef.tab });
@@ -6280,7 +6296,9 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
     AVATARS.forEach((a, i) => {
       const r = avatarRect(i);
       const on = a.id === sel;
-      // tiny windows — the picked trainer pops ink + a gold rim
+      const owned = avatarOwned(a.id);
+      // tiny windows — the picked trainer pops ink + a gold rim; a locked
+      // look stays a ghosted mystery, not a face you can just take
       uiWindow(ctx, r, on ? { dark: true, rim: false, rad: 8 } : { tint: '#0a0d18', rim: false, rad: 8 });
       if (on) {
         ctx.strokeStyle = GOLD;
@@ -6288,12 +6306,47 @@ export function drawSettings(ctx: CanvasRenderingContext2D, cat: SettingsCat, va
         roundRect(ctx, r.x + 2, r.y + 2, r.w - 4, r.h - 4, 6);
         ctx.stroke();
       }
+      ctx.save();
+      ctx.globalAlpha = owned ? 1 : 0.26;
       drawNpc(ctx, `${a.id}_down_0`, r.x + r.w / 2, r.y + 52, 50);
+      ctx.restore();
       ctx.textAlign = 'center';
       ctx.font = font(6);
-      ctx.fillStyle = on ? GOLD : INK_FAINT;
-      ctx.fillText(a.name, r.x + r.w / 2, r.y + r.h - 7);
+      ctx.fillStyle = on ? GOLD : owned ? INK_FAINT : '#555c7c';
+      ctx.fillText(owned ? a.name : '? ? ?', r.x + r.w / 2, r.y + r.h - 7);
     });
+
+    // the wardrobe roll — a gold pill when a look is still out there,
+    // ink-armed after the first tap so the spend is never a misclick
+    const lockedN = AVATARS.filter((a) => !avatarOwned(a.id)).length;
+    const afford = stars() >= AVATAR_ROLL_COST;
+    pill(
+      ctx,
+      AVATAR_ROLL,
+      lockedN === 0
+        ? { c: '#e8e8e0', cd: '#aab0c8', tc: INK_FAINT, label: 'WARDROBE COMPLETE' }
+        : roll.armed
+          ? { c: '#1b2140', cd: INK, tc: GOLD_HI, label: `ROLL? · ★${AVATAR_ROLL_COST}` }
+          : { c: afford ? GOLD_HI : '#8a8a80', cd: '#c8a44d', tc: INK, label: `ROLL A LOOK · ★${AVATAR_ROLL_COST}` },
+    );
+    if (roll.armed) {
+      const pulse = 0.45 + 0.55 * Math.abs(Math.sin(t * 6));
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 2;
+      roundRect(ctx, AVATAR_ROLL.x - 2, AVATAR_ROLL.y - 2, AVATAR_ROLL.w + 4, AVATAR_ROLL.h + 4, 10);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.textAlign = 'center';
+    ctx.font = fontB(7);
+    ctx.fillStyle = roll.flash ? GOLD_HI : INK_FAINT;
+    ctx.fillText(
+      roll.flash ?? (lockedN > 0 ? `${AVATARS.length - lockedN}/${AVATARS.length} LOOKS IN YOUR CLOSET` : 'EVERY LOOK IN THE CLOSET'),
+      SET_PANEL.x + SET_PANEL.w / 2,
+      AVATAR_ROLL.y + AVATAR_ROLL.h + 22,
+    );
   }
 
   SET_ROWS[cat].forEach((row, i) => {

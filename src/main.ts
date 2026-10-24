@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage } from './game/data';
 import type { SpeciesDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, avatarOwned, avatarRoll, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -274,6 +274,9 @@ const currentTaskViews = (): TaskView[] => {
 };
 let settingsCat: SettingsCat = 'sound';
 let settingsDrag: { key: SettingsSliderKey } | null = null;
+let avatarArmT = -9; // the wardrobe roll's armed window — 3s like a spark buy
+let avatarFlash = '';
+let avatarFlashT = -9;
 let helpPage = 0;
 let dexOpen = false;
 let dexScroll = 0;
@@ -1042,8 +1045,27 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     if (hit?.kind === 'avatar') {
-      setTrainer(AVATARS[hit.i].id);
-      sfx('ui');
+      // locked looks refuse the tap — the wardrobe pull opens them
+      if (avatarOwned(AVATARS[hit.i].id)) {
+        setTrainer(AVATARS[hit.i].id);
+        sfx('ui');
+      } else sfx('ui', 0.55);
+      return;
+    }
+    if (hit?.kind === 'avatarRoll') {
+      // two taps like a spark buy — the first arms, the second spends
+      if (t - avatarArmT < 3) {
+        avatarArmT = -9;
+        const got = avatarRoll();
+        if (got) {
+          avatarFlash = `${AVATARS.find((a) => a.id === got)!.name} UNLOCKED`;
+          avatarFlashT = t;
+          playJingle('catch');
+        } else sfx('ui', 0.55); // short on stars or the closet's full
+      } else {
+        avatarArmT = t;
+        sfx('ui', 0.8); // armed, not spent
+      }
       return;
     }
     return; // dead panel space is still modal
@@ -2321,7 +2343,11 @@ function render() {
   }
   if (helpOpen) drawHelp(ctx, helpPage, (!!battle && battle.coach) || !coachDone(), helpWelcome);
   if (bugOpen) drawBugCard(ctx, runSave()?.seed ?? titleSave?.seed ?? null);
-  if (settingsOpen) drawSettings(ctx, settingsCat, settings());
+  if (settingsOpen)
+    drawSettings(ctx, settingsCat, settings(), t, {
+      armed: t - avatarArmT < 3,
+      flash: t - avatarFlashT < 4 ? avatarFlash : undefined,
+    });
   if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
   // playtester lifeline: you can't see their console — a crash paints
   // itself with the run's seed and build, so one screenshot is the report

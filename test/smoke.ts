@@ -1,7 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
@@ -10,7 +10,7 @@ import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY } from '../src/game/meta';
+import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
@@ -3282,6 +3282,27 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(!buyLab(up.id) && stars() === maxedStars, 'a maxed upgrade refuses to sell');
   const broke = LAB_UPGRADES.find((u) => labLevel(u.id) < u.max && u.costs[labLevel(u.id)] > stars());
   if (broke) ok(!buyLab(broke.id), 'an unaffordable upgrade refuses to sell');
+
+  // the wardrobe — MAY + WALLY hang free; a roll sells for stars, unlocks one
+  // locked look, refuses when broke, and stops selling when the closet's full
+  localStorage.removeItem('pk_avatars');
+  ok(avatarOwned('may') && avatarOwned('wally'), 'the free pair is always owned');
+  const lockedAtStart = AVATARS.filter((a) => !avatarOwned(a.id));
+  ok(lockedAtStart.length === AVATARS.length - 2, 'a fresh closet locks every other look');
+  const sRoll = stars();
+  if (sRoll < AVATAR_ROLL_COST) addStars(AVATAR_ROLL_COST - sRoll);
+  const rolled = avatarRoll();
+  ok(!!rolled && avatarOwned(rolled!), 'a roll unlocks a locked look');
+  ok(stars() === Math.max(sRoll, AVATAR_ROLL_COST) - AVATAR_ROLL_COST, 'a roll charges the printed price');
+  ok(!avatarOwned('not_a_trainer'), 'junk ids never read owned');
+  const nPreUnlock = AVATARS.filter((a) => avatarOwned(a.id)).length;
+  avatarUnlock('generic_m1');
+  avatarUnlock('generic_m1');
+  ok(AVATARS.filter((a) => avatarOwned(a.id)).length === nPreUnlock + (rolled === 'generic_m1' ? 0 : 1),
+    'unlocking twice stays idempotent');
+  for (const a of AVATARS) { addStars(AVATAR_ROLL_COST); avatarUnlock(a.id); }
+  const sFull = stars();
+  ok(avatarRoll() === null && stars() === sFull, 'a full closet refuses to sell');
 
   // lab levels change measurable battle state — a level must do something
   const preLab = localStorage.getItem('pk_lab');
