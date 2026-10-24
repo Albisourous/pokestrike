@@ -124,4 +124,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `c521a98` | battle+data | SLEEPY foes doze till hit — countdown frozen (zZ tag), wake-up hit lands +35% and wakes it; Drowzee/Slowpoke/Slakoth/Hypno/Musharna | `git revert <this commit>` |
 | 2026-10-25 | `853a7b3` | data | dormant gust/spikes/grass hazards wired into rooms — '5'/'6'/'7' tiles + bramble & crosswind hard-tier layouts | `git revert <this commit>` |
 | 2026-10-25 | `bc31f2d` | battle | STORM & THORNS wave mutators — converging gust lanes / seeded spike fields ride the power-zone spawn pattern | `git revert <this commit>` |
-| 2026-10-25 | pending | battle+data | REPEL foes — a gold halo shoves the ball off approach; Magneton line + Nosepass line | `git revert <this commit>` |
+| 2026-10-25 | `aafb9e5` | battle+data | REPEL foes — a gold halo shoves the ball off approach; Magneton line + Nosepass line | `git revert <this commit>` |
