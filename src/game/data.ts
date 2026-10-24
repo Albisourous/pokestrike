@@ -72,6 +72,7 @@ export interface SpeciesDef {
   anchor?: boolean; // too heavy to shove — knockback and blast leave it planted
   tempo?: boolean; // Own Tempo: it keeps its head — confusion can't stick
   flank?: boolean; // approaches on an arc — drifts beside the pack, not at it
+  forecast?: boolean; // its type becomes whatever the sky is — weather chameleon
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -380,7 +381,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 327, name: 'Spinda', type: 'normal', stats: st(60, 60, 60, 60, 60, 60) },
   { id: 339, name: 'Barboach', type: 'water', type2: 'rock', stats: st(50, 48, 43, 46, 41, 60), evolvesTo: 340 },
   { id: 340, name: 'Whiscash', type: 'water', type2: 'rock', stats: st(110, 78, 73, 76, 71, 60), taunt: true },
-  { id: 351, name: 'Castform', type: 'normal', stats: st(70, 70, 70, 70, 70, 70) },
+  { id: 351, name: 'Castform', type: 'normal', stats: st(70, 70, 70, 70, 70, 70), forecast: true },
   { id: 352, name: 'Kecleon', type: 'normal', stats: st(60, 90, 70, 60, 120, 40) },
   { id: 358, name: 'Chimecho', type: 'psychic', stats: st(75, 50, 80, 95, 90, 65) },
   { id: 368, name: 'Gorebyss', type: 'water', stats: st(55, 84, 105, 114, 75, 52) },

@@ -1554,6 +1554,12 @@ export class Battle {
       const lead = this.players.filter((p) => !p.dead).sort((a, b) => bst(b.def) - bst(a.def))[0];
       if (lead) def = { ...s.def, type: lead.def.type, type2: lead.def.type2, stats: { ...lead.def.stats, hp: s.def.stats.hp } };
     }
+    // forecast: the chameleon wears the sky — its type (and its weakness)
+    // follows whatever weather the wave is under
+    if (def.forecast && this.weather) {
+      const t = { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying' }[this.weather] as PokeType | undefined;
+      if (t) def = { ...def, type: t };
+    }
     return {
       uid: this.uidCtr++,
       def,
@@ -7668,6 +7674,7 @@ export class Battle {
       e.def.confuse && 'supersonic — contact rattles your next aim',
       e.def.anchor && 'too heavy to shove — banks and blasts leave it planted',
       e.def.flank && 'flanks the pack — it drifts wide before it closes',
+      e.def.forecast && 'forecast — its type wears the sky',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9093,6 +9100,7 @@ export class Battle {
         u.def.confuse && 'SONIC',
         u.def.anchor && 'ANCHOR',
         u.def.flank && 'FLANK',
+        u.def.forecast && 'FORECAST',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
