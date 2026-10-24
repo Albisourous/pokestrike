@@ -6282,6 +6282,21 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // enrage embers — a wounded berserker keeps steaming after the pop,
+    // a flickering red collar tight on the sprite (bosses + RAGE fodder)
+    for (const e of this.enemies) {
+      if (e.dead || !e.enraged) continue;
+      ctx.globalAlpha = 0.3 + Math.sin(this.time * 11 + e.uid) * 0.18;
+      ctx.strokeStyle = '#ff5040';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([3, 5]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 5, this.time * 2.4, this.time * 2.4 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+
     // repulsor fields — a pale gold halo, dashes streaming outward
     for (const e of this.enemies) {
       if (e.dead || !e.repelR) continue;
