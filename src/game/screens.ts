@@ -2407,6 +2407,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'W-GUARD only falls to super-effective hits — slams still count',
       'STURDY foes hang on at 1 HP — the first kill shot only wounds',
       'CHARM hides lull the striker — contact can put it to sleep',
+      'SCALE hides half damage at full HP — chip it open first',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

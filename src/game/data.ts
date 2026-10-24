@@ -41,6 +41,7 @@ export interface SpeciesDef {
   wguard?: boolean; // Wonder Guard: only super-effective hits land — slam it, burn it, or hit SE
   sturdy?: boolean; // Sturdy: hangs on at 1 HP through the first lethal hit
   charm?: boolean; // Cute Charm: a smitten striker nods off — it loses a launch
+  scale?: boolean; // Multiscale: halved damage while at full HP — chip it open first
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -401,7 +402,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 132, name: 'Ditto', type: 'normal', stats: st(48, 48, 48, 48, 48, 48), mirror: true },
   { id: 150, name: 'Mewtwo', type: 'psychic', stats: st(106, 110, 90, 154, 90, 130) },
   { id: 130, name: 'Gyarados', type: 'water', type2: 'flying', stats: st(95, 125, 79, 60, 100, 81), rage: true },
-  { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80) },
+  { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80), scale: true },
   { id: 6, name: 'Charizard', type: 'fire', type2: 'flying', stats: st(78, 84, 78, 109, 85, 100) },
   { id: 3, name: 'Venusaur', type: 'grass', type2: 'poison', stats: st(80, 82, 83, 100, 100, 80), healer: true },
   { id: 94, name: 'Gengar', type: 'ghost', type2: 'poison', stats: st(60, 65, 60, 130, 75, 110), pierce: true },
@@ -600,7 +601,7 @@ export const INVADERS: SpeciesDef[] = [
   { id: 382, name: 'Kyogre', type: 'water', stats: st(100, 100, 90, 150, 140, 90) },
   { id: 383, name: 'Groudon', type: 'rock', stats: st(100, 150, 140, 100, 90, 90), melee: true },
   { id: 384, name: 'Rayquaza', type: 'flying', stats: st(105, 150, 90, 150, 90, 95) },
-  { id: 249, name: 'Lugia', type: 'psychic', type2: 'flying', stats: st(106, 90, 130, 90, 154, 110) },
+  { id: 249, name: 'Lugia', type: 'psychic', type2: 'flying', stats: st(106, 90, 130, 90, 154, 110), scale: true },
   { id: 250, name: 'Ho-Oh', type: 'fire', type2: 'flying', stats: st(106, 130, 90, 110, 154, 90) },
   { id: 385, name: 'Jirachi', type: 'psychic', stats: st(100, 100, 100, 100, 100, 100), healer: true },
   { id: 386, name: 'Deoxys', type: 'psychic', stats: st(50, 150, 50, 150, 50, 150), pierce: true },

@@ -3301,6 +3301,9 @@ export class Battle {
         // carry the field's charge
         (this.inPower(shooter.x, shooter.y) ? 1.5 : 1) *
         (shooter.giant ? 2 : 1) *
+        // multiscale: an untouched hide halves the hit — chip it open
+        // first, then bring the finisher
+        (e.def.scale && e.hp >= e.maxHp ? 0.5 : 1) *
         Math.pow(0.9, hitN),
     );
     if (weak) {
@@ -4282,7 +4285,7 @@ export class Battle {
             (phys
               ? physDamage(u.def.stats.atk, e.def.stats.def, multOf(e))
               : specDamage(u.def.stats.spa, e.def.stats.spd, multOf(e))) *
-              u.pow * SUPER_POW * 4.5 * power * (e.boss ? 0.55 : 1),
+              u.pow * SUPER_POW * 4.5 * power * (e.boss ? 0.55 : 1) * (e.def.scale && e.hp >= e.maxHp ? 0.5 : 1),
           );
     const targets = this.enemies.filter((e) => !e.dead);
     const a = this.arena;
@@ -7264,6 +7267,7 @@ export class Battle {
       e.def.wguard && 'wonder guard — only super-effective hits land',
       e.def.sturdy && 'sturdy — hangs on at 1 HP once',
       e.def.charm && 'cute charm — contact can lull the ball to sleep',
+      e.def.scale && 'multiscale — half damage while its hide is whole',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8644,6 +8648,7 @@ export class Battle {
         u.def.wguard && 'W-GUARD',
         u.def.sturdy && u.sash && 'STURDY',
         u.def.charm && 'CHARM',
+        u.def.scale && u.hp >= u.maxHp && 'SCALE',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

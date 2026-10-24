@@ -591,6 +591,22 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.asleep = false;
   e.def = eDef;
 
+  // multiscale: an untouched hide halves the hit, a chipped one doesn't
+  e.def = { ...eDef, scale: true };
+  e.dead = false;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  striker.lastHit = new Map();
+  (b as any).strikeEnemy(striker, e);
+  const fullHit = e.maxHp - e.hp;
+  e.hp = e.maxHp - 1; // chipped — scale drops
+  e.lastHit = new Map();
+  striker.lastHit = new Map();
+  const before = e.hp;
+  (b as any).strikeEnemy(striker, e);
+  const chipHit = before - e.hp;
+  ok(fullHit < chipHit && Math.abs(fullHit / chipHit - 0.5) < 0.2, `multiscale halves at full HP (${fullHit} vs ${chipHit})`);
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
