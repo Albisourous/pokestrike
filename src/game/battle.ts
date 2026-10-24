@@ -109,6 +109,7 @@ interface Unit {
   gravR: number; // gravity aura radius — the ball crawls inside the bubble
   shieldN: number; // aegis wards — each stack negates one incoming hit
   airborne?: boolean; // SKY wave mod — the pack takes wing: creeps cross moats/boulders
+  asleep?: boolean; // SLEEPY species — timer frozen till the first hit lands
   warpT: number; // last warp ride — cooldown stops portal ping-pong
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
   hpLag?: number; // display-only wound trail — drains toward hp so hits read
@@ -1500,6 +1501,7 @@ export class Battle {
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
       shieldA: s.def.shielded ? this.rng() * Math.PI * 2 : 0,
       regenT: 0,
+      asleep: !!s.def.sleepy,
       shieldN: 0,
       revives: 0,
       gravR: 0,
@@ -2699,7 +2701,15 @@ export class Battle {
     // be finishable even when the whole team is immune-typed
     const immune = d <= 0;
     if (immune) d = 1;
+    // sleep bonus: a dozing foe takes the hit like a free crit — and the
+    // hit wakes it, so the ambush is one clean swing per fight
+    if (e.asleep) d = Math.max(1, Math.round(d * 1.35));
     e.hp -= d;
+    if (e.asleep && e.hp > 0) {
+      e.asleep = false;
+      this.pushText({ x: e.x, y: e.y - e.r - 22, text: 'IT WOKE UP!', t: 1, color: '#c8d0e8', big: false });
+      sfx('warn');
+    }
     // enemy focus sash: the gym ace's held item hangs on at 1 HP once
     if (e.sash && e.hp <= 0) {
       e.sash = false;
@@ -5320,7 +5330,7 @@ export class Battle {
     this.pendingAttacks = [];
     let warned = false;
     for (const e of this.enemies) {
-      e.timer--;
+      if (!e.asleep) e.timer--; // a dozing foe's countdown never winds down
       if (e.timer <= 0) {
         this.pendingAttacks.push(e);
       } else if (e.timer === 1) {
@@ -7899,7 +7909,7 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      const tag = u.boss ? `★${Math.ceil(u.timer)}` : `${Math.ceil(u.timer)}`;
+      const tag = u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(u.timer)}` : `${Math.ceil(u.timer)}`;
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = u.timer <= 1 || u.enraged ? '#ff6b6b' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);

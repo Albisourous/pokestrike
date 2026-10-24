@@ -121,3 +121,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `c5f176d` | battle | aim ghost's rebound leg: first-contact ring now throws the ball's post-bounce direction off the foe's face — double-kiss plans pre-pull (pierce skips it) | `git revert <this commit>` |
 | 2026-10-25 | `eca5ae3` | battle | rage-foe flag: Mankey/Primeape/Tauros/Gyarados/Zangoose/Ursaring enrage under 30% — reuses the boss fast-cycle; smoke asserts the snap | `git revert <this commit>` |
 | 2026-10-25 | `bbbb2a7` | battle | tap settles a dribbling shot (<260 u/s) — 'TAP TO SKIP THE DRIBBLE' surfaces after 1.2s of crawl; live ricochets can't be cut | `git revert <this commit>` |
+| 2026-10-25 | pending | battle+data | SLEEPY foes doze till hit — countdown frozen (zZ tag), wake-up hit lands +35% and wakes it; Drowzee/Slowpoke/Slakoth/Hypno/Musharna | `git revert <this commit>` |

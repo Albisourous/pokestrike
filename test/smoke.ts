@@ -220,6 +220,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e1.hp = e1.maxHp;
   (b as any).hurt(e1, Math.ceil(e1.maxHp * 0.75), '#fff');
   ok(e1.enraged === true, 'rage foe enrages under 30%');
+
+  // sleepy foes doze — countdown frozen, first hit lands +35% and wakes it
+  e1.asleep = true;
+  e1.enraged = false;
+  e1.hp = e1.maxHp;
+  e1.timer = 5;
+  (b as any).endShot();
+  ok(e1.timer === 5, `dozing countdown never winds (${e1.timer})`);
+  (b as any).hurt(e1, 10, '#fff');
+  ok(e1.asleep === false && e1.hp === e1.maxHp - 14, `wake-up hit lands like a crit (${e1.maxHp} -> ${e1.hp})`);
 }
 
 {

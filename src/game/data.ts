@@ -21,6 +21,7 @@ export interface SpeciesDef {
   regen?: boolean; // mends ~3% HP a second — must be burst down, not whittled
   split?: boolean; // divides on KO — two half-size spawn take its place
   rage?: boolean; // under 30% HP it enrages — attack cycle drops a third
+  sleepy?: boolean; // dozes until hit — timer frozen, +35% to hits on it
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -92,7 +93,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 239, name: 'Elekid', type: 'electric', stats: st(45, 63, 37, 65, 55, 95), evolvesTo: 125 },
   { id: 238, name: 'Smoochum', type: 'psychic', type2: 'water', stats: st(45, 30, 15, 85, 65, 65), evolvesTo: 124 },
   { id: 23, name: 'Ekans', type: 'poison', stats: st(35, 60, 44, 40, 54, 55), evolvesTo: 24 },
-  { id: 96, name: 'Drowzee', type: 'psychic', stats: st(60, 48, 45, 43, 90, 42), evolvesTo: 97 },
+  { id: 96, name: 'Drowzee', type: 'psychic', stats: st(60, 48, 45, 43, 90, 42), sleepy: true, evolvesTo: 97 },
   { id: 83, name: "Farfetch'd", type: 'flying', type2: 'normal', stats: st(52, 90, 55, 58, 62, 60), melee: true },
   { id: 220, name: 'Swinub', type: 'water', type2: 'rock', stats: st(50, 50, 40, 30, 30, 50), evolvesTo: 221 },
   { id: 120, name: 'Staryu', type: 'water', stats: st(30, 45, 55, 70, 55, 85), evolvesTo: 121 },
@@ -240,7 +241,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 333, name: 'Swablu', type: 'flying', type2: 'normal', stats: st(45, 40, 60, 40, 75, 50), melee: true, evolvesTo: 334 },
   { id: 98, name: 'Krabby', type: 'water', stats: st(30, 105, 90, 25, 25, 50), melee: true, evolvesTo: 99 },
   { id: 118, name: 'Goldeen', type: 'water', stats: st(45, 67, 60, 35, 50, 63), evolvesTo: 119 },
-  { id: 79, name: 'Slowpoke', type: 'psychic', type2: 'water', stats: st(90, 65, 65, 40, 40, 15), evolvesTo: [80, 199] },
+  { id: 79, name: 'Slowpoke', type: 'psychic', type2: 'water', stats: st(90, 65, 65, 40, 40, 15), sleepy: true, evolvesTo: [80, 199] },
   { id: 108, name: 'Lickitung', type: 'normal', stats: st(90, 55, 75, 60, 75, 30), melee: true, evolvesTo: 463 },
   { id: 128, name: 'Tauros', type: 'normal', stats: st(75, 100, 95, 40, 70, 110), melee: true, rage: true },
   { id: 137, name: 'Porygon', type: 'normal', stats: st(65, 60, 70, 85, 75, 40) },
@@ -299,7 +300,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 366, name: 'Clamperl', type: 'water', stats: st(35, 64, 85, 74, 55, 32), evolvesTo: [367, 368] },
   { id: 370, name: 'Luvdisc', type: 'water', stats: st(43, 30, 55, 40, 65, 97), healer: true },
   { id: 24, name: 'Arbok', type: 'poison', stats: st(60, 95, 69, 65, 79, 80) },
-  { id: 97, name: 'Hypno', type: 'psychic', stats: st(85, 73, 70, 73, 115, 67) },
+  { id: 97, name: 'Hypno', type: 'psychic', stats: st(85, 73, 70, 73, 115, 67), sleepy: true },
   { id: 124, name: 'Jynx', type: 'psychic', type2: 'water', stats: st(65, 50, 35, 115, 95, 95) },
   { id: 114, name: 'Tangela', type: 'grass', stats: st(65, 55, 115, 100, 40, 60), regen: true, evolvesTo: 465 },
   { id: 162, name: 'Furret', type: 'normal', stats: st(85, 76, 64, 45, 55, 90) },
@@ -316,7 +317,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 269, name: 'Dustox', type: 'poison', stats: st(60, 50, 70, 50, 90, 65) },
   { id: 272, name: 'Ludicolo', type: 'water', type2: 'grass', stats: st(80, 70, 70, 90, 100, 70) },
   { id: 275, name: 'Shiftry', type: 'grass', type2: 'ghost', stats: st(90, 100, 60, 90, 60, 80) },
-  { id: 287, name: 'Slakoth', type: 'normal', stats: st(60, 60, 60, 35, 35, 30), evolvesTo: 288 },
+  { id: 287, name: 'Slakoth', type: 'normal', stats: st(60, 60, 60, 35, 35, 30), sleepy: true, evolvesTo: 288 },
   { id: 288, name: 'Vigoroth', type: 'normal', stats: st(80, 80, 80, 55, 55, 90), melee: true, evolvesTo: 289 },
   { id: 290, name: 'Nincada', type: 'rock', stats: st(31, 45, 90, 30, 30, 40), evolvesTo: 291 },
   { id: 291, name: 'Ninjask', type: 'flying', stats: st(61, 90, 45, 50, 50, 160), pierce: true },
@@ -510,7 +511,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 512, name: 'Simisage', type: 'grass', stats: st(75, 98, 63, 98, 63, 101) },
   { id: 514, name: 'Simisear', type: 'fire', stats: st(75, 98, 63, 98, 63, 101) },
   { id: 516, name: 'Simipour', type: 'water', stats: st(75, 98, 63, 98, 63, 101) },
-  { id: 518, name: 'Musharna', type: 'psychic', stats: st(116, 55, 85, 107, 95, 29), healer: true },
+  { id: 518, name: 'Musharna', type: 'psychic', stats: st(116, 55, 85, 107, 95, 29), healer: true, sleepy: true },
   { id: 521, name: 'Unfezant', type: 'normal', type2: 'flying', stats: st(80, 115, 80, 65, 55, 93) },
   { id: 523, name: 'Zebstrika', type: 'electric', stats: st(75, 100, 63, 80, 63, 116) },
   { id: 526, name: 'Gigalith', type: 'rock', stats: st(85, 135, 130, 60, 80, 25), taunt: true },
