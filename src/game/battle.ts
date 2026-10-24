@@ -9032,7 +9032,7 @@ export class Battle {
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       // keyword flags — the counter-mechanics read at a glance
       // keyword flags — composite so a dual-trait foe never hides a mechanic
-      const kw = [
+      const kws = [
         u.def.taunt && 'MAGNET',
         u.def.cursed && 'CURSE',
         u.def.shielded && 'SHELL',
@@ -9082,7 +9082,10 @@ export class Battle {
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
-      ].filter(Boolean).join('·');
+      ].filter(Boolean) as string[];
+      // cap the ribbon at three — a stacked vet would spill off the unit,
+      // and the scout card already lists every flag it carries
+      const kw = kws.length > 3 ? `${kws.slice(0, 3).join('·')}+${kws.length - 3}` : kws.join('·');
       if (kw) {
         ctx.font = font(8);
         ctx.strokeText(kw, u.x, u.y + u.r + 14);
