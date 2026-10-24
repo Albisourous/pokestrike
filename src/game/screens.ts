@@ -5,7 +5,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, hash } from './bg';
 import { drawTile } from './map';
-import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, TILE_HALL, TILE_CAFE, TILE_GAZEBO, TILE_BUSH, TILE_FENCE, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_PINK, FLOWER_WILD, ROCK_SMALL } from './maptiles';
+import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, TILE_HALL, TILE_CAFE, TILE_GAZEBO, TILE_BUSH, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_PINK, FLOWER_WILD, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -1986,7 +1986,7 @@ export const TOWN_FOLK: TownStroll[] = [
   { id: 'lass',         seed: 7.7, hx: 348, hy: 402, x0: 302, y0: 388, x1: 496, y1: 420, speed: 30, h: 30 }, // north street, east half
   { id: 'gentleman',    seed: 5.3, hx: 476, hy: 676, x0: 302, y0: 660, x1: 500, y1: 694, speed: 20, h: 30 }, // south street, east half
   { id: 'shopkeeper_m', seed: 9.9, hx: 214, hy: 592, x0: 46,  y0: 566, x1: 228, y1: 634, speed: 26, h: 30 }, // mart front
-  { id: 'norman',       seed: 4.2, hx: 356, hy: 840, x0: 160, y0: 828, x1: 400, y1: 850, speed: 24, h: 32, noRight: true }, // park's south shore
+  { id: 'norman',       seed: 4.2, hx: 275, hy: 716, x0: 68, y0: 704, x1: 468, y1: 730, speed: 24, h: 32, noRight: true }, // the grass band at the park's mouth — wandering down to the pond
   { id: 'youngster',    seed: 8.8, hx: 60,  hy: 402, x0: 44,  y0: 388, x1: 496, y1: 420, speed: 55, h: 30 }, // sprints the whole north street
 ];
 
@@ -2186,11 +2186,6 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // the gazebo watches the pond from the northeast shore — Norman's stroll
   // runs the south shore, well clear of its deck
   drawTile(ctx, TILE_GAZEBO, 348, 692, 48, 79);
-  // iron rails fence the pond's north shore, gapped where the lane runs in
-  for (let x = 152; x <= 330; x += 27) {
-    if (x > 222 && x < 296) continue;
-    drawTile(ctx, TILE_FENCE, x, 736, 29, 14);
-  }
 
   ctx.restore();
 }
