@@ -137,4 +137,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `7e3940f` | battle | SLUMBER wave mutator — the whole pack dozes; assassinate quietly or wake a bad night | `git revert <this commit>` |
 | 2026-10-25 | `00b3aee` | battle | multi-KO callouts — DOUBLE/TRIPLE/N KO pops mid-flight on the pinball line | `git revert <this commit>` |
 | 2026-10-25 | `7cdd7f5` | battle | aim ghost stays honest — repel targets ring orange, grav carriers ring teal | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | foes chip in lava too — kite the pack through pools; fire types + flyers exempt | `git revert <this commit>` |
+| 2026-10-25 | `e183160` | battle | foes chip in lava too — kite the pack through pools; fire types + flyers exempt | `git revert <this commit>` |
