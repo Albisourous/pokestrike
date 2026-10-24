@@ -259,3 +259,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `6d2702b` | battle | SNIPE — Seadra/Octillery mark your farthest mon, punishing the back row | `git revert <this commit>` |
 | 2026-10-25 | `397ed3a` | battle | UNAWARE — Quagsire/Bibarel shrug off your attack buffs | `git revert <this commit>` |
 | 2026-10-25 | `32c2f29` | battle | SWIFT SWIM/CHLOROPHYLL — carriers press 1.5× in their sky (Ludicolo/Kingdra/Floatzel); scout line, SWIFT tag, dex trait, help line, smoke drift assert | `git revert 32c2f29` |
+| 2026-10-26 | `46da9ff` | raid | day seed spends itself on the fight, not just the pick — `raidStage()` fields the ace + typed-tribe escorts (LV28-30) at pinned LV36-45 w/ +25-45% bulk; `RAID_MODS` names the day's handicap (enraged/storm/fortress/plated/warded/volatile/frenzy/guardian/hasty/horde/laststand — all live knobs in `battle.ts`); card shows LV + mod chip + escort count | `git revert 46da9ff` |
