@@ -385,6 +385,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e.vx = 0;
   e.vy = 0;
 
+  // billiards: a shoved foe slams its packmate and transfers the hit
+  const pin = (b as any).enemies.find((f: any) => f !== e && !f.dead);
+  if (pin) {
+    pin.x = e.x + e.r + pin.r - 4; pin.y = e.y; // overlapping, e slams rightward
+    pin.vx = 0; pin.vy = 0;
+    e.vx = 400; e.vy = 0;
+    const pinHp0 = pin.hp;
+    (b as any).separatePair(e, pin);
+    ok(pin.hp < pinHp0 && pin.vx > 100, `a shoved foe bowls its packmate (hp ${pinHp0} -> ${pin.hp}, vx ${pin.vx.toFixed(0)})`);
+    e.vx = 0;
+  }
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

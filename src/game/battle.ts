@@ -2457,6 +2457,25 @@ export class Battle {
     const d = Math.hypot(dx, dy);
     if (d === 0) return;
     const nx = dx / d, ny = dy / d;
+    // billiards: a knockback-shoved foe slams its packmate — momentum
+    // transfers, both eat the collision. A hard bank can bowl a whole pod;
+    // drift-speed nudges stay below the bar so packs don't self-harm.
+    if (!a.dead && !b.dead) {
+      const rel = Math.abs((a.vx - b.vx) * nx + (a.vy - b.vy) * ny);
+      if (rel > 220) {
+        const fast = a.vx * a.vx + a.vy * a.vy > b.vx * b.vx + b.vy * b.vy ? a : b;
+        const slow = fast === a ? b : a;
+        slow.vx += fast.vx * 0.45;
+        slow.vy += fast.vy * 0.45;
+        fast.vx *= 0.55;
+        fast.vy *= 0.55;
+        const chip = Math.max(1, Math.round(rel * 0.03));
+        this.hurt(slow, chip, '#c8c8d8');
+        if (!fast.dead) this.hurt(fast, Math.round(chip * 0.5), '#c8c8d8');
+        this.burst((a.x + b.x) / 2, (a.y + b.y) / 2, '#c8c8d8', 4, 180, 0.5);
+        sfx('bounce');
+      }
+    }
     const push = (rr - d) / 2;
     a.x -= nx * push;
     a.y -= ny * push;
