@@ -2905,9 +2905,8 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
   ctx.font = font(9);
   ctx.fillStyle = INK;
   ctx.fillText(`${roleOf(def)} · ${moveOf(id, def.type).toUpperCase()}`, cx, r.y + 252);
-  ctx.font = fontB(7);
   ctx.fillStyle = INK_FAINT;
-  fitFont(ctx, superDesc(id, def.type).toUpperCase(), 7, r.w - 48);
+  fitFontB(ctx, superDesc(id, def.type).toUpperCase(), 8, r.w - 48);
   ctx.fillText(superDesc(id, def.type).toUpperCase(), cx, r.y + 270);
   const traits = [
     def.healer && 'BUMP HEALS THE TEAM',
@@ -2919,7 +2918,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;
-    fitFont(ctx, traits.join(' · '), 7, r.w - 48);
+    fitFontB(ctx, traits.join(' · '), 8, r.w - 48);
     ctx.fillText(traits.join(' · '), cx, r.y + 288);
   }
 
