@@ -98,3 +98,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-24 | `b0923d9` | climb/arena | opener pack's clustered xs read as a fused blob — sort + fan to 22% window apart (display-only, real spawn kept) | `git revert b0923d9` |
 | 2026-10-24 | `a4d07c6` | climb/fonts | arena plates fontB7→8, RIVALS caption 7→9 — no sub-9 text left on the climb board | `git revert a4d07c6` |
 | 2026-10-24 | `9170203` | title/wilds | edge wilds static → slow ellipse graze — the field breathes at the margins | `git revert 9170203` |
+| 2026-10-24 | `a5ae860` | dex/detail | superDesc + traits lines drew in PS2P (fontB→fitFont override) and bled past the frame — fitFontB(8), contained | `git revert a5ae860` |
