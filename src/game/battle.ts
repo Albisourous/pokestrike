@@ -5778,6 +5778,12 @@ export class Battle {
     // venom works both ways — a poisoned mon bleeds out the same ticks,
     // and a burned one singes until the flame wears out
     for (const p of this.players) {
+      // natural cure / shed skin: the carrier sloughs its ailments before
+      // they can tick — same rhythm as the foe version
+      if (p.def.shed && !p.dead && (p.dotTicks > 0 || p.burnT > 0 || p.paraT > 0 || p.asleep) && this.rng() < 0.3) {
+        p.dotTicks = 0; p.dotDmg = 0; p.burnT = 0; p.paraT = 0; p.asleep = false;
+        this.pushText({ x: p.x, y: p.y - p.r - 8, text: 'SHED!', t: 0.8, color: '#78c850', big: false });
+      }
       if (p.dotTicks > 0 && !p.dead) {
         p.dotTicks--;
         // poison heal: the venom feeds it — Breloom-line turns the sting

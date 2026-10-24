@@ -242,3 +242,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `7133c30` | battle | DESTINY BOND — direct KO takes the striker down; hazards/catches stay safe | `git revert <this commit>` |
 | 2026-10-25 | `d042165` | battle | GRUDGE — roster cursed mons' faint slows the foe pack's wind-ups | `git revert <this commit>` |
 | 2026-10-25 | `f004c37` | battle | AIM HONESTY — ghost path now bends through wells, rides boosts and warps | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | SHED SKIN — player-side natural cure on Scraggy, mirrors the foe tick | `git revert <this commit>` |

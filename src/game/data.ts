@@ -196,7 +196,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 551, name: 'Sandile', type: 'rock', type2: 'ghost', stats: st(50, 72, 35, 35, 35, 65), evolvesTo: 552, melee: true },
   { id: 554, name: 'Darumaka', type: 'fire', stats: st(70, 90, 45, 15, 45, 50), evolvesTo: 555 },
   { id: 557, name: 'Dwebble', type: 'grass', type2: 'rock', stats: st(50, 65, 85, 35, 35, 55), evolvesTo: 558 },
-  { id: 559, name: 'Scraggy', type: 'ghost', type2: 'fighting', stats: st(50, 75, 70, 35, 70, 48), evolvesTo: 560, melee: true },
+  { id: 559, name: 'Scraggy', type: 'ghost', type2: 'fighting', stats: st(50, 75, 70, 35, 70, 48), evolvesTo: 560, melee: true, shed: true },
   { id: 562, name: 'Yamask', type: 'ghost', stats: st(38, 30, 85, 55, 65, 30), evolvesTo: 563, cursed: true },
   { id: 568, name: 'Trubbish', type: 'poison', stats: st(50, 50, 62, 40, 62, 65), evolvesTo: 569 },
   { id: 570, name: 'Zorua', type: 'ghost', stats: st(40, 65, 40, 80, 40, 65), evolvesTo: 571 },
