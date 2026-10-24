@@ -2998,6 +2998,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.cursed && 'DEATH SLOWS ENEMY SUPERS',
     def.huge && 'HUGE POWER — 2× CONTACT',
     def.sturdy && 'STURDY — SURVIVES ONE HIT',
+    def.guts && 'GUTS — STATUS FEEDS IT',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;

@@ -3350,7 +3350,8 @@ export class Battle {
         (this.shotGold ? 1.2 : 1) *
         (1 + this.shotVolleyBoost) *
         (rico ? 1 + this.ricoMult : 1) *
-        (shooter.burnT > 0 ? 0.7 : 1) * // a burned striker pulls its punches
+        (shooter.burnT > 0 && !shooter.def.guts ? 0.7 : 1) * // a burned striker pulls its punches — guts burns it off
+        (shooter.def.guts && (shooter.dotTicks > 0 || shooter.burnT > 0 || shooter.paraT > 0) ? 1.5 : 1) * // Guts: status feeds it
         (shooter.def.huge ? 2 : 1) * // Huge Power: canon attack doubling
         // intimidate: a living menace cowes the whole team — kill it first
         (this.enemies.some((m) => !m.dead && m.def.menace) ? 0.8 : 1) *
