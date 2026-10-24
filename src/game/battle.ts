@@ -1284,7 +1284,7 @@ export class Battle {
     // same stop, different fight (StS hallway affixes)
     let powerZoneSpawn = false; // 'power' mutator pushes its zone once hazards land
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < (this.allAffix ? 1 : 0.35)) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind', 'headwind', 'slick'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -1364,10 +1364,12 @@ export class Battle {
           break;
         case 'hexed': // your contacts envenom — rides curMod in strikeEnemy
         case 'tailwind': // +15% launch speed this wave — rides curMod on the sling
+        case 'headwind': // -15% launch speed — banks need a longer pull
+        case 'slick': // 40% less friction — the ball carries farther, settle comes late
           break;
       }
       this.curMod = mod;
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -1676,7 +1678,7 @@ export class Battle {
     this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
     this.shotGold = gold;
-    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : 1) * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
+    const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (0.4 + 0.6 * (gold ? 1 : charge));
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
     u.sq = 1; // launch pop — the ball stretches off the sling
@@ -1974,7 +1976,7 @@ export class Battle {
     const h = dt / sub;
     for (let i = 0; i < sub; i++) {
       const wave = this.enemies; // spawnWave swaps this array on wave clear
-      const damp = Math.exp(-FRICTION * this.frictionMult * h);
+      const damp = Math.exp(-FRICTION * this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * h);
       u.vx *= damp;
       u.vy *= damp;
       // gravity auras: inside a carrier's bubble the ball crawls — aim
@@ -8051,7 +8053,7 @@ export class Battle {
     if (sig !== this.aimCache.sig) {
       this.aimCache.sig = sig;
       const speed =
-        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : 1) * u.launch * (0.4 + 0.6 * (maxed ? 1 : frac));
+        BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (0.4 + 0.6 * (maxed ? 1 : frac));
       let sx = u.x, sy = u.y, svx = dir.x * speed, svy = dir.y * speed;
       const dots: Vec[] = [];
       let hit: Unit | null = null;
