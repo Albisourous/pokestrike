@@ -2416,6 +2416,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'SYNC foes echo their status — burn one and it burns you back',
       'PRESSURE halves your super charge — legends bend the economy',
       'BEAM foes lock a lane — the dashed line telegraphs the burn',
+      'TRAP foes leash the court — the ball can\'t flee while they live',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

@@ -240,6 +240,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const ax = act.x;
   (b as any).stepShot(0.05);
   ok(act.x < ax, `repel field shoves the ball back (${ax.toFixed(0)} -> ${act.x.toFixed(0)})`);
+  e1.repelR = 0;
+
+  // arena trap: a fleeing ball inside the leash band gets dragged back
+  const trapDef = e1.def;
+  e1.def = { ...trapDef, trap: true };
+  e1.x = arena.x + 200; e1.y = arena.y + 200;
+  act.x = e1.x + 200; act.y = e1.y; // in the 150–300 leash band
+  act.vx = 300; act.vy = 0; // fleeing outward
+  const ax2 = act.x;
+  (b as any).stepShot(0.05);
+  ok(act.x < ax2 + 5 || act.vx < 300, `arena trap drags the fleeing ball back (x ${ax2.toFixed(0)} -> ${act.x.toFixed(0)}, vx ${act.vx.toFixed(0)})`);
+  e1.def = trapDef;
 
   // type-aware hazards: fire balls bathe in lava, flyers sail the spikes
   // (hzT stamps when the hazard fires — the flying trait can still dodge)

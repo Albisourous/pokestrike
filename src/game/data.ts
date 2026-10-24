@@ -50,6 +50,7 @@ export interface SpeciesDef {
   sync?: boolean; // Synchronize: contact echoes its ailments back onto the striker
   pressure?: boolean; // Pressure: while it lives, bump supers charge at half speed
   beam?: boolean; // Signal Beam: locks a lane, telegraphs, then burns the channel
+  trap?: boolean; // Arena Trap: the ball can't flee its neighborhood while it lives
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -251,7 +252,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 48, name: 'Venonat', type: 'poison', stats: st(60, 55, 50, 40, 55, 45), evolvesTo: 49 },
   { id: 69, name: 'Bellsprout', type: 'grass', type2: 'poison', stats: st(50, 75, 35, 70, 30, 40), evolvesTo: 70 },
   { id: 102, name: 'Exeggcute', type: 'grass', type2: 'psychic', stats: st(60, 40, 80, 60, 45, 40), split: true, evolvesTo: 103 },
-  { id: 50, name: 'Diglett', type: 'rock', stats: st(10, 55, 25, 35, 45, 95), melee: true, evolvesTo: 51 },
+  { id: 50, name: 'Diglett', type: 'rock', stats: st(10, 55, 25, 35, 45, 95), melee: true, trap: true, evolvesTo: 51 },
   { id: 104, name: 'Cubone', type: 'rock', stats: st(50, 50, 95, 40, 50, 35), melee: true, evolvesTo: 105 },
   { id: 56, name: 'Mankey', type: 'fighting', stats: st(40, 80, 35, 35, 45, 70), melee: true, rage: true, evolvesTo: 57 },
   { id: 88, name: 'Grimer', type: 'poison', stats: st(80, 80, 50, 40, 50, 25), melee: true, evolvesTo: 89 },
@@ -664,7 +665,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 45, name: 'Vileplume', type: 'grass', type2: 'poison', stats: st(75, 80, 85, 110, 90, 50), regen: true, spore: true },
   { id: 47, name: 'Parasect', type: 'grass', type2: 'poison', stats: st(60, 95, 80, 60, 80, 30), melee: true, leech: true },
   { id: 49, name: 'Venomoth', type: 'poison', stats: st(70, 65, 60, 90, 75, 90) },
-  { id: 51, name: 'Dugtrio', type: 'rock', stats: st(35, 100, 50, 50, 70, 120), melee: true },
+  { id: 51, name: 'Dugtrio', type: 'rock', stats: st(35, 100, 50, 50, 70, 120), melee: true, trap: true },
   { id: 53, name: 'Persian', type: 'normal', stats: st(65, 70, 60, 65, 65, 115), pierce: true, raider: true },
   { id: 55, name: 'Golduck', type: 'water', stats: st(80, 82, 78, 95, 80, 85) },
   { id: 57, name: 'Primeape', type: 'fighting', stats: st(65, 105, 60, 60, 70, 95), melee: true, rage: true },

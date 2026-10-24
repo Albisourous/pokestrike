@@ -2119,6 +2119,16 @@ export class Battle {
           u.vy += ((u.y - e.y) / rd) * 1600 * h;
         }
       }
+      // arena traps: past the pit's rim the earth drags the ball back —
+      // while the trapper lives, the neighborhood is a one-way door
+      for (const e of wave) {
+        if (e.dead || !e.def.trap) continue;
+        const rd = Math.hypot(u.x - e.x, u.y - e.y);
+        if (rd > 150 && rd < 300) {
+          u.vx += ((e.x - u.x) / rd) * 2400 * h;
+          u.vy += ((e.y - u.y) / rd) * 2400 * h;
+        }
+      }
       u.x += u.vx * h;
       u.y += u.vy * h;
       // speed trail while flying fast — ghost positions smear the path
@@ -6681,6 +6691,26 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // arena traps — a dark earthen leash ring: inside is free, the rim
+    // drags the ball back. The deadliest read is its absence after the KO
+    for (const e of this.enemies) {
+      if (e.dead || !e.def.trap) continue;
+      ctx.globalAlpha = 0.12;
+      ctx.fillStyle = '#705030';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, 150, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.4;
+      ctx.strokeStyle = '#907050';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 9]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, 150, this.time * 0.8, this.time * 0.8 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+
     // repulsor fields — a pale gold halo, dashes streaming outward
     for (const e of this.enemies) {
       if (e.dead || !e.repelR) continue;
@@ -7389,6 +7419,7 @@ export class Battle {
       e.def.sync && 'synchronize — contact echoes its ailments to you',
       e.def.pressure && 'pressure — supers charge at half speed while it lives',
       e.def.beam && 'signal beam — locks a lane, then burns the channel',
+      e.def.trap && 'arena trap — the ball can\'t flee its neighborhood',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8778,6 +8809,7 @@ export class Battle {
         u.def.sync && 'SYNC',
         u.def.pressure && 'PRESSURE',
         u.def.beam && 'BEAM',
+        u.def.trap && 'TRAP',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
