@@ -153,3 +153,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `3b31689` | battle | venom status reads — rising poison bubbles + VENOM kw tag | `git revert <this commit>` |
 | 2026-10-25 | `1b898ff` | battle | volatile ember crown — KO-burst foes marked before they pop | `git revert <this commit>` |
 | 2026-10-25 | `92671d5` | battle | airborne foes hover — lift + detached ground shadow sells the SKY wave | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | court-state mods get ambient reads — slick gloss, hexed wisps, wind lanes | `git revert <this commit>` |

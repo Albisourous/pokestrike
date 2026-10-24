@@ -7724,16 +7724,65 @@ export class Battle {
   // slants down, embers climb in the sun, sand drifts, wind streaks by.
   private drawWeather(ctx: CanvasRenderingContext2D) {
     const w = this.weather;
-    if (!w) return;
+    const mod = this.curMod;
+    // court-state mutators get the same ambient read — a slick floor
+    // should look slick, a hexed court should feel cursed
+    const modWash = mod === 'slick' || mod === 'hexed' || mod === 'tailwind' || mod === 'headwind';
+    if (!w && !modWash) return;
     const a = this.arena;
     const TAU = Math.PI * 2;
     ctx.save();
     ctx.beginPath();
     roundRect(ctx, a.x, a.y, a.w, a.h, 18);
     ctx.clip();
-    ctx.fillStyle = WEATHER_TINT[w];
-    ctx.globalAlpha = 0.06;
-    ctx.fillRect(a.x, a.y, a.w, a.h);
+    if (w) {
+      ctx.fillStyle = WEATHER_TINT[w];
+      ctx.globalAlpha = 0.06;
+      ctx.fillRect(a.x, a.y, a.w, a.h);
+    }
+    if (modWash) {
+      ctx.fillStyle = mod === 'hexed' ? '#a040a0' : mod === 'slick' ? '#9dd8f0' : '#b8e8c0';
+      ctx.globalAlpha = mod === 'hexed' ? 0.07 : 0.045;
+      ctx.fillRect(a.x, a.y, a.w, a.h);
+      const t2 = this.time;
+      for (let i = 0; i < 12; i++) {
+        const h1 = hash(i * 5.3 + 2), h2 = hash(i * 3.1 + 7), h3 = hash(i * 7.7 + 1);
+        if (mod === 'hexed') {
+          // wisps climb out of the floorboards
+          const y = a.y + a.h - ((h1 * a.h + t2 * 26 + i * 41) % a.h);
+          const x = a.x + h2 * a.w + Math.sin(t2 * 1.1 + i * 2) * 10;
+          ctx.globalAlpha = 0.12 + h3 * 0.12;
+          ctx.fillStyle = '#c080e0';
+          ctx.beginPath();
+          ctx.arc(x, y, 1.8 + h3 * 1.4, 0, TAU);
+          ctx.fill();
+        } else if (mod === 'slick') {
+          // gloss streaks slide downcourt
+          const x = a.x + ((h1 * a.w + t2 * 30 + i * 53) % a.w);
+          const y = a.y + h2 * a.h;
+          ctx.globalAlpha = 0.10 + h3 * 0.08;
+          ctx.strokeStyle = '#d8f4ff';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x - 14, y);
+          ctx.lineTo(x + 14, y);
+          ctx.stroke();
+        } else {
+          // wind lanes — tailwind streams upcourt, headwind presses down
+          const dirW = mod === 'tailwind' ? -1 : 1;
+          const y = a.y + ((h1 * a.h + t2 * 120 * dirW + i * 61 + a.h * 8) % a.h);
+          const x = a.x + h2 * a.w;
+          ctx.globalAlpha = 0.10 + h3 * 0.1;
+          ctx.strokeStyle = mod === 'tailwind' ? '#a8e8b8' : '#e8a8a8';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, y + 8 * -dirW);
+          ctx.lineTo(x, y + 8 * dirW);
+          ctx.stroke();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
     const t = this.time;
     const motes = Math.max(1, Math.round(24 * QUALITY_FX[settings().quality]));
     for (let i = 0; i < motes; i++) {
