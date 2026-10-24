@@ -80,6 +80,7 @@ export interface SpeciesDef {
   chameleon?: boolean; // Color Change: takes on the type that last struck it
   friendGuard?: boolean; // Friend Guard: living carrier softens hits on teammates
   weakArmor?: boolean; // Weak Armor: each hit speeds it up and softens it
+  moxie?: boolean; // Moxie: each KO it causes sharpens its own attacks
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -582,7 +583,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 545, name: 'Scolipede', type: 'grass', type2: 'poison', stats: st(60, 100, 89, 55, 69, 112), boost: true },
   { id: 547, name: 'Whimsicott', type: 'grass', type2: 'normal', stats: st(60, 67, 85, 77, 75, 116), prank: true },
   { id: 549, name: 'Lilligant', type: 'grass', stats: st(70, 60, 75, 110, 75, 90) },
-  { id: 553, name: 'Krookodile', type: 'rock', type2: 'ghost', stats: st(95, 117, 80, 65, 70, 92), melee: true },
+  { id: 553, name: 'Krookodile', type: 'rock', type2: 'ghost', stats: st(95, 117, 80, 65, 70, 92), melee: true, moxie: true },
   { id: 555, name: 'Darmanitan', type: 'fire', stats: st(105, 140, 55, 30, 55, 95) },
   { id: 558, name: 'Crustle', type: 'grass', type2: 'rock', stats: st(70, 105, 125, 65, 75, 45), taunt: true },
   { id: 560, name: 'Scrafty', type: 'ghost', type2: 'fighting', stats: st(65, 90, 115, 45, 115, 58), melee: true, shed: true },
@@ -733,7 +734,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },
   { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true, guts: true },
   { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true, charge: true },
-  { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true, hunter: true },
+  { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true, hunter: true, moxie: true },
   { id: 271, name: 'Lombre', type: 'grass', type2: 'water', stats: st(60, 50, 50, 60, 70, 50) },
   { id: 274, name: 'Nuzleaf', type: 'grass', type2: 'ghost', stats: st(70, 70, 40, 60, 40, 60) },
   { id: 277, name: 'Swellow', type: 'flying', type2: 'normal', stats: st(60, 85, 60, 50, 50, 125), melee: true },

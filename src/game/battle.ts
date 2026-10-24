@@ -122,6 +122,7 @@ interface Unit {
   stolen?: PickupKind; // a thief's pocket — re-drops when the body drops // BLINK foes: countdown to the next teleport — shimmer tells first
   boostN: number; // SPEED BOOST foes: attacks launched — each re-arm winds it tighter
   armorN: number; // WEAK ARMOR: shell cracks — faster but softer each hit
+  atkMul: number; // MOXIE: kills it causes sharpen its own attacks
 }
 
 interface FloatText {
@@ -919,6 +920,7 @@ export class Battle {
         blinkT: 0,
         boostN: 0,
         armorN: 0,
+        atkMul: 1,
       });
     });
     // bag items field after the team does — persistent consumables earned
@@ -1627,6 +1629,7 @@ export class Battle {
       blinkT: s.def.blink ? 4 + this.rng() * 2.5 : 0,
       boostN: 0,
       armorN: 0,
+      atkMul: 1,
     };
   }
 
@@ -6104,6 +6107,7 @@ export class Battle {
 
   private foeAtk(e: Unit) {
     return e.def.stats.atk
+      * e.atkMul // moxie: a fed predator swings that much harder
       * (e.burnT > 0 ? 0.75 : 1) // a singed foe swings dulled — same burn rule the ball plays by
       // intimidate on your bench: a living menace mon cowes the whole pack
       * (this.players.some((m) => !m.dead && m.def.menace) ? 0.8 : 1)
@@ -6444,6 +6448,12 @@ export class Battle {
       if (p.def.cursed) {
         for (const e of this.enemies) if (!e.dead) e.timer += 1;
         this.pushText({ x: p.x, y: p.y - p.r - 44, text: 'GRUDGE!', t: 1.1, color: '#a868c8', big: true });
+      }
+      // moxie: the killer rides the faint — every mon it drops makes the
+      // next swing worse. Kill the predator before it feeds.
+      if (src?.def.moxie && !src.dead) {
+        src.atkMul = Math.min(src.atkMul * 1.3, 3);
+        this.pushText({ x: src.x, y: src.y - src.r - 30, text: 'MOXIE!', t: 0.9, color: '#f85888', big: false });
       }
       this.killer = src?.def.name ?? 'the hazards'; // who lands the wipe — the result screen names it
       this.refreshTraits(); // a faint drops its type from the team bonus
@@ -7762,6 +7772,7 @@ export class Battle {
       e.def.armor && 'shell armor — critical hits glance off',
       e.def.chameleon && 'color change — its hide becomes the type that hit it',
       e.def.weakArmor && 'weak armor — hits crack it: faster but softer',
+      e.def.moxie && 'moxie — every KO it lands sharpens its bite',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9204,6 +9215,7 @@ export class Battle {
         u.def.armor && 'ARMOR',
         u.def.chameleon && 'CAMO',
         u.def.weakArmor && 'W-ARMOR',
+        u.def.moxie && 'MOXIE',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
