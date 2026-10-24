@@ -73,6 +73,7 @@ export interface SpeciesDef {
   tempo?: boolean; // Own Tempo: it keeps its head — confusion can't stick
   flank?: boolean; // approaches on an arc — drifts beside the pack, not at it
   forecast?: boolean; // its type becomes whatever the sky is — weather chameleon
+  breaker?: boolean; // Mold Breaker: its hits ignore Wonder Guard + Multiscale
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -155,7 +156,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 399, name: 'Bidoof', type: 'normal', stats: st(59, 45, 40, 35, 40, 31), taunt: true, evolvesTo: 400 },
   { id: 403, name: 'Shinx', type: 'electric', stats: st(45, 65, 34, 40, 34, 45), melee: true, guts: true, evolvesTo: 404 },
   { id: 406, name: 'Budew', type: 'grass', stats: st(40, 30, 35, 50, 70, 55), evolvesTo: 315, toxic: true },
-  { id: 408, name: 'Cranidos', type: 'rock', stats: st(67, 125, 40, 30, 30, 58), melee: true, evolvesTo: 409 },
+  { id: 408, name: 'Cranidos', type: 'rock', stats: st(67, 125, 40, 30, 30, 58), melee: true, breaker: true, evolvesTo: 409 },
   { id: 410, name: 'Shieldon', type: 'rock', stats: st(30, 42, 118, 42, 88, 30), shielded: true, evolvesTo: 411 },
   { id: 417, name: 'Pachirisu', type: 'electric', stats: st(60, 45, 70, 45, 90, 95), pierce: true, taunt: true },
   { id: 418, name: 'Buizel', type: 'water', stats: st(55, 65, 35, 60, 30, 85), pierce: true, evolvesTo: 419 },
@@ -183,7 +184,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 506, name: 'Lillipup', type: 'normal', stats: st(45, 60, 45, 25, 45, 55), evolvesTo: 507, pickup: true },
   { id: 509, name: 'Purrloin', type: 'ghost', stats: st(41, 50, 37, 50, 37, 66), evolvesTo: 510 },
   { id: 519, name: 'Pidove', type: 'normal', type2: 'flying', stats: st(50, 55, 50, 36, 30, 43), evolvesTo: 520 },
-  { id: 529, name: 'Drilbur', type: 'rock', stats: st(60, 85, 40, 30, 45, 68), evolvesTo: 530, melee: true },
+  { id: 529, name: 'Drilbur', type: 'rock', stats: st(60, 85, 40, 30, 45, 68), evolvesTo: 530, melee: true, breaker: true },
   { id: 532, name: 'Timburr', type: 'fighting', stats: st(75, 80, 55, 25, 35, 35), evolvesTo: 533, melee: true, guts: true },
   { id: 535, name: 'Tympole', type: 'water', stats: st(50, 50, 40, 50, 40, 64), evolvesTo: 536 },
   { id: 540, name: 'Sewaddle', type: 'grass', stats: st(45, 53, 70, 40, 60, 42), evolvesTo: 541 },
@@ -210,7 +211,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 602, name: 'Tynamo', type: 'electric', stats: st(35, 55, 40, 45, 40, 60), evolvesTo: 603 },
   { id: 605, name: 'Elgyem', type: 'psychic', stats: st(55, 55, 55, 85, 55, 30), evolvesTo: 606 },
   { id: 607, name: 'Litwick', type: 'ghost', type2: 'fire', stats: st(50, 30, 55, 65, 55, 20), evolvesTo: 608, cursed: true, flame: true },
-  { id: 610, name: 'Axew', type: 'flying', stats: st(46, 87, 60, 30, 40, 57), evolvesTo: 611, melee: true },
+  { id: 610, name: 'Axew', type: 'flying', stats: st(46, 87, 60, 30, 40, 57), evolvesTo: 611, melee: true, breaker: true },
   { id: 613, name: 'Cubchoo', type: 'water', stats: st(55, 70, 40, 60, 40, 40), evolvesTo: 614, melee: true },
   { id: 616, name: 'Shelmet', type: 'grass', stats: st(50, 40, 85, 40, 65, 25), evolvesTo: 617 },
   { id: 619, name: 'Mienfoo', type: 'fighting', stats: st(45, 85, 50, 55, 50, 65), evolvesTo: 620, melee: true },

@@ -3427,7 +3427,7 @@ export class Battle {
         (shooter.giant ? 2 : 1) *
         // multiscale: an untouched hide halves the hit — chip it open
         // first, then bring the finisher
-        (e.def.scale && e.hp >= e.maxHp ? 0.5 : 1) *
+        (e.def.scale && e.hp >= e.maxHp && !shooter.def.breaker ? 0.5 : 1) *
         Math.pow(0.9, hitN),
     );
     if (weak) {
@@ -3449,7 +3449,7 @@ export class Battle {
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     // wonder guard shrugs off anything that isn't super-effective — the
     // shove still lands, so walls and lava stay on the table
-    if (e.def.wguard && mult <= 1) {
+    if (e.def.wguard && mult <= 1 && !shooter.def.breaker) {
       this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'NO EFFECT', t: 0.7, color: '#8a90a8', big: false });
       sfx('bounce');
     } else if (e.def.absorb === at) {
@@ -4441,7 +4441,7 @@ export class Battle {
     const multOf = (e: Unit) => typeMult(u.def.type, e.def) * weatherMult(this.weather, u.def.type);
     const dmgOf = (e: Unit, power = 1) =>
       // wonder guard: only super-effective damage lands — supers included
-      e.def.wguard && multOf(e) <= 1
+      e.def.wguard && multOf(e) <= 1 && !u.def.breaker
         ? 0
         : e.def.absorb === u.def.type
           ? -Math.round(e.maxHp * 0.25)
@@ -4449,7 +4449,7 @@ export class Battle {
             (phys
               ? physDamage(u.def.stats.atk, e.def.stats.def, multOf(e))
               : specDamage(u.def.stats.spa, e.def.stats.spd, multOf(e))) *
-              u.pow * SUPER_POW * 4.5 * power * (e.boss ? 0.55 : 1) * (e.def.scale && e.hp >= e.maxHp ? 0.5 : 1),
+              u.pow * SUPER_POW * 4.5 * power * (e.boss ? 0.55 : 1) * (e.def.scale && e.hp >= e.maxHp && !u.def.breaker ? 0.5 : 1),
           );
     const targets = this.enemies.filter((e) => !e.dead);
     const a = this.arena;

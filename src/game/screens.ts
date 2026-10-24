@@ -3019,6 +3019,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.sync && 'SYNCHRONIZE — ECHOES ILLS',
     def.taunt && 'FOLLOW ME — DRAWS FIRE',
     def.tempo && 'OWN TEMPO — CLEAR-HEADED',
+    def.breaker && 'MOLD BREAKER — PIERCES GUARDS',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;
@@ -4824,7 +4825,7 @@ export function drawDraft(
       def.grace && 'GRACE', def.damp && 'DAMP', def.taunt && 'BAIT',
       def.sturdy && 'STURDY', def.sleepless && 'AWAKE', def.limber && 'LIMBER',
       def.thickFat && 'THICK', def.pickup && 'PICKUP', def.pheal && 'P-HEAL',
-      def.tempo && 'TEMPO',
+      def.tempo && 'TEMPO', def.breaker && 'BREAKER',
     ].filter(Boolean).join('·');
     if (flags) {
       ctx.font = fontB(8);
