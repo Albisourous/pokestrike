@@ -3028,6 +3028,10 @@ export class Battle {
       return;
     }
     let d = dmg;
+    // filter/solid rock: super-effective hits lose their edge — STAB spam
+    // isn't the whole answer, bring a neutral hitter too. Mold Breaker
+    // canonically punches straight through it.
+    if (suffix === '!' && e.def.filter && !src?.def.breaker) d *= 0.7;
     if (suffix === '!') d *= 1 + this.belt; // expert belt loves super-effective
     if (e.boss) d *= 1 + this.bossSlayer;
     let crit = false;
@@ -7809,6 +7813,7 @@ export class Battle {
       e.def.weakArmor && 'weak armor — hits crack it: faster but softer',
       e.def.moxie && 'moxie — every KO it lands sharpens its bite',
       e.def.veil && 'sand veil — strikes whiff in a sandstorm',
+      e.def.filter && 'filter — super-effective hits lose their edge',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9253,6 +9258,7 @@ export class Battle {
         u.def.weakArmor && 'W-ARMOR',
         u.def.moxie && 'MOXIE',
         u.def.veil && 'VEIL',
+        u.def.filter && 'FILTER',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

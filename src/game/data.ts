@@ -82,6 +82,7 @@ export interface SpeciesDef {
   weakArmor?: boolean; // Weak Armor: each hit speeds it up and softens it
   moxie?: boolean; // Moxie: each KO it causes sharpens its own attacks
   veil?: Weather; // Sand Veil: strikes whiff a quarter of the time in its sky
+  filter?: boolean; // Filter/Solid Rock: super-effective hits deal 70%
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -485,7 +486,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 257, name: 'Blaziken', type: 'fire', type2: 'fighting', stats: st(80, 120, 70, 110, 70, 80), melee: true, boost: true },
   { id: 282, name: 'Gardevoir', type: 'psychic', type2: 'normal', stats: st(68, 65, 65, 125, 115, 80), healer: true },
   { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true, truant: true },
-  { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true, anchor: true },
+  { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true, anchor: true, filter: true },
   { id: 350, name: 'Milotic', type: 'water', stats: st(95, 60, 79, 100, 125, 81), healer: true, charm: true },
   { id: 373, name: 'Salamence', type: 'flying', stats: st(95, 135, 80, 110, 80, 100), melee: true, menace: true },
   { id: 121, name: 'Starmie', type: 'water', type2: 'psychic', stats: st(60, 75, 85, 100, 85, 115), pierce: true },
@@ -776,7 +777,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 284, name: 'Masquerain', type: 'flying', stats: st(70, 60, 62, 100, 82, 80) },
   { id: 301, name: 'Delcatty', type: 'normal', stats: st(70, 65, 65, 55, 55, 90), charm: true },
   { id: 308, name: 'Medicham', type: 'fighting', type2: 'psychic', stats: st(60, 60, 75, 60, 75, 80), melee: true, huge: true },
-  { id: 323, name: 'Camerupt', type: 'fire', stats: st(70, 100, 70, 105, 75, 40), melee: true },
+  { id: 323, name: 'Camerupt', type: 'fire', stats: st(70, 100, 70, 105, 75, 40), melee: true, filter: true },
   { id: 326, name: 'Grumpig', type: 'psychic', stats: st(80, 45, 65, 90, 110, 80) },
   { id: 344, name: 'Claydol', type: 'psychic', type2: 'rock', stats: st(60, 70, 105, 70, 120, 75) },
   { id: 346, name: 'Cradily', type: 'grass', type2: 'rock', stats: st(86, 81, 97, 81, 107, 43) },
