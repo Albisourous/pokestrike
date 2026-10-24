@@ -46,6 +46,7 @@ export interface SpeciesDef {
   absorb?: PokeType; // Water/Volt Absorb, Flash Fire: same-type hits heal it
   truant?: boolean; // Truant: fires then loafs a full round — huge stats, half the uptime
   boost?: boolean; // Speed Boost: every attack re-arms a touch faster — kill it early
+  spore?: boolean; // Effect Spore: contact scatters a random ailment — poison, shock, or sleep
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -657,7 +658,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 40, name: 'Wigglytuff', type: 'normal', stats: st(140, 70, 45, 85, 50, 45), healer: true },
   { id: 42, name: 'Golbat', type: 'poison', type2: 'flying', stats: st(75, 80, 70, 65, 75, 90), melee: true, evolvesTo: 169 },
   { id: 44, name: 'Gloom', type: 'grass', type2: 'poison', stats: st(60, 65, 70, 85, 75, 40), evolvesTo: [45, 182] },
-  { id: 45, name: 'Vileplume', type: 'grass', type2: 'poison', stats: st(75, 80, 85, 110, 90, 50), regen: true },
+  { id: 45, name: 'Vileplume', type: 'grass', type2: 'poison', stats: st(75, 80, 85, 110, 90, 50), regen: true, spore: true },
   { id: 47, name: 'Parasect', type: 'grass', type2: 'poison', stats: st(60, 95, 80, 60, 80, 30), melee: true, leech: true },
   { id: 49, name: 'Venomoth', type: 'poison', stats: st(70, 65, 60, 90, 75, 90) },
   { id: 51, name: 'Dugtrio', type: 'rock', stats: st(35, 100, 50, 50, 70, 120), melee: true },
@@ -705,7 +706,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 274, name: 'Nuzleaf', type: 'grass', type2: 'ghost', stats: st(70, 70, 40, 60, 40, 60) },
   { id: 277, name: 'Swellow', type: 'flying', type2: 'normal', stats: st(60, 85, 60, 50, 50, 125), melee: true },
   { id: 281, name: 'Kirlia', type: 'psychic', type2: 'normal', stats: st(38, 35, 35, 65, 55, 50), evolvesTo: [282, 475] },
-  { id: 286, name: 'Breloom', type: 'grass', stats: st(60, 130, 80, 60, 60, 70), melee: true },
+  { id: 286, name: 'Breloom', type: 'grass', stats: st(60, 130, 80, 60, 60, 70), melee: true, spore: true },
   { id: 294, name: 'Loudred', type: 'normal', stats: st(84, 71, 43, 71, 43, 48) },
   { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },
   { id: 305, name: 'Lairon', type: 'rock', stats: st(60, 90, 140, 50, 50, 40), evolvesTo: 306 },

@@ -3378,6 +3378,20 @@ export class Battle {
       shooter.asleep = true;
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SMITTEN!', t: 0.9, color: '#f8b8d0', big: false });
     }
+    // effect spore: the puff scatters whatever it carried — venom, a
+    // jolt, or a lullaby. You never know which spore you breathed
+    if (e.def.spore && !shooter.dead && this.rng() < 0.3) {
+      const sporeRoll = this.rng();
+      if (sporeRoll < 0.4) {
+        shooter.dotTicks = Math.max(shooter.dotTicks, 4);
+        shooter.dotDmg = Math.max(shooter.dotDmg, Math.ceil(shooter.maxHp * 0.06));
+      } else if (sporeRoll < 0.7) {
+        shooter.paraT = Math.max(shooter.paraT, 3);
+      } else {
+        shooter.asleep = true;
+      }
+      this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SPORED!', t: 0.9, color: '#a8b820', big: false });
+    }
     // barbed foes bite back — every contact costs the ball a chip of its
     // own HP, so sloppy grazes through the pack bleed the run
     if (e.def.spiky && !shooter.dead) {
@@ -7298,6 +7312,7 @@ export class Battle {
       e.def.absorb && `${e.def.absorb} hits heal it — absorb`,
       e.def.truant && 'truant — loiters a round after each attack',
       e.def.boost && 'speed boost — re-arms faster every attack',
+      e.def.spore && 'effect spore — contact scatters a random ailment',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8683,6 +8698,7 @@ export class Battle {
         u.def.absorb && `DRAIN:${u.def.absorb.toUpperCase().slice(0, 3)}`,
         u.def.truant && 'LOAF',
         u.def.boost && 'BOOST',
+        u.def.spore && 'SPORE',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

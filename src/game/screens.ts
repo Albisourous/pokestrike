@@ -2412,6 +2412,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'DRAIN foes absorb their element — same-type hits heal them',
       'LOAF foes truant — they fire once, then loiter a round',
       'BOOST foes speed up every attack — kill them early',
+      'SPORE hides scatter a random ailment on contact',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

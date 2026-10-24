@@ -664,6 +664,21 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   lazy.def = lazyDef;
   lazy.boostN = 0;
 
+  // effect spore: contact scatters a random ailment — sleep lands at 0.7+
+  e.def = { ...eDef, spore: true };
+  e.dead = false;
+  e.hp = e.maxHp;
+  striker.asleep = false;
+  striker.lastHit = new Map();
+  e.lastHit = new Map();
+  let roll = 0.1;
+  (b as any).rng = () => { const r = roll; roll = 0.8; return r; }; // spore check 0.1 < 0.3, spore roll 0.8 → sleep
+  (b as any).strikeEnemy(striker, e);
+  (b as any).rng = rng3;
+  ok(striker.asleep, 'effect spore can lull the striker');
+  striker.asleep = false;
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
