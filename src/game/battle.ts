@@ -9030,6 +9030,20 @@ export class Battle {
         ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.regen || u.def.split ? '#a0e060' : u.def.shielded ? '#9aa7b8' : '#f85888';
         ctx.fillText(kw, u.x, u.y + u.r + 14);
       }
+      // a loaded thief wears its take — the loot floats at its shoulder so
+      // you can see exactly what KOing it buys back
+      if (u.stolen) {
+        const li = itemSprite(u.stolen);
+        const bx = u.x + u.r * 0.85, by = u.y - u.r - 8 + Math.sin(this.time * 3 + u.uid) * 2;
+        ctx.fillStyle = 'rgba(8,10,20,0.75)';
+        ctx.beginPath();
+        ctx.arc(bx, by, 9, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#f8d030';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        if (li) ctx.drawImage(li, bx - 8, by - 8, 16, 16);
+      }
     } else {
       // charge meter: a row of pips under the hp bar — dark pips are
       // charge still owed, type-colored are earned, all-gold = READY

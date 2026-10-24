@@ -224,3 +224,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `a0bd6f2` | battle | player SYNCHRONIZE — ailments echo onto the striker | `git revert <this commit>` |
 | 2026-10-25 | `5b2fa7a` | battle | bumping a sleeping ally wakes it (WOKE!) — no super | `git revert <this commit>` |
 | 2026-10-25 | `29bff8e` | battle | THIEF foes pocket pickups — KO to re-drop | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | thief wears its loot — pocketed item floats at shoulder | `git revert <this commit>` |
