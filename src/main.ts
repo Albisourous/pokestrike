@@ -1833,7 +1833,7 @@ function hud(name: string) {
   if (!battle) return;
   ctx.save();
   ctx.translate(0, -viewPad);
-  drawHud(ctx, battle.waveIndex, battle.shots, name, battle.score, battle.streak, battle.ultIn, battle.time);
+  drawHud(ctx, battle.waveIndex, battle.shots, name, battle.score, battle.streak, battle.ultIn, battle.time, battle.phase === 'map');
   ctx.restore();
 }
 
