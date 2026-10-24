@@ -475,7 +475,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'living', name: 'LIVING DEX', desc: 'Catch every species' },
   { id: 'rampage', name: 'RAMPAGE', desc: 'Score 40+ KOs in one run' },
   { id: 'hot-streak', name: 'VICTORY STAR', desc: 'Win 3 climbs in a row' },
-  { id: 'daily-devotion', name: 'WEEK SIBLING', desc: 'Finish daily climbs 7 days running' },
+  { id: 'daily-devotion', name: 'WEEK SIBLING', desc: 'Finish a run 7 days running' },
   // one trophy per leader — generated off the badge case so they stay in sync
   ...BADGES.map((b) => {
     const d = speciesById(b.boss);

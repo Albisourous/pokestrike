@@ -2007,8 +2007,9 @@ function update(dt: number) {
         wins: won ? 1 : 0,
         maxstage: stageReached,
       });
-      // streaks bump once per finished run — a lost daily still counts the day
-      bumpStreaks(won, runIsDaily);
+      // streaks bump once per finished run — a finished run counts the day,
+      // win or lose (daily mode is gone; the chain rides any climb)
+      bumpStreaks(won, true);
       // a finished daily pays a star-piece boost till UTC midnight — win or lose
       if (runIsDaily) grantBoost((daySeed() + 1) * 86400_000, 1.5); // tunable guess: ×1.5
       const dexBefore = dexIds().length;
