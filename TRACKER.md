@@ -248,3 +248,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `8852526` | battle | REGENERATOR — player-side per-turn mend on Foongus, honors heal block | `git revert <this commit>` |
 | 2026-10-25 | `8a44048` | battle | SHELL ARMOR — Kabuto/Kingler/Drapion shrug off crits | `git revert <this commit>` |
 | 2026-10-25 | `5260326` | battle | COLOR CHANGE — Kecleon adopts the type that struck it, ring shows the hide | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | FRIEND GUARD — Cleffa/Igglybuff soften hits on teammates while alive | `git revert <this commit>` |

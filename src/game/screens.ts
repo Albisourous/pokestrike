@@ -3025,6 +3025,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.breaker && 'MOLD BREAKER — PIERCES GUARDS',
     def.shed && 'SHED SKIN — SLAYS OFF ILLS',
     def.regen && 'REGENERATOR — MENDS EACH TURN',
+    def.friendGuard && 'FRIEND GUARD — SHIELDS TEAM',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;

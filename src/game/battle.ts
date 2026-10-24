@@ -6320,6 +6320,9 @@ export class Battle {
     const pressure = 1 + Math.max(0, this.waveShots - 10) * 0.12;
     dmg = Math.max(1, Math.round(dmg * (src?.side === 'enemy' ? foePow : 1) * (src?.boss ? bossPow : 1) * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
     if (p.role === 'BULWARK' || p.role === 'WARDEN' || p.role === 'GUARDIAN') dmg = Math.max(1, Math.round(dmg * 0.75));
+    // friend guard: a living carrier covers its teammates — the tag reads
+    // at draft time, so protect the guard or the team folds soft
+    if (this.players.some((q) => q !== p && !q.dead && q.def.friendGuard)) dmg = Math.max(1, Math.round(dmg * 0.75));
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
       p.sash = false;

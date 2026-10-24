@@ -78,6 +78,7 @@ export interface SpeciesDef {
   bond?: boolean; // Destiny Bond: a direct KO takes the striker down too
   armor?: boolean; // Battle/Shell Armor: critical hits glance to normal
   chameleon?: boolean; // Color Change: takes on the type that last struck it
+  friendGuard?: boolean; // Friend Guard: living carrier softens hits on teammates
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -122,7 +123,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 361, name: 'Snorunt', type: 'water', stats: st(50, 50, 50, 50, 50, 50), evolvesTo: [362, 478] },
   { id: 363, name: 'Spheal', type: 'water', stats: st(70, 40, 50, 55, 50, 25), evolvesTo: 364, thickFat: true },
   { id: 172, name: 'Pichu', type: 'electric', stats: st(20, 40, 15, 35, 35, 60), evolvesTo: 25 },
-  { id: 174, name: 'Igglybuff', type: 'normal', stats: st(90, 30, 15, 40, 20, 15), healer: true, evolvesTo: 39 },
+  { id: 174, name: 'Igglybuff', type: 'normal', stats: st(90, 30, 15, 40, 20, 15), healer: true, friendGuard: true, evolvesTo: 39 },
   { id: 191, name: 'Sunkern', type: 'grass', stats: st(30, 30, 30, 30, 30, 30), evolvesTo: 192 },
   { id: 209, name: 'Snubbull', type: 'normal', stats: st(60, 80, 50, 40, 40, 30), melee: true, menace: true, evolvesTo: 210 },
   { id: 223, name: 'Remoraid', type: 'water', stats: st(35, 65, 35, 65, 35, 65), pierce: true, evolvesTo: 224 },
@@ -141,7 +142,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 252, name: 'Treecko', type: 'grass', stats: st(40, 45, 35, 65, 55, 70), evolvesTo: 253 },
   { id: 255, name: 'Torchic', type: 'fire', stats: st(45, 60, 40, 70, 50, 45), evolvesTo: 256 },
   { id: 258, name: 'Mudkip', type: 'water', stats: st(50, 70, 50, 50, 50, 40), damp: true, evolvesTo: 259 },
-  { id: 173, name: 'Cleffa', type: 'normal', stats: st(50, 25, 28, 45, 55, 15), healer: true, evolvesTo: 35 },
+  { id: 173, name: 'Cleffa', type: 'normal', stats: st(50, 25, 28, 45, 55, 15), healer: true, friendGuard: true, evolvesTo: 35 },
   { id: 175, name: 'Togepi', type: 'normal', stats: st(35, 20, 65, 40, 65, 20), healer: true, grace: true, evolvesTo: 176 },
   { id: 161, name: 'Sentret', type: 'normal', stats: st(35, 46, 34, 35, 45, 20), evolvesTo: 162 },
   { id: 190, name: 'Aipom', type: 'normal', stats: st(55, 70, 55, 40, 55, 85), evolvesTo: 424, pickup: true },
