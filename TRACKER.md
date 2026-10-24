@@ -212,4 +212,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `afcfcea` | battle | player-side GUTS — statused Machop/Shinx/etc hit 1.5×, ignore burn dip | `git revert <this commit>` |
 | 2026-10-25 | `aca9773` | battle | POISON HEAL — venom mends Shroomish players and Breloom foes | `git revert <this commit>` |
 | 2026-10-25 | `c577a07` | battle | SLEEPLESS — Insomnia/Vital Spirit mons shake off every lull | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | PICKUP ability — scavenger mons nose out bag consumables post-wave | `git revert <this commit>` |
+| 2026-10-25 | `78b98ad` | battle | PICKUP ability — scavenger mons nose out bag consumables post-wave | `git revert <this commit>` |
