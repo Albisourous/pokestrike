@@ -805,6 +805,7 @@ export class Battle {
   private lootGot = 0; // score scooped this fountain — tallied at the end
   private bossKilledAt: { x: number; y: number } | null = null; // coin fountain origin
   private trail: { x: number; y: number; t: number }[] = []; // speed smear — ghost positions of the flying ball
+  private lastPath: { x: number; y: number }[] = []; // the previous shot's arc — echoes faintly under the next aim
   private fx: Fx[] = []; // sparks, streaks and stars from every impact
   private pops: { x: number; y: number; id: number; r: number; t: number; life: number }[] = []; // KO ghost-outs — the sprite flashes skyward
   private punch = 0; // camera zoom-kick — big hits lunge the screen
@@ -5425,6 +5426,8 @@ export class Battle {
     }
     u.vx = 0;
     u.vy = 0;
+    // bank the flight path before the smear dies — next aim draws the echo
+    this.lastPath = this.trail.length > 4 ? this.trail.map((p) => ({ x: p.x, y: p.y })) : [];
     this.trail = []; // smear dies with the shot
     // supers recharge per shot taken; leftovers ticks a small heal
     if (this.healCd > 0) this.healCd--;
@@ -6261,6 +6264,22 @@ export class Battle {
     }
 
     for (const w of this.waves) this.drawWave(ctx, w);
+
+    // last-shot echo — the previous arc lingers as a faint dotted line so
+    // bank angles are learnable, not guessed (Angry Birds' old-arc trick)
+    if (this.phase === 'aim' && this.waveShots > 0 && this.lastPath.length > 2) {
+      ctx.save();
+      ctx.strokeStyle = '#fff8e0';
+      ctx.globalAlpha = 0.16;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([3, 7]);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(this.lastPath[0].x, this.lastPath[0].y);
+      for (const p of this.lastPath) ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // afterimage — fading ghost sprites smear the flight path, anime-style
     if (this.trail.length) {
