@@ -74,6 +74,7 @@ export interface SpeciesDef {
   flank?: boolean; // approaches on an arc — drifts beside the pack, not at it
   forecast?: boolean; // its type becomes whatever the sky is — weather chameleon
   breaker?: boolean; // Mold Breaker: its hits ignore Wonder Guard + Multiscale
+  healBlock?: boolean; // Heal Block: while it lives, your team can't mend
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -586,7 +587,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 569, name: 'Garbodor', type: 'poison', stats: st(80, 95, 82, 60, 82, 75), taunt: true },
   { id: 571, name: 'Zoroark', type: 'ghost', stats: st(60, 105, 60, 120, 60, 105), flank: true },
   { id: 573, name: 'Cinccino', type: 'normal', stats: st(75, 95, 60, 65, 60, 115) },
-  { id: 576, name: 'Gothitelle', type: 'psychic', stats: st(70, 55, 95, 95, 110, 65) },
+  { id: 576, name: 'Gothitelle', type: 'psychic', stats: st(70, 55, 95, 95, 110, 65), healBlock: true },
   { id: 579, name: 'Reuniclus', type: 'psychic', stats: st(110, 65, 75, 125, 85, 30), taunt: true },
   { id: 581, name: 'Swanna', type: 'water', type2: 'flying', stats: st(75, 87, 63, 87, 63, 98) },
   { id: 584, name: 'Vanilluxe', type: 'water', stats: st(71, 95, 85, 110, 95, 79) },
@@ -802,7 +803,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 544, name: 'Whirlipede', type: 'grass', type2: 'poison', stats: st(40, 55, 99, 40, 79, 47), evolvesTo: 545 },
   { id: 552, name: 'Krokorok', type: 'rock', type2: 'ghost', stats: st(60, 82, 45, 45, 45, 74), evolvesTo: 553, melee: true },
   { id: 575, name: 'Gothorita', type: 'psychic', stats: st(60, 45, 70, 75, 85, 55), evolvesTo: 576 },
-  { id: 578, name: 'Duosion', type: 'psychic', stats: st(65, 40, 50, 125, 60, 30), evolvesTo: 579 },
+  { id: 578, name: 'Duosion', type: 'psychic', stats: st(65, 40, 50, 125, 60, 30), healBlock: true, evolvesTo: 579 },
   { id: 583, name: 'Vanillish', type: 'water', stats: st(51, 65, 65, 80, 75, 59), evolvesTo: 584 },
   { id: 600, name: 'Klang', type: 'rock', stats: st(60, 80, 95, 70, 85, 50), evolvesTo: 601 },
   { id: 603, name: 'Eelektrik', type: 'electric', stats: st(65, 85, 70, 75, 70, 40), evolvesTo: 604 },

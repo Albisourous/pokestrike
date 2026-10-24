@@ -2953,6 +2953,13 @@ export class Battle {
   // downtime, so sustain is a drip, not a reset — items still bypass it.
   private tryHeal(ps: Unit[], amount: (p: Unit) => number) {
     if (this.healCd > 0) return;
+    if (this.enemies.some((e) => !e.dead && e.def.healBlock)) {
+      // heal block: a living carrier keeps the wounds open — say so, or the
+      // berry just vanishes and reads as a bug. Kill the blocker to mend.
+      const p0 = ps.find((p) => !p.dead && p.hp < p.maxHp);
+      if (p0) this.pushText({ x: p0.x, y: p0.y - p0.r - 8, text: 'HEAL BLOCKED!', t: 0.9, color: '#a868c8', big: false });
+      return;
+    }
     let healed = false;
     for (const p of ps) {
       if (p.dead || p.hp >= p.maxHp) continue;
@@ -3325,7 +3332,8 @@ export class Battle {
       // skull mark: the bounty pops on the KO — team heal + score
       if (e.skull) {
         this.score += 150;
-        for (const p of this.players) if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.12));
+        if (!this.enemies.some((f) => !f.dead && f.def.healBlock))
+          for (const p of this.players) if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.12));
         this.pushText({ x: e.x, y: e.y - e.r - 72, text: 'SKULL BONUS!', t: 1.2, color: '#c8ff70', big: true });
         this.burst(e.x, e.y, '#c8ff70', 12, 320, 1);
         sfx('heal');
@@ -7675,6 +7683,7 @@ export class Battle {
       e.def.anchor && 'too heavy to shove — banks and blasts leave it planted',
       e.def.flank && 'flanks the pack — it drifts wide before it closes',
       e.def.forecast && 'forecast — its type wears the sky',
+      e.def.healBlock && 'heal block — your team can\'t mend while it lives',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9101,6 +9110,7 @@ export class Battle {
         u.def.anchor && 'ANCHOR',
         u.def.flank && 'FLANK',
         u.def.forecast && 'FORECAST',
+        u.def.healBlock && 'H-BLOCK',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
