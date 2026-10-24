@@ -340,6 +340,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).stepEnemyMovement(0.05);
   ok(Math.hypot(e.x - bx0, e.y - by0) > 30 && e.blinkT > 3, `blink foe teleports and re-arms (${bx0.toFixed(0)},${by0.toFixed(0)} -> ${e.x.toFixed(0)},${e.y.toFixed(0)})`);
 
+  // SOS callers cry a flagless kid into the pack instead of attacking
+  e.def = { ...e.def, summon: true };
+  const nFoes0 = (b as any).enemies.filter((a: any) => !a.dead).length;
+  (b as any).fireEnemy(e);
+  const nFoes1 = (b as any).enemies.filter((a: any) => !a.dead).length;
+  const kid = (b as any).enemies[(b as any).enemies.length - 1];
+  ok(nFoes1 === nFoes0 + 1 && !kid.def.summon, `SOS caller spawns a flagless kid (${nFoes0} -> ${nFoes1})`);
+  e.def = { ...e.def, summon: undefined };
+  kid.dead = true; // the test spawn can't leak into later wave counts
+
   // volley fans the attack across the three nearest mons, weakened per orb
   e.def = { ...e.def, volley: true, melee: false, raider: false, healer: false };
   (b as any).pickups = [];

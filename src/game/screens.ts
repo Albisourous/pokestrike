@@ -2391,6 +2391,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'thieves dash at your field drops — grab the loot or drop them first',
       'volley foes fan their shot across three mons — kill the cannon first',
       'blink foes flicker before they teleport — hold the shot a beat',
+      'SOS callers cry for backup — silence them before the field floods',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

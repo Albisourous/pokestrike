@@ -5764,6 +5764,22 @@ export class Battle {
           e.y = at.y;
           sfx('launch');
         }
+      } else if (e.def.summon && this.enemies.filter((a) => !a.dead).length < 7) {
+        // SOS caller: cries for help instead of attacking — a weak kid
+        // warps in at its side. Flood-capped at seven living; past that it
+        // drops the act and fights like anything else.
+        const kid = this.makeEnemy(
+          { def: { ...e.def, summon: undefined }, nx: 0, ny: 0 },
+          this.waveIndex,
+        );
+        kid.maxHp = kid.hp = Math.max(8, Math.round(e.maxHp * 0.4));
+        const at = this.unstick(e.x + e.r * 2.5, e.y, kid.r + 2);
+        kid.x = at.x;
+        kid.y = at.y;
+        this.enemies.push(kid);
+        this.burst(kid.x, kid.y, '#c8e0ff', 7, 220, 0.7);
+        this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'SOS!', t: 0.9, color: '#c8e0ff', big: true });
+        sfx('warn');
       } else if (e.def.volley) {
         // artillery: the shot fans across the three nearest mons at a
         // haircut per orb — the tank can't body-block a spread, so the
@@ -7004,6 +7020,7 @@ export class Battle {
     const tells = foe ? ([
       e.def.melee && 'lunges into your team',
       e.def.volley && 'fans its shot across three',
+      e.def.summon && 'calls for help instead of attacking',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8323,6 +8340,7 @@ export class Battle {
         u.def.repel && 'REPEL',
         u.def.raider && 'RAIDER',
         u.def.volley && 'VOLLEY',
+        u.def.summon && 'SOS',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

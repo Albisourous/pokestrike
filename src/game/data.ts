@@ -25,6 +25,7 @@ export interface SpeciesDef {
   repel?: boolean; // a repulsor field shoves the ball away — bank in or burn through
   raider?: boolean; // ignores the fight to steal field pickups — kill it before the loot's gone
   volley?: boolean; // fans its attack across the three nearest mons — one tank can't soak it
+  summon?: boolean; // SOS caller: cries for a weak kid instead of attacking — kill it before the field floods
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -213,7 +214,7 @@ export function draftOrder(rng: () => number): number[] {
 export const ENEMY_DB: SpeciesDef[] = [
   { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72), melee: true, raider: true, evolvesTo: 20 },
   { id: 16, name: 'Pidgey', type: 'flying', type2: 'normal', stats: st(40, 45, 40, 35, 35, 56), melee: true, evolvesTo: 17 },
-  { id: 41, name: 'Zubat', type: 'poison', type2: 'flying', stats: st(40, 45, 35, 30, 40, 55), melee: true, evolvesTo: 42 },
+  { id: 41, name: 'Zubat', type: 'poison', type2: 'flying', stats: st(40, 45, 35, 30, 40, 55), melee: true, summon: true, evolvesTo: 42 },
   { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20), evolvesTo: 75 },
   { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45), repel: true, evolvesTo: 82 },
   { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90), blink: true, evolvesTo: 64 },
@@ -239,7 +240,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 111, name: 'Rhyhorn', type: 'rock', stats: st(80, 85, 95, 30, 30, 25), melee: true, evolvesTo: 112 },
   { id: 100, name: 'Voltorb', type: 'electric', stats: st(40, 30, 50, 55, 55, 100), evolvesTo: 101 },
   { id: 170, name: 'Chinchou', type: 'electric', type2: 'water', stats: st(75, 38, 38, 56, 56, 67), evolvesTo: 171 },
-  { id: 72, name: 'Tentacool', type: 'water', type2: 'poison', stats: st(40, 40, 35, 50, 100, 70), evolvesTo: 73 },
+  { id: 72, name: 'Tentacool', type: 'water', type2: 'poison', stats: st(40, 40, 35, 50, 100, 70), summon: true, evolvesTo: 73 },
   { id: 84, name: 'Doduo', type: 'flying', type2: 'normal', stats: st(35, 85, 45, 35, 35, 75), melee: true, split: true, evolvesTo: 85 },
   { id: 278, name: 'Wingull', type: 'flying', type2: 'water', stats: st(40, 30, 30, 55, 30, 85), melee: true, evolvesTo: 279 },
   { id: 333, name: 'Swablu', type: 'flying', type2: 'normal', stats: st(45, 40, 60, 40, 75, 50), melee: true, evolvesTo: 334 },
