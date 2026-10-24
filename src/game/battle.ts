@@ -8528,6 +8528,25 @@ export class Battle {
             hitFoe = false;
           }
         }
+        let mineHit: Hazard | null = null;
+        for (const hz of this.hazards) {
+          // a live mine on the lane is contact too — the ball detonates it,
+          // it doesn't pass through
+          if (hz.kind !== 'mine' || hz.spent) continue;
+          const R = u.r + hz.r;
+          const ox = hz.x - u.x;
+          const oy = hz.y - u.y;
+          const proj = ox * dir.x + oy * dir.y;
+          if (proj <= 0) continue;
+          const d2 = ox * ox + oy * oy - proj * proj;
+          if (d2 > R * R) continue;
+          const t = proj - Math.sqrt(R * R - d2);
+          if (t > 0 && t < best) {
+            best = t;
+            hitFoe = false;
+            mineHit = hz;
+          }
+        }
         let foeHit: Unit | null = null;
         for (const e of this.enemies) {
           if (e.dead) continue;
@@ -8565,7 +8584,7 @@ export class Battle {
             // same honesty for the gravity bubble — the ball crawls inside
             foeColor = '#58c8d8';
           }
-          ctx.strokeStyle = hitFoe ? foeColor : color;
+          ctx.strokeStyle = hitFoe ? foeColor : mineHit ? '#ff9a30' : color;
           ctx.lineWidth = 2;
           ctx.setLineDash([4, 5]);
           ctx.beginPath();
@@ -8622,6 +8641,18 @@ export class Battle {
               ctx.stroke();
               ctx.setLineDash([]);
             }
+          } else if (mineHit) {
+            // the lane ends in a blast, not a bank — a blast ring marks the
+            // mine and the ghost leg stays honest by staying home
+            ctx.beginPath();
+            ctx.arc(hx, hy, 9 + Math.sin(this.time * 8) * 1.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(hx - 5, hy);
+            ctx.lineTo(hx + 5, hy);
+            ctx.moveTo(hx, hy - 5);
+            ctx.lineTo(hx, hy + 5);
+            ctx.stroke();
           } else {
             // ghost leg banks off the surface the way the ball will
             ctx.beginPath();

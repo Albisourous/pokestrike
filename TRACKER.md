@@ -139,3 +139,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `7cdd7f5` | battle | aim ghost stays honest — repel targets ring orange, grav carriers ring teal | `git revert <this commit>` |
 | 2026-10-25 | `e183160` | battle | foes chip in lava too — kite the pack through pools; fire types + flyers exempt | `git revert <this commit>` |
 | 2026-10-25 | `aa51f25` | battle | spike strips nick grounded foes too — the fence hurts, not just walls | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | aim ray marks live mines on the lane — orange blast ring, no ghost leg | `git revert <this commit>` |
