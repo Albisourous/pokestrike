@@ -6224,6 +6224,22 @@ export class Battle {
         src.burnT = Math.max(src.burnT, 5);
         this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'FLAME BODY!', t: 0.9, color: '#f08030', big: false });
       }
+      if (p.def.charm && this.rng() < 0.3) {
+        src.asleep = true;
+        this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'SMITTEN!', t: 0.9, color: '#f8b8d0', big: false });
+      }
+      if (p.def.spore && this.rng() < 0.3) {
+        const roll = this.rng();
+        if (roll < 0.4) {
+          src.dotTicks = Math.max(src.dotTicks, 4);
+          src.dotDmg = Math.max(src.dotDmg, Math.ceil(src.maxHp * 0.06));
+        } else if (roll < 0.7) {
+          src.paraT = Math.max(src.paraT, 3);
+        } else {
+          src.asleep = true;
+        }
+        this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'SPORED!', t: 0.9, color: '#a8b820', big: false });
+      }
     }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
