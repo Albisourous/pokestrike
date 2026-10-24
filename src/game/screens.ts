@@ -1008,8 +1008,16 @@ function drawClimbBody(
       bg: INK,
       fg: PAPER,
     });
+    // the opener pack keeps its real spawn xs, spread to a minimum spread so
+    // a clustered pull reads as three foes, not a fused blob
+    const xs = stg.waves[0]
+      .map((sp) => inner.w * Math.min(0.9, Math.max(0.1, sp.nx)))
+      .sort((a, b) => a - b);
+    for (let i = 1; i < xs.length; i++) xs[i] = Math.max(xs[i], xs[i - 1] + inner.w * 0.22);
+    const over = xs[xs.length - 1] - inner.w * 0.94;
+    if (over > 0) for (let i = 0; i < xs.length; i++) xs[i] -= over;
     stg.waves[0].forEach((sp, i) => {
-      const mx = inner.x + inner.w * Math.min(0.9, Math.max(0.1, sp.nx));
+      const mx = inner.x + xs[i];
       const my = inner.y + inner.h * Math.min(0.86, Math.max(0.3, sp.ny)) + 26;
       monShadow(ctx, mx, my, 46);
       drawMon(ctx, sp.def.id, mx, my + Math.sin(t * 2.2 + i * 1.7) * 2, 46);
