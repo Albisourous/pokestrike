@@ -5715,6 +5715,19 @@ export class Battle {
           e.y = at.y;
           sfx('launch');
         }
+      } else if (e.def.volley) {
+        // artillery: the shot fans across the three nearest mons at a
+        // haircut per orb — the tank can't body-block a spread, so the
+        // counterplay is killing the cannon, not positioning the wall
+        sfx('zap');
+        for (const p of this.playersByDist(e).slice(0, 3)) {
+          this.orbs.push({
+            x: e.x, y: e.y, target: p,
+            dmg: Math.round(physDamage(e.def.stats.atk, p.def.stats.def, 1, zapPower) * 0.55),
+            t: 2.5, wob: e.uid * 1.7, color: '#ff9a30', hostile: true, src: e,
+          });
+        }
+        if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
       } else if (e.def.melee) {
         // melee enemies lunge instead of zapping — the dash plays out over
         // the next moments while you're lining up your shot
@@ -8086,6 +8099,7 @@ export class Battle {
         u.def.rage && 'RAGE',
         u.def.repel && 'REPEL',
         u.def.raider && 'RAIDER',
+        u.def.volley && 'VOLLEY',
       ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);

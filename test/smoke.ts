@@ -323,6 +323,14 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const hp1 = e.hp;
   (b as any).stepEnemyMovement(0.05);
   ok(e.hp < hp1, `spike strip nicks the grounded foe (${hp1} -> ${e.hp})`);
+
+  // volley fans the attack across the three nearest mons, weakened per orb
+  e.def = { ...e.def, volley: true, melee: false, raider: false, healer: false };
+  (b as any).pickups = [];
+  (b as any).orbs = [];
+  (b as any).fireEnemy(e);
+  const volleyTargets = new Set((b as any).orbs.map((o: any) => o.target));
+  ok((b as any).orbs.length === Math.min(3, (b as any).players.filter((p: any) => !p.dead).length) && volleyTargets.size === (b as any).orbs.length, `volley fans one orb per distinct target (${(b as any).orbs.length})`);
 }
 
 {

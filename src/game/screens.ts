@@ -800,7 +800,6 @@ export function echoMonAt(x: number, y: number): number | null {
 
 // Wild mons at the screen edges — the stadium crowd, clear of the pitch
 const WILD_MONS: [number, number, number][] = [
-  [16, 484, 118],
   [19, 72, 884],
   [41, 476, 884],
 ];
@@ -1116,16 +1115,39 @@ function drawClimbBody(
     ctx.fillText(boostTxt, recX + measureW(ctx, `${recLine} · `), recY);
   }
   ctx.textAlign = 'center';
-  // the ladder: a fill bar toward the next tier, tinted to the current one —
-  // its label already rode up into the stat line above
-  const rw = 220, rx = W / 2 - rw / 2, ry = ctaBottom + 102;
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
-  ctx.fillRect(rx, ry, rw, 7);
-  ctx.fillStyle = ld.color;
-  ctx.fillRect(rx, ry, Math.max(3, rw * ld.prog), 7);
-  ctx.strokeStyle = GOLD;
+  // the ladder: a dark inset capsule the band's tier-color fill rides in,
+  // capped by the rung's own ball icons — the current one chases the next
+  const BALL_ICON: Record<string, string> = {
+    'POKé BALL': 'poke-ball',
+    'GREAT BALL': 'great-ball',
+    'ULTRA BALL': 'ultra-ball',
+    'MASTER BALL': 'master-ball',
+    CHAMPION: 'star-piece',
+  };
+  const rw = 200, rx = W / 2 - rw / 2, ry = ctaBottom + 100;
+  roundRect(ctx, rx, ry, rw, 12, 6);
+  ctx.fillStyle = 'rgba(10,13,24,0.6)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(rx + 0.5, ry + 0.5, rw - 1, 6);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.22)'; // quartile notches — a measured track
+  for (let i = 1; i < 4; i++) ctx.fillRect(Math.floor(rx + (rw * i) / 4), ry + 3, 1, 6);
+  const fw = rw * ld.prog;
+  if (fw > 2) {
+    roundRect(ctx, rx + 1.5, ry + 1.5, Math.max(5, fw - 3), 9, 4);
+    ctx.fillStyle = ld.color;
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; // crown sheen
+    roundRect(ctx, rx + 3, ry + 2.5, Math.max(3, fw - 6), 3.5, 2);
+    ctx.fill();
+  }
+  const ci = itemSprite(BALL_ICON[ld.name]);
+  const ni = itemSprite(ld.next ? BALL_ICON[ld.next.name] : 'star-piece');
+  if (ci) ctx.drawImage(ci, rx - 27, ry - 4, 21, 21);
+  else void loadItem(BALL_ICON[ld.name]);
+  if (ni) ctx.drawImage(ni, rx + rw + 6, ry - 4, 21, 21);
+  else void loadItem(ld.next ? BALL_ICON[ld.next.name] : 'star-piece');
 
   // the day's login drop — a gold banner over the pitch top for the first
   // seconds on title, so the calendar reads as a reward, not a ledger line
@@ -2360,6 +2382,14 @@ const HELP_SECTIONS: HelpSection[] = [
       'melee countdowns start low — thin them out first',
       "a boss's drifting gold star is its weak face — hits there pay triple",
       'shelled foes glance hits off the plate — bank around the back for a FLANK',
+      'spiked foes bite the ball on contact — hit them clean, don\'t graze',
+      'regen foes mend over time — burst them down, don\'t whittle',
+      'split foes divide when KO\'d — expect two where one fell',
+      'rage foes snap under 30% — a wounded one swings faster',
+      'zZ foes doze till hit — the wake-up shot lands like a crit',
+      'gold halos repel the ball — bank in behind or punch through fast',
+      'thieves dash at your field drops — grab the loot or drop them first',
+      'volley foes fan their shot across three mons — kill the cannon first',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
@@ -2845,10 +2875,21 @@ export function dexRowAt(x: number, y: number, scroll: number): number | null {
 
 // the mon detail card — a dex row's whole story: portrait, typing, role and
 // signature move, base stats, its evolution line, and where its bond stands
-export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
+// the solo-mon card's frame is shared with its buy-pill hit rect
+const DEX_DETAIL_R = { x: 44, y: 150, w: W - 88, h: 610 };
+
+// an unowned pullable sells right on its card — the spark shop's price and
+// deal discount apply; null when the mon can't be bought
+export function dexBuyRect(id: number): { x: number; y: number; w: number; h: number } | null {
+  const def = speciesById(id);
+  if (!def || dexIds().includes(id) || !PULLABLE.some((d) => d.id === id)) return null;
+  return { x: W / 2 - 110, y: DEX_DETAIL_R.y + DEX_DETAIL_R.h - 56, w: 220, h: 32 };
+}
+
+export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, armed = false) {
   const def = speciesById(id);
   if (!def) return;
-  const r = { x: 44, y: 150, w: W - 88, h: 610 };
+  const r = DEX_DETAIL_R;
   scrim(ctx, 0.55);
   uiPanel(ctx, r, def.name.toUpperCase(), { rad: 14, sub: `#${id}` });
   uiClose(ctx, { x: r.x + r.w - 48, y: r.y + 12, w: 40, h: 40 });
@@ -2954,9 +2995,11 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
   ctx.fillStyle = INK_FAINT;
   ctx.fillText(`BASE TOTAL ${stats.reduce((a, s) => a + s[1], 0)}`, r.x + r.w - 24, r.y + 312 + 6 * 26 + 12);
 
-  // the family row — caught bright, the viewed mon pinned gold
+  // the family row — caught bright, the viewed mon pinned gold; a live buy
+  // pill claims the footer lane so the row rides higher
+  const buy = dexBuyRect(id);
   const line = EVO_LINES.find((l) => l.ids.includes(id));
-  const ly = r.y + r.h - 96;
+  const ly = r.y + r.h - (buy ? 132 : 96);
   ctx.textAlign = 'left';
   ctx.fillStyle = INK_SOFT;
   ctx.fillText(line ? 'EVOLUTION LINE' : 'NO EVOLUTION LINE', r.x + 24, ly);
@@ -2982,9 +3025,28 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number) {
   }
 
   ctx.textAlign = 'center';
+  if (buy) {
+    // sell it here — same dust price as the spark grid (deal species ride
+    // the −25% inside dealCost); the pill's the armed cue the grid wears
+    const cost = dealCost(def);
+    const afford = dust() >= cost;
+    ctx.save();
+    if (armed) ctx.globalAlpha = 0.7 + 0.3 * Math.sin(t * 10);
+    roundRect(ctx, buy.x, buy.y, buy.w, buy.h, 16);
+    ctx.fillStyle = afford ? GOLD : '#8a8a80';
+    ctx.fill();
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+    const label = armed ? `TAP AGAIN · ◆${cost}` : `${def.id === dealPick().id ? 'DEAL −25% · ' : ''}BUY · ◆${cost}`;
+    fitFontB(ctx, label, 9, buy.w - 24);
+    ctx.fillStyle = afford ? INK : PAPER_HI;
+    ctx.fillText(label, cx, buy.y + 21);
+  }
   ctx.font = fontB(7);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('TAP TO CLOSE', cx, r.y + r.h - 14);
+  ctx.fillText('TAP TO CLOSE', cx, r.y + r.h - 12);
 }
 
 // --- hall of fame: the top climbs this device has logged, score-ranked ---

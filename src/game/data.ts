@@ -24,6 +24,7 @@ export interface SpeciesDef {
   sleepy?: boolean; // dozes until hit — timer frozen, +35% to hits on it
   repel?: boolean; // a repulsor field shoves the ball away — bank in or burn through
   raider?: boolean; // ignores the fight to steal field pickups — kill it before the loot's gone
+  volley?: boolean; // fans its attack across the three nearest mons — one tank can't soak it
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -710,7 +711,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 188, name: 'Skiploom', type: 'grass', type2: 'flying', stats: st(55, 45, 50, 45, 65, 80), evolvesTo: 189 },
   { id: 189, name: 'Jumpluff', type: 'grass', type2: 'flying', stats: st(75, 55, 70, 55, 95, 110) },
   { id: 192, name: 'Sunflora', type: 'grass', stats: st(75, 75, 55, 105, 85, 30) },
-  { id: 224, name: 'Octillery', type: 'water', stats: st(75, 105, 75, 105, 75, 45), pierce: true },
+  { id: 224, name: 'Octillery', type: 'water', stats: st(75, 105, 75, 105, 75, 45), pierce: true, volley: true },
   { id: 247, name: 'Pupitar', type: 'rock', stats: st(70, 84, 70, 65, 70, 51), evolvesTo: 248 },
   { id: 266, name: 'Silcoon', type: 'grass', stats: st(50, 35, 55, 25, 25, 15), evolvesTo: 267 },
   { id: 267, name: 'Beautifly', type: 'flying', stats: st(60, 70, 50, 100, 50, 65) },
