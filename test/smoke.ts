@@ -277,6 +277,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   act2.hzT = -9;
   (b as any).stepShot(0.02);
   ok(act2.hzT > -9, 'non-fire ball takes the lava chip');
+
+  // ice slick: a shot crossing the frozen band keeps nearly all its speed
+  (b as any).hazards = [{ kind: 'ice', x: lx, y: ly, r: 60 }];
+  act2.def = { ...act2.def, type: 'normal' };
+  act2.x = lx; act2.y = ly; act2.vx = 400; act2.vy = 0;
+  (b as any).stepShot(0.02);
+  const vIce = Math.abs(act2.vx);
+  act2.x = lx + 150; act2.y = ly; act2.vx = 400; act2.vy = 0;
+  (b as any).stepShot(0.02);
+  const vDry = Math.abs(act2.vx);
+  ok(vIce > vDry, `ice keeps the ball's speed (${vIce.toFixed(0)} vs ${vDry.toFixed(0)})`);
+  act2.vx = 0;
 }
 
 // sweep streaks pay — back-to-back one-shot clears escalate the callout

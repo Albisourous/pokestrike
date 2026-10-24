@@ -1320,6 +1320,22 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // glacier — a frozen band splits the court; shots crossing it keep
+  // nearly all their speed, so banks carry clean to the far wall while
+  // mistimed entries overshoot into the mine teeth at the exits
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '102000201',
+    '1S00S00S1',
+    '188888881',
+    '10S0S0S01',
+    '100000001',
+    '14S000S41',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 // the keep/pincer/saltire/moat-gate/sluice/bramble/crosswind tail is the
 // hard tier — it only rides in from depth 2 (stage ~5 up); append new
@@ -1534,7 +1550,7 @@ export function rivalWave(defs: SpeciesDef[], rng: () => number): WaveSpawn[] {
 // Hazard zones: per-theme arena dangers laid out alongside a wave's spawns.
 // Same normalized coords as WaveSpawn; r is a fraction of arena width.
 // Zones stay out of the bottom 25% (player turf) and inside the side walls.
-export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power';
+export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power' | 'ice';
 export interface HazardSpawn {
   kind: HazardKind;
   nx: number;
@@ -1548,6 +1564,7 @@ export interface HazardSpawn {
 // horizontal slabs, '3' themes into lava pools (volcano) or silence
 // ponds, '4' drops a mine, '5' lays a spike strip (chips the ball, walls
 // grounded foes), '6' a gust lane pushing toward mid, '7' a drag patch,
+// '8' an ice slick the ball barely slows on,
 // 'S' lists the wave's spawn anchors.
 export function buildRoom(grid: string[], theme: Theme, rng: () => number): RoomDef {
   const blocks: BlockDef[] = [];
@@ -1569,6 +1586,7 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
       else if (ch === '5') hazards.push({ kind: 'spikes', ...at, r: 0.062 });
       else if (ch === '6') hazards.push({ kind: 'gust', ...at, r: 0.062, dir: c < 4 ? 1 : -1 });
       else if (ch === '7') hazards.push({ kind: 'grass', ...at, r: 0.062 });
+      else if (ch === '8') hazards.push({ kind: 'ice', ...at, r: 0.062 });
       else if (ch === 'S') anchors.push(at);
     }
     if (run >= 0) blocks.push({ nx: run / 9, ny: r / 11, nw: (8 - run) / 9, nh: 1 / 11 });
@@ -1614,7 +1632,7 @@ for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
     const [c, r] = q.pop()!;
     const k = `${c},${r}`;
     if (seen.has(k) || c < 1 || c > 7 || r < 1 || r > 9) continue;
-    if (grid[r][c] !== '0' && grid[r][c] !== 'S' && grid[r][c] !== '4' && grid[r][c] !== 'P' && grid[r][c] !== '6' && grid[r][c] !== '7') continue;
+    if (grid[r][c] !== '0' && grid[r][c] !== 'S' && grid[r][c] !== '4' && grid[r][c] !== 'P' && grid[r][c] !== '6' && grid[r][c] !== '7' && grid[r][c] !== '8') continue;
     seen.add(k);
     q.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
   }
@@ -1622,7 +1640,7 @@ for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
   for (let r = 1; r <= 9; r++)
     for (let c = 1; c <= 7; c++) {
       const ch = grid[r][c];
-      if (!'0234567SP'.includes(ch)) throw new Error(`bad room tile '${ch}'`);
+      if (!'02345678SP'.includes(ch)) throw new Error(`bad room tile '${ch}'`);
       if (ch === 'S' && !seen.has(`${c},${r}`)) throw new Error('room anchor is walled in');
     }
 }

@@ -163,7 +163,7 @@ interface Wave {
 }
 // A themed hazard zone on the court — MS damage-wall/gimmick analog.
 interface Hazard {
-  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power';
+  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power' | 'ice';
   x: number;
   y: number;
   r: number; // px radius of the zone
@@ -277,6 +277,7 @@ const DECOR_MONS: Record<'tree' | 'rock' | 'flower', [number, number, number][]>
 const HZ_TINT: Record<Hazard['kind'], string> = {
   lava: '#c23a0e', grass: '#2f7a2a', gust: '#bfe6ff', spikes: '#241f30', static: '#4a2a78',
   mine: '#ff9a30', warp: '#c890ff', boost: '#2a5a30', well: '#101826', power: '#d83018',
+  ice: '#9adcff',
 };
 const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
   grass: [1715, 93, 78, 33], // tall-grass tufts
@@ -2104,7 +2105,8 @@ export class Battle {
     const h = dt / sub;
     for (let i = 0; i < sub; i++) {
       const wave = this.enemies; // spawnWave swaps this array on wave clear
-      const damp = Math.exp(-FRICTION * this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * h);
+      const onIce = this.hazards.some((hz) => hz.kind === 'ice' && Math.hypot(u.x - hz.x, u.y - hz.y) < hz.r + u.r);
+      const damp = Math.exp(-FRICTION * this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * (onIce ? 0.1 : 1) * h);
       u.vx *= damp;
       u.vy *= damp;
       // gravity auras: inside a carrier's bubble the ball crawls — aim
@@ -8357,6 +8359,19 @@ export class Battle {
         ctx.moveTo(cx - 6 * d, hz.y - 8);
         ctx.lineTo(cx + 6 * d, hz.y);
         ctx.lineTo(cx - 6 * d, hz.y + 8);
+        ctx.stroke();
+      }
+    } else if (hz.kind === 'ice') {
+      // frozen slick — sheen streaks drift across the pad so it reads as
+      // slippery before the ball ever touches it
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = '#e8faff';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 3; i++) {
+        const off = ((this.time * 40 + i * hz.r * 0.7) % (hz.r * 1.6)) - hz.r * 0.8;
+        ctx.beginPath();
+        ctx.moveTo(hz.x + off - 7, hz.y + hz.r * 0.2 - i * hz.r * 0.25);
+        ctx.lineTo(hz.x + off + 7, hz.y + hz.r * 0.2 - i * hz.r * 0.25);
         ctx.stroke();
       }
     } else if (hz.kind === 'static') {
