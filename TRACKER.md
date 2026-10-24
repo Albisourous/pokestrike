@@ -243,4 +243,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `d042165` | battle | GRUDGE — roster cursed mons' faint slows the foe pack's wind-ups | `git revert <this commit>` |
 | 2026-10-25 | `f004c37` | battle | AIM HONESTY — ghost path now bends through wells, rides boosts and warps | `git revert <this commit>` |
 | 2026-10-25 | `ee19171` | battle | SHED SKIN — player-side natural cure on Scraggy, mirrors the foe tick | `git revert <this commit>` |
-| 2026-10-25 | pending | feel | HIT FLASH — sprites burn white for a beat on every landed hit | `git revert <this commit>` |
+| 2026-10-25 | `cafbc8f` | feel | HIT FLASH — sprites burn white for a beat on every landed hit | `git revert <this commit>` |
