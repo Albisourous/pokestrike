@@ -56,6 +56,7 @@ import {
   BUG_HIT,
   drawPerkPick,
   charmSkipRect,
+  charmCardRect,
   TOOL_ROLL,
   TOOL_BAN,
   drawToolRow,
@@ -1301,7 +1302,7 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     for (let i = 0; i < startOffers.length; i++) {
-      if (inRect(p.x, p.y, perkCardRect(i, startOffers.length, -140))) {
+      if (inRect(p.x, p.y, charmCardRect(i, startOffers.length))) {
         charmPick(i);
         return;
       }

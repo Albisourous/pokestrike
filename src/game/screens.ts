@@ -225,9 +225,15 @@ export function perkCardRect(i: number, n = 3, dy = 0) {
   }
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: 380 + dy, w: CARD_W, h: 200 };
 }
+// the charm board's own card slot — draw and hit share the one function so
+// the 3-offer row can't drift from its tap zones. 3 offers sit in a centered
+// window (cards dy −80); the 2×2 board fills the tall one (dy −140).
+export function charmCardRect(i: number, n: number) {
+  return perkCardRect(i, n, n >= 4 ? -140 : -72);
+}
 export function charmSkipRect(n: number) {
   // rides under the board — the 2×2's second row pushes it past the 3-card slot
-  return { x: W / 2 - 90, y: n >= 4 ? 716 : 456, w: 180, h: 40 };
+  return { x: W / 2 - 90, y: n >= 4 ? 716 : 520, w: 180, h: 40 };
 }
 export const REWARD_TEAM = { x: W / 2 - 95, y: 872, w: 190, h: 40 };
 // the NEW CATCH card doubles as a button — it opens the team panel
@@ -5358,18 +5364,19 @@ export function drawPerkPick(
   drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
   ctx.textAlign = 'center';
   const four = offers.length >= 4; // the lab's FOURTH OPTION hits the charm board too
-  // a tall menu window owns the whole column — the squad rides inside it now
-  uiPanel(ctx, { x: 14, y: 84, w: W - 28, h: four ? 856 : 580 }, title);
+  // the 2×2 board fills a tall window; the 3-offer row sits in a centered one
+  const py = four ? 84 : 232;
+  uiPanel(ctx, { x: 14, y: py, w: W - 28, h: four ? 856 : 496 }, title);
   ctx.font = fontB(9);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText(sub, W / 2, 156);
-  offers.forEach((p, i) => drawPerkCard(ctx, perkCardRect(i, offers.length, -140), p, undefined, { idx: i }));
+  ctx.fillText(sub, W / 2, py + 72);
+  offers.forEach((p, i) => drawPerkCard(ctx, charmCardRect(i, offers.length), p, undefined, { idx: i }));
   // declining pays score instead — a dead offer still has a price
   pill(ctx, charmSkipRect(offers.length), { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP +200 PTS' });
   // the drafted squad rides under the offers — pick the item for THESE mons
   if (team.length) {
-    const labelY = four ? 780 : 520;
-    const monY = four ? 798 : 540;
+    const labelY = four ? 780 : 584;
+    const monY = four ? 798 : 632; // drawMon centers — half the sprite + pad
     const monS = four ? 48 : 62;
     ctx.font = font(9);
     ctx.fillStyle = INK_FAINT;
