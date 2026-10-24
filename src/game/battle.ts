@@ -121,6 +121,7 @@ interface Unit {
   blinkT: number;
   stolen?: PickupKind; // a thief's pocket — re-drops when the body drops // BLINK foes: countdown to the next teleport — shimmer tells first
   boostN: number; // SPEED BOOST foes: attacks launched — each re-arm winds it tighter
+  armorN: number; // WEAK ARMOR: shell cracks — faster but softer each hit
 }
 
 interface FloatText {
@@ -917,6 +918,7 @@ export class Battle {
         boostT: -9,
         blinkT: 0,
         boostN: 0,
+        armorN: 0,
       });
     });
     // bag items field after the team does — persistent consumables earned
@@ -1624,6 +1626,7 @@ export class Battle {
       boostT: -9,
       blinkT: s.def.blink ? 4 + this.rng() * 2.5 : 0,
       boostN: 0,
+      armorN: 0,
     };
   }
 
@@ -3032,7 +3035,7 @@ export class Battle {
         d *= 2;
       }
     }
-    d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1));
+    d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1) * (1 + e.armorN * 0.12)); // a cracked shell reads softer
     // aegis ward: a shielded foe eats the whole hit — crack the guardian
     // first, or the pack soaks your best lines for free
     if (e.shieldN > 0) {
@@ -3054,6 +3057,13 @@ export class Battle {
     if (e.asleep) d = Math.max(1, Math.round(d * 1.35));
     e.hp -= d;
     e.flashT = 0.12; // the sprite burns white for a beat — every hit confirms
+    // weak armor: every landed hit cracks the shell — it sheds weight and
+    // presses faster, but the next hit finds a softer hide. Burst it, don't chip.
+    if (e.def.weakArmor && e.hp > 0 && e.armorN < 6) {
+      e.armorN++;
+      e.drift *= 1.1;
+      if (e.armorN === 1) this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'SHELL CRACKS!', t: 0.9, color: '#9aa7b8', big: false });
+    }
     if (e.asleep && e.hp > 0) {
       e.asleep = false;
       this.pushText({ x: e.x, y: e.y - e.r - 22, text: 'IT WOKE UP!', t: 1, color: '#c8d0e8', big: false });
@@ -7751,6 +7761,7 @@ export class Battle {
       e.def.bond && 'destiny bond — a direct KO takes the striker with it',
       e.def.armor && 'shell armor — critical hits glance off',
       e.def.chameleon && 'color change — its hide becomes the type that hit it',
+      e.def.weakArmor && 'weak armor — hits crack it: faster but softer',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9192,6 +9203,7 @@ export class Battle {
         u.def.bond && 'BOND',
         u.def.armor && 'ARMOR',
         u.def.chameleon && 'CAMO',
+        u.def.weakArmor && 'W-ARMOR',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

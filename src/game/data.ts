@@ -79,6 +79,7 @@ export interface SpeciesDef {
   armor?: boolean; // Battle/Shell Armor: critical hits glance to normal
   chameleon?: boolean; // Color Change: takes on the type that last struck it
   friendGuard?: boolean; // Friend Guard: living carrier softens hits on teammates
+  weakArmor?: boolean; // Weak Armor: each hit speeds it up and softens it
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -425,7 +426,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 561, name: 'Sigilyph', type: 'psychic', type2: 'flying', stats: st(72, 58, 80, 103, 80, 97), pierce: true },
   { id: 564, name: 'Tirtouga', type: 'water', type2: 'rock', stats: st(54, 78, 103, 53, 45, 22), evolvesTo: 565 },
   { id: 566, name: 'Archen', type: 'rock', type2: 'flying', stats: st(55, 112, 45, 74, 45, 70), evolvesTo: 567 },
-  { id: 582, name: 'Vanillite', type: 'water', stats: st(36, 50, 50, 65, 60, 44), evolvesTo: 583 },
+  { id: 582, name: 'Vanillite', type: 'water', stats: st(36, 50, 50, 65, 60, 44), evolvesTo: 583, weakArmor: true },
   { id: 588, name: 'Karrablast', type: 'grass', stats: st(50, 75, 45, 40, 45, 60), evolvesTo: 589 },
   { id: 594, name: 'Alomomola', type: 'water', stats: st(165, 75, 80, 40, 45, 65), healer: true, regen: true },
   { id: 597, name: 'Ferroseed', type: 'grass', type2: 'rock', stats: st(44, 50, 91, 24, 86, 10), spiky: true, shielded: true, evolvesTo: 598 },
@@ -717,7 +718,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 164, name: 'Noctowl', type: 'flying', type2: 'normal', stats: st(100, 50, 50, 86, 96, 70), melee: true },
   { id: 171, name: 'Lanturn', type: 'electric', type2: 'water', stats: st(125, 58, 58, 76, 76, 67), absorb: 'electric' },
   { id: 208, name: 'Steelix', type: 'rock', stats: st(75, 85, 200, 55, 65, 30), melee: true },
-  { id: 219, name: 'Magcargo', type: 'fire', stats: st(60, 50, 120, 90, 80, 30) },
+  { id: 219, name: 'Magcargo', type: 'fire', stats: st(60, 50, 120, 90, 80, 30), weakArmor: true },
   { id: 279, name: 'Pelipper', type: 'flying', type2: 'water', stats: st(60, 50, 100, 95, 70, 65) },
   { id: 334, name: 'Altaria', type: 'flying', stats: st(75, 70, 90, 70, 105, 80) },
   { id: 80, name: 'Slowbro', type: 'psychic', type2: 'water', stats: st(95, 75, 110, 100, 80, 30) },
