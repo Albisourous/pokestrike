@@ -2411,6 +2411,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'FIELD PICKUPS',
     lines: [
       'each wave seeds a pickup — the colored ring and tag name it',
+      'LUM BERRY cures the team — it only drops when someone is sick',
       'berry heals the team, protein buffs the shot, elixir charges pips',
       'fly through the glowing item to collect on touch',
       'one spawns each wave, two when something big lurks',

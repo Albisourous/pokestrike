@@ -525,6 +525,11 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.burnT = 0;
   e.def = { ...e.def, flame: undefined };
 
+  // lum berry washes every ailment off the team at once
+  striker.dotTicks = 4; striker.dotDmg = 3; striker.burnT = 4; striker.paraT = 2; striker.asleep = true;
+  (b as any).grabPickup({ kind: 'lum-berry', x: 100, y: 100, t: 0 });
+  ok(striker.dotTicks === 0 && striker.burnT === 0 && striker.paraT === 0 && !striker.asleep, 'lum berry cures the whole slate');
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

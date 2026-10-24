@@ -213,7 +213,7 @@ interface BallDrop {
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
-type PickupKind = 'oran-berry' | 'protein' | 'elixir';
+type PickupKind = 'oran-berry' | 'protein' | 'elixir' | 'lum-berry';
 interface Pickup {
   x: number;
   y: number;
@@ -356,13 +356,14 @@ const SHINY_RATE = 1 / 48; // ~2% of wild spawns roll the gold palette
 const BALL_ROCK0 = 0.3; // drop-in seconds before the first swing
 const BALL_ROCK_T = 0.4; // one full side-to-side swing
 const BALL_TAIL = 0.25; // linger after the click/burst before fading
-const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir'];
+const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir']; // lum rolls separately — see spawnWave
 // every pickup gets a color + one-word tag so the drop reads before the
 // ball reaches it
 const PICKUP_META: Record<PickupKind, { name: string; label: string; color: string }> = {
   'oran-berry': { name: 'ORAN BERRY', label: 'HEAL 15%', color: '#6fdc6f' },
   protein: { name: 'PROTEIN', label: 'ATK +50%', color: '#f08030' },
   elixir: { name: 'ELIXIR', label: 'SUPER +1', color: '#9ecbff' },
+  'lum-berry': { name: 'LUM BERRY', label: 'CURE ALL', color: '#b8f8f8' },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 // star pieces — the meta wallet paid by run progress (Oct-20/21 specs;
@@ -1424,6 +1425,10 @@ export class Battle {
     this.pickups = [];
     this.scars = [];
     const npk = this.enemies.some((e) => e.boss || ELITE_IDS.has(e.def.id)) ? 2 : 1;
+    // a lum cure only rolls when the pack carries a status threat — it
+    // never crowds out the heal/atk drops on a clean wave, and keeps the
+    // seeded stream identical on threat-free waves
+    const ailThreat = this.enemies.some((e) => e.def.venom || e.def.para || e.def.burn || e.def.drowsy || e.def.shock || e.def.toxic || e.def.flame);
     for (let k = 0; k < npk; k++) {
       const at = this.unstick(
         this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
@@ -1433,7 +1438,9 @@ export class Battle {
       this.pickups.push({
         x: at.x,
         y: at.y,
-        kind: PICKUP_KINDS[Math.floor(this.rng() * PICKUP_KINDS.length)],
+        kind: ailThreat && this.rng() < 0.35
+          ? 'lum-berry'
+          : PICKUP_KINDS[Math.floor(this.rng() * 3)],
         t: this.rng() * 6,
       });
     }
@@ -2812,6 +2819,21 @@ export class Battle {
         for (const p of this.players) this.chargeUp(p);
         this.pushText({ x: pk.x, y: pk.y - 12, text: 'CD -1!', t: 0.9, color: '#9ecbff', big: true });
         break;
+      case 'lum-berry': {
+        sfx('ready');
+        // canonical lum — every ailment on the team washes off at once
+        let cured = false;
+        for (const p of this.players) {
+          if (p.dead) continue;
+          if (p.dotTicks > 0 || p.burnT > 0 || p.paraT > 0 || p.asleep) cured = true;
+          p.dotTicks = 0; p.dotDmg = 0; p.burnT = 0; p.paraT = 0; p.asleep = false;
+        }
+        this.pushText({
+          x: pk.x, y: pk.y - 12,
+          text: cured ? 'CURED!' : 'FRESH', t: 0.9, color: '#b8f8f8', big: cured,
+        });
+        break;
+      }
     }
   }
 
