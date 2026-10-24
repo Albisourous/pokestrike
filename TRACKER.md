@@ -176,4 +176,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `007d41b` | battle | Poké Center cleanses statuses (sleep/poison/burn) alongside the heal | `git revert <this commit>` |
 | 2026-10-25 | `9a619d7` | battle | JOLT waves paralyze — launch limps a few rounds | `git revert <this commit>` |
 | 2026-10-25 | `2df16f2` | battle | TOXIC hides poison the ball on contact — Nidorans/Seadra | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | STATIC hides paralyze the striker — Electabuzz/Manectric | `git revert <this commit>` |
+| 2026-10-25 | `5045321` | battle | STATIC hides paralyze the striker — Electabuzz/Manectric | `git revert <this commit>` |
