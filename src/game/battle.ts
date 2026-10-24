@@ -8128,6 +8128,17 @@ export class Battle {
     }
     if (blinking) ctx.globalAlpha = 1;
 
+    // protein-fed shot — the buffed ball burns orange until it parks
+    if (u === this.active && this.phase === 'shot' && this.shotPhys > 1) {
+      ctx.strokeStyle = '#f08030';
+      ctx.globalAlpha = 0.55 + Math.sin(this.time * 10) * 0.2;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(u.x, u.y + bob - lift, u.r + 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
     // focus sash — the white headband reads on both sides: a one-shot plan
     // should be visible before the shot commits, not after the pop
     if (u.sash) {
