@@ -55,6 +55,7 @@ export interface SpeciesDef {
   counter?: boolean; // Counter: returns a third of contact damage to the striker
   alpha?: boolean; // pack leader: rallying cry — packmates hit harder while it lives
   shed?: boolean; // Shed Skin: each tick it may slough off every ailment
+  charge?: boolean; // stampede: paws a beat, then rams across the court at a mon
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -277,7 +278,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 118, name: 'Goldeen', type: 'water', stats: st(45, 67, 60, 35, 50, 63), evolvesTo: 119 },
   { id: 79, name: 'Slowpoke', type: 'psychic', type2: 'water', stats: st(90, 65, 65, 40, 40, 15), sleepy: true, evolvesTo: [80, 199] },
   { id: 108, name: 'Lickitung', type: 'normal', stats: st(90, 55, 75, 60, 75, 30), melee: true, evolvesTo: 463 },
-  { id: 128, name: 'Tauros', type: 'normal', stats: st(75, 100, 95, 40, 70, 110), melee: true, rage: true },
+  { id: 128, name: 'Tauros', type: 'normal', stats: st(75, 100, 95, 40, 70, 110), melee: true, rage: true, charge: true },
   { id: 137, name: 'Porygon', type: 'normal', stats: st(65, 60, 70, 85, 75, 40), beam: true },
   { id: 138, name: 'Omanyte', type: 'water', type2: 'rock', stats: st(35, 40, 100, 90, 55, 35), evolvesTo: 139 },
   { id: 140, name: 'Kabuto', type: 'rock', type2: 'water', stats: st(30, 80, 90, 55, 45, 55), evolvesTo: 141 },
@@ -409,7 +410,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 615, name: 'Cryogonal', type: 'water', stats: st(80, 50, 50, 95, 135, 105), pierce: true },
   { id: 618, name: 'Stunfisk', type: 'rock', type2: 'electric', stats: st(109, 66, 84, 81, 99, 32), taunt: true },
   { id: 621, name: 'Druddigon', type: 'flying', stats: st(77, 120, 90, 60, 90, 48), melee: true },
-  { id: 626, name: 'Bouffalant', type: 'normal', stats: st(95, 110, 95, 40, 95, 55), melee: true },
+  { id: 626, name: 'Bouffalant', type: 'normal', stats: st(95, 110, 95, 40, 95, 55), melee: true, charge: true },
   { id: 631, name: 'Heatmor', type: 'fire', stats: st(85, 97, 66, 105, 66, 65), taunt: true },
   { id: 632, name: 'Durant', type: 'grass', type2: 'rock', stats: st(58, 109, 112, 48, 48, 109), truant: true },
   { id: 132, name: 'Ditto', type: 'normal', stats: st(48, 48, 48, 48, 48, 48), mirror: true },
@@ -708,7 +709,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true },
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },
   { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true, guts: true },
-  { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true },
+  { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true, charge: true },
   { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true, hunter: true },
   { id: 271, name: 'Lombre', type: 'grass', type2: 'water', stats: st(60, 50, 50, 60, 70, 50) },
   { id: 274, name: 'Nuzleaf', type: 'grass', type2: 'ghost', stats: st(70, 70, 40, 60, 40, 60) },

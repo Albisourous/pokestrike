@@ -810,6 +810,20 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(e.dotTicks === 0 && e.burnT === 0 && e.hp === shedHp, `shed sloughs the ailment (ticks ${e.dotTicks})`);
   e.def = eDef;
 
+  // stampede: a charge foe's attack queues a hostile dash at its target
+  e.def = { ...eDef, charge: true };
+  e.timer = 0;
+  e.dead = false;
+  e.hp = e.maxHp;
+  (b as any).delays.length = 0;
+  (b as any).fireEnemy(e);
+  (b as any).delays.forEach((d: any) => (d.t = 0));
+  (b as any).update(0.001);
+  const ram = (b as any).dashes.find((d: any) => d.hostile);
+  ok(!!ram && ram.u === e, 'charge queues a hostile ram dash');
+  e.def = eDef;
+  (b as any).dashes.length = 0;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

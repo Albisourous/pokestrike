@@ -189,6 +189,7 @@ interface Dash {
   e: Unit;
   done: boolean;
   dmg: number;
+  hostile?: boolean; // an enemy stampede — the mover rams its target
 }
 interface ScreenFlash {
   t: number;
@@ -2609,15 +2610,16 @@ export class Battle {
   private stepDashes(dt: number) {
     const SP = 1100;
     for (const d of this.dashes) {
-      if (d.e.dead) {
-        d.done = true; // target died mid-lunge — park where it is
+      if (d.e.dead || d.u.dead) {
+        d.done = true; // target or mover died mid-lunge — park where it is
         continue;
       }
       // hold just outside the target's radius — never overlap it
       const gap = d.u.r + d.e.r + 2;
       if (dist(d.u, d.e) <= gap + 2) {
-        this.hurt(d.e, d.dmg, '#9df0ff');
-        this.impact(d.e.x, d.e.y, '#9df0ff', 1.2);
+        if (d.hostile) this.damagePlayer(d.e, d.dmg, d.u);
+        else this.hurt(d.e, d.dmg, '#9df0ff');
+        this.impact(d.e.x, d.e.y, d.hostile ? '#f87070' : '#9df0ff', 1.2);
         this.addShake(8);
         this.addPunch(0.04);
         this.hitStop = Math.max(this.hitStop, 0.09);
@@ -6033,6 +6035,23 @@ export class Battle {
         this.burst(kid.x, kid.y, '#c8e0ff', 7, 220, 0.7);
         this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'SOS!', t: 0.9, color: '#c8e0ff', big: true });
         sfx('warn');
+      } else if (e.def.charge) {
+        // stampede: a pawing windup, then it rams across the court at the
+        // nearest mon — the rush lands where the target stood, so the ball
+        // shoving it off-line mid-windup sends the charge wide
+        const target = this.nearestPlayer(e);
+        if (target) {
+          e.sq = 0.55; // the paw-and-lean tell — same squash the melee lunge wears
+          sfx('warn');
+          this.later(0.55, () => {
+            if (e.dead || target.dead) return;
+            this.dashes.push({
+              u: e, e: target, done: false, hostile: true,
+              dmg: Math.round(physDamage(this.foeAtk(e), target.def.stats.def, 1, zapPower * 1.1)),
+            });
+            sfx('launch');
+          });
+        }
       } else if (e.def.beam) {
         // beam caster: locks the lane through its target — the channel
         // glows for a beat, then burns. Spread the team off the line
@@ -7451,6 +7470,7 @@ export class Battle {
       e.def.counter && 'counter — returns a third of contact damage',
       e.def.alpha && 'pack leader — rallies packmates\' hits while it lives',
       e.def.shed && 'shed skin — may slough off every ailment each tick',
+      e.def.charge && 'stampede — paws the ground, then rams across the court',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8858,6 +8878,7 @@ export class Battle {
         u.def.counter && 'COUNTER',
         u.def.alpha && 'ALPHA',
         u.def.shed && 'SHED',
+        u.def.charge && 'CHARGE',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
