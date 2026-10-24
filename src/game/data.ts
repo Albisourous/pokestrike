@@ -38,6 +38,7 @@ export interface SpeciesDef {
   shock?: boolean; // Static: striking the crackling hide can paralyze the ball — the launch limps
   flame?: boolean; // Flame Body: striking the hide can burn the ball — its hits lose heat
   menace?: boolean; // Intimidate: while it lives the team's hits lose a fifth — kill it first
+  wguard?: boolean; // Wonder Guard: only super-effective hits land — slam it, burn it, or hit SE
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -338,7 +339,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 288, name: 'Vigoroth', type: 'normal', stats: st(80, 80, 80, 55, 55, 90), melee: true, evolvesTo: 289 },
   { id: 290, name: 'Nincada', type: 'rock', stats: st(31, 45, 90, 30, 30, 40), evolvesTo: 291 },
   { id: 291, name: 'Ninjask', type: 'flying', stats: st(61, 90, 45, 50, 50, 160), pierce: true },
-  { id: 292, name: 'Shedinja', type: 'ghost', stats: st(1, 90, 45, 30, 30, 40), cursed: true },
+  { id: 292, name: 'Shedinja', type: 'ghost', stats: st(1, 90, 45, 30, 30, 40), cursed: true, wguard: true },
   { id: 311, name: 'Plusle', type: 'electric', stats: st(60, 50, 40, 85, 75, 95) },
   { id: 312, name: 'Minun', type: 'electric', stats: st(60, 40, 50, 75, 85, 95) },
   { id: 316, name: 'Gulpin', type: 'poison', stats: st(70, 43, 53, 43, 53, 40), evolvesTo: 317 },

@@ -2404,6 +2404,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'STATIC hides paralyze on contact — touch once, hard',
       'FLAME hides burn on contact — seared hits lose heat',
       'MENACE foes intimidate — your hits lose a fifth while they live',
+      'W-GUARD only falls to super-effective hits — slams still count',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

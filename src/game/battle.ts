@@ -3320,7 +3320,14 @@ export class Battle {
       sfx('bounce');
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
-    this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+    // wonder guard shrugs off anything that isn't super-effective — the
+    // shove still lands, so walls and lava stay on the table
+    if (e.def.wguard && mult <= 1) {
+      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'NO EFFECT', t: 0.7, color: '#8a90a8', big: false });
+      sfx('bounce');
+    } else {
+      this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+    }
     // knockback: the ball's momentum shoves the foe along the shot's line —
     // bank a hit to push a raider off the loot, split a taunter from its
     // pack, or feed the whole crowd to the lava. Bosses stay planted.
@@ -4262,12 +4269,15 @@ export class Battle {
     const phys = bumpIsPhysical(u.def.type);
     const multOf = (e: Unit) => typeMult(u.def.type, e.def) * weatherMult(this.weather, u.def.type);
     const dmgOf = (e: Unit, power = 1) =>
-      Math.round(
-        (phys
-          ? physDamage(u.def.stats.atk, e.def.stats.def, multOf(e))
-          : specDamage(u.def.stats.spa, e.def.stats.spd, multOf(e))) *
-          u.pow * SUPER_POW * 4.5 * power * (e.boss ? 0.55 : 1),
-      );
+      // wonder guard: only super-effective damage lands — supers included
+      e.def.wguard && multOf(e) <= 1
+        ? 0
+        : Math.round(
+            (phys
+              ? physDamage(u.def.stats.atk, e.def.stats.def, multOf(e))
+              : specDamage(u.def.stats.spa, e.def.stats.spd, multOf(e))) *
+              u.pow * SUPER_POW * 4.5 * power * (e.boss ? 0.55 : 1),
+          );
     const targets = this.enemies.filter((e) => !e.dead);
     const a = this.arena;
     switch (u.def.type) {
@@ -7245,6 +7255,7 @@ export class Battle {
       e.def.shock && 'contact can paralyze the ball',
       e.def.flame && 'contact can burn the ball',
       e.def.menace && 'intimidates — your hits lose a fifth while it lives',
+      e.def.wguard && 'wonder guard — only super-effective hits land',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8621,6 +8632,7 @@ export class Battle {
         u.def.shock && 'STATIC',
         u.def.flame && 'FLAME',
         u.def.menace && 'MENACE',
+        u.def.wguard && 'W-GUARD',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

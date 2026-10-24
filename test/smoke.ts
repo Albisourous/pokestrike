@@ -551,6 +551,24 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const freeHit = hpFree - e.hp;
   ok(menHit < freeHit && Math.abs(menHit / freeHit - 0.8) < 0.12, `intimidate shaves a fifth (${menHit} vs ${freeHit})`);
 
+  // wonder guard: neutral hits whiff, super-effective still lands
+  const strikerDef = striker.def, eDef = e.def;
+  e.def = { ...e.def, wguard: true, type: 'water' as const, type2: undefined };
+  e.dead = false;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  striker.def = { ...striker.def, type: 'normal' as const, type2: undefined };
+  striker.lastHit = new Map();
+  (b as any).strikeEnemy(striker, e);
+  ok(e.hp === e.maxHp, 'wonder guard nullifies a neutral hit');
+  striker.def = { ...striker.def, type: 'electric' as const };
+  striker.lastHit = new Map();
+  e.lastHit = new Map();
+  (b as any).strikeEnemy(striker, e);
+  ok(e.hp < e.maxHp, 'wonder guard still falls to SE');
+  striker.def = strikerDef;
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

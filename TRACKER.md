@@ -180,3 +180,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `6ab7ad5` | battle | FLAME hides burn the striker — Ponyta/Slugma/Magmar | `git revert <this commit>` |
 | 2026-10-25 | `1d2d472` | battle | LUM BERRY drops vs status packs — full team cleanse | `git revert <this commit>` |
 | 2026-10-25 | `ba1a926` | battle | MENACE foes intimidate — team hits -20% while they live | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | W-GUARD Shedinja — only SE hits land, slams still count | `git revert <this commit>` |
