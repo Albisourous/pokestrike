@@ -49,6 +49,7 @@ export interface SpeciesDef {
   spore?: boolean; // Effect Spore: contact scatters a random ailment — poison, shock, or sleep
   sync?: boolean; // Synchronize: contact echoes its ailments back onto the striker
   pressure?: boolean; // Pressure: while it lives, bump supers charge at half speed
+  beam?: boolean; // Signal Beam: locks a lane, telegraphs, then burns the channel
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -272,7 +273,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 79, name: 'Slowpoke', type: 'psychic', type2: 'water', stats: st(90, 65, 65, 40, 40, 15), sleepy: true, evolvesTo: [80, 199] },
   { id: 108, name: 'Lickitung', type: 'normal', stats: st(90, 55, 75, 60, 75, 30), melee: true, evolvesTo: 463 },
   { id: 128, name: 'Tauros', type: 'normal', stats: st(75, 100, 95, 40, 70, 110), melee: true, rage: true },
-  { id: 137, name: 'Porygon', type: 'normal', stats: st(65, 60, 70, 85, 75, 40) },
+  { id: 137, name: 'Porygon', type: 'normal', stats: st(65, 60, 70, 85, 75, 40), beam: true },
   { id: 138, name: 'Omanyte', type: 'water', type2: 'rock', stats: st(35, 40, 100, 90, 55, 35), evolvesTo: 139 },
   { id: 140, name: 'Kabuto', type: 'rock', type2: 'water', stats: st(30, 80, 90, 55, 45, 55), evolvesTo: 141 },
   { id: 147, name: 'Dratini', type: 'flying', stats: st(41, 64, 45, 50, 50, 50), evolvesTo: 148 },
@@ -479,7 +480,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 205, name: 'Forretress', type: 'rock', stats: st(75, 90, 140, 60, 60, 40), taunt: true },
   { id: 227, name: 'Skarmory', type: 'flying', stats: st(65, 80, 140, 40, 70, 70), sturdy: true },
   { id: 226, name: 'Mantine', type: 'water', type2: 'flying', stats: st(85, 40, 70, 80, 140, 70) },
-  { id: 233, name: 'Porygon2', type: 'normal', stats: st(85, 80, 90, 105, 95, 60) },
+  { id: 233, name: 'Porygon2', type: 'normal', stats: st(85, 80, 90, 105, 95, 60), beam: true },
   { id: 237, name: 'Hitmontop', type: 'fighting', stats: st(50, 95, 95, 35, 110, 70), melee: true },
   { id: 107, name: 'Hitmonchan', type: 'fighting', stats: st(50, 105, 79, 35, 110, 76), melee: true },
   { id: 330, name: 'Flygon', type: 'rock', type2: 'flying', stats: st(80, 100, 80, 80, 80, 100) },
@@ -524,7 +525,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 471, name: 'Glaceon', type: 'water', stats: st(65, 60, 110, 130, 95, 65) },
   { id: 472, name: 'Gliscor', type: 'rock', type2: 'flying', stats: st(75, 95, 125, 45, 75, 95), melee: true },
   { id: 473, name: 'Mamoswine', type: 'water', type2: 'rock', stats: st(110, 130, 80, 70, 60, 80), melee: true },
-  { id: 474, name: 'Porygon-Z', type: 'normal', stats: st(85, 80, 70, 135, 75, 90) },
+  { id: 474, name: 'Porygon-Z', type: 'normal', stats: st(85, 80, 70, 135, 75, 90), beam: true },
   { id: 475, name: 'Gallade', type: 'psychic', type2: 'fighting', stats: st(68, 125, 65, 65, 115, 80), melee: true },
   { id: 476, name: 'Probopass', type: 'rock', stats: st(60, 55, 145, 75, 150, 40), taunt: true, repel: true },
   { id: 477, name: 'Dusknoir', type: 'ghost', stats: st(45, 100, 135, 65, 135, 45), pressure: true },

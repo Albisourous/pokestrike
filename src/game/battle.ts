@@ -630,6 +630,9 @@ export class Battle {
   private texts: FloatText[] = [];
   private orbs: Orb[] = [];
   private waves: Wave[] = [];
+  // beam telegraphs: a lane locks, the line glows for a beat, then the
+  // beam fires through it — park nobody in the channel
+  private lanes: { horiz: boolean; at: number; t: number; fired: boolean }[] = [];
   private dashes: Dash[] = [];
   private delays: { t: number; fn: () => void }[] = []; // staggered super hits
   private dueQ: { t: number; fn: () => void }[] = []; // scratch for the update sweep — the due list isn't a per-frame alloc
@@ -2043,6 +2046,8 @@ export class Battle {
     this.stepOrbs(dt);
     this.stepWaves(dt);
     this.stepDashes(dt);
+    for (const l of this.lanes) l.t -= dt;
+    cull(this.lanes, (l) => l.t > 0);
     if (this.phase === 'map' && this.mapWalk) this.stepMapWalk(dt);
     if (this.phase === 'map') this.mapCam += (this.mapCamTarget() - this.mapCam) * Math.min(1, dt * 4.5);
     for (const d of this.delays) d.t -= dt;
@@ -5991,6 +5996,27 @@ export class Battle {
         this.burst(kid.x, kid.y, '#c8e0ff', 7, 220, 0.7);
         this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'SOS!', t: 0.9, color: '#c8e0ff', big: true });
         sfx('warn');
+      } else if (e.def.beam) {
+        // beam caster: locks the lane through its target — the channel
+        // glows for a beat, then burns. Spread the team off the line
+        const target = this.nearestPlayer(e);
+        if (target) {
+          const horiz = Math.abs(target.x - e.x) >= Math.abs(target.y - e.y);
+          const at = horiz ? e.y : e.x;
+          const lane = { horiz, at, t: 1.0, fired: false };
+          this.lanes.push(lane);
+          sfx('warn');
+          this.later(0.7, () => {
+            if (e.dead) { lane.t = 0; return; } // killed mid-windup — the channel fizzles
+            lane.fired = true;
+            for (const p of this.players) {
+              if (!p.dead && Math.abs((horiz ? p.y : p.x) - at) < 26)
+                this.damagePlayer(p, Math.round(physDamage(this.foeAtk(e), p.def.stats.def, 1, zapPower * 1.2)), e);
+            }
+            this.addShake(6);
+            sfx('zap');
+          });
+        }
       } else if (e.def.volley) {
         // artillery: the shot fans across the three nearest mons at a
         // haircut per orb — the tank can't body-block a spread, so the
@@ -6529,6 +6555,40 @@ export class Battle {
     }
 
     for (const w of this.waves) this.drawWave(ctx, w);
+
+    // beam lanes — the locked channel glows a warning, then the beam
+    // itself burns bright for the rest of its life
+    for (const l of this.lanes) {
+      const a = this.arena;
+      ctx.save();
+      if (!l.fired) {
+        // warning: thin pulsing dashes down the locked lane
+        ctx.globalAlpha = 0.35 + Math.sin(this.time * 14) * 0.15;
+        ctx.strokeStyle = '#ff6b6b';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 8]);
+        ctx.beginPath();
+        if (l.horiz) { ctx.moveTo(a.x, l.at); ctx.lineTo(a.x + a.w, l.at); }
+        else { ctx.moveTo(l.at, a.y); ctx.lineTo(l.at, a.y + a.h); }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else {
+        // fired: a fat hot bar fading over its last stretch
+        ctx.globalAlpha = Math.min(0.85, l.t * 3);
+        ctx.strokeStyle = '#ffb0b0';
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        if (l.horiz) { ctx.moveTo(a.x, l.at); ctx.lineTo(a.x + a.w, l.at); }
+        else { ctx.moveTo(l.at, a.y); ctx.lineTo(l.at, a.y + a.h); }
+        ctx.stroke();
+        ctx.globalAlpha = Math.min(0.5, l.t * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
 
     // last-shot echo — the previous arc lingers as a faint dotted line so
     // bank angles are learnable, not guessed (Angry Birds' old-arc trick)
@@ -7328,6 +7388,7 @@ export class Battle {
       e.def.spore && 'effect spore — contact scatters a random ailment',
       e.def.sync && 'synchronize — contact echoes its ailments to you',
       e.def.pressure && 'pressure — supers charge at half speed while it lives',
+      e.def.beam && 'signal beam — locks a lane, then burns the channel',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8716,6 +8777,7 @@ export class Battle {
         u.def.spore && 'SPORE',
         u.def.sync && 'SYNC',
         u.def.pressure && 'PRESSURE',
+        u.def.beam && 'BEAM',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

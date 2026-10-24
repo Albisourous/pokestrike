@@ -193,3 +193,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `81c3431` | battle | SYNC foes echo their status onto contact — Espeon/Kirlia | `git revert <this commit>` |
 | 2026-10-25 | `f6b560d` | battle | PRESSURE halves super charge — the legendary beasts + Dusknoir | `git revert <this commit>` |
 | 2026-10-25 | pending | verify | live shot: menace ring, static/flame/repel tags, halo, status marks all read | — |
+| 2026-10-25 | pending | battle | BEAM casters lock + burn a lane — Porygon line | `git revert <this commit>` |

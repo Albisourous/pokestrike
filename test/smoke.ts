@@ -717,6 +717,24 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   legend.dead = false;
   legend.def = legendDef;
 
+  // signal beam: the lane locks, telegraphs, then burns the channel
+  const caster = (b as any).enemies[1];
+  const casterDef = caster.def;
+  caster.def = { ...casterDef, beam: true };
+  caster.dead = false;
+  caster.hp = caster.maxHp;
+  caster.timer = 0;
+  p0.hp = p0.maxHp;
+  p0.x = caster.x; p0.y = caster.y + 200; // lined up — the beam will find it
+  (b as any).lanes.length = 0;
+  (b as any).fireEnemy(caster);
+  ok((b as any).lanes.length === 1, 'beam locks a lane');
+  // run the delay queue — later() callbacks fire inside update()
+  for (const d of (b as any).delays) d.t = 0;
+  (b as any).update(0.01);
+  ok(p0.hp < p0.maxHp, `beam burns the channel (hp ${p0.hp})`);
+  caster.def = casterDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
