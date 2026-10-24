@@ -2211,6 +2211,18 @@ export class Battle {
           this.grabPickup(pk);
         }
       }
+      // swat: a live ball punches hostile orbs out of the air — shooting
+      // through the volley is real cover for the parked team
+      for (const o of this.orbs) {
+        if (!o.hostile || o.t <= 0) continue;
+        if (Math.hypot(o.x - u.x, o.y - u.y) < u.r + 12) {
+          o.t = 0;
+          this.score += 10;
+          this.burst(o.x, o.y, o.color, 8, 300);
+          this.pushText({ x: o.x, y: o.y - 10, text: 'SWAT!', t: 0.7, color: '#9df0ff', big: false });
+          sfx('bounce');
+        }
+      }
     }
     cull(this.enemies, (e) => !e.dead);
     if (u.dead) {

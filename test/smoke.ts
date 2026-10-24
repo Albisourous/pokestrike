@@ -271,6 +271,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok((b as any).sweepStreak === 2 && (b as any).score - s0 >= 120, `sweep x2 pays the streak bonus (${s0} -> ${(b as any).score})`);
 }
 
+// the ball swats hostile orbs mid-flight — cover for the parked team
+{
+  const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(5));
+  (b as any).spawnWave(0);
+  const act = (b as any).active;
+  act.vx = 0; act.vy = 0;
+  (b as any).orbs = [{ x: act.x + 20, y: act.y, target: act, dmg: 5, t: 2, wob: 0, color: '#f00', hostile: true, src: (b as any).enemies[0] }];
+  const sc0 = (b as any).score;
+  (b as any).stepShot(0.02);
+  ok(!(b as any).orbs.some((o: any) => o.t > 0) && (b as any).score - sc0 >= 10, `ball swats a hostile orb (${sc0} -> ${(b as any).score})`);
+}
+
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));
   (b as any).spawnWave(0);
