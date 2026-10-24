@@ -43,6 +43,7 @@ export interface SpeciesDef {
   charm?: boolean; // Cute Charm: a smitten striker nods off — it loses a launch
   scale?: boolean; // Multiscale: halved damage while at full HP — chip it open first
   guts?: boolean; // Guts: statused hits harder — don't poison it, kill it clean
+  absorb?: PokeType; // Water/Volt Absorb, Flash Fire: same-type hits heal it
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -434,8 +435,8 @@ export const ELITES: SpeciesDef[] = [
   { id: 123, name: 'Scyther', type: 'flying', stats: st(70, 110, 80, 55, 80, 105), pierce: true, melee: true },
   { id: 113, name: 'Chansey', type: 'normal', stats: st(250, 5, 5, 35, 105, 50), healer: true, evolvesTo: 242 },
   { id: 115, name: 'Kangaskhan', type: 'normal', stats: st(105, 95, 80, 40, 80, 90), taunt: true },
-  { id: 134, name: 'Vaporeon', type: 'water', stats: st(130, 65, 60, 110, 95, 65), healer: true },
-  { id: 136, name: 'Flareon', type: 'fire', stats: st(65, 130, 60, 95, 110, 65), melee: true },
+  { id: 134, name: 'Vaporeon', type: 'water', stats: st(130, 65, 60, 110, 95, 65), healer: true, absorb: 'water' },
+  { id: 136, name: 'Flareon', type: 'fire', stats: st(65, 130, 60, 95, 110, 65), melee: true, absorb: 'fire' },
   { id: 154, name: 'Meganium', type: 'grass', stats: st(80, 82, 100, 83, 100, 80), healer: true },
   { id: 157, name: 'Typhlosion', type: 'fire', stats: st(78, 84, 78, 109, 85, 100) },
   { id: 160, name: 'Feraligatr', type: 'water', stats: st(85, 105, 100, 79, 83, 78), melee: true },
@@ -680,7 +681,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60), split: true },
   { id: 112, name: 'Rhydon', type: 'rock', stats: st(105, 130, 120, 45, 45, 40), melee: true },
   { id: 164, name: 'Noctowl', type: 'flying', type2: 'normal', stats: st(100, 50, 50, 86, 96, 70), melee: true },
-  { id: 171, name: 'Lanturn', type: 'electric', type2: 'water', stats: st(125, 58, 58, 76, 76, 67) },
+  { id: 171, name: 'Lanturn', type: 'electric', type2: 'water', stats: st(125, 58, 58, 76, 76, 67), absorb: 'electric' },
   { id: 208, name: 'Steelix', type: 'rock', stats: st(75, 85, 200, 55, 65, 30), melee: true },
   { id: 219, name: 'Magcargo', type: 'fire', stats: st(60, 50, 120, 90, 80, 30) },
   { id: 279, name: 'Pelipper', type: 'flying', type2: 'water', stats: st(60, 50, 100, 95, 70, 65) },

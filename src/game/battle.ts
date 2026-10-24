@@ -2884,6 +2884,14 @@ export class Battle {
   // Central damage path so every source (contact, bump, orb, dot) behaves alike.
   private hurt(e: Unit, dmg: number, color: string, suffix = '') {
     if (e.dead) return;
+    // absorb: a matching element feeds the hide instead of hurting it —
+    // the heal signal travels as negative damage through this one seam
+    if (dmg < 0) {
+      e.hp = Math.min(e.maxHp, e.hp - dmg);
+      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'ABSORBED!', t: 0.9, color: '#6fdc6f', big: false });
+      sfx('heal');
+      return;
+    }
     let d = dmg;
     if (suffix === '!') d *= 1 + this.belt; // expert belt loves super-effective
     if (e.boss) d *= 1 + this.bossSlayer;
@@ -3328,6 +3336,8 @@ export class Battle {
     if (e.def.wguard && mult <= 1) {
       this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'NO EFFECT', t: 0.7, color: '#8a90a8', big: false });
       sfx('bounce');
+    } else if (e.def.absorb === at) {
+      this.hurt(e, -Math.round(e.maxHp * 0.25), color);
     } else {
       this.hurt(e, dmg, color, mult > 1 ? '!' : '');
     }
@@ -3905,7 +3915,8 @@ export class Battle {
     const eff = (e: Unit) => typeMult(src.def.type, e.def) * weatherMult(this.weather, src.def.type);
     // Physical bump attacks roll Attack vs Defense; elemental ones SpA vs SpD.
     const bumpDmg = (e: Unit, power: number) =>
-      Math.round(
+      e.def.absorb === src.def.type ? -Math.round(e.maxHp * 0.25)
+      : Math.round(
         (phys
           ? physDamage(src.def.stats.atk, e.def.stats.def, eff(e), power) * this.physMult
           : specDamage(src.def.stats.spa, e.def.stats.spd, eff(e), power) * this.specMult) *
@@ -4281,7 +4292,9 @@ export class Battle {
       // wonder guard: only super-effective damage lands — supers included
       e.def.wguard && multOf(e) <= 1
         ? 0
-        : Math.round(
+        : e.def.absorb === u.def.type
+          ? -Math.round(e.maxHp * 0.25)
+          : Math.round(
             (phys
               ? physDamage(u.def.stats.atk, e.def.stats.def, multOf(e))
               : specDamage(u.def.stats.spa, e.def.stats.spd, multOf(e))) *
@@ -7276,6 +7289,7 @@ export class Battle {
       e.def.charm && 'cute charm — contact can lull the ball to sleep',
       e.def.scale && 'multiscale — half damage while its hide is whole',
       e.def.guts && 'guts — hits 50% harder while statused',
+      e.def.absorb && `${e.def.absorb} hits heal it — absorb`,
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8658,6 +8672,7 @@ export class Battle {
         u.def.charm && 'CHARM',
         u.def.scale && u.hp >= u.maxHp && 'SCALE',
         u.def.guts && 'GUTS',
+        u.def.absorb && `DRAIN:${u.def.absorb.toUpperCase().slice(0, 3)}`,
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

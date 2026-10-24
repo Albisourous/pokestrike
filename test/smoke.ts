@@ -624,6 +624,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e.dotTicks = 0;
   e.def = eDef;
 
+  // absorb: a matching element feeds the hide instead of hurting it
+  e.def = { ...eDef, absorb: 'water' as const, type: 'fire' as const, type2: undefined };
+  e.dead = false;
+  e.hp = Math.floor(e.maxHp / 2);
+  e.lastHit = new Map();
+  striker.def = { ...strikerDef, type: 'water' as const, type2: undefined };
+  striker.lastHit = new Map();
+  (b as any).strikeEnemy(striker, e);
+  ok(e.hp > Math.floor(e.maxHp / 2), `absorb heals on a matching hit (hp ${e.hp})`);
+  striker.def = strikerDef;
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

@@ -2409,6 +2409,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'CHARM hides lull the striker — contact can put it to sleep',
       'SCALE hides half damage at full HP — chip it open first',
       'GUTS foes hit harder while statused — kill them clean',
+      'DRAIN foes absorb their element — same-type hits heal them',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
