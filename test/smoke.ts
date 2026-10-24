@@ -324,6 +324,13 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).stepEnemyMovement(0.05);
   ok(e.hp < hp1, `spike strip nicks the grounded foe (${hp1} -> ${e.hp})`);
 
+  // a gust lane sweeps the pack standing in it — hazards herd foes too
+  e.boss = false;
+  const gx0 = e.x;
+  (b as any).hazards = [{ kind: 'gust', x: e.x, y: e.y, r: 80, dir: 1 }];
+  (b as any).stepEnemyMovement(0.5);
+  ok(e.x > gx0 + 10, `gust lane sweeps the standing foe (${gx0.toFixed(0)} -> ${e.x.toFixed(0)})`);
+
   // volley fans the attack across the three nearest mons, weakened per orb
   e.def = { ...e.def, volley: true, melee: false, raider: false, healer: false };
   (b as any).pickups = [];

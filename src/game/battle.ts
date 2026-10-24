@@ -2367,6 +2367,21 @@ export class Battle {
           }
         }
       }
+      // the court herds the pack too — a well's undertow drags swimmers
+      // into a clump (the kill-zone you fire into; grounded foes bank off
+      // the shore anyway), a gust lane sweeps creeps off their cover.
+      // Bosses stay planted; the court is their turf.
+      if (!e.dead && !e.boss) {
+        for (const hz of this.hazards) {
+          if (hz.kind === 'well' && canSwim(e.def) && dist(e, hz) <= hz.r + e.r) {
+            const d = Math.max(30, dist(e, hz));
+            e.x += ((hz.x - e.x) / d) * 160 * dt;
+            e.y += ((hz.y - e.y) / d) * 160 * dt;
+          } else if (hz.kind === 'gust' && dist(e, hz) <= hz.r + e.r) {
+            e.x += (hz.dir ?? 1) * 42 * dt;
+          }
+        }
+      }
     }
     // pairwise separation between enemies
     for (let i = 0; i < this.enemies.length; i++) {
