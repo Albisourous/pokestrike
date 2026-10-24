@@ -3001,6 +3001,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.sturdy && 'STURDY — SURVIVES ONE HIT',
     def.guts && 'GUTS — STATUS FEEDS IT',
     def.pheal && 'POISON HEALS IT',
+    def.sleepless && 'NEVER SLEEPS',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;

@@ -1413,7 +1413,7 @@ export class Battle {
           break;
         case 'slumber': // the whole pack dozes — assassinate quietly, but
           // splash and stray hits wake the neighbors into a bad night
-          for (const e of this.enemies) e.asleep = true;
+          for (const e of this.enemies) if (!e.def.sleepless) e.asleep = true;
           break;
         case 'polarized': // every foe carries a repulsor halo — the court
           // is bumper cars; bank lanes or burn speed punching through
@@ -1602,7 +1602,7 @@ export class Battle {
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
       shieldA: s.def.shielded ? this.rng() * Math.PI * 2 : 0,
       regenT: 0,
-      asleep: !!s.def.sleepy,
+      asleep: !!s.def.sleepy && !s.def.sleepless,
       repelR: s.def.repel ? 90 : 0,
       shieldN: 0,
       revives: 0,
@@ -3429,7 +3429,7 @@ export class Battle {
     }
     // cute charm: the smitten striker nods off — a grazed shot can cost
     // the team its next launch, so finish the charm carrier from range
-    if (e.def.charm && !shooter.dead && !shooter.asleep && this.rng() < 0.3) {
+    if (e.def.charm && !shooter.dead && !shooter.asleep && !shooter.def.sleepless && this.rng() < 0.3) {
       shooter.asleep = true;
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SMITTEN!', t: 0.9, color: '#f8b8d0', big: false });
     }
@@ -3442,7 +3442,7 @@ export class Battle {
         shooter.dotDmg = Math.max(shooter.dotDmg, Math.ceil(shooter.maxHp * 0.06));
       } else if (sporeRoll < 0.7) {
         shooter.paraT = Math.max(shooter.paraT, 3);
-      } else {
+      } else if (!shooter.def.sleepless) {
         shooter.asleep = true;
       }
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SPORED!', t: 0.9, color: '#a8b820', big: false });
@@ -6166,7 +6166,7 @@ export class Battle {
       this.pushText({ x: src.x, y: src.y - src.r - 8, text: `+${sip}`, t: 0.8, color: '#6fdc6f', big: false });
     }
     // sleep powder: the dust can drop the victim — loses its next turn
-    if (src?.def.drowsy && !p.dead && dmg > 0 && this.rng() < 0.55) {
+    if (src?.def.drowsy && !p.dead && !p.def.sleepless && dmg > 0 && this.rng() < 0.55) {
       p.asleep = true;
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'PUT TO SLEEP!', t: 1, color: '#a890f0', big: false });
     }

@@ -59,6 +59,7 @@ export interface SpeciesDef {
   prank?: boolean; // Prankster: its opening attack comes early
   huge?: boolean; // Huge Power / Pure Power: doubled contact damage
   pheal?: boolean; // Poison Heal: venom ticks mend instead of bleed
+  sleepless?: boolean; // Insomnia/Vital Spirit: sleep effects wash off
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -128,10 +129,10 @@ export const ROSTER: SpeciesDef[] = [
   { id: 161, name: 'Sentret', type: 'normal', stats: st(35, 46, 34, 35, 45, 20), evolvesTo: 162 },
   { id: 190, name: 'Aipom', type: 'normal', stats: st(55, 70, 55, 40, 55, 85), evolvesTo: 424 },
   { id: 235, name: 'Smeargle', type: 'normal', stats: st(55, 20, 35, 20, 45, 75), copy: true },
-  { id: 239, name: 'Elekid', type: 'electric', stats: st(45, 63, 37, 65, 55, 95), evolvesTo: 125 },
+  { id: 239, name: 'Elekid', type: 'electric', stats: st(45, 63, 37, 65, 55, 95), evolvesTo: 125, sleepless: true },
   { id: 238, name: 'Smoochum', type: 'psychic', type2: 'water', stats: st(45, 30, 15, 85, 65, 65), evolvesTo: 124 },
   { id: 23, name: 'Ekans', type: 'poison', stats: st(35, 60, 44, 40, 54, 55), evolvesTo: 24 },
-  { id: 96, name: 'Drowzee', type: 'psychic', stats: st(60, 48, 45, 43, 90, 42), sleepy: true, evolvesTo: 97 },
+  { id: 96, name: 'Drowzee', type: 'psychic', stats: st(60, 48, 45, 43, 90, 42), sleepy: true, sleepless: true, evolvesTo: 97 },
   { id: 83, name: "Farfetch'd", type: 'flying', type2: 'normal', stats: st(52, 90, 55, 58, 62, 60), melee: true },
   { id: 220, name: 'Swinub', type: 'water', type2: 'rock', stats: st(50, 50, 40, 30, 30, 50), evolvesTo: 221 },
   { id: 120, name: 'Staryu', type: 'water', stats: st(30, 45, 55, 70, 55, 85), evolvesTo: 121 },
