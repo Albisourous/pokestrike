@@ -8528,11 +8528,11 @@ export class Battle {
             hitFoe = false;
           }
         }
-        let mineHit: Hazard | null = null;
+        let firstHz: Hazard | null = null;
         for (const hz of this.hazards) {
-          // a live mine on the lane is contact too — the ball detonates it,
-          // it doesn't pass through
-          if (hz.kind !== 'mine' || hz.spent) continue;
+          // a live mine or warp pad on the lane is contact too — the ball
+          // detonates one and rides the other, it never passes through
+          if ((hz.kind !== 'mine' && hz.kind !== 'warp') || hz.spent) continue;
           const R = u.r + hz.r;
           const ox = hz.x - u.x;
           const oy = hz.y - u.y;
@@ -8544,7 +8544,7 @@ export class Battle {
           if (t > 0 && t < best) {
             best = t;
             hitFoe = false;
-            mineHit = hz;
+            firstHz = hz;
           }
         }
         let foeHit: Unit | null = null;
@@ -8584,7 +8584,7 @@ export class Battle {
             // same honesty for the gravity bubble — the ball crawls inside
             foeColor = '#58c8d8';
           }
-          ctx.strokeStyle = hitFoe ? foeColor : mineHit ? '#ff9a30' : color;
+          ctx.strokeStyle = hitFoe ? foeColor : firstHz ? (firstHz.kind === 'mine' ? '#ff9a30' : '#c890ff') : color;
           ctx.lineWidth = 2;
           ctx.setLineDash([4, 5]);
           ctx.beginPath();
@@ -8641,7 +8641,7 @@ export class Battle {
               ctx.stroke();
               ctx.setLineDash([]);
             }
-          } else if (mineHit) {
+          } else if (firstHz?.kind === 'mine') {
             // the lane ends in a blast, not a bank — a blast ring marks the
             // mine and the ghost leg stays honest by staying home
             ctx.beginPath();
@@ -8653,6 +8653,27 @@ export class Battle {
             ctx.moveTo(hx, hy - 5);
             ctx.lineTo(hx, hy + 5);
             ctx.stroke();
+          } else if (firstHz?.kind === 'warp') {
+            // the lane dives into a portal — ring the pad, then ghost the
+            // exit leg out of the twin so the trick shot previews true
+            ctx.beginPath();
+            ctx.arc(hx, hy, 8 + Math.sin(this.time * 8) * 1.5, 0, Math.PI * 2);
+            ctx.stroke();
+            const twin = this.hazards.find((w) => w !== firstHz && w.kind === 'warp' && w.pair === firstHz.pair);
+            if (twin) {
+              const ex2 = twin.x + dir.x * (twin.r + u.r + 6);
+              const ey2 = twin.y + dir.y * (twin.r + u.r + 6);
+              ctx.setLineDash([4, 5]);
+              ctx.strokeStyle = '#c890ff';
+              ctx.beginPath();
+              ctx.arc(ex2, ey2, 6, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.moveTo(ex2, ey2);
+              ctx.lineTo(ex2 + dir.x * 55, ey2 + dir.y * 55);
+              ctx.stroke();
+              ctx.setLineDash([]);
+            }
           } else {
             // ghost leg banks off the surface the way the ball will
             ctx.beginPath();
