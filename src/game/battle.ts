@@ -2386,7 +2386,9 @@ export class Battle {
           sfx('gust');
         }
       }
-      const kn = Math.exp(-4 * dt);
+      // a shoved foe skates on ice — knockback across the slick carries it
+      // like the ball, so the rink doubles as a bowling lane
+      const kn = Math.exp(-4 * (this.hazards.some((hz) => hz.kind === 'ice' && dist(e, hz) < hz.r + e.r) ? 0.15 : 1) * dt);
       e.vx *= kn;
       e.vy *= kn;
       e.x += e.vx * dt;
