@@ -5639,6 +5639,11 @@ export class Battle {
       if (e.boss && e.relic === 'leftovers' && !e.dead) {
         e.hp = Math.min(e.maxHp, e.hp + Math.ceil(e.maxHp * 0.04));
       }
+      // shed skin: sloughs every ailment before the venom can tick
+      if (e.def.shed && !e.dead && (e.dotTicks > 0 || e.burnT > 0 || e.paraT > 0 || e.asleep) && this.rng() < 0.3) {
+        e.dotTicks = 0; e.dotDmg = 0; e.burnT = 0; e.paraT = 0; e.asleep = false;
+        this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'SHED!', t: 0.8, color: '#78c850', big: false });
+      }
       if (e.dotTicks > 0) {
         e.dotTicks--;
         this.hurt(e, e.dotDmg, '#a040a0');
@@ -7441,6 +7446,7 @@ export class Battle {
       e.def.skyFor && `summons ${e.def.skyFor} — its sky rides the whole wave`,
       e.def.counter && 'counter — returns a third of contact damage',
       e.def.alpha && 'pack leader — rallies packmates\' hits while it lives',
+      e.def.shed && 'shed skin — may slough off every ailment each tick',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8834,6 +8840,7 @@ export class Battle {
         u.def.skyFor && 'SKY',
         u.def.counter && 'COUNTER',
         u.def.alpha && 'ALPHA',
+        u.def.shed && 'SHED',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

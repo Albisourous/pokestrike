@@ -198,3 +198,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `f252826` | battle | SKY callers summon weather — Torkoal/Ninetales/Ttar/Hippo/Politoed | `git revert <this commit>` |
 | 2026-10-25 | `4aa5c70` | battle | COUNTER foes return a third of contact — Wobbuffet/Hitmons | `git revert <this commit>` |
 | 2026-10-25 | `6fe2473` | battle | ALPHA leaders rally packmate hits — kill-order flag | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | SHED foes slough ailments each tick — anti-dot flag | `git revert <this commit>` |

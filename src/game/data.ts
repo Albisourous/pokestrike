@@ -54,6 +54,7 @@ export interface SpeciesDef {
   skyFor?: Weather; // Drought/Drizzle/Sand Stream: its arrival summons this sky
   counter?: boolean; // Counter: returns a third of contact damage to the striker
   alpha?: boolean; // pack leader: rallying cry — packmates hit harder while it lives
+  shed?: boolean; // Shed Skin: each tick it may slough off every ailment
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -473,7 +474,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 242, name: 'Blissey', type: 'normal', stats: st(255, 10, 10, 75, 135, 55), healer: true },
   { id: 248, name: 'Tyranitar', type: 'rock', type2: 'ghost', stats: st(100, 134, 110, 95, 100, 61), melee: true, skyFor: 'sand' },
   { id: 295, name: 'Exploud', type: 'normal', stats: st(104, 91, 63, 91, 73, 68) },
-  { id: 336, name: 'Seviper', type: 'poison', stats: st(73, 100, 60, 100, 60, 65), melee: true },
+  { id: 336, name: 'Seviper', type: 'poison', stats: st(73, 100, 60, 100, 60, 65), melee: true, shed: true },
   { id: 359, name: 'Absol', type: 'ghost', stats: st(65, 130, 60, 75, 60, 75), melee: true },
   { id: 365, name: 'Walrein', type: 'water', stats: st(110, 80, 90, 95, 90, 65) },
   { id: 376, name: 'Metagross', type: 'psychic', stats: st(80, 135, 130, 95, 90, 70), melee: true },
@@ -560,7 +561,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 553, name: 'Krookodile', type: 'rock', type2: 'ghost', stats: st(95, 117, 80, 65, 70, 92), melee: true },
   { id: 555, name: 'Darmanitan', type: 'fire', stats: st(105, 140, 55, 30, 55, 95) },
   { id: 558, name: 'Crustle', type: 'grass', type2: 'rock', stats: st(70, 105, 125, 65, 75, 45), taunt: true },
-  { id: 560, name: 'Scrafty', type: 'ghost', type2: 'fighting', stats: st(65, 90, 115, 45, 115, 58), melee: true },
+  { id: 560, name: 'Scrafty', type: 'ghost', type2: 'fighting', stats: st(65, 90, 115, 45, 115, 58), melee: true, shed: true },
   { id: 563, name: 'Cofagrigus', type: 'ghost', stats: st(58, 50, 145, 95, 105, 30), taunt: true, cursed: true },
   { id: 565, name: 'Carracosta', type: 'water', type2: 'rock', stats: st(74, 108, 133, 83, 65, 32), taunt: true },
   { id: 567, name: 'Archeops', type: 'rock', type2: 'flying', stats: st(75, 140, 65, 112, 65, 110) },
@@ -701,7 +702,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 119, name: 'Seaking', type: 'water', stats: st(80, 92, 65, 65, 80, 68) },
   { id: 139, name: 'Omastar', type: 'water', type2: 'rock', stats: st(70, 60, 125, 115, 70, 55) },
   { id: 141, name: 'Kabutops', type: 'rock', type2: 'water', stats: st(60, 115, 105, 65, 70, 80), melee: true },
-  { id: 148, name: 'Dragonair', type: 'flying', stats: st(61, 84, 65, 70, 70, 70), evolvesTo: 149 },
+  { id: 148, name: 'Dragonair', type: 'flying', stats: st(61, 84, 65, 70, 70, 70), evolvesTo: 149, shed: true },
   { id: 178, name: 'Xatu', type: 'flying', type2: 'psychic', stats: st(65, 75, 70, 95, 70, 95), blink: true },
   { id: 180, name: 'Flaaffy', type: 'electric', stats: st(70, 55, 55, 80, 60, 45), evolvesTo: 181 },
   { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true },

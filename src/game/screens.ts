@@ -2420,6 +2420,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'SKY callers summon weather — Torkoal brings the drought',
       'COUNTER foes return a third of contact — chip, don\'t crit',
       'ALPHA foes rally the pack — kill the leader first',
+      'SHED foes shrug off poison, burns and sleep — burst them',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

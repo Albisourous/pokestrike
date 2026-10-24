@@ -787,6 +787,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   boss.dead = false;
   boss.def = bossDef;
 
+  // shed skin: a statused shedder sloughs instead of ticking
+  e.def = { ...eDef, shed: true };
+  e.dotTicks = 3; e.dotDmg = 5; e.burnT = 2; e.hp = e.maxHp;
+  const shedHp = e.hp;
+  const rngHold = (b as any).rng;
+  (b as any).rng = () => 0.1;
+  (b as any).endShot();
+  (b as any).rng = rngHold;
+  ok(e.dotTicks === 0 && e.burnT === 0 && e.hp === shedHp, `shed sloughs the ailment (ticks ${e.dotTicks})`);
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;
