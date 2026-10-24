@@ -882,10 +882,13 @@ function logoBig(ctx: CanvasRenderingContext2D, text: string, cx: number, baseY:
   ctx.restore();
 }
 
-function drawWildMons(ctx: CanvasRenderingContext2D) {
-  WILD_MONS.forEach(([id, x, y]) => {
-    monShadow(ctx, x, y, 34);
-    drawMon(ctx, id, x, y, 34);
+function drawWildMons(ctx: CanvasRenderingContext2D, t: number) {
+  WILD_MONS.forEach(([id, x, y], i) => {
+    // a slow graze loop — each wild wanders a small ellipse around its spot
+    const wx = x + Math.sin(t * 0.21 + i * 2.1) * 22;
+    const wy = y + Math.sin(t * 0.34 + i * 1.3) * 10;
+    monShadow(ctx, wx, wy, 34);
+    drawMon(ctx, id, wx, wy, 34);
   });
 }
 
@@ -908,7 +911,7 @@ export function drawTitle(
   const freeNow = freePullLeft();
 
   drawField(ctx);
-  drawWildMons(ctx);
+  drawWildMons(ctx, t);
 
   // stadium shadow at the edges keeps the eye on logo + impact
   const vig = gradFor(ctx, 'vignette', (cc) => {
