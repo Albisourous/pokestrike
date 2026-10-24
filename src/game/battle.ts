@@ -613,6 +613,7 @@ export class Battle {
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
   private shotCombo = 0; // pass-through links chained this shot
   private shotDmg = 0; // running damage tally this shot — read under the COMBO meter
+  private shotLoot = 0; // pickups grabbed this shot — a loot run isn't a whiff
   private comboLabel = ''; // COMBO meter string — rebuilt only when the counters move
   private comboLabelN = -1;
   private dmgLabel = '';
@@ -1733,6 +1734,7 @@ export class Battle {
     this.bumpNoted.clear();
     this.shotCombo = 0;
     this.shotDmg = 0;
+    this.shotLoot = 0;
     this.kosThisShot = 0;
     u.wallN = 0;
     this.shotPhys = 1;
@@ -2649,6 +2651,7 @@ export class Battle {
   // Field pickups — the MS heart/sword/hourglass: heal, damage, cooldown.
   private grabPickup(pk: Pickup) {
     this.burst(pk.x, pk.y, '#fff8dc', 9, 260, 0.9);
+    this.shotLoot++;
     switch (pk.kind) {
       case 'oran-berry': {
         const hp0 = this.players.reduce((a, p) => a + p.hp, 0);
@@ -5375,6 +5378,11 @@ export class Battle {
       if (this.waveHadGym) this.enterLoot();
       else this.enterReward();
       return;
+    }
+    // a shot that lands nothing — no contact, no bump chain, no loot —
+    // calls itself out so the dead air reads as feedback, not a shrug
+    if (this.shotDmg === 0 && this.shotCombo === 0 && this.shotLoot === 0) {
+      this.pushText({ x: u.x, y: u.y - u.r - 18, text: 'WHIFF!', t: 0.9, color: '#8a90a8', big: false });
     }
     this.pendingAttacks = [];
     let warned = false;
