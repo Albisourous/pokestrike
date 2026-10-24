@@ -141,4 +141,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `aa51f25` | battle | spike strips nick grounded foes too — the fence hurts, not just walls | `git revert <this commit>` |
 | 2026-10-25 | `eb6568f` | battle | aim ray marks live mines on the lane — orange blast ring, no ghost leg | `git revert <this commit>` |
 | 2026-10-25 | `287d77d` | battle | aim ray previews warp pads — pad ring + ghost leg exiting the twin | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | POLARIZED wave mutator — every foe carries a repulsor halo | `git revert <this commit>` |
+| 2026-10-25 | `ebeab84` | battle | POLARIZED wave mutator — every foe carries a repulsor halo | `git revert <this commit>` |
