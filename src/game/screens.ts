@@ -994,8 +994,8 @@ function drawClimbBody(
     ctx.globalAlpha = 0.34;
     echo.slice(0, 3).forEach((e, i) => {
       const ex = PITCH.x + PITCH.w * (0.2 + i * 0.3);
-      const ey = ctaBottom + 32 + Math.sin(t * 1.6 + i * 2.1) * 4;
-      monShadow(ctx, ex, ctaBottom + 32, 44);
+      const ey = ctaBottom + 28 + Math.sin(t * 1.6 + i * 2.1) * 4;
+      monShadow(ctx, ex, ctaBottom + 28, 44);
       try {
         drawMon(ctx, e.id, ex, ey, 44);
       } catch {
@@ -1007,7 +1007,7 @@ function drawClimbBody(
     ctx.textAlign = 'center';
     ctx.font = fontB(9);
     ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, ctaBottom + 68);
+    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, ctaBottom + 62);
     ctx.restore();
   }
 
@@ -1105,7 +1105,7 @@ function drawClimbBody(
   const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
   // the dense-stat face — the pixel font's floor can't squeeze this line
   fitFontB(ctx, recFull, 8, W - 44);
-  const recY = ctaBottom + 90; // clears the echo band's caption
+  const recY = ctaBottom + 76; // clears the echo band's caption
   const recX = W / 2 - measureW(ctx, recFull) / 2;
   ctx.textAlign = 'left';
   ctx.fillStyle = '#aab4dd';
@@ -1124,7 +1124,7 @@ function drawClimbBody(
     'MASTER BALL': 'master-ball',
     CHAMPION: 'star-piece',
   };
-  const rw = 200, rx = W / 2 - rw / 2, ry = ctaBottom + 100;
+  const rw = 200, rx = W / 2 - rw / 2, ry = ctaBottom + 86;
   roundRect(ctx, rx, ry, rw, 12, 6);
   ctx.fillStyle = 'rgba(10,13,24,0.6)';
   ctx.fill();
@@ -1223,7 +1223,7 @@ function drawTabBar(
     // proud of the bar so the picked tab reads from across the room;
     // CLIMB pops tallest as the hero
     const big = hero
-      ? { x: cell.x - 1, y: cell.y - 28, w: cell.w + 2, h: cell.h + 18 }
+      ? { x: cell.x - 1, y: cell.y - 20, w: cell.w + 2, h: cell.h + 14 }
       : { x: cell.x - 2, y: cell.y - 16, w: cell.w + 4, h: cell.h + 10 };
     // grow-in on switch: back-out ease overshoots the pill past `big` then
     // settles — a spring pop, not an instant swap. The outgoing card shrinks
