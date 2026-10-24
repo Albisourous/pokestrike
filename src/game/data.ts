@@ -31,6 +31,7 @@ export interface SpeciesDef {
   hunter?: boolean; // pack predator — targets the weakest mon, not the nearest; guard the low one
   leech?: boolean; // Leech Life: its hits mend its own wounds — bursts beat chip trades
   drowsy?: boolean; // Sleep Powder: hits can put a mon to sleep — it loses a turn and can't bump
+  venom?: boolean; // poison sting: its hits leave the victim bleeding a tick a round
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -277,7 +278,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 353, name: 'Shuppet', type: 'ghost', stats: st(44, 75, 35, 63, 33, 45), pierce: true, evolvesTo: 354 },
   { id: 355, name: 'Duskull', type: 'ghost', stats: st(20, 40, 90, 30, 90, 25), evolvesTo: 356 },
   { id: 10, name: 'Caterpie', type: 'grass', stats: st(45, 30, 35, 20, 20, 45), melee: true, evolvesTo: 11 },
-  { id: 13, name: 'Weedle', type: 'poison', stats: st(40, 35, 30, 20, 20, 50), melee: true, evolvesTo: 14 },
+  { id: 13, name: 'Weedle', type: 'poison', stats: st(40, 35, 30, 20, 20, 50), melee: true, venom: true, evolvesTo: 14 },
   { id: 27, name: 'Sandshrew', type: 'rock', stats: st(50, 75, 85, 20, 30, 40), melee: true, evolvesTo: 28 },
   { id: 29, name: 'Nidoran♀', type: 'poison', stats: st(55, 47, 52, 40, 40, 41), evolvesTo: 30 },
   { id: 86, name: 'Seel', type: 'water', stats: st(65, 45, 55, 45, 70, 45), evolvesTo: 87 },
@@ -309,7 +310,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 357, name: 'Tropius', type: 'grass', type2: 'flying', stats: st(99, 68, 83, 72, 87, 51) },
   { id: 366, name: 'Clamperl', type: 'water', stats: st(35, 64, 85, 74, 55, 32), evolvesTo: [367, 368] },
   { id: 370, name: 'Luvdisc', type: 'water', stats: st(43, 30, 55, 40, 65, 97), healer: true },
-  { id: 24, name: 'Arbok', type: 'poison', stats: st(60, 95, 69, 65, 79, 80) },
+  { id: 24, name: 'Arbok', type: 'poison', stats: st(60, 95, 69, 65, 79, 80), venom: true },
   { id: 97, name: 'Hypno', type: 'psychic', stats: st(85, 73, 70, 73, 115, 67), sleepy: true },
   { id: 124, name: 'Jynx', type: 'psychic', type2: 'water', stats: st(65, 50, 35, 115, 95, 95) },
   { id: 114, name: 'Tangela', type: 'grass', stats: st(65, 55, 115, 100, 40, 60), regen: true, evolvesTo: 465 },
@@ -706,7 +707,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 11, name: 'Metapod', type: 'grass', stats: st(50, 20, 55, 25, 25, 30), shielded: true, evolvesTo: 12 },
   { id: 12, name: 'Butterfree', type: 'flying', stats: st(60, 45, 50, 90, 80, 70) },
   { id: 14, name: 'Kakuna', type: 'poison', stats: st(45, 25, 50, 25, 25, 35), shielded: true, evolvesTo: 15 },
-  { id: 15, name: 'Beedrill', type: 'poison', stats: st(65, 90, 40, 45, 80, 75), melee: true },
+  { id: 15, name: 'Beedrill', type: 'poison', stats: st(65, 90, 40, 45, 80, 75), melee: true, venom: true },
   { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true, spiky: true },
   { id: 30, name: 'Nidorina', type: 'poison', stats: st(70, 62, 67, 55, 55, 56), evolvesTo: 31 },
   { id: 31, name: 'Nidoqueen', type: 'poison', type2: 'rock', stats: st(90, 92, 87, 75, 85, 76), melee: true },

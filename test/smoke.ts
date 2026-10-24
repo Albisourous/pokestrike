@@ -449,6 +449,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(sleepy.asleep === false && (living < 2 || (b as any).active !== sleepy), 'a dozing mon skips its turn and wakes');
   e.def = { ...e.def, drowsy: undefined };
 
+  // venom stings leave a wound that bleeds each round
+  e.def = { ...e.def, venom: true };
+  const vic = (b as any).players.find((p: any) => !p.dead);
+  vic.dotTicks = 0;
+  (b as any).damagePlayer(vic, 5, e);
+  ok(vic.dotTicks > 0 && vic.dotDmg > 0, `venom sting poisons the victim (${vic.dotTicks} ticks)`);
+  vic.dotTicks = 0;
+  vic.dotDmg = 0;
+  e.def = { ...e.def, venom: undefined };
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

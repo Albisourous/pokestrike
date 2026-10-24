@@ -5498,6 +5498,13 @@ export class Battle {
         this.hurt(e, e.dotDmg, '#a040a0');
       }
     }
+    // venom works both ways — a poisoned mon bleeds out the same ticks
+    for (const p of this.players) {
+      if (p.dotTicks > 0 && !p.dead) {
+        p.dotTicks--;
+        this.damagePlayer(p, p.dotDmg);
+      }
+    }
     // zombie loop: a linked foe rises unless its partner fell too — the
     // pair only stays down if both die inside the same shot
     for (const e of this.enemies) {
@@ -5916,6 +5923,12 @@ export class Battle {
     if (src?.def.drowsy && !p.dead && dmg > 0 && this.rng() < 0.55) {
       p.asleep = true;
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'PUT TO SLEEP!', t: 1, color: '#a890f0', big: false });
+    }
+    // venom sting: the wound keeps bleeding — ticks down once a round
+    if (src?.def.venom && !p.dead && dmg > 0) {
+      p.dotTicks = Math.max(p.dotTicks, 4);
+      p.dotDmg = Math.max(p.dotDmg, Math.ceil(p.maxHp * 0.06));
+      this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'POISONED!', t: 1, color: '#a040a0', big: false });
     }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
@@ -7139,6 +7152,7 @@ export class Battle {
       e.def.hunter && 'hunts your weakest mon',
       e.def.leech && 'heals off every hit it lands',
       e.def.drowsy && 'its hits can put a mon to sleep',
+      e.def.venom && 'its sting leaves a bleeding wound',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8329,7 +8343,7 @@ export class Battle {
     }
 
     // envenomed — poison bubbles rise off the sprite while ticks remain
-    if (u.side === 'enemy' && u.dotTicks > 0) {
+    if (u.dotTicks > 0) {
       ctx.fillStyle = '#a040a0';
       for (let k = 0; k < 3; k++) {
         const ph = (this.time * 0.7 + k * 0.34) % 1;
@@ -8476,6 +8490,7 @@ export class Battle {
         u.def.hunter && 'HUNTER',
         u.def.leech && 'LEECH',
         u.def.drowsy && 'SLEEP',
+        u.def.venom && 'STING',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

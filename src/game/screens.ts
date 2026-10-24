@@ -2397,6 +2397,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'HUNTER foes stalk your weakest — park a tank between them',
       'LEECH foes heal off every hit — burst them, don\'t trade chips',
       'SLEEP powder drops a mon a whole turn — sleepers can\'t bump either',
+      'VENOM stings leave a wound that bleeds a tick a round',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
