@@ -71,6 +71,7 @@ export interface SpeciesDef {
   confuse?: boolean; // Supersonic: contact can rattle the striker's next aim
   anchor?: boolean; // too heavy to shove — knockback and blast leave it planted
   tempo?: boolean; // Own Tempo: it keeps its head — confusion can't stick
+  flank?: boolean; // approaches on an arc — drifts beside the pack, not at it
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -490,7 +491,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 248, name: 'Tyranitar', type: 'rock', type2: 'ghost', stats: st(100, 134, 110, 95, 100, 61), melee: true, skyFor: 'sand' },
   { id: 295, name: 'Exploud', type: 'normal', stats: st(104, 91, 63, 91, 73, 68) },
   { id: 336, name: 'Seviper', type: 'poison', stats: st(73, 100, 60, 100, 60, 65), melee: true, shed: true },
-  { id: 359, name: 'Absol', type: 'ghost', stats: st(65, 130, 60, 75, 60, 75), melee: true },
+  { id: 359, name: 'Absol', type: 'ghost', stats: st(65, 130, 60, 75, 60, 75), melee: true, flank: true },
   { id: 365, name: 'Walrein', type: 'water', stats: st(110, 80, 90, 95, 90, 65) },
   { id: 376, name: 'Metagross', type: 'psychic', stats: st(80, 135, 130, 95, 90, 70), melee: true },
   { id: 254, name: 'Sceptile', type: 'grass', stats: st(70, 85, 65, 105, 85, 120), pierce: true },
@@ -581,7 +582,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 565, name: 'Carracosta', type: 'water', type2: 'rock', stats: st(74, 108, 133, 83, 65, 32), taunt: true },
   { id: 567, name: 'Archeops', type: 'rock', type2: 'flying', stats: st(75, 140, 65, 112, 65, 110) },
   { id: 569, name: 'Garbodor', type: 'poison', stats: st(80, 95, 82, 60, 82, 75), taunt: true },
-  { id: 571, name: 'Zoroark', type: 'ghost', stats: st(60, 105, 60, 120, 60, 105) },
+  { id: 571, name: 'Zoroark', type: 'ghost', stats: st(60, 105, 60, 120, 60, 105), flank: true },
   { id: 573, name: 'Cinccino', type: 'normal', stats: st(75, 95, 60, 65, 60, 115) },
   { id: 576, name: 'Gothitelle', type: 'psychic', stats: st(70, 55, 95, 95, 110, 65) },
   { id: 579, name: 'Reuniclus', type: 'psychic', stats: st(110, 65, 75, 125, 85, 30), taunt: true },

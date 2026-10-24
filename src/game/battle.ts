@@ -2457,6 +2457,18 @@ export class Battle {
             }
           }
         }
+        if (e.def.flank && e.lunging <= 0 && d > e.r + target.r + 130) {
+          // flanker: far out it steers at a point beside the pack, not the
+          // body — zappers drift straight, these come in on an arc. Close
+          // in and it fights like anything else.
+          const px = -ny, py = nx;
+          const side = e.uid % 2 ? 1 : -1;
+          const fx = target.x + px * 120 * side - e.x;
+          const fy = target.y + py * 120 * side - e.y;
+          const fd = Math.hypot(fx, fy) || 1;
+          nx = fx / fd;
+          ny = fy / fd;
+        }
         if (e.lunging > 0) {
           // melee attack in flight: steer hard at the target, hit on contact
           e.lunging -= dt;
@@ -7655,6 +7667,7 @@ export class Battle {
       e.def.lay && 'lays spikes in your half — kill it before the court fills',
       e.def.confuse && 'supersonic — contact rattles your next aim',
       e.def.anchor && 'too heavy to shove — banks and blasts leave it planted',
+      e.def.flank && 'flanks the pack — it drifts wide before it closes',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9079,6 +9092,7 @@ export class Battle {
         u.def.lay && 'SPIKER',
         u.def.confuse && 'SONIC',
         u.def.anchor && 'ANCHOR',
+        u.def.flank && 'FLANK',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
