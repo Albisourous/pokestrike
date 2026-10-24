@@ -8547,6 +8547,13 @@ export class Battle {
             let dd = Math.abs(a2 - foeHit.shieldA) % (Math.PI * 2);
             if (dd > Math.PI) dd = Math.PI * 2 - dd;
             foeColor = dd < 0.85 ? '#ff6b6b' : dd > 2.4 ? '#9df0ff' : '#ffd84d';
+          } else if (foeHit?.repelR) {
+            // the ghost promises contact the field will bend away — orange
+            // flags the repel before the pull, not after the deflection
+            foeColor = '#ff9a30';
+          } else if (foeHit?.gravR) {
+            // same honesty for the gravity bubble — the ball crawls inside
+            foeColor = '#58c8d8';
           }
           ctx.strokeStyle = hitFoe ? foeColor : color;
           ctx.lineWidth = 2;
