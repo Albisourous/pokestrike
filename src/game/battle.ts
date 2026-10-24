@@ -3306,6 +3306,13 @@ export class Battle {
       e.vx += n.x * kb;
       e.vy += n.y * kb;
     }
+    // poison point: brushing the thorn hide can venom the striker —
+    // kill it at range with banks, or budget the ticks into the trade
+    if (e.def.toxic && !shooter.dead && this.rng() < 0.3) {
+      shooter.dotTicks = Math.max(shooter.dotTicks, 4);
+      shooter.dotDmg = Math.max(shooter.dotDmg, Math.ceil(shooter.maxHp * 0.06));
+      this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'POISONED!', t: 0.9, color: '#a040a0', big: false });
+    }
     // barbed foes bite back — every contact costs the ball a chip of its
     // own HP, so sloppy grazes through the pack bleed the run
     if (e.def.spiky && !shooter.dead) {
@@ -7183,6 +7190,7 @@ export class Battle {
       e.def.venom && 'its sting leaves a bleeding wound',
       e.def.burn && 'its hits can burn — singes and softens',
       e.def.para && 'its hits can paralyze — launches limp',
+      e.def.toxic && 'contact can poison the ball',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8555,6 +8563,7 @@ export class Battle {
         u.def.venom && 'STING',
         u.def.burn && 'WISP',
         u.def.para && 'JOLT',
+        u.def.toxic && 'TOXIC',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

@@ -483,6 +483,24 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   jolted.paraT = 0;
   e.def = { ...e.def, para: undefined };
 
+  // poison point: striking the hide can venom the ball
+  e.def = { ...e.def, toxic: true };
+  e.dead = false;
+  e.hp = e.maxHp;
+  const striker = (b as any).active;
+  striker.dotTicks = 0;
+  striker.vx = 300; striker.vy = 0;
+  striker.lastHit = new Map();
+  e.lastHit = new Map();
+  const rng3 = (b as any).rng;
+  (b as any).rng = () => 0.1; // under the 0.3 point chance
+  (b as any).strikeEnemy(striker, e);
+  (b as any).rng = rng3;
+  ok(striker.dotTicks > 0, `poison point venoms the striker (${striker.dotTicks} ticks)`);
+  striker.dotTicks = 0;
+  striker.dotDmg = 0;
+  e.def = { ...e.def, toxic: undefined };
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

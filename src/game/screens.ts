@@ -2400,6 +2400,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'VENOM stings leave a wound that bleeds a tick a round',
       'WISP flames burn — the victim singes and hits softer',
       'JOLT waves paralyze — the shocked mon\'s launch limps',
+      'TOXIC hides poison the ball on contact — kill them with banks',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

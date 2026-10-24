@@ -34,6 +34,7 @@ export interface SpeciesDef {
   venom?: boolean; // poison sting: its hits leave the victim bleeding a tick a round
   burn?: boolean; // Will-O-Wisp: hits can burn — the victim hits softer and singes each round
   para?: boolean; // Thunder Wave: hits can paralyze — the victim's launch limps a few rounds
+  toxic?: boolean; // Poison Point: merely striking the hide can poison the ball — graze it wide
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -282,7 +283,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 10, name: 'Caterpie', type: 'grass', stats: st(45, 30, 35, 20, 20, 45), melee: true, evolvesTo: 11 },
   { id: 13, name: 'Weedle', type: 'poison', stats: st(40, 35, 30, 20, 20, 50), melee: true, venom: true, evolvesTo: 14 },
   { id: 27, name: 'Sandshrew', type: 'rock', stats: st(50, 75, 85, 20, 30, 40), melee: true, evolvesTo: 28 },
-  { id: 29, name: 'Nidoran♀', type: 'poison', stats: st(55, 47, 52, 40, 40, 41), evolvesTo: 30 },
+  { id: 29, name: 'Nidoran♀', type: 'poison', stats: st(55, 47, 52, 40, 40, 41), toxic: true, evolvesTo: 30 },
   { id: 86, name: 'Seel', type: 'water', stats: st(65, 45, 55, 45, 70, 45), evolvesTo: 87 },
   { id: 90, name: 'Shellder', type: 'water', stats: st(30, 65, 100, 45, 25, 40), shielded: true, evolvesTo: 91 },
   { id: 116, name: 'Horsea', type: 'water', stats: st(30, 40, 70, 70, 25, 60), evolvesTo: 117 },
@@ -417,7 +418,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120), pierce: true, blink: true },
   { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60), healer: true },
   { id: 76, name: 'Golem', type: 'rock', stats: st(80, 120, 130, 55, 65, 45) },
-  { id: 34, name: 'Nidoking', type: 'poison', type2: 'rock', stats: st(81, 102, 77, 85, 75, 85), melee: true },
+  { id: 34, name: 'Nidoking', type: 'poison', type2: 'rock', stats: st(81, 102, 77, 85, 75, 85), melee: true, toxic: true },
   { id: 125, name: 'Electabuzz', type: 'electric', stats: st(65, 83, 57, 95, 85, 105), evolvesTo: 466 },
   { id: 135, name: 'Jolteon', type: 'electric', stats: st(65, 65, 60, 110, 95, 130), pierce: true },
   { id: 142, name: 'Aerodactyl', type: 'rock', type2: 'flying', stats: st(80, 105, 65, 60, 75, 130), melee: true },
@@ -716,7 +717,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 87, name: 'Dewgong', type: 'water', stats: st(90, 70, 80, 70, 95, 70) },
   { id: 91, name: 'Cloyster', type: 'water', stats: st(50, 95, 180, 85, 45, 70), shielded: true },
   { id: 106, name: 'Hitmonlee', type: 'fighting', stats: st(50, 120, 53, 35, 110, 87), melee: true },
-  { id: 117, name: 'Seadra', type: 'water', stats: st(55, 65, 95, 95, 45, 85), evolvesTo: 230 },
+  { id: 117, name: 'Seadra', type: 'water', stats: st(55, 65, 95, 95, 45, 85), toxic: true, evolvesTo: 230 },
   { id: 166, name: 'Ledian', type: 'flying', stats: st(55, 35, 50, 55, 110, 85), melee: true },
   { id: 168, name: 'Ariados', type: 'poison', stats: st(70, 90, 70, 60, 60, 40), melee: true },
   { id: 188, name: 'Skiploom', type: 'grass', type2: 'flying', stats: st(55, 45, 50, 45, 65, 80), evolvesTo: 189 },
