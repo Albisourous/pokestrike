@@ -1392,7 +1392,9 @@ export function bumpStreaks(won: boolean, isDaily: boolean, now = Date.now()): v
 // achievement, a maxed lab, a stocked bag, and nine wins so the ascension
 // ladder tops out. Coach + help flags are preset so no first-boot overlays
 // interrupt. Everything past this point plays normally — the sandbox records
-// its own progress.
+// its own progress. Self-invoked at module load (after every store it
+// touches exists); the guard makes a second call — or a non-debug boot — a
+// no-op.
 export function debugSeed() {
   if (!DEBUG || load('pk_seeded')) return;
   store('pk_seeded', 1);
@@ -1413,3 +1415,5 @@ export function debugSeed() {
   markHelpSeen();
   console.info('[debug] sandbox save seeded — real pk_* untouched; drop ?debug to play for real');
 }
+
+debugSeed();

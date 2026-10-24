@@ -15,10 +15,9 @@ export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left t
 // Town-tab buildings — whole structures sliced from the atlas's mid bands.
 // The top-band copies all touch the sheet edge (roofs clipped); these don't.
 export const TILE_LAB: TileRect = [688, 93, 86, 86]; // domed civic hall, white rose emblem
-export const TILE_HALL: TileRect = [842, 195, 88, 78]; // columned pavilion, gold-crest door
-export const TILE_TOWER: TileRect = [1450, 541, 94, 110]; // hexagonal jewel-domed hall (the door is a separate atlas sprite — stacking it floats a pod)
-export const TILE_MART: TileRect = [469, 7, 68, 58]; // canonical blue-roofed MART
-export const TILE_GYMHQ: TileRect = [608, 393, 48, 86]; // columned gym entrance + steps
+export const TILE_HALL: TileRect = [838, 192, 96, 82]; // columned pavilion — the brown in its top corners is the facade baked behind it
+export const TILE_TOWER: TileRect = [1446, 540, 88, 124]; // hexagonal jewel-domed tower, dome apex to marquee door — 540 clears the slab above, 664 is its real base
+export const TILE_MART: TileRect = [1558, 386, 164, 72]; // blue storefront facade — emblem, awnings, marquee (the real mart sprite's roof is sheet-clipped)
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand

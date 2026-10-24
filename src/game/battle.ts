@@ -98,6 +98,7 @@ interface Unit {
   sumStage: number; // boss phase summons fired (0..2 — at 2/3 and 1/3 hp)
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
   weakA: number; // boss weak point angle — rotating gold face, ×3 contact
+  shieldA: number; // shelled foes: the shell's facing — front hits glance, back hits flank
   minion?: boolean; // summoned add — while any live, the boss is guarded
   volatile?: boolean; // VOLATILE wave mod — a KO bursts, splashing neighbors
   supp?: 'medic' | 'aegis'; // support foe — heals or shields the pack on its turn
@@ -877,6 +878,7 @@ export class Battle {
         sumStage: 0,
         atkN: 0,
         weakA: 0,
+        shieldA: def.shielded ? rng() * Math.PI * 2 : 0,
         shieldN: 0,
         revives: 0,
         gravR: 0,
@@ -1490,6 +1492,7 @@ export class Battle {
       sumStage: 0,
       atkN: 0,
       weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
+      shieldA: s.def.shielded ? this.rng() * Math.PI * 2 : 0,
       shieldN: 0,
       revives: 0,
       gravR: 0,
@@ -2176,6 +2179,7 @@ export class Battle {
       const e = wave[i];
       if (e.dead) continue; // corpses don't drift, lunge, or shove
       if (e.boss) e.weakA += dt * 0.45; // the weak face drifts — watch it before you commit
+      if (e.def.shielded) e.shieldA += dt * 0.22; // the shell turns slower — the flank window roams the rim
       const kn = Math.exp(-4 * dt);
       e.vx *= kn;
       e.vy *= kn;
@@ -2975,6 +2979,17 @@ export class Battle {
       if (dd > Math.PI) dd = Math.PI * 2 - dd;
       weak = dd < 0.62;
     }
+    // shelled foes face their shell into the fight: hits arriving on it
+    // glance to 30%, hits landing behind it pay the flank
+    let guarded = false;
+    let flanked = false;
+    if (e.def.shielded) {
+      const a = Math.atan2(shooter.y - e.y, shooter.x - e.x);
+      let dd = Math.abs(a - e.shieldA) % (Math.PI * 2);
+      if (dd > Math.PI) dd = Math.PI * 2 - dd;
+      guarded = dd < 0.85;
+      flanked = dd > 2.4;
+    }
     // momentum pays: impact speed is a damage input, so a max-pull launch
     // or a whip-around-a-well hits harder than a dribble. Capped +40% —
     // physics skill converts to power, not double damage
@@ -2992,6 +3007,7 @@ export class Battle {
         (1 + this.shotVolleyBoost) *
         (rico ? 1 + this.ricoMult : 1) *
         (weak ? 3 : 1) *
+        (guarded ? 0.3 : flanked ? 1.5 : 1) *
         // power zone: hits landed while the ball's inside the ATK field
         // carry the field's charge
         (this.inPower(shooter.x, shooter.y) ? 1.5 : 1) *
@@ -3005,6 +3021,14 @@ export class Battle {
       this.addPunch(0.11);
       this.addShake(11);
       sfx('perfect');
+    }
+    if (flanked) {
+      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'FLANKED!', t: 0.9, color: '#9df0ff', big: true });
+      this.impact(e.x, e.y, '#9df0ff', 1.2);
+      sfx('hit');
+    } else if (guarded) {
+      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'GUARDED', t: 0.7, color: '#8a90a8', big: false });
+      sfx('bounce');
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
@@ -7772,6 +7796,20 @@ export class Battle {
           ctx.stroke();
         }
       }
+      // shelled foes wear a plate on their facing — the flank window is
+      // the unguarded rim. Drifts slowly; read it before the pull.
+      if (u.def.shielded && !u.dead) {
+        ctx.strokeStyle = '#9aa7b8';
+        ctx.lineWidth = 6;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.r + 3, u.shieldA - 0.85, u.shieldA + 0.85);
+        ctx.stroke();
+        ctx.strokeStyle = '#5c6478';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.r + 6, u.shieldA - 0.7, u.shieldA + 0.7);
+        ctx.stroke();
+      }
       // boss weak point: a drifting gold star on the rim — contact on that
       // face pays triple. MS's core precision tell.
       if (u.boss && !u.dead) {
@@ -7805,11 +7843,11 @@ export class Battle {
       ctx.fillStyle = u.timer <= 1 || u.enraged ? '#ff6b6b' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       // keyword flags — the counter-mechanics read at a glance
-      const kw = u.def.taunt ? 'MAGNET' : u.def.cursed ? 'CURSE' : '';
+      const kw = u.def.taunt ? 'MAGNET' : u.def.cursed ? 'CURSE' : u.def.shielded ? 'SHELL' : '';
       if (kw) {
         ctx.font = font(8);
         ctx.strokeText(kw, u.x, u.y + u.r + 14);
-        ctx.fillStyle = u.def.taunt ? '#ffd84d' : '#a868c8';
+        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : '#9aa7b8';
         ctx.fillText(kw, u.x, u.y + u.r + 14);
       }
     } else {

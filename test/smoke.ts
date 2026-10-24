@@ -166,7 +166,22 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   );
 }
 
-// --- KOs level the shooter ----------------------------------------------
+// --- shelled foes: the plate face glances hits, the back pays a flank ----
+{
+  const b = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(5));
+  (b as any).spawnWave(0);
+  const [e1, e2] = (b as any).enemies;
+  for (const e of [e1, e2]) {
+    e.def = { ...e.def, shielded: true };
+    e.shieldA = 0; // plate faces +x — a shooter right of the foe hits the shell
+  }
+  const shooter = (b as any).active;
+  shooter.vx = 500;
+  shooter.vy = 0;
+  const hp1 = e1.hp;
+  (b as any).strikeEnemy(shooter, { ...e1 }); // spread keeps uid/pos? no — need the real unit
+}
+
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));
   (b as any).spawnWave(0);

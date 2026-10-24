@@ -16,6 +16,7 @@ export interface SpeciesDef {
   copy?: boolean; // bump super replays the bumper's super (Ditto)
   taunt?: boolean; // while it lives, contact hits vs other enemies are blocked
   cursed?: boolean; // on KO, all ally supers gain +1 cooldown pip
+  shielded?: boolean; // a shell face drifts the rim: front hits glance to 30%, back hits pay a 50% flank
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -99,7 +100,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 403, name: 'Shinx', type: 'electric', stats: st(45, 65, 34, 40, 34, 45), melee: true, evolvesTo: 404 },
   { id: 406, name: 'Budew', type: 'grass', stats: st(40, 30, 35, 50, 70, 55), evolvesTo: 315 },
   { id: 408, name: 'Cranidos', type: 'rock', stats: st(67, 125, 40, 30, 30, 58), melee: true, evolvesTo: 409 },
-  { id: 410, name: 'Shieldon', type: 'rock', stats: st(30, 42, 118, 42, 88, 30), evolvesTo: 411 },
+  { id: 410, name: 'Shieldon', type: 'rock', stats: st(30, 42, 118, 42, 88, 30), shielded: true, evolvesTo: 411 },
   { id: 417, name: 'Pachirisu', type: 'electric', stats: st(60, 45, 70, 45, 90, 95), pierce: true },
   { id: 418, name: 'Buizel', type: 'water', stats: st(55, 65, 35, 60, 30, 85), pierce: true, evolvesTo: 419 },
   { id: 425, name: 'Drifloon', type: 'ghost', stats: st(90, 50, 34, 60, 44, 70), cursed: true, evolvesTo: 426 },
@@ -265,7 +266,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 27, name: 'Sandshrew', type: 'rock', stats: st(50, 75, 85, 20, 30, 40), melee: true, evolvesTo: 28 },
   { id: 29, name: 'Nidoran♀', type: 'poison', stats: st(55, 47, 52, 40, 40, 41), evolvesTo: 30 },
   { id: 86, name: 'Seel', type: 'water', stats: st(65, 45, 55, 45, 70, 45), evolvesTo: 87 },
-  { id: 90, name: 'Shellder', type: 'water', stats: st(30, 65, 100, 45, 25, 40), evolvesTo: 91 },
+  { id: 90, name: 'Shellder', type: 'water', stats: st(30, 65, 100, 45, 25, 40), shielded: true, evolvesTo: 91 },
   { id: 116, name: 'Horsea', type: 'water', stats: st(30, 40, 70, 70, 25, 60), evolvesTo: 117 },
   { id: 165, name: 'Ledyba', type: 'flying', stats: st(40, 20, 30, 40, 80, 55), melee: true, evolvesTo: 166 },
   { id: 167, name: 'Spinarak', type: 'poison', stats: st(40, 60, 40, 40, 40, 30), melee: true, evolvesTo: 168 },
@@ -301,7 +302,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 185, name: 'Sudowoodo', type: 'rock', stats: st(70, 100, 115, 30, 65, 30), taunt: true },
   { id: 201, name: 'Unown', type: 'psychic', stats: st(48, 72, 48, 72, 48, 48) },
   { id: 203, name: 'Girafarig', type: 'psychic', type2: 'normal', stats: st(70, 80, 65, 90, 65, 85) },
-  { id: 204, name: 'Pineco', type: 'poison', stats: st(50, 65, 90, 35, 35, 15), evolvesTo: 205 },
+  { id: 204, name: 'Pineco', type: 'poison', stats: st(50, 65, 90, 35, 35, 15), shielded: true, evolvesTo: 205 },
   { id: 211, name: 'Qwilfish', type: 'water', type2: 'poison', stats: st(65, 95, 85, 55, 55, 85) },
   { id: 213, name: 'Shuckle', type: 'rock', stats: st(20, 10, 230, 10, 230, 5), taunt: true },
   { id: 215, name: 'Sneasel', type: 'ghost', type2: 'water', stats: st(55, 95, 55, 35, 75, 115), pierce: true, melee: true, evolvesTo: 461 },
@@ -686,15 +687,15 @@ export const EVOS: SpeciesDef[] = [
   { id: 356, name: 'Dusclops', type: 'ghost', stats: st(40, 70, 130, 60, 130, 25), taunt: true, evolvesTo: 477 },
   { id: 362, name: 'Glalie', type: 'water', stats: st(80, 80, 80, 80, 80, 80) },
   { id: 364, name: 'Sealeo', type: 'water', stats: st(90, 60, 70, 75, 70, 45) },
-  { id: 11, name: 'Metapod', type: 'grass', stats: st(50, 20, 55, 25, 25, 30), evolvesTo: 12 },
+  { id: 11, name: 'Metapod', type: 'grass', stats: st(50, 20, 55, 25, 25, 30), shielded: true, evolvesTo: 12 },
   { id: 12, name: 'Butterfree', type: 'flying', stats: st(60, 45, 50, 90, 80, 70) },
-  { id: 14, name: 'Kakuna', type: 'poison', stats: st(45, 25, 50, 25, 25, 35), evolvesTo: 15 },
+  { id: 14, name: 'Kakuna', type: 'poison', stats: st(45, 25, 50, 25, 25, 35), shielded: true, evolvesTo: 15 },
   { id: 15, name: 'Beedrill', type: 'poison', stats: st(65, 90, 40, 45, 80, 75), melee: true },
   { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true },
   { id: 30, name: 'Nidorina', type: 'poison', stats: st(70, 62, 67, 55, 55, 56), evolvesTo: 31 },
   { id: 31, name: 'Nidoqueen', type: 'poison', type2: 'rock', stats: st(90, 92, 87, 75, 85, 76), melee: true },
   { id: 87, name: 'Dewgong', type: 'water', stats: st(90, 70, 80, 70, 95, 70) },
-  { id: 91, name: 'Cloyster', type: 'water', stats: st(50, 95, 180, 85, 45, 70) },
+  { id: 91, name: 'Cloyster', type: 'water', stats: st(50, 95, 180, 85, 45, 70), shielded: true },
   { id: 106, name: 'Hitmonlee', type: 'fighting', stats: st(50, 120, 53, 35, 110, 87), melee: true },
   { id: 117, name: 'Seadra', type: 'water', stats: st(55, 65, 95, 95, 45, 85), evolvesTo: 230 },
   { id: 166, name: 'Ledian', type: 'flying', stats: st(55, 35, 50, 55, 110, 85), melee: true },
