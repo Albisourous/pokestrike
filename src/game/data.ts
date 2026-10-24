@@ -101,7 +101,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 179, name: 'Mareep', type: 'electric', stats: st(55, 40, 40, 65, 45, 35), evolvesTo: 180, shock: true },
   { id: 183, name: 'Marill', type: 'water', type2: 'normal', stats: st(70, 20, 50, 20, 50, 40), healer: true, evolvesTo: 184 },
   { id: 194, name: 'Wooper', type: 'water', type2: 'rock', stats: st(55, 45, 45, 25, 25, 15), damp: true, evolvesTo: 195 },
-  { id: 280, name: 'Ralts', type: 'psychic', type2: 'normal', stats: st(28, 25, 25, 45, 35, 40), evolvesTo: 281 },
+  { id: 280, name: 'Ralts', type: 'psychic', type2: 'normal', stats: st(28, 25, 25, 45, 35, 40), sync: true, evolvesTo: 281 },
   { id: 285, name: 'Shroomish', type: 'grass', stats: st(60, 40, 60, 40, 60, 35), evolvesTo: 286, pheal: true },
   { id: 293, name: 'Whismur', type: 'normal', stats: st(64, 51, 23, 51, 23, 28), evolvesTo: 294 },
   { id: 304, name: 'Aron', type: 'rock', stats: st(50, 70, 100, 40, 40, 30), evolvesTo: 305 },

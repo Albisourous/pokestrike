@@ -6250,6 +6250,14 @@ export class Battle {
         }
         this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'SPORED!', t: 0.9, color: '#a8b820', big: false });
       }
+      if (p.def.sync) {
+        // synchronize: whatever ails it echoes onto the striker
+        let synced = false;
+        if (p.dotTicks > 0) { src.dotTicks = Math.max(src.dotTicks, p.dotTicks); src.dotDmg = Math.max(src.dotDmg, p.dotDmg); synced = true; }
+        if (p.burnT > 0) { src.burnT = Math.max(src.burnT, p.burnT); synced = true; }
+        if (p.paraT > 0) { src.paraT = Math.max(src.paraT, p.paraT); synced = true; }
+        if (synced) this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'SYNCED!', t: 0.9, color: '#f85888', big: false });
+      }
     }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
