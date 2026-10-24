@@ -2340,8 +2340,16 @@ export class Battle {
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
       }
-      // enemies take no environment damage — lava pools, mines and the
-      // court's other tricks only ever punish the ball
+      // court chip: lava burns anyone standing in it — fire types bathe,
+      // flyers and the sky-modded sail over. The other zones are ball-only.
+      if (!e.dead && !e.airborne && !flies(e.def) && e.def.type !== 'fire' && e.def.type2 !== 'fire' && this.time - e.hzT > 0.8) {
+        for (const hz of this.hazards) {
+          if (hz.kind !== 'lava' || dist(e, hz) > hz.r + e.r) continue;
+          e.hzT = this.time;
+          this.hurt(e, Math.max(1, Math.round(e.maxHp * 0.04)), '#f08030');
+          break;
+        }
+      }
     }
     // pairwise separation between enemies
     for (let i = 0; i < this.enemies.length; i++) {

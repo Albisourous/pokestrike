@@ -310,6 +310,14 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const ex = e.x;
   (b as any).fireEnemy(e);
   ok(Math.abs(e.x - ex) > 40, `raider dashes at the far drop (${ex.toFixed(0)} -> ${e.x.toFixed(0)})`);
+
+  // lava burns whatever stands in it — fire types and flyers exempt
+  e.def = { ...e.def, raider: false, type: 'grass', type2: undefined };
+  e.x = arena.x + 240; e.y = arena.y + 300; e.hzT = -9;
+  (b as any).hazards = [{ kind: 'lava', x: e.x, y: e.y, r: 60 }];
+  const hp0 = e.hp;
+  (b as any).stepEnemyMovement(0.05);
+  ok(e.hp < hp0, `lava chips the standing foe (${hp0} -> ${e.hp})`);
 }
 
 {
