@@ -3010,6 +3010,8 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.flame && 'FLAME BODY — HITS SINGE BACK',
     def.charm && 'CUTE CHARM — HITS LULL BACK',
     def.spore && 'EFFECT SPORE — HITS SCATTER',
+    def.menace && 'INTIMIDATE — DULLS FOES',
+    def.grace && 'SERENE GRACE — 2× ODDS',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;

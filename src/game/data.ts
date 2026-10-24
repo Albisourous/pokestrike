@@ -63,6 +63,7 @@ export interface SpeciesDef {
   pickup?: boolean; // Pickup: may nose out a bag consumable after each wave
   thickFat?: boolean; // Thick Fat: lava's bite lands at half heat
   limber?: boolean; // Limber: paralysis can't hold the limbs
+  grace?: boolean; // Serene Grace: its contact abilities fire at double odds
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -110,7 +111,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 172, name: 'Pichu', type: 'electric', stats: st(20, 40, 15, 35, 35, 60), evolvesTo: 25 },
   { id: 174, name: 'Igglybuff', type: 'normal', stats: st(90, 30, 15, 40, 20, 15), healer: true, evolvesTo: 39 },
   { id: 191, name: 'Sunkern', type: 'grass', stats: st(30, 30, 30, 30, 30, 30), evolvesTo: 192 },
-  { id: 209, name: 'Snubbull', type: 'normal', stats: st(60, 80, 50, 40, 40, 30), melee: true, evolvesTo: 210 },
+  { id: 209, name: 'Snubbull', type: 'normal', stats: st(60, 80, 50, 40, 40, 30), melee: true, menace: true, evolvesTo: 210 },
   { id: 223, name: 'Remoraid', type: 'water', stats: st(35, 65, 35, 65, 35, 65), pierce: true, evolvesTo: 224 },
   { id: 236, name: 'Tyrogue', type: 'fighting', stats: st(35, 35, 35, 35, 35, 35), melee: true, guts: true, evolvesTo: [106, 107, 237] },
   { id: 246, name: 'Larvitar', type: 'rock', stats: st(50, 64, 50, 45, 50, 41), melee: true, guts: true, evolvesTo: 247 },
@@ -128,13 +129,13 @@ export const ROSTER: SpeciesDef[] = [
   { id: 255, name: 'Torchic', type: 'fire', stats: st(45, 60, 40, 70, 50, 45), evolvesTo: 256 },
   { id: 258, name: 'Mudkip', type: 'water', stats: st(50, 70, 50, 50, 50, 40), evolvesTo: 259 },
   { id: 173, name: 'Cleffa', type: 'normal', stats: st(50, 25, 28, 45, 55, 15), healer: true, evolvesTo: 35 },
-  { id: 175, name: 'Togepi', type: 'normal', stats: st(35, 20, 65, 40, 65, 20), healer: true, evolvesTo: 176 },
+  { id: 175, name: 'Togepi', type: 'normal', stats: st(35, 20, 65, 40, 65, 20), healer: true, grace: true, evolvesTo: 176 },
   { id: 161, name: 'Sentret', type: 'normal', stats: st(35, 46, 34, 35, 45, 20), evolvesTo: 162 },
   { id: 190, name: 'Aipom', type: 'normal', stats: st(55, 70, 55, 40, 55, 85), evolvesTo: 424, pickup: true },
   { id: 235, name: 'Smeargle', type: 'normal', stats: st(55, 20, 35, 20, 45, 75), copy: true },
   { id: 239, name: 'Elekid', type: 'electric', stats: st(45, 63, 37, 65, 55, 95), evolvesTo: 125, sleepless: true },
   { id: 238, name: 'Smoochum', type: 'psychic', type2: 'water', stats: st(45, 30, 15, 85, 65, 65), evolvesTo: 124 },
-  { id: 23, name: 'Ekans', type: 'poison', stats: st(35, 60, 44, 40, 54, 55), evolvesTo: 24 },
+  { id: 23, name: 'Ekans', type: 'poison', stats: st(35, 60, 44, 40, 54, 55), evolvesTo: 24, menace: true },
   { id: 96, name: 'Drowzee', type: 'psychic', stats: st(60, 48, 45, 43, 90, 42), sleepy: true, sleepless: true, evolvesTo: 97 },
   { id: 83, name: "Farfetch'd", type: 'flying', type2: 'normal', stats: st(52, 90, 55, 58, 62, 60), melee: true },
   { id: 220, name: 'Swinub', type: 'water', type2: 'rock', stats: st(50, 50, 40, 30, 30, 50), evolvesTo: 221, thickFat: true },
@@ -157,7 +158,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 436, name: 'Bronzor', type: 'rock', stats: st(57, 24, 86, 24, 86, 23), taunt: true, evolvesTo: 437 },
   { id: 438, name: 'Bonsly', type: 'rock', stats: st(50, 80, 95, 10, 45, 10), taunt: true, sturdy: true, evolvesTo: 185 },
   { id: 439, name: 'Mime Jr.', type: 'psychic', stats: st(20, 25, 45, 70, 90, 60), evolvesTo: 122 },
-  { id: 440, name: 'Happiny', type: 'normal', stats: st(100, 5, 5, 15, 65, 30), healer: true, evolvesTo: 113 },
+  { id: 440, name: 'Happiny', type: 'normal', stats: st(100, 5, 5, 15, 65, 30), healer: true, grace: true, evolvesTo: 113 },
   { id: 443, name: 'Gible', type: 'rock', stats: st(58, 70, 45, 40, 45, 42), melee: true, evolvesTo: 444 },
   { id: 446, name: 'Munchlax', type: 'normal', stats: st(135, 85, 40, 40, 85, 5), taunt: true, pickup: true, thickFat: true, evolvesTo: 143 },
   { id: 447, name: 'Riolu', type: 'fighting', stats: st(40, 70, 40, 35, 40, 60), melee: true, evolvesTo: 448 },

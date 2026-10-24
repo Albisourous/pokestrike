@@ -5976,6 +5976,8 @@ export class Battle {
   private foeAtk(e: Unit) {
     return e.def.stats.atk
       * (e.burnT > 0 ? 0.75 : 1) // a singed foe swings dulled — same burn rule the ball plays by
+      // intimidate on your bench: a living menace mon cowes the whole pack
+      * (this.players.some((m) => !m.dead && m.def.menace) ? 0.8 : 1)
       * (e.def.guts && (e.dotTicks > 0 || e.burnT > 0) ? 1.5 : 1)
       // pack alpha: a living leader rallies every packmate's hits — the
       // leader itself doesn't march under its own flag
@@ -6211,24 +6213,25 @@ export class Battle {
     // point abilities fire both ways: a melee hit on a static or poison-
     // point mon answers back — the lunge is the contact, orbs don't count
     if (src?.def.melee && !src.dead && dmg > 0) {
-      if (p.def.shock && this.rng() < 0.3) {
+      const grace = p.def.grace ? 2 : 1; // serene grace doubles the contact odds
+      if (p.def.shock && this.rng() < 0.3 * grace) {
         src.paraT = Math.max(src.paraT, 3);
         this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'STATIC!', t: 0.9, color: '#f8d030', big: false });
       }
-      if (p.def.toxic && this.rng() < 0.3) {
+      if (p.def.toxic && this.rng() < 0.3 * grace) {
         src.dotTicks = Math.max(src.dotTicks, 4);
         src.dotDmg = Math.max(src.dotDmg, Math.ceil(src.maxHp * 0.06));
         this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'POISON PT!', t: 0.9, color: '#a040a0', big: false });
       }
-      if (p.def.flame && this.rng() < 0.3) {
+      if (p.def.flame && this.rng() < 0.3 * grace) {
         src.burnT = Math.max(src.burnT, 5);
         this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'FLAME BODY!', t: 0.9, color: '#f08030', big: false });
       }
-      if (p.def.charm && this.rng() < 0.3) {
+      if (p.def.charm && this.rng() < 0.3 * grace) {
         src.asleep = true;
         this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'SMITTEN!', t: 0.9, color: '#f8b8d0', big: false });
       }
-      if (p.def.spore && this.rng() < 0.3) {
+      if (p.def.spore && this.rng() < 0.3 * grace) {
         const roll = this.rng();
         if (roll < 0.4) {
           src.dotTicks = Math.max(src.dotTicks, 4);
