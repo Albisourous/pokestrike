@@ -239,4 +239,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `79662cd` | battle | FORECAST — Castform's type wears the sky (weakness follows weather) | `git revert <this commit>` |
 | 2026-10-25 | `7790950` | battle | MOLD BREAKER — strikes and supers pierce Wonder Guard + Multiscale | `git revert <this commit>` |
 | 2026-10-25 | `50fe718` | battle | HEAL BLOCK — Gothitelle + Duosion stop team recovery while alive | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | DESTINY BOND — direct KO takes the striker down; hazards/catches stay safe | `git revert <this commit>` |
+| 2026-10-25 | `7133c30` | battle | DESTINY BOND — direct KO takes the striker down; hazards/catches stay safe | `git revert <this commit>` |
