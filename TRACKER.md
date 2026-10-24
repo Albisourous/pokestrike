@@ -132,3 +132,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `f88baa1` | battle | ARMORED wave mutator — the whole pack rolls plated, cloned defs keep the DB row clean | `git revert <this commit>` |
 | 2026-10-25 | `47e75e0` | battle | KO-shot chain feeds the catch roll — pinball kills tire the mon (+1.5%/link, cap +12%) | `git revert <this commit>` |
 | 2026-10-25 | `4f37bca` | battle | aim preview shows the matchup — SE/NVE badge rides the first-contact ring | `git revert <this commit>` |
+| 2026-10-25 | `verify` | battle | live pass — sleepy zZ, repel halo, gust chevrons, SE matchup badge all confirmed rendering mid-fight | n/a |
