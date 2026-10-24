@@ -212,6 +212,8 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `afcfcea` | battle | player-side GUTS — statused Machop/Shinx/etc hit 1.5×, ignore burn dip | `git revert <this commit>` |
 | 2026-10-25 | `aca9773` | battle | POISON HEAL — venom mends Shroomish players and Breloom foes | `git revert <this commit>` |
 | 2026-10-25 | `c577a07` | battle | SLEEPLESS — Insomnia/Vital Spirit mons shake off every lull | `git revert <this commit>` |
+| 2026-10-23 | `c9fa90b` | copy | player-facing text audit (humanizer pass): WEEK SIBLING desc drops dead "daily climbs" + `bumpStreaks(won, true)` revives the day chain — trophy reachable again | `git revert c9fa90b` |
+| 2026-10-23 | pending | copy | same audit, screens.ts hunks ride the pickup WIP: ult help drops negation-first "not a per-mon super", dex footer `tap to close` → `outside closes` (row taps open cards) | — |
 | 2026-10-25 | `78b98ad` | battle | PICKUP ability — scavenger mons nose out bag consumables post-wave | `git revert <this commit>` |
 | 2026-10-25 | `f33950e` | battle | THICK FAT half lava chip + LIMBER para-immune — player flags | `git revert <this commit>` |
 | 2026-10-25 | `dd86210` | battle | player-side STATIC/POISON PT + foe paralysis eats attacks | `git revert <this commit>` |
