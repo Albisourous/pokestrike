@@ -123,6 +123,7 @@ interface Unit {
   boostN: number; // SPEED BOOST foes: attacks launched — each re-arm winds it tighter
   armorN: number; // WEAK ARMOR: shell cracks — faster but softer each hit
   atkMul: number; // MOXIE: kills it causes sharpen its own attacks
+  lastStand: boolean; // final-gym ace: already burned its one refusal
 }
 
 interface FloatText {
@@ -921,6 +922,7 @@ export class Battle {
         boostN: 0,
         armorN: 0,
         atkMul: 1,
+        lastStand: false,
       });
     });
     // bag items field after the team does — persistent consumables earned
@@ -1630,6 +1632,7 @@ export class Battle {
       boostN: 0,
       armorN: 0,
       atkMul: 1,
+      lastStand: false,
     };
   }
 
@@ -3170,6 +3173,21 @@ export class Battle {
     }
     // styler loop wraps the target — every hit is another circle
     if (e.hp <= 0) {
+      // the champion's last stand: the final gym's ace refuses once —
+      // back up at ~45% and already enraged. The run's last fight earns
+      // a second wind the other gyms never get.
+      if (e.boss && !e.lastStand && this.depth >= FINAL_DEPTH) {
+        e.lastStand = true;
+        e.hp = Math.ceil(e.maxHp * 0.45);
+        e.enraged = true;
+        e.timer = Math.min(e.timer, 1.5);
+        this.pushText({ x: e.x, y: e.y - e.r - 58, text: 'LAST STAND!', t: 1.5, color: '#ffd84d', big: true });
+        this.burst(e.x, e.y, '#ffd84d', 22, 460, 1.3);
+        this.screenFlash('#ffd84d', 0.2);
+        this.addShake(8);
+        sfx('invade');
+        return;
+      }
       e.dead = true;
       // destiny bond: a direct hit that finishes the carrier drags the
       // striker down with it — hazards, splashes, catches and bump supers
