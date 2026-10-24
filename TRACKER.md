@@ -256,3 +256,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `fbc6562` | battle | ABSORB — player-side same-type hits heal; Deerling gets Sap Sipper | `git revert <this commit>` |
 | 2026-10-25 | `8643472` | battle | FILTER — Aggron/Camerupt blunt super-effective hits; Mold Breaker pierces | `git revert <this commit>` |
 | 2026-10-25 | `6d2702b` | battle | SNIPE — Seadra/Octillery mark your farthest mon, punishing the back row | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | UNAWARE — Quagsire/Bibarel shrug off your attack buffs | `git revert <this commit>` |

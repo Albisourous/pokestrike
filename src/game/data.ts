@@ -84,6 +84,7 @@ export interface SpeciesDef {
   veil?: Weather; // Sand Veil: strikes whiff a quarter of the time in its sky
   filter?: boolean; // Filter/Solid Rock: super-effective hits deal 70%
   snipe?: boolean; // Sniper: its attacks mark your farthest mon
+  unaware?: boolean; // Unaware: ignores the striker's attack buffs
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -397,7 +398,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 358, name: 'Chimecho', type: 'psychic', stats: st(75, 50, 80, 95, 90, 65) },
   { id: 368, name: 'Gorebyss', type: 'water', stats: st(55, 84, 105, 114, 75, 52) },
   { id: 221, name: 'Piloswine', type: 'water', type2: 'rock', stats: st(100, 100, 80, 70, 60, 50), evolvesTo: 473 },
-  { id: 400, name: 'Bibarel', type: 'normal', type2: 'water', stats: st(79, 85, 60, 55, 60, 71) },
+  { id: 400, name: 'Bibarel', type: 'normal', type2: 'water', stats: st(79, 85, 60, 55, 60, 71), unaware: true },
   { id: 401, name: 'Kricketot', type: 'poison', stats: st(37, 25, 41, 25, 41, 25), evolvesTo: 402 },
   { id: 402, name: 'Kricketune', type: 'poison', stats: st(77, 85, 51, 55, 51, 65) },
   { id: 412, name: 'Burmy', type: 'poison', stats: st(40, 29, 45, 29, 45, 36), evolvesTo: 413 },
@@ -734,7 +735,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 178, name: 'Xatu', type: 'flying', type2: 'psychic', stats: st(65, 75, 70, 95, 70, 95), blink: true },
   { id: 180, name: 'Flaaffy', type: 'electric', stats: st(70, 55, 55, 80, 60, 45), evolvesTo: 181 },
   { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true, huge: true },
-  { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },
+  { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35), unaware: true },
   { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true, guts: true },
   { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true, charge: true },
   { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true, hunter: true, moxie: true },

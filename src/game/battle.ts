@@ -3472,7 +3472,9 @@ export class Battle {
     // grip claw stacks its own ramp per wall bounce this shot
     const dmg = Math.round(
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
-        shooter.pow * this.physMult * this.shotPhys * spdMul * (1 + this.shotCombo * (0.1 + this.comboDmg + this.t('electric') * 0.04)) *
+        // unaware: the carrier reads the mon, not the buffs — protein and
+        // pow stacks wash off at its hide
+        (e.def.unaware ? 1 : shooter.pow) * this.physMult * (e.def.unaware ? 1 : this.shotPhys) * spdMul * (1 + this.shotCombo * (0.1 + this.comboDmg + this.t('electric') * 0.04)) *
         (1 + this.wallRamp * shooter.wallN) *
         (this.typePow[at] ?? 1) *
         this.shotStreak *
@@ -7816,6 +7818,7 @@ export class Battle {
       e.def.veil && 'sand veil — strikes whiff in a sandstorm',
       e.def.filter && 'filter — super-effective hits lose their edge',
       e.def.snipe && 'sniper — marks your farthest mon',
+      e.def.unaware && 'unaware — your attack buffs wash off at its hide',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9262,6 +9265,7 @@ export class Battle {
         u.def.veil && 'VEIL',
         u.def.filter && 'FILTER',
         u.def.snipe && 'SNIPE',
+        u.def.unaware && 'UNAWARE',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
