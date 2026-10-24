@@ -230,6 +230,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(e1.timer === 5, `dozing countdown never winds (${e1.timer})`);
   (b as any).hurt(e1, 10, '#fff');
   ok(e1.asleep === false && e1.hp === e1.maxHp - 14, `wake-up hit lands like a crit (${e1.maxHp} -> ${e1.hp})`);
+
+  // repel fields shove the ball off a head-on lane
+  e1.repelR = 90;
+  e1.x = arena.x + 300; e1.y = arena.y + 300;
+  const act = (b as any).active;
+  act.x = e1.x - 60; act.y = e1.y;
+  act.vx = 50; act.vy = 0;
+  const ax = act.x;
+  (b as any).stepShot(0.05);
+  ok(act.x < ax, `repel field shoves the ball back (${ax.toFixed(0)} -> ${act.x.toFixed(0)})`);
 }
 
 {

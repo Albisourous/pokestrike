@@ -22,6 +22,7 @@ export interface SpeciesDef {
   split?: boolean; // divides on KO — two half-size spawn take its place
   rage?: boolean; // under 30% HP it enrages — attack cycle drops a third
   sleepy?: boolean; // dozes until hit — timer frozen, +35% to hits on it
+  repel?: boolean; // a repulsor field shoves the ball away — bank in or burn through
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -211,7 +212,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 16, name: 'Pidgey', type: 'flying', type2: 'normal', stats: st(40, 45, 40, 35, 35, 56), melee: true, evolvesTo: 17 },
   { id: 41, name: 'Zubat', type: 'poison', type2: 'flying', stats: st(40, 45, 35, 30, 40, 55), melee: true, evolvesTo: 42 },
   { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20), evolvesTo: 75 },
-  { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45), evolvesTo: 82 },
+  { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45), repel: true, evolvesTo: 82 },
   { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90), evolvesTo: 64 },
   { id: 43, name: 'Oddish', type: 'grass', type2: 'poison', stats: st(45, 50, 55, 75, 65, 30), evolvesTo: 44 },
   { id: 92, name: 'Gastly', type: 'ghost', type2: 'poison', stats: st(30, 35, 30, 100, 35, 80), evolvesTo: 93 },
@@ -284,7 +285,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 240, name: 'Magby', type: 'fire', stats: st(45, 75, 37, 70, 55, 83), evolvesTo: 126 },
   { id: 265, name: 'Wurmple', type: 'grass', stats: st(45, 45, 35, 20, 30, 20), evolvesTo: [266, 268] },
   { id: 283, name: 'Surskit', type: 'water', stats: st(40, 30, 32, 50, 52, 65), evolvesTo: 284 },
-  { id: 299, name: 'Nosepass', type: 'rock', stats: st(30, 45, 135, 45, 90, 30), evolvesTo: 476 },
+  { id: 299, name: 'Nosepass', type: 'rock', stats: st(30, 45, 135, 45, 90, 30), repel: true, evolvesTo: 476 },
   { id: 302, name: 'Sableye', type: 'ghost', stats: st(50, 75, 75, 65, 65, 50), melee: true },
   { id: 313, name: 'Volbeat', type: 'grass', stats: st(65, 73, 55, 47, 75, 85) },
   { id: 314, name: 'Illumise', type: 'grass', stats: st(65, 47, 55, 73, 75, 85) },
@@ -483,7 +484,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 454, name: 'Toxicroak', type: 'poison', type2: 'fighting', stats: st(83, 106, 65, 86, 65, 85), melee: true, spiky: true },
   { id: 460, name: 'Abomasnow', type: 'grass', type2: 'water', stats: st(90, 92, 75, 92, 85, 60), taunt: true },
   { id: 461, name: 'Weavile', type: 'ghost', type2: 'water', stats: st(70, 120, 65, 45, 85, 125), pierce: true, melee: true },
-  { id: 462, name: 'Magnezone', type: 'electric', stats: st(70, 70, 115, 130, 90, 60), pierce: true },
+  { id: 462, name: 'Magnezone', type: 'electric', stats: st(70, 70, 115, 130, 90, 60), pierce: true, repel: true },
   { id: 463, name: 'Lickilicky', type: 'normal', stats: st(110, 85, 95, 80, 95, 50) },
   { id: 464, name: 'Rhyperior', type: 'rock', stats: st(115, 140, 130, 55, 55, 40), melee: true },
   { id: 465, name: 'Tangrowth', type: 'grass', stats: st(100, 100, 125, 110, 50, 50), regen: true },
@@ -497,7 +498,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 473, name: 'Mamoswine', type: 'water', type2: 'rock', stats: st(110, 130, 80, 70, 60, 80), melee: true },
   { id: 474, name: 'Porygon-Z', type: 'normal', stats: st(85, 80, 70, 135, 75, 90) },
   { id: 475, name: 'Gallade', type: 'psychic', type2: 'fighting', stats: st(68, 125, 65, 65, 115, 80), melee: true },
-  { id: 476, name: 'Probopass', type: 'rock', stats: st(60, 55, 145, 75, 150, 40), taunt: true },
+  { id: 476, name: 'Probopass', type: 'rock', stats: st(60, 55, 145, 75, 150, 40), taunt: true, repel: true },
   { id: 477, name: 'Dusknoir', type: 'ghost', stats: st(45, 100, 135, 65, 135, 45) },
   { id: 478, name: 'Froslass', type: 'ghost', type2: 'water', stats: st(70, 80, 70, 80, 70, 110), pierce: true },
   { id: 479, name: 'Rotom', type: 'electric', type2: 'ghost', stats: st(50, 50, 77, 95, 77, 91), cursed: true },
@@ -647,7 +648,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 73, name: 'Tentacruel', type: 'water', type2: 'poison', stats: st(80, 70, 65, 80, 120, 100), spiky: true },
   { id: 75, name: 'Graveler', type: 'rock', stats: st(55, 95, 115, 45, 45, 35), evolvesTo: 76 },
   { id: 78, name: 'Rapidash', type: 'fire', stats: st(65, 100, 70, 80, 80, 105) },
-  { id: 82, name: 'Magneton', type: 'electric', stats: st(50, 60, 95, 120, 70, 70), evolvesTo: 462 },
+  { id: 82, name: 'Magneton', type: 'electric', stats: st(50, 60, 95, 120, 70, 70), repel: true, evolvesTo: 462 },
   { id: 85, name: 'Dodrio', type: 'flying', type2: 'normal', stats: st(60, 110, 70, 60, 60, 110), melee: true },
   { id: 89, name: 'Muk', type: 'poison', stats: st(105, 105, 75, 65, 100, 50), melee: true },
   { id: 93, name: 'Haunter', type: 'ghost', type2: 'poison', stats: st(45, 50, 45, 115, 55, 95), pierce: true, evolvesTo: 94 },

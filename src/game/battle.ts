@@ -107,6 +107,7 @@ interface Unit {
   revives: number; // soul-link charges left — capped so a weak team can't hard-stall
   skull?: boolean; // skull-marked — the KO pays a bounty (MS skull icon)
   gravR: number; // gravity aura radius — the ball crawls inside the bubble
+  repelR: number; // repulsor field radius — the ball gets shoved off approach
   shieldN: number; // aegis wards — each stack negates one incoming hit
   airborne?: boolean; // SKY wave mod — the pack takes wing: creeps cross moats/boulders
   asleep?: boolean; // SLEEPY species — timer frozen till the first hit lands
@@ -887,6 +888,7 @@ export class Battle {
         shieldN: 0,
         revives: 0,
         gravR: 0,
+        repelR: 0,
         warpT: -9,
         boostT: -9,
       });
@@ -1529,6 +1531,7 @@ export class Battle {
       shieldA: s.def.shielded ? this.rng() * Math.PI * 2 : 0,
       regenT: 0,
       asleep: !!s.def.sleepy,
+      repelR: s.def.repel ? 90 : 0,
       shieldN: 0,
       revives: 0,
       gravR: 0,
@@ -2032,6 +2035,16 @@ export class Battle {
           const gd = Math.exp(-5 * h);
           u.vx *= gd;
           u.vy *= gd;
+        }
+      }
+      // repulsor fields: inside the rim the ball is shoved outward — bank
+      // around the face or burn speed punching straight through
+      for (const e of wave) {
+        if (e.dead || !e.repelR) continue;
+        const rd = Math.hypot(u.x - e.x, u.y - e.y);
+        if (rd > 0 && rd < e.repelR + u.r) {
+          u.vx += ((u.x - e.x) / rd) * 1600 * h;
+          u.vy += ((u.y - e.y) / rd) * 1600 * h;
         }
       }
       u.x += u.vx * h;
@@ -6133,6 +6146,25 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // repulsor fields — a pale gold halo, dashes streaming outward
+    for (const e of this.enemies) {
+      if (e.dead || !e.repelR) continue;
+      ctx.globalAlpha = 0.07 + Math.sin(this.time * 3) * 0.02;
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.repelR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = '#ffd84d';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 8]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.repelR, -this.time * 1.2, -this.time * 1.2 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+
     // soul-link tethers — the zombie pair must read before you shoot
     ctx.strokeStyle = '#a0e060';
     for (const e of this.enemies) {
@@ -7950,6 +7982,7 @@ export class Battle {
         u.def.regen && 'REGEN',
         u.def.split && 'SPLIT',
         u.def.rage && 'RAGE',
+        u.def.repel && 'REPEL',
       ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);
