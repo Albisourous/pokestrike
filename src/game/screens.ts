@@ -5,7 +5,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, hash } from './bg';
 import { drawTile } from './map';
-import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TILE_HALL, TILE_MART, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
+import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_LAB, TILE_HALL, TILE_MART, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_YB, FLOWER_PK, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -1207,9 +1207,10 @@ function drawTabBar(
   // the bar is a dark command strip — the menu window inverted
   uiWindow(ctx, TAB_BAR, { dark: true, rad: 18 });
 
-  void loadItem('poke-ball');
+  void loadItem('amulet-coin');
   void loadItem('badges/1');
-  void loadItem('star-piece');
+  void loadItem('master-ball');
+  void loadSprite(25);
 
   for (const cell of TAB_CELLS) {
     const on = cell.tab === active;
@@ -1259,15 +1260,17 @@ function drawTabBar(
     const tint = lit ? INK : '#8890b8';
     // press-pop — the just-tapped pill squashes for ~0.16s (stamp set in main)
     const pop = on ? Math.max(0, 1 - (t - tabPressT) / 0.16) : 0;
-    // every tab icon is a real asset: ball, gym badge, star piece, shiny boss,
-    // townsperson
+    // every tab icon is a real asset that says what the tab is: the amulet
+    // coin spends (SHOP), the badge climbs the gym ladder, the master ball is
+    // the day's big catch (RAID), a mon face owns the collection, a house is
+    // the town
     const spr =
-      cell.tab === 'mons'
-        ? itemSprite('poke-ball')
+      cell.tab === 'shop'
+        ? itemSprite('amulet-coin')
         : cell.tab === 'climb'
           ? itemSprite('badges/1')
-          : cell.tab === 'shop'
-            ? itemSprite('star-piece')
+          : cell.tab === 'raid'
+            ? itemSprite('master-ball')
             : undefined;
     ctx.save();
     ctx.globalAlpha = 0.55 + 0.45 * clamp01(grow); // the icon fades in with the pop
@@ -1280,16 +1283,14 @@ function drawTabBar(
     if (spr) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(spr, cx - 12, icY - 12, 24, 24);
-    } else if (cell.tab === 'town') drawNpc(ctx, 'mom_down_0', cx, icY + 12, 28);
-    else if (cell.tab === 'raid') {
-      // the tab's face is today's shiny boss itself
+    } else if (cell.tab === 'town') drawTile(ctx, TILE_TOWN, cx - 12, icY - 14, 24, 24);
+    else if (cell.tab === 'mons') {
       try {
-        drawShiny(ctx, raidPick().id, cx, icY, 26);
+        drawMon(ctx, 25, cx, icY, 26);
       } catch {
-        void loadSprite(raidPick().id);
+        ballGlyph(ctx, cx, icY, 1, tint);
       }
-    } else if (cell.tab === 'mons') ballGlyph(ctx, cx, icY, 1, tint);
-    else if (cell.tab === 'climb') peakGlyph(ctx, cx, icY, 1, tint);
+    } else if (cell.tab === 'climb') peakGlyph(ctx, cx, icY, 1, tint);
     else {
       ctx.fillStyle = tint;
       fillStar(ctx, cx, icY, 11);
