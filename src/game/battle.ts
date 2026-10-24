@@ -579,6 +579,8 @@ export class Battle {
   private wasGold = false; // edge detector for the in-zone tick
 
   private stopTimer = 0;
+  private slowT = 0; // crawl time this shot — gates the tap-to-skip hint
+  private skipHinted = false; // TAP TO SKIP pushed once per shot
   private shotT = 0; // launch timestamp — hard-caps a shot that never settles
   private enemyPhaseT = 0;
   // uids are per-battle on purpose: a session-global counter made orb wobble
@@ -1563,6 +1565,15 @@ export class Battle {
       this.lootDown = { ...p };
       return;
     }
+    if (this.phase === 'shot') {
+      // a dribbling ball doesn't deserve the wait — a tap settles it early.
+      // The gate keeps a live ricochet from eating accidental taps.
+      const a = this.active;
+      if (a.vx * a.vx + a.vy * a.vy < 260 * 260) {
+        this.endShot();
+        return;
+      }
+    }
     if (this.phase === 'map') {
       if (this.eventChoice) {
         // a ? with options swallows taps until the player picks one
@@ -1698,6 +1709,8 @@ export class Battle {
     this.shotHitN.clear();
     this.gustSounded = false;
     this.stopTimer = 0;
+    this.slowT = 0;
+    this.skipHinted = false;
     this.shotT = this.time;
     // STRIKE SHOT: launch with a recharged super and it fires from the
     // sling — MS's namesake. Spends the cooldown, erupts immediately.
@@ -2164,6 +2177,14 @@ export class Battle {
     } else {
       this.stopTimer = 0;
     }
+    // crawling but not settled — surface the tap-to-skip once it lingers
+    if (speed < 260 && !this.skipHinted) {
+      this.slowT += dt;
+      if (this.slowT > 1.2) {
+        this.skipHinted = true;
+        this.pushText({ x: this.arena.x + this.arena.w / 2, y: this.arena.y + this.arena.h - 60, text: 'TAP TO SKIP THE DRIBBLE', t: 1.3, color: '#8a90a8', big: false });
+      }
+    } else if (speed >= 260) this.slowT = 0;
     // failsafe: a ball caught orbiting a well or looping boost pads never
     // dips under settle speed — without this the run softlocks mid-shot
     if (this.phase === 'shot' && this.time - this.shotT > SHOT_MAX) this.endShot();
