@@ -2715,9 +2715,9 @@ export class Battle {
       e.dotTicks = Math.min(e.dotTicks + 1, 6);
       e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.08));
     }
-    // boss enrage: below 30% the leader fights dirty — attacks cycle a
-    // third faster, so the last stretch of a gym is the tense one
-    if (e.boss && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.3) {
+    // enrage: below 30% the boss fights dirty — and rage-flagged fodder
+    // goes berserk the same way. A wounded Mankey stops being fodder.
+    if ((e.boss || e.def.rage) && !e.enraged && e.hp > 0 && e.hp / e.maxHp < 0.3) {
       e.enraged = true;
       e.timer = Math.min(e.timer, 2);
       this.pushText({ x: e.x, y: e.y - e.r - 58, text: 'ENRAGED!', t: 1.2, color: '#ff6b6b', big: true });
@@ -7891,6 +7891,7 @@ export class Battle {
         u.def.spiky && 'SPIKY',
         u.def.regen && 'REGEN',
         u.def.split && 'SPLIT',
+        u.def.rage && 'RAGE',
       ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);

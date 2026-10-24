@@ -20,6 +20,7 @@ export interface SpeciesDef {
   spiky?: boolean; // contact bites the ball — grazing through the pack costs ~6% of the shooter's HP
   regen?: boolean; // mends ~3% HP a second — must be burst down, not whittled
   split?: boolean; // divides on KO — two half-size spawn take its place
+  rage?: boolean; // under 30% HP it enrages — attack cycle drops a third
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -222,7 +223,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 102, name: 'Exeggcute', type: 'grass', type2: 'psychic', stats: st(60, 40, 80, 60, 45, 40), split: true, evolvesTo: 103 },
   { id: 50, name: 'Diglett', type: 'rock', stats: st(10, 55, 25, 35, 45, 95), melee: true, evolvesTo: 51 },
   { id: 104, name: 'Cubone', type: 'rock', stats: st(50, 50, 95, 40, 50, 35), melee: true, evolvesTo: 105 },
-  { id: 56, name: 'Mankey', type: 'fighting', stats: st(40, 80, 35, 35, 45, 70), melee: true, evolvesTo: 57 },
+  { id: 56, name: 'Mankey', type: 'fighting', stats: st(40, 80, 35, 35, 45, 70), melee: true, rage: true, evolvesTo: 57 },
   { id: 88, name: 'Grimer', type: 'poison', stats: st(80, 80, 50, 40, 50, 25), melee: true, evolvesTo: 89 },
   { id: 109, name: 'Koffing', type: 'poison', stats: st(40, 65, 95, 60, 45, 35), evolvesTo: 110 },
   { id: 37, name: 'Vulpix', type: 'fire', stats: st(38, 41, 40, 50, 65, 65), evolvesTo: 38 },
@@ -241,7 +242,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 118, name: 'Goldeen', type: 'water', stats: st(45, 67, 60, 35, 50, 63), evolvesTo: 119 },
   { id: 79, name: 'Slowpoke', type: 'psychic', type2: 'water', stats: st(90, 65, 65, 40, 40, 15), evolvesTo: [80, 199] },
   { id: 108, name: 'Lickitung', type: 'normal', stats: st(90, 55, 75, 60, 75, 30), melee: true, evolvesTo: 463 },
-  { id: 128, name: 'Tauros', type: 'normal', stats: st(75, 100, 95, 40, 70, 110), melee: true },
+  { id: 128, name: 'Tauros', type: 'normal', stats: st(75, 100, 95, 40, 70, 110), melee: true, rage: true },
   { id: 137, name: 'Porygon', type: 'normal', stats: st(65, 60, 70, 85, 75, 40) },
   { id: 138, name: 'Omanyte', type: 'water', type2: 'rock', stats: st(35, 40, 100, 90, 55, 35), evolvesTo: 139 },
   { id: 140, name: 'Kabuto', type: 'rock', type2: 'water', stats: st(30, 80, 90, 55, 45, 55), evolvesTo: 141 },
@@ -377,7 +378,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 631, name: 'Heatmor', type: 'fire', stats: st(85, 97, 66, 105, 66, 65), taunt: true },
   { id: 632, name: 'Durant', type: 'grass', type2: 'rock', stats: st(58, 109, 112, 48, 48, 109) },
   { id: 150, name: 'Mewtwo', type: 'psychic', stats: st(106, 110, 90, 154, 90, 130) },
-  { id: 130, name: 'Gyarados', type: 'water', type2: 'flying', stats: st(95, 125, 79, 60, 100, 81) },
+  { id: 130, name: 'Gyarados', type: 'water', type2: 'flying', stats: st(95, 125, 79, 60, 100, 81), rage: true },
   { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80) },
   { id: 6, name: 'Charizard', type: 'fire', type2: 'flying', stats: st(78, 84, 78, 109, 85, 100) },
   { id: 3, name: 'Venusaur', type: 'grass', type2: 'poison', stats: st(80, 82, 83, 100, 100, 80), healer: true },
@@ -455,7 +456,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 321, name: 'Wailord', type: 'water', stats: st(170, 90, 45, 90, 45, 60), taunt: true },
   { id: 369, name: 'Relicanth', type: 'water', type2: 'rock', stats: st(100, 90, 130, 45, 65, 55), taunt: true },
   { id: 303, name: 'Mawile', type: 'fighting', stats: st(50, 85, 85, 55, 55, 50), melee: true },
-  { id: 335, name: 'Zangoose', type: 'normal', stats: st(73, 115, 60, 60, 60, 90), melee: true },
+  { id: 335, name: 'Zangoose', type: 'normal', stats: st(73, 115, 60, 60, 60, 90), melee: true, rage: true },
   { id: 389, name: 'Torterra', type: 'grass', type2: 'rock', stats: st(95, 109, 105, 75, 85, 56), taunt: true },
   { id: 392, name: 'Infernape', type: 'fire', type2: 'fighting', stats: st(76, 104, 71, 104, 71, 108), melee: true, pierce: true },
   { id: 395, name: 'Empoleon', type: 'water', stats: st(84, 86, 88, 111, 101, 60), taunt: true },
@@ -635,7 +636,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 51, name: 'Dugtrio', type: 'rock', stats: st(35, 100, 50, 50, 70, 120), melee: true },
   { id: 53, name: 'Persian', type: 'normal', stats: st(65, 70, 60, 65, 65, 115), pierce: true },
   { id: 55, name: 'Golduck', type: 'water', stats: st(80, 82, 78, 95, 80, 85) },
-  { id: 57, name: 'Primeape', type: 'fighting', stats: st(65, 105, 60, 60, 70, 95), melee: true },
+  { id: 57, name: 'Primeape', type: 'fighting', stats: st(65, 105, 60, 60, 70, 95), melee: true, rage: true },
   { id: 61, name: 'Poliwhirl', type: 'water', stats: st(65, 65, 65, 50, 50, 90), evolvesTo: [62, 186] },
   { id: 62, name: 'Poliwrath', type: 'water', stats: st(90, 95, 95, 70, 90, 70), melee: true },
   { id: 64, name: 'Kadabra', type: 'psychic', stats: st(40, 35, 30, 120, 70, 105), pierce: true, evolvesTo: 65 },
@@ -670,7 +671,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 180, name: 'Flaaffy', type: 'electric', stats: st(70, 55, 55, 80, 60, 45), evolvesTo: 181 },
   { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true },
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },
-  { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true },
+  { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true },
   { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true },
   { id: 262, name: 'Mightyena', type: 'ghost', stats: st(70, 90, 70, 60, 60, 70), melee: true },
   { id: 271, name: 'Lombre', type: 'grass', type2: 'water', stats: st(60, 50, 50, 60, 70, 50) },

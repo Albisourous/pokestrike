@@ -119,3 +119,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `401a063` | battle | regen-foe flag: Tangela/Tangrowth/Gastrodon/Slowking/Vileplume/Alomomola mend ~3%/s (green puff throttle + REGEN kw tag) — burst them, don't whittle; smoke asserts 82→87 over a sim second | `git revert <this commit>` |
 | 2026-10-25 | `abee525` | battle | split-foe flag: Exeggcute/Doduo/Combee/Klink/Weezing divide on KO into two 35%/0.7r kids (def-cloned, no recursion) + SPLIT kw tag; smoke 3→5 | `git revert <this commit>` |
 | 2026-10-25 | `c5f176d` | battle | aim ghost's rebound leg: first-contact ring now throws the ball's post-bounce direction off the foe's face — double-kiss plans pre-pull (pierce skips it) | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | rage-foe flag: Mankey/Primeape/Tauros/Gyarados/Zangoose/Ursaring enrage under 30% — reuses the boss fast-cycle; smoke asserts the snap | `git revert <this commit>` |

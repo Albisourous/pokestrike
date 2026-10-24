@@ -214,6 +214,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).hurt(e2, e2.hp, '#fff');
   ok((b as any).enemies.length === n0 + 2, `split KO adds two kids (${n0} -> ${(b as any).enemies.length})`);
   ok((b as any).enemies.filter((x: any) => !x.dead && x.def.split === undefined).length >= 2, 'split kids can\'t re-split');
+
+  // rage foes snap under 30% — wound one and it enrages
+  e1.def = { ...e1.def, rage: true };
+  e1.hp = e1.maxHp;
+  (b as any).hurt(e1, Math.ceil(e1.maxHp * 0.75), '#fff');
+  ok(e1.enraged === true, 'rage foe enrages under 30%');
 }
 
 {
