@@ -981,7 +981,8 @@ const SLOTS: [number, number][] = [
 // authored for readability only (the parser reads interior rows 1-9,
 // cols 1-7). Tile legend:
 //   0 floor · 2 rock slab (ball banks off) · 3 liquid moat · 4 mine
-//   S enemy spawn anchor · 1/E/P border dressing
+//   5 spike strip (chips ball, walls grounded foes) · 6 gust lane (wind
+//   pushes to mid) · 7 grass drag patch · S enemy spawn · 1/E/P dressing
 // Layouts [0..2] stay gentle — they're the stage-opener pool. Bosses
 // get ROOM_BOSS instead. Normalized arena coords as usual.
 export interface BlockDef {
@@ -1254,10 +1255,41 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // bramble — spike strips wall both flanks so grounded creeps can't hug
+  // the edges; the grass drag kills a dribbling bank dead mid-court
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '157000751',
+    '1S0S0S0S1',
+    '107000701',
+    '1S0S0S0S1',
+    '100000001',
+    '10S0S0S01',
+    '1000P0001',
+    '111111111',
+  ],
+  // crosswind — gust lanes converge on mid and mine teeth guard the
+  // junction; shots ride the wind in, then get shoved off the exits
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '160000061',
+    '160S0S061',
+    '102000201',
+    '160404061',
+    '1S00S00S1',
+    '160000061',
+    '10S0S0S01',
+    '1000P0001',
+    '111111111',
+  ],
 ];
-// the keep/pincer/saltire/moat-gate/sluice tail is the hard tier — it only
-// rides in from depth 2 (stage ~5 up); append new mid-pool rooms before it
-export const ROOM_HARD = 5;
+// the keep/pincer/saltire/moat-gate/sluice/bramble/crosswind tail is the
+// hard tier — it only rides in from depth 2 (stage ~5 up); append new
+// mid-pool rooms before it
+export const ROOM_HARD = 7;
 // Gym arenas stay open — the leader fight is the spectacle, so no
 // furniture; the entourage still enters on the anchor ring.
 export const ROOM_BOSS: string[] = [
@@ -1476,7 +1508,9 @@ export interface HazardSpawn {
 
 // Compile one room template into court furniture: '2' cells merge into
 // horizontal slabs, '3' themes into lava pools (volcano) or silence
-// ponds, '4' drops a mine, 'S' lists the wave's spawn anchors.
+// ponds, '4' drops a mine, '5' lays a spike strip (chips the ball, walls
+// grounded foes), '6' a gust lane pushing toward mid, '7' a drag patch,
+// 'S' lists the wave's spawn anchors.
 export function buildRoom(grid: string[], theme: Theme, rng: () => number): RoomDef {
   const blocks: BlockDef[] = [];
   const hazards: HazardSpawn[] = [];
@@ -1494,6 +1528,9 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
       const at = { nx: (c + 0.5) / 9, ny: (r + 0.5) / 11 };
       if (ch === '3') hazards.push({ kind: theme === 'volcano' ? 'lava' : 'static', ...at, r: 0.062 });
       else if (ch === '4') hazards.push({ kind: 'mine', ...at, r: 0.05 });
+      else if (ch === '5') hazards.push({ kind: 'spikes', ...at, r: 0.062 });
+      else if (ch === '6') hazards.push({ kind: 'gust', ...at, r: 0.062, dir: c < 4 ? 1 : -1 });
+      else if (ch === '7') hazards.push({ kind: 'grass', ...at, r: 0.062 });
       else if (ch === 'S') anchors.push(at);
     }
     if (run >= 0) blocks.push({ nx: run / 9, ny: r / 11, nw: (8 - run) / 9, nh: 1 / 11 });
@@ -1539,7 +1576,7 @@ for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
     const [c, r] = q.pop()!;
     const k = `${c},${r}`;
     if (seen.has(k) || c < 1 || c > 7 || r < 1 || r > 9) continue;
-    if (grid[r][c] !== '0' && grid[r][c] !== 'S' && grid[r][c] !== '4' && grid[r][c] !== 'P') continue;
+    if (grid[r][c] !== '0' && grid[r][c] !== 'S' && grid[r][c] !== '4' && grid[r][c] !== 'P' && grid[r][c] !== '6' && grid[r][c] !== '7') continue;
     seen.add(k);
     q.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
   }
@@ -1547,7 +1584,7 @@ for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
   for (let r = 1; r <= 9; r++)
     for (let c = 1; c <= 7; c++) {
       const ch = grid[r][c];
-      if (!'0234SP'.includes(ch)) throw new Error(`bad room tile '${ch}'`);
+      if (!'0234567SP'.includes(ch)) throw new Error(`bad room tile '${ch}'`);
       if (ch === 'S' && !seen.has(`${c},${r}`)) throw new Error('room anchor is walled in');
     }
 }
