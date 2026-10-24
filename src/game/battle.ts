@@ -6841,6 +6841,26 @@ export class Battle {
       ctx.fillText(tag, a.x + 10 + tw / 2, a.y + 61);
     }
 
+    // team-trait ribbon — the build-around payoff reads at a glance: a
+    // type-colored pip per active trait, tier numeral riding it
+    const liveTraits = [...this.traits.entries()].sort((x, y) => y[1] - x[1]);
+    if (liveTraits.length) {
+      const ty = a.y + 48 + (this.asc > 0 ? 22 : 0);
+      const tw2 = liveTraits.length * 24 + 8;
+      uiWindow(ctx, { x: a.x + 10, y: ty, w: tw2, h: 18 }, { dark: true, shadow: false, rad: 6 });
+      ctx.font = fontB(8);
+      ctx.textAlign = 'center';
+      liveTraits.forEach(([t, tier], i) => {
+        const cx = a.x + 10 + 14 + i * 24;
+        ctx.fillStyle = TYPE_COLOR[t];
+        ctx.beginPath();
+        ctx.arc(cx - 5, ty + 9, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.fillText(`${tier}`, cx + 6, ty + 12);
+      });
+    }
+
     // tapped-foe scout card — floats while aiming, a pull dismisses it
     if (this.inspect && this.phase === 'aim') this.drawInspect(ctx);
 

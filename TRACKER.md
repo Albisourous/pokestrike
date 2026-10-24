@@ -160,3 +160,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `7e8a854` | battle | last-shot arc echoes as a faint dotted line under the next aim | `git revert <this commit>` |
 | 2026-10-25 | `f69daeb` | battle | SOS callers summon weak kids instead of attacking — flood-capped at 7 | `git revert <this commit>` |
 | 2026-10-25 | `7607c1e` | battle | MIRROR blobs transform into the lead's typing + stats, keep own HP | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | active team traits read as a type-pip ribbon under the ASC chip | `git revert <this commit>` |
