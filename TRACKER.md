@@ -134,3 +134,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `4f37bca` | battle | aim preview shows the matchup — SE/NVE badge rides the first-contact ring | `git revert <this commit>` |
 | 2026-10-25 | `verify` | battle | live pass — sleepy zZ, repel halo, gust chevrons, SE matchup badge all confirmed rendering mid-fight | n/a |
 | 2026-10-25 | `db00306` | battle+data | RAIDER foes ditch the fight for field drops — dash at pickups, swallow in reach, mend on the bite; Meowth/Rattata/Zigzagoon lines | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | SLUMBER wave mutator — the whole pack dozes; assassinate quietly or wake a bad night | `git revert <this commit>` |

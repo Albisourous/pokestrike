@@ -1295,7 +1295,7 @@ export class Battle {
     let stormSpawn = false; // 'storm' lays two converging gust lanes
     let thornSpawn = false; // 'thorns' seeds a spike field mid-court
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < (this.allAffix ? 1 : 0.35)) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind', 'headwind', 'slick', 'storm', 'thorns', 'armored'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind', 'headwind', 'slick', 'storm', 'thorns', 'armored', 'slumber'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -1377,6 +1377,10 @@ export class Battle {
             e.shieldA = this.rng() * Math.PI * 2;
           }
           break;
+        case 'slumber': // the whole pack dozes — assassinate quietly, but
+          // splash and stray hits wake the neighbors into a bad night
+          for (const e of this.enemies) e.asleep = true;
+          break;
         case 'warded': // every foe carries a one-hit ward — the aegis bubble soak
           for (const e of this.enemies) e.shieldN = 1;
           break;
@@ -1393,7 +1397,7 @@ export class Battle {
           break;
       }
       this.curMod = mod;
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!', armored: 'THE PACK IS PLATED!' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!', armored: 'THE PACK IS PLATED!', slumber: 'THE PACK IS NAPPING…' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
