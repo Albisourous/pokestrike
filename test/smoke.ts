@@ -373,6 +373,22 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(mir.def.mirror && mir.def.stats.atk === lead.def.stats.atk && mir.def.stats.hp === 48, `mirror copies the lead's stats but keeps blob HP (atk ${mir.def.stats.atk})`);
   mir.dead = true; // test spawn, not a wave member
 
+  // fuse foes detonate on their countdown — the blast wounds both sides
+  e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
+  e.dead = false;
+  const pal = (b as any).players.find((p: any) => !p.dead);
+  pal.x = e.x + 60; pal.y = e.y; // park a mon inside the blast radius
+  const palHp0 = pal.hp;
+  const packMate = (b as any).enemies.find((f: any) => f !== e && !f.dead);
+  let packHp0 = -1;
+  if (packMate) { packMate.x = e.x + 50; packMate.y = e.y; packHp0 = packMate.hp; }
+  (b as any).fireEnemy(e);
+  ok(e.dead && pal.hp < palHp0, `fuse detonates — bomber dies, blast hits the team (${palHp0} -> ${pal.hp})`);
+  ok(packHp0 < 0 || (packMate.hp < packHp0 || packMate.dead), 'the pack takes the blast too');
+  e.def = { ...e.def, fuse: undefined };
+  e.dead = false;
+  e.hp = e.maxHp; // the test corpse can't leak into the volley check
+
   // volley fans the attack across the three nearest mons, weakened per orb
   e.def = { ...e.def, volley: true, melee: false, raider: false, healer: false };
   (b as any).pickups = [];

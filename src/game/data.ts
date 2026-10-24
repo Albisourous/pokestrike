@@ -27,6 +27,7 @@ export interface SpeciesDef {
   volley?: boolean; // fans its attack across the three nearest mons — one tank can't soak it
   summon?: boolean; // SOS caller: cries for a weak kid instead of attacking — kill it before the field floods
   mirror?: boolean; // Transform: copies the strongest standing mon's typing + stats (keeps its own HP)
+  fuse?: boolean; // self-destructs when its countdown ends — the blast hits BOTH sides; kill it fast or bait it into the pack
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -232,14 +233,14 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 104, name: 'Cubone', type: 'rock', stats: st(50, 50, 95, 40, 50, 35), melee: true, evolvesTo: 105 },
   { id: 56, name: 'Mankey', type: 'fighting', stats: st(40, 80, 35, 35, 45, 70), melee: true, rage: true, evolvesTo: 57 },
   { id: 88, name: 'Grimer', type: 'poison', stats: st(80, 80, 50, 40, 50, 25), melee: true, evolvesTo: 89 },
-  { id: 109, name: 'Koffing', type: 'poison', stats: st(40, 65, 95, 60, 45, 35), evolvesTo: 110 },
+  { id: 109, name: 'Koffing', type: 'poison', stats: st(40, 65, 95, 60, 45, 35), fuse: true, evolvesTo: 110 },
   { id: 37, name: 'Vulpix', type: 'fire', stats: st(38, 41, 40, 50, 65, 65), evolvesTo: 38 },
   { id: 58, name: 'Growlithe', type: 'fire', stats: st(55, 70, 45, 70, 50, 60), melee: true, evolvesTo: 59 },
   { id: 77, name: 'Ponyta', type: 'fire', stats: st(50, 85, 55, 65, 65, 90), evolvesTo: 78 },
   { id: 126, name: 'Magmar', type: 'fire', stats: st(65, 95, 57, 100, 85, 93), evolvesTo: 467 },
   { id: 218, name: 'Slugma', type: 'fire', type2: 'rock', stats: st(40, 40, 40, 70, 40, 20), evolvesTo: 219 },
   { id: 111, name: 'Rhyhorn', type: 'rock', stats: st(80, 85, 95, 30, 30, 25), melee: true, evolvesTo: 112 },
-  { id: 100, name: 'Voltorb', type: 'electric', stats: st(40, 30, 50, 55, 55, 100), evolvesTo: 101 },
+  { id: 100, name: 'Voltorb', type: 'electric', stats: st(40, 30, 50, 55, 55, 100), fuse: true, evolvesTo: 101 },
   { id: 170, name: 'Chinchou', type: 'electric', type2: 'water', stats: st(75, 38, 38, 56, 56, 67), evolvesTo: 171 },
   { id: 72, name: 'Tentacool', type: 'water', type2: 'poison', stats: st(40, 40, 35, 50, 100, 70), summon: true, evolvesTo: 73 },
   { id: 84, name: 'Doduo', type: 'flying', type2: 'normal', stats: st(35, 85, 45, 35, 35, 75), melee: true, split: true, evolvesTo: 85 },

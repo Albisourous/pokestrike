@@ -5726,6 +5726,27 @@ export class Battle {
       e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1);
       if (e.boss) {
         this.bossAttack(e);
+      } else if (e.def.fuse) {
+        // self-destruct: the countdown was a fuse. The blast hurts BOTH
+        // sides — kill it before the zero, or herd it next to its pack and
+        // let the explosion do your work. First in the chain: a bomber
+        // with a support role still answers its fuse.
+        this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'BOOM!', t: 1.1, color: '#ff9a30', big: true });
+        this.burst(e.x, e.y, '#ff9a30', 22, 460, 1.1);
+        this.waves.push({ x: e.x, y: e.y, r: 0, maxR: 130, t: 0.4, life: 0.4, color: '#ff9a30', hits: new Set() });
+        this.addShake(12);
+        this.screenFlash('#ff9a30', 0.25);
+        sfx('hit', 0.7);
+        for (const p of this.players) {
+          if (!p.dead && dist(e, p) < 130) {
+            this.damagePlayer(p, Math.round(physDamage(e.def.stats.atk, p.def.stats.def, 1, zapPower) * 1.8), e);
+          }
+        }
+        for (const f of [...this.enemies]) {
+          // the pack takes the blast too — hurt() may split, so snapshot
+          if (!f.dead && f !== e && dist(e, f) < 130) this.hurt(f, Math.max(20, Math.round(e.maxHp * 0.55)), '#ff9a30');
+        }
+        this.hurt(e, e.maxHp + 999, '#ff9a30'); // the bomber never survives its own fuse
       } else if (e.supp === 'aegis') {
         // guardians ward their weakest ally — the bubble eats one whole
         // hit, so the pack keeps its bodies until the ward is broken
@@ -7055,6 +7076,7 @@ export class Battle {
       e.def.volley && 'fans its shot across three',
       e.def.summon && 'calls for help instead of attacking',
       e.def.mirror && 'transformed into your strongest mon',
+      e.def.fuse && 'detonates at zero — blast hits everything',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8376,6 +8398,7 @@ export class Battle {
         u.def.volley && 'VOLLEY',
         u.def.summon && 'SOS',
         u.def.mirror && 'MIRROR',
+        u.def.fuse && 'FUSE',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
