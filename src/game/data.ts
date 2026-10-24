@@ -44,6 +44,7 @@ export interface SpeciesDef {
   scale?: boolean; // Multiscale: halved damage while at full HP — chip it open first
   guts?: boolean; // Guts: statused hits harder — don't poison it, kill it clean
   absorb?: PokeType; // Water/Volt Absorb, Flash Fire: same-type hits heal it
+  truant?: boolean; // Truant: fires then loafs a full round — huge stats, half the uptime
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -400,7 +401,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 621, name: 'Druddigon', type: 'flying', stats: st(77, 120, 90, 60, 90, 48), melee: true },
   { id: 626, name: 'Bouffalant', type: 'normal', stats: st(95, 110, 95, 40, 95, 55), melee: true },
   { id: 631, name: 'Heatmor', type: 'fire', stats: st(85, 97, 66, 105, 66, 65), taunt: true },
-  { id: 632, name: 'Durant', type: 'grass', type2: 'rock', stats: st(58, 109, 112, 48, 48, 109) },
+  { id: 632, name: 'Durant', type: 'grass', type2: 'rock', stats: st(58, 109, 112, 48, 48, 109), truant: true },
   { id: 132, name: 'Ditto', type: 'normal', stats: st(48, 48, 48, 48, 48, 48), mirror: true },
   { id: 150, name: 'Mewtwo', type: 'psychic', stats: st(106, 110, 90, 154, 90, 130) },
   { id: 130, name: 'Gyarados', type: 'water', type2: 'flying', stats: st(95, 125, 79, 60, 100, 81), rage: true },
@@ -410,7 +411,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 94, name: 'Gengar', type: 'ghost', type2: 'poison', stats: st(60, 65, 60, 130, 75, 110), pierce: true },
   { id: 125, name: 'Electabuzz', type: 'electric', stats: st(65, 83, 57, 95, 85, 105), shock: true },
   { id: 112, name: 'Rhydon', type: 'rock', stats: st(105, 130, 120, 45, 45, 40), melee: true },
-  { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true },
+  { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true, truant: true },
   { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60), split: true },
   { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },
 ];
@@ -447,7 +448,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 229, name: 'Houndoom', type: 'fire', type2: 'ghost', stats: st(75, 90, 50, 110, 80, 95) },
   { id: 257, name: 'Blaziken', type: 'fire', type2: 'fighting', stats: st(80, 120, 70, 110, 70, 80), melee: true },
   { id: 282, name: 'Gardevoir', type: 'psychic', type2: 'normal', stats: st(68, 65, 65, 125, 115, 80), healer: true },
-  { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true },
+  { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true, truant: true },
   { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true },
   { id: 350, name: 'Milotic', type: 'water', stats: st(95, 60, 79, 100, 125, 81), healer: true, charm: true },
   { id: 373, name: 'Salamence', type: 'flying', stats: st(95, 135, 80, 110, 80, 100), melee: true, menace: true },

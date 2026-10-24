@@ -636,6 +636,22 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.def = strikerDef;
   e.def = eDef;
 
+  // truant: the loaf re-arms at double the cooldown
+  const lazy = (b as any).enemies[1];
+  const lazyDef = lazy.def;
+  lazy.def = { ...lazyDef, truant: true };
+  lazy.dead = false;
+  lazy.hp = lazy.maxHp;
+  lazy.timer = 0;
+  (b as any).fireEnemy(lazy);
+  const lazyTimer = lazy.timer;
+  lazy.def = { ...lazyDef, truant: false };
+  lazy.timer = 0;
+  (b as any).fireEnemy(lazy);
+  const busyTimer = lazy.timer;
+  ok(lazyTimer > 0 && Math.abs(busyTimer * 2 - lazyTimer) < 0.001, `truant loafs a full round (${lazyTimer} vs ${busyTimer})`);
+  lazy.def = lazyDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

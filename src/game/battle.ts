@@ -5868,7 +5868,7 @@ export class Battle {
   private fireEnemy(e: Unit) {
     if (e.dead) return; // killed during the windup — the corpse stays down
     {
-      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1);
+      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1) * (e.def.truant ? 2 : 1);
       if (e.boss) {
         this.bossAttack(e);
       } else if (e.def.fuse) {
@@ -7290,6 +7290,7 @@ export class Battle {
       e.def.scale && 'multiscale — half damage while its hide is whole',
       e.def.guts && 'guts — hits 50% harder while statused',
       e.def.absorb && `${e.def.absorb} hits heal it — absorb`,
+      e.def.truant && 'truant — loiters a round after each attack',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8673,6 +8674,7 @@ export class Battle {
         u.def.scale && u.hp >= u.maxHp && 'SCALE',
         u.def.guts && 'GUTS',
         u.def.absorb && `DRAIN:${u.def.absorb.toUpperCase().slice(0, 3)}`,
+        u.def.truant && 'LOAF',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

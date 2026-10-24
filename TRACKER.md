@@ -187,3 +187,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | pending | perf | heavy-scene re-check: 2.46ms avg update+render — visual passes cheap | — |
 | 2026-10-25 | `f8130af` | battle | GUTS foes hit harder while statused — Heracross/Machamp/Ursaring | `git revert <this commit>` |
 | 2026-10-25 | `ffef951` | battle | DRAIN foes absorb their element — Vaporeon/Lanturn/Flareon | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | LOAF foes truant — Slaking/Durant fire every other round | `git revert <this commit>` |
