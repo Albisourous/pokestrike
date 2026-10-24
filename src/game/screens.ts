@@ -1351,7 +1351,7 @@ function drawTabBar(
 function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
   hatcherCard(ctx, t, freeNow);
 
-  // the day's −25% spark bargain — its own window so the deal sells itself
+  // the day's deep spark bargain — its own window so the deal sells itself
   const dr = DEAL_BTN;
   uiPanel(ctx, dr, `SPARK DEAL −${dealOff()}%`);
   const deal = dealPick();
@@ -1378,7 +1378,7 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.font = fontB(8);
   ctx.fillStyle = TYPE_COLOR[deal.type];
   ctx.fillText(deal.type2 ? `${deal.type} · ${deal.type2}`.toUpperCase() : deal.type.toUpperCase(), tx2, dr.y + 101);
-  // the price leads; the struck list price beside it makes the −25% land
+  // the price leads; the struck list price beside it makes the day's cut land
   const was = dustCost(deal);
   ctx.font = fontB(11);
   ctx.fillStyle = ACCENT;
@@ -3165,7 +3165,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
   ctx.textAlign = 'center';
   if (buy) {
     // sell it here — same dust price as the spark grid (deal species ride
-    // the −25% inside dealCost); the pill's the armed cue the grid wears
+    // the day's cut inside dealCost); the pill's the armed cue the grid wears
     const cost = dealCost(def);
     const afford = dust() >= cost;
     ctx.save();

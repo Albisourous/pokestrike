@@ -163,7 +163,7 @@ export const raidLvl = dayMemo((seed) => 36 + Math.floor(mulberry32(seed * 31 + 
 export const raidEscortN = (now = Date.now()) => 3 + (raidMod(now).id === 'horde' ? 2 : 0);
 
 // --- the daily deal ---------------------------------------------------------
-// One seeded rare+ spark mon at 25% off dust — the rotating reason to open
+// One seeded rare+ spark mon at a seeded deep cut off dust — the rotating reason to open
 // the exchange. Its own salt so it can't collide with the raid or rate-up.
 export const dealPick = dayMemo((seed) => {
   const rng = mulberry32(seed * 31 + 43);
