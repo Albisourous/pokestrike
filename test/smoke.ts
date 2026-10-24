@@ -192,6 +192,15 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const flankDmg = hp2 - e2.hp;
 
   ok(guardedDmg > 0 && flankDmg > 0 && flankDmg / guardedDmg > 3, `shell face glances, back flanks (${guardedDmg} -> ${flankDmg})`);
+
+  // barbed foes: contact chips the shooter's own HP
+  const e3 = (b as any).enemies[2] ?? e1;
+  e3.def = { ...e3.def, spiky: true, shielded: false };
+  const php = shooter.hp;
+  shooter.x = e3.x - e3.r - 10;
+  shooter.y = e3.y;
+  (b as any).strikeEnemy(shooter, e3);
+  ok(shooter.hp < php, `spiked contact chips the ball (${php} -> ${shooter.hp})`);
 }
 
 {

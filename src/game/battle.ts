@@ -3032,6 +3032,12 @@ export class Battle {
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     this.hurt(e, dmg, color, mult > 1 ? '!' : '');
+    // barbed foes bite back — every contact costs the ball a chip of its
+    // own HP, so sloppy grazes through the pack bleed the run
+    if (e.def.spiky && !shooter.dead) {
+      this.damagePlayer(shooter, Math.max(1, Math.round(shooter.maxHp * 0.06)), e);
+      this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SPIKED!', t: 0.7, color: '#f85888', big: false });
+    }
     // HEXED FIELD mutator: contacts envenom — the same doT poison supers stack
     if (this.curMod === 'hexed' && !e.dead) {
       e.dotTicks = Math.min(e.dotTicks + 2, 6);
@@ -7843,11 +7849,11 @@ export class Battle {
       ctx.fillStyle = u.timer <= 1 || u.enraged ? '#ff6b6b' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       // keyword flags — the counter-mechanics read at a glance
-      const kw = u.def.taunt ? 'MAGNET' : u.def.cursed ? 'CURSE' : u.def.shielded ? 'SHELL' : '';
+      const kw = u.def.taunt ? 'MAGNET' : u.def.cursed ? 'CURSE' : u.def.shielded ? 'SHELL' : u.def.spiky ? 'SPIKY' : '';
       if (kw) {
         ctx.font = font(8);
         ctx.strokeText(kw, u.x, u.y + u.r + 14);
-        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : '#9aa7b8';
+        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.shielded ? '#9aa7b8' : '#f85888';
         ctx.fillText(kw, u.x, u.y + u.r + 14);
       }
     } else {

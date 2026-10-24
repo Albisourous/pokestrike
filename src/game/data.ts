@@ -17,6 +17,7 @@ export interface SpeciesDef {
   taunt?: boolean; // while it lives, contact hits vs other enemies are blocked
   cursed?: boolean; // on KO, all ally supers gain +1 cooldown pip
   shielded?: boolean; // a shell face drifts the rim: front hits glance to 30%, back hits pay a 50% flank
+  spiky?: boolean; // contact bites the ball — grazing through the pack costs ~6% of the shooter's HP
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -303,7 +304,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 201, name: 'Unown', type: 'psychic', stats: st(48, 72, 48, 72, 48, 48) },
   { id: 203, name: 'Girafarig', type: 'psychic', type2: 'normal', stats: st(70, 80, 65, 90, 65, 85) },
   { id: 204, name: 'Pineco', type: 'poison', stats: st(50, 65, 90, 35, 35, 15), shielded: true, evolvesTo: 205 },
-  { id: 211, name: 'Qwilfish', type: 'water', type2: 'poison', stats: st(65, 95, 85, 55, 55, 85) },
+  { id: 211, name: 'Qwilfish', type: 'water', type2: 'poison', stats: st(65, 95, 85, 55, 55, 85), spiky: true },
   { id: 213, name: 'Shuckle', type: 'rock', stats: st(20, 10, 230, 10, 230, 5), taunt: true },
   { id: 215, name: 'Sneasel', type: 'ghost', type2: 'water', stats: st(55, 95, 55, 35, 75, 115), pierce: true, melee: true, evolvesTo: 461 },
   { id: 234, name: 'Stantler', type: 'normal', stats: st(73, 95, 62, 85, 65, 85) },
@@ -359,14 +360,14 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 538, name: 'Throh', type: 'fighting', stats: st(120, 100, 85, 30, 85, 45), melee: true },
   { id: 539, name: 'Sawk', type: 'fighting', stats: st(75, 125, 75, 30, 75, 85), melee: true },
   { id: 550, name: 'Basculin', type: 'water', stats: st(70, 92, 65, 80, 55, 98) },
-  { id: 556, name: 'Maractus', type: 'grass', stats: st(75, 86, 67, 106, 67, 60) },
+  { id: 556, name: 'Maractus', type: 'grass', stats: st(75, 86, 67, 106, 67, 60), spiky: true },
   { id: 561, name: 'Sigilyph', type: 'psychic', type2: 'flying', stats: st(72, 58, 80, 103, 80, 97), pierce: true },
   { id: 564, name: 'Tirtouga', type: 'water', type2: 'rock', stats: st(54, 78, 103, 53, 45, 22), evolvesTo: 565 },
   { id: 566, name: 'Archen', type: 'rock', type2: 'flying', stats: st(55, 112, 45, 74, 45, 70), evolvesTo: 567 },
   { id: 582, name: 'Vanillite', type: 'water', stats: st(36, 50, 50, 65, 60, 44), evolvesTo: 583 },
   { id: 588, name: 'Karrablast', type: 'grass', stats: st(50, 75, 45, 40, 45, 60), evolvesTo: 589 },
   { id: 594, name: 'Alomomola', type: 'water', stats: st(165, 75, 80, 40, 45, 65), healer: true },
-  { id: 597, name: 'Ferroseed', type: 'grass', type2: 'rock', stats: st(44, 50, 91, 24, 86, 10), evolvesTo: 598 },
+  { id: 597, name: 'Ferroseed', type: 'grass', type2: 'rock', stats: st(44, 50, 91, 24, 86, 10), spiky: true, evolvesTo: 598 },
   { id: 615, name: 'Cryogonal', type: 'water', stats: st(80, 50, 50, 95, 135, 105), pierce: true },
   { id: 618, name: 'Stunfisk', type: 'rock', type2: 'electric', stats: st(109, 66, 84, 81, 99, 32), taunt: true },
   { id: 621, name: 'Druddigon', type: 'flying', stats: st(77, 120, 90, 60, 90, 48), melee: true },
@@ -475,7 +476,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 448, name: 'Lucario', type: 'fighting', stats: st(70, 110, 70, 115, 70, 90), melee: true, pierce: true },
   { id: 450, name: 'Hippowdon', type: 'rock', stats: st(108, 112, 118, 68, 72, 47), taunt: true },
   { id: 452, name: 'Drapion', type: 'poison', type2: 'ghost', stats: st(70, 90, 110, 60, 75, 95), melee: true },
-  { id: 454, name: 'Toxicroak', type: 'poison', type2: 'fighting', stats: st(83, 106, 65, 86, 65, 85), melee: true },
+  { id: 454, name: 'Toxicroak', type: 'poison', type2: 'fighting', stats: st(83, 106, 65, 86, 65, 85), melee: true, spiky: true },
   { id: 460, name: 'Abomasnow', type: 'grass', type2: 'water', stats: st(90, 92, 75, 92, 85, 60), taunt: true },
   { id: 461, name: 'Weavile', type: 'ghost', type2: 'water', stats: st(70, 120, 65, 45, 85, 125), pierce: true, melee: true },
   { id: 462, name: 'Magnezone', type: 'electric', stats: st(70, 70, 115, 130, 90, 60), pierce: true },
@@ -639,7 +640,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 67, name: 'Machoke', type: 'fighting', stats: st(80, 100, 70, 50, 60, 45), melee: true, evolvesTo: 68 },
   { id: 70, name: 'Weepinbell', type: 'grass', type2: 'poison', stats: st(65, 90, 50, 85, 45, 55), evolvesTo: 71 },
   { id: 71, name: 'Victreebel', type: 'grass', type2: 'poison', stats: st(80, 105, 65, 100, 70, 70), melee: true },
-  { id: 73, name: 'Tentacruel', type: 'water', type2: 'poison', stats: st(80, 70, 65, 80, 120, 100) },
+  { id: 73, name: 'Tentacruel', type: 'water', type2: 'poison', stats: st(80, 70, 65, 80, 120, 100), spiky: true },
   { id: 75, name: 'Graveler', type: 'rock', stats: st(55, 95, 115, 45, 45, 35), evolvesTo: 76 },
   { id: 78, name: 'Rapidash', type: 'fire', stats: st(65, 100, 70, 80, 80, 105) },
   { id: 82, name: 'Magneton', type: 'electric', stats: st(50, 60, 95, 120, 70, 70), evolvesTo: 462 },
@@ -691,7 +692,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 12, name: 'Butterfree', type: 'flying', stats: st(60, 45, 50, 90, 80, 70) },
   { id: 14, name: 'Kakuna', type: 'poison', stats: st(45, 25, 50, 25, 25, 35), shielded: true, evolvesTo: 15 },
   { id: 15, name: 'Beedrill', type: 'poison', stats: st(65, 90, 40, 45, 80, 75), melee: true },
-  { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true },
+  { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true, spiky: true },
   { id: 30, name: 'Nidorina', type: 'poison', stats: st(70, 62, 67, 55, 55, 56), evolvesTo: 31 },
   { id: 31, name: 'Nidoqueen', type: 'poison', type2: 'rock', stats: st(90, 92, 87, 75, 85, 76), melee: true },
   { id: 87, name: 'Dewgong', type: 'water', stats: st(90, 70, 80, 70, 95, 70) },
