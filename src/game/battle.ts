@@ -774,6 +774,7 @@ export class Battle {
   eggIn = 0; // stops until the egg hatches — the ? pool's slow payoff
   eggJustLaid = false; // the laying arrival doesn't consume a tick
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
+  private sweepStreak = 0; // consecutive one-shot clears — the streak pays
   private splashing = false; // psychic trait re-entry guard
   private mapCam = -1; // island-row the viewport starts at — lerps toward mapCamTarget
   private mapMsg = ''; // toast line on the region map (resolved events, egg ticks)
@@ -4328,10 +4329,15 @@ export class Battle {
     this.addPunch(0.08);
     this.addShake(9);
     this.burst(this.arena.x + this.arena.w / 2, this.arena.y + this.arena.h / 2, '#ffd84d', 26, 540, 1.2);
-    // the clear calls itself out — same ribbon the wave intro rides in on
+    // the clear calls itself out — same ribbon the wave intro rides in on;
+    // back-to-back one-shot clears streak into a score bonus
+    this.sweepStreak = this.waveShots === 1 ? this.sweepStreak + 1 : 0;
+    if (this.sweepStreak > 1) this.score += 60 * this.sweepStreak;
     this.waveSpecial =
       (this.waveIndex + 1 >= this.waveCount ? 'STAGE CLEAR!' : 'WAVE CLEAR!') +
-      (this.waveShots === 1 ? ' · SWEEP!' : ` · ${this.waveShots} SHOTS`);
+      (this.waveShots === 1
+        ? this.sweepStreak > 1 ? ` · SWEEP x${this.sweepStreak}!` : ' · SWEEP!'
+        : ` · ${this.waveShots} SHOTS`);
     this.waveBanner = 1.1;
     sfx('wave');
     // a raid is the whole fight — the win beat is short and never rolls the

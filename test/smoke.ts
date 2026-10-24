@@ -256,6 +256,21 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(act2.hzT > -9, 'non-fire ball takes the lava chip');
 }
 
+// sweep streaks pay — back-to-back one-shot clears escalate the callout
+{
+  const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(4));
+  (b as any).spawnWave(0);
+  (b as any).waveShots = 1;
+  (b as any).waveCleared();
+  ok((b as any).sweepStreak === 1, 'first sweep starts the streak');
+  const s0 = (b as any).score;
+  (b as any).phase = 'aim'; // the board consumed the reward between waves
+  (b as any).rewardPending = false;
+  (b as any).waveShots = 1;
+  (b as any).waveCleared();
+  ok((b as any).sweepStreak === 2 && (b as any).score - s0 >= 120, `sweep x2 pays the streak bonus (${s0} -> ${(b as any).score})`);
+}
+
 {
   const b = new Battle(arena, team(), makeStage(11, 'T'), mulberry32(2));
   (b as any).spawnWave(0);
