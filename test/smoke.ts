@@ -100,6 +100,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(hpB > hpA, `ascension scales enemy hp (${hpA} -> ${hpB})`);
 }
 
+// --- weather summoners own the sky ----------------------------------------
+{
+  const stage = makeStage(7, 'Test');
+  const caller = new Battle(arena, team(), stage, mulberry32(1));
+  const s0 = (caller as any).stage.waves[0][0];
+  s0.def = { ...s0.def, skyFor: 'sun' as const };
+  (caller as any).spawnWave(0);
+  ok((caller as any).weather === 'sun', 'drought caller brings its own sky');
+  ok(String((caller as any).waveSpecial ?? '').includes('DROUGHT'), 'the banner names the sky it brought');
+}
+
 // --- ascension modifiers: named tiers on top of the bulk ------------------
 {
   const base = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(1));

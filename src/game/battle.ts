@@ -1204,6 +1204,14 @@ export class Battle {
     // STORM: the sky never clears — every other wave rolls the pool too.
     if (this.waveHadGym) this.weather = WEATHER_FOR[this.theme];
     else if (this.asc >= 8) this.weather = WEATHER_FOR[THEMES[Math.floor(this.rng() * THEMES.length)]];
+    // weather summoners own the sky — a drought caller's arrival overrules
+    // whatever rolled, and its banner names the sky it brought
+    const caller = spawns.find((s) => s.def.skyFor);
+    if (caller) {
+      this.weather = caller.def.skyFor ?? null;
+      const skyLabel = { sun: 'DROUGHT CALLER!', rain: 'DRIZZLE CALLER!', sand: 'SAND STREAM!', wind: 'AIR LOCK!' }[caller.def.skyFor as Weather];
+      this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${skyLabel}` : skyLabel;
+    }
     this.inRival = false;
     // ASC 1 ROAMERS: echoes and invades hunt twice as hard. ASC 9 TAG
     // TEAM: the echo is owed one guaranteed visit this climb.
@@ -7420,6 +7428,7 @@ export class Battle {
       e.def.pressure && 'pressure — supers charge at half speed while it lives',
       e.def.beam && 'signal beam — locks a lane, then burns the channel',
       e.def.trap && 'arena trap — the ball can\'t flee its neighborhood',
+      e.def.skyFor && `summons ${e.def.skyFor} — its sky rides the whole wave`,
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8810,6 +8819,7 @@ export class Battle {
         u.def.pressure && 'PRESSURE',
         u.def.beam && 'BEAM',
         u.def.trap && 'TRAP',
+        u.def.skyFor && 'SKY',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

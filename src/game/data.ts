@@ -1,4 +1,4 @@
-import type { PokeType } from './types';
+import type { PokeType, Weather } from './types';
 import type { Stats } from './stats';
 import type { Theme } from './bg';
 import { THEMES } from './bg';
@@ -51,6 +51,7 @@ export interface SpeciesDef {
   pressure?: boolean; // Pressure: while it lives, bump supers charge at half speed
   beam?: boolean; // Signal Beam: locks a lane, telegraphs, then burns the channel
   trap?: boolean; // Arena Trap: the ball can't flee its neighborhood while it lives
+  skyFor?: Weather; // Drought/Drizzle/Sand Stream: its arrival summons this sky
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -320,7 +321,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 314, name: 'Illumise', type: 'grass', stats: st(65, 47, 55, 73, 75, 85) },
   { id: 315, name: 'Roselia', type: 'grass', stats: st(50, 60, 45, 100, 80, 65), healer: true, evolvesTo: 407 },
   { id: 322, name: 'Numel', type: 'fire', type2: 'rock', stats: st(60, 60, 40, 65, 45, 35), evolvesTo: 323 },
-  { id: 324, name: 'Torkoal', type: 'fire', stats: st(70, 85, 140, 85, 70, 20), sturdy: true },
+  { id: 324, name: 'Torkoal', type: 'fire', stats: st(70, 85, 140, 85, 70, 20), sturdy: true, skyFor: 'sun' },
   { id: 337, name: 'Lunatone', type: 'psychic', type2: 'rock', stats: st(90, 55, 65, 95, 85, 70), pierce: true },
   { id: 338, name: 'Solrock', type: 'psychic', type2: 'rock', stats: st(90, 95, 85, 55, 65, 70), melee: true },
   { id: 343, name: 'Baltoy', type: 'rock', type2: 'psychic', stats: st(40, 40, 55, 40, 70, 55), evolvesTo: 344 },
@@ -461,14 +462,14 @@ export const ELITES: SpeciesDef[] = [
   { id: 121, name: 'Starmie', type: 'water', type2: 'psychic', stats: st(60, 75, 85, 100, 85, 115), pierce: true },
   { id: 122, name: 'Mr. Mime', type: 'psychic', stats: st(40, 45, 65, 100, 120, 90), taunt: true },
   { id: 127, name: 'Pinsir', type: 'fighting', stats: st(65, 125, 100, 55, 70, 85), melee: true },
-  { id: 186, name: 'Politoed', type: 'water', stats: st(90, 75, 75, 90, 100, 70), healer: true },
+  { id: 186, name: 'Politoed', type: 'water', stats: st(90, 75, 75, 90, 100, 70), healer: true, skyFor: 'rain' },
   { id: 202, name: 'Wobbuffet', type: 'psychic', stats: st(190, 33, 58, 33, 58, 33), taunt: true },
   { id: 210, name: 'Granbull', type: 'normal', stats: st(90, 120, 75, 60, 60, 45), melee: true },
   { id: 214, name: 'Heracross', type: 'fighting', stats: st(80, 125, 75, 40, 95, 85), melee: true, guts: true },
   { id: 230, name: 'Kingdra', type: 'water', type2: 'flying', stats: st(75, 95, 95, 95, 95, 85), pierce: true },
   { id: 241, name: 'Miltank', type: 'normal', stats: st(95, 80, 105, 40, 70, 100), healer: true },
   { id: 242, name: 'Blissey', type: 'normal', stats: st(255, 10, 10, 75, 135, 55), healer: true },
-  { id: 248, name: 'Tyranitar', type: 'rock', type2: 'ghost', stats: st(100, 134, 110, 95, 100, 61), melee: true },
+  { id: 248, name: 'Tyranitar', type: 'rock', type2: 'ghost', stats: st(100, 134, 110, 95, 100, 61), melee: true, skyFor: 'sand' },
   { id: 295, name: 'Exploud', type: 'normal', stats: st(104, 91, 63, 91, 73, 68) },
   { id: 336, name: 'Seviper', type: 'poison', stats: st(73, 100, 60, 100, 60, 65), melee: true },
   { id: 359, name: 'Absol', type: 'ghost', stats: st(65, 130, 60, 75, 60, 75), melee: true },
@@ -509,7 +510,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 442, name: 'Spiritomb', type: 'ghost', stats: st(50, 92, 108, 92, 108, 35), cursed: true },
   { id: 445, name: 'Garchomp', type: 'rock', type2: 'flying', stats: st(108, 130, 95, 80, 85, 102), melee: true, pierce: true },
   { id: 448, name: 'Lucario', type: 'fighting', stats: st(70, 110, 70, 115, 70, 90), melee: true, pierce: true },
-  { id: 450, name: 'Hippowdon', type: 'rock', stats: st(108, 112, 118, 68, 72, 47), taunt: true },
+  { id: 450, name: 'Hippowdon', type: 'rock', stats: st(108, 112, 118, 68, 72, 47), taunt: true, skyFor: 'sand' },
   { id: 452, name: 'Drapion', type: 'poison', type2: 'ghost', stats: st(70, 90, 110, 60, 75, 95), melee: true },
   { id: 454, name: 'Toxicroak', type: 'poison', type2: 'fighting', stats: st(83, 106, 65, 86, 65, 85), melee: true, spiky: true },
   { id: 460, name: 'Abomasnow', type: 'grass', type2: 'water', stats: st(90, 92, 75, 92, 85, 60), taunt: true },
@@ -658,7 +659,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 26, name: 'Raichu', type: 'electric', stats: st(60, 90, 55, 90, 80, 110), pierce: true },
   { id: 33, name: 'Nidorino', type: 'poison', stats: st(61, 72, 57, 55, 55, 65), melee: true, evolvesTo: 34 },
   { id: 36, name: 'Clefable', type: 'normal', stats: st(95, 70, 73, 95, 90, 60), healer: true },
-  { id: 38, name: 'Ninetales', type: 'fire', stats: st(73, 76, 75, 81, 100, 100), burn: true },
+  { id: 38, name: 'Ninetales', type: 'fire', stats: st(73, 76, 75, 81, 100, 100), burn: true, skyFor: 'sun' },
   { id: 40, name: 'Wigglytuff', type: 'normal', stats: st(140, 70, 45, 85, 50, 45), healer: true },
   { id: 42, name: 'Golbat', type: 'poison', type2: 'flying', stats: st(75, 80, 70, 65, 75, 90), melee: true, evolvesTo: 169 },
   { id: 44, name: 'Gloom', type: 'grass', type2: 'poison', stats: st(60, 65, 70, 85, 75, 40), evolvesTo: [45, 182] },

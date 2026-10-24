@@ -2417,6 +2417,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'PRESSURE halves your super charge — legends bend the economy',
       'BEAM foes lock a lane — the dashed line telegraphs the burn',
       'TRAP foes leash the court — the ball can\'t flee while they live',
+      'SKY callers summon weather — Torkoal brings the drought',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
