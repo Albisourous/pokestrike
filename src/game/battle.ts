@@ -8310,6 +8310,7 @@ export class Battle {
             hitFoe = false;
           }
         }
+        let foeHit: Unit | null = null;
         for (const e of this.enemies) {
           if (e.dead) continue;
           const R = u.r + e.r;
@@ -8323,13 +8324,23 @@ export class Battle {
           if (t > 0 && t < best) {
             best = t;
             hitFoe = true;
+            foeHit = e;
           }
         }
         if (best < Infinity) {
           const hx = u.x + dir.x * best;
           const hy = u.y + dir.y * best;
           ctx.globalAlpha = 0.4;
-          ctx.strokeStyle = hitFoe ? '#ffd84d' : color;
+          // a shelled opening target colors by outcome — red the plate,
+          // bright the flank — so the bank angle is planned, not guessed
+          let foeColor = '#ffd84d';
+          if (hitFoe && foeHit?.def.shielded) {
+            const a2 = Math.atan2(hy - foeHit.y, hx - foeHit.x);
+            let dd = Math.abs(a2 - foeHit.shieldA) % (Math.PI * 2);
+            if (dd > Math.PI) dd = Math.PI * 2 - dd;
+            foeColor = dd < 0.85 ? '#ff6b6b' : dd > 2.4 ? '#9df0ff' : '#ffd84d';
+          }
+          ctx.strokeStyle = hitFoe ? foeColor : color;
           ctx.lineWidth = 2;
           ctx.setLineDash([4, 5]);
           ctx.beginPath();
