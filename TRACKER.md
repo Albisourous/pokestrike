@@ -210,3 +210,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `d7fdddb` | battle | HUGE POWER — Azumarill/Medicham deal 2× contact (first player flag) | `git revert <this commit>` |
 | 2026-10-25 | `1c52088` | battle | player-side STURDY — Onix/Bonsly hang on natively + STURDY! pop | `git revert <this commit>` |
 | 2026-10-25 | `afcfcea` | battle | player-side GUTS — statused Machop/Shinx/etc hit 1.5×, ignore burn dip | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | POISON HEAL — venom mends Shroomish players and Breloom foes | `git revert <this commit>` |

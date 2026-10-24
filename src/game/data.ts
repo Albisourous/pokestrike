@@ -58,6 +58,7 @@ export interface SpeciesDef {
   charge?: boolean; // stampede: paws a beat, then rams across the court at a mon
   prank?: boolean; // Prankster: its opening attack comes early
   huge?: boolean; // Huge Power / Pure Power: doubled contact damage
+  pheal?: boolean; // Poison Heal: venom ticks mend instead of bleed
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -95,7 +96,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 183, name: 'Marill', type: 'water', type2: 'normal', stats: st(70, 20, 50, 20, 50, 40), healer: true, evolvesTo: 184 },
   { id: 194, name: 'Wooper', type: 'water', type2: 'rock', stats: st(55, 45, 45, 25, 25, 15), evolvesTo: 195 },
   { id: 280, name: 'Ralts', type: 'psychic', type2: 'normal', stats: st(28, 25, 25, 45, 35, 40), evolvesTo: 281 },
-  { id: 285, name: 'Shroomish', type: 'grass', stats: st(60, 40, 60, 40, 60, 35), evolvesTo: 286 },
+  { id: 285, name: 'Shroomish', type: 'grass', stats: st(60, 40, 60, 40, 60, 35), evolvesTo: 286, pheal: true },
   { id: 293, name: 'Whismur', type: 'normal', stats: st(64, 51, 23, 51, 23, 28), evolvesTo: 294 },
   { id: 304, name: 'Aron', type: 'rock', stats: st(50, 70, 100, 40, 40, 30), evolvesTo: 305 },
   { id: 328, name: 'Trapinch', type: 'rock', stats: st(45, 100, 45, 45, 45, 10), evolvesTo: 329 },
@@ -717,7 +718,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 274, name: 'Nuzleaf', type: 'grass', type2: 'ghost', stats: st(70, 70, 40, 60, 40, 60) },
   { id: 277, name: 'Swellow', type: 'flying', type2: 'normal', stats: st(60, 85, 60, 50, 50, 125), melee: true },
   { id: 281, name: 'Kirlia', type: 'psychic', type2: 'normal', stats: st(38, 35, 35, 65, 55, 50), sync: true, evolvesTo: [282, 475] },
-  { id: 286, name: 'Breloom', type: 'grass', stats: st(60, 130, 80, 60, 60, 70), melee: true, spore: true },
+  { id: 286, name: 'Breloom', type: 'grass', stats: st(60, 130, 80, 60, 60, 70), melee: true, spore: true, pheal: true },
   { id: 294, name: 'Loudred', type: 'normal', stats: st(84, 71, 43, 71, 43, 48) },
   { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },
   { id: 305, name: 'Lairon', type: 'rock', stats: st(60, 90, 140, 50, 50, 40), evolvesTo: 306 },

@@ -5671,7 +5671,9 @@ export class Battle {
       }
       if (e.dotTicks > 0) {
         e.dotTicks--;
-        this.hurt(e, e.dotDmg, '#a040a0');
+        // poison heal on a foe: your venom feeds it — burn it down instead
+        if (e.def.pheal) e.hp = Math.min(e.maxHp, e.hp + e.dotDmg);
+        else this.hurt(e, e.dotDmg, '#a040a0');
       }
     }
     // venom works both ways — a poisoned mon bleeds out the same ticks,
@@ -5679,7 +5681,10 @@ export class Battle {
     for (const p of this.players) {
       if (p.dotTicks > 0 && !p.dead) {
         p.dotTicks--;
-        this.damagePlayer(p, p.dotDmg);
+        // poison heal: the venom feeds it — Breloom-line turns the sting
+        // into a steady mend
+        if (p.def.pheal) p.hp = Math.min(p.maxHp, p.hp + p.dotDmg);
+        else this.damagePlayer(p, p.dotDmg);
       }
       if (p.burnT > 0 && !p.dead) {
         p.burnT--;
@@ -7498,6 +7503,7 @@ export class Battle {
       e.def.shed && 'shed skin — may slough off every ailment each tick',
       e.def.charge && 'stampede — paws the ground, then rams across the court',
       e.def.prank && 'prankster — its opening attack comes early',
+      e.def.pheal && 'poison heal — your venom mends it; burn it instead',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8907,6 +8913,7 @@ export class Battle {
         u.def.shed && 'SHED',
         u.def.charge && 'CHARGE',
         u.def.prank && 'PRANK',
+        u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

@@ -2424,6 +2424,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'SHED foes shrug off poison, burns and sleep — burst them',
       'CHARGE foes paw the ground, then ram — shove them off-line',
       'PRANK foes strike early — expect an ambush opener',
+      'P-HEAL foes mend off your poison — burn them instead',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
@@ -2999,6 +3000,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.huge && 'HUGE POWER — 2× CONTACT',
     def.sturdy && 'STURDY — SURVIVES ONE HIT',
     def.guts && 'GUTS — STATUS FEEDS IT',
+    def.pheal && 'POISON HEALS IT',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;
