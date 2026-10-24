@@ -331,6 +331,15 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).stepEnemyMovement(0.5);
   ok(e.x > gx0 + 10, `gust lane sweeps the standing foe (${gx0.toFixed(0)} -> ${e.x.toFixed(0)})`);
 
+  // blink foes teleport on a cycle — the hop lands somewhere else
+  e.def = { ...e.def, blink: true, sleepy: false };
+  e.asleep = false;
+  e.blinkT = 0.01;
+  const bx0 = e.x, by0 = e.y;
+  (b as any).hazards = [];
+  (b as any).stepEnemyMovement(0.05);
+  ok(Math.hypot(e.x - bx0, e.y - by0) > 30 && e.blinkT > 3, `blink foe teleports and re-arms (${bx0.toFixed(0)},${by0.toFixed(0)} -> ${e.x.toFixed(0)},${e.y.toFixed(0)})`);
+
   // volley fans the attack across the three nearest mons, weakened per orb
   e.def = { ...e.def, volley: true, melee: false, raider: false, healer: false };
   (b as any).pickups = [];

@@ -25,6 +25,7 @@ export interface SpeciesDef {
   repel?: boolean; // a repulsor field shoves the ball away — bank in or burn through
   raider?: boolean; // ignores the fight to steal field pickups — kill it before the loot's gone
   volley?: boolean; // fans its attack across the three nearest mons — one tank can't soak it
+  blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -215,7 +216,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 41, name: 'Zubat', type: 'poison', type2: 'flying', stats: st(40, 45, 35, 30, 40, 55), melee: true, evolvesTo: 42 },
   { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20), evolvesTo: 75 },
   { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45), repel: true, evolvesTo: 82 },
-  { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90), evolvesTo: 64 },
+  { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90), blink: true, evolvesTo: 64 },
   { id: 43, name: 'Oddish', type: 'grass', type2: 'poison', stats: st(45, 50, 55, 75, 65, 30), evolvesTo: 44 },
   { id: 92, name: 'Gastly', type: 'ghost', type2: 'poison', stats: st(30, 35, 30, 100, 35, 80), evolvesTo: 93 },
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), melee: true, evolvesTo: 67 },
@@ -251,7 +252,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 138, name: 'Omanyte', type: 'water', type2: 'rock', stats: st(35, 40, 100, 90, 55, 35), evolvesTo: 139 },
   { id: 140, name: 'Kabuto', type: 'rock', type2: 'water', stats: st(30, 80, 90, 55, 45, 55), evolvesTo: 141 },
   { id: 147, name: 'Dratini', type: 'flying', stats: st(41, 64, 45, 50, 50, 50), evolvesTo: 148 },
-  { id: 177, name: 'Natu', type: 'flying', type2: 'psychic', stats: st(40, 50, 45, 70, 45, 70), evolvesTo: 178 },
+  { id: 177, name: 'Natu', type: 'flying', type2: 'psychic', stats: st(40, 50, 45, 70, 45, 70), blink: true, evolvesTo: 178 },
   { id: 198, name: 'Murkrow', type: 'ghost', type2: 'flying', stats: st(60, 85, 42, 85, 42, 91), melee: true, evolvesTo: 430 },
   { id: 200, name: 'Misdreavus', type: 'ghost', stats: st(60, 60, 60, 85, 85, 85), pierce: true, evolvesTo: 429 },
   { id: 216, name: 'Teddiursa', type: 'normal', stats: st(60, 80, 50, 50, 50, 40), melee: true, evolvesTo: 217 },
@@ -403,7 +404,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95) },
   { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
   { id: 3, name: 'Venusaur', type: 'grass', type2: 'poison', stats: st(80, 82, 83, 100, 100, 80), healer: true },
-  { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120), pierce: true },
+  { id: 65, name: 'Alakazam', type: 'psychic', stats: st(55, 50, 45, 135, 95, 120), pierce: true, blink: true },
   { id: 131, name: 'Lapras', type: 'water', stats: st(130, 85, 80, 85, 95, 60), healer: true },
   { id: 76, name: 'Golem', type: 'rock', stats: st(80, 120, 130, 55, 65, 45) },
   { id: 34, name: 'Nidoking', type: 'poison', type2: 'rock', stats: st(81, 102, 77, 85, 75, 85), melee: true },
@@ -643,7 +644,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 57, name: 'Primeape', type: 'fighting', stats: st(65, 105, 60, 60, 70, 95), melee: true, rage: true },
   { id: 61, name: 'Poliwhirl', type: 'water', stats: st(65, 65, 65, 50, 50, 90), evolvesTo: [62, 186] },
   { id: 62, name: 'Poliwrath', type: 'water', stats: st(90, 95, 95, 70, 90, 70), melee: true },
-  { id: 64, name: 'Kadabra', type: 'psychic', stats: st(40, 35, 30, 120, 70, 105), pierce: true, evolvesTo: 65 },
+  { id: 64, name: 'Kadabra', type: 'psychic', stats: st(40, 35, 30, 120, 70, 105), pierce: true, blink: true, evolvesTo: 65 },
   { id: 67, name: 'Machoke', type: 'fighting', stats: st(80, 100, 70, 50, 60, 45), melee: true, evolvesTo: 68 },
   { id: 70, name: 'Weepinbell', type: 'grass', type2: 'poison', stats: st(65, 90, 50, 85, 45, 55), evolvesTo: 71 },
   { id: 71, name: 'Victreebel', type: 'grass', type2: 'poison', stats: st(80, 105, 65, 100, 70, 70), melee: true },
@@ -671,7 +672,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 139, name: 'Omastar', type: 'water', type2: 'rock', stats: st(70, 60, 125, 115, 70, 55) },
   { id: 141, name: 'Kabutops', type: 'rock', type2: 'water', stats: st(60, 115, 105, 65, 70, 80), melee: true },
   { id: 148, name: 'Dragonair', type: 'flying', stats: st(61, 84, 65, 70, 70, 70), evolvesTo: 149 },
-  { id: 178, name: 'Xatu', type: 'flying', type2: 'psychic', stats: st(65, 75, 70, 95, 70, 95) },
+  { id: 178, name: 'Xatu', type: 'flying', type2: 'psychic', stats: st(65, 75, 70, 95, 70, 95), blink: true },
   { id: 180, name: 'Flaaffy', type: 'electric', stats: st(70, 55, 55, 80, 60, 45), evolvesTo: 181 },
   { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true },
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },

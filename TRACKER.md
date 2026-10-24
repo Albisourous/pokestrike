@@ -155,3 +155,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `92671d5` | battle | airborne foes hover — lift + detached ground shadow sells the SKY wave | `git revert <this commit>` |
 | 2026-10-25 | `a4a2f64` | battle | court-state mods get ambient reads — slick gloss, hexed wisps, wind lanes | `git revert <this commit>` |
 | 2026-10-25 | `04706eb` | battle | focus-sash headband — one-hit protection reads before the pop | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | BLINK foes teleport on a cycle — Abra/Natu lines, shimmer telegraph | `git revert <this commit>` |

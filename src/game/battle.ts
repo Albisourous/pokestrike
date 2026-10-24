@@ -114,6 +114,7 @@ interface Unit {
   warpT: number; // last warp ride — cooldown stops portal ping-pong
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
   hpLag?: number; // display-only wound trail — drains toward hp so hits read
+  blinkT: number; // BLINK foes: countdown to the next teleport — shimmer tells first
 }
 
 interface FloatText {
@@ -894,6 +895,7 @@ export class Battle {
         repelR: 0,
         warpT: -9,
         boostT: -9,
+        blinkT: 0,
       });
     });
     // bag items field after the team does — persistent consumables earned
@@ -1561,6 +1563,7 @@ export class Battle {
       gravR: 0,
       warpT: -9,
       boostT: -9,
+      blinkT: s.def.blink ? 4 + this.rng() * 2.5 : 0,
     };
   }
 
@@ -2307,6 +2310,28 @@ export class Battle {
         if (e.regenT > 1.5) {
           e.regenT = 0;
           this.burst(e.x, e.y - e.r, '#a0e060', 3, 140, 0.6);
+        }
+      }
+      // blink foes teleport on a cycle — the shimmer warn is drawn; the
+      // hop itself lands here. Sleepy blinkers don't dream of elsewhere.
+      if (e.def.blink && !e.asleep && e.blinkT > 0) {
+        e.blinkT -= dt;
+        if (e.blinkT <= 0) {
+          e.blinkT = 4.5 + this.rng() * 2.5;
+          const a2 = this.arena;
+          this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.4, t: 0.3, life: 0.3, color: '#c890ff', hits: new Set() });
+          this.burst(e.x, e.y, '#c890ff', 8, 300);
+          // blinkers haunt the foe half — the chase stays on their turf
+          const at = this.unstick(
+            a2.x + (0.12 + this.rng() * 0.76) * a2.w,
+            a2.y + (0.08 + this.rng() * 0.42) * a2.h,
+            e.r + 2,
+          );
+          e.x = at.x;
+          e.y = at.y;
+          this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.4, t: 0.3, life: 0.3, color: '#c890ff', hits: new Set() });
+          this.burst(e.x, e.y, '#c890ff', 8, 300);
+          sfx('gust');
         }
       }
       const kn = Math.exp(-4 * dt);
@@ -6960,6 +6985,7 @@ export class Battle {
     const tells = foe ? ([
       e.def.melee && 'lunges into your team',
       e.def.volley && 'fans its shot across three',
+      e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -8082,6 +8108,10 @@ export class Battle {
     // mid-evolution the cinematic owns the sprite — a white silhouette
     // flickering old↔new — so the settled new form doesn't peek through
     const evolving = this.evoFx.some((f) => f.u === u);
+    // blink telegraph — the last half-second before the hop it flickers
+    // half-there: read it and hold the shot
+    const blinking = u.side === 'enemy' && u.def.blink && u.blinkT > 0 && u.blinkT < 0.45;
+    if (blinking) ctx.globalAlpha = 0.3 + Math.abs(Math.sin(this.time * 18)) * 0.45;
     if (!evolving) {
       if (st > 0.02) {
         ctx.save();
@@ -8096,6 +8126,7 @@ export class Battle {
         else drawMon(ctx, u.def.id, u.x, u.y + bob - lift, u.r * 2.6 * grow);
       }
     }
+    if (blinking) ctx.globalAlpha = 1;
 
     // focus sash — the white headband reads on both sides: a one-shot plan
     // should be visible before the shot commits, not after the pop
@@ -8262,6 +8293,7 @@ export class Battle {
         u.def.repel && 'REPEL',
         u.def.raider && 'RAIDER',
         u.def.volley && 'VOLLEY',
+        u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
       if (kw) {
