@@ -1627,9 +1627,10 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   ctx.font = font(20);
   ctx.fillStyle = INK;
   ctx.fillText(`${dexN}`, d.x + 20, d.y + 96);
+  const dexN_w = ctx.measureText(`${dexN}`).width; // measure under font(20) — after the fontB swap the label lands inside the digits
   ctx.font = fontB(9);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText(`OF ${CATCHABLE} REGISTERED`, d.x + 26 + ctx.measureText(`${dexN}`).width, d.y + 96);
+  ctx.fillText(`OF ${CATCHABLE} REGISTERED`, d.x + 26 + dexN_w, d.y + 96);
   void loadItem('shiny-charm');
   void loadItem('badges/1');
   ctx.fillStyle = GOLD;
@@ -1688,7 +1689,9 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   if (readySets) {
     const label = `${readySets} SET BONUS${readySets > 1 ? 'ES' : ''} READY`;
     ctx.font = fontB(7);
-    roundRect(ctx, bx, d.y + d.h - 28, ctx.measureText(label).width + 14, 15, 7);
+    ctx.textAlign = 'left'; // still 'right' from the % label — right-aligned at the pill's left edge it inks off-card
+    const lw = ctx.measureText(label).width;
+    roundRect(ctx, bx, d.y + d.h - 28, lw + 14, 15, 7);
     ctx.fillStyle = GOLD;
     ctx.fill();
     ctx.fillStyle = INK;
@@ -1716,7 +1719,9 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
     ready.forEach((root) => {
       const line = EVO_LINES.find((l) => l.root === root)!;
       pay += setPay(line);
-      if (ry < sr.y + sr.h - 20) {
+      // stop a row short of the footnote lane — at 34px the row's text and
+      // TAP TO CLAIM can't collide
+      if (ry < sr.y + sr.h - 34) {
         uiRow(
           ctx,
           { x: sr.x + 8, y: ry - 14, w: sr.w - 16, h: 20 },
@@ -2550,7 +2555,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 // home-tab card rects — the same _BTN names the hit tests know, re-homed to
 // the cards the tab bodies draw. SHOP owns the hatcher hero + spark deal;
 // MONS owns dex / line-sets / catches; TOWN owns the 2-col grid + ASC + HALL.
-export const HATCH_BTN = { x: 30, y: 210, w: W - 60, h: 250 };
+export const HATCH_BTN = { x: 30, y: 110, w: W - 60, h: 250 };
 export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 170 };
 export const DEX_BTN = { x: 30, y: 110, w: W - 60, h: 240 };
 export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
