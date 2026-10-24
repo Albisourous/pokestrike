@@ -397,6 +397,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     e.vx = 0;
   }
 
+  // wall-slam: a flung foe pays for the rocks it hits
+  (b as any).blocks = [{ x: e.x + 30, y: e.y - 20, w: 20, h: 60, kind: 'rock' }];
+  e.vx = 500; e.vy = 0;
+  const slamHp0 = e.hp;
+  (b as any).stepEnemyMovement(0.1);
+  ok(e.hp < slamHp0, `wall-slam chips the flung foe (${slamHp0} -> ${e.hp})`);
+  e.vx = 0;
+  e.vy = 0;
+  (b as any).blocks = [];
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

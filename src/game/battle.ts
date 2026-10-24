@@ -2390,8 +2390,15 @@ export class Battle {
           }
         }
       }
-      for (const b of this.blocks) resolveBlock(e, b); // creeps slide off the stones
-      this.hitSolid(e); // and creeps bank off water/boulders they can't cross
+      // wall-slam: capture impact speed before the resolve kills it — a
+      // knockback-flung foe pays for the rocks and shorelines it hits
+      const spd0 = Math.hypot(e.vx, e.vy);
+      let slammed = false;
+      for (const b of this.blocks) slammed = resolveBlock(e, b) || slammed;
+      const zoneHit = this.hitSolid(e); // creeps bank off water/boulders they can't cross
+      if ((slammed || zoneHit) && spd0 > 220 && !e.dead) {
+        this.hurt(e, Math.max(1, Math.round(spd0 * 0.02)), '#c8c8d8');
+      }
       this.clampToArena(e);
       for (const p of this.players) {
         if (!p.dead) this.separate(e, p);
@@ -2672,7 +2679,7 @@ export class Battle {
   // Solid prop zones (ponds, spike boulders) are walls to bodies that
   // can't cross them — swim/fly/hover over, otherwise bank off the
   // surface and take the bounce credit a stone slab would pay.
-  private hitSolid(u: Unit) {
+  private hitSolid(u: Unit): Hazard['kind'] | null {
     const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
     let kind: Hazard['kind'] | null = null;
     for (const hz of this.hazards) if (!u.airborne && isSolid(hz, u.def) && resolveZone(u, hz)) kind = hz.kind;
@@ -2681,6 +2688,7 @@ export class Battle {
       this.onBounceFx(u);
       if (this.ricochet(kind === 'spikes' ? -5 : -4) && !this.inStatic(u.x, u.y)) this.onRicochet(u.x, u.y);
     }
+    return kind;
   }
 
   // Pinball feedback on a real bounce: squash pulse, expanding ring, a

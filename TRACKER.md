@@ -166,3 +166,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `42fbeba` | battle | FUSE foes self-destruct at zero — blast wounds both sides | `git revert <this commit>` |
 | 2026-10-25 | `65d11dc` | battle | contact knockback — hits shove foes along the shot line into hazards | `git revert <this commit>` |
 | 2026-10-25 | `e5f4073` | battle | billiard collisions — shoved foes slam packmates, momentum + chip | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | wall-slam — flung foes chip on rocks and shorelines | `git revert <this commit>` |
