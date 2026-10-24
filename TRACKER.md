@@ -100,3 +100,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-24 | `9170203` | title/wilds | edge wilds static → slow ellipse graze — the field breathes at the margins | `git revert 9170203` |
 | 2026-10-24 | `a5ae860` | dex/detail | superDesc + traits lines drew in PS2P (fontB→fitFont override) and bled past the frame — fitFontB(8), contained | `git revert a5ae860` |
 | 2026-10-24 | `4f46631` | town/layout | scattered lots + corner pond → walled main-street plan: civic row (lab/hall) on a north street, commerce row (mart/tower) on a south street, lane joining them dead-ending at a centered park pond; hit rects re-fit to the new footprints | `git revert 4f46631` |
+| 2026-10-24 | `f260ccb` | draft | bag row shrinks chips to fit (icon+badge under 60px, desc/names ride the subtitle); `→ EVO` no longer collides with PIERCE/COPY | `git revert f260ccb` |
