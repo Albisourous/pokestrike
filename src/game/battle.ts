@@ -116,7 +116,8 @@ interface Unit {
   warpT: number; // last warp ride — cooldown stops portal ping-pong
   boostT: number; // last boost-pad kick — throttle so pads can't stack hits
   hpLag?: number; // display-only wound trail — drains toward hp so hits read
-  blinkT: number; // BLINK foes: countdown to the next teleport — shimmer tells first
+  blinkT: number;
+  stolen?: PickupKind; // a thief's pocket — re-drops when the body drops // BLINK foes: countdown to the next teleport — shimmer tells first
   boostN: number; // SPEED BOOST foes: attacks launched — each re-arm winds it tighter
 }
 
@@ -2418,8 +2419,30 @@ export class Battle {
           if (q < best) { best = q; target = p; }
         }
         const d = Math.sqrt(best);
-        const nx = (target.x - e.x) / (d || 1);
-        const ny = (target.y - e.y) / (d || 1);
+        let nx = (target.x - e.x) / (d || 1);
+        let ny = (target.y - e.y) / (d || 1);
+        if (e.def.thief && !e.stolen && this.pickups.length > 0 && e.lunging <= 0) {
+          // thieves nose toward the loot, not the fight — steer the drift
+          // at the nearest pickup and pocket it on contact
+          let bp: Pickup | null = null;
+          let bq = Infinity;
+          for (const pk of this.pickups) {
+            const q = (pk.x - e.x) * (pk.x - e.x) + (pk.y - e.y) * (pk.y - e.y);
+            if (q < bq) { bq = q; bp = pk; }
+          }
+          if (bp) {
+            const pd = Math.sqrt(bq) || 1;
+            nx = (bp.x - e.x) / pd;
+            ny = (bp.y - e.y) / pd;
+            if (pd < e.r + 10) {
+              e.stolen = bp.kind;
+              this.pickups.splice(this.pickups.indexOf(bp), 1);
+              this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'STOLE!', t: 0.9, color: '#f8d030', big: false });
+              this.burst(e.x, e.y, '#f8d030', 6, 240, 0.7);
+              sfx('tick');
+            }
+          }
+        }
         if (e.lunging > 0) {
           // melee attack in flight: steer hard at the target, hit on contact
           e.lunging -= dt;
@@ -3277,6 +3300,8 @@ export class Battle {
       }
       // VOLATILE mod: the KO detonates — a chunk of its max hp splashes
       // onto every neighbor, and volatile kills can chain
+      // a dead thief coughs up the loot — KO it to take your berry back
+      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0 });
       if (e.volatile && !this.players.some((p) => !p.dead && p.def.damp)) {
         const BR = 110;
         this.waves.push({ x: e.x, y: e.y, r: 0, maxR: BR, t: 0.3, life: 0.3, color: '#ff9a30', hits: new Set() });
@@ -7585,6 +7610,7 @@ export class Battle {
       e.def.prank && 'prankster — its opening attack comes early',
       e.def.pheal && 'poison heal — your venom mends it; burn it instead',
       e.def.blink && 'teleports when it shimmers',
+      e.def.thief && 'snatches pickups — KO it to take them back',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -8993,6 +9019,7 @@ export class Battle {
         u.def.shed && 'SHED',
         u.def.charge && 'CHARGE',
         u.def.prank && 'PRANK',
+        u.def.thief && 'THIEF',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

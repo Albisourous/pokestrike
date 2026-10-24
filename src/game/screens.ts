@@ -2424,6 +2424,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'SHED foes shrug off poison, burns and sleep — burst them',
       'CHARGE foes paw the ground, then ram — shove them off-line',
       'PRANK foes strike early — expect an ambush opener',
+      'THIEF foes snatch your pickups — KO them to take it back',
       'P-HEAL foes mend off your poison — burn them instead',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],

@@ -66,6 +66,7 @@ export interface SpeciesDef {
   grace?: boolean; // Serene Grace: its contact abilities fire at double odds
   damp?: boolean; // Damp: while it lives, fuses fizzle and blasts soften
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
+  thief?: boolean; // drifts toward pickups and pockets them — KO it to re-drop
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -356,7 +357,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 213, name: 'Shuckle', type: 'rock', stats: st(20, 10, 230, 10, 230, 5), taunt: true },
   { id: 215, name: 'Sneasel', type: 'ghost', type2: 'water', stats: st(55, 95, 55, 35, 75, 115), pierce: true, melee: true, evolvesTo: 461 },
   { id: 234, name: 'Stantler', type: 'normal', stats: st(73, 95, 62, 85, 65, 85) },
-  { id: 264, name: 'Linoone', type: 'normal', stats: st(78, 70, 61, 50, 61, 100), raider: true },
+  { id: 264, name: 'Linoone', type: 'normal', stats: st(78, 70, 61, 50, 61, 100), raider: true, thief: true },
   { id: 268, name: 'Cascoon', type: 'poison', stats: st(50, 35, 55, 25, 25, 15), evolvesTo: 269 },
   { id: 269, name: 'Dustox', type: 'poison', stats: st(60, 50, 70, 50, 90, 65) },
   { id: 272, name: 'Ludicolo', type: 'water', type2: 'grass', stats: st(80, 70, 70, 90, 100, 70) },
@@ -552,7 +553,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 503, name: 'Samurott', type: 'water', stats: st(95, 100, 85, 108, 70, 70) },
   { id: 505, name: 'Watchog', type: 'normal', stats: st(60, 85, 69, 60, 69, 77) },
   { id: 508, name: 'Stoutland', type: 'normal', stats: st(85, 110, 90, 45, 90, 80), melee: true },
-  { id: 510, name: 'Liepard', type: 'ghost', stats: st(64, 88, 50, 88, 50, 106) },
+  { id: 510, name: 'Liepard', type: 'ghost', stats: st(64, 88, 50, 88, 50, 106), thief: true },
   { id: 512, name: 'Simisage', type: 'grass', stats: st(75, 98, 63, 98, 63, 101) },
   { id: 514, name: 'Simisear', type: 'fire', stats: st(75, 98, 63, 98, 63, 101) },
   { id: 516, name: 'Simipour', type: 'water', stats: st(75, 98, 63, 98, 63, 101) },
