@@ -513,6 +513,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.paraT = 0;
   e.def = { ...e.def, shock: undefined };
 
+  // flame body: striking the hide can burn the ball
+  e.def = { ...e.def, flame: true };
+  striker.burnT = 0;
+  striker.lastHit = new Map();
+  e.lastHit = new Map();
+  (b as any).rng = () => 0.1;
+  (b as any).strikeEnemy(striker, e);
+  (b as any).rng = rng3;
+  ok(striker.burnT > 0, `flame body singes the striker (burn ${striker.burnT})`);
+  striker.burnT = 0;
+  e.def = { ...e.def, flame: undefined };
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

@@ -3319,6 +3319,12 @@ export class Battle {
       shooter.paraT = 3;
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'STATIC!', t: 0.9, color: '#f8d030', big: false });
     }
+    // flame body: the hide singes the striker — burned hits lose heat,
+    // so a grazing route through it dulls the whole shot's trade
+    if (e.def.flame && !shooter.dead && this.rng() < 0.3) {
+      shooter.burnT = Math.max(shooter.burnT, 4);
+      this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'BURNED!', t: 0.9, color: '#f08030', big: false });
+    }
     // barbed foes bite back — every contact costs the ball a chip of its
     // own HP, so sloppy grazes through the pack bleed the run
     if (e.def.spiky && !shooter.dead) {
@@ -7198,6 +7204,7 @@ export class Battle {
       e.def.para && 'its hits can paralyze — launches limp',
       e.def.toxic && 'contact can poison the ball',
       e.def.shock && 'contact can paralyze the ball',
+      e.def.flame && 'contact can burn the ball',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8572,6 +8579,7 @@ export class Battle {
         u.def.para && 'JOLT',
         u.def.toxic && 'TOXIC',
         u.def.shock && 'STATIC',
+        u.def.flame && 'FLAME',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

@@ -36,6 +36,7 @@ export interface SpeciesDef {
   para?: boolean; // Thunder Wave: hits can paralyze — the victim's launch limps a few rounds
   toxic?: boolean; // Poison Point: merely striking the hide can poison the ball — graze it wide
   shock?: boolean; // Static: striking the crackling hide can paralyze the ball — the launch limps
+  flame?: boolean; // Flame Body: striking the hide can burn the ball — its hits lose heat
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -244,9 +245,9 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 109, name: 'Koffing', type: 'poison', stats: st(40, 65, 95, 60, 45, 35), fuse: true, evolvesTo: 110 },
   { id: 37, name: 'Vulpix', type: 'fire', stats: st(38, 41, 40, 50, 65, 65), burn: true, evolvesTo: 38 },
   { id: 58, name: 'Growlithe', type: 'fire', stats: st(55, 70, 45, 70, 50, 60), melee: true, burn: true, evolvesTo: 59 },
-  { id: 77, name: 'Ponyta', type: 'fire', stats: st(50, 85, 55, 65, 65, 90), evolvesTo: 78 },
-  { id: 126, name: 'Magmar', type: 'fire', stats: st(65, 95, 57, 100, 85, 93), burn: true, evolvesTo: 467 },
-  { id: 218, name: 'Slugma', type: 'fire', type2: 'rock', stats: st(40, 40, 40, 70, 40, 20), evolvesTo: 219 },
+  { id: 77, name: 'Ponyta', type: 'fire', stats: st(50, 85, 55, 65, 65, 90), flame: true, evolvesTo: 78 },
+  { id: 126, name: 'Magmar', type: 'fire', stats: st(65, 95, 57, 100, 85, 93), burn: true, flame: true, evolvesTo: 467 },
+  { id: 218, name: 'Slugma', type: 'fire', type2: 'rock', stats: st(40, 40, 40, 70, 40, 20), flame: true, evolvesTo: 219 },
   { id: 111, name: 'Rhyhorn', type: 'rock', stats: st(80, 85, 95, 30, 30, 25), melee: true, evolvesTo: 112 },
   { id: 100, name: 'Voltorb', type: 'electric', stats: st(40, 30, 50, 55, 55, 100), fuse: true, evolvesTo: 101 },
   { id: 170, name: 'Chinchou', type: 'electric', type2: 'water', stats: st(75, 38, 38, 56, 56, 67), para: true, evolvesTo: 171 },
