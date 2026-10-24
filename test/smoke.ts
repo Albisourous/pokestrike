@@ -240,6 +240,20 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const ax = act.x;
   (b as any).stepShot(0.05);
   ok(act.x < ax, `repel field shoves the ball back (${ax.toFixed(0)} -> ${act.x.toFixed(0)})`);
+
+  // type-aware hazards: fire balls bathe in lava, flyers sail the spikes
+  // (hzT stamps when the hazard fires — the flying trait can still dodge)
+  const act2 = (b as any).active;
+  const lx = arena.x + arena.w / 2, ly = arena.y + arena.h / 2;
+  (b as any).hazards = [{ kind: 'lava', x: lx, y: ly, r: 40 }];
+  act2.def = { ...act2.def, type: 'fire', type2: undefined };
+  act2.x = lx; act2.y = ly; act2.vx = 5; act2.vy = 0; act2.hzT = -9;
+  (b as any).stepShot(0.02);
+  ok(act2.hzT === -9, 'fire ball bathes in lava — the chip never fires');
+  act2.def = { ...act2.def, type: 'normal' };
+  act2.hzT = -9;
+  (b as any).stepShot(0.02);
+  ok(act2.hzT > -9, 'non-fire ball takes the lava chip');
 }
 
 {

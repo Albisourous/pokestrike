@@ -2151,8 +2151,11 @@ export class Battle {
             u.vx *= Math.exp(-8 * h);
             u.vy *= Math.exp(-8 * h);
           }
-        } else if ((hz.kind === 'lava' || hz.kind === 'spikes') && !this.slowImmune && this.time - u.hzT > 0.5) {
+        } else if ((hz.kind === 'lava' || hz.kind === 'spikes') && !this.slowImmune && this.time - u.hzT > 0.5
+            && !(hz.kind === 'lava' && (u.def.type === 'fire' || u.def.type2 === 'fire'))
+            && !(hz.kind === 'spikes' && flies(u.def))) {
           // lava & spikes chip the ball on contact — MS damage walls.
+          // Fire mons bathe in lava; flyers sail over the boulder strip.
           // Field zones (static/power/well) must not land here: they work
           // by being entered, and chip turned them into disguised lava.
           u.hzT = this.time;
