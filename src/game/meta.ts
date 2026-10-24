@@ -1009,6 +1009,35 @@ export const avatarRoll = (): string | null => {
   return pick.id;
 };
 
+// pk_itemtiers — held-item tiers bought in the shop's upgrade pack: cheap
+// dust, small bumps (cap 5), meant to stay gentler than the lab's star
+// levels. Same unversioned-blob shape-check as pk_avatars.
+export const ITEM_TIER_CAP = 5;
+let memTiers: Record<string, number> = {};
+const tierStock = (): Record<string, number> => {
+  const raw = load<Partial<{ t: Record<string, number> }>>('pk_itemtiers');
+  return raw && typeof raw === 'object' && raw.t && typeof raw.t === 'object'
+    ? Object.fromEntries(
+        Object.entries(raw.t).filter(
+          ([k, v]) => BAG_ITEMS.some((i) => i.id === k) && typeof v === 'number' && v > 0,
+        ),
+      )
+    : memTiers;
+};
+export const itemTier = (id: string): number => Math.min(ITEM_TIER_CAP, tierStock()[id] ?? 0);
+export const ITEM_PACK_COST = 40;
+// the pack — Math.random like every title-side spend; +1 tier on a random
+// held item still under the cap, or null when everything's maxed/broke
+export const itemTierRoll = (): string | null => {
+  const low = BAG_ITEMS.filter((i) => itemTier(i.id) < ITEM_TIER_CAP);
+  if (!low.length || !spendDust(ITEM_PACK_COST)) return null;
+  const pick = low[Math.floor(Math.random() * low.length)];
+  const t = { ...tierStock(), [pick.id]: (tierStock()[pick.id] ?? 0) + 1 };
+  memTiers = t;
+  store('pk_itemtiers', { t });
+  return pick.id;
+};
+
 // --- decision telemetry ------------------------------------------------------
 // MegaCrit balanced StS off pick rates and where runs die, logged per
 // decision — no backend here, so pk_stats keeps the same data on-device

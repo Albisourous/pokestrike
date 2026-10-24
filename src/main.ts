@@ -11,7 +11,7 @@ import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage } from './game/data';
 import type { SpeciesDef } from './game/data';
 import { THEMES } from './game/bg';
-import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, avatarOwned, avatarRoll, type RunSave } from './game/meta';
+import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, avatarOwned, avatarRoll, itemTierRoll, type RunSave } from './game/meta';
 import {
   W,
   H,
@@ -121,6 +121,7 @@ import {
   noteTabSwap,
   takeClimbSeed,
   DEAL_BTN,
+  PACK_PILL,
   SETS_BTN,
   PARTNERS_BTN,
   partnersStripAt,
@@ -277,6 +278,9 @@ let settingsDrag: { key: SettingsSliderKey } | null = null;
 let avatarArmT = -9; // the wardrobe roll's armed window — 3s like a spark buy
 let avatarFlash = '';
 let avatarFlashT = -9;
+let packArmT = -9; // the upgrade pack's armed window — same two-tap contract
+let packFlashId: string | null = null;
+let packFlashT = -9;
 let helpPage = 0;
 let dexOpen = false;
 let dexScroll = 0;
@@ -1137,6 +1141,22 @@ canvas.addEventListener('pointerdown', (e) => {
         dexPick = ghost;
         return;
       }
+    }
+    if (homeTab === 'shop' && inRect(p.x, p.y, PACK_PILL)) {
+      // two taps like a spark buy — the first arms, the second pays dust
+      if (t - packArmT < 3) {
+        packArmT = -9;
+        const got = itemTierRoll();
+        if (got) {
+          packFlashId = got;
+          packFlashT = t;
+          playJingle('catch');
+        } else sfx('ui', 0.55); // short on dust or every item's maxed
+      } else {
+        packArmT = t;
+        sfx('ui', 0.8);
+      }
+      return;
     }
     if (homeTab === 'shop' && inRect(p.x, p.y, DEAL_BTN)) {
       // the bargain's face opens its own card — the hatcher's spark shop
@@ -2213,7 +2233,10 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score, seed: titleSave.seed } : null, t - restartConfirmT0 < 3, homeTab);
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score, seed: titleSave.seed } : null, t - restartConfirmT0 < 3, homeTab, {
+        arm: t - packArmT < 3,
+        flash: t - packFlashT < 4 ? packFlashId : null,
+      });
       if (dexOpen) drawDex(ctx, dexScroll);
       if (dexPick != null) drawDexDetail(ctx, dexPick, t, sparkArm.id === dexPick && t - sparkArm.t < SPARK_ARM_T); // solo or stacked — its own scrim
       if (achOpen) drawAch(ctx, achScroll);

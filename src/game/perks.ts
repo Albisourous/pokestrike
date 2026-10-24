@@ -570,6 +570,9 @@ export interface BagItem {
   item: string; // sprite name in public/sprites/items/
   desc: string;
   apply: (b: Battle) => void;
+  // shop upgrade-pack tiers (0..5): applied once per owned tier after the
+  // flat — small bumps meant to sit under the lab's star levels
+  perTier?: (b: Battle) => void;
   // durable items bake their effect into already-saved state (levels ride in
   // team[].lvl), so a resume must skip re-applying them or they'd double
   durable?: boolean;
@@ -580,17 +583,20 @@ export const BAG_ITEMS: BagItem[] = [
     id: 'exp-share', name: 'Exp Share', item: 'exp-share',
     desc: 'team starts 2 levels up',
     apply: (b) => b.players.forEach((p) => b.gainLevels(p, 2)),
+    perTier: (b) => b.players.forEach((p) => b.gainLevels(p, 1)),
     durable: true, // the +2 lives in team[].lvl — re-applying on resume would double it
   },
   {
     id: 'master-ball', name: 'Master Ball', item: 'master-ball',
     desc: 'first catch of the run is guaranteed',
     apply: (b) => { b.masterArmed = true; },
+    perTier: (b) => { b.captureChance += 0.03; },
   },
   {
     id: 'friend-ball', name: 'Friend Ball', item: 'friend-ball',
     desc: '+8% catch chance all run',
     apply: (b) => { b.captureChance += 0.08; },
+    perTier: (b) => { b.captureChance += 0.02; },
   },
   {
     id: 'macho-brace', name: 'Macho Brace', item: 'macho-brace',
@@ -599,52 +605,62 @@ export const BAG_ITEMS: BagItem[] = [
       b.scoreMult += 0.2;
       b.launchBoost *= 0.92;
     },
+    perTier: (b) => { b.scoreMult += 0.04; },
   },
   {
     id: 'scope-lens', name: 'Scope Lens', item: 'scope-lens',
     desc: '15% chance hits crit x2',
     apply: (b) => { b.critCh += 0.15; },
+    perTier: (b) => { b.critCh += 0.02; },
   },
   {
     id: 'sacred-ash', name: 'Sacred Ash', item: 'sacred-ash',
     desc: 'a wipe revives the team at 30% once',
     apply: (b) => { b.ashArmed = true; },
+    perTier: (b) => { b.ashPct += 0.04; },
   },
   {
     id: 'quick-claw', name: 'Quick Claw', item: 'quick-claw',
     desc: '+12% launch speed',
     apply: (b) => { b.launchBoost *= 1.12; },
+    perTier: (b) => { b.launchBoost *= 1.02; },
   },
   {
     id: 'dusk-ball', name: 'Dusk Ball', item: 'dusk-ball',
     desc: '+12% catch chance',
     apply: (b) => { b.captureChance += 0.12; },
+    perTier: (b) => { b.captureChance += 0.03; },
   },
   {
     id: 'protein', name: 'Protein', item: 'protein',
     desc: '+8% bump damage',
     // dmgMult is hurt()'s single multiplier — covers phys + spec bumps
     apply: (b) => { b.dmgMult *= 1.08; },
+    perTier: (b) => { b.dmgMult *= 1.02; },
   },
   {
     id: 'razor-claw', name: 'Razor Claw', item: 'razor-claw',
     desc: '+10% crit chance',
     apply: (b) => { b.critCh += 0.1; },
+    perTier: (b) => { b.critCh += 0.02; },
   },
   {
     id: 'wide-lens', name: 'Wide Lens', item: 'wide-lens',
     desc: '+10% catch chance',
     apply: (b) => { b.captureChance += 0.1; },
+    perTier: (b) => { b.captureChance += 0.03; },
   },
   {
     id: 'muscle-band', name: 'Muscle Band', item: 'muscle-band',
     desc: '+10% hit damage',
     apply: (b) => { b.physMult *= 1.1; },
+    perTier: (b) => { b.physMult *= 1.02; },
   },
   {
     id: 'rocky-helmet', name: 'Rocky Helmet', item: 'rocky-helmet',
     desc: 'attackers take 15 recoil',
     apply: (b) => { b.thorns += 15; },
+    perTier: (b) => { b.thorns += 3; },
   },
 ];
 

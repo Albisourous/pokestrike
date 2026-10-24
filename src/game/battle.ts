@@ -11,7 +11,7 @@ import type { EventChoice, EventArt } from './events';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
 import { uiWindow } from './ui';
 import type { Theme, PropSpec } from './bg';
@@ -720,6 +720,7 @@ export class Battle {
   bossCatch = 0; // heavy ball: extra catch chance vs bosses
   masterArmed = false; // master ball relic: next KO is a guaranteed catch
   ashArmed = false; // sacred ash bag charm: the first team wipe revives instead
+  ashPct = 0.3; // revive fraction — shop pack tiers raise it +4% each
   private bagIds: string[] = []; // this run's bag picks — the save replays them
   takenMult = 1; // zinc/eviolite: incoming damage multiplier
   foeCdMult = 1; // bright powder: enemy attack-timer multiplier
@@ -929,7 +930,11 @@ export class Battle {
     // bag items field after the team does — persistent consumables earned
     // on gym wins, picked on the draft screen (≤2)
     this.bagIds = bag;
-    for (const id of bag) BAG_ITEMS.find((i) => i.id === id)?.apply(this);
+    for (const id of bag) {
+      const it = BAG_ITEMS.find((i) => i.id === id);
+      it?.apply(this);
+      for (let n = itemTier(id); n > 0; n--) it?.perTier?.(this);
+    }
     const mapSeed = Math.floor(this.rng() * 2 ** 31);
     this.mapSeed = mapSeed;
     this.region = genRegion(mapSeed);
@@ -1078,7 +1083,11 @@ export class Battle {
     // bag items replay the same door as perks; armed flags come back
     // verbatim so a spent ball/ash stays spent
     this.bagIds = [...(s.bag ?? [])];
-    for (const id of this.bagIds) BAG_ITEMS.find((i) => i.id === id)?.apply(this);
+    for (const id of this.bagIds) {
+      const it = BAG_ITEMS.find((i) => i.id === id);
+      it?.apply(this);
+      for (let n = itemTier(id); n > 0; n--) it?.perTier?.(this);
+    }
     if (s.masterArmed != null) this.masterArmed = s.masterArmed;
     if (s.ashArmed != null) this.ashArmed = s.ashArmed;
     this.reviveUsed = s.reviveUsed ?? false; // a spent token stays spent
@@ -6622,7 +6631,7 @@ export class Battle {
     this.ashArmed = false;
     for (const p of this.players) {
       p.dead = false;
-      p.hp = Math.round(p.maxHp * 0.3);
+      p.hp = Math.round(p.maxHp * this.ashPct);
     }
     this.refreshTraits(); // the revive fields the whole team again
     this.pushText({

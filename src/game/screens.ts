@@ -9,7 +9,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, 
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -915,6 +915,7 @@ export function drawTitle(
   cont: { stage: number; score: number; seed: number } | null = null,
   restartArmed = false, // RESTART's own two-tap — warn-red face while it's lit
   tab: HomeTab,
+  pack: { arm: boolean; flash: string | null } = { arm: false, flash: null },
 ) {
   // meta getters each hit localStorage + JSON.parse — one read each per frame
   const starN = stars();
@@ -942,7 +943,7 @@ export function drawTitle(
   ctx.save();
   if (rise > 0.05) ctx.translate(0, rise);
   if (tab === 'climb') drawClimbBody(ctx, t, cont, restartArmed);
-  else if (tab === 'shop') drawShopBody(ctx, t, freeNow);
+  else if (tab === 'shop') drawShopBody(ctx, t, freeNow, pack.arm, pack.flash);
   else if (tab === 'mons') drawMonsBody(ctx, t);
   else if (tab === 'raid') drawRaidBody(ctx, t);
   else drawTownBody(ctx, t, taskN);
@@ -1348,7 +1349,13 @@ function drawTabBar(
 
 // --- MONS: the creature loop — hatcher hero, dex card, latest catches -----
 // --- SHOP: stars and sparks in, mons out — hatcher hero + the daily deal ---
-function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
+function drawShopBody(
+  ctx: CanvasRenderingContext2D,
+  t: number,
+  freeNow: boolean,
+  packArmed = false,
+  packFlashId: string | null = null,
+) {
   hatcherCard(ctx, t, freeNow);
 
   // the day's deep spark bargain — its own window so the deal sells itself
@@ -1399,36 +1406,74 @@ function drawShopBody(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean
   ctx.fillStyle = INK_SOFT;
   ctx.fillText('TAP TO VIEW ›', tx2, dr.y + 170);
 
-  // the honest cut, visible before the hatcher opens — same rarity colors
-  // the overlay's own table prints, plus the pity count. Fills down to the
-  // tab bar — a bare gap under the card read as a hole
-  const orr = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 16, w: W - 60, h: TAB_BAR.y - 20 - (DEAL_BTN.y + DEAL_BTN.h + 16) };
+  // the upgrade rack — held items tier up off cheap dust packs; the shelf
+  // lists every bag item's pips so a pack's bump has a visible home, and
+  // the pill is the right column so the shelf doesn't fight it
+  const ur = UPGRADES_BTN;
+  uiPanel(ctx, ur, 'ITEM UPGRADES');
+  BAG_ITEMS.forEach((it, i) => {
+    const col = i % 7, row = (i / 7) | 0;
+    const cx = ur.x + 34 + col * 47;
+    const cy = ur.y + 62 + row * 50;
+    ctx.globalAlpha = itemTier(it.id) > 0 ? 1 : 0.55;
+    const spr = itemSprite(it.item);
+    void loadItem(it.item);
+    if (spr) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(spr, cx - 14, cy - 14, 28, 28);
+      ctx.restore();
+    }
+    // tier pips — five slots under the icon, gold where earned
+    const tt = itemTier(it.id);
+    for (let p = 0; p < ITEM_TIER_CAP; p++) {
+      ctx.fillStyle = p < tt ? GOLD : 'rgba(40,44,70,0.25)';
+      ctx.beginPath();
+      ctx.arc(cx - 14 + p * 7, cy + 20, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  });
+  // the pack pill arms like a spark buy — first tap reads its cost, second pays
+  const maxed = BAG_ITEMS.every((i) => itemTier(i.id) >= ITEM_TIER_CAP);
+  const canPay = dust() >= ITEM_PACK_COST;
+  const pk = PACK_PILL;
+  roundRect(ctx, pk.x, pk.y, pk.w, pk.h, 12);
+  ctx.fillStyle = packArmed ? '#1a2a4a' : maxed || !canPay ? '#3a3f58' : GOLD;
+  ctx.fill();
+  ctx.strokeStyle = packArmed ? '#8ab8ff' : INK;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.textAlign = 'center';
+  ctx.font = font(8);
+  ctx.fillStyle = packArmed ? '#c8dcff' : maxed || !canPay ? '#7a82a0' : INK;
+  ctx.fillText(maxed ? 'ALL MAXED' : packArmed ? 'TAP AGAIN' : 'UPGRADE', pk.x + pk.w / 2, pk.y + 26);
+  ctx.fillText(maxed ? '' : packArmed ? 'TO BUY' : 'PACK', pk.x + pk.w / 2, pk.y + 40);
+  ctx.font = fontB(9);
+  ctx.fillStyle = packArmed ? '#9df0ff' : maxed || !canPay ? '#5a6280' : INK;
+  ctx.fillText(`◆ ${ITEM_PACK_COST}`, pk.x + pk.w / 2, pk.y + 58);
+  if (packFlashId) {
+    ctx.font = font(8);
+    ctx.fillStyle = GOLD;
+    const fn = BAG_ITEMS.find((i) => i.id === packFlashId)?.name.toUpperCase() ?? '';
+    ctx.fillText(`${fn} T${itemTier(packFlashId)}!`, ur.x + ur.w / 2 - 40, ur.y + ur.h - 14);
+  }
+
+  // the honest cut, visible before the hatcher opens — same rarity table as
+  // the overlay prints, plus the pity count, compressed so the rack fits
+  const orr = { x: 30, y: UPGRADES_BTN.y + UPGRADES_BTN.h + 14, w: W - 60, h: TAB_BAR.y - 20 - (UPGRADES_BTN.y + UPGRADES_BTN.h + 14) };
   uiPanel(ctx, orr, 'PULL ODDS', { sub: `RARE+ IN ${PULL_PITY - (pullCount() % PULL_PITY)} PULLS` });
-  ([['COMMON', PULL_RATES.common, '#d0d0c8'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f'], ['SHINY', shinyOdds(), '#ffd848']] as const).forEach(([label, pct, color], i) => {
-    const ry = orr.y + 62 + i * 38;
-    ctx.textAlign = 'left';
-    ctx.font = fontB(8);
-    ctx.fillStyle = INK_SOFT;
-    ctx.fillText(label, orr.x + 18, ry + 9);
-    const bx = orr.x + 92, bw = orr.w - 92 - 66;
-    roundRect(ctx, bx, ry, bw, 12, 6);
-    ctx.fillStyle = '#e8e8e0';
-    ctx.fill();
-    ctx.save();
-    ctx.beginPath();
-    roundRect(ctx, bx, ry, bw, 12, 6);
-    ctx.clip();
+  ctx.textAlign = 'left';
+  ctx.font = fontB(8);
+  ([['COMMON', PULL_RATES.common, '#b8b8b0'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f'], ['SHINY', shinyOdds(), '#ffd848']] as const).forEach(([label, pct, color], i) => {
+    const ly = orr.y + 42 + i * 13;
     ctx.fillStyle = color;
-    ctx.fillRect(bx, ry, Math.max(4, bw * pct), 12);
-    ctx.restore();
+    ctx.fillText(label, orr.x + 18, ly);
     ctx.textAlign = 'right';
     ctx.fillStyle = INK;
-    ctx.fillText(`${Math.round(pct * 100)}%`, orr.x + orr.w - 18, ry + 9);
+    ctx.fillText(`${Math.round(pct * 100)}%`, orr.x + orr.w - 18, ly);
+    ctx.textAlign = 'left';
   });
-  ctx.textAlign = 'center';
-  ctx.font = fontB(7);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('rate-up day pays ×10 on the featured mon inside the rare+ pool', orr.x + orr.w / 2, orr.y + orr.h - 14);
 }
 
 // the hatcher's hero card — featured pull on its type stage, pity, prices
@@ -2479,6 +2524,13 @@ const HELP_SECTIONS: HelpSection[] = [
       'FUSE foes detonate at zero — kill fast, or bait the blast into its pack',
       'HUNTER foes stalk your weakest — park a tank between them',
       'LEECH foes heal off every hit — burst them, don\'t trade chips',
+      'tap (don\'t pull) a foe to scout its name, hp, and next move',
+    ],
+    demo: demoCountdown,
+  },
+  {
+    title: 'FOE AILMENTS',
+    lines: [
       'SLEEP powder drops a mon a whole turn — sleepers can\'t bump either',
       'VENOM stings leave a wound that bleeds a tick a round',
       'WISP flames burn — the victim singes and hits softer',
@@ -2486,17 +2538,27 @@ const HELP_SECTIONS: HelpSection[] = [
       'TOXIC hides poison the ball on contact — kill them with banks',
       'STATIC hides paralyze on contact — touch once, hard',
       'FLAME hides burn on contact — seared hits lose heat',
+      'CHARM hides lull the striker — contact can put it to sleep',
+      'SPORE hides scatter a random ailment on contact',
+      'SYNC foes echo their status — burn one and it burns you back',
+      'SHED foes shrug off poison, burns and sleep — burst them',
+      'P-HEAL foes mend off your poison — burn them instead',
+      'DRAIN foes absorb their element — same-type hits heal them',
+      'H-BLOCK foes stop your heals — kill the blocker to mend',
+      'BOND foes drag down whoever lands the KO — finish them with hazards or a catch',
+    ],
+    demo: demoCountdown,
+  },
+  {
+    title: 'FOE TELLS',
+    lines: [
       'MENACE foes intimidate — your hits lose a fifth while they live',
       'W-GUARD only falls to super-effective hits — slams still count',
       'STURDY foes hang on at 1 HP — the first kill shot only wounds',
-      'CHARM hides lull the striker — contact can put it to sleep',
       'SCALE hides half damage at full HP — chip it open first',
       'GUTS foes hit harder while statused — kill them clean',
-      'DRAIN foes absorb their element — same-type hits heal them',
       'LOAF foes truant — they fire once, then loiter a round',
       'BOOST foes speed up every attack — kill them early',
-      'SPORE hides scatter a random ailment on contact',
-      'SYNC foes echo their status — burn one and it burns you back',
       'PRESSURE halves your super charge — legends bend the economy',
       'BEAM foes lock a lane — the dashed line telegraphs the burn',
       'TRAP foes leash the court — the ball can\'t flee while they live',
@@ -2504,7 +2566,6 @@ const HELP_SECTIONS: HelpSection[] = [
       'a ball matching the sky launches faster — draft into the weather',
       'COUNTER foes return a third of contact — chip, don\'t crit',
       'ALPHA foes rally the pack — kill the leader first',
-      'SHED foes shrug off poison, burns and sleep — burst them',
       'CHARGE foes paw the ground, then ram — shove them off-line',
       'PRANK foes strike early — expect an ambush opener',
       'THIEF foes snatch your pickups — KO them to take it back',
@@ -2512,11 +2573,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'SPIKER foes seed your half with spikes — the court fills while they live',
       'SONIC foes rattle your aim — a touched mon launches off-line',
       'ANCHOR foes cannot be shoved — no herding them into hazards',
-      'H-BLOCK foes stop your heals — kill the blocker to mend',
-      'BOND foes drag down whoever lands the KO — finish them with hazards or a catch',
       'ARMOR foes shrug off crits — out-muscle them straight',
-      'P-HEAL foes mend off your poison — burn them instead',
-      'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
   },
@@ -2635,15 +2692,17 @@ const HELP_SECTIONS: HelpSection[] = [
 // a manual. Pages pair what belongs together — shot basics with the enemy
 // countdown, supers with their pips, map stops with the climb.
 const HELP_PAGES: { name: string; secs: number[] }[] = [
-  { name: 'YOUR SHOT', secs: [0, 4] },
+  { name: 'YOUR SHOT', secs: [0, 2] },
+  { name: 'FOES', secs: [4] },
+  { name: 'AILMENTS', secs: [5] },
+  { name: 'TELLS', secs: [6] },
   { name: 'SUPERS', secs: [1, 3] },
-  { name: 'ULTIMATE', secs: [16] },
-  { name: 'SUPER INDEX', secs: [14, 15] },
-  { name: 'SHOT TECH', secs: [2, 5] },
-  { name: 'THE FIELD', secs: [11, 12] },
-  { name: 'GROWTH', secs: [6, 7] },
-  { name: 'THE CLIMB', secs: [8, 9] },
-  { name: 'EXTRAS', secs: [10, 13] },
+  { name: 'SUPER INDEX', secs: [16, 17] },
+  { name: 'ULTIMATE', secs: [18, 12] },
+  { name: 'THE FIELD', secs: [7, 14] },
+  { name: 'GROWTH', secs: [8, 9] },
+  { name: 'THE CLIMB', secs: [10, 11] },
+  { name: 'EXTRAS', secs: [13, 15] },
 ];
 export const HELP_PAGE_COUNT = HELP_PAGES.length;
 
@@ -2685,26 +2744,28 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   ctx.fillStyle = coachArmed ? '#9fe89f' : PARCH;
   ctx.fillText(coachArmed ? 'TUTORIAL ON' : '▶ TUTORIAL', HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 25);
 
-  // two roomy cards per page — bigger demos than the old scroll ever showed
-  HELP_PAGES[page].secs.forEach((si, slot) => {
+  // cards flow down the page — each section's slot is exactly as tall as
+  // its own content, so a glossary page can pack nineteen lines
+  let sy = r.y + HELP_HEAD + 14;
+  HELP_PAGES[page].secs.forEach((si) => {
     const s = HELP_SECTIONS[si];
-    const sy = r.y + HELP_HEAD + 14 + slot * 336;
     const dx = r.x + 22, dw = r.w - 44;
     ctx.font = font(11);
     ctx.fillStyle = INK;
     ctx.fillText(s.title, r.x + r.w / 2, sy + 12);
 
     const dy = sy + 20;
-    uiWindow(ctx, { x: dx, y: dy, w: dw, h: 210 }, { shadow: false });
+    uiWindow(ctx, { x: dx, y: dy, w: dw, h: 180 }, { shadow: false });
     ctx.save();
-    roundRect(ctx, dx, dy, dw, 210, 8);
+    roundRect(ctx, dx, dy, dw, 180, 8);
     ctx.clip();
-    s.demo(ctx, dx, dy, dw, 210);
+    s.demo(ctx, dx, dy, dw, 180);
     ctx.restore();
 
     ctx.font = fontB(9);
     ctx.fillStyle = INK;
-    s.lines.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, dy + 234 + li * 16));
+    s.lines.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, dy + 212 + li * 15));
+    sy += 224 + s.lines.length * 15 + 8;
   });
 
   // footer nav: ‹ › arrows flank the page dots — same dots, new chrome
@@ -2731,6 +2792,10 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 // MONS owns dex / line-sets / catches; TOWN owns the 2-col grid + ASC + HALL.
 export const HATCH_BTN = { x: 30, y: 110, w: W - 60, h: 250 };
 export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 190 };
+export const UPGRADES_BTN = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 14, w: W - 60, h: 150 };
+// the pack pill is the rack's right column — exported for main's two-tap
+// armed-buy routing
+export const PACK_PILL = { x: UPGRADES_BTN.x + UPGRADES_BTN.w - 158, y: UPGRADES_BTN.y + 52, w: 140, h: 74 };
 export const DEX_BTN = { x: 30, y: 110, w: W - 60, h: 240 };
 export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
 // the partners strip upgrades from LATEST CATCHES once any bond exists —

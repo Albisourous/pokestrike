@@ -10,7 +10,7 @@ import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST } from '../src/game/meta';
+import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
@@ -3303,6 +3303,25 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   for (const a of AVATARS) { addStars(AVATAR_ROLL_COST); avatarUnlock(a.id); }
   const sFull = stars();
   ok(avatarRoll() === null && stars() === sFull, 'a full closet refuses to sell');
+
+  // the upgrade pack — dust buys +1 tier on a random held item, caps at 5,
+  // refuses when broke or maxed, and the tier actually lands in battle
+  localStorage.removeItem('pk_itemtiers');
+  ok(BAG_ITEMS.every((i) => itemTier(i.id) === 0), 'a fresh save starts every item at T0');
+  const dRoll = dust();
+  if (dRoll < ITEM_PACK_COST) addDust(ITEM_PACK_COST - dRoll);
+  const bumped = itemTierRoll();
+  ok(!!bumped && itemTier(bumped!) === 1, 'a pack raises one item a tier');
+  ok(dust() === Math.max(dRoll, ITEM_PACK_COST) - ITEM_PACK_COST, 'a pack charges the printed price');
+  for (let n = 0; n < ITEM_TIER_CAP * BAG_ITEMS.length; n++) { addDust(ITEM_PACK_COST); itemTierRoll(); }
+  ok(BAG_ITEMS.every((i) => itemTier(i.id) === ITEM_TIER_CAP), 'packs top out at the cap');
+  const dFull = dust();
+  ok(itemTierRoll() === null && dust() === dFull, 'a maxed shelf refuses to sell');
+  ok(itemTier('not_an_item') === 0, 'junk ids never read tiered');
+  // scope-lens T5 must land in the fight: +0.15 flat + 5 × 0.02 tiers
+  localStorage.setItem('pk_itemtiers', JSON.stringify({ t: { 'scope-lens': 5 } }));
+  const tiered = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3), ['scope-lens']);
+  ok(Math.abs(tiered.critCh - 0.25) < 1e-9, 'item tiers feed battle state');
 
   // lab levels change measurable battle state — a level must do something
   const preLab = localStorage.getItem('pk_lab');
