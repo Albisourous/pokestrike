@@ -195,4 +195,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | pending | verify | live shot: menace ring, static/flame/repel tags, halo, status marks all read | — |
 | 2026-10-25 | `d04fa18` | battle | BEAM casters lock + burn a lane — Porygon line | `git revert <this commit>` |
 | 2026-10-25 | `1726ac0` | battle | TRAP foes leash the court — Diglett/Dugtrio pit | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | SKY callers summon weather — Torkoal/Ninetales/Ttar/Hippo/Politoed | `git revert <this commit>` |
+| 2026-10-25 | `f252826` | battle | SKY callers summon weather — Torkoal/Ninetales/Ttar/Hippo/Politoed | `git revert <this commit>` |
