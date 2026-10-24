@@ -988,9 +988,9 @@ function drawClimbBody(
     });
     ctx.globalAlpha = 1;
     ctx.textAlign = 'center';
-    ctx.font = fontB(7);
+    ctx.font = fontB(9);
     ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, ctaBottom + 66);
+    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, ctaBottom + 68);
     ctx.restore();
   }
 
@@ -1007,6 +1007,7 @@ function drawClimbBody(
     chip(ctx, card.x + 12, card.y + 11, `STAGE ${cont ? cont.stage : 1} · ${stg.name.toUpperCase()}`, {
       bg: INK,
       fg: PAPER,
+      fontPx: 8,
     });
     // the opener pack keeps its real spawn xs, spread to a minimum spread so
     // a clustered pull reads as three foes, not a fused blob
@@ -1026,8 +1027,8 @@ function drawClimbBody(
     // foe count plate — right rail, mirrors the stage plate
     const foes = stg.waves.flat().length;
     const ft = `${foes} FOES`;
-    ctx.font = fontB(7);
-    chip(ctx, card.x + card.w - 12 - ctx.measureText(ft).width - 14, card.y + 11, ft, { bg: INK, fg: PAPER });
+    ctx.font = fontB(8);
+    chip(ctx, card.x + card.w - 12 - ctx.measureText(ft).width - 14, card.y + 11, ft, { bg: INK, fg: PAPER, fontPx: 8 });
   }
 
   // the run's heat picks right on the climb screen — the ladder StS
