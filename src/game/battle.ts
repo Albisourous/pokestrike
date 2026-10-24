@@ -8020,21 +8020,31 @@ export class Battle {
     const grow = u === this.active && this.phase === 'aim' ? 1.18 : 1;
     // everyone breathes a little — a standing army reads as a dead board
     const bob = Math.sin(this.time * 2.4 + u.uid * 1.7) * 1.2;
+    // winged units ride a deeper bob — the SKY wave's whole tell is that
+    // these foes float over the floor hazards
+    const lift = u.airborne ? 5 + Math.sin(this.time * 2.2 + u.uid * 1.3) * 2.5 : 0;
+    if (u.airborne) {
+      // a detached ground shadow sells the hover better than any badge
+      ctx.fillStyle = '#00000033';
+      ctx.beginPath();
+      ctx.ellipse(u.x, u.y + u.r * 0.85, u.r * 0.65, u.r * 0.26, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     // mid-evolution the cinematic owns the sprite — a white silhouette
     // flickering old↔new — so the settled new form doesn't peek through
     const evolving = this.evoFx.some((f) => f.u === u);
     if (!evolving) {
       if (st > 0.02) {
         ctx.save();
-        ctx.translate(u.x, u.y + bob);
+        ctx.translate(u.x, u.y + bob - lift);
         if (spd > 40) ctx.rotate(Math.atan2(u.vy, u.vx));
         ctx.scale(1 + st, Math.max(0.55, 1 - st * 0.7));
         if (u.shiny) drawShiny(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
         else drawMon(ctx, u.def.id, 0, 0, u.r * 2.6 * grow);
         ctx.restore();
       } else {
-        if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
-        else drawMon(ctx, u.def.id, u.x, u.y + bob, u.r * 2.6 * grow);
+        if (u.shiny) drawShiny(ctx, u.def.id, u.x, u.y + bob - lift, u.r * 2.6 * grow);
+        else drawMon(ctx, u.def.id, u.x, u.y + bob - lift, u.r * 2.6 * grow);
       }
     }
 
