@@ -67,6 +67,7 @@ export interface SpeciesDef {
   damp?: boolean; // Damp: while it lives, fuses fizzle and blasts soften
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   thief?: boolean; // drifts toward pickups and pockets them — KO it to re-drop
+  lay?: boolean; // lobs spike patches into your half instead of attacking
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -307,7 +308,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 296, name: 'Makuhita', type: 'fighting', stats: st(72, 60, 30, 20, 30, 25), melee: true, evolvesTo: 297 },
   { id: 309, name: 'Electrike', type: 'electric', stats: st(40, 45, 40, 65, 40, 65), para: true, evolvesTo: 310 },
   { id: 318, name: 'Carvanha', type: 'water', type2: 'ghost', stats: st(45, 90, 20, 65, 20, 65), melee: true, evolvesTo: 319 },
-  { id: 331, name: 'Cacnea', type: 'grass', type2: 'ghost', stats: st(50, 85, 40, 85, 40, 35), evolvesTo: 332 },
+  { id: 331, name: 'Cacnea', type: 'grass', type2: 'ghost', stats: st(50, 85, 40, 85, 40, 35), lay: true, evolvesTo: 332 },
   { id: 341, name: 'Corphish', type: 'water', stats: st(43, 80, 65, 50, 35, 35), melee: true, evolvesTo: 342 },
   { id: 353, name: 'Shuppet', type: 'ghost', stats: st(44, 75, 35, 63, 33, 45), pierce: true, evolvesTo: 354 },
   { id: 355, name: 'Duskull', type: 'ghost', stats: st(20, 40, 90, 30, 90, 25), evolvesTo: 356 },
@@ -494,7 +495,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 182, name: 'Bellossom', type: 'grass', stats: st(75, 80, 95, 90, 100, 50), healer: true },
   { id: 199, name: 'Slowking', type: 'psychic', type2: 'water', stats: st(95, 75, 80, 100, 110, 30), regen: true },
   { id: 205, name: 'Forretress', type: 'rock', stats: st(75, 90, 140, 60, 60, 40), taunt: true },
-  { id: 227, name: 'Skarmory', type: 'flying', stats: st(65, 80, 140, 40, 70, 70), sturdy: true },
+  { id: 227, name: 'Skarmory', type: 'flying', stats: st(65, 80, 140, 40, 70, 70), sturdy: true, lay: true },
   { id: 226, name: 'Mantine', type: 'water', type2: 'flying', stats: st(85, 40, 70, 80, 140, 70) },
   { id: 233, name: 'Porygon2', type: 'normal', stats: st(85, 80, 90, 105, 95, 60), beam: true },
   { id: 237, name: 'Hitmontop', type: 'fighting', stats: st(50, 95, 95, 35, 110, 70), melee: true },

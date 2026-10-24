@@ -6131,6 +6131,25 @@ export class Battle {
         this.burst(kid.x, kid.y, '#c8e0ff', 7, 220, 0.7);
         this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'SOS!', t: 0.9, color: '#c8e0ff', big: true });
         sfx('warn');
+      } else if (e.def.lay) {
+        // spiker: instead of attacking it lobs a spike patch into your
+        // half — the court slowly fills with denial. Layer the field out
+        // and your lanes shrink; cap the yard so it can't bury the arena
+        if (this.hazards.filter((h) => h.kind === 'spikes').length < 5) {
+          const a = this.arena;
+          const at = this.unstick(
+            a.x + a.w * (0.15 + this.rng() * 0.7),
+            a.y + a.h * (0.55 + this.rng() * 0.38),
+            30,
+          );
+          this.hazards.push({ kind: 'spikes', x: at.x, y: at.y, r: 34 });
+          this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'SPIKES!', t: 0.9, color: '#8a90a8', big: false });
+          this.burst(at.x, at.y, '#8a90a8', 8, 240, 0.8);
+          sfx('warn');
+        } else {
+          const target = this.nearestPlayer(e);
+          if (target) this.foeZap(e, target);
+        }
       } else if (e.def.charge) {
         // stampede: a pawing windup, then it rams across the court at the
         // nearest mon — the rush lands where the target stood, so the ball
@@ -7613,6 +7632,7 @@ export class Battle {
       e.def.pheal && 'poison heal — your venom mends it; burn it instead',
       e.def.blink && 'teleports when it shimmers',
       e.def.thief && 'snatches pickups — KO it to take them back',
+      e.def.lay && 'lays spikes in your half — kill it before the court fills',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9022,6 +9042,7 @@ export class Battle {
         u.def.charge && 'CHARGE',
         u.def.prank && 'PRANK',
         u.def.thief && 'THIEF',
+        u.def.lay && 'SPIKER',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
