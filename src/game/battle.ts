@@ -7853,7 +7853,13 @@ export class Battle {
       ctx.fillStyle = u.timer <= 1 || u.enraged ? '#ff6b6b' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       // keyword flags — the counter-mechanics read at a glance
-      const kw = u.def.taunt ? 'MAGNET' : u.def.cursed ? 'CURSE' : u.def.shielded ? 'SHELL' : u.def.spiky ? 'SPIKY' : '';
+      // keyword flags — composite so a dual-trait foe never hides a mechanic
+      const kw = [
+        u.def.taunt && 'MAGNET',
+        u.def.cursed && 'CURSE',
+        u.def.shielded && 'SHELL',
+        u.def.spiky && 'SPIKY',
+      ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);
         ctx.strokeText(kw, u.x, u.y + u.r + 14);

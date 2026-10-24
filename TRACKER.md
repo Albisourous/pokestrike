@@ -114,3 +114,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `455a0ab` | battle | two sling-side wave mods join the pool: HEADWIND (−15% launch — banks want a longer pull) and SLICK COURT (−40% friction — the ball carries, settle comes late). Both ride curMod, wave-scoped | `git revert <this commit>` |
 | 2026-10-25 | `0061d28` | battle | aim ghost marks ally passes: teammates the launch ray crosses get a ring (cyan = super ready, gray = cooling) — the bump chain reads before the pull | `git revert <this commit>` |
 | 2026-10-25 | `32500f6` | battle | aim ghost colors the first-contact ring by shield outcome on shelled foes — red opening = plate (glance), cyan = back door (flank) | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | kw tag composite (SHELL·SPIKY etc.) so dual-trait foes never hide a mechanic; Ferroseed double-flagged — flank it without grazing | `git revert <this commit>` |

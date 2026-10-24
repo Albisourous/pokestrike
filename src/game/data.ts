@@ -367,7 +367,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 582, name: 'Vanillite', type: 'water', stats: st(36, 50, 50, 65, 60, 44), evolvesTo: 583 },
   { id: 588, name: 'Karrablast', type: 'grass', stats: st(50, 75, 45, 40, 45, 60), evolvesTo: 589 },
   { id: 594, name: 'Alomomola', type: 'water', stats: st(165, 75, 80, 40, 45, 65), healer: true },
-  { id: 597, name: 'Ferroseed', type: 'grass', type2: 'rock', stats: st(44, 50, 91, 24, 86, 10), spiky: true, evolvesTo: 598 },
+  { id: 597, name: 'Ferroseed', type: 'grass', type2: 'rock', stats: st(44, 50, 91, 24, 86, 10), spiky: true, shielded: true, evolvesTo: 598 },
   { id: 615, name: 'Cryogonal', type: 'water', stats: st(80, 50, 50, 95, 135, 105), pierce: true },
   { id: 618, name: 'Stunfisk', type: 'rock', type2: 'electric', stats: st(109, 66, 84, 81, 99, 32), taunt: true },
   { id: 621, name: 'Druddigon', type: 'flying', stats: st(77, 120, 90, 60, 90, 48), melee: true },
