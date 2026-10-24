@@ -3351,6 +3351,7 @@ export class Battle {
         (1 + this.shotVolleyBoost) *
         (rico ? 1 + this.ricoMult : 1) *
         (shooter.burnT > 0 ? 0.7 : 1) * // a burned striker pulls its punches
+        (shooter.def.huge ? 2 : 1) * // Huge Power: canon attack doubling
         // intimidate: a living menace cowes the whole team — kill it first
         (this.enemies.some((m) => !m.dead && m.def.menace) ? 0.8 : 1) *
         (weak ? 3 : 1) *

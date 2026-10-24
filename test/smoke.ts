@@ -830,6 +830,27 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e.def = eDef;
   (b as any).dashes.length = 0;
 
+  // huge power: the flag doubles a striker's contact damage
+  e.dead = false;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  const sDef = striker.def;
+  striker.hp = striker.maxHp;
+  striker.def = { ...sDef, stats: { ...sDef.stats, atk: 300 } }; // big enough that rounding can't blur the ×2
+  (b as any).shotCombo = 0;
+  (b as any).shotHitN.clear();
+  (b as any).strikeEnemy(striker, e);
+  const normalHit = e.maxHp - e.hp;
+  e.hp = e.maxHp;
+  e.lastHit = new Map();
+  (b as any).shotCombo = 0;
+  (b as any).shotHitN.clear();
+  striker.def = { ...sDef, stats: { ...sDef.stats, atk: 300 }, huge: true };
+  (b as any).strikeEnemy(striker, e);
+  const hugeHit = e.maxHp - e.hp;
+  striker.def = sDef;
+  ok(hugeHit > normalHit * 1.8, `huge power doubles contact (${hugeHit} vs ${normalHit})`);
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

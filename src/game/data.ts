@@ -57,6 +57,7 @@ export interface SpeciesDef {
   shed?: boolean; // Shed Skin: each tick it may slough off every ailment
   charge?: boolean; // stampede: paws a beat, then rams across the court at a mon
   prank?: boolean; // Prankster: its opening attack comes early
+  huge?: boolean; // Huge Power / Pure Power: doubled contact damage
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -707,7 +708,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 148, name: 'Dragonair', type: 'flying', stats: st(61, 84, 65, 70, 70, 70), evolvesTo: 149, shed: true },
   { id: 178, name: 'Xatu', type: 'flying', type2: 'psychic', stats: st(65, 75, 70, 95, 70, 95), blink: true },
   { id: 180, name: 'Flaaffy', type: 'electric', stats: st(70, 55, 55, 80, 60, 45), evolvesTo: 181 },
-  { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true },
+  { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', stats: st(100, 50, 80, 60, 80, 50), healer: true, huge: true },
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', stats: st(95, 85, 85, 65, 65, 35) },
   { id: 217, name: 'Ursaring', type: 'normal', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true, guts: true },
   { id: 232, name: 'Donphan', type: 'rock', stats: st(90, 120, 120, 60, 60, 50), melee: true, charge: true },
@@ -751,7 +752,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 267, name: 'Beautifly', type: 'flying', stats: st(60, 70, 50, 100, 50, 65) },
   { id: 284, name: 'Masquerain', type: 'flying', stats: st(70, 60, 62, 100, 82, 80) },
   { id: 301, name: 'Delcatty', type: 'normal', stats: st(70, 65, 65, 55, 55, 90), charm: true },
-  { id: 308, name: 'Medicham', type: 'fighting', type2: 'psychic', stats: st(60, 60, 75, 60, 75, 80), melee: true },
+  { id: 308, name: 'Medicham', type: 'fighting', type2: 'psychic', stats: st(60, 60, 75, 60, 75, 80), melee: true, huge: true },
   { id: 323, name: 'Camerupt', type: 'fire', stats: st(70, 100, 70, 105, 75, 40), melee: true },
   { id: 326, name: 'Grumpig', type: 'psychic', stats: st(80, 45, 65, 90, 110, 80) },
   { id: 344, name: 'Claydol', type: 'psychic', type2: 'rock', stats: st(60, 70, 105, 70, 120, 75) },
