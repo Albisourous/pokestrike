@@ -172,4 +172,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `c0ab5d3` | battle | LEECH foes sip back the wounds they deal — Paras/Parasect | `git revert <this commit>` |
 | 2026-10-25 | `15b089a` | battle | SLEEP powder — drowsy hits drop a mon a turn, can't bump | `git revert <this commit>` |
 | 2026-10-25 | `014ae74` | battle | STING foes poison on hit — wound bleeds a tick a round both ways | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | WISP foes burn on hit — victim singes and hits softer | `git revert <this commit>` |
+| 2026-10-25 | `191d16f` | battle | WISP foes burn on hit — victim singes and hits softer | `git revert <this commit>` |
