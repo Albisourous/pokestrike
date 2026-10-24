@@ -69,6 +69,7 @@ export interface SpeciesDef {
   thief?: boolean; // drifts toward pickups and pockets them — KO it to re-drop
   lay?: boolean; // lobs spike patches into your half instead of attacking
   confuse?: boolean; // Supersonic: contact can rattle the striker's next aim
+  anchor?: boolean; // too heavy to shove — knockback and blast leave it planted
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -443,7 +444,7 @@ export const ENEMY_DB: SpeciesDef[] = [
 // reason to keep pushing into deeper depths.
 export const ELITES: SpeciesDef[] = [
   { id: 94, name: 'Gengar', type: 'ghost', type2: 'poison', stats: st(60, 65, 60, 130, 75, 110), pierce: true, cursed: true },
-  { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30), taunt: true },
+  { id: 143, name: 'Snorlax', type: 'normal', stats: st(160, 110, 65, 65, 110, 30), taunt: true, anchor: true },
   { id: 68, name: 'Machamp', type: 'fighting', stats: st(90, 130, 80, 65, 85, 55), melee: true, guts: true },
   { id: 59, name: 'Arcanine', type: 'fire', stats: st(90, 110, 80, 100, 80, 95), menace: true },
   { id: 9, name: 'Blastoise', type: 'water', stats: st(79, 83, 100, 85, 105, 78) },
@@ -472,7 +473,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 257, name: 'Blaziken', type: 'fire', type2: 'fighting', stats: st(80, 120, 70, 110, 70, 80), melee: true, boost: true },
   { id: 282, name: 'Gardevoir', type: 'psychic', type2: 'normal', stats: st(68, 65, 65, 125, 115, 80), healer: true },
   { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true, truant: true },
-  { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true },
+  { id: 306, name: 'Aggron', type: 'rock', stats: st(70, 110, 180, 60, 60, 50), melee: true, anchor: true },
   { id: 350, name: 'Milotic', type: 'water', stats: st(95, 60, 79, 100, 125, 81), healer: true, charm: true },
   { id: 373, name: 'Salamence', type: 'flying', stats: st(95, 135, 80, 110, 80, 100), melee: true, menace: true },
   { id: 121, name: 'Starmie', type: 'water', type2: 'psychic', stats: st(60, 75, 85, 100, 85, 115), pierce: true },

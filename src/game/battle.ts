@@ -2197,7 +2197,7 @@ export class Battle {
           this.scar(hz.x, hz.y, 30);
           this.waves.push({ x: hz.x, y: hz.y, r: 0, maxR: hz.r * 3.2, t: 0.35, life: 0.35, color: '#ff9a30', hits: new Set() });
           for (const e of this.enemies) {
-            if (!e.dead && dist(hz, e) < hz.r * 2.2 + e.r) {
+            if (!e.dead && !e.def.anchor && dist(hz, e) < hz.r * 2.2 + e.r) {
               const d = Math.max(30, dist(hz, e));
               e.vx += ((e.x - hz.x) / d) * 520;
               e.vy += ((e.y - hz.y) / d) * 520;
@@ -3449,7 +3449,7 @@ export class Battle {
     // bank a hit to push a raider off the loot, split a taunter from its
     // pack, or feed the whole crowd to the lava. Bosses stay planted.
     if (!e.dead && spd > 120) {
-      const kb = Math.min(300, spd * 0.35) * (e.boss ? 0.25 : 1);
+      const kb = Math.min(300, spd * 0.35) * (e.boss ? 0.25 : 1) * (e.def.anchor ? 0 : 1);
       const n = norm({ x: shooter.vx, y: shooter.vy });
       e.vx += n.x * kb;
       e.vy += n.y * kb;
@@ -7654,6 +7654,7 @@ export class Battle {
       e.def.thief && 'snatches pickups — KO it to take them back',
       e.def.lay && 'lays spikes in your half — kill it before the court fills',
       e.def.confuse && 'supersonic — contact rattles your next aim',
+      e.def.anchor && 'too heavy to shove — banks and blasts leave it planted',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9077,6 +9078,7 @@ export class Battle {
         u.def.thief && 'THIEF',
         u.def.lay && 'SPIKER',
         u.def.confuse && 'SONIC',
+        u.def.anchor && 'ANCHOR',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

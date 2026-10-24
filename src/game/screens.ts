@@ -2427,6 +2427,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'THIEF foes snatch your pickups — KO them to take it back',
       'SPIKER foes seed your half with spikes — the court fills while they live',
       'SONIC foes rattle your aim — a touched mon launches off-line',
+      'ANCHOR foes cannot be shoved — no herding them into hazards',
       'P-HEAL foes mend off your poison — burn them instead',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
