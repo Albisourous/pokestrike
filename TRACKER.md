@@ -236,4 +236,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `a8ba5cf` | battle | OWN TEMPO (Spoink) shrugs off confusion + Mudkip picks up canon Damp | `git revert <this commit>` |
 | 2026-10-25 | `fc3dcdc` | battle | FLANK foes approach on an arc — Zoroark + Absol drift wide | `git revert <this commit>` |
 | 2026-10-25 | verify | visual | live probe: thief loot bubble, dizzy ?, zZ, capped kw tags, SPIKER — all clean | n/a |
-| 2026-10-25 | pending | battle | FORECAST — Castform's type wears the sky (weakness follows weather) | `git revert <this commit>` |
+| 2026-10-25 | `79662cd` | battle | FORECAST — Castform's type wears the sky (weakness follows weather) | `git revert <this commit>` |
