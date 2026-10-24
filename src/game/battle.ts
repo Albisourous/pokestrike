@@ -4223,7 +4223,9 @@ export class Battle {
     this.addShake(9);
     this.burst(this.arena.x + this.arena.w / 2, this.arena.y + this.arena.h / 2, '#ffd84d', 26, 540, 1.2);
     // the clear calls itself out — same ribbon the wave intro rides in on
-    this.waveSpecial = this.waveIndex + 1 >= this.waveCount ? 'STAGE CLEAR!' : 'WAVE CLEAR!';
+    this.waveSpecial =
+      (this.waveIndex + 1 >= this.waveCount ? 'STAGE CLEAR!' : 'WAVE CLEAR!') +
+      (this.waveShots === 1 ? ' · SWEEP!' : ` · ${this.waveShots} SHOTS`);
     this.waveBanner = 1.1;
     sfx('wave');
     // a raid is the whole fight — the win beat is short and never rolls the
