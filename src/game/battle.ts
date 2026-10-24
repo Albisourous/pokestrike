@@ -8258,7 +8258,9 @@ export class Battle {
         // the class's overworld sprite stands on the stop — elites get the
         // ace trainer, the colored ring is still the squad's type
         const frame = n.kind === 'elite' ? 'ace_trainer_down_0' : TRAINER_CLASS[n.ttype ?? 'normal'].frame;
-        drawNpc(ctx, frame, nx, ny + cell * 0.5, cell * 1.7);
+        // stop-guardians read as figures on the path — a person looms wrong
+        // when they're taller than the buildings beside them
+        drawNpc(ctx, frame, nx, ny + cell * 0.5, cell * 1.15);
       } else if (n.kind === 'wild') {
         // a flower patch = tall grass — something wild is rustling there
         drawTile(ctx, MT.TILE_FLOWER, nx - cell * 0.6, ny - cell * 0.6, cell * 1.2, cell * 1.2);
@@ -8326,11 +8328,11 @@ export class Battle {
         : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title
         : n.kind === 'start' ? 'HOME'
         : 'WILD';
-      ctx.strokeText(label, nx, ny - cell * 1.55);
+      ctx.strokeText(label, nx, ny - cell * 0.95);
       ctx.fillStyle = reachable
         ? (n.kind === 'elite' ? '#c8b0ff' : n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d')
         : current ? '#6fdc6f' : '#8a94b8';
-      ctx.fillText(label, nx, ny - cell * 1.55);
+      ctx.fillText(label, nx, ny - cell * 0.95);
       // trainer squads are mono-type — name it so routing around a bad
       // matchup is a choice, not a coin flip; gyms sign their leader's
       // type the same way
@@ -8339,16 +8341,16 @@ export class Battle {
         ctx.font = font(8);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText(ty, nx, ny - cell * 1.55 + 12);
+        ctx.strokeText(ty, nx, ny - cell * 0.95 + 12);
         ctx.fillStyle = TYPE_COLOR[n.ttype ?? 'normal'];
-        ctx.fillText(ty, nx, ny - cell * 1.55 + 12);
+        ctx.fillText(ty, nx, ny - cell * 0.95 + 12);
       }
     });
     // the trainer draws last — she walks in front of the stops, and at
     // HOME she stands on the cottage's doorstep instead of its roof
     if (at) {
       const bob = this.mapWalk ? 0 : Math.sin(this.time * 4) * 1.5;
-      drawNpc(ctx, frame, ox + lx * cell + cell / 2, oy + (ly - cam) * cell + cell * 0.55 + bob, cell * 1.7);
+      drawNpc(ctx, frame, ox + lx * cell + cell / 2, oy + (ly - cam) * cell + cell * 0.55 + bob, cell * 1.3);
     }
     ctx.restore(); // end island clip
     ctx.strokeStyle = '#2a3560';
