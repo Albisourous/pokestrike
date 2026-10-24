@@ -163,4 +163,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `dad1229` | battle | active team traits read as a type-pip ribbon under the ASC chip | `git revert <this commit>` |
 | 2026-10-25 | verified | verify | live pass: trait ribbon, SOS/BLINK tags, protein aura, path echo all read in-fight | n/a |
 | 2026-10-25 | `ea21ae7` | battle | FLAWLESS clear bonus — untouched waves pay depth-scaled score | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | FUSE foes self-destruct at zero — blast wounds both sides | `git revert <this commit>` |
+| 2026-10-25 | `42fbeba` | battle | FUSE foes self-destruct at zero — blast wounds both sides | `git revert <this commit>` |
