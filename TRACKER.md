@@ -99,4 +99,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-24 | `a4d07c6` | climb/fonts | arena plates fontB7→8, RIVALS caption 7→9 — no sub-9 text left on the climb board | `git revert a4d07c6` |
 | 2026-10-24 | `9170203` | title/wilds | edge wilds static → slow ellipse graze — the field breathes at the margins | `git revert 9170203` |
 | 2026-10-24 | `a5ae860` | dex/detail | superDesc + traits lines drew in PS2P (fontB→fitFont override) and bled past the frame — fitFontB(8), contained | `git revert a5ae860` |
-| 2026-10-24 | `pending` | town/layout | scattered lots + corner pond → walled main-street plan: civic row (lab/hall) on a north street, commerce row (mart/tower) on a south street, lane joining them dead-ending at a centered park pond; hit rects re-fit to the new footprints | `git revert <town-layout-commit>` |
+| 2026-10-24 | `4f46631` | town/layout | scattered lots + corner pond → walled main-street plan: civic row (lab/hall) on a north street, commerce row (mart/tower) on a south street, lane joining them dead-ending at a centered park pond; hit rects re-fit to the new footprints | `git revert 4f46631` |
