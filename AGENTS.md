@@ -76,6 +76,10 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - Physics tunables are named consts at the top of `battle.ts`.
 - Asset canon is FRLG/Gen-3 (see Direction). Mons and items are vendored PNGs from PokeAPI/sprites; new scenery/props get sliced or blitted from `sprites/gracidea/` atlases.
 - Scenery draws from the gracidea atlases (the prop pass landed) — new scenery still means slice or blit from the pack, never invented blobs.
+- All new player-facing text ships through the humanizer checklist: terse
+  fragments, no AI tells (not-X-but-Y, staged openers, inflation, closers).
+  `—`/`·` are the house delimiters — keep them. Same bar covers prose an
+  agent writes: help copy, event lines, achievements, tracker rows.
 
 ## Installed agent tooling (`.devin/`)
 
