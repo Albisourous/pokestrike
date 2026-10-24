@@ -269,3 +269,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-23 | `70c0be2` | town | resliced real buildings — lab = domed institute (570,346), job board = awning café w/ patio (855,342); hedges → round garden bushes, pond gets iron rails + a gazebo, wildflower clusters + rocks fill dead lot sand | `git revert 70c0be2` |
 | 2026-10-23 | `f7bc510` | town | Norman's stroll box moved off the pond rim to the park-mouth grass band; iron rail dress removed (read as floating debris at 29×14) | `git revert f7bc510` |
 | 2026-10-23 | `bb02855` | map | stop guardians cell*1.7→1.15, player cell*1.7→1.3 — people were taller than buildings; labels pull in to sit right above heads | `git revert bb02855` |
+| 2026-10-23 | `504d079` | arena | sports-pitch paint removed (inset rect/halfway/center circle/corner arcs); floor bake stamps 5 worn-ground patches per theme; blocks rounded + softer rim | `git revert 504d079` |
