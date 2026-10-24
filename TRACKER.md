@@ -182,4 +182,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `ba1a926` | battle | MENACE foes intimidate — team hits -20% while they live | `git revert <this commit>` |
 | 2026-10-25 | `0daabf2` | battle | W-GUARD Shedinja — only SE hits land, slams still count | `git revert <this commit>` |
 | 2026-10-25 | `800a389` | battle | STURDY foes hang at 1 HP — Geodude/Torkoal/Skarmory | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | CHARM hides lull the striker — Delcatty/Milotic | `git revert <this commit>` |
+| 2026-10-25 | `543d001` | battle | CHARM hides lull the striker — Delcatty/Milotic | `git revert <this commit>` |
