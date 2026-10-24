@@ -39,6 +39,7 @@ export interface SpeciesDef {
   flame?: boolean; // Flame Body: striking the hide can burn the ball — its hits lose heat
   menace?: boolean; // Intimidate: while it lives the team's hits lose a fifth — kill it first
   wguard?: boolean; // Wonder Guard: only super-effective hits land — slam it, burn it, or hit SE
+  sturdy?: boolean; // Sturdy: hangs on at 1 HP through the first lethal hit
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -228,7 +229,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 19, name: 'Rattata', type: 'normal', stats: st(30, 56, 35, 25, 35, 72), melee: true, raider: true, evolvesTo: 20 },
   { id: 16, name: 'Pidgey', type: 'flying', type2: 'normal', stats: st(40, 45, 40, 35, 35, 56), melee: true, evolvesTo: 17 },
   { id: 41, name: 'Zubat', type: 'poison', type2: 'flying', stats: st(40, 45, 35, 30, 40, 55), melee: true, summon: true, evolvesTo: 42 },
-  { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20), evolvesTo: 75 },
+  { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20), sturdy: true, evolvesTo: 75 },
   { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45), repel: true, evolvesTo: 82 },
   { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90), blink: true, evolvesTo: 64 },
   { id: 43, name: 'Oddish', type: 'grass', type2: 'poison', stats: st(45, 50, 55, 75, 65, 30), drowsy: true, evolvesTo: 44 },
@@ -308,7 +309,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 314, name: 'Illumise', type: 'grass', stats: st(65, 47, 55, 73, 75, 85) },
   { id: 315, name: 'Roselia', type: 'grass', stats: st(50, 60, 45, 100, 80, 65), healer: true, evolvesTo: 407 },
   { id: 322, name: 'Numel', type: 'fire', type2: 'rock', stats: st(60, 60, 40, 65, 45, 35), evolvesTo: 323 },
-  { id: 324, name: 'Torkoal', type: 'fire', stats: st(70, 85, 140, 85, 70, 20) },
+  { id: 324, name: 'Torkoal', type: 'fire', stats: st(70, 85, 140, 85, 70, 20), sturdy: true },
   { id: 337, name: 'Lunatone', type: 'psychic', type2: 'rock', stats: st(90, 55, 65, 95, 85, 70), pierce: true },
   { id: 338, name: 'Solrock', type: 'psychic', type2: 'rock', stats: st(90, 95, 85, 55, 65, 70), melee: true },
   { id: 343, name: 'Baltoy', type: 'rock', type2: 'psychic', stats: st(40, 40, 55, 40, 70, 55), evolvesTo: 344 },
@@ -467,7 +468,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 182, name: 'Bellossom', type: 'grass', stats: st(75, 80, 95, 90, 100, 50), healer: true },
   { id: 199, name: 'Slowking', type: 'psychic', type2: 'water', stats: st(95, 75, 80, 100, 110, 30), regen: true },
   { id: 205, name: 'Forretress', type: 'rock', stats: st(75, 90, 140, 60, 60, 40), taunt: true },
-  { id: 227, name: 'Skarmory', type: 'flying', stats: st(65, 80, 140, 40, 70, 70) },
+  { id: 227, name: 'Skarmory', type: 'flying', stats: st(65, 80, 140, 40, 70, 70), sturdy: true },
   { id: 226, name: 'Mantine', type: 'water', type2: 'flying', stats: st(85, 40, 70, 80, 140, 70) },
   { id: 233, name: 'Porygon2', type: 'normal', stats: st(85, 80, 90, 105, 95, 60) },
   { id: 237, name: 'Hitmontop', type: 'fighting', stats: st(50, 95, 95, 35, 110, 70), melee: true },

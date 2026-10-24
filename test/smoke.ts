@@ -569,6 +569,14 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.def = strikerDef;
   e.def = eDef;
 
+  // sturdy: the first lethal blow only wounds — hangs on at 1 HP
+  e.def = { ...eDef, sturdy: true };
+  e.sash = true;
+  e.dead = false;
+  e.hp = e.maxHp;
+  (b as any).hurt(e, e.maxHp + 50);
+  ok(e.hp === 1 && !e.dead && !e.sash, `sturdy hangs on at 1 HP (hp ${e.hp})`);
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

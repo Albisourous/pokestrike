@@ -1564,7 +1564,7 @@ export class Battle {
       cdMax: 1,
       lastBump: -1,
       role: 'wild',
-      sash: false,
+      sash: !!s.def.sturdy, // sturdy species carry the hang-on natively
       lvl: el,
       pow: lvlPow(offStat(s.def.stats, s.def.type), el),
       rngMul: 1,
@@ -2918,11 +2918,11 @@ export class Battle {
       this.pushText({ x: e.x, y: e.y - e.r - 22, text: 'IT WOKE UP!', t: 1, color: '#c8d0e8', big: false });
       sfx('warn');
     }
-    // enemy focus sash: the gym ace's held item hangs on at 1 HP once
+    // enemy focus sash / sturdy: hangs on at 1 HP through the lethal hit
     if (e.sash && e.hp <= 0) {
       e.sash = false;
       e.hp = 1;
-      this.pushText({ x: e.x, y: e.y - e.r - 34, text: 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
+      this.pushText({ x: e.x, y: e.y - e.r - 34, text: e.def.sturdy ? 'STURDY!' : 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
     }
     // ghost trait: execute non-boss foes already on fumes
     if (!e.dead && !e.boss && e.hp > 0 && e.hp <= e.maxHp * this.t('ghost') * 0.06) {
@@ -7256,6 +7256,7 @@ export class Battle {
       e.def.flame && 'contact can burn the ball',
       e.def.menace && 'intimidates — your hits lose a fifth while it lives',
       e.def.wguard && 'wonder guard — only super-effective hits land',
+      e.def.sturdy && 'sturdy — hangs on at 1 HP once',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8455,8 +8456,9 @@ export class Battle {
     }
 
     // focus sash — the white headband reads on both sides: a one-shot plan
-    // should be visible before the shot commits, not after the pop
-    if (u.sash) {
+    // should be visible before the shot commits, not after the pop.
+    // sturdy foes skip the band — it's an ability, not a held item
+    if (u.sash && !u.def.sturdy) {
       ctx.strokeStyle = '#f0f0e8';
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -8633,6 +8635,7 @@ export class Battle {
         u.def.flame && 'FLAME',
         u.def.menace && 'MENACE',
         u.def.wguard && 'W-GUARD',
+        u.def.sturdy && u.sash && 'STURDY',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

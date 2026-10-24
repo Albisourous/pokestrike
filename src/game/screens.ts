@@ -2405,6 +2405,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'FLAME hides burn on contact — seared hits lose heat',
       'MENACE foes intimidate — your hits lose a fifth while they live',
       'W-GUARD only falls to super-effective hits — slams still count',
+      'STURDY foes hang on at 1 HP — the first kill shot only wounds',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
