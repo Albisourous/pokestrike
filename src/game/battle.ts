@@ -80,6 +80,7 @@ interface Unit {
   dotDmg: number;
   burnT: number; // burn rounds left — softens hits and singes each round
   paraT: number; // paralysis rounds left — the launch limps while it lasts
+  confuseT: number; // confusion rounds — the next launch veers off-line
   cd: number; // player bump-super recharge in shots; 0 = ready
   cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
@@ -886,6 +887,7 @@ export class Battle {
         dotDmg: 0,
         burnT: 0,
         paraT: 0,
+        confuseT: 0,
         cd,
         cdMax: cd,
         lastBump: -1,
@@ -1584,6 +1586,7 @@ export class Battle {
       dotDmg: 0,
       burnT: 0,
       paraT: 0,
+      confuseT: 0,
       cd: 0,
       cdMax: 1,
       lastBump: -1,
@@ -1802,6 +1805,17 @@ export class Battle {
     const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (u.paraT > 0 ? 0.65 : 1) * (0.4 + 0.6 * (gold ? 1 : charge)) * this.swiftMult(u);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
+    if (u.confuseT > 0) {
+      // supersonic bite: the release veers inside the wobble cone the ghost
+      // was showing — you aimed honestly, the launch still jitters ±10°
+      const j = (this.rng() - 0.5) * 0.35;
+      const c = Math.cos(j), s = Math.sin(j);
+      const vx = u.vx * c - u.vy * s, vy = u.vx * s + u.vy * c;
+      u.vx = vx;
+      u.vy = vy;
+      u.confuseT = 0;
+      this.pushText({ x: u.x, y: u.y - u.r - 14, text: 'DIZZY!', t: 0.8, color: '#c8a8f8', big: false });
+    }
     u.sq = 1; // launch pop — the ball stretches off the sling
     this.bumpsThisShot.clear();
     this.bumpNoted.clear();
@@ -3458,6 +3472,12 @@ export class Battle {
     if (e.def.flame && !shooter.dead && this.rng() < 0.3) {
       shooter.burnT = Math.max(shooter.burnT, 4);
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'BURNED!', t: 0.9, color: '#f08030', big: false });
+    }
+    // supersonic: the shriek scrambles the next launch — the ghost wobbles
+    // honestly, but tight banks get dicey for a round
+    if (e.def.confuse && !shooter.dead && this.rng() < 0.3) {
+      shooter.confuseT = 1;
+      this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'CONFUSED!', t: 0.9, color: '#c8a8f8', big: false });
     }
     // cute charm: the smitten striker nods off — a grazed shot can cost
     // the team its next launch, so finish the charm carrier from range
@@ -7633,6 +7653,7 @@ export class Battle {
       e.def.blink && 'teleports when it shimmers',
       e.def.thief && 'snatches pickups — KO it to take them back',
       e.def.lay && 'lays spikes in your half — kill it before the court fills',
+      e.def.confuse && 'supersonic — contact rattles your next aim',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -8843,6 +8864,18 @@ export class Battle {
       ctx.fillText('zZ', u.x + u.r - 2, u.y - u.r + 7);
     }
 
+    // a rattled player wears the dizzy mark — the next launch can veer, and
+    // the wobbling ghost is the same honest read in a different register
+    if (u.confuseT > 0 && u.side === 'player') {
+      ctx.font = font(11);
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText('?', u.x - u.r + 2, u.y - u.r + 7);
+      ctx.fillStyle = '#c8a8f8';
+      ctx.fillText('?', u.x - u.r + 2, u.y - u.r + 7);
+    }
+
     // focus sash — the white headband reads on both sides: a one-shot plan
     // should be visible before the shot commits, not after the pop.
     // sturdy foes skip the band — it's an ability, not a held item
@@ -9043,6 +9076,7 @@ export class Battle {
         u.def.prank && 'PRANK',
         u.def.thief && 'THIEF',
         u.def.lay && 'SPIKER',
+        u.def.confuse && 'SONIC',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
@@ -9207,6 +9241,15 @@ export class Battle {
     const pullLen = len(pull);
     if (pullLen < 18) return; // same tap floor as pointerUp
     const dir = norm(pull);
+    if (u.confuseT > 0) {
+      // the confused ghost wanders inside the real launch cone — the line
+      // shivers, so you know the release can drift about ±10°
+      const w = Math.sin(this.time * 7) * 0.17;
+      const c = Math.cos(w), s = Math.sin(w);
+      const dx = dir.x * c - dir.y * s, dy = dir.x * s + dir.y * c;
+      dir.x = dx;
+      dir.y = dy;
+    }
     const frac = this.charge();
     const zone = this.sweetSpot();
     const maxed = Math.abs(frac - zone.c) <= zone.hw;

@@ -228,3 +228,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | perf | verify | 8-foe + ball-flight re-check: avg 1.9ms, p50 0.1ms — ~64ms "spikes" are Chrome display-list raster billing in the sync probe loop, not game code | n/a |
 | 2026-10-25 | `5f87fbf` | battle | player FOLLOW ME (taunt) — living bait mon pulls all foe locks | `git revert <this commit>` |
 | 2026-10-25 | `2426dfb` | battle | SPIKER foes lob spike patches into your half — court denial | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | SONIC foes confuse on contact — next launch veers ±10°, ghost wobbles | `git revert <this commit>` |

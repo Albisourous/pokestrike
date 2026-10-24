@@ -68,6 +68,7 @@ export interface SpeciesDef {
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   thief?: boolean; // drifts toward pickups and pockets them — KO it to re-drop
   lay?: boolean; // lobs spike patches into your half instead of attacking
+  confuse?: boolean; // Supersonic: contact can rattle the striker's next aim
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -260,7 +261,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45), repel: true, evolvesTo: 82 },
   { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90), blink: true, evolvesTo: 64 },
   { id: 43, name: 'Oddish', type: 'grass', type2: 'poison', stats: st(45, 50, 55, 75, 65, 30), drowsy: true, evolvesTo: 44 },
-  { id: 92, name: 'Gastly', type: 'ghost', type2: 'poison', stats: st(30, 35, 30, 100, 35, 80), evolvesTo: 93 },
+  { id: 92, name: 'Gastly', type: 'ghost', type2: 'poison', stats: st(30, 35, 30, 100, 35, 80), confuse: true, evolvesTo: 93 },
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), melee: true, evolvesTo: 67 },
   { id: 21, name: 'Spearow', type: 'flying', type2: 'normal', stats: st(40, 60, 30, 31, 31, 70), melee: true, evolvesTo: 22 },
   { id: 163, name: 'Hoothoot', type: 'flying', type2: 'normal', stats: st(60, 30, 30, 36, 56, 50), melee: true, evolvesTo: 164 },
@@ -740,7 +741,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 362, name: 'Glalie', type: 'water', stats: st(80, 80, 80, 80, 80, 80) },
   { id: 364, name: 'Sealeo', type: 'water', stats: st(90, 60, 70, 75, 70, 45) },
   { id: 11, name: 'Metapod', type: 'grass', stats: st(50, 20, 55, 25, 25, 30), shielded: true, evolvesTo: 12 },
-  { id: 12, name: 'Butterfree', type: 'flying', stats: st(60, 45, 50, 90, 80, 70) },
+  { id: 12, name: 'Butterfree', type: 'flying', stats: st(60, 45, 50, 90, 80, 70), confuse: true },
   { id: 14, name: 'Kakuna', type: 'poison', stats: st(45, 25, 50, 25, 25, 35), shielded: true, evolvesTo: 15 },
   { id: 15, name: 'Beedrill', type: 'poison', stats: st(65, 90, 40, 45, 80, 75), melee: true, venom: true },
   { id: 28, name: 'Sandslash', type: 'rock', stats: st(75, 100, 110, 45, 55, 65), melee: true, spiky: true },
