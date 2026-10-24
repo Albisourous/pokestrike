@@ -2396,6 +2396,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'FUSE foes detonate at zero — kill fast, or bait the blast into its pack',
       'HUNTER foes stalk your weakest — park a tank between them',
       'LEECH foes heal off every hit — burst them, don\'t trade chips',
+      'SLEEP powder drops a mon a whole turn — sleepers can\'t bump either',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

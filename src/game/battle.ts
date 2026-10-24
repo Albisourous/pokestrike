@@ -2241,7 +2241,7 @@ export class Battle {
       }
       for (const p of this.players) {
         // pass through teammates — each pass is a link-bump combo tick
-        if (!p.dead && p !== u && dist(u, p) < u.r + p.r && u.vx * u.vx + u.vy * u.vy > 1600)
+        if (!p.dead && !p.asleep && p !== u && dist(u, p) < u.r + p.r && u.vx * u.vx + u.vy * u.vy > 1600)
           this.bumpAlly(p, u);
       }
       for (let j = this.pickups.length - 1; j >= 0; j--) {
@@ -5912,6 +5912,11 @@ export class Battle {
       src.hp = Math.min(src.maxHp, src.hp + sip);
       this.pushText({ x: src.x, y: src.y - src.r - 8, text: `+${sip}`, t: 0.8, color: '#6fdc6f', big: false });
     }
+    // sleep powder: the dust can drop the victim — loses its next turn
+    if (src?.def.drowsy && !p.dead && dmg > 0 && this.rng() < 0.55) {
+      p.asleep = true;
+      this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'PUT TO SLEEP!', t: 1, color: '#a890f0', big: false });
+    }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
     // the map early-returns before texts draw — a stray orb hit there
@@ -5976,7 +5981,15 @@ export class Battle {
     if (this.phase === 'won' || this.phase === 'lost') return;
     for (let i = 1; i <= this.players.length; i++) {
       const idx = (this.activeIdx + i) % this.players.length;
-      if (!this.players[idx].dead) {
+      const c = this.players[idx];
+      if (c.dead) continue;
+      // the nap costs the turn — wakes as it sits out so it's ready next round
+      if (c.asleep) {
+        c.asleep = false;
+        this.pushText({ x: c.x, y: c.y - c.r - 8, text: `${c.def.name.toUpperCase()} DOZES`, t: 1, color: '#a890f0', big: false });
+        continue;
+      }
+      {
         this.activeIdx = idx;
         this.phase = 'aim';
         const a = this.players[idx];
@@ -5989,6 +6002,8 @@ export class Battle {
         return;
       }
     }
+    // the whole bench dozed — everyone's awake now, the first one goes
+    if (this.players.some((p) => !p.dead)) return this.nextTurn();
     // nobody left standing — a stocked sacred ash burns to undo the wipe
     if (this.ashRevive()) return this.nextTurn();
     this.wipe();
@@ -7123,6 +7138,7 @@ export class Battle {
       e.def.fuse && 'detonates at zero — blast hits everything',
       e.def.hunter && 'hunts your weakest mon',
       e.def.leech && 'heals off every hit it lands',
+      e.def.drowsy && 'its hits can put a mon to sleep',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8277,6 +8293,18 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
+    // a dozing player gets the same zZ the sleepy foes wear — the nap is
+    // readable at a glance, not a turn-order surprise
+    if (u.asleep && u.side === 'player') {
+      ctx.font = font(11);
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText('zZ', u.x + u.r - 2, u.y - u.r + 7);
+      ctx.fillStyle = '#a890f0';
+      ctx.fillText('zZ', u.x + u.r - 2, u.y - u.r + 7);
+    }
+
     // focus sash — the white headband reads on both sides: a one-shot plan
     // should be visible before the shot commits, not after the pop
     if (u.sash) {
@@ -8447,6 +8475,7 @@ export class Battle {
         u.def.fuse && 'FUSE',
         u.def.hunter && 'HUNTER',
         u.def.leech && 'LEECH',
+        u.def.drowsy && 'SLEEP',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

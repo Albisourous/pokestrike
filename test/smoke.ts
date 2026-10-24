@@ -432,6 +432,23 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e.def = { ...e.def, leech: undefined };
   e.hp = e.maxHp;
 
+  // sleep powder drops the victim, the nap costs a turn
+  e.def = { ...e.def, drowsy: true };
+  const sleepy = (b as any).players.find((p: any) => !p.dead);
+  const rng0 = (b as any).rng;
+  (b as any).rng = () => 0.1; // under the 0.55 powder chance
+  (b as any).damagePlayer(sleepy, 5, e);
+  (b as any).rng = rng0;
+  ok(sleepy.asleep === true, 'sleep powder puts the victim out');
+  // the sleeping mon skips its turn — nextTurn wakes it sitting out
+  const living = (b as any).players.filter((p: any) => !p.dead).length;
+  (b as any).activeIdx = (b as any).players.indexOf(sleepy) - 1;
+  if ((b as any).activeIdx < 0) (b as any).activeIdx = (b as any).players.length - 1;
+  (b as any).phase = 'aim';
+  (b as any).nextTurn();
+  ok(sleepy.asleep === false && (living < 2 || (b as any).active !== sleepy), 'a dozing mon skips its turn and wakes');
+  e.def = { ...e.def, drowsy: undefined };
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

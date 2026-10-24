@@ -30,6 +30,7 @@ export interface SpeciesDef {
   fuse?: boolean; // self-destructs when its countdown ends — the blast hits BOTH sides; kill it fast or bait it into the pack
   hunter?: boolean; // pack predator — targets the weakest mon, not the nearest; guard the low one
   leech?: boolean; // Leech Life: its hits mend its own wounds — bursts beat chip trades
+  drowsy?: boolean; // Sleep Powder: hits can put a mon to sleep — it loses a turn and can't bump
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -222,7 +223,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 74, name: 'Geodude', type: 'rock', stats: st(40, 80, 100, 30, 30, 20), evolvesTo: 75 },
   { id: 81, name: 'Magnemite', type: 'electric', stats: st(25, 35, 70, 95, 55, 45), repel: true, evolvesTo: 82 },
   { id: 63, name: 'Abra', type: 'psychic', stats: st(25, 20, 15, 105, 55, 90), blink: true, evolvesTo: 64 },
-  { id: 43, name: 'Oddish', type: 'grass', type2: 'poison', stats: st(45, 50, 55, 75, 65, 30), evolvesTo: 44 },
+  { id: 43, name: 'Oddish', type: 'grass', type2: 'poison', stats: st(45, 50, 55, 75, 65, 30), drowsy: true, evolvesTo: 44 },
   { id: 92, name: 'Gastly', type: 'ghost', type2: 'poison', stats: st(30, 35, 30, 100, 35, 80), evolvesTo: 93 },
   { id: 66, name: 'Machop', type: 'fighting', stats: st(70, 80, 50, 35, 35, 35), melee: true, evolvesTo: 67 },
   { id: 21, name: 'Spearow', type: 'flying', type2: 'normal', stats: st(40, 60, 30, 31, 31, 70), melee: true, evolvesTo: 22 },
