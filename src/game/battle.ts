@@ -8336,6 +8336,22 @@ export class Battle {
           ctx.moveTo(u.x, u.y);
           ctx.lineTo(hx, hy);
           ctx.stroke();
+          // allies the ray crosses glow — the bump chain reads before the pull
+          for (const p of this.players) {
+            if (p.dead || p === u) continue;
+            const R = u.r + p.r;
+            const ox = p.x - u.x;
+            const oy = p.y - u.y;
+            const proj = ox * dir.x + oy * dir.y;
+            if (proj <= 0 || proj >= best) continue;
+            const d2 = ox * ox + oy * oy - proj * proj;
+            if (d2 > R * R) continue;
+            ctx.setLineDash([]);
+            ctx.strokeStyle = p.cd <= 0 ? '#9df0ff' : '#8a90a8';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r + 5 + Math.sin(this.time * 8) * 1.5, 0, Math.PI * 2);
+            ctx.stroke();
+          }
           if (hitFoe) {
             // gold ring on the opening target — the shot's first read
             ctx.setLineDash([]);
