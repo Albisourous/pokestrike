@@ -2798,6 +2798,24 @@ export class Battle {
         for (const p of this.players) p.cd = Math.min(p.cd + 1, p.cdMax);
         this.pushText({ x: e.x, y: e.y - e.r - 60, text: 'CURSED!', t: 1.1, color: '#a868c8', big: true });
       }
+      // split foes divide on KO — two half-size spawn take its place;
+      // kids lose the flag (cloned def) so it can't recurse
+      if (e.def.split) {
+        for (const s of [-1, 1]) {
+          const kid = this.makeEnemy(
+            { def: { ...e.def, split: undefined }, nx: (e.x - this.arena.x) / this.arena.w, ny: (e.y - this.arena.y) / this.arena.h },
+            this.waveIndex,
+          );
+          kid.maxHp = kid.hp = Math.max(8, Math.round(e.maxHp * 0.35));
+          kid.r = Math.max(10, Math.round(e.r * 0.7));
+          const at = this.unstick(e.x + s * e.r * 0.9, e.y, kid.r + 2);
+          kid.x = at.x;
+          kid.y = at.y;
+          this.enemies.push(kid);
+          this.burst(kid.x, kid.y, '#a0e060', 5, 160, 0.7);
+        }
+        this.pushText({ x: e.x, y: e.y - e.r - 34, text: 'SPLIT!', t: 0.9, color: '#a0e060', big: false });
+      }
       // multi-KO callouts — chaining kills in one shot should feel huge
       this.kosThisShot++;
       this.totalKos++;
@@ -7872,11 +7890,12 @@ export class Battle {
         u.def.shielded && 'SHELL',
         u.def.spiky && 'SPIKY',
         u.def.regen && 'REGEN',
+        u.def.split && 'SPLIT',
       ].filter(Boolean).join('·');
       if (kw) {
         ctx.font = font(8);
         ctx.strokeText(kw, u.x, u.y + u.r + 14);
-        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.regen ? '#a0e060' : u.def.shielded ? '#9aa7b8' : '#f85888';
+        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.regen || u.def.split ? '#a0e060' : u.def.shielded ? '#9aa7b8' : '#f85888';
         ctx.fillText(kw, u.x, u.y + u.r + 14);
       }
     } else {

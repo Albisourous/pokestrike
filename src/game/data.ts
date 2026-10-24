@@ -19,6 +19,7 @@ export interface SpeciesDef {
   shielded?: boolean; // a shell face drifts the rim: front hits glance to 30%, back hits pay a 50% flank
   spiky?: boolean; // contact bites the ball — grazing through the pack costs ~6% of the shooter's HP
   regen?: boolean; // mends ~3% HP a second — must be burst down, not whittled
+  split?: boolean; // divides on KO — two half-size spawn take its place
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -152,7 +153,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 590, name: 'Foongus', type: 'grass', type2: 'poison', stats: st(69, 55, 45, 55, 55, 15), evolvesTo: 591 },
   { id: 592, name: 'Frillish', type: 'water', type2: 'ghost', stats: st(55, 40, 50, 65, 85, 40), evolvesTo: 593, cursed: true },
   { id: 595, name: 'Joltik', type: 'grass', type2: 'electric', stats: st(50, 47, 50, 57, 50, 65), evolvesTo: 596 },
-  { id: 599, name: 'Klink', type: 'rock', stats: st(40, 55, 70, 45, 60, 30), evolvesTo: 600 },
+  { id: 599, name: 'Klink', type: 'rock', stats: st(40, 55, 70, 45, 60, 30), split: true, evolvesTo: 600 },
   { id: 602, name: 'Tynamo', type: 'electric', stats: st(35, 55, 40, 45, 40, 60), evolvesTo: 603 },
   { id: 605, name: 'Elgyem', type: 'psychic', stats: st(55, 55, 55, 85, 55, 30), evolvesTo: 606 },
   { id: 607, name: 'Litwick', type: 'ghost', type2: 'fire', stats: st(50, 30, 55, 65, 55, 20), evolvesTo: 608, cursed: true },
@@ -218,7 +219,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 46, name: 'Paras', type: 'grass', type2: 'poison', stats: st(35, 70, 55, 45, 55, 25), melee: true, evolvesTo: 47 },
   { id: 48, name: 'Venonat', type: 'poison', stats: st(60, 55, 50, 40, 55, 45), evolvesTo: 49 },
   { id: 69, name: 'Bellsprout', type: 'grass', type2: 'poison', stats: st(50, 75, 35, 70, 30, 40), evolvesTo: 70 },
-  { id: 102, name: 'Exeggcute', type: 'grass', type2: 'psychic', stats: st(60, 40, 80, 60, 45, 40), evolvesTo: 103 },
+  { id: 102, name: 'Exeggcute', type: 'grass', type2: 'psychic', stats: st(60, 40, 80, 60, 45, 40), split: true, evolvesTo: 103 },
   { id: 50, name: 'Diglett', type: 'rock', stats: st(10, 55, 25, 35, 45, 95), melee: true, evolvesTo: 51 },
   { id: 104, name: 'Cubone', type: 'rock', stats: st(50, 50, 95, 40, 50, 35), melee: true, evolvesTo: 105 },
   { id: 56, name: 'Mankey', type: 'fighting', stats: st(40, 80, 35, 35, 45, 70), melee: true, evolvesTo: 57 },
@@ -233,7 +234,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 100, name: 'Voltorb', type: 'electric', stats: st(40, 30, 50, 55, 55, 100), evolvesTo: 101 },
   { id: 170, name: 'Chinchou', type: 'electric', type2: 'water', stats: st(75, 38, 38, 56, 56, 67), evolvesTo: 171 },
   { id: 72, name: 'Tentacool', type: 'water', type2: 'poison', stats: st(40, 40, 35, 50, 100, 70), evolvesTo: 73 },
-  { id: 84, name: 'Doduo', type: 'flying', type2: 'normal', stats: st(35, 85, 45, 35, 35, 75), melee: true, evolvesTo: 85 },
+  { id: 84, name: 'Doduo', type: 'flying', type2: 'normal', stats: st(35, 85, 45, 35, 35, 75), melee: true, split: true, evolvesTo: 85 },
   { id: 278, name: 'Wingull', type: 'flying', type2: 'water', stats: st(40, 30, 30, 55, 30, 85), melee: true, evolvesTo: 279 },
   { id: 333, name: 'Swablu', type: 'flying', type2: 'normal', stats: st(45, 40, 60, 40, 75, 50), melee: true, evolvesTo: 334 },
   { id: 98, name: 'Krabby', type: 'water', stats: st(30, 105, 90, 25, 25, 50), melee: true, evolvesTo: 99 },
@@ -338,7 +339,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 412, name: 'Burmy', type: 'poison', stats: st(40, 29, 45, 29, 45, 36), evolvesTo: 413 },
   { id: 413, name: 'Wormadam', type: 'grass', stats: st(60, 59, 85, 79, 105, 36) },
   { id: 414, name: 'Mothim', type: 'flying', stats: st(70, 94, 50, 94, 50, 66) },
-  { id: 415, name: 'Combee', type: 'flying', stats: st(30, 30, 42, 30, 42, 70), evolvesTo: 416 },
+  { id: 415, name: 'Combee', type: 'flying', stats: st(30, 30, 42, 30, 42, 70), split: true, evolvesTo: 416 },
   { id: 416, name: 'Vespiquen', type: 'flying', stats: st(70, 80, 102, 80, 102, 40) },
   { id: 420, name: 'Cherubi', type: 'grass', stats: st(45, 35, 45, 62, 53, 35), evolvesTo: 421 },
   { id: 421, name: 'Cherrim', type: 'grass', stats: st(70, 60, 70, 87, 78, 85) },
@@ -384,7 +385,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 125, name: 'Electabuzz', type: 'electric', stats: st(65, 83, 57, 95, 85, 105) },
   { id: 112, name: 'Rhydon', type: 'rock', stats: st(105, 130, 120, 45, 45, 40), melee: true },
   { id: 289, name: 'Slaking', type: 'normal', stats: st(150, 160, 100, 95, 65, 100), taunt: true },
-  { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60) },
+  { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60), split: true },
   { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },
 ];
 
@@ -651,7 +652,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 101, name: 'Electrode', type: 'electric', stats: st(60, 50, 70, 80, 80, 150) },
   { id: 103, name: 'Exeggutor', type: 'grass', type2: 'psychic', stats: st(95, 95, 85, 125, 75, 55) },
   { id: 105, name: 'Marowak', type: 'rock', stats: st(60, 80, 110, 50, 80, 45), melee: true },
-  { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60) },
+  { id: 110, name: 'Weezing', type: 'poison', stats: st(65, 90, 120, 85, 70, 60), split: true },
   { id: 112, name: 'Rhydon', type: 'rock', stats: st(105, 130, 120, 45, 45, 40), melee: true },
   { id: 164, name: 'Noctowl', type: 'flying', type2: 'normal', stats: st(100, 50, 50, 86, 96, 70), melee: true },
   { id: 171, name: 'Lanturn', type: 'electric', type2: 'water', stats: st(125, 58, 58, 76, 76, 67) },

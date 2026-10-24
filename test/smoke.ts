@@ -207,6 +207,13 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   e1.hp = Math.floor(e1.maxHp / 2);
   (b as any).stepEnemyMovement(1);
   ok(e1.hp > Math.floor(e1.maxHp / 2), `regen foe mends (${Math.floor(e1.maxHp / 2)} -> ${e1.hp})`);
+
+  // split foes divide on KO — two half-size spawn take its place
+  const n0 = (b as any).enemies.length;
+  e2.def = { ...e2.def, split: true };
+  (b as any).hurt(e2, e2.hp, '#fff');
+  ok((b as any).enemies.length === n0 + 2, `split KO adds two kids (${n0} -> ${(b as any).enemies.length})`);
+  ok((b as any).enemies.filter((x: any) => !x.dead && x.def.split === undefined).length >= 2, 'split kids can\'t re-split');
 }
 
 {
