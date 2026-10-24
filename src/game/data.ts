@@ -26,6 +26,7 @@ export interface SpeciesDef {
   raider?: boolean; // ignores the fight to steal field pickups — kill it before the loot's gone
   volley?: boolean; // fans its attack across the three nearest mons — one tank can't soak it
   summon?: boolean; // SOS caller: cries for a weak kid instead of attacking — kill it before the field floods
+  mirror?: boolean; // Transform: copies the strongest standing mon's typing + stats (keeps its own HP)
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -383,6 +384,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 626, name: 'Bouffalant', type: 'normal', stats: st(95, 110, 95, 40, 95, 55), melee: true },
   { id: 631, name: 'Heatmor', type: 'fire', stats: st(85, 97, 66, 105, 66, 65), taunt: true },
   { id: 632, name: 'Durant', type: 'grass', type2: 'rock', stats: st(58, 109, 112, 48, 48, 109) },
+  { id: 132, name: 'Ditto', type: 'normal', stats: st(48, 48, 48, 48, 48, 48), mirror: true },
   { id: 150, name: 'Mewtwo', type: 'psychic', stats: st(106, 110, 90, 154, 90, 130) },
   { id: 130, name: 'Gyarados', type: 'water', type2: 'flying', stats: st(95, 125, 79, 60, 100, 81), rage: true },
   { id: 149, name: 'Dragonite', type: 'flying', stats: st(91, 134, 95, 100, 100, 80) },

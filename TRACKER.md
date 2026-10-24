@@ -159,3 +159,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `2db4c5a` | battle | protein-fed ball burns orange till the shot parks | `git revert <this commit>` |
 | 2026-10-25 | `7e8a854` | battle | last-shot arc echoes as a faint dotted line under the next aim | `git revert <this commit>` |
 | 2026-10-25 | `f69daeb` | battle | SOS callers summon weak kids instead of attacking — flood-capped at 7 | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | MIRROR blobs transform into the lead's typing + stats, keep own HP | `git revert <this commit>` |

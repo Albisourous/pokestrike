@@ -1,7 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst } from '../src/game/data';
 import { existsSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
@@ -349,6 +349,15 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(nFoes1 === nFoes0 + 1 && !kid.def.summon, `SOS caller spawns a flagless kid (${nFoes0} -> ${nFoes1})`);
   e.def = { ...e.def, summon: undefined };
   kid.dead = true; // the test spawn can't leak into later wave counts
+
+  // mirror blobs transform into the strongest standing mon — own HP kept
+  const lead = [...(b as any).players].filter((p: any) => !p.dead).sort((x: any, y: any) => bst(y.def) - bst(x.def))[0];
+  const mir = (b as any).makeEnemy(
+    { def: { id: 132, name: 'Ditto', type: 'normal', stats: { hp: 48, atk: 48, def: 48, spa: 48, spd: 48, spe: 48 }, mirror: true }, nx: 0.5, ny: 0.3 },
+    (b as any).waveIndex,
+  );
+  ok(mir.def.mirror && mir.def.stats.atk === lead.def.stats.atk && mir.def.stats.hp === 48, `mirror copies the lead's stats but keeps blob HP (atk ${mir.def.stats.atk})`);
+  mir.dead = true; // test spawn, not a wave member
 
   // volley fans the attack across the three nearest mons, weakened per orb
   e.def = { ...e.def, volley: true, melee: false, raider: false, healer: false };

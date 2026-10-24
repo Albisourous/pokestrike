@@ -1508,9 +1508,16 @@ export class Battle {
     const ehp = Math.round(
       (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * lvlHp(s.def.stats.hp, el),
     );
+    // mirror foes Transform on entry — they wear the strongest standing
+    // mon's typing and moves, but canon keeps the blob's own HP
+    let def = s.def;
+    if (s.def.mirror) {
+      const lead = this.players.filter((p) => !p.dead).sort((a, b) => bst(b.def) - bst(a.def))[0];
+      if (lead) def = { ...s.def, type: lead.def.type, type2: lead.def.type2, stats: { ...lead.def.stats, hp: s.def.stats.hp } };
+    }
     return {
       uid: this.uidCtr++,
-      def: s.def,
+      def,
       side: 'enemy',
       x: at.x,
       y: at.y,
@@ -1521,7 +1528,7 @@ export class Battle {
       maxHp: ehp,
       timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() + (wi === 0 ? 1 : 0),
       // ASC 7 FRENZY: foes press harder — approach speed ×1.25
-      drift: enemyDrift(s.def.stats) * (s.boss ? 0.55 : 1) * (this.asc >= 7 ? 1.25 : 1),
+      drift: enemyDrift(def.stats) * (s.boss ? 0.55 : 1) * (this.asc >= 7 ? 1.25 : 1),
       wx: 0,
       wy: 0,
       wT: this.rng() * 0.8,
@@ -7021,6 +7028,7 @@ export class Battle {
       e.def.melee && 'lunges into your team',
       e.def.volley && 'fans its shot across three',
       e.def.summon && 'calls for help instead of attacking',
+      e.def.mirror && 'transformed into your strongest mon',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8341,6 +8349,7 @@ export class Battle {
         u.def.raider && 'RAIDER',
         u.def.volley && 'VOLLEY',
         u.def.summon && 'SOS',
+        u.def.mirror && 'MIRROR',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

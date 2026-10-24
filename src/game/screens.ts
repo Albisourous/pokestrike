@@ -2392,6 +2392,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'volley foes fan their shot across three mons — kill the cannon first',
       'blink foes flicker before they teleport — hold the shot a beat',
       'SOS callers cry for backup — silence them before the field floods',
+      'mirror blobs transform into your strongest — feed them a weak lead',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
