@@ -271,3 +271,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-23 | `bb02855` | map | stop guardians cell*1.7→1.15, player cell*1.7→1.3 — people were taller than buildings; labels pull in to sit right above heads | `git revert bb02855` |
 | 2026-10-23 | `504d079` | arena | sports-pitch paint removed (inset rect/halfway/center circle/corner arcs); floor bake stamps 5 worn-ground patches per theme; blocks rounded + softer rim | `git revert 504d079` |
 | 2026-10-23 | `0d09dbc` | help+shop | ENEMIES glossary split into 3 sections, deck repaged to 11 with flowing card heights (was one 56-line slot overflowing the pager); ITEM UPGRADES rack — ◆40 dust packs bump a random held item +1 tier (cap 5, pk_itemtiers, perTier effects on field+resume) | `git revert 0d09dbc` |
+| 2026-10-23 | `0d09dbc`+ | shop | upgrade rack cells ghost on bag stock, not tier — a maxed-but-owned item reads lit | — |
