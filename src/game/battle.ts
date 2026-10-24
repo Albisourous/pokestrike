@@ -8260,6 +8260,91 @@ export class Battle {
       ctx.lineTo(ex + px * hs * 0.6, ey + py * hs * 0.6);
       ctx.lineTo(ex - px * hs * 0.6, ey - py * hs * 0.6);
       ctx.fill();
+
+      // first-contact preview: the ray rides past the arrow — a ring marks
+      // the foe you'd open on, and a wall/block hit throws the bank angle
+      // back as a short ghost leg. Teaches the bank shot without a word.
+      if (dir.x !== 0 || dir.y !== 0) {
+        const a = this.arena;
+        let best = Infinity;
+        let nx = 0;
+        let ny = 0;
+        let hitFoe = false;
+        const wall = (t: number, nX: number, nY: number) => {
+          if (t > 0 && t < best) {
+            best = t;
+            nx = nX;
+            ny = nY;
+            hitFoe = false;
+          }
+        };
+        if (dir.x < 0) wall((a.x + u.r - u.x) / dir.x, 1, 0);
+        else if (dir.x > 0) wall((a.x + a.w - u.r - u.x) / dir.x, -1, 0);
+        if (dir.y < 0) wall((a.y + u.r - u.y) / dir.y, 0, 1);
+        else if (dir.y > 0) wall((a.y + a.h - u.r - u.y) / dir.y, 0, -1);
+        // shortcut: stone slabs read as four faces each — slab test, no
+        // corner rounding; upgrade if aim-ghost misses on block corners
+        for (const b of this.blocks) {
+          const inv = (v: number) => 1 / (v === 0 ? 1e-9 : v);
+          const tx1 = (b.x - u.r - u.x) * inv(dir.x);
+          const tx2 = (b.x + b.w + u.r - u.x) * inv(dir.x);
+          const ty1 = (b.y - u.r - u.y) * inv(dir.y);
+          const ty2 = (b.y + b.h + u.r - u.y) * inv(dir.y);
+          const tEnter = Math.max(Math.min(tx1, tx2), Math.min(ty1, ty2));
+          const tExit = Math.min(Math.max(tx1, tx2), Math.max(ty1, ty2));
+          if (tEnter < tExit && tEnter > 0 && tEnter < best) {
+            best = tEnter;
+            const xEntry = Math.min(tx1, tx2) > Math.min(ty1, ty2);
+            nx = xEntry ? Math.sign(tx1 - tx2) : 0;
+            ny = xEntry ? 0 : Math.sign(ty1 - ty2);
+            hitFoe = false;
+          }
+        }
+        for (const e of this.enemies) {
+          if (e.dead) continue;
+          const R = u.r + e.r;
+          const ox = e.x - u.x;
+          const oy = e.y - u.y;
+          const proj = ox * dir.x + oy * dir.y;
+          if (proj <= 0) continue;
+          const d2 = ox * ox + oy * oy - proj * proj;
+          if (d2 > R * R) continue;
+          const t = proj - Math.sqrt(R * R - d2);
+          if (t > 0 && t < best) {
+            best = t;
+            hitFoe = true;
+          }
+        }
+        if (best < Infinity) {
+          const hx = u.x + dir.x * best;
+          const hy = u.y + dir.y * best;
+          ctx.globalAlpha = 0.4;
+          ctx.strokeStyle = hitFoe ? '#ffd84d' : color;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 5]);
+          ctx.beginPath();
+          ctx.moveTo(u.x, u.y);
+          ctx.lineTo(hx, hy);
+          ctx.stroke();
+          if (hitFoe) {
+            // gold ring on the opening target — the shot's first read
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(hx, hy, 6 + Math.sin(this.time * 8) * 1.5, 0, Math.PI * 2);
+            ctx.stroke();
+          } else {
+            // ghost leg banks off the surface the way the ball will
+            ctx.beginPath();
+            const rx = dir.x - 2 * (dir.x * nx + dir.y * ny) * nx;
+            const ry = dir.y - 2 * (dir.x * nx + dir.y * ny) * ny;
+            ctx.moveTo(hx, hy);
+            ctx.lineTo(hx + rx * 70, hy + ry * 70);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          ctx.globalAlpha = 1;
+        }
+      }
     }
   }
 
