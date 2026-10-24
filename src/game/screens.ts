@@ -2398,6 +2398,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'LEECH foes heal off every hit — burst them, don\'t trade chips',
       'SLEEP powder drops a mon a whole turn — sleepers can\'t bump either',
       'VENOM stings leave a wound that bleeds a tick a round',
+      'WISP flames burn — the victim singes and hits softer',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

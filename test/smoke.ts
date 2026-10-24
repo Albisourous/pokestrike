@@ -459,6 +459,18 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   vic.dotDmg = 0;
   e.def = { ...e.def, venom: undefined };
 
+  // will-o-wisp burns — the victim singes and pulls its punches
+  e.def = { ...e.def, burn: true };
+  const burnee = (b as any).players.find((p: any) => !p.dead);
+  burnee.burnT = 0;
+  const rng1 = (b as any).rng;
+  (b as any).rng = () => 0.1; // under the 0.7 wisp chance
+  (b as any).damagePlayer(burnee, 5, e);
+  (b as any).rng = rng1;
+  ok(burnee.burnT > 0, `wisp burns the victim (${burnee.burnT} rounds)`);
+  burnee.burnT = 0;
+  e.def = { ...e.def, burn: undefined };
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

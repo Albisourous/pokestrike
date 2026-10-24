@@ -32,6 +32,7 @@ export interface SpeciesDef {
   leech?: boolean; // Leech Life: its hits mend its own wounds — bursts beat chip trades
   drowsy?: boolean; // Sleep Powder: hits can put a mon to sleep — it loses a turn and can't bump
   venom?: boolean; // poison sting: its hits leave the victim bleeding a tick a round
+  burn?: boolean; // Will-O-Wisp: hits can burn — the victim hits softer and singes each round
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -238,10 +239,10 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 56, name: 'Mankey', type: 'fighting', stats: st(40, 80, 35, 35, 45, 70), melee: true, rage: true, evolvesTo: 57 },
   { id: 88, name: 'Grimer', type: 'poison', stats: st(80, 80, 50, 40, 50, 25), melee: true, evolvesTo: 89 },
   { id: 109, name: 'Koffing', type: 'poison', stats: st(40, 65, 95, 60, 45, 35), fuse: true, evolvesTo: 110 },
-  { id: 37, name: 'Vulpix', type: 'fire', stats: st(38, 41, 40, 50, 65, 65), evolvesTo: 38 },
-  { id: 58, name: 'Growlithe', type: 'fire', stats: st(55, 70, 45, 70, 50, 60), melee: true, evolvesTo: 59 },
+  { id: 37, name: 'Vulpix', type: 'fire', stats: st(38, 41, 40, 50, 65, 65), burn: true, evolvesTo: 38 },
+  { id: 58, name: 'Growlithe', type: 'fire', stats: st(55, 70, 45, 70, 50, 60), melee: true, burn: true, evolvesTo: 59 },
   { id: 77, name: 'Ponyta', type: 'fire', stats: st(50, 85, 55, 65, 65, 90), evolvesTo: 78 },
-  { id: 126, name: 'Magmar', type: 'fire', stats: st(65, 95, 57, 100, 85, 93), evolvesTo: 467 },
+  { id: 126, name: 'Magmar', type: 'fire', stats: st(65, 95, 57, 100, 85, 93), burn: true, evolvesTo: 467 },
   { id: 218, name: 'Slugma', type: 'fire', type2: 'rock', stats: st(40, 40, 40, 70, 40, 20), evolvesTo: 219 },
   { id: 111, name: 'Rhyhorn', type: 'rock', stats: st(80, 85, 95, 30, 30, 25), melee: true, evolvesTo: 112 },
   { id: 100, name: 'Voltorb', type: 'electric', stats: st(40, 30, 50, 55, 55, 100), fuse: true, evolvesTo: 101 },
@@ -639,7 +640,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 26, name: 'Raichu', type: 'electric', stats: st(60, 90, 55, 90, 80, 110), pierce: true },
   { id: 33, name: 'Nidorino', type: 'poison', stats: st(61, 72, 57, 55, 55, 65), melee: true, evolvesTo: 34 },
   { id: 36, name: 'Clefable', type: 'normal', stats: st(95, 70, 73, 95, 90, 60), healer: true },
-  { id: 38, name: 'Ninetales', type: 'fire', stats: st(73, 76, 75, 81, 100, 100) },
+  { id: 38, name: 'Ninetales', type: 'fire', stats: st(73, 76, 75, 81, 100, 100), burn: true },
   { id: 40, name: 'Wigglytuff', type: 'normal', stats: st(140, 70, 45, 85, 50, 45), healer: true },
   { id: 42, name: 'Golbat', type: 'poison', type2: 'flying', stats: st(75, 80, 70, 65, 75, 90), melee: true, evolvesTo: 169 },
   { id: 44, name: 'Gloom', type: 'grass', type2: 'poison', stats: st(60, 65, 70, 85, 75, 40), evolvesTo: [45, 182] },

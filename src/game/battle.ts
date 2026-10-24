@@ -78,6 +78,7 @@ interface Unit {
   dead: boolean;
   dotTicks: number; // poison ticks remaining
   dotDmg: number;
+  burnT: number; // burn rounds left — softens hits and singes each round
   cd: number; // player bump-super recharge in shots; 0 = ready
   cdMax: number; // threshold the pips count up to
   lastBump: number; // last time a pass-through triggered this ally
@@ -872,6 +873,7 @@ export class Battle {
         dead: false,
         dotTicks: 0,
         dotDmg: 0,
+        burnT: 0,
         cd,
         cdMax: cd,
         lastBump: -1,
@@ -1547,6 +1549,7 @@ export class Battle {
       dead: false,
       dotTicks: 0,
       dotDmg: 0,
+      burnT: 0,
       cd: 0,
       cdMax: 1,
       lastBump: -1,
@@ -3264,6 +3267,7 @@ export class Battle {
         (this.shotGold ? 1.2 : 1) *
         (1 + this.shotVolleyBoost) *
         (rico ? 1 + this.ricoMult : 1) *
+        (shooter.burnT > 0 ? 0.7 : 1) * // a burned striker pulls its punches
         (weak ? 3 : 1) *
         (guarded ? 0.3 : flanked ? 1.5 : 1) *
         // power zone: hits landed while the ball's inside the ATK field
@@ -5498,11 +5502,16 @@ export class Battle {
         this.hurt(e, e.dotDmg, '#a040a0');
       }
     }
-    // venom works both ways — a poisoned mon bleeds out the same ticks
+    // venom works both ways — a poisoned mon bleeds out the same ticks,
+    // and a burned one singes until the flame wears out
     for (const p of this.players) {
       if (p.dotTicks > 0 && !p.dead) {
         p.dotTicks--;
         this.damagePlayer(p, p.dotDmg);
+      }
+      if (p.burnT > 0 && !p.dead) {
+        p.burnT--;
+        this.damagePlayer(p, Math.max(1, Math.ceil(p.maxHp * 0.04)), undefined);
       }
     }
     // zombie loop: a linked foe rises unless its partner fell too — the
@@ -5929,6 +5938,11 @@ export class Battle {
       p.dotTicks = Math.max(p.dotTicks, 4);
       p.dotDmg = Math.max(p.dotDmg, Math.ceil(p.maxHp * 0.06));
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'POISONED!', t: 1, color: '#a040a0', big: false });
+    }
+    // will-o-wisp: the burn singes each round and dulls the victim's hits
+    if (src?.def.burn && !p.dead && dmg > 0 && this.rng() < 0.7) {
+      p.burnT = Math.max(p.burnT, 6);
+      this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'BURNED!', t: 1, color: '#f08030', big: false });
     }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
@@ -7153,6 +7167,7 @@ export class Battle {
       e.def.leech && 'heals off every hit it lands',
       e.def.drowsy && 'its hits can put a mon to sleep',
       e.def.venom && 'its sting leaves a bleeding wound',
+      e.def.burn && 'its hits can burn — singes and softens',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8307,6 +8322,19 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
+    // a burned mon flickers embers — the wisp's mark while it singes
+    if (u.burnT > 0 && !u.dead) {
+      ctx.fillStyle = '#f08030';
+      for (let k = 0; k < 3; k++) {
+        const ph = (this.time * 0.9 + k * 0.3) % 1;
+        ctx.globalAlpha = 0.6 * (1 - ph);
+        ctx.beginPath();
+        ctx.arc(u.x + (k - 1) * u.r * 0.45 + Math.sin(this.time * 5 + k * 2.3) * 3, u.y - u.r * 0.4 - ph * u.r, 3 - ph * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // a dozing player gets the same zZ the sleepy foes wear — the nap is
     // readable at a glance, not a turn-order surprise
     if (u.asleep && u.side === 'player') {
@@ -8491,6 +8519,7 @@ export class Battle {
         u.def.leech && 'LEECH',
         u.def.drowsy && 'SLEEP',
         u.def.venom && 'STING',
+        u.def.burn && 'WISP',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');
