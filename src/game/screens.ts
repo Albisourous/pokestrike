@@ -3023,6 +3023,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.tempo && 'OWN TEMPO — CLEAR-HEADED',
     def.breaker && 'MOLD BREAKER — PIERCES GUARDS',
     def.shed && 'SHED SKIN — SLAYS OFF ILLS',
+    def.regen && 'REGENERATOR — MENDS EACH TURN',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;

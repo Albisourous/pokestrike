@@ -2954,9 +2954,13 @@ export class Battle {
 
   // One shared heal window: a mend that lands starts HEAL_CD shots of
   // downtime, so sustain is a drip, not a reset — items still bypass it.
+  private healBlocked() {
+    return this.enemies.some((e) => !e.dead && e.def.healBlock);
+  }
+
   private tryHeal(ps: Unit[], amount: (p: Unit) => number) {
     if (this.healCd > 0) return;
-    if (this.enemies.some((e) => !e.dead && e.def.healBlock)) {
+    if (this.healBlocked()) {
       // heal block: a living carrier keeps the wounds open — say so, or the
       // berry just vanishes and reads as a bug. Kill the blocker to mend.
       const p0 = ps.find((p) => !p.dead && p.hp < p.maxHp);
@@ -3344,7 +3348,7 @@ export class Battle {
       // skull mark: the bounty pops on the KO — team heal + score
       if (e.skull) {
         this.score += 150;
-        if (!this.enemies.some((f) => !f.dead && f.def.healBlock))
+        if (!this.healBlocked())
           for (const p of this.players) if (!p.dead) p.hp = Math.min(p.maxHp, p.hp + Math.ceil(p.maxHp * 0.12));
         this.pushText({ x: e.x, y: e.y - e.r - 72, text: 'SKULL BONUS!', t: 1.2, color: '#c8ff70', big: true });
         this.burst(e.x, e.y, '#c8ff70', 12, 320, 1);
@@ -5800,6 +5804,11 @@ export class Battle {
         this.damagePlayer(p, Math.max(1, Math.ceil(p.maxHp * 0.04)), undefined);
       }
       if (p.paraT > 0) p.paraT--;
+      // regenerator: a sip each turn — canon heals on switch-out, and the
+      // turn cadence is the closest thing a sling court has to a bench
+      if (p.def.regen && !p.dead && p.hp < p.maxHp && !this.healBlocked()) {
+        p.hp = Math.min(p.maxHp, p.hp + Math.max(1, Math.round(p.maxHp * 0.04)));
+      }
     }
     // zombie loop: a linked foe rises unless its partner fell too — the
     // pair only stays down if both die inside the same shot
