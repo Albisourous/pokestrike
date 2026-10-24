@@ -1,18 +1,19 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
-import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow } from '../src/game/stats';
+import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
 import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
-import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, dealPick, dealCost } from '../src/game/tasks';
+import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealCost } from '../src/game/tasks';
+import { THEMES } from '../src/game/bg';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 
@@ -3011,6 +3012,84 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   let reRolled = false;
   for (let d = 1; d <= 30 && !reRolled; d++) reRolled = raidPick(t0 + d * DAY).id !== r0.id;
   ok(reRolled, 'a new day seed re-rolls the raid pick');
+  // the handicap card rides the same day memo — same day hits, new day rolls
+  ok(raidMod(t0).id === raidMod(t0 + 3600000).id && raidLvl(t0) === raidLvl(t0 + 3600000), 'same UTC day hits the memo\'d raid mod + lvl');
+  let modRerolled = false;
+  for (let d = 1; d <= 30 && !modRerolled; d++) modRerolled = raidMod(t0 + d * DAY).id !== raidMod(t0).id;
+  ok(modRerolled, 'a new day seed re-rolls the raid mod');
+}
+
+// --- the daily chroma raid: seeded handicap + tribe escorts -------------------
+// The day seed spends itself on the fight's shape: a named modifier, boss-typed
+// escorts, pinned levels, flat bulk. The card advertises exactly what spawns.
+{
+  const boss = raidPick();
+  const lvl = raidLvl();
+  const escN = raidEscortN();
+  const stage = raidStage(daySeed() * 31 + 91, boss, THEMES[daySeed() % THEMES.length], escN, lvl);
+  const wave = stage.waves[0];
+  ok(wave.filter((s) => s.boss).length === 1 && wave.length === escN + 1, `raid fields the boss + ${escN} escorts (${wave.length} foes)`);
+  ok(wave.every((s) => s.boss || s.def.type === boss.type || s.def.type === boss.type2), 'raid escorts share the boss typing');
+  ok(wave.find((s) => s.boss)?.lvl === lvl && wave.every((s) => s.boss || (s.lvl ?? 0) >= 28), `levels pinned — boss LV${lvl}, escorts ≥28`);
+  ok(lvl >= 36 && lvl <= 45, `raid lvl band 36–45 (${lvl})`);
+  ok(RAID_MODS.length === 11 && new Set(RAID_MODS.map((m) => m.id)).size === 11, 'eleven raid mods, unique ids');
+
+  // every mod actually lands on the field — one battle per id
+  for (const m of RAID_MODS) {
+    const st = raidStage(9, boss, 'grove', m.id === 'horde' ? 5 : 3, 40);
+    const b = new Battle(arena, team(), st, mulberry32(7), []);
+    b.raid = true;
+    b.raidMod = m.id;
+    b.startFight();
+    const foes = b.enemies;
+    const ace = foes.find((e) => e.boss)!;
+    switch (m.id) {
+      case 'enraged':
+        ok(ace.enraged, 'ENRAGED: the boss walks in furious');
+        break;
+      case 'storm': {
+        const want = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind' } as Record<string, string>)[boss.type] ?? 'rain'; // grove fallback
+        ok(b.weather === want, `STORM CALLER: the sky locks to ${b.weather}`);
+        break;
+      }
+      case 'fortress':
+        ok(b.blocks.length > 0 || (b as any).hazards.length > 0, 'FORTRESS: a furnished court, not the open arena');
+        break;
+      case 'plated':
+        ok(foes.every((e) => e.def.shielded), 'PLATED: every foe rolls shielded');
+        break;
+      case 'warded':
+        ok(foes.every((e) => e.shieldN === 1), 'WARDED: every foe carries a ward');
+        break;
+      case 'volatile':
+        ok(foes.every((e) => e.volatile), 'VOLATILE: every KO splashes');
+        break;
+      case 'frenzy':
+        ok(foes.every((e) => e.drift >= enemyDrift(e.def.stats) * (e.boss ? 0.55 : 1) * 1.24), 'FRENZY: escorts press harder');
+        break;
+      case 'guardian':
+        ok(foes.some((e) => e.supp === 'aegis') && foes.some((e) => e.supp === 'medic'), 'GUARDIAN: a warded cleric hides in the escorts');
+        break;
+      case 'hasty': {
+        const cb = new Battle(arena, team(), raidStage(9, boss, 'grove', 3, 40), mulberry32(7), []);
+        cb.raid = true;
+        cb.startFight();
+        ok(ace.timer < cb.enemies.find((e) => e.boss)!.timer, 'HAIR TRIGGER: foes wind up sooner');
+        break;
+      }
+      case 'horde':
+        ok(foes.length === 6, 'HORDE: five escorts flank the boss');
+        break;
+      case 'laststand': {
+        ace.sash = false; // a rolled focus-sash would hang it at 1 first — the stand is what's under test
+        (b as any).hurt(ace, ace.hp + 1, '#fff');
+        ok(!ace.dead && ace.hp === Math.ceil(ace.maxHp * 0.45) && ace.enraged, 'LAST STAND: the boss rises once at 45%, enraged');
+        break;
+      }
+    }
+    // the pinned level survives makeEnemy — the card's LV is the field's truth
+    ok(ace.lvl === 40, `${m.id}: boss spawns at its pinned LV40`);
+  }
 }
 
 // --- streaks: the daily chain counts fresh UTC days, wins count finishes ---

@@ -10,7 +10,7 @@ import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
 import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, type Settings } from './meta';
-import { tasksReady, taskResetsIn, raidPick, raidTeam, featuredPull, dealPick, dealCost } from './tasks';
+import { tasksReady, taskResetsIn, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, featuredPull, dealPick, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
 import {
@@ -1593,7 +1593,7 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
   ctx.fillText(boss.name.toUpperCase(), bcx, r.y + 262);
   ctx.font = fontB(8);
   ctx.fillStyle = '#9a6cff';
-  ctx.fillText(`SHINY BOSS · LV 30 · ${roleOf(boss)}`, bcx, r.y + 280);
+  ctx.fillText(`SHINY BOSS · LV ${raidLvl()} · ${roleOf(boss)}`, bcx, r.y + 280);
   const types = boss.type2 ? [boss.type, boss.type2] : [boss.type];
   const tcw = types.map((tp) => ctx.measureText(tp.toUpperCase()).width + 18);
   let tx = bcx - (tcw.reduce((a, b) => a + b, 0) + (types.length - 1) * 8) / 2;
@@ -1605,19 +1605,35 @@ function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillText(tp.toUpperCase(), tx + tcw[i] / 2, r.y + 305);
     tx += tcw[i] + 8;
   });
+  // the day's handicap — a chroma chip carrying the seeded modifier, with the
+  // escort count riding it: the card reads the whole fight, not just the ace
+  const rm = raidMod();
+  ctx.font = fontB(8);
+  const modTxt = `MOD · ${rm.name}`;
+  const mw = ctx.measureText(modTxt).width + 22;
+  roundRect(ctx, bcx - mw / 2, r.y + 316, mw, 18, 9);
+  ctx.fillStyle = '#9a6cff';
+  ctx.fill();
+  ctx.fillStyle = PAPER_HI;
+  ctx.textAlign = 'center';
+  ctx.fillText(modTxt, bcx, r.y + 329);
+  ctx.fillStyle = INK_FAINT;
+  fitFontB(ctx, `${raidEscortN() + 1} FOES · ${rm.desc.toUpperCase()}`, 7, r.w - 40);
+  ctx.fillText(`${raidEscortN() + 1} FOES · ${rm.desc.toUpperCase()}`, bcx, r.y + 346);
+
   ctx.fillStyle = INK;
   fitFont(ctx, moveOf(boss.id, boss.type).toUpperCase(), 9, r.w - 60);
-  ctx.fillText(moveOf(boss.id, boss.type).toUpperCase(), bcx, r.y + 330);
+  ctx.fillText(moveOf(boss.id, boss.type).toUpperCase(), bcx, r.y + 366);
   ctx.fillStyle = INK_FAINT;
   fitFontB(ctx, superDesc(boss.id, boss.type).toUpperCase(), 7, r.w - 40);
-  ctx.fillText(superDesc(boss.id, boss.type).toUpperCase(), bcx, r.y + 344);
+  ctx.fillText(superDesc(boss.id, boss.type).toUpperCase(), bcx, r.y + 380);
 
   // the loaner trio as shelf cells — the dex grid's idiom, three LV30
   // rare+ rentals standing on their own type pads. Band needs h≥22 — at 16
   // the PS2P ink rides past the gold rule into the cells below
-  uiBand(ctx, { x: r.x + 16, y: r.y + 352, w: r.w - 32, h: 22 }, 'YOUR LV30 LOANERS', { h: 22, rad: 5 });
+  uiBand(ctx, { x: r.x + 16, y: r.y + 386, w: r.w - 32, h: 22 }, 'YOUR LV30 LOANERS', { h: 22, rad: 5 });
   raidTeam().forEach((d, i) => {
-    const cell = { x: r.x + 22 + i * ((r.w - 44) / 3) + 4, y: r.y + 384, w: (r.w - 44) / 3 - 8, h: 74 };
+    const cell = { x: r.x + 22 + i * ((r.w - 44) / 3) + 4, y: r.y + 416, w: (r.w - 44) / 3 - 8, h: 74 };
     uiWindow(ctx, cell, { rad: 8, shadow: false });
     ctx.fillStyle = `${TYPE_COLOR[d.type]}26`;
     ctx.beginPath();
@@ -2818,7 +2834,7 @@ export const HALL_BTN = BOARD_BTN;
 export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 18, w: 220, h: 52 };
 // RAID: one boss card — today's shiny fight + its loaner trio — then the
 // FIGHT pill the tab's tap target rides on
-export const RAID_CARD = { x: 30, y: 210, w: W - 60, h: 470 };
+export const RAID_CARD = { x: 30, y: 210, w: W - 60, h: 502 };
 export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 // the register is a card shelf now — the SPARK grid's idiom: 4 cols of small

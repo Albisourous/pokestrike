@@ -1,6 +1,6 @@
 import { mulberry32 } from '../core/rng';
 import { bankBag, taskState, saveTaskState, type TaskState } from './meta';
-import { pullSpecies, tierOf, INVADER_IDS, dustCost, type SpeciesDef } from './data';
+import { pullSpecies, tierOf, INVADER_IDS, dustCost, RAID_MODS, type SpeciesDef } from './data';
 
 // Daily/weekly task board — the retention loop that pays bag items. Each
 // period's board is seeded off its key so every player rolls the same
@@ -154,6 +154,13 @@ export function raidTeam(now = Date.now()): SpeciesDef[] {
   // loaner level, never mutate the roster (or the memo)
   return raidTeamRoll(now).map((d) => ({ ...d, lvl: 30 }));
 }
+
+// the raid's handicap + threat level — own salts so they never shift the
+// boss/loaner/deal streams. What the card advertises is what startRaid
+// fields: the mod lands in spawnWave, the level pins every spawn's lvl.
+export const raidMod = dayMemo((seed) => RAID_MODS[Math.floor(mulberry32(seed * 31 + 61)() * RAID_MODS.length)]);
+export const raidLvl = dayMemo((seed) => 36 + Math.floor(mulberry32(seed * 31 + 73)() * 10)); // 36–45 vs LV30 loaners
+export const raidEscortN = (now = Date.now()) => 3 + (raidMod(now).id === 'horde' ? 2 : 0);
 
 // --- the daily deal ---------------------------------------------------------
 // One seeded rare+ spark mon at 25% off dust — the rotating reason to open

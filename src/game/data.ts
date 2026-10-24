@@ -1016,6 +1016,7 @@ export interface WaveSpawn {
   nx: number;
   ny: number;
   boss?: boolean;
+  lvl?: number; // pinned level — raids declare theirs; rolled waves derive
 }
 export interface StageDef {
   name: string;
@@ -1477,6 +1478,48 @@ export function rollWave(rng: () => number, depth: number, theme?: Theme, bossTy
   const wave: WaveSpawn[] = boss ? gymPack(boss, n, rng, slot, fodder, depth) : Array.from({ length: n }, add);
   if (boss) wave.push({ def: boss, nx: 0.5, ny: 0.3, boss: true });
   return wave;
+}
+
+// --- the daily chroma raid ---------------------------------------------------
+// One UTC-seeded epic boss for everyone — and since a lone LV30 pinata wasn't
+// a fight, the day seed also rolls the raid's handicap: a named modifier off
+// this table. Every mod spends battle mechanics that already exist (mutator
+// flags, weather, furnished courts, the champion's last stand) — no raid-only
+// systems. The card reads the same pick, so what it advertises is what spawns.
+export const RAID_MODS = [
+  { id: 'storm', name: 'STORM CALLER', desc: 'the boss owns the sky all fight' },
+  { id: 'fortress', name: 'FORTRESS', desc: 'furnished court — nowhere clean to bank' },
+  { id: 'enraged', name: 'ENRAGED', desc: 'walks in furious — fast attack cycle' },
+  { id: 'laststand', name: 'LAST STAND', desc: 'rises once at half health, enraged' },
+  { id: 'plated', name: 'PLATED', desc: 'the pack rolls shielded — flank or bank' },
+  { id: 'warded', name: 'WARDED', desc: 'every foe carries a one-hit ward' },
+  { id: 'volatile', name: 'VOLATILE', desc: 'KOs burst and splash the pack' },
+  { id: 'frenzy', name: 'FRENZY', desc: 'escorts press 25% harder on approach' },
+  { id: 'horde', name: 'HORDE', desc: '+2 escorts flank the boss' },
+  { id: 'guardian', name: 'GUARDIAN', desc: 'a warded cleric hides in the escorts' },
+  { id: 'hasty', name: 'HAIR TRIGGER', desc: 'foes wind up 15% faster' },
+] as const;
+export type RaidModId = (typeof RAID_MODS)[number]['id'];
+
+// The raid wave: escorts of the boss's own typing flank it — the gymPack
+// tribe — with levels pinned so the card's LV is the spawn's truth (rolled
+// levels would drift off whatever the card promised).
+export function raidStage(seed: number, boss: SpeciesDef, theme: Theme, escorts: number, bossLvl: number): StageDef {
+  const rng = mulberry32(seed);
+  const slots = [...SLOTS];
+  const slot = () => {
+    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
+    return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
+  };
+  const pack = gymPack(boss, escorts, rng, slot, fodderPool(theme, 1), 1).map((s) => ({
+    ...s,
+    lvl: Math.max(28, bossLvl - 8 + Math.floor(rng() * 4)),
+  }));
+  return {
+    name: 'CHROMA RAID',
+    theme,
+    waves: [[...pack, { def: { ...boss, shiny: true }, nx: 0.5, ny: 0.3, boss: true, lvl: bossLvl }]],
+  };
 }
 
 // Trainer battles: map stops where an overworld trainer fields a mono-type

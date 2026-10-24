@@ -8,8 +8,8 @@ import { vec } from './core/vec';
 import { Battle, PAUSE_QUIT, PAUSE_SETTINGS } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS } from './game/data';
-import type { SpeciesDef, StageDef } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage } from './game/data';
+import type { SpeciesDef } from './game/data';
 import { THEMES } from './game/bg';
 import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, type RunSave } from './game/meta';
 import {
@@ -129,7 +129,7 @@ import {
   echoMonAt,
 } from './game/screens';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
-import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, dealPick, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
+import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
 import { dailyMod, DAILY_MODS, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
 
@@ -625,15 +625,23 @@ function resumeRun(s: RunSave) {
 
 // the daily raid: one UTC-seeded epic boss for everyone — a standalone fight
 // on the day's loaner trio, not a climb (no map, no draft, no end-of-run
-// ledger, and a parked pk_run is never touched)
+// ledger, and a parked pk_run is never touched). The day seed rolls the whole
+// handicap card: modifier, escort count, boss level, and flat foe bulk —
+// Monday's raid fights nothing like Tuesday's.
 function startRaid() {
-  const raidStage: StageDef = {
-    name: 'CHROMA RAID',
-    theme: THEMES[daySeed() % THEMES.length], // seeded rotate — same court for everyone
-    waves: [[{ def: { ...raidPick(), shiny: true }, nx: 0.5, ny: 0.3, boss: true }]], // the chroma boss wears its palette
-  };
-  battle = new Battle(arenaRect(), raidTeam(), raidStage, mulberry32(daySeed() * 7919 + 13), []);
+  const stage = raidStage(
+    daySeed() * 31 + 91,
+    raidPick(),
+    THEMES[daySeed() % THEMES.length], // seeded rotate — same court for everyone
+    raidEscortN(),
+    raidLvl(),
+  );
+  battle = new Battle(arenaRect(), raidTeam(), stage, mulberry32(daySeed() * 7919 + 13), []);
   battle.raid = true;
+  battle.raidMod = raidMod().id;
+  // seeded bulk: every raid foe carries +25-45% hp — the challenge lives in
+  // the bodies too, not just the named mod
+  battle.foeHpBonus = 0.25 + 0.2 * mulberry32(daySeed() * 31 + 5)();
   battle.rank = rank();
   battle.shinyRate = shinyCharm() ? 2 : 1;
   battle.startFight(); // no island — straight into the lone wave

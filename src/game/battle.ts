@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -763,6 +763,7 @@ export class Battle {
   teamSel = -1; // team index picked — a swap starts from either side
   depth = 0; // rolled stages survived past the opening trio
   raid = false; // standalone one-boss fight — never touches 'reward'/'map' or the climb-clear ledger
+  raidMod = ''; // the day's seeded handicap — a RAID_MODS id, spent in spawnWave/makeEnemy
   rewardOffers: Perk[] = [];
   tools = { roll: 1, ban: 1 }; // offer-tool charges, per-run — REROLL re-deals, BANISH culls
   perkOfferN = 3; // perk cards per board — lab 'fourth' deals a fourth
@@ -944,8 +945,10 @@ export class Battle {
   startFight() {
     this.spawnWave(0);
     this.nextTurn();
-    this.waveSpecial = 'CHROMA RAID'; // the banner names the event, not 'WAVE 1'
-    this.log('CHROMA RAID');
+    // the banner names the event + the day's handicap, not 'WAVE 1'
+    const modName = RAID_MODS.find((m) => m.id === this.raidMod)?.name;
+    this.waveSpecial = modName ? `CHROMA RAID · ${modName}` : 'CHROMA RAID';
+    this.log(this.waveSpecial);
   }
 
   // gym stops wear their leader's type on the sign, like trainer doors —
@@ -1226,6 +1229,12 @@ export class Battle {
       const skyLabel = { sun: 'DROUGHT CALLER!', rain: 'DRIZZLE CALLER!', sand: 'SAND STREAM!', wind: 'AIR LOCK!' }[caller.def.skyFor as Weather];
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${skyLabel}` : skyLabel;
     }
+    // STORM CALLER raid: the boss's own typing owns the court's sky all
+    // fight — a caller escort may narrate, but the mod's sky wins
+    if (this.raid && this.raidMod === 'storm') {
+      const bt = spawns.find((s) => s.boss)?.def.type;
+      this.weather = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind' } as Partial<Record<PokeType, Weather>>)[bt ?? 'normal'] ?? WEATHER_FOR[this.theme];
+    }
     this.inRival = false;
     // ASC 1 ROAMERS: echoes and invades hunt twice as hard. ASC 9 TAG
     // TEAM: the echo is owed one guaranteed visit this climb.
@@ -1264,7 +1273,8 @@ export class Battle {
     // waves take the open gym arena; openers stay gentle; trainer battles
     // are always furnished.
     const bossWave = spawns.some((s) => s.boss);
-    const gymFurnished = bossWave && this.rng() < 0.3; // ~1 gym in 3 fights in a furnished court
+    // ~1 gym in 3 fights in a furnished court — a FORTRESS raid is always one
+    const gymFurnished = bossWave && (this.raidMod === 'fortress' || this.rng() < 0.3);
     let li = 0;
     if (!bossWave) {
       if (i === 0) li = Math.floor(this.rng() * 3); // gentle openers
@@ -1327,6 +1337,33 @@ export class Battle {
     // boss kit, one rolled quirk per fight
     const armed = this.enemies.find((e) => e.boss);
     if (armed && (this.waveHadGym || this.inEvent || this.raid)) this.armBoss(armed); // the raid boss keeps its rolled quirk
+    // the raid's day-seeded handicap spends itself here — every flag is one
+    // the wave mutators already use, applied by name to the whole pack
+    if (this.raid) switch (this.raidMod) {
+      case 'plated':
+        for (const e of this.enemies) {
+          e.def = { ...e.def, shielded: true };
+          e.shieldA = this.rng() * Math.PI * 2;
+        }
+        break;
+      case 'warded':
+        for (const e of this.enemies) e.shieldN = 1;
+        break;
+      case 'volatile':
+        for (const e of this.enemies) e.volatile = true;
+        break;
+      case 'frenzy':
+        for (const e of this.enemies) e.drift *= 1.25;
+        break;
+      case 'guardian': {
+        const esc = this.enemies.filter((e) => !e.boss);
+        if (esc[0]) esc[0].supp = 'aegis';
+        if (esc[1]) esc[1].supp = 'medic';
+        break;
+      }
+      // 'storm'/'fortress'/'enraged'/'hasty'/'horde' land earlier — sky, room
+      // pick, boss flags and the escort count all set before this point
+    }
     // normal trait: the squad mends as the wave forms
     const mend = this.t('normal') * 0.05;
     if (mend > 0) {
@@ -1550,8 +1587,10 @@ export class Battle {
     const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
     // wild level = the climb's depth: route-1 fodder up to champion-tier;
     // the level is honest (bulkier wilds), not just a number
-    // raids flat-line at +30 — a one-wave stage has no climb to ride
-    const el = Math.min(LV_CAP, 5 + wi * 10 + (this.raid ? 30 : 0) + (this.rng() < 0.35 ? 4 : 0) + (s.boss ? 8 : 0));
+    // raids flat-line at +30 — a one-wave stage has no climb to ride —
+    // unless the spawn pins its level, which a raid does so the card's
+    // LV promise is the field's truth
+    const el = Math.min(LV_CAP, s.lvl ?? (5 + wi * 10 + (this.raid ? 30 : 0) + (this.rng() < 0.35 ? 4 : 0) + (s.boss ? 8 : 0)));
     const ehp = Math.round(
       (s.boss ? bossHp(s.def.stats) : enemyHp(s.def.stats)) * this.hpScale * lvlHp(s.def.stats.hp, el),
     );
@@ -1579,7 +1618,7 @@ export class Battle {
       r,
       hp: ehp,
       maxHp: ehp,
-      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (s.def.prank ? 0.55 : 1) + (wi === 0 ? 1 : 0),
+      timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (this.raidMod === 'hasty' ? 0.85 : 1) * (s.def.prank ? 0.55 : 1) + (wi === 0 ? 1 : 0),
       // ASC 7 FRENZY: foes press harder — approach speed ×1.25
       drift: enemyDrift(def.stats) * (s.boss ? 0.55 : 1) * (this.asc >= 7 ? 1.25 : 1),
       wx: 0,
@@ -1588,8 +1627,9 @@ export class Battle {
       wMul: 1,
       lunging: 0,
       boss: !!s.boss,
-      // ASC 6+: gym leaders walk in furious — fast attack cycle from bell one
-      enraged: !!s.boss && this.asc >= 6,
+      // ASC 6+: gym leaders walk in furious — fast attack cycle from bell
+      // one; an ENRAGED raid boss takes the same bell
+      enraged: !!s.boss && (this.asc >= 6 || this.raidMod === 'enraged'),
       // shinies: wild fodder rolls gold; a scripted spawn can force the
       // palette via def.shiny (golden-mon event), and your rival echo keeps
       // the palette it died with — including a shiny if you lost one.
@@ -3182,8 +3222,9 @@ export class Battle {
     if (e.hp <= 0) {
       // the champion's last stand: the final gym's ace refuses once —
       // back up at ~45% and already enraged. The run's last fight earns
-      // a second wind the other gyms never get.
-      if (e.boss && !e.lastStand && this.depth >= FINAL_DEPTH) {
+      // a second wind the other gyms never get — a LAST STAND raid boss
+      // borrows the same refusal.
+      if (e.boss && !e.lastStand && (this.depth >= FINAL_DEPTH || (this.raid && this.raidMod === 'laststand'))) {
         e.lastStand = true;
         e.hp = Math.ceil(e.maxHp * 0.45);
         e.enraged = true;
