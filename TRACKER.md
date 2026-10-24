@@ -147,4 +147,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `95d9ff2` | battle | hazards herd the pack — gust lanes sweep creeps, wells clump swimmers | `git revert <this commit>` |
 | 2026-10-25 | `6862018` | battle | species pods — ~12% of waves are one-species packs, banner names the flock | `git revert <this commit>` |
 | 2026-10-25 | `905978f` | battle | countdown urgency ramp — amber at 2, throbbing swell on the last tick | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | scout card explains foe flags — kw names what it does | `git revert <this commit>` |
+| 2026-10-25 | `d346d92` | battle | scout card explains foe flags — kw names what it does | `git revert <this commit>` |
