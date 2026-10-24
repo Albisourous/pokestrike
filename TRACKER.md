@@ -127,4 +127,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `aafb9e5` | battle+data | REPEL foes — a gold halo shoves the ball off approach; Magneton line + Nosepass line | `git revert <this commit>` |
 | 2026-10-25 | `e00bad2` | battle | type-aware chip hazards — fire balls bathe in lava, flyers sail the spike strip | `git revert <this commit>` |
 | 2026-10-25 | `cca1e29` | battle | SWEEP streaks — back-to-back one-shot clears escalate the ribbon and pay +60 x streak | `git revert <this commit>` |
-| 2026-10-25 | pending | battle | WHIFF callout — a shot landing no contact/bump/loot says so instead of ending silent | `git revert <this commit>` |
+| 2026-10-25 | `1de6cd8` | battle | WHIFF callout — a shot landing no contact/bump/loot says so instead of ending silent | `git revert <this commit>` |
