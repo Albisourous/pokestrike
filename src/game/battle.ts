@@ -1771,6 +1771,17 @@ export class Battle {
     this.shots++;
     if (this.ultIn > 0) this.ultIn--; // every shot banks charge toward the ultimate
     this.waveShots++; // anti-stall pressure counts shots inside the wave
+    if (this.waveShots === 8) {
+      // three shots of runway before the ramp bites — warn early so a
+      // dawdling climb reads as the player's own choice, not a surprise
+      this.pushText({
+        x: this.arena.x + this.arena.w / 2,
+        y: this.arena.y + this.arena.h / 2 - 30,
+        text: 'THE PACK GROWS RESTLESS…',
+        t: 1.2, color: '#ffb84d', big: false,
+      });
+      sfx('warn');
+    }
     if (this.waveShots === 11) {
       // the pressure ramp just went live — say so once, or the heavier
       // volleys read as a bug (waveShots past 10 is what feeds it)
