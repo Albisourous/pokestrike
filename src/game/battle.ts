@@ -3392,6 +3392,15 @@ export class Battle {
       }
       this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SPORED!', t: 0.9, color: '#a8b820', big: false });
     }
+    // synchronize: whatever ails it, ails you — a dotted or singed
+    // carrier returns the status to anyone who touches it
+    if (e.def.sync && !shooter.dead) {
+      let synced = false;
+      if (e.dotTicks > 0) { shooter.dotTicks = Math.max(shooter.dotTicks, e.dotTicks); shooter.dotDmg = Math.max(shooter.dotDmg, e.dotDmg); synced = true; }
+      if (e.burnT > 0) { shooter.burnT = Math.max(shooter.burnT, e.burnT); synced = true; }
+      if (e.paraT > 0) { shooter.paraT = Math.max(shooter.paraT, e.paraT); synced = true; }
+      if (synced) this.pushText({ x: shooter.x, y: shooter.y - shooter.r - 12, text: 'SYNCED!', t: 0.9, color: '#f85888', big: false });
+    }
     // barbed foes bite back — every contact costs the ball a chip of its
     // own HP, so sloppy grazes through the pack bleed the run
     if (e.def.spiky && !shooter.dead) {
@@ -7313,6 +7322,7 @@ export class Battle {
       e.def.truant && 'truant — loiters a round after each attack',
       e.def.boost && 'speed boost — re-arms faster every attack',
       e.def.spore && 'effect spore — contact scatters a random ailment',
+      e.def.sync && 'synchronize — contact echoes its ailments to you',
       e.def.blink && 'teleports when it shimmers',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
@@ -8699,6 +8709,7 @@ export class Battle {
         u.def.truant && 'LOAF',
         u.def.boost && 'BOOST',
         u.def.spore && 'SPORE',
+        u.def.sync && 'SYNC',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',
       ].filter(Boolean).join('·');

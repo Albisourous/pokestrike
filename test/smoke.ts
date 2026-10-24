@@ -679,6 +679,24 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   striker.asleep = false;
   e.def = eDef;
 
+  // synchronize: a statused carrier echoes the ailment on contact
+  e.def = { ...eDef, sync: true };
+  e.dead = false;
+  e.hp = e.maxHp;
+  e.dotTicks = 4;
+  e.dotDmg = 3;
+  striker.dotTicks = 0;
+  striker.dotDmg = 0;
+  striker.lastHit = new Map();
+  e.lastHit = new Map();
+  (b as any).strikeEnemy(striker, e);
+  ok(striker.dotTicks === 4, `synchronize echoes the ailment (${striker.dotTicks} ticks)`);
+  striker.dotTicks = 0;
+  striker.dotDmg = 0;
+  e.dotTicks = 0;
+  e.dotDmg = 0;
+  e.def = eDef;
+
   // fuse foes detonate on their countdown — the blast wounds both sides
   e.def = { ...e.def, fuse: true, summon: undefined, blink: undefined };
   e.dead = false;

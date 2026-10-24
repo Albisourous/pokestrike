@@ -2413,6 +2413,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'LOAF foes truant — they fire once, then loiter a round',
       'BOOST foes speed up every attack — kill them early',
       'SPORE hides scatter a random ailment on contact',
+      'SYNC foes echo their status — burn one and it burns you back',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,

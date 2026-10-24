@@ -47,6 +47,7 @@ export interface SpeciesDef {
   truant?: boolean; // Truant: fires then loafs a full round — huge stats, half the uptime
   boost?: boolean; // Speed Boost: every attack re-arms a touch faster — kill it early
   spore?: boolean; // Effect Spore: contact scatters a random ailment — poison, shock, or sleep
+  sync?: boolean; // Synchronize: contact echoes its ailments back onto the striker
   blink?: boolean; // teleports mid-fight — a shimmer warns before it vanishes
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
@@ -444,7 +445,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 157, name: 'Typhlosion', type: 'fire', stats: st(78, 84, 78, 109, 85, 100) },
   { id: 160, name: 'Feraligatr', type: 'water', stats: st(85, 105, 100, 79, 83, 78), melee: true },
   { id: 181, name: 'Ampharos', type: 'electric', stats: st(90, 75, 85, 115, 90, 55) },
-  { id: 196, name: 'Espeon', type: 'psychic', stats: st(65, 65, 60, 130, 95, 110), pierce: true },
+  { id: 196, name: 'Espeon', type: 'psychic', stats: st(65, 65, 60, 130, 95, 110), pierce: true, sync: true },
   { id: 197, name: 'Umbreon', type: 'ghost', stats: st(95, 65, 110, 60, 130, 65), taunt: true },
   { id: 212, name: 'Scizor', type: 'fighting', stats: st(70, 130, 100, 55, 80, 65), pierce: true, melee: true },
   { id: 229, name: 'Houndoom', type: 'fire', type2: 'ghost', stats: st(75, 90, 50, 110, 80, 95) },
@@ -705,7 +706,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 271, name: 'Lombre', type: 'grass', type2: 'water', stats: st(60, 50, 50, 60, 70, 50) },
   { id: 274, name: 'Nuzleaf', type: 'grass', type2: 'ghost', stats: st(70, 70, 40, 60, 40, 60) },
   { id: 277, name: 'Swellow', type: 'flying', type2: 'normal', stats: st(60, 85, 60, 50, 50, 125), melee: true },
-  { id: 281, name: 'Kirlia', type: 'psychic', type2: 'normal', stats: st(38, 35, 35, 65, 55, 50), evolvesTo: [282, 475] },
+  { id: 281, name: 'Kirlia', type: 'psychic', type2: 'normal', stats: st(38, 35, 35, 65, 55, 50), sync: true, evolvesTo: [282, 475] },
   { id: 286, name: 'Breloom', type: 'grass', stats: st(60, 130, 80, 60, 60, 70), melee: true, spore: true },
   { id: 294, name: 'Loudred', type: 'normal', stats: st(84, 71, 43, 71, 43, 48) },
   { id: 297, name: 'Hariyama', type: 'fighting', stats: st(144, 120, 60, 40, 60, 50), melee: true },

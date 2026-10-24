@@ -190,3 +190,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `a9bd49d` | battle | LOAF foes truant — Slaking/Durant fire every other round | `git revert <this commit>` |
 | 2026-10-25 | `2517d4e` | battle | BOOST foes re-arm faster each attack — Sharpedo/Blaziken/Scolipede | `git revert <this commit>` |
 | 2026-10-25 | `58ef4a2` | battle | SPORE hides scatter a random ailment — Breloom/Vileplume | `git revert <this commit>` |
+| 2026-10-25 | pending | battle | SYNC foes echo their status onto contact — Espeon/Kirlia | `git revert <this commit>` |
