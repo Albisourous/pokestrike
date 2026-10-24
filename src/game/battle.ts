@@ -5754,7 +5754,15 @@ export class Battle {
     for (const e of this.enemies) {
       if (!e.asleep) e.timer--; // a dozing foe's countdown never winds down
       if (e.timer <= 0) {
-        this.pendingAttacks.push(e);
+        // full para: the jolt eats the swing — the wind-up restarts a
+        // round out, and the charge burns one tick of what held it
+        if (e.paraT > 0 && this.rng() < 0.5) {
+          e.paraT--;
+          e.timer = 1;
+          this.pushText({ x: e.x, y: e.y - e.r - 10, text: 'CAN\'T MOVE!', t: 0.8, color: '#f8d030', big: false });
+        } else {
+          this.pendingAttacks.push(e);
+        }
       } else if (e.timer === 1) {
         warned = true; // it swings after this shot — one soft warning tick
       }
@@ -6194,6 +6202,19 @@ export class Battle {
     if (src?.def.para && !p.dead && !p.def.limber && dmg > 0 && this.rng() < 0.6) {
       p.paraT = Math.max(p.paraT, 5);
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: 'PARALYZED!', t: 1, color: '#f8d030', big: false });
+    }
+    // point abilities fire both ways: a melee hit on a static or poison-
+    // point mon answers back — the lunge is the contact, orbs don't count
+    if (src?.def.melee && !src.dead && dmg > 0) {
+      if (p.def.shock && this.rng() < 0.3) {
+        src.paraT = Math.max(src.paraT, 3);
+        this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'STATIC!', t: 0.9, color: '#f8d030', big: false });
+      }
+      if (p.def.toxic && this.rng() < 0.3) {
+        src.dotTicks = Math.max(src.dotTicks, 4);
+        src.dotDmg = Math.max(src.dotDmg, Math.ceil(src.maxHp * 0.06));
+        this.pushText({ x: src.x, y: src.y - src.r - 10, text: 'POISON PT!', t: 0.9, color: '#a040a0', big: false });
+      }
     }
     if (settings().dmgNums)
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });

@@ -2529,7 +2529,7 @@ const HELP_SECTIONS: HelpSection[] = [
     // top-level read would hit the const before it's initialized
     get lines() {
       return [
-        `not a per-mon super — one shared meter · every shot banks a pip, ${ULT_SHOTS} pips arm it`,
+        `one shared meter · every shot banks a pip, ${ULT_SHOTS} pips arm it`,
         'when the gauge floods gold, TAP a glowing mon — tap it again to fire · its type picks the nuke',
         'all foes take the hit · bosses shrug off most of it · charge resets each fight',
         // key affordances hide on touch — same (pointer: fine) gate as the [1]/[R] hints
@@ -2894,7 +2894,7 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.fillText(`${SHINY_CHARM_AT - dexN} more catches for the SHINY CHARM (x2 shinies)`, r.x + r.w / 2, r.y + r.h - 26);
   }
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('tap a row for its card · catches join future draft pools · tap to close', r.x + r.w / 2, r.y + r.h - 14);
+  ctx.fillText('tap a row for its card · catches join future draft pools · outside closes', r.x + r.w / 2, r.y + r.h - 14);
 }
 
 // a tap on a shelf cell resolves to its species — the detail card's door.
@@ -3005,6 +3005,8 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.pickup && 'PICKUP — FINDS LOOT',
     def.thickFat && 'THICK FAT — HALF LAVA',
     def.limber && 'LIMBER — NO PARALYSIS',
+    def.shock && 'STATIC — HITS JOLT BACK',
+    def.toxic && 'POISON POINT — HITS VENOM BACK',
   ].filter(Boolean) as string[];
   if (traits.length) {
     ctx.fillStyle = ACCENT;
