@@ -184,3 +184,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `800a389` | battle | STURDY foes hang at 1 HP — Geodude/Torkoal/Skarmory | `git revert <this commit>` |
 | 2026-10-25 | `543d001` | battle | CHARM hides lull the striker — Delcatty/Milotic | `git revert <this commit>` |
 | 2026-10-25 | `a63347f` | battle | SCALE hides halve damage at full HP — Dragonite/Lugia | `git revert <this commit>` |
+| 2026-10-25 | pending | perf | heavy-scene re-check: 2.46ms avg update+render — visual passes cheap | — |
