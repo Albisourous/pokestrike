@@ -224,6 +224,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(eBond.dead && !shooterAlive && shooter.dead, `destiny bond takes the striker down (${eBond.def.name})`);
   shooter.dead = false; shooter.hp = shooter.maxHp; // the next asserts still need it
 
+  // color change: a struck chameleon takes on the attacking type, so the
+  // same hit lands resisted next time
+  const shooterDef0 = shooter.def;
+  shooter.def = { ...shooter.def, type: 'fire' as const, type2: undefined };
+  eBond.def = { ...eBond.def, bond: false, chameleon: true };
+  eBond.hp = eBond.maxHp; eBond.dead = false; eBond.lastHit.clear();
+  (b as any).strikeEnemy(shooter, eBond);
+  ok(eBond.def.type === 'fire', `color change adopts the strike type (now ${eBond.def.type})`);
+  shooter.def = shooterDef0;
+
   // regen foes mend — a wounded one gains HP over a sim second
   e1.def = { ...e1.def, regen: true };
   e1.hp = Math.floor(e1.maxHp / 2);

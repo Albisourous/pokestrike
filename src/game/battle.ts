@@ -3492,6 +3492,12 @@ export class Battle {
         this.damagePlayer(shooter, Math.max(1, Math.round(dmg * 0.3)), e);
         this.pushText({ x: e.x, y: e.y - e.r - 46, text: 'COUNTER!', t: 0.9, color: '#f85888', big: false });
       }
+      // color change: the hide takes on whatever type just struck it —
+      // repeat hits hit resisted hide, so alternate your strikers
+      if (e.def.chameleon && !e.dead && e.def.type !== at) {
+        e.def = { ...e.def, type: at };
+        this.pushText({ x: e.x, y: e.y - e.r - 46, text: `BECAME ${at.toUpperCase()}!`, t: 0.9, color: TYPE_COLOR[at] ?? '#fff', big: false });
+      }
     }
     // knockback: the ball's momentum shoves the foe along the shot's line —
     // bank a hit to push a raider off the loot, split a taunter from its
@@ -7000,6 +7006,21 @@ export class Battle {
     }
     ctx.globalAlpha = 1;
 
+    // color change — the ring wears the hide's CURRENT type, so a striker
+    // reads what it's about to hit before committing the angle
+    for (const e of this.enemies) {
+      if (e.dead || !e.def.chameleon) continue;
+      ctx.globalAlpha = 0.5 + Math.sin(this.time * 4 + e.uid) * 0.15;
+      ctx.strokeStyle = TYPE_COLOR[e.def.type] ?? '#fff';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 5]);
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 6, -this.time * 1.4, -this.time * 1.4 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+
     // repulsor fields — a pale gold halo, dashes streaming outward
     for (const e of this.enemies) {
       if (e.dead || !e.repelR) continue;
@@ -7726,6 +7747,7 @@ export class Battle {
       e.def.healBlock && 'heal block — your team can\'t mend while it lives',
       e.def.bond && 'destiny bond — a direct KO takes the striker with it',
       e.def.armor && 'shell armor — critical hits glance off',
+      e.def.chameleon && 'color change — its hide becomes the type that hit it',
       e.def.shielded && 'shell glances hits — flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
@@ -9166,6 +9188,7 @@ export class Battle {
         u.def.healBlock && 'H-BLOCK',
         u.def.bond && 'BOND',
         u.def.armor && 'ARMOR',
+        u.def.chameleon && 'CAMO',
         u.def.pheal && 'P-HEAL',
         u.def.blink && 'BLINK',
         u.dotTicks > 0 && 'VENOM',

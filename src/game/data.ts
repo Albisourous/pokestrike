@@ -77,6 +77,7 @@ export interface SpeciesDef {
   healBlock?: boolean; // Heal Block: while it lives, your team can't mend
   bond?: boolean; // Destiny Bond: a direct KO takes the striker down too
   armor?: boolean; // Battle/Shell Armor: critical hits glance to normal
+  chameleon?: boolean; // Color Change: takes on the type that last struck it
   shiny?: boolean; // alt-palette marker — draft picks and catches carry it
   lvl?: number; // level marker — draft picks roll 5-14, catches keep theirs
   luck?: number; // fusion count — absorbed dupes feed it; team luck pays in the loot fountain
@@ -386,7 +387,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 339, name: 'Barboach', type: 'water', type2: 'rock', stats: st(50, 48, 43, 46, 41, 60), evolvesTo: 340 },
   { id: 340, name: 'Whiscash', type: 'water', type2: 'rock', stats: st(110, 78, 73, 76, 71, 60), taunt: true },
   { id: 351, name: 'Castform', type: 'normal', stats: st(70, 70, 70, 70, 70, 70), forecast: true },
-  { id: 352, name: 'Kecleon', type: 'normal', stats: st(60, 90, 70, 60, 120, 40) },
+  { id: 352, name: 'Kecleon', type: 'normal', stats: st(60, 90, 70, 60, 120, 40), chameleon: true },
   { id: 358, name: 'Chimecho', type: 'psychic', stats: st(75, 50, 80, 95, 90, 65) },
   { id: 368, name: 'Gorebyss', type: 'water', stats: st(55, 84, 105, 114, 75, 52) },
   { id: 221, name: 'Piloswine', type: 'water', type2: 'rock', stats: st(100, 100, 80, 70, 60, 50), evolvesTo: 473 },
