@@ -1288,8 +1288,10 @@ export class Battle {
     // wave mutators: a third of rolled non-boss waves get an affix —
     // same stop, different fight (StS hallway affixes)
     let powerZoneSpawn = false; // 'power' mutator pushes its zone once hazards land
+    let stormSpawn = false; // 'storm' lays two converging gust lanes
+    let thornSpawn = false; // 'thorns' seeds a spike field mid-court
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < (this.allAffix ? 1 : 0.35)) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind', 'headwind', 'slick'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind', 'headwind', 'slick', 'storm', 'thorns'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -1358,6 +1360,12 @@ export class Battle {
         case 'power': // an ATK field — hits landed from inside hit harder
           powerZoneSpawn = true;
           break;
+        case 'storm': // gust lanes converge on mid — shots ride the wind
+          stormSpawn = true;
+          break;
+        case 'thorns': // a spike field erupts — grounded foes get fenced too
+          thornSpawn = true;
+          break;
         case 'warded': // every foe carries a one-hit ward — the aegis bubble soak
           for (const e of this.enemies) e.shieldN = 1;
           break;
@@ -1374,7 +1382,7 @@ export class Battle {
           break;
       }
       this.curMod = mod;
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -1412,6 +1420,25 @@ export class Battle {
         pr,
       );
       this.hazards.push({ kind: 'power', x: at.x, y: at.y, r: pr });
+    }
+    if (stormSpawn) { // twin gust lanes flank mid, both blowing inward
+      const gr = this.arena.w * 0.1;
+      const gy = this.arena.y + this.arena.h * (0.28 + this.rng() * 0.2);
+      this.hazards.push(
+        { kind: 'gust', x: this.arena.x + this.arena.w * 0.28, y: gy, r: gr, dir: 1 },
+        { kind: 'gust', x: this.arena.x + this.arena.w * 0.72, y: gy, r: gr, dir: -1 },
+      );
+    }
+    if (thornSpawn) { // spike strips erupt mid-court — chip the ball, fence the pack
+      for (let k = 0; k < 2; k++) {
+        const sr = this.arena.w * 0.062;
+        const at = this.unstick(
+          this.arena.x + this.arena.w * (0.2 + this.rng() * 0.6),
+          this.arena.y + this.arena.h * (0.2 + this.rng() * 0.35),
+          sr,
+        );
+        this.hazards.push({ kind: 'spikes', x: at.x, y: at.y, r: sr });
+      }
     }
     // new ponds/boulders can land on parked bodies — units that can't
     // cross them get waded out to the shoreline before anyone sees
