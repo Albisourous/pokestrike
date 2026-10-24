@@ -14,10 +14,10 @@ export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left t
 
 // Town-tab buildings — whole structures sliced from the atlas's mid bands.
 // The top-band copies all touch the sheet edge (roofs clipped); these don't.
-export const TILE_LAB: TileRect = [688, 93, 86, 86]; // domed civic hall, white rose emblem
-export const TILE_HALL: TileRect = [838, 192, 96, 82]; // columned pavilion — the brown in its top corners is the facade baked behind it
-export const TILE_TOWER: TileRect = [1446, 540, 88, 124]; // hexagonal jewel-domed tower, dome apex to marquee door — 540 clears the slab above, 664 is its real base
-export const TILE_MART: TileRect = [1558, 386, 164, 72]; // blue storefront facade — emblem, awnings, marquee (the real mart sprite's roof is sheet-clipped)
+export const TILE_LAB: TileRect = [684, 93, 90, 85]; // domed civic hall, white rose emblem — wing edges at 684/774, door base lands 177
+export const TILE_HALL: TileRect = [847, 200, 90, 76]; // columned pavilion: marquee lip at 200, stone base ends 276 — the orange behind is a neighbor, not the hall
+export const TILE_TOWER: TileRect = [1441, 556, 87, 98]; // hexagonal jewel-domed tower — dome cap at 556, pillar base ends 654
+export const TILE_MART: TileRect = [1585, 395, 160, 53]; // blue storefront facade — emblem + awnings + marquee, 1585..1745; the bench row above and the orange tower left are neighbors
 
 // Scenery + shore.
 export const TILE_SAND: TileRect = [91, 667, 16, 16]; // pale beach sand

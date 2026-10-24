@@ -2073,10 +2073,10 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   hedgeCol(502, 170, 340);
   hedgeCol(30, 452, 620);
   hedgeCol(502, 452, 620);
-  hedgeRow(36, 232, 366, 110); // street-edge hedges, gapped at each door walk
-  hedgeRow(306, 504, 366, 434);
-  hedgeRow(36, 232, 638, 136);
-  hedgeRow(306, 504, 638, 442);
+  hedgeRow(36, 232, 366, 135); // street-edge hedges, gapped at each door walk
+  hedgeRow(306, 504, 366, 406);
+  hedgeRow(36, 232, 638, 135);
+  hedgeRow(306, 504, 638, 406);
 
   for (let gx = 0; gx < W; gx += 52) {
     drawTile(ctx, TILE_PATH, gx, NORTH_Y, 52, 52);
@@ -2091,17 +2091,19 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const stub = (cx: number, y0: number, y1: number) => {
     for (let y = y0; y < y1; y += 30) drawTile(ctx, TILE_PATH, cx - 16, y, 32, 32);
   };
-  stub(110, 316, NORTH_Y);
-  stub(434, 304, NORTH_Y);
+  stub(135, 316, NORTH_Y);
+  stub(406, 304, NORTH_Y);
   stub(136, 560, SOUTH_Y);
-  stub(442, 572, SOUTH_Y);
+  stub(406, 572, SOUTH_Y);
 
-  // civic row — the lab west, the hall east, doors on the north street
-  drawTile(ctx, TILE_LAB, 48, 190, 124, 124);
-  drawTile(ctx, TILE_HALL, 372, 196, 124, 104);
+  // civic row — the lab west, the hall east, doors on the north street.
+  // Every facade centers on its lot: drawn size keeps the sprite's own
+  // aspect so nothing squashes or clips at the edges
+  drawTile(ctx, TILE_LAB, 135 - 60, 196, 120, 113);
+  drawTile(ctx, TILE_HALL, 406 - 63, 198, 126, 106);
   // commerce row — the mart west, the trophy tower east, doors on the south
-  drawTile(ctx, TILE_MART, 36, 470, 200, 88);
-  drawTile(ctx, TILE_TOWER, 396, 440, 92, 130);
+  drawTile(ctx, TILE_MART, 135 - 100, 482, 200, 66);
+  drawTile(ctx, TILE_TOWER, 406 - 48, 452, 96, 108);
 
   // drifting pollen — a little life over the grass, riding the same
   // ambient-sparkle opt-out as the map's sea glints
@@ -2125,9 +2127,9 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const trained = LAB_UPGRADES.filter((u) => (lvls.get(u.id) ?? 0) > 0).length;
   const b = best();
   const runs = board().length;
-  townSign(ctx, 110, 322, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
-  townSign(ctx, 434, 316, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
-  townSign(ctx, 442, 580, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
+  townSign(ctx, 135, 322, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
+  townSign(ctx, 406, 316, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
+  townSign(ctx, 406, 580, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
   townSign(ctx, 136, 596, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
   // a claimable task pins the red count pip on the sign's corner — the same
   // badge the old card corner wore
