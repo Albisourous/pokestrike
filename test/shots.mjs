@@ -8,30 +8,28 @@ const sleep = (ms) => pg.waitForTimeout(ms);
 
 await pg.goto('http://localhost:5173/?dev&seed=99');
 await sleep(1800);
+// the manual auto-opens on first boot — grab it, then tap outside to close
+await shot('02-help-p1');
+await pg.mouse.click(480, 92); // outside/right edge — 'outside closes'
+await sleep(400);
 await shot('01-title');
 
-await pg.keyboard.press('?');
-await sleep(400);
-await shot('02-help-p1');
-await pg.keyboard.press('ArrowRight');
-await pg.keyboard.press('ArrowRight');
-await sleep(400);
-await shot('03-help-p3');
-await pg.keyboard.press('Escape');
-await sleep(300);
-
-await pg.mouse.click(270, 772); // START CLIMB
+await pg.mouse.click(270, 640); // START CLIMB (FREE_BTN center on the CLIMB tab)
 await sleep(600);
 await shot('04-draft');
 
+// four rounds of 3-card boards; a tap mid-reel only fast-forwards, so wait
+// for the dealt board before picking (card 0 center: x=99, y=378)
 for (let i = 0; i < 4; i++) {
-  await pg.mouse.click(105, 425);
-  await sleep(350);
+  await pg.mouse.click(99, 378); // fast-forwards the reel if still rolling
+  await sleep(1600);
+  await pg.mouse.click(99, 378);
+  await sleep(400);
 }
 await shot('05-drafted');
 
 await sleep(400);
-await pg.mouse.click(105, 480); // charm: left perk card
+await pg.mouse.click(99, 408); // charm: left perk card (charmCardRect(0,3) center)
 await sleep(800);
 await shot('06-map');
 

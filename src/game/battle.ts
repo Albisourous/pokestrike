@@ -8000,7 +8000,7 @@ export class Battle {
       ctx.font = fontB(10);
       ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
       ctx.fillStyle = color;
-      ctx.fillText(s, a.x + a.w / 2, a.y + a.h - 30); // clear of the rim's low props
+      ctx.fillText(s, a.x + a.w / 2, a.y + a.h - 58); // above the rim's low props, which ink over the floor's last strip
       ctx.globalAlpha = 1;
     };
     ctx.save();

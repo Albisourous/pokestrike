@@ -2596,6 +2596,8 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'CATCHING',
     lines: [
       'beaten foes sometimes drop a ball: catches go to your box',
+      'weak foes join easy — ones far above your ace all but refuse',
+      'a catch joins at your team\'s level, never above it',
       'beat a gym and its ace joins your box too',
       'a duplicate feeds the copy you own: +1 LUCK every fusion',
       'luck pays out in gym loot',
