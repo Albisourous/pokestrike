@@ -2306,6 +2306,7 @@ function render() {
             battle.teamLuck(),
             t - rewardT0,
             battle.perkIds,
+            battle.boxPing,
           );
           if (!menuOpen && !battle.evoChoice) drawToolRow(ctx, battle.tools, battle.banArmed, t);
           // the capture ritual renders inside battle's own pass — the reward

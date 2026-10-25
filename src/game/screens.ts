@@ -593,10 +593,13 @@ export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number;
   ctx.lineWidth = on ? 3 : 2;
   ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
   const ic = icon ? 42 : 0; // an icon claims the left edge — text centers in what's left
-  fitFont(ctx, label, 13, r.w - 20 - ic);
+  // fitFont floors at 6px — a still-long label ellipsizes rather than spill
+  const fit = fitFont(ctx, label, 13, r.w - 20 - ic);
+  let lab = label;
+  if (fit <= 6) while (lab.length > 3 && measureW(ctx, lab + '…') > r.w - 20 - ic) lab = lab.slice(0, -1);
   ctx.textAlign = 'center';
   ctx.fillStyle = on ? INK : INK_FAINT;
-  ctx.fillText(label, r.x + ic + (r.w - ic) / 2, r.y + r.h / 2 + 6);
+  ctx.fillText(fit <= 6 && lab !== label ? lab + '…' : label, r.x + ic + (r.w - ic) / 2, r.y + r.h / 2 + 6);
   if (icon) {
     void loadItem(icon);
     const img = itemSprite(icon);
@@ -4645,7 +4648,9 @@ function drawLabCard(
   ctx.textAlign = 'left';
   ctx.font = fontB(7);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText(u.desc, r.x + 12, r.y + 56);
+  let dsc = u.desc;
+  while (dsc.length > 3 && ctx.measureText(dsc + '…').width > r.w - 24) dsc = dsc.slice(0, -1);
+  ctx.fillText(dsc, r.x + 12, r.y + 56);
   // the bought effect, summed — levels must show what they've already bought
   if (lvl > 0) {
     ctx.fillStyle = GOLD;
@@ -5202,6 +5207,7 @@ export function drawReward(
   luck: number,
   spin: number, // reel age in seconds — counts up from the deal
   perkIds?: string[], // the run's granted perks — repeat offers tag as DUPE
+  ping = false, // a fresh catch waits in the box — the team pill glows gold
 ) {
   scrim(ctx, 0.85);
 
@@ -5293,8 +5299,8 @@ export function drawReward(
   }
   // every board is pick-one — the old decline-for-score pill is gone; you
   // can still check the deck mid-pick: TEAM · ITEMS is the same panel the
-  // map carries
-  pill(ctx, REWARD_TEAM, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'TEAM · ITEMS' });
+  // map carries. A fresh catch arms it gold — swap first, then pick.
+  pill(ctx, REWARD_TEAM, { c: ping ? GOLD_HI : '#e8e8e0', cd: ping ? GOLD : '#aab0c8', tc: INK, label: ping ? 'SWAP THE NEW CATCH IN' : 'TEAM · ITEMS' });
 
   // a split evolution blocks the reward pick until its form is chosen
   if (evo) {
@@ -5394,7 +5400,9 @@ function drawRoster(
   // captured box — tap a catch and a teammate, in either order, to swap
   ctx.font = font(9);
   ctx.fillStyle = INK_FAINT;
-  const capLine = `BOX: beaten foes join at ${Math.round(catchPct * 100)}%`;
+  // odds scale off your ace's level — weaklings easy, far-above foes gated
+  const capLine = `BOX: beaten foes may join — weaker foes up to ${Math.round(catchPct * 300)}%`;
+  fitFont(ctx, capLine, 9, W - 40);
   ctx.fillText(capLine, W / 2, 526);
   if (masterArmed) {
     void loadItem('master-ball');
@@ -5635,10 +5643,14 @@ export function drawTeamMenu(
       ctx.font = fontB(8);
       ctx.fillStyle = INK_FAINT;
       // ellipsize, not hard-clip — a cut glyph reads as text spilling off the row
-      let dsc = `— ${perk.desc}`;
       const dscW = r.x + r.w - 10 - (r.x + 48 + nw);
-      while (dsc.length > 3 && ctx.measureText(dsc + '…').width > dscW) dsc = dsc.slice(0, -1);
-      ctx.fillText(dsc, r.x + 48 + nw, r.y + 19);
+      // a long name can eat the whole row — no room means no desc, never
+      // a negative width that lands text past the row's edge
+      if (dscW > 26) {
+        let dsc = `— ${perk.desc}`;
+        while (dsc.length > 3 && ctx.measureText(dsc + '…').width > dscW) dsc = dsc.slice(0, -1);
+        ctx.fillText(dsc, r.x + 48 + nw, r.y + 19);
+      }
     }
     ctx.textAlign = 'center';
   });
@@ -6667,7 +6679,10 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     ctx.fillText(v.label, tx, r.y + 22);
     ctx.font = fontB(7);
     ctx.fillStyle = v.claimed ? '#464e6e' : ready ? INK_SOFT : INK_FAINT;
-    ctx.fillText(v.desc.toUpperCase(), tx, r.y + 35);
+    let dsc = v.desc.toUpperCase();
+    const dscW = rx - tx - 6; // the reward cell's column — never cross it
+    while (dsc.length > 3 && ctx.measureText(dsc + '…').width > dscW) dsc = dsc.slice(0, -1);
+    ctx.fillText(dsc === v.desc.toUpperCase() ? dsc : dsc + '…', tx, r.y + 35);
     // the counter rides the label line — the claim slot is for the button
     ctx.font = fontB(8);
     ctx.textAlign = 'right';

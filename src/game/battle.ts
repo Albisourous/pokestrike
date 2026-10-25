@@ -1907,7 +1907,19 @@ export class Battle {
     if (u.cd <= 0) this.bumpAlly(u, u);
     this.phase = 'shot';
     this.shots++;
-    if (this.ultIn > 0) this.ultIn--; // every shot banks charge toward the ultimate
+    if (this.ultIn > 0 && --this.ultIn === 0) {
+      // the charge just armed — announce it, or the HUD's gold pulse reads
+      // as decoration and the ult sits unfired
+      this.pushText({
+        x: this.arena.x + this.arena.w / 2,
+        y: this.arena.y + 58,
+        text: 'ULTIMATE READY — TAP A TEAMMATE!',
+        t: 1.7, color: '#ffd84d', big: true,
+      });
+      this.screenFlash('#ffd84d', 0.15);
+      sfx('ready');
+      buzz([20, 30, 40]);
+    }
     this.waveShots++; // anti-stall pressure counts shots inside the wave
     if (this.waveShots === 8) {
       // three shots of runway before the ramp bites — warn early so a
@@ -1973,7 +1985,7 @@ export class Battle {
   // The pace and needle start re-roll every pull, so the window is never
   // the same shot twice.
   private charge() {
-    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.2);
+    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.28);
     const ph = (this.dragT + this.gaugeStart * 2 * P) % (2 * P);
     return ph < P ? ph / P : 2 - ph / P;
   }
@@ -1994,9 +2006,9 @@ export class Battle {
     const d = this.gaugeDifficulty();
     // the window itself breathes ±30% pull to pull — some releases are
     // generous, some ask for precision; it never lands on the same spec twice
-    const hw = Math.max((0.09 - 0.05 * n - 0.04 * d) * (1 + this.gaugeJit2 * 0.3), 0.022);
+    const hw = Math.max((0.09 - 0.05 * n - 0.04 * d) * (1 + this.gaugeJit2 * 0.45), 0.02);
     const drift = Math.max(d - 0.5, 0) * 0.16 * Math.sin(this.dragT * 2.4);
-    const c = Math.min(Math.max(0.68 + 0.27 * n + drift + this.gaugeJit * 0.13, hw), 1 - hw);
+    const c = Math.min(Math.max(0.66 + 0.27 * n + drift + this.gaugeJit * 0.18, hw), 1 - hw);
     return { c, hw };
   }
 
@@ -3340,7 +3352,7 @@ export class Battle {
       // the KO shot's combo feeds the roll — a pinball kill tires the mon
       // out like a proper weaken-first. (Dots and orbs from this same shot
       // still read this shot's chain — the right value.)
-      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.captureChance + (e.boss ? this.bossCatch : 0) + Math.min(0.12, this.shotCombo * 0.015));
+      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.catchOdds(e) + Math.min(0.12, this.shotCombo * 0.015));
       if (master) {
         this.masterArmed = false;
         this.pushText({ x: e.x, y: e.y - e.r - 58, text: '★ MASTER BALL!', t: 1.5, color: '#c96bff', big: true });
@@ -4945,12 +4957,24 @@ export class Battle {
     sfx('perfect');
   }
 
-  // A catch can't outpace the team it joins — wild level is foe difficulty,
-  // not a free pass. Captures keep their level up to a few over your best,
-  // so a boss catch or a rival-echo mon never lands as a run-breaker.
+  // A catch lands at the team's pace, never above it — wild level is foe
+  // difficulty, not a free upgrade. Joining at the team average keeps the
+  // swap a real choice: new type + move vs your ace's levels.
   catchLvl(lvl: number) {
+    const n = this.players.length || 1;
+    const avg = Math.max(1, Math.round(this.players.reduce((a, p) => a + p.lvl, 0) / n));
+    return Math.min(lvl, avg);
+  }
+
+  // Catch odds ride the level gap to your ace: fodder jumps in the ball, a
+  // mon far above the team's pace all but refuses — the % reads as a gate,
+  // not a flat roll. Balls + boss relics still widen it; master ball and
+  // shinies skip the check entirely.
+  catchOdds(e: Unit) {
     const best = Math.max(1, ...this.players.map((p) => p.lvl));
-    return Math.min(lvl, best + 3);
+    const over = e.lvl - best;
+    const lvlOdds = over <= -5 ? 3 : over <= 0 ? 2 : over <= 3 ? 0.7 : over <= 6 ? 0.25 : 0.05;
+    return this.captureChance * lvlOdds + (e.boss ? this.bossCatch : 0);
   }
 
   // Queue the capture ritual: ball drops in, rocks `rocks` times over the
@@ -7376,7 +7400,8 @@ export class Battle {
       } else {
         tx = Math.min(Math.max(t.x, half + 8), W_CANVAS_FALLBACK - half - 8);
       }
-      ctx.translate(tx, t.y - dy);
+      // rim-top banners ride up off-canvas — clamp the float inside the frame
+      ctx.translate(tx, Math.min(Math.max(t.y - dy, 30), 930));
       ctx.rotate(t.tilt ?? 0);
       ctx.strokeText(t.text, 0, 0);
       ctx.fillText(t.text, 0, 0);
@@ -7868,7 +7893,7 @@ export class Battle {
     ].filter(Boolean) as string[]) : [];
     const a = this.arena;
     const w = 200; // dual-type tags need the room a 176 card never had
-    const h = foe ? 76 + (tells.length > 1 ? 10 : 0) : 100; // teammates get two lines for what the super does
+    const h = foe ? 90 + (tells.length > 1 ? 10 : 0) : 100; // teammates get two lines for what the super does
     const cx = Math.min(Math.max(e.x - w / 2, a.x + 6), a.x + a.w - w - 6);
     const cy = Math.max(a.y + 8, e.y - e.r - h - 16);
     ctx.save();
@@ -7945,6 +7970,12 @@ export class Battle {
         fitFontB(ctx, tells[1], 7, w - 60);
         ctx.fillText(tells[1], cx + 50, cy + 80);
       }
+      // the catch read — weaklings jump in the ball, aces above the team's
+      // pace read locked. The % is live: balls + combo already folded in.
+      const pct = this.inTrainer ? 0 : Math.round(Math.min(0.95, this.catchOdds(e)) * 100);
+      ctx.fillStyle = this.inTrainer ? '#6a7090' : pct >= 15 ? '#6fdc6f' : pct >= 5 ? '#ffd84d' : '#8890b8';
+      fitFontB(ctx, this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN — ~${pct}%`, 7, w - 60);
+      ctx.fillText(this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN — ~${pct}%`, cx + 50, cy + h - 8);
     } else {
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
@@ -7969,7 +8000,7 @@ export class Battle {
       ctx.font = fontB(10);
       ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
       ctx.fillStyle = color;
-      ctx.fillText(s, a.x + a.w / 2, a.y + a.h - 16);
+      ctx.fillText(s, a.x + a.w / 2, a.y + a.h - 30); // clear of the rim's low props
       ctx.globalAlpha = 1;
     };
     ctx.save();
@@ -8071,7 +8102,7 @@ export class Battle {
       ctx.globalAlpha = 1;
       ctx.font = font(9);
       ctx.fillStyle = '#ffb0b0';
-      ctx.fillText('STRIKES AT 0', threat.x, threat.y - threat.r - 20);
+      ctx.fillText('STRIKES AT 0', threat.x, Math.max(threat.y - threat.r - 20, a.y + 12));
     }
     ctx.restore();
   }
@@ -8597,10 +8628,17 @@ export class Battle {
           button(ctx, r, '', afford, o.icon);
           const lx = r.x + 50;
           const ty = r.y + r.h / 2 + 4;
-          fitFont(ctx, o.label, 10, r.w - 50 - 64);
+          // fitFont floors at 6px — a still-long label ellipsizes before it
+          // runs into the price tag
+          const lw = r.w - 50 - 64;
+          let lab = o.label;
+          if (fitFont(ctx, lab, 10, lw) <= 6) {
+            while (lab.length > 3 && ctx.measureText(lab + '…').width > lw) lab = lab.slice(0, -1);
+            lab += '…';
+          }
           ctx.textAlign = 'left';
           ctx.fillStyle = afford ? '#f0e6c8' : '#6a7090';
-          ctx.fillText(o.label, lx, ty);
+          ctx.fillText(lab, lx, ty);
           ctx.font = font(9);
           ctx.textAlign = 'right';
           ctx.strokeStyle = '#000';
@@ -8740,7 +8778,16 @@ export class Battle {
       drawTile(ctx, prop, hz.x - dw / 2, hz.y - dh / 2, dw, dh);
     }
     if (hz.kind === 'lava') {
-      // molten pool — no atlas tile, the two-tone pulse reads as lava
+      // molten pool — scorched rock ring (atlas slice, seeded off the
+      // pool's own coords), the two-tone pulse reads as lava
+      for (let i = 0; i < 4; i++) {
+        const a0 = i * 1.73 + hz.x * 0.013 + hz.y * 0.007;
+        const rs = hz.r * (0.3 + ((i * 0.37) % 0.25));
+        drawSlice(ctx, MT.ROCK_SMALL,
+          hz.x + Math.cos(a0) * hz.r * 0.95 - rs / 2,
+          hz.y + Math.sin(a0) * hz.r * 0.55 - rs / 2,
+          rs, rs * 0.7, 'rgba(80,24,6,0.55)');
+      }
       const pulse = 0.34 + Math.sin(this.time * 2.4) * 0.07;
       ctx.globalAlpha = pulse + 0.2;
       ctx.fillStyle = '#c23a0e';
@@ -9391,9 +9438,10 @@ export class Battle {
         ctx.lineWidth = 3;
         // an armed ult marks its own mon — second tap on it fires
         const armed = this.ultArmUid === u.uid && this.time - this.ultArmT < 2;
-        ctx.strokeText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, u.y - u.r - 52);
+        const uly = Math.max(u.y - u.r - 52, this.arena.y + 12); // rim-hugging mons keep the tag on-canvas
+        ctx.strokeText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, uly);
         ctx.fillStyle = armed ? '#ff9d4d' : '#ffe76a';
-        ctx.fillText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, u.y - u.r - 52);
+        ctx.fillText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, uly);
       }
     }
   }
@@ -9437,7 +9485,7 @@ export class Battle {
     ctx.fillRect(zx + zw / 2 - 7, by + bh + 1, 7, 2);
     // the needle — a bright hand sweeping the track, trailing ghosts
     // behind it (dir re-derived from the same phase math as charge())
-    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.2);
+    const P = (0.85 - 0.3 * this.gaugeDifficulty()) * (1 + this.gaugeJit * 0.28);
     const ph = (this.dragT + this.gaugeStart * 2 * P) % (2 * P);
     const dir = ph < P ? 1 : -1;
     for (const [g, al] of [[0.028, 0.14], [0.014, 0.3]] as const) {

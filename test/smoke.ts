@@ -1050,16 +1050,31 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).spawnWave(0);
   const e = (b as any).enemies.find((x: any) => !team().some((t) => t.id === x.def.id));
   e.lvl = 90; // a wild far above anything a young team could field
-  b.captureChance = 1; // the ball always lands
+  b.captureChance = 20; // the ball always lands — even through the level gate
   (b as any).hurt(e, e.hp + 50, '#fff');
   // the KO's punch-up EXP lands before the catch — measure the cap after
-  const best = Math.max(...(b as any).players.map((p: any) => p.lvl));
-  ok((b as any).boxLvl[0] === best + 3, `a lvl-90 catch joins at team pace (box lvl ${(b as any).boxLvl[0]} vs team best ${best})`);
+  const pl = (b as any).players.map((p: any) => p.lvl);
+  const avg = Math.max(1, Math.round(pl.reduce((s: number, l: number) => s + l, 0) / pl.length));
+  ok((b as any).boxLvl[0] === avg, `a lvl-90 catch joins at team average (box lvl ${(b as any).boxLvl[0]} vs team avg ${avg})`);
   // the capture ritual: the ball sequence exists mid-rock, then resolves
   // and drains on the update clock alone — the sim never waits for theatre
   ok((b as any).balls.length === 1, 'a forced catch queues its ball ritual');
   for (let i = 0; i < 40; i++) b.update(0.05); // 2s > the ritual's 1.8s bound
   ok((b as any).balls.length === 0, 'the ritual resolves and drains inside its span');
+}
+
+// --- catch odds scale off the team's ace -------------------------------------
+{
+  const b = new Battle(arena, team(), makeStage(8, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  const e = (b as any).enemies.find((x: any) => !team().some((t) => t.id === x.def.id));
+  const best = Math.max(...(b as any).players.map((p: any) => p.lvl));
+  e.lvl = best - 8; // a weakling next to the team
+  const easy = b.catchOdds(e);
+  e.lvl = best + 10; // far above — the gate closes
+  const hard = b.catchOdds(e);
+  ok(easy >= b.captureChance * 2.9, `weak foes catch easy (${easy.toFixed(2)} vs base ${b.captureChance})`);
+  ok(hard <= b.captureChance * 0.06, `far-above foes are all but locked (${hard.toFixed(3)})`);
 }
 
 // --- gym stops sign their leader's type -------------------------------------
@@ -1094,7 +1109,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   // solve dragT through the live charge/sweetSpot pair instead of constants
   for (let i = 0; i < 6; i++) {
     const z = (b as any).sweetSpot();
-    const P = (0.85 - 0.3 * (b as any).gaugeDifficulty()) * (1 + (b as any).gaugeJit * 0.14);
+    const P = (0.85 - 0.3 * (b as any).gaugeDifficulty()) * (1 + (b as any).gaugeJit * 0.28);
     let dt = P * z.c - (b as any).gaugeStart * 2 * P;
     dt = ((dt % (2 * P)) + 2 * P) % (2 * P);
     (b as any).dragT = dt;
@@ -1594,9 +1609,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const e = (b as any).enemies[0];
   const el = e.lvl;
   (b as any).hurt(e, e.hp + 50, '#fff');
-  // keeps its level up to the catch cap — a few over the team's best
-  const best = Math.max(...(b as any).players.map((p: any) => p.lvl));
-  const want = Math.min(el, best + 3);
+  // keeps its level up to the catch cap — the team's own average
+  const pl = (b as any).players.map((p: any) => p.lvl);
+  const want = Math.min(el, Math.max(1, Math.round(pl.reduce((s: number, l: number) => s + l, 0) / pl.length)));
   ok(b.boxLvl[b.boxLvl.length - 1] === want, `caught mon joins capped at team pace (Lv${el} wild → Lv${b.boxLvl[b.boxLvl.length - 1]}, cap ${want})`);
 }
 
