@@ -272,3 +272,8 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-23 | `504d079` | arena | sports-pitch paint removed (inset rect/halfway/center circle/corner arcs); floor bake stamps 5 worn-ground patches per theme; blocks rounded + softer rim | `git revert 504d079` |
 | 2026-10-23 | `0d09dbc` | help+shop | ENEMIES glossary split into 3 sections, deck repaged to 11 with flowing card heights (was one 56-line slot overflowing the pager); ITEM UPGRADES rack — ◆40 dust packs bump a random held item +1 tier (cap 5, pk_itemtiers, perTier effects on field+resume) | `git revert 0d09dbc` |
 | 2026-10-23 | `0d09dbc`+ | shop | upgrade rack cells ghost on bag stock, not tier — a maxed-but-owned item reads lit | — |
+| 2026-10-25 | `6258dd1` | catch | odds scale off the gap to your ace (weak x3 → +7 all but locked); catches join at team average, never above — the swap stays a trade; scout card prints live %, roster header reframed | `git revert 6258dd1` |
+| 2026-10-25 | `6258dd1` | ult | armed beat — ULTIMATE READY banner + flash + chime the shot the charge lands (the HUD pulse was the only cue) | `git revert 6258dd1` |
+| 2026-10-25 | `6258dd1` | timing | gold band breathes wider pull-to-pull: pace ±28%, window ±45%, center ±0.18 | `git revert 6258dd1` |
+| 2026-10-25 | `6258dd1` | text | FloatText y-clamped inside the frame; STRIKES/ULT tags clamp above the rim; coach line lifts off the low props; roster/lab/task/event descs ellipsize instead of spilling | `git revert 6258dd1` |
+| 2026-10-25 | `6258dd1` | reward | fresh catch lights the TEAM · ITEMS pill gold — SWAP THE NEW CATCH IN before the relic board | `git revert 6258dd1` |

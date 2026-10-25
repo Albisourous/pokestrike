@@ -67,6 +67,10 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - Each type's bump super is one case in the `bumpAlly` switch; its move name
   lives in `MOVE_NAME`, cooldown in `BUMP_CD` (all in `stats.ts`). Keep them
   in sync when changing a super.
+- Catch odds aren't a flat %: `catchOdds(e)` scales `captureChance` off the
+  level gap to the team's ace (weak ×3, +7 over ≈ locked), and `catchLvl`
+  clamps joins to the team average — catches should never out-level the
+  squad or swapping stops being a choice.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Two UI faces: `font()` = Press Start 2P pixel display (vendored `public/fonts/PressStart2P-Regular.ttf`), `fontB()` = Roboto Condensed for dense stat/small print — pixel type runs ~1.7x wider, so cramped readouts use `fontB` and long labels `fitFont()`.
 - New battle rooms are data: author a 9×11 char grid in `ROOM_LAYOUTS`
