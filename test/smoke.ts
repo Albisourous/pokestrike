@@ -1352,6 +1352,17 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const c = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(99));
   c.applySnapshot(s);
   ok(c.tools.roll === 0 && c.tools.ban === 1 && c.perkBan.has('sash'), 'tools + bans survive the resume');
+  // the banked ult charge rides the save too; old saves re-arm the counter
+  a.ultIn = 4;
+  const su = JSON.parse(JSON.stringify(a.snapshot()!));
+  ok(su.ultIn === 4, 'snapshot banks the ult charge');
+  const u = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(42));
+  u.applySnapshot(su);
+  ok(u.ultIn === 4, 'banked ult charge survives the resume');
+  delete su.ultIn;
+  const vu = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(7));
+  vu.applySnapshot(su);
+  ok(vu.ultIn === ULT_SHOTS, 'an older save re-arms the ult counter');
   delete s.tools;
   delete s.perkBan;
   const v1 = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(7));
@@ -1479,9 +1490,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(b.ultIn === ULT_SHOTS, 'firing the ult re-arms the counter');
   for (let i = 0; i < 60; i++) b.update(0.05); // the beams land on a stagger
   ok((b as any).enemies.every((e: any, i: number) => e.dead || e.hp < hp0[i]), 'the ult hits every foe on the court');
-  b.ultIn = 3; // a part-banked charge...
+  b.ultIn = 3; // a part-banked charge rides into the next fight — the run banks it
   (b as any).spawnWave(0);
-  ok(b.ultIn === ULT_SHOTS, 'ult charge never carries into the next fight');
+  ok(b.ultIn === 3, 'ult charge carries into the next fight');
   // the charge is the team's — a benched teammate can spend it too
   b.phase = 'aim';
   b.ultIn = 0;

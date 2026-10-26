@@ -1099,6 +1099,7 @@ export class Battle {
       masterArmed: this.masterArmed,
       ashArmed: this.ashArmed,
       reviveUsed: this.reviveUsed,
+      ultIn: this.ultIn,
       starsRun: this.starsRun,
       score: this.score,
       perksTaken: this.perksTaken,
@@ -1155,6 +1156,7 @@ export class Battle {
     if (s.masterArmed != null) this.masterArmed = s.masterArmed;
     if (s.ashArmed != null) this.ashArmed = s.ashArmed;
     this.reviveUsed = s.reviveUsed ?? false; // a spent token stays spent
+    this.ultIn = s.ultIn ?? ULT_SHOTS; // older saves re-arm the charge
     this.starsRun = s.starsRun ?? 0;
     // a spent echo visit stays spent — without this a park/resume re-arms it
     this.tagEchoDone = s.tagEchoDone ?? false;
@@ -1242,7 +1244,7 @@ export class Battle {
     this.inEvent = false;
     this.waveShots = 0;
     this.waveFlawless = true;
-    this.ultIn = ULT_SHOTS; // the ult is per-fight — no banking a charge into the next stop
+    // ultIn banks across the whole run — pips earned in one fight spend at the next
     this.boxGain = null;
     this.refreshTraits();
     let spawns: WaveSpawn[];

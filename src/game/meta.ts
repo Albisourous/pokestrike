@@ -1126,6 +1126,7 @@ export interface RunSave {
   masterArmed?: boolean; // armed one-shot flags save verbatim — a spent ball stays spent
   ashArmed?: boolean;
   reviveUsed?: boolean; // the lab revive token is one-shot per run — a spent revive stays spent (v4+)
+  ultIn?: number; // banked ult charge — shots until the team ultimate arms (v6+)
   score: number;
   starsRun?: number; // star pieces banked this run — the result screen's +N row (v4+)
   perksTaken: number;
