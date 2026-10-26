@@ -626,3 +626,11 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   line clears the tutorial pill, hall-of-fame empty state shows the
   rank ladder. ux_lint score 98 — remaining flags are intentional
   ?dev/?debug logging + the wheel listener's legit preventDefault.
+
+- Deep-surface audit: drove a real seeded run through the `?`/mart/chest
+  doors — POKÉ MART card verified (shopkeeper NPC, wallet line, priced
+  rows, LEAVE, live debit on re-prompt), event box verified (berry-bush
+  art + note), TEAM·ITEMS overlay verified dense (KO'd ace, 7-catch box
+  strip scrolling with ◀▶ affordances, 5 held items). Result screen
+  verified: WIPED OUT stamp, findings table, squad attachment, badge
+  strip, REMATCH/SHARE/TITLE.
