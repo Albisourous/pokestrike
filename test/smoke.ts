@@ -1154,6 +1154,15 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const FOR: Record<string, string> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind', shore: 'rain', plant: 'storm', marsh: 'rain' };
   const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(7));
   (b as any).spawnWave(0);
+  // the arena is the element of the battle: stage-locked on wild waves,
+  // the stop's own type court on trainer/elite stops
+  ok((b as any).theme === (b as any).stage.theme, 'wild wave fights in the stage biome');
+  const tb = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(7));
+  (tb as any).spawnWave(0, { kind: 'trainer', ttype: 'fire', row: 0, tx: 0, ty: 0, links: [] });
+  ok((tb as any).theme === 'volcano', `a fire stop fights in the volcano (${(tb as any).theme})`);
+  const eb = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(7));
+  (eb as any).spawnWave(0, { kind: 'elite', ttype: 'ghost', row: 0, tx: 0, ty: 0, links: [] });
+  ok((eb as any).theme === 'tower', `a ghost elite fights in the tower (${(eb as any).theme})`);
   ok(
     (b as any).weather === null ||
       (b as any).weather === FOR[(b as any).theme] ||

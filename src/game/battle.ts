@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -418,6 +418,27 @@ const PICKUP_META: Record<PickupKind, { name: string; label: string; color: stri
   'revival-herb': { name: 'REVIVAL HERB', label: 'REVIVE', color: '#f8d030' },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
+
+// ?dev&arena=<name|index> — pin every wave's court for arena review.
+// Parsed once, `?dev`-gated; node-smoke has no location so it always nulls.
+let dbgArena: Theme | null | undefined;
+export function debugArena(): Theme | null {
+  if (dbgArena === undefined) {
+    dbgArena = null;
+    if (typeof location !== 'undefined') {
+      const q = new URLSearchParams(location.search);
+      const raw = q.get('arena');
+      if (raw && (q.has('dev') || q.has('debug'))) {
+        dbgArena = /^\d+$/.test(raw)
+          ? THEMES[Number(raw) % THEMES.length]
+          : (THEMES as readonly string[]).includes(raw)
+            ? (raw as Theme)
+            : null;
+      }
+    }
+  }
+  return dbgArena;
+}
 // star pieces — the meta wallet paid by run progress (Oct-20/21 specs;
 // rates are guesses pending playtesting): a cleared map row pays
 // 2 + stage#, a climb win pays a lump, gym fountains spill a few shards
@@ -829,7 +850,8 @@ export class Battle {
   lastRecruit: SpeciesDef | null = null; // gym ace prize, for the reward screen
   private rewardPending = false;
   private hpScale = 1;
-  private theme: Theme; // current wave's scene — rotates each wave
+  private theme: Theme; // current wave's scene — the element of the battle
+  private deepThemes = new Map<number, Theme>(); // rolled rows remember the biome their pool was drawn from
   traits = new Map<PokeType, number>(); // type-trait tiers — teamTraits, refreshed on composition shifts
   private pendingEventWave: WaveSpawn[] | null = null; // ?-stop ambush replaces the row's wave
   private inEvent = false; // this wave is a scripted event fight (no gym credit)
@@ -1233,15 +1255,20 @@ export class Battle {
         this.depth++;
         // keep waves[i] indexed by row even though the event replaced it —
         // the next row reads stage.waves[i+1] off this slot
-        this.stage.waves.push(rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)]));
+        const th = THEMES[Math.floor(this.rng() * THEMES.length)];
+        this.deepThemes.set(this.stage.waves.length, th);
+        this.stage.waves.push(rollWave(this.rng, this.depth, th));
       }
     } else {
       while (i >= this.stage.waves.length) {
         this.depth++;
         // a gym's rolled wave fields the leader its sign announced; deep
-        // waves roll their biome per row — the climb isn't one species pool
+        // waves roll their biome per row — the climb isn't one species pool.
+        // The biome is remembered so the arena draws the same element.
+        const th = THEMES[Math.floor(this.rng() * THEMES.length)];
+        this.deepThemes.set(this.stage.waves.length, th);
         this.stage.waves.push(
-          rollWave(this.rng, this.depth, THEMES[Math.floor(this.rng() * THEMES.length)], node?.kind === 'gym' ? node.ttype : undefined),
+          rollWave(this.rng, this.depth, th, node?.kind === 'gym' ? node.ttype : undefined),
         );
       }
       // elite doors field the same mono-type squad but one depth tier hotter
@@ -1250,10 +1277,13 @@ export class Battle {
     this.hardWave = this.inTrainer || this.inEvent;
     this.curSpawns = spawns;
     this.hpScale = 1 + this.foeHpBonus + this.depth * 0.25 + i * 0.12 + this.asc * 0.15; // wave 3 mobs are +24% tanky; ascension stacks on top
-    // each wave is a new scene — rotate the flat theme; about half roll
-    // weather, which tilts the type table until the wave ends
-    const others = THEMES.filter((t) => t !== this.theme);
-    this.theme = others[Math.floor(this.rng() * others.length)];
+    // the arena IS the element of the battle: a typed stop (trainer /
+    // elite / gym boss) fights in its type's court, wild waves in the
+    // biome their pool was drawn from — never a mid-battle scene swap
+    const bossType = spawns.find((s) => s.boss)?.def.type;
+    this.theme =
+      debugArena() ??
+      (ttype ? TYPE_THEME[ttype] : bossType ? TYPE_THEME[bossType] : this.deepThemes.get(i) ?? this.stage.theme);
     this.weather = this.rng() < (this.dailyWeather ? 1 : 0.5) ? (WEATHER_FOR[this.theme] ?? rolledSky(this.rng)) : null;
     // stale super timers mustn't carry hits into the fresh wave — orbs
     // included, or a flight of homers retargets onto the next pack
@@ -1286,6 +1316,8 @@ export class Battle {
       const bt = spawns.find((s) => s.boss)?.def.type;
       this.weather = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind', electric: 'storm' } as Partial<Record<PokeType, Weather>>)[bt ?? 'normal'] ?? WEATHER_FOR[this.theme] ?? 'storm';
     }
+    // the storm chaser's contract outranks every override — no clear courts
+    if (this.dailyWeather) this.weather ??= rolledSky(this.rng);
     this.inRival = false;
     // ASC 1 ROAMERS: echoes and invades hunt twice as hard. ASC 9 TAG
     // TEAM: the echo is owed one guaranteed visit this climb.
