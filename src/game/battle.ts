@@ -321,7 +321,7 @@ const AMBIENT: Record<Theme, { n: number; col: string; vx: number; vy: number; r
 
 // theme → its sky: groves rain, caverns swirl sand, the volcano bakes
 // under sun, the heights blow. ~Half of rolled courts get weather.
-const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
+export const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
 // block boulders take the wall ring's prop tint so cover reads as the same
 // stone as the court's edge — scorched at the volcano, iced on the summit
 const BLOCK_TINT: Record<Theme, string | undefined> = {

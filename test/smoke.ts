@@ -1,6 +1,6 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS } from '../src/game/battle';
+import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
@@ -14,6 +14,7 @@ import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coac
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
+import type { Theme } from '../src/game/bg';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 
@@ -3063,7 +3064,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
         ok(ace.enraged, 'ENRAGED: the boss walks in furious');
         break;
       case 'storm': {
-        const want = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind' } as Record<string, string>)[boss.type] ?? 'rain'; // grove fallback
+        const want = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind' } as Record<string, string>)[boss.type] ?? WEATHER_FOR[b.theme as Theme]; // unmapped typings keep the re-rolled court's own sky
         ok(b.weather === want, `STORM CALLER: the sky locks to ${b.weather}`);
         break;
       }

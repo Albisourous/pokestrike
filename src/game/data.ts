@@ -1367,11 +1367,26 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // hourglass — flank slabs rake both edges into a three-gap throat
+  // mid-court; anchors crowd the gaps so banked shots thread a needle
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '12S000S21',
+    '10S2S2S01',
+    '12S000S21',
+    '100000001',
+    '10S0S0S01',
+    '100S0S001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 // the keep/pincer/saltire/moat-gate/sluice/bramble/crosswind tail is the
 // hard tier — it only rides in from depth 2 (stage ~5 up); append new
 // mid-pool rooms before it
-export const ROOM_HARD = 7;
+export const ROOM_HARD = 8;
 // Gym arenas stay open — the leader fight is the spectacle, so no
 // furniture; the entourage still enters on the anchor ring.
 export const ROOM_BOSS: string[] = [
