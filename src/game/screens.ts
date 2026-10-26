@@ -1413,11 +1413,16 @@ function drawShopBody(
   // lists every bag item's pips so a pack's bump has a visible home, and
   // the pill is the right column so the shelf doesn't fight it
   const ur = UPGRADES_BTN;
-  uiPanel(ctx, ur, 'ITEM UPGRADES');
+  const uc = uiPanel(ctx, ur, 'ITEM UPGRADES');
+  const pk = PACK_PILL;
+  // the shelf spreads seven columns across the strip left of the pill
+  const rackW = pk.x - 12 - uc.x;
+  const pitch = Math.floor((rackW - 28) / 6);
+  const x0 = uc.x + 14 + (rackW - 28 - pitch * 6) / 2;
   BAG_ITEMS.forEach((it, i) => {
     const col = i % 7, row = (i / 7) | 0;
-    const cx = ur.x + 34 + col * 47;
-    const cy = ur.y + 62 + row * 50;
+    const cx = x0 + col * pitch;
+    const cy = uc.y + 16 + row * 46;
     // ghosted = none in the bag — its tier just waits for stock to land
     ctx.globalAlpha = (bagStock()[it.id] ?? 0) > 0 ? 1 : 0.55;
     const spr = itemSprite(it.item);
@@ -1433,7 +1438,7 @@ function drawShopBody(
     for (let p = 0; p < ITEM_TIER_CAP; p++) {
       ctx.fillStyle = p < tt ? GOLD : 'rgba(40,44,70,0.25)';
       ctx.beginPath();
-      ctx.arc(cx - 14 + p * 7, cy + 20, 3, 0, Math.PI * 2);
+      ctx.arc(cx - 12 + p * 6, cy + 20, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
@@ -1441,7 +1446,6 @@ function drawShopBody(
   // the pack pill arms like a spark buy — first tap reads its cost, second pays
   const maxed = BAG_ITEMS.every((i) => itemTier(i.id) >= ITEM_TIER_CAP);
   const canPay = dust() >= ITEM_PACK_COST;
-  const pk = PACK_PILL;
   roundRect(ctx, pk.x, pk.y, pk.w, pk.h, 12);
   ctx.fillStyle = packArmed ? '#1a2a4a' : maxed || !canPay ? '#3a3f58' : GOLD;
   ctx.fill();
@@ -1457,26 +1461,27 @@ function drawShopBody(
   ctx.fillStyle = packArmed ? '#9df0ff' : maxed || !canPay ? '#5a6280' : INK;
   ctx.fillText(`◆ ${ITEM_PACK_COST}`, pk.x + pk.w / 2, pk.y + 58);
   if (packFlashId) {
-    ctx.font = font(8);
     ctx.fillStyle = GOLD;
     const fn = BAG_ITEMS.find((i) => i.id === packFlashId)?.name.toUpperCase() ?? '';
-    ctx.fillText(`${fn} T${itemTier(packFlashId)}!`, ur.x + ur.w / 2 - 40, ur.y + ur.h - 14);
+    fitFont(ctx, `${fn} T${itemTier(packFlashId)}!`, 8, rackW);
+    ctx.fillText(`${fn} T${itemTier(packFlashId)}!`, uc.x + rackW / 2, ur.y + ur.h - 9);
   }
 
   // the honest cut, visible before the hatcher opens — same rarity table as
-  // the overlay prints, plus the pity count, compressed so the rack fits
+  // the overlay prints, plus the pity count, two columns so it fits the
+  // leftover strip above the tab bar
   const orr = { x: 30, y: UPGRADES_BTN.y + UPGRADES_BTN.h + 14, w: W - 60, h: TAB_BAR.y - 20 - (UPGRADES_BTN.y + UPGRADES_BTN.h + 14) };
-  uiPanel(ctx, orr, 'PULL ODDS', { sub: `RARE+ IN ${PULL_PITY - (pullCount() % PULL_PITY)} PULLS` });
-  ctx.textAlign = 'left';
-  ctx.font = fontB(8);
+  const oc = uiPanel(ctx, orr, 'PULL ODDS', { sub: `RARE+ IN ${PULL_PITY - (pullCount() % PULL_PITY)} PULLS` });
   ([['COMMON', PULL_RATES.common, '#b8b8b0'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f'], ['SHINY', shinyOdds(), '#ffd848']] as const).forEach(([label, pct, color], i) => {
-    const ly = orr.y + 42 + i * 13;
+    const lx = oc.x + 12 + ((i / 2) | 0) * (oc.w / 2);
+    const ly = oc.y + 13 + (i % 2) * 17;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(9);
     ctx.fillStyle = color;
-    ctx.fillText(label, orr.x + 18, ly);
+    ctx.fillText(label, lx, ly);
     ctx.textAlign = 'right';
     ctx.fillStyle = INK;
-    ctx.fillText(`${Math.round(pct * 100)}%`, orr.x + orr.w - 18, ly);
-    ctx.textAlign = 'left';
+    ctx.fillText(`${Math.round(pct * 100)}%`, lx + oc.w / 2 - 24, ly);
   });
 }
 
@@ -2722,7 +2727,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   if (welcome) {
     ctx.font = fontB(9);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText('your first fight teaches the pull — this deck is the manual', r.x + r.w / 2, r.y + 56);
+    ctx.fillText('your first fight teaches the pull — this deck is the manual', r.x + r.w / 2, r.y + 62);
   }
 
   uiClose(ctx, HELP_CLOSE);
@@ -3028,11 +3033,20 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.fill();
   }
   if (!seen.size) {
-    // zero catches — the ghosts already show what the register wants
+    // zero catches — the ghosts already show what the register wants; the
+    // hint rides a dark chip so it doesn't ghost through the sealed cells
     ctx.font = fontB(8);
     ctx.textAlign = 'center';
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText('catch wilds mid-run to fill the register', r.x + r.w / 2, r.y + r.h / 2 - 24);
+    const hw = ctx.measureText('catch wilds mid-run to fill the register').width + 20;
+    const hx = r.x + r.w / 2 - hw / 2, hy = r.y + r.h / 2 - 38;
+    roundRect(ctx, hx, hy, hw, 20, 8);
+    ctx.fillStyle = 'rgba(10,13,24,0.82)';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(208,208,200,0.4)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = PARCH;
+    ctx.fillText('catch wilds mid-run to fill the register', r.x + r.w / 2, hy + 14);
   }
 
   // the completion milestone is the promise that keeps hunters grinding
@@ -3435,6 +3449,21 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   });
   ctx.restore();
 
+  // scroll thumb — same slim rail + gold thumb the dex shelf wears
+  const achView = r.h - ACH_HEAD - 36;
+  const achTotal = ACHIEVEMENTS.length * ACH_ROW + 8;
+  if (achTotal > achView) {
+    const rail = { x: r.x + r.w - 11, y: r.y + ACH_HEAD + 4, w: 4, h: achView - 8 };
+    ctx.fillStyle = 'rgba(12,16,32,0.4)';
+    roundRect(ctx, rail.x, rail.y, rail.w, rail.h, 2);
+    ctx.fill();
+    const th = Math.max(24, (achView / achTotal) * rail.h);
+    const ty = rail.y + (scroll / achScrollMax()) * (rail.h - th);
+    ctx.fillStyle = GOLD;
+    roundRect(ctx, rail.x, ty, rail.w, th, 2);
+    ctx.fill();
+  }
+
   ctx.textAlign = 'center';
   ctx.font = fontB(8);
   ctx.fillStyle = INK_FAINT;
@@ -3749,8 +3778,13 @@ export function drawHatch(
   // slot — and pityIn counting to 1 means the NEXT pull is the guarantee
   const done = PULL_PITY - info.pityIn;
   ctx.textAlign = 'center';
-  ctx.font = font(9);
   ctx.fillStyle = info.pityIn <= 1 ? GOLD : INK_SOFT;
+  fitFont(
+    ctx,
+    info.pityIn <= 1 ? 'NEXT PULL IS A GUARANTEED RARE+' : `${info.pityIn} MORE PULLS TO A GUARANTEED RARE+`,
+    9,
+    PITY_BAR.w - 8,
+  );
   ctx.fillText(
     info.pityIn <= 1 ? 'NEXT PULL IS A GUARANTEED RARE+' : `${info.pityIn} MORE PULLS TO A GUARANTEED RARE+`,
     W / 2,
