@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -419,24 +419,24 @@ const PICKUP_META: Record<PickupKind, { name: string; label: string; color: stri
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 
-// ?dev&arena=<name|index> — pin every wave's court for arena review.
-// Parsed once, `?dev`-gated; node-smoke has no location so it always nulls.
+// ?debug=arena1..11 or ?dev&arena=<name|index> — pin every wave's court
+// for arena review. debugArena() parses once, dev/debug-gated; node-smoke
+// has no location so it always nulls.
+export function parseArenaPin(q: URLSearchParams): Theme | null {
+  let raw = q.get('arena');
+  const m = /^arena(\d{1,2})$/.exec(q.get('debug') ?? '');
+  if (!raw && m) raw = String(Math.max(0, Number(m[1]) - 1)); // arena1 → court 0
+  if (!raw || !(q.has('dev') || q.has('debug'))) return null;
+  return /^\d+$/.test(raw)
+    ? THEMES[Number(raw) % THEMES.length]
+    : (THEMES as readonly string[]).includes(raw)
+      ? (raw as Theme)
+      : null;
+}
 let dbgArena: Theme | null | undefined;
 export function debugArena(): Theme | null {
-  if (dbgArena === undefined) {
-    dbgArena = null;
-    if (typeof location !== 'undefined') {
-      const q = new URLSearchParams(location.search);
-      const raw = q.get('arena');
-      if (raw && (q.has('dev') || q.has('debug'))) {
-        dbgArena = /^\d+$/.test(raw)
-          ? THEMES[Number(raw) % THEMES.length]
-          : (THEMES as readonly string[]).includes(raw)
-            ? (raw as Theme)
-            : null;
-      }
-    }
-  }
+  if (dbgArena === undefined)
+    dbgArena = typeof location === 'undefined' ? null : parseArenaPin(new URLSearchParams(location.search));
   return dbgArena;
 }
 // star pieces — the meta wallet paid by run progress (Oct-20/21 specs;
@@ -851,6 +851,9 @@ export class Battle {
   private rewardPending = false;
   private hpScale = 1;
   private theme: Theme; // current wave's scene — the element of the battle
+  get themeName(): string {
+    return THEME_NAME[this.theme];
+  }
   private deepThemes = new Map<number, Theme>(); // rolled rows remember the biome their pool was drawn from
   traits = new Map<PokeType, number>(); // type-trait tiers — teamTraits, refreshed on composition shifts
   private pendingEventWave: WaveSpawn[] | null = null; // ?-stop ambush replaces the row's wave
@@ -1018,6 +1021,12 @@ export class Battle {
     const modName = RAID_MODS.find((m) => m.id === this.raidMod)?.name;
     this.waveSpecial = modName ? `CHROMA RAID · ${modName}` : 'CHROMA RAID';
     this.log(this.waveSpecial);
+  }
+
+  // ?debug=arenaN — jump the pinned court without the raid banner
+  debugSpawn() {
+    this.spawnWave(0);
+    this.nextTurn();
   }
 
   // gym stops wear their leader's type on the sign, like trainer doors —

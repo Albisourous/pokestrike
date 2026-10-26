@@ -5,7 +5,7 @@ import type { TrackName } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
-import { Battle, PAUSE_QUIT, PAUSE_SETTINGS } from './game/battle';
+import { Battle, PAUSE_QUIT, PAUSE_SETTINGS, debugArena } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom } from './game/data';
@@ -1900,7 +1900,8 @@ function hud(name: string) {
   if (!battle) return;
   ctx.save();
   ctx.translate(0, -viewPad);
-  drawHud(ctx, battle.waveIndex, battle.shots, name, battle.score, battle.streak, battle.ultIn, battle.time, battle.phase === 'map');
+  // a pinned arena names the court it previews — the stage tag lies otherwise
+  drawHud(ctx, battle.waveIndex, battle.shots, debugArena() ? battle.themeName : name, battle.score, battle.streak, battle.ultIn, battle.time, battle.phase === 'map');
   ctx.restore();
 }
 
@@ -2432,9 +2433,18 @@ Promise.all([
   .then(() => {
     scene = 'title';
     titleSave = runSave();
+    // ?debug=arena<N> boots straight into the pinned court on a stock
+    // roster — the sandbox flag keeps the preview off the real save
+    if (debugArena()) {
+      newRun();
+      battle = new Battle(arenaRect(), ROSTER.slice(0, 4), stage, runRng);
+      battle.debugSpawn();
+      scene = 'battle';
+      sceneMusic();
+    }
     // first boot opens the help deck — the kinetic coach then teaches the
     // pull itself inside run one. Later boots leave it under the ? chip
-    if (!helpSeen()) {
+    if (!debugArena() && !helpSeen()) {
       helpOpen = true;
       helpWelcome = true;
       markHelpSeen();

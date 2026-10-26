@@ -1,6 +1,6 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR } from '../src/game/battle';
+import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
@@ -1214,6 +1214,14 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
       if (!sAll || !seen.has('4,1') || blocks > 25) break;
     }
   }
+}
+
+// --- debug arena pin: ?debug=arenaN maps 1-based to THEMES ---------------
+{
+  ok(parseArenaPin(new URLSearchParams('?debug=arena1')) === 'grove', 'debug=arena1 pins the grove court');
+  ok(parseArenaPin(new URLSearchParams(`?debug=arena${THEMES.length}`)) === THEMES[THEMES.length - 1], `debug=arena${THEMES.length} pins the last court`);
+  ok(parseArenaPin(new URLSearchParams('?dev&arena=shore')) === 'shore', '?dev&arena=<name> pins by name');
+  ok(parseArenaPin(new URLSearchParams('?arena=volcano')) === null, 'the pin stays gated — no dev/debug flag');
 }
 
 // --- benching keeps earned levels ------------------------------------------

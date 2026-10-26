@@ -22,9 +22,10 @@ const loadCache = new Map<string, { raw: string | null; val: unknown }>();
 
 // ?debug=1 — a god-mode sandbox: every pk_* key reads/writes pk_debug_* so
 // the real save is never touched while the flag is up. debugSeed() loads it
-// once at boot; clear site data to reseed.
-const DEBUG =
-  typeof location !== 'undefined' && new URLSearchParams(location.search).get('debug') === '1';
+// once at boot; clear site data to reseed. ?debug=arena<N> sandboxes too —
+// the arena preview must not park a ghost run over the real climb.
+const dbgRaw = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('debug') : null;
+const DEBUG = dbgRaw === '1' || /^arena/.test(dbgRaw ?? '');
 const liveKey = (key: string) => (DEBUG ? key.replace(/^pk_/, 'pk_debug_') : key);
 
 const load = <T>(key: string): T | null => {
