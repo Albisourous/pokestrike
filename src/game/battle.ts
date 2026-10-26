@@ -4948,7 +4948,9 @@ export class Battle {
     const a = ACHIEVEMENTS.find((x) => x.id === id);
     this.pushText({
       x: this.arena.x + this.arena.w / 2,
-      y: this.arena.y + 110,
+      // spawns deep — its 52px rise then parks below the N-LEFT chip
+      // instead of ending stamped under it
+      y: this.arena.y + 148,
       text: `★ TROPHY: ${a?.name ?? id} ★`,
       t: 2,
       color: '#ffd84d',
@@ -9439,8 +9441,11 @@ export class Battle {
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        // an armed ult marks its own mon — second tap on it fires
+        // an armed ult marks its own mon — second tap on it fires. While
+        // one is armed the others' tags drop, and during the fire cinema
+        // the banner owns the court — no labels under it.
         const armed = this.ultArmUid === u.uid && this.time - this.ultArmT < 2;
+        if (this.ultFx.t > 0 || (this.ultArmUid !== -1 && !armed)) return;
         const uly = Math.max(u.y - u.r - 52, this.arena.y + 12); // rim-hugging mons keep the tag on-canvas
         ctx.strokeText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, uly);
         ctx.fillStyle = armed ? '#ff9d4d' : '#ffe76a';
