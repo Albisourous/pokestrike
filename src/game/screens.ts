@@ -2140,7 +2140,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const stub = (cx: number, y0: number, y1: number) => {
     for (let y = y0; y < y1; y += 30) drawTile(ctx, TILE_PATH, cx - 16, y, 32, 32);
   };
-  stub(183, 312, NORTH_Y); // the institute's door lands right-of-center in the slice
+  stub(189, 312, NORTH_Y); // the institute's door lands right-of-center in the slice
   stub(406, 304, NORTH_Y);
   stub(136, 578, SOUTH_Y);
   stub(406, 572, SOUTH_Y);
@@ -2148,7 +2148,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // civic row — the institute west, the hall east, doors on the north
   // street. Drawn size keeps each sprite's own aspect; the museum's dome
   // tower + columned entrance nearly fills its lot — an institute should loom
-  drawTile(ctx, TILE_MUSEUM, 135 - 86, 190, 172, 142);
+  drawTile(ctx, TILE_MUSEUM, 135 - 75, 190, 150, 151);
   drawTile(ctx, TILE_HALL, 406 - 63, 198, 126, 106);
   // commerce row — the café hall west (its own patio paves the doorstep),
   // the trophy tower east, doors on the south street
