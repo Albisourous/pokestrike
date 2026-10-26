@@ -2107,7 +2107,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // south street under the commerce row (mart + tower), and a lane down the
   // lot line joining them and running on into the park — no dead grass
   const NORTH_Y = 372, SOUTH_Y = 648, LANE_X = 244;
-  hedgeRow(36, 232, 366, 189); // frontage hedges, gapped at each door walk
+  hedgeRow(36, 232, 366, 116); // frontage hedges, gapped at each door walk
   hedgeRow(306, 504, 366, 406);
   hedgeRow(36, 232, 638, 136);
   hedgeRow(306, 504, 638, 406);
@@ -2125,7 +2125,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const stub = (cx: number, y0: number, y1: number) => {
     for (let y = y0; y < y1; y += 30) drawTile(ctx, TILE_PATH, cx - 16, y, 32, 32);
   };
-  stub(189, 341, NORTH_Y); // the institute's door lands right-of-center in the slice
+  stub(116, 341, NORTH_Y); // the institute's door lands right-of-center in the slice
   stub(406, 340, NORTH_Y);
   stub(136, 577, SOUTH_Y);
   stub(406, 575, SOUTH_Y);
@@ -2133,7 +2133,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   // civic row — the institute west, the hall east, doors on the north
   // street. Fronts align along the street like a real block; the museum's
   // dome tower + columned entrance nearly fills its lot — an institute looms
-  drawTile(ctx, TILE_MUSEUM, 135 - 75, 190, 150, 151);
+  drawTile(ctx, TILE_MUSEUM, 135 - 70, 188, 140, 159);
   drawTile(ctx, TILE_HALL, 406 - 63, 234, 126, 106);
   // commerce row — the café hall west (its own patio paves the doorstep),
   // the trophy tower east, doors on the south street
@@ -2170,7 +2170,7 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const trained = LAB_UPGRADES.filter((u) => (lvls.get(u.id) ?? 0) > 0).length;
   const b = best();
   const runs = board().length;
-  townSign(ctx, 189, 342, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
+  townSign(ctx, 116, 343, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
   townSign(ctx, 406, 341, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
   townSign(ctx, 406, 576, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
   townSign(ctx, 136, 578, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);

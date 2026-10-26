@@ -14,7 +14,7 @@ export const TILE_GYM: TileRect = [398, 2, 68, 57]; // red-roofed center (left t
 
 // Town-tab buildings — whole structures sliced from the atlas's mid bands.
 // The top-band copies all touch the sheet edge (roofs clipped); these don't.
-export const TILE_MUSEUM: TileRect = [552, 347, 126, 127]; // the institute — dome tower + columned facade + glass wing + flanking lawn trees; the glass dome building east of x680 is a neighbor, not the lab. Door ~x662
+export const TILE_MUSEUM: TileRect = [399, 69, 72, 82]; // the institute — satellite dish on a parapet roof deck over a gray lab facade; the dome museum east of x552 is a neighbor, not the lab. Door ~x425
 export const TILE_HALL: TileRect = [847, 200, 90, 76]; // columned pavilion: marquee lip at 200, stone base ends 276 — the orange behind is a neighbor, not the hall
 export const TILE_TOWER: TileRect = [1441, 556, 87, 98]; // hexagonal jewel-domed tower — dome cap at 556, pillar base ends 654
 export const TILE_CAFE: TileRect = [855, 342, 143, 144]; // the job hall — red roof, striped awning, flower boxes, teal patio with stools; door centered ~x927
