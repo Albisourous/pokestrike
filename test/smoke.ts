@@ -1,7 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
@@ -1213,6 +1213,29 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
       ok(sAll && seen.has('4,1') && blocks <= 25, `${theme} generated room ${s}: lanes reach every spawn`);
       if (!sAll || !seen.has('4,1') || blocks > 25) break;
     }
+  }
+}
+
+// --- signature gimmick: a court's roamer fixture is the biome's own -----
+{
+  const GI: Record<string, string> = {
+    grove: 'well', cavern: 'well', volcano: 'boost', sky: 'boost', meadow: 'boost',
+    shore: 'warp', plant: 'boost', marsh: 'well', sanctum: 'warp', dojo: 'boost', tower: 'warp',
+  };
+  for (const theme of THEMES) {
+    let saw = 0;
+    for (let s = 1; s <= 30; s++) {
+      // the open room has no moats — every gimmick-shaped hazard here
+      // came from the roamer fixture, not a '3' cell
+      const r = buildRoom(ROOM_LAYOUTS[0], theme, mulberry32(s * 31 + 7));
+      for (const h of r.hazards) {
+        if (h.kind === 'warp' || h.kind === 'boost' || h.kind === 'well') {
+          ok(h.kind === GI[theme], `${theme} gimmick is ${GI[theme]}`);
+          saw++;
+        }
+      }
+    }
+    ok(saw > 0, `${theme} rolls its signature gimmick`);
   }
 }
 
