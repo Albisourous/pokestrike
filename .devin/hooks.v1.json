@@ -9,6 +9,15 @@
           "timeout": 10
         }
       ]
+    },
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "bash .devin/skills/prefixer/scripts/session_start.sh --json 2>/dev/null || true"
+        }
+      ]
     }
   ]
 }

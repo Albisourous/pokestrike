@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "prefixer",
+  "owner": {
+    "name": "Albisourous",
+    "url": "https://github.com/Albisourous"
+  },
+  "description": "Install Prefixer as a Claude plugin.",
+  "plugins": [
+    {
+      "name": "prefixer",
+      "source": "./",
+      "description": "Give agents a namespace map of a codebase so searches start scoped instead of broad.",
+      "license": "MIT",
+      "keywords": [
+        "search",
+        "retrieval",
+        "tokens",
+        "token-efficiency",
+        "prompt-caching",
+        "namespaces",
+        "rag"
+      ]
+    }
+  ]
+}

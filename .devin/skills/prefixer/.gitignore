@@ -1,0 +1,6 @@
+.DS_Store
+__pycache__/
+*.pyc
+eval/.work/
+eval/agent/.fixture/
+eval/agent/.runs/
