@@ -1142,7 +1142,9 @@ export class Battle {
     while (this.stage.waves.length <= Math.max(s.pendingNext, s.waveIndex)) {
       const r = this.stage.waves.length;
       const gym = this.region.nodes.find((n) => n.row === r && n.kind === 'gym');
-      this.stage.waves.push(rollWave(this.rng, r - 2, THEMES[Math.floor(this.rng() * THEMES.length)], gym?.ttype));
+      const th = THEMES[Math.floor(this.rng() * THEMES.length)];
+      this.deepThemes.set(r, th); // a resumed row keeps the biome its pool rolled
+      this.stage.waves.push(rollWave(this.rng, r - 2, th, gym?.ttype));
     }
     // backfilled rows are rolled waves too — depth must count them or a
     // resumed climb can clear the last gym short of FINAL_DEPTH and stall
@@ -1384,7 +1386,7 @@ export class Battle {
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
           ? ROOM_BOSS
-          : this.rng() < 0.4 // generated courts share the pool with the authored pull
+          : li > 0 && this.rng() < 0.4 // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
             : ROOM_LAYOUTS[li],
       this.theme,

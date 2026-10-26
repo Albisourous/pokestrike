@@ -1,6 +1,6 @@
 # Elemental Arenas Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Lock the battle arena to the element of the battle, grow from 4 to 11 elemental arenas (one per type), add a seeded room generator next to the authored layouts, bank ULT across the run, and ship a `?arena=` debug viewer.
 
@@ -41,11 +41,11 @@
 **Interfaces:**
 - Produces: `Theme = 'grove'|'cavern'|'volcano'|'sky'|'meadow'|'shore'|'plant'|'marsh'|'sanctum'|'dojo'|'tower'`; `TYPE_THEME: Record<PokeType,Theme>`; `MOAT_HAZARD: Record<Theme,HazardKind>` used by `buildRoom`'s `'3'` case.
 
-- [ ] **Step 1:** Extend `Theme`/`THEMES`; run `npx tsc --noEmit` and collect the full list of `Record<Theme,…>` errors — that list IS the fill checklist.
-- [ ] **Step 2:** Fill every table per the spec's per-arena element table (floors, wall props, faces, decor, ambient, block tints, moat hazards, stage names, enemy pools by canon habitat). Mine atlas JSON for sand/water-edge/fence/column rects; add `TILE_*` consts.
-- [ ] **Step 3:** `npm run build` — must pass with zero `Theme`-coverage errors.
-- [ ] **Step 4:** Eyeball each new theme once via dev server + `?dev` (screenshots land properly in Task 7; here just confirm no missing-slice holes).
-- [ ] **Step 5:** Commit `feat: 11 elemental arenas — per-type court tables`.
+- [x] **Step 1:** Extend `Theme`/`THEMES`; run `npx tsc --noEmit` and collect the full list of `Record<Theme,…>` errors — that list IS the fill checklist.
+- [x] **Step 2:** Fill every table per the spec's per-arena element table (floors, wall props, faces, decor, ambient, block tints, moat hazards, stage names, enemy pools by canon habitat). Mine atlas JSON for sand/water-edge/fence/column rects; add `TILE_*` consts.
+- [x] **Step 3:** `npm run build` — must pass with zero `Theme`-coverage errors.
+- [x] **Step 4:** Eyeball each new theme once via dev server + `?dev` (screenshots land properly in Task 7; here just confirm no missing-slice holes).
+- [x] **Step 5:** Commit `feat: 11 elemental arenas — per-type court tables`.
 
 ### Task 2: `storm` weather
 
@@ -56,9 +56,9 @@
 **Interfaces:**
 - Produces: `Weather` gains `'storm'`; `WEATHER_OF.storm = ['electric','grass']`.
 
-- [ ] **Step 1:** Add member + entries; `WEATHER_LINE.storm = 'THUNDERSTORM · ELECTRIC ×1.5'`, tint `#b8b8d0`.
-- [ ] **Step 2:** Assert in `test/smoke.ts` (or a tsc-level check): `weatherMult('storm','electric') === 1.5`, `weatherMult('storm','grass') === 0.75`. Run `npm run smoke`.
-- [ ] **Step 3:** Commit.
+- [x] **Step 1:** Add member + entries; `WEATHER_LINE.storm = 'THUNDERSTORM · ELECTRIC ×1.5'`, tint `#b8b8d0`.
+- [x] **Step 2:** Assert in `test/smoke.ts` (or a tsc-level check): `weatherMult('storm','electric') === 1.5`, `weatherMult('storm','grass') === 0.75`. Run `npm run smoke`.
+- [x] **Step 3:** Commit.
 
 ### Task 3: Theme selection rule (kill per-wave rotation)
 
@@ -69,10 +69,10 @@
 **Interfaces:**
 - Consumes: `TYPE_THEME` (Task 1), `arenaOverride` debug hook (Task 6 supplies the param reader — land the call site here behind a `debugArena()` helper Task 6 defines in `main.ts`; keep a stub `= null` if Task 6 hasn't landed).
 
-- [ ] **Step 1:** In `spawnWave`: replace rotation with — `this.theme = debugArena() ?? (ttype ? TYPE_THEME[ttype] : this.stage.theme)`.
-- [ ] **Step 2:** `rollWave` biome argument: pass `this.stage.theme` (deep waves stay in-biome); gym row already passes `node.ttype`.
-- [ ] **Step 3:** `npm run build` + `npm run smoke` — seed determinism must hold (no new rng draws on this path).
-- [ ] **Step 4:** Commit `fix: arena follows the element of the battle, not a per-wave roll`.
+- [x] **Step 1:** In `spawnWave`: replace rotation with — `this.theme = debugArena() ?? (ttype ? TYPE_THEME[ttype] : this.stage.theme)`.
+- [x] **Step 2:** `rollWave` biome argument: pass `this.stage.theme` (deep waves stay in-biome); gym row already passes `node.ttype`.
+- [x] **Step 3:** `npm run build` + `npm run smoke` — seed determinism must hold (no new rng draws on this path).
+- [x] **Step 4:** Commit `fix: arena follows the element of the battle, not a per-wave roll`.
 
 ### Task 4: `genRoom` seeded room generator
 
@@ -84,11 +84,11 @@
 **Interfaces:**
 - Produces: `genRoom(theme: Theme, rng: () => number): string[]` (9×11 `ROOM_LAYOUTS` charset); `rollRoom(rng, theme, pool): string[]` picks authored/generated; `__dbg.room(theme?)` → `{ bg, fg, behavior }` JSON dump of last/generated grid.
 
-- [ ] **Step 1:** Write the failing test in `test/smoke.ts`: for each of the 11 themes × 8 seeds, `genRoom` output is 9×11, border `1`, contains `P`+≥1 `S`, and flood-fill from `P` reaches every `S` and `E` with ≤40% interior non-floor. Run — fails (no `genRoom`).
-- [ ] **Step 2:** Implement `genRoom`: per-biome stamp table (`clusters`/`lanes`/`scatter`/`ring` with per-theme hazard char palette — e.g. shore cluster `'3'`, plant lanes `'2'`, tower scatter `'4'`/`'8'`); stamp → validate (flood fill + density) → retry ≤6 → fallback open room grid.
-- [ ] **Step 3:** Wire `rollRoom` into the wave pull; `__dbg.room` export.
-- [ ] **Step 4:** `npm run smoke` passes (incl. new asserts); `npm run build`.
-- [ ] **Step 5:** Commit `feat: seeded per-biome room generator alongside authored layouts`.
+- [x] **Step 1:** Write the failing test in `test/smoke.ts`: for each of the 11 themes × 8 seeds, `genRoom` output is 9×11, border `1`, contains `P`+≥1 `S`, and flood-fill from `P` reaches every `S` and `E` with ≤40% interior non-floor. Run — fails (no `genRoom`).
+- [x] **Step 2:** Implement `genRoom`: per-biome stamp table (`clusters`/`lanes`/`scatter`/`ring` with per-theme hazard char palette — e.g. shore cluster `'3'`, plant lanes `'2'`, tower scatter `'4'`/`'8'`); stamp → validate (flood fill + density) → retry ≤6 → fallback open room grid.
+- [x] **Step 3:** Wire `rollRoom` into the wave pull; `__dbg.room` export.
+- [x] **Step 4:** `npm run smoke` passes (incl. new asserts); `npm run build`.
+- [x] **Step 5:** Commit `feat: seeded per-biome room generator alongside authored layouts`.
 
 ### Task 5: ULT banks across the run
 
@@ -99,11 +99,11 @@
 **Interfaces:**
 - Produces: `RunSave.ultIn?: number`; Battle keeps `ultIn` field — unchanged name.
 
-- [ ] **Step 1:** Delete the reset line; field initializer keeps `ULT_SHOTS`; `fireUlt` re-arm already correct.
-- [ ] **Step 2:** `snapshot()` adds `ultIn: this.ultIn`; `applySnapshot` restores `s.ultIn ?? ULT_SHOTS`; bump `SAVE_VER`, add migrate step (default `ULT_SHOTS`).
-- [ ] **Step 3:** On first `aim` phase of a wave, if `ultIn <= 0` and it was already armed at wave start, draw a small `ULT READY` tag under the shots pill (reuse existing pill style; no new UI system).
-- [ ] **Step 4:** `npm run build` + `npm run smoke`; smoke assert: two consecutive `spawnWave`s don't reset `ultIn`.
-- [ ] **Step 5:** Commit `feat: team ult banks across the whole run + parked saves`.
+- [x] **Step 1:** Delete the reset line; field initializer keeps `ULT_SHOTS`; `fireUlt` re-arm already correct.
+- [x] **Step 2:** `snapshot()` adds `ultIn: this.ultIn`; `applySnapshot` restores `s.ultIn ?? ULT_SHOTS`; bump `SAVE_VER`, add migrate step (default `ULT_SHOTS`).
+- [x] **Step 3:** On first `aim` phase of a wave, if `ultIn <= 0` and it was already armed at wave start, draw a small `ULT READY` tag under the shots pill (reuse existing pill style; no new UI system).
+- [x] **Step 4:** `npm run build` + `npm run smoke`; smoke assert: two consecutive `spawnWave`s don't reset `ultIn`.
+- [x] **Step 5:** Commit `feat: team ult banks across the whole run + parked saves`.
 
 ### Task 6: `?arena=` debug viewer + HUD arena label
 
@@ -114,19 +114,19 @@
 **Interfaces:**
 - Produces: `debugArena()` consumed by Task 3's `spawnWave`.
 
-- [ ] **Step 1:** Implement `debugArena` (name or `THEMES` index; invalid → null). Import into battle via a small exported setter or direct import — match existing `?dev` plumbing style.
-- [ ] **Step 2:** HUD label (fontB, small, under stage pill, `?dev`-gated).
-- [ ] **Step 3:** `npm run build`; manual: `?dev&seed=1&arena=shore` boots into the shore court with the label visible.
-- [ ] **Step 4:** Commit `feat: ?arena= debug viewer + arena name HUD tag`.
+- [x] **Step 1:** Implement `debugArena` (name or `THEMES` index; invalid → null). Import into battle via a small exported setter or direct import — match existing `?dev` plumbing style.
+- [x] **Step 2:** HUD label (fontB, small, under stage pill, `?dev`-gated).
+- [x] **Step 3:** `npm run build`; manual: `?dev&seed=1&arena=shore` boots into the shore court with the label visible.
+- [x] **Step 4:** Commit `feat: ?arena= debug viewer + arena name HUD tag`.
 
 ### Task 7: Screenshot pass — all 11 arenas
 
 **Files:**
 - None (verification only); screenshots to `docs/` alongside existing `_boot*.png`s.
 
-- [ ] **Step 1:** `npm run dev`; playwright-cli: for each `?dev&seed=1&arena=<id>`, load, dismiss to battle, capture `docs/_arena_<id>.png`. 11 shots.
-- [ ] **Step 2:** Review the sheet: physics rim readable, no missing-slice holes, element reads at a glance; fix tint/prop choices that fail the eye test.
-- [ ] **Step 3:** `npm run build` + `npm run smoke` green; commit any tuning + screenshots `docs: elemental arena screenshot sheet`.
+- [x] **Step 1:** `npm run dev`; playwright-cli: for each `?dev&seed=1&arena=<id>`, load, dismiss to battle, capture `docs/_arena_<id>.png`. 11 shots.
+- [x] **Step 2:** Review the sheet: physics rim readable, no missing-slice holes, element reads at a glance; fix tint/prop choices that fail the eye test.
+- [x] **Step 3:** `npm run build` + `npm run smoke` green; commit any tuning + screenshots `docs: elemental arena screenshot sheet`.
 
 ## Self-review notes
 

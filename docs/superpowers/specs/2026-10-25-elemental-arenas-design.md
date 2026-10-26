@@ -1,6 +1,6 @@
 # Elemental Arenas — design + tracker
 
-Date: 2026-10-25 · Status: proposed · Owner: dev
+Date: 2026-10-25 · Status: implemented (0b56f91…840e6a0) · Owner: dev
 
 ## Intent
 
@@ -29,35 +29,34 @@ per biome.
 
 | Type      | Arena    | Canon anchor                              | Status |
 |-----------|----------|-------------------------------------------|--------|
-| grass     | grove    | Viridian Forest — deep woods, flowers     | exists |
-| rock      | cavern   | Mt. Moon / Rock Tunnel — boulder dark     | exists |
-| fire      | volcano  | Cinnabar/Mt. Ember — basalt, embers       | exists |
-| flying    | sky      | high summit — snow peak, thin air         | exists |
-| normal    | meadow   | Route fields — tall grass, fences, hay    | new    |
-| water     | shore    | Cerulean/Seafoam — sand, pond slicks      | new    |
-| electric  | plant    | Kanto Power Plant — industrial slabs      | new    |
-| poison    | marsh    | Fuchsia Safari Zone — bog, dead trees     | new    |
-| psychic   | sanctum  | Ruins of Alph — broken columns, dusk      | new    |
-| fighting  | dojo     | Saffron Fighting Dojo — packed-dirt ring  | new    |
-| ghost     | tower    | Pokémon Tower, Lavender — graves, wisps   | new    |
+| grass     | grove    | Viridian Forest — deep woods, flowers     | shipped (docs/_arena1.png)  |
+| rock      | cavern   | Mt. Moon / Rock Tunnel — boulder dark     | shipped (docs/_arena2.png)  |
+| fire      | volcano  | Cinnabar/Mt. Ember — basalt, embers       | shipped (docs/_arena3.png)  |
+| flying    | sky      | high summit — snow peak, thin air         | shipped (docs/_arena4.png)  |
+| normal    | meadow   | Route fields — tall grass, fences, hay    | shipped (docs/_arena5.png)  |
+| water     | shore    | Cerulean/Seafoam — sand, pond slicks      | shipped (docs/_arena6.png)  |
+| electric  | plant    | Kanto Power Plant — industrial slabs      | shipped (docs/_arena7.png)  |
+| poison    | marsh    | Fuchsia Safari Zone — bog, dead trees     | shipped (docs/_arena8.png)  |
+| psychic   | sanctum  | Ruins of Alph — broken columns, dusk      | shipped (docs/_arena9.png)  |
+| fighting  | dojo     | Saffron Fighting Dojo — packed-dirt ring  | shipped (docs/_arena10.png) |
+| ghost     | tower    | Pokémon Tower, Lavender — graves, wisps   | shipped (docs/_arena11.png) |
 
 `TYPE_THEME: Record<PokeType, Theme>` in `data.ts` owns this map. Theme ids
 are short strings; `THEME_NAME` gains the stage-name entries below.
 
 ## Theme selection rule
 
-`spawnWave` stops rotating themes. Resolution order:
+`spawnWave` stops rotating themes. Resolution order (shipped):
 
-1. `?arena=<name|index>` debug override (dev only) — forces every wave.
+1. Debug pin — `?debug=arena1..11` or `?dev&arena=<name|index>` — forces
+   every wave. (`parseArenaPin` in battle.ts)
 2. Trainer / elite / gym node → `TYPE_THEME[node.ttype]` — the element of
    the battle.
-3. Everything else (wild rows, `?`-events, rival echo, raids without a
-   declared theme) → `stage.theme`.
+3. Wild deep waves → the per-row biome remembered in `deepThemes`; the
+   rest → `stage.theme`.
 
 `makeStage` keeps picking `stage.theme` from `THEMES` — now 11 entries, so
 rolled stages spread across the full elemental set automatically.
-`rollWave`'s per-row `THEMES[…]` argument passes `stage.theme` instead so
-deep waves stay in-biome.
 
 ## Per-arena element tables — THE TRACKER
 
@@ -82,9 +81,9 @@ is added because rain+Thunder is canon and the plant deserves a sky.
 | shore   | sand / water-edge patches     | rocks·fence / drift+tufts at the tideline| rain    | mist spray       | well     | Cerulean Shore  |
 | plant   | cobble gray-rust / oil dark   | rocks iron-tint·small rocks / scrap      | storm   | spark flickers   | power    | Vermilion Plant |
 | marsh   | grassf bog-tint / pond slicks | dead trees·rocks / weed tufts            | rain    | firefly motes    | static   | Fuchsia Marsh   |
-| sanctum | cobble violet / cracked dark  | hall-column slices·rocks / rubble        | —       | drifting motes   | warp     | Alph Ruins      |
+| sanctum | cobble violet / cracked dark  | hall-column slices·rocks / rubble        | —       | drifting motes   | well     | Alph Ruins      |
 | dojo    | packed dirt (sand/path) / scuff | rocks·fence rails / sand tufts         | —       | kicked dust      | boost    | Saffron Dojo    |
-| tower   | cobble grave-dark / darker    | dead trees·grave rocks / small rocks     | —       | violet wisps     | warp     | Lavender Tower  |
+| tower   | cobble grave-dark / darker    | dead trees·grave rocks / small rocks     | —       | violet wisps     | static   | Lavender Tower  |
 
 Enemy pools (`ENEMY_THEME`): new arenas draw from `ENEMY_DB` by canon
 habitat — water+ice mons to shore, electric+steel-ish to plant, poison+bug
@@ -118,28 +117,27 @@ Debug: under `?dev`, `__dbg.room(theme)` dumps the last generated room as
 `{ bg[][], fg[][], behavior[][] }` (the spec's JSON node shape — `0x0C`
 floor, `0x01` blocked, `0x02` hazard) for inspection.
 
-## ULT banking
+## ULT banking — shipped
 
 `ultIn` is a run resource, not a wave resource:
 
-- Delete the per-wave `this.ultIn = ULT_SHOTS` reset in `spawnWave` — the
-  field initializer already sets it; `fireUlt` already re-arms on spend.
-- `RunSave` gains `ultIn?: number` (snapshot stamps it, `applySnapshot`
-  restores it) — `pk_*` shape change ⇒ `SAVE_VER` bump + migrate step per
-  AGENTS.md.
-- HUD: the armed/ready state already pulses gold; a banked-armed ULT shows
-  the same "ULTIMATE READY" toast once on the first wave it carries into
-  (only if it arms mid-wave, or armed-at-entry shows `ULT READY` tag — one
-  line, no new UI).
+- The per-wave `this.ultIn = ULT_SHOTS` reset in `spawnWave` is gone — the
+  field initializer arms a fresh run; `fireUlt` re-arms on spend.
+- `RunSave.ultIn?: number` — snapshot stamps it, `applySnapshot` restores
+  it (`?? ULT_SHOTS` for pre-field saves). Optional field + default, the
+  house pattern for `pk_run` evolution — no `SAVE_VER` bump needed.
 
-## Debug arena viewer
+## Debug arena viewer — shipped
 
-`?dev&arena=<name|index>`:
+`?debug=arena<N>` (N = 1..11, 1-based over `THEMES`):
 
-- forces `this.theme` every `spawnWave` (resolution step 1 above)
-- HUD draws `ARENA · <name>` under the stage-name pill in `?dev` always —
-  cheap, and makes screenshot review of all 11 arenas a one-link job:
-  `?dev&seed=1&arena=6`
+- sandboxes `pk_*` to `pk_debug_*` (meta.ts `DEBUG` treats `debug=arena*`
+  like `debug=1`) — the preview never writes the real save
+- boots straight past the title into the pinned court on a stock roster
+- the HUD stage tag shows the arena's `THEME_NAME` while pinned
+- `?dev&arena=<name|index>` still pins courts inside a normal dev run
+- `__dbg.room(theme, seed)` under `?dev` dumps a generated room as
+  `{ bg, fg, behavior }` nodes per cell
 
 ## Non-goals
 
@@ -159,3 +157,8 @@ floor, `0x01` blocked, `0x02` hazard) for inspection.
 - `storm` weather added (electric boost) — one new `Weather` member.
 - Arena names reuse canon place names where one fits (Power Plant,
   Pokémon Tower, Safari Zone→Marsh, Alph Ruins, Saffron Dojo).
+- Sanctum/tower moats ship `well`/`static`, not `warp` — unpaired '3'
+  cells chain-link into an unpredictable teleport net (unpaired warps
+  connect to each other). A warp room should be authored, not rolled.
+- No `SAVE_VER` bump for `ultIn` — optional field + `??` default is the
+  `pk_run` evolution pattern (`eggIn`, `tagEchoDone`).
