@@ -634,3 +634,8 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   strip scrolling with ◀▶ affordances, 5 held items). Result screen
   verified: WIPED OUT stamp, findings table, squad attachment, badge
   strip, REMATCH/SHARE/TITLE.
+
+- Ult beats decluttered on live screenshots: armed mon alone keeps its
+  ULT — AGAIN! tag (the other three drop), the fire cinema suppresses
+  labels entirely, and the TROPHY banner now spawns 38px deeper so its
+  52px rise parks below the N-LEFT chip instead of stamping under it.
