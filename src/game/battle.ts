@@ -1235,14 +1235,14 @@ export class Battle {
     const caller = spawns.find((s) => s.def.skyFor);
     if (caller) {
       this.weather = caller.def.skyFor ?? null;
-      const skyLabel = { sun: 'DROUGHT CALLER!', rain: 'DRIZZLE CALLER!', sand: 'SAND STREAM!', wind: 'AIR LOCK!' }[caller.def.skyFor as Weather];
+      const skyLabel = { sun: 'DROUGHT CALLER!', rain: 'DRIZZLE CALLER!', sand: 'SAND STREAM!', wind: 'AIR LOCK!', storm: 'LIGHTNING CALLER!' }[caller.def.skyFor as Weather];
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${skyLabel}` : skyLabel;
     }
     // STORM CALLER raid: the boss's own typing owns the court's sky all
     // fight — a caller escort may narrate, but the mod's sky wins
     if (this.raid && this.raidMod === 'storm') {
       const bt = spawns.find((s) => s.boss)?.def.type;
-      this.weather = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind' } as Partial<Record<PokeType, Weather>>)[bt ?? 'normal'] ?? WEATHER_FOR[this.theme];
+      this.weather = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind', electric: 'storm' } as Partial<Record<PokeType, Weather>>)[bt ?? 'normal'] ?? WEATHER_FOR[this.theme];
     }
     this.inRival = false;
     // ASC 1 ROAMERS: echoes and invades hunt twice as hard. ASC 9 TAG
@@ -2052,7 +2052,9 @@ export class Battle {
       this.phase !== 'map' && this.phase !== 'won' && this.phase !== 'lost'
         ? this.weather === 'sand' || this.weather === 'wind'
           ? this.weather
-          : null
+          : this.weather === 'storm'
+            ? 'rain' // thunderstorm rides the rain bed — rumble without a new loop
+            : null
         : null,
     );
     // hit-stop: freeze-frame feel on big combos
@@ -8728,10 +8730,10 @@ export class Battle {
     for (let i = 0; i < motes; i++) {
       const h1 = hash(i * 7.3 + 1), h2 = hash(i * 3.7 + 5), h3 = hash(i * 9.1 + 2);
       ctx.globalAlpha = 0.16 + h3 * 0.2;
-      if (w === 'rain') {
-        const y = a.y + ((h1 * a.h + t * 640 + i * 37) % a.h);
+      if (w === 'rain' || w === 'storm') {
+        const y = a.y + ((h1 * a.h + t * (w === 'storm' ? 760 : 640) + i * 37) % a.h);
         const x = a.x + h2 * a.w;
-        ctx.strokeStyle = '#9dc0ff';
+        ctx.strokeStyle = w === 'storm' ? '#c8b8ff' : '#9dc0ff';
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(x, y);

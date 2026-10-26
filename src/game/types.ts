@@ -46,12 +46,13 @@ export const strikeType = (att: Typed, def: Typed): PokeType =>
 
 // Court weather — Gen-3 weather wars shrunk to a wave gimmick: each sky
 // boosts its type ×1.5 and dulls the counter-type ×0.75 on typed hits.
-export type Weather = 'sun' | 'rain' | 'sand' | 'wind';
+export type Weather = 'sun' | 'rain' | 'sand' | 'wind' | 'storm';
 export const WEATHER_OF: Record<Weather, [PokeType, PokeType]> = {
   sun: ['fire', 'water'],
   rain: ['water', 'fire'],
   sand: ['rock', 'flying'],
   wind: ['flying', 'electric'],
+  storm: ['electric', 'grass'], // thunderstorm — the power plant's sky
 };
 export const weatherMult = (w: Weather | null | undefined, at: PokeType) =>
   !w ? 1 : at === WEATHER_OF[w][0] ? 1.5 : at === WEATHER_OF[w][1] ? 0.75 : 1;
@@ -60,12 +61,14 @@ export const WEATHER_LINE: Record<Weather, string> = {
   rain: 'RAIN FALLS · WATER ×1.5',
   sand: 'SANDSTORM RAGES · ROCK ×1.5',
   wind: 'STRONG WINDS · FLYING ×1.5',
+  storm: 'THUNDERSTORM · ELECTRIC ×1.5',
 };
 export const WEATHER_TINT: Record<Weather, string> = {
   sun: '#ff9a30',
   rain: '#6890f0',
   sand: '#c8b060',
   wind: '#a8d8f0',
+  storm: '#b8b8d0',
 };
 
 export const TYPE_COLOR: Record<PokeType, string> = {

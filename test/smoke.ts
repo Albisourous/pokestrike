@@ -1138,6 +1138,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 {
   ok(weatherMult('sun', 'fire') === 1.5 && weatherMult('sun', 'water') === 0.75, 'sun boosts fire, dulls water');
   ok(weatherMult(null, 'fire') === 1 && weatherMult('rain', 'grass') === 1, 'clear sky and neutral types unchanged');
+  ok(weatherMult('storm', 'electric') === 1.5 && weatherMult('storm', 'grass') === 0.75, 'storm boosts electric, dulls grass');
   const FOR: Record<string, string> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
   const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(7));
   (b as any).spawnWave(0);
