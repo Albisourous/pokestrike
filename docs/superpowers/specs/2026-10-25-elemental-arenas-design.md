@@ -117,6 +117,12 @@ Debug: under `?dev`, `__dbg.room(theme)` dumps the last generated room as
 `{ bg[][], fg[][], behavior[][] }` (the spec's JSON node shape — `0x0C`
 floor, `0x01` blocked, `0x02` hazard) for inspection.
 
+Shipped extras past the spec: **ring** is the 4th stamp (perimeter hazards,
+35% of generated rooms); `buildRoom`'s roamer gimmick is keyed per-theme
+(`GIMMICK` — sanctum/tower warp, shore warp, dojo/plant boost, the wet
+biomes well) instead of a flat 3-way roll; `&wave=M` and `&room=gen|authored`
+extend the preview URL.
+
 ## ULT banking — shipped
 
 `ultIn` is a run resource, not a wave resource:

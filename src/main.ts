@@ -2438,7 +2438,8 @@ Promise.all([
     if (debugArena()) {
       newRun();
       battle = new Battle(arenaRect(), ROSTER.slice(0, 4), stage, runRng);
-      battle.debugSpawn();
+      const wv = Number(new URLSearchParams(location.search).get('wave'));
+      battle.debugSpawn(Number.isInteger(wv) && wv > 0 ? wv : 0);
       scene = 'battle';
       sceneMusic();
     }

@@ -439,6 +439,19 @@ export function debugArena(): Theme | null {
     dbgArena = typeof location === 'undefined' ? null : parseArenaPin(new URLSearchParams(location.search));
   return dbgArena;
 }
+// ?debug&room=gen|authored — pin which pool courts pull from for review
+let dbgRoom: 'gen' | 'authored' | null | undefined;
+export function debugRoom(): 'gen' | 'authored' | null {
+  if (dbgRoom === undefined) {
+    dbgRoom = null;
+    if (typeof location !== 'undefined') {
+      const q = new URLSearchParams(location.search);
+      const raw = q.get('room');
+      if ((q.has('dev') || q.has('debug')) && (raw === 'gen' || raw === 'authored')) dbgRoom = raw;
+    }
+  }
+  return dbgRoom;
+}
 // star pieces — the meta wallet paid by run progress (Oct-20/21 specs;
 // rates are guesses pending playtesting): a cleared map row pays
 // 2 + stage#, a climb win pays a lump, gym fountains spill a few shards
@@ -1023,9 +1036,10 @@ export class Battle {
     this.log(this.waveSpecial);
   }
 
-  // ?debug=arenaN — jump the pinned court without the raid banner
-  debugSpawn() {
-    this.spawnWave(0);
+  // ?debug=arenaN — jump the pinned court without the raid banner;
+  // &wave=M previews a deeper row (generated courts live past wave 0)
+  debugSpawn(i = 0) {
+    this.spawnWave(i);
     this.nextTurn();
   }
 
@@ -1386,7 +1400,8 @@ export class Battle {
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
           ? ROOM_BOSS
-          : i !== 0 && li > 0 && this.rng() < 0.4 // generated courts share the mid/hard pull; gentle openers stay authored
+          : debugRoom() === 'gen' ||
+              (debugRoom() !== 'authored' && i !== 0 && li > 0 && this.rng() < 0.4) // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
             : ROOM_LAYOUTS[li],
       this.theme,
