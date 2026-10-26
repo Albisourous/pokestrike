@@ -1040,7 +1040,7 @@ export interface StageDef {
   waves: WaveSpawn[][];
 }
 
-const THEME_NAME: Record<Theme, string> = {
+export const THEME_NAME: Record<Theme, string> = {
   grove: 'Viridian Wilds',
   cavern: 'Echo Cavern',
   volcano: 'Cinder Crag',
