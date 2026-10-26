@@ -7711,7 +7711,7 @@ export class Battle {
       if (this.weather) {
         ctx.font = font(9);
         ctx.fillStyle = WEATHER_TINT[this.weather];
-        ctx.fillText(WEATHER_LINE[this.weather], a.x + a.w / 2, cy - 12);
+        ctx.fillText(WEATHER_LINE[this.weather], a.x + a.w / 2, cy - 20);
       }
       // boss weak points are the gym's whole trick — say it on the banner
       if (gym) {

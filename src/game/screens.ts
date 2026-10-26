@@ -5403,7 +5403,7 @@ function drawRoster(
   ctx.font = font(9);
   ctx.fillStyle = INK_FAINT;
   // odds scale off your ace's level — weaklings easy, far-above foes gated
-  const capLine = `BOX: beaten foes may join — weaker foes up to ${Math.round(catchPct * 300)}%`;
+  const capLine = `BOX: beaten foes may join — weakest ${Math.round(catchPct * 300)}%`;
   fitFont(ctx, capLine, 9, W - 40);
   ctx.fillText(capLine, W / 2, 526);
   if (masterArmed) {
