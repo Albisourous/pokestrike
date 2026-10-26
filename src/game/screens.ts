@@ -9,7 +9,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, 
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, type Settings } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -2910,7 +2910,7 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
 // the hall IS the Poké Center building — same door as TOP RUNS, same board
 export const HALL_BTN = BOARD_BTN;
 // the empty ledger's door — a dead hall still owes you the climb
-export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 18, w: 220, h: 52 };
+export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 88, w: 220, h: 52 };
 // RAID: one boss card — today's shiny fight + its loaner trio — then the
 // FIGHT pill the tab's tap target rides on
 export const RAID_CARD = { x: 30, y: 210, w: W - 60, h: 502 };
@@ -3293,7 +3293,29 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
   if (!list.length) {
     fitFont(ctx, 'NO RUNS YET — CLIMB AND CLAIM A SPOT', 10, r.w - 40);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('NO RUNS YET — CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + r.h / 2 - 14);
+    ctx.fillText('NO RUNS YET — CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + 192);
+    // an empty hall still teaches the climb — the rank ladder up the middle
+    const rt = tier();
+    ctx.font = font(9);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText(`RANK LADDER — YOU'RE ${rt.name}`, r.x + r.w / 2, r.y + 240);
+    LADDER.forEach((t, i) => {
+      const ty = r.y + 264 + i * 44;
+      const cur = i === rt.i;
+      ctx.globalAlpha = cur ? 1 : 0.6;
+      ctx.fillStyle = t.color;
+      ctx.beginPath();
+      ctx.arc(r.x + 46, ty + 14, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = cur ? GOLD : '#3a4370';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      uiRow(ctx, { x: r.x + 66, y: ty, w: r.w - 96, h: 34 }, t.name, {
+        on: cur,
+        sub: `AT ${t.at} RATING${i === LADDER.length - 1 ? ' · TOP TIER' : ''}`,
+      });
+      ctx.globalAlpha = 1;
+    });
     pill(ctx, HOF_CLIMB, { c: GOLD_HI, cd: GOLD, tc: INK, label: 'START A CLIMB' });
   }
   ctx.save();
