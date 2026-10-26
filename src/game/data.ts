@@ -233,6 +233,8 @@ export const ROSTER: SpeciesDef[] = [
   { id: 629, name: 'Vullaby', type: 'ghost', type2: 'flying', stats: st(70, 55, 75, 45, 65, 60), evolvesTo: 630 },
   { id: 633, name: 'Deino', type: 'ghost', type2: 'flying', stats: st(52, 65, 50, 45, 50, 38), evolvesTo: 634, melee: true },
   { id: 636, name: 'Larvesta', type: 'grass', type2: 'fire', stats: st(55, 85, 55, 50, 55, 60), evolvesTo: 637, flame: true },
+  // thin pool top-up — flying was the roster's scarcest primary type
+  { id: 276, name: 'Taillow', type: 'flying', type2: 'normal', stats: st(40, 55, 30, 30, 30, 85), melee: true, evolvesTo: 277 },
 
 ];
 
