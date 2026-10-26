@@ -8,9 +8,9 @@ import { vec } from './core/vec';
 import { Battle, PAUSE_QUIT, PAUSE_SETTINGS } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom } from './game/data';
 import type { SpeciesDef } from './game/data';
-import { THEMES } from './game/bg';
+import { THEMES, type Theme } from './game/bg';
 import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, avatarOwned, avatarRoll, itemTierRoll, type RunSave } from './game/meta';
 import {
   W,
@@ -365,12 +365,21 @@ window.visualViewport?.addEventListener('resize', resize);
 resize();
 // ?dev also exposes the scene machine + coordinate transform for playtest probes
 if (new URLSearchParams(location.search).has('dev'))
-  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void; ui: () => Record<string, boolean | string> } }).__dbg = {
+  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void; room: (theme: Theme, seed?: number) => { bg: number; fg: number; behavior: string }[][]; ui: () => Record<string, boolean | string> } }).__dbg = {
     scene: () => scene,
     battle: () => battle,
     ui: () => ({ homeTab, help: helpOpen, bug: bugOpen, menu: menuOpen, settings: settingsOpen, tasks: tasksOpen, dex: dexOpen, ach: achOpen, board: boardOpen, hatch: hatchOpen, lab: labOpen }),
     xy: (x, y) => { const p = toLogical({ clientX: x, clientY: y } as PointerEvent); return { x: p.x, y: p.y }; },
     stats: statsDump, // the on-device metric server — pick rates + stage deaths
+    // dump a seeded generated room as the tilemap spec's compound nodes —
+    // { bg, fg, behavior } per cell — to eyeball biome stamps in console
+    room: (theme: Theme, seed = 1) =>
+      genRoom(theme, mulberry32(seed)).map((row) =>
+        row.split('').map((ch) => ({
+          bg: '35678'.includes(ch) ? 2 : 0,
+          fg: ch === '1' || ch === '2' ? 1 : 0,
+          behavior: ch === '1' || ch === '2' ? '0x01' : ch === 'E' || ch === 'P' ? '0x6A' : '35678'.includes(ch) ? '0x02' : '0x0C',
+        }))),
     // audition any track straight from the console — builders can't hear
     song: (name: string) => {
       if (!(name in TRACKS)) {

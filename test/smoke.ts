@@ -1,7 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
@@ -1183,6 +1183,37 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   };
   const clear = strike(null), sunny = strike('sun');
   ok(sunny > clear, `sun buffs charmander's contact (${clear} -> ${sunny})`);
+}
+
+// --- generated rooms: every biome synthesizes a connected court ---------
+{
+  for (const theme of THEMES) {
+    for (let s = 1; s <= 8; s++) {
+      const g = genRoom(theme, mulberry32(s * 97 + 13));
+      ok(g.length === 11 && g.every((r) => r.length === 9), `${theme} room is 9x11`);
+      const open = (r: number, c: number) => '0S4P678'.includes(g[r][c]); // ground-foe walkable set — same rule the authored-room validator uses
+      const seen = new Set<string>(['4,9']);
+      const q: [number, number][] = [[4, 9]];
+      while (q.length) {
+        const [x, y] = q.pop()!;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy, k = `${nx},${ny}`;
+          if (nx < 1 || nx > 7 || ny < 1 || ny > 9 || seen.has(k) || !open(ny, nx)) continue;
+          seen.add(k);
+          q.push([nx, ny]);
+        }
+      }
+      let sAll = true, blocks = 0;
+      for (let r = 1; r <= 9; r++) {
+        for (let c = 1; c <= 7; c++) {
+          if (g[r][c] === 'S' && !seen.has(`${c},${r}`)) sAll = false;
+          if (g[r][c] === '2') blocks++;
+        }
+      }
+      ok(sAll && seen.has('4,1') && blocks <= 25, `${theme} generated room ${s}: lanes reach every spawn`);
+      if (!sAll || !seen.has('4,1') || blocks > 25) break;
+    }
+  }
 }
 
 // --- benching keeps earned levels ------------------------------------------

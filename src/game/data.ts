@@ -1788,3 +1788,89 @@ for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Seeded room synthesizer: biome stamps compose a 9x11 grid in the same
+// charset buildRoom reads — CA blobs for moats and groves, slab lanes for
+// cover, sparse single-cell hazards for spice. Every grid is validated like
+// the authored pool (walkable = '0 S 4 P 6 7 8'): P reaches the E strip and
+// every S anchor. Six tries, then the open room — a bad pull never ships.
+const GEN_STAMP: Record<Theme, { cluster: string; lane: string; scatter: string[] }> = {
+  grove: { cluster: '7', lane: '2', scatter: ['4'] },
+  cavern: { cluster: '3', lane: '2', scatter: ['4', '5'] },
+  volcano: { cluster: '3', lane: '2', scatter: ['4'] },
+  sky: { cluster: '8', lane: '2', scatter: ['4'] },
+  meadow: { cluster: '7', lane: '2', scatter: ['4'] },
+  shore: { cluster: '3', lane: '2', scatter: ['4'] },
+  plant: { cluster: '3', lane: '2', scatter: ['4', '5'] },
+  marsh: { cluster: '3', lane: '2', scatter: ['4'] },
+  sanctum: { cluster: '3', lane: '2', scatter: ['4'] },
+  dojo: { cluster: '3', lane: '2', scatter: ['5'] },
+  tower: { cluster: '3', lane: '2', scatter: ['4', '8'] },
+};
+
+const WALKABLE = new Set(['0', 'S', '4', 'P', '6', '7', '8']);
+
+function roomReachable(g: string[][]): boolean {
+  const seen = new Set<string>();
+  const q = [[4, 9]];
+  let sNeed = 0;
+  for (let r = 1; r <= 9; r++) for (let c = 1; c <= 7; c++) if (g[r][c] === 'S') sNeed++;
+  if (!sNeed) return false;
+  while (q.length) {
+    const [c, r] = q.pop()!;
+    const k = `${c},${r}`;
+    if (seen.has(k) || c < 1 || c > 7 || r < 1 || r > 9 || !WALKABLE.has(g[r][c])) continue;
+    seen.add(k);
+    q.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
+  }
+  if (!seen.has('4,1')) return false;
+  for (let r = 1; r <= 9; r++) for (let c = 1; c <= 7; c++) if (g[r][c] === 'S' && !seen.has(`${c},${r}`)) return false;
+  return true;
+}
+
+export function genRoom(theme: Theme, rng: () => number): string[] {
+  const P = GEN_STAMP[theme];
+  for (let tries = 0; tries < 6; tries++) {
+    const g: string[][] = Array.from({ length: 11 }, (_, r) =>
+      Array.from({ length: 9 }, (_, c) => (r === 0 || r === 10 || c === 0 || c === 8 ? '1' : '0')));
+    g[0][4] = 'E';
+    g[9][4] = 'P';
+    // clusters — CA blobs of the biome's signature zone (ponds, tall
+    // grass, ice slicks); two growth rounds keeps them small and lane-safe
+    for (let k = 0, cl = 1 + Math.floor(rng() * 2); k < cl; k++) {
+      const cells: [number, number][] = [[1 + Math.floor(rng() * 7), 2 + Math.floor(rng() * 6)]];
+      for (let grow = 0; grow < 2; grow++) {
+        for (const [x, y] of [...cells]) {
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx >= 1 && nx <= 7 && ny >= 1 && ny <= 9 && g[ny][nx] === '0' && rng() < 0.5) cells.push([nx, ny]);
+          }
+        }
+      }
+      for (const [x, y] of cells.slice(0, 9)) if (g[y][x] === '0') g[y][x] = P.cluster;
+    }
+    // lane — one short slab run for cover, horizontal or vertical
+    if (rng() < 0.6) {
+      if (rng() < 0.5) {
+        const r = 2 + Math.floor(rng() * 6), c0 = 1 + Math.floor(rng() * 3), len = 2 + Math.floor(rng() * 3);
+        for (let c = c0; c < Math.min(8, c0 + len); c++) if (g[r][c] === '0') g[r][c] = P.lane;
+      } else {
+        const c = 1 + Math.floor(rng() * 7), r0 = 2 + Math.floor(rng() * 4), len = 2 + Math.floor(rng() * 3);
+        for (let r = r0; r < Math.min(10, r0 + len); r++) if (g[r][c] === '0') g[r][c] = P.lane;
+      }
+    }
+    // scatter — sparse single hazard cells
+    for (let k = 0, sc = 1 + Math.floor(rng() * 3); k < sc; k++) {
+      const x = 1 + Math.floor(rng() * 7), y = 1 + Math.floor(rng() * 9);
+      if (g[y][x] === '0') g[y][x] = P.scatter[Math.floor(rng() * P.scatter.length)];
+    }
+    // anchors — 4-7 spawn hooks in the top 60%, clear cells only
+    for (let k = 0, sn = 4 + Math.floor(rng() * 4); k < sn; k++) {
+      const x = 1 + Math.floor(rng() * 7), y = 1 + Math.floor(rng() * 6);
+      if (g[y][x] === '0') g[y][x] = 'S';
+    }
+    if (roomReachable(g)) return g.map((row) => row.join(''));
+  }
+  return ROOM_LAYOUTS[0];
+}
+
