@@ -5,7 +5,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, hash } from './bg';
 import { drawTile } from './map';
-import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, TILE_HALL, TILE_CAFE, TILE_GAZEBO, TILE_BUSH, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_PINK, FLOWER_WILD, ROCK_SMALL } from './maptiles';
+import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, TILE_HALL, TILE_CAFE, TILE_GAZEBO, TILE_BUSH, TILE_FENCE, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_PINK, FLOWER_WILD, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -2031,10 +2031,10 @@ export interface TownStroll {
 }
 
 export const TOWN_FOLK: TownStroll[] = [
-  { id: 'scientist',    seed: 3.1, hx: 172, hy: 344, x0: 52,  y0: 330, x1: 228, y1: 360, speed: 26, h: 30 }, // lab lawn
+  { id: 'scientist',    seed: 3.1, hx: 96,  hy: 344, x0: 48,  y0: 330, x1: 148, y1: 360, speed: 26, h: 30 }, // lab's west lawn, clear of the door board
   { id: 'lass',         seed: 7.7, hx: 348, hy: 402, x0: 302, y0: 388, x1: 496, y1: 420, speed: 30, h: 30 }, // north street, east half
   { id: 'gentleman',    seed: 5.3, hx: 476, hy: 676, x0: 302, y0: 660, x1: 500, y1: 694, speed: 20, h: 30 }, // south street, east half
-  { id: 'shopkeeper_m', seed: 9.9, hx: 214, hy: 592, x0: 46,  y0: 566, x1: 228, y1: 634, speed: 26, h: 30 }, // mart front
+  { id: 'shopkeeper_m', seed: 9.9, hx: 214, hy: 596, x0: 152, y0: 570, x1: 234, y1: 630, speed: 26, h: 30 }, // café's east patio side, clear of the board
   { id: 'norman',       seed: 4.2, hx: 275, hy: 716, x0: 68, y0: 704, x1: 468, y1: 730, speed: 24, h: 32, noRight: true }, // the grass band at the park's mouth — wandering down to the pond
   { id: 'youngster',    seed: 8.8, hx: 60,  hy: 402, x0: 44,  y0: 388, x1: 496, y1: 420, speed: 55, h: 30 }, // sprints the whole north street
 ];
@@ -2093,36 +2093,21 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
     drawTile(ctx, [TREE_TEAL, TREE_ROUND, TREE_PINE][i % 3], 504, 184 + i * 88, 34, 36);
   }
 
-  // sidewalk lots — each building gets a sand court, hedged on the wall
-  // sides; the street side stays open so the door reads as the way in
-  const plaza = (x0: number, y0: number, x1: number, y1: number) => {
-    for (let y = y0; y < y1; y += 32) for (let x = x0; x < x1; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
-  };
+  // Pallet-convention lots: buildings sit on the lawn — no paved pens.
+  // A low hedge lines each frontage, gapped where the door walk meets the
+  // street, the way FRLG fences a yard without caging it
   const hedgeRow = (x0: number, x1: number, y: number, doorCx = 0) => {
     for (let x = x0; x <= x1; x += 22) {
       if (doorCx && Math.abs(x + 9 - doorCx) < 26) continue;
       drawTile(ctx, TILE_BUSH, x, y - 4, 24, 30);
     }
   };
-  const hedgeCol = (x: number, y0: number, y1: number) => {
-    for (let y = y0; y <= y1; y += 22) drawTile(ctx, TILE_BUSH, x - 3, y - 4, 24, 30);
-  };
 
   // the street plan: a north street under the civic row (lab + hall), a
   // south street under the commerce row (mart + tower), and a lane down the
   // lot line joining them and running on into the park — no dead grass
   const NORTH_Y = 372, SOUTH_Y = 648, LANE_X = 244;
-  plaza(30, 150, 240, 368);   // lab lot
-  plaza(300, 150, 512, 368);  // hall lot
-  plaza(30, 432, 240, 644);   // mart lot
-  plaza(300, 432, 512, 644);  // tower lot
-  hedgeRow(36, 232, 150);     // lot fences: north bands under the treeline
-  hedgeRow(306, 504, 150);
-  hedgeCol(30, 170, 340);
-  hedgeCol(502, 170, 340);
-  hedgeCol(30, 452, 620);
-  hedgeCol(502, 452, 620);
-  hedgeRow(36, 232, 366, 183); // street-edge hedges, gapped at each door walk
+  hedgeRow(36, 232, 366, 189); // frontage hedges, gapped at each door walk
   hedgeRow(306, 504, 366, 406);
   hedgeRow(36, 232, 638, 136);
   hedgeRow(306, 504, 638, 406);
@@ -2140,20 +2125,20 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   const stub = (cx: number, y0: number, y1: number) => {
     for (let y = y0; y < y1; y += 30) drawTile(ctx, TILE_PATH, cx - 16, y, 32, 32);
   };
-  stub(189, 312, NORTH_Y); // the institute's door lands right-of-center in the slice
-  stub(406, 304, NORTH_Y);
-  stub(136, 578, SOUTH_Y);
-  stub(406, 572, SOUTH_Y);
+  stub(189, 341, NORTH_Y); // the institute's door lands right-of-center in the slice
+  stub(406, 340, NORTH_Y);
+  stub(136, 577, SOUTH_Y);
+  stub(406, 575, SOUTH_Y);
 
   // civic row — the institute west, the hall east, doors on the north
-  // street. Drawn size keeps each sprite's own aspect; the museum's dome
-  // tower + columned entrance nearly fills its lot — an institute should loom
+  // street. Fronts align along the street like a real block; the museum's
+  // dome tower + columned entrance nearly fills its lot — an institute looms
   drawTile(ctx, TILE_MUSEUM, 135 - 75, 190, 150, 151);
-  drawTile(ctx, TILE_HALL, 406 - 63, 198, 126, 106);
+  drawTile(ctx, TILE_HALL, 406 - 63, 234, 126, 106);
   // commerce row — the café hall west (its own patio paves the doorstep),
   // the trophy tower east, doors on the south street
   drawTile(ctx, TILE_CAFE, 135 - 68, 444, 136, 133);
-  drawTile(ctx, TILE_TOWER, 406 - 48, 452, 96, 108);
+  drawTile(ctx, TILE_TOWER, 406 - 48, 467, 96, 108);
 
   // drifting pollen — a little life over the grass, riding the same
   // ambient-sparkle opt-out as the map's sea glints
@@ -2176,22 +2161,23 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   drawTile(ctx, FLOWER_WILD, 478, 330, 30, 24);
   drawTile(ctx, FLOWER_WILD, 46, 560, 30, 24);
   drawTile(ctx, FLOWER_PINK, 480, 596, 28, 24);
-  drawTile(ctx, TILE_ROCK, 218, 322, 26, 28);
+  drawTile(ctx, TILE_ROCK, 226, 304, 26, 28);
   drawTile(ctx, ROCK_SMALL, 310, 566, 30, 24);
 
-  // door signs — what the old cards said, now posted at each doorstep
+  // door signs — what the old cards said, now the signboard each doorstep
+  // posts flush against its front, like the read-me posts beside FRLG doors
   const lvls = labLevelMap();
   const trained = LAB_UPGRADES.filter((u) => (lvls.get(u.id) ?? 0) > 0).length;
   const b = best();
   const runs = board().length;
-  townSign(ctx, 183, 320, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
-  townSign(ctx, 406, 316, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
-  townSign(ctx, 406, 580, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
-  townSign(ctx, 136, 596, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
+  townSign(ctx, 189, 342, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
+  townSign(ctx, 406, 341, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
+  townSign(ctx, 406, 576, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
+  townSign(ctx, 136, 578, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
   // a claimable task pins the red count pip on the sign's corner — the same
   // badge the old card corner wore
   if (taskN > 0) {
-    const bx = 136 + 55, by = 596;
+    const bx = 136 + 55, by = 578;
     ctx.beginPath();
     ctx.arc(bx, by, 9, 0, Math.PI * 2);
     ctx.fillStyle = '#e03c34';
@@ -2232,6 +2218,9 @@ function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
   drawTile(ctx, ROCK_SMALL, 468, 776, 40, 30);
   drawTile(ctx, FLOWER_PINK, 236, 730, 28, 24);
   drawTile(ctx, FLOWER_WILD, 306, 800, 30, 24);
+  // shore rail — the lane dies at the pond; guard rails flank its mouth
+  drawTile(ctx, TILE_FENCE, 176, 742, 60, 22);
+  drawTile(ctx, TILE_FENCE, 306, 742, 60, 22);
   // the gazebo watches the pond from the northeast shore — Norman's stroll
   // runs the south shore, well clear of its deck
   drawTile(ctx, TILE_GAZEBO, 348, 692, 48, 79);
