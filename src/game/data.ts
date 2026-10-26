@@ -1712,7 +1712,7 @@ export const MOAT_HAZARD: Record<Theme, HazardKind> = {
 
 // each court's signature roamer gimmick — the biome's fixture, not a
 // random roll: ruins teleport, open courts spring you, deep ones tug
-const GIMMICK: Record<Theme, 'warp' | 'boost' | 'well'> = {
+export const GIMMICK: Record<Theme, 'warp' | 'boost' | 'well'> = {
   grove: 'well', // the fairy ring pulls you in
   cavern: 'well', // gravity pocket in the deep
   volcano: 'boost', // thermal updraft

@@ -1,14 +1,14 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, music, toggleMute, syncVolumes, playJingle, buzz, TRACKS } from './core/audio';
+import { unlockAudio, sfx, music, toggleMute, syncVolumes, playJingle, buzz, TRACKS, BIOME_TRACK } from './core/audio';
 import type { TrackName } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
-import { Battle, PAUSE_QUIT, PAUSE_SETTINGS, debugArena } from './game/battle';
+import { Battle, PAUSE_QUIT, PAUSE_SETTINGS, debugArena, WEATHER_FOR } from './game/battle';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom, ENEMY_THEME, MOAT_HAZARD, GIMMICK, THEME_NAME } from './game/data';
 import type { SpeciesDef } from './game/data';
 import { THEMES, type Theme } from './game/bg';
 import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, avatarOwned, avatarRoll, itemTierRoll, type RunSave } from './game/meta';
@@ -365,7 +365,7 @@ window.visualViewport?.addEventListener('resize', resize);
 resize();
 // ?dev also exposes the scene machine + coordinate transform for playtest probes
 if (new URLSearchParams(location.search).has('dev'))
-  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void; room: (theme: Theme, seed?: number) => { bg: number; fg: number; behavior: string }[][]; ui: () => Record<string, boolean | string> } }).__dbg = {
+  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void; room: (theme: Theme, seed?: number) => { bg: number; fg: number; behavior: string }[][]; arenas: () => Record<string, unknown>[]; ui: () => Record<string, boolean | string> } }).__dbg = {
     scene: () => scene,
     battle: () => battle,
     ui: () => ({ homeTab, help: helpOpen, bug: bugOpen, menu: menuOpen, settings: settingsOpen, tasks: tasksOpen, dex: dexOpen, ach: achOpen, board: boardOpen, hatch: hatchOpen, lab: labOpen }),
@@ -380,6 +380,21 @@ if (new URLSearchParams(location.search).has('dev'))
           fg: ch === '1' || ch === '2' ? 1 : 0,
           behavior: ch === '1' || ch === '2' ? '0x01' : ch === 'E' || ch === 'P' ? '0x6A' : '35678'.includes(ch) ? '0x02' : '0x0C',
         }))),
+    // every arena's element set — the live version of the spec tracker:
+    // name, sky, moat kind, signature gimmick, biome track, habitat pool
+    arenas: () =>
+      THEMES.map((t, i) => ({
+        arena: i + 1,
+        theme: t,
+        name: THEME_NAME[t],
+        weather: WEATHER_FOR[t] ?? '—',
+        moat: MOAT_HAZARD[t],
+        gimmick: GIMMICK[t],
+        track: BIOME_TRACK[t],
+        pool: ENEMY_THEME[t].length,
+        enemies: ENEMY_THEME[t].map((d) => d.name).join(', '),
+        url: `?debug=arena${i + 1}`,
+      })),
     // audition any track straight from the console — builders can't hear
     song: (name: string) => {
       if (!(name in TRACKS)) {
