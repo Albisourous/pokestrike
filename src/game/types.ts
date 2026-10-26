@@ -56,10 +56,10 @@ export const WEATHER_OF: Record<Weather, [PokeType, PokeType]> = {
 export const weatherMult = (w: Weather | null | undefined, at: PokeType) =>
   !w ? 1 : at === WEATHER_OF[w][0] ? 1.5 : at === WEATHER_OF[w][1] ? 0.75 : 1;
 export const WEATHER_LINE: Record<Weather, string> = {
-  sun: 'THE SUN BEATS DOWN — FIRE ×1.5',
-  rain: 'RAIN FALLS — WATER ×1.5',
-  sand: 'SANDSTORM RAGES — ROCK ×1.5',
-  wind: 'STRONG WINDS — FLYING ×1.5',
+  sun: 'THE SUN BEATS DOWN · FIRE ×1.5',
+  rain: 'RAIN FALLS · WATER ×1.5',
+  sand: 'SANDSTORM RAGES · ROCK ×1.5',
+  wind: 'STRONG WINDS · FLYING ×1.5',
 };
 export const WEATHER_TINT: Record<Weather, string> = {
   sun: '#ff9a30',

@@ -981,7 +981,7 @@ export class Battle {
     p.apply(this);
     this.perkIds.push(p.id);
     this.heldItems.push(p.item);
-    this.log(`RELIC — ${p.name.toUpperCase()}`);
+    this.log(`RELIC · ${p.name.toUpperCase()}`);
   }
 
   // The run is safe to bank on the map — and at the reward/loot break,
@@ -1251,12 +1251,12 @@ export class Battle {
     const tagTeam = this.asc >= 9 && !this.tagEchoDone;
     if (ttype) {
       this.waveSpecial = elite
-        ? `ACE TRAINER — RARE LOOT ON THE LINE!`
+        ? `ACE TRAINER · RARE LOOT ON THE LINE!`
         : `${TRAINER_CLASS[ttype]?.title ?? 'TRAINER'} WANTS TO BATTLE!`;
       sfx('invade');
     } else if (!this.inEvent && this.echo?.length && i > 0 && !this.waveHadGym && (tagTeam || this.rng() < 0.15 * roam)) {
       spawns = this.curSpawns = rivalWave(this.echo.map((e) => e.def), this.rng);
-      this.waveSpecial = 'RIVAL BATTLE — YOUR FALLEN TEAM RETURNS!';
+      this.waveSpecial = 'RIVAL BATTLE · YOUR FALLEN TEAM RETURNS!';
       this.inRival = true;
       this.tagEchoDone = true; // echo fought — the owed visit is spent
       sfx('invade');
@@ -1492,7 +1492,7 @@ export class Battle {
           break;
       }
       this.curMod = mod;
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE — BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!', armored: 'THE PACK IS PLATED!', slumber: 'THE PACK IS NAPPING…', polarized: 'POLARIZED FIELD!' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE · BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!', armored: 'THE PACK IS PLATED!', slumber: 'THE PACK IS NAPPING…', polarized: 'POLARIZED FIELD!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
@@ -1913,7 +1913,7 @@ export class Battle {
       this.pushText({
         x: this.arena.x + this.arena.w / 2,
         y: this.arena.y + 58,
-        text: 'ULTIMATE READY — TAP A TEAMMATE!',
+        text: 'ULTIMATE READY · TAP A TEAMMATE!',
         t: 1.7, color: '#ffd84d', big: true,
       });
       this.screenFlash('#ffd84d', 0.15);
@@ -3991,7 +3991,7 @@ export class Battle {
         this.addShake(4);
         this.hurt(t, bumpDmg(t, 0.1), '#bfe8ff'); // the ripple still stings a little
         this.pushText({ x: p.x, y: p.y - p.r - 64, text: '…but nothing happened!', t: 1.1, color: '#9db8d8', big: false });
-        this.log(`${src.def.name.toUpperCase()} used SPLASH — nothing happened`);
+        this.log(`${src.def.name.toUpperCase()} used SPLASH · nothing happened`);
         sfx('splash', 0.7);
         return true;
       }
@@ -4919,7 +4919,7 @@ export class Battle {
         text: `+${starPay} ★`,
         t: 1.6, color: '#c9a8ff', big: true,
       });
-      this.log(`CLIMB CLEAR — +${starPay} STAR PIECES`);
+      this.log(`CLIMB CLEAR · +${starPay} STAR PIECES`);
       this.screenFlash('#ffd84d', 0.35);
       this.addPunch(0.14);
       // victory star-shower — the whole court celebrates
@@ -5738,7 +5738,7 @@ export class Battle {
       playJingle('hatch'); // curious arp — a new face, not a fought catch
     });
     recordCapture([def.id]);
-    this.mapMsg = `THE EGG HATCHED — ${def.name.toUpperCase()} JOINED YOUR BOX!`;
+    this.mapMsg = `THE EGG HATCHED · ${def.name.toUpperCase()} JOINED YOUR BOX!`;
     this.log(this.mapMsg);
     this.mapMsgT = 3;
   }
@@ -5775,11 +5775,11 @@ export class Battle {
       // the pick lands. ASC 4+ centers run on fumes (75% heal)
       const healTo = this.asc >= 4 ? 0.75 : 1;
       this.eventChoice = {
-        prompt: 'A POKÉ CENTER — REST THE TEAM, OR TRAIN THROUGH?',
+        prompt: 'A POKÉ CENTER · REST THE TEAM, OR TRAIN THROUGH?',
         art: { mon: 113 }, // Chansey keeps the counter
         options: [
           {
-            label: `POKÉ CENTER — HEAL${healTo < 1 ? ' 75%' : ''} + REVIVE`,
+            label: `POKÉ CENTER · HEAL${healTo < 1 ? ' 75%' : ''} + REVIVE`,
             icon: 'potion',
             run: (b) => {
               let revived = 0;
@@ -5805,11 +5805,11 @@ export class Battle {
             },
           },
           {
-            label: 'TRAIN HARD — +3 LEVELS, NO HEAL',
+            label: 'TRAIN HARD · +3 LEVELS, NO HEAL',
             icon: 'macho-brace',
             run: (b) => {
               for (const p of b.players) if (!p.dead) b.gainLevels(p, 3);
-              return { note: 'A HARD WORKOUT — EVERYONE +3 LEVELS!', skip: true };
+              return { note: 'A HARD WORKOUT · EVERYONE +3 LEVELS!', skip: true };
             },
           },
         ],
@@ -6540,7 +6540,7 @@ export class Battle {
       this.pushText({ x: p.x, y: p.y - p.r - 8, text: `-${dmg}`, t: 0.9, color: '#ff6b6b', big: false });
     // the map early-returns before texts draw — a stray orb hit there
     // would be invisible, so it goes on the field log instead
-    if (this.phase === 'map') this.log(`${p.def.name.toUpperCase()} TOOK A STRAY HIT — ${dmg}`);
+    if (this.phase === 'map') this.log(`${p.def.name.toUpperCase()} TOOK A STRAY HIT · ${dmg}`);
     // survived on fumes — the clutch beat deserves a callout
     if (p.hp > 0 && p.hp <= p.maxHp * 0.15) {
       this.pushText({ x: p.x, y: p.y - p.r - 34, text: 'BARELY!', t: 0.9, color: '#ffd84d', big: false });
@@ -6628,7 +6628,7 @@ export class Battle {
         this.pushText({
           x: a.x, y: a.y - a.r - 8,
           // a charged super fires on launch — the GO! call is where it's taught
-          text: `GO! ${a.def.name.toUpperCase()}${a.cd <= 0 ? ' — SUPER READY!' : ''}`,
+          text: `GO! ${a.def.name.toUpperCase()}${a.cd <= 0 ? ' · SUPER READY!' : ''}`,
           t: 1, color: TYPE_COLOR[a.def.type], big: true,
         });
         return;
@@ -6666,7 +6666,7 @@ export class Battle {
       text: 'SACRED ASH!',
       t: 1.6, color: '#ffd84d', big: true,
     });
-    this.log('SACRED ASH — TEAM REVIVED');
+    this.log('SACRED ASH · TEAM REVIVED');
     this.screenFlash('#ffd84d', 0.3);
     sfx('heal');
     return true;
@@ -7490,9 +7490,9 @@ export class Battle {
       ctx.fillText(u.text, 270, cy);
       ctx.font = fontB(9);
       ctx.lineWidth = 3;
-      ctx.strokeText('MAP-WIDE — EVERY FOE TAKES THE HIT', 270, cy + 26);
+      ctx.strokeText('MAP-WIDE · EVERY FOE TAKES THE HIT', 270, cy + 26);
       ctx.fillStyle = '#e8ecf8';
-      ctx.fillText('MAP-WIDE — EVERY FOE TAKES THE HIT', 270, cy + 26);
+      ctx.fillText('MAP-WIDE · EVERY FOE TAKES THE HIT', 270, cy + 26);
       ctx.globalAlpha = 1;
     }
     // wipe pressure: a nearly-dead team breathes a red vignette — the danger
@@ -7833,61 +7833,61 @@ export class Battle {
       e.def.volley && 'fans its shot across three',
       e.def.summon && 'calls for help instead of attacking',
       e.def.mirror && 'transformed into your strongest mon',
-      e.def.fuse && 'detonates at zero — blast hits everything',
+      e.def.fuse && 'detonates at zero · blast hits everything',
       e.def.hunter && 'hunts your weakest mon',
       e.def.leech && 'heals off every hit it lands',
       e.def.drowsy && 'its hits can put a mon to sleep',
       e.def.venom && 'its sting leaves a bleeding wound',
-      e.def.burn && 'its hits can burn — singes and softens',
-      e.def.para && 'its hits can paralyze — launches limp',
+      e.def.burn && 'its hits can burn · singes and softens',
+      e.def.para && 'its hits can paralyze · launches limp',
       e.def.toxic && 'contact can poison the ball',
       e.def.shock && 'contact can paralyze the ball',
       e.def.flame && 'contact can burn the ball',
-      e.def.menace && 'intimidates — your hits lose a fifth while it lives',
-      e.def.wguard && 'wonder guard — only super-effective hits land',
-      e.def.sturdy && 'sturdy — hangs on at 1 HP once',
-      e.def.charm && 'cute charm — contact can lull the ball to sleep',
-      e.def.scale && 'multiscale — half damage while its hide is whole',
-      e.def.guts && 'guts — hits 50% harder while statused',
-      e.def.absorb && `${e.def.absorb} hits heal it — absorb`,
-      e.def.truant && 'truant — loiters a round after each attack',
-      e.def.boost && 'speed boost — re-arms faster every attack',
-      e.def.spore && 'effect spore — contact scatters a random ailment',
-      e.def.sync && 'synchronize — contact echoes its ailments to you',
-      e.def.pressure && 'pressure — supers charge at half speed while it lives',
-      e.def.beam && 'signal beam — locks a lane, then burns the channel',
-      e.def.trap && 'arena trap — the ball can\'t flee its neighborhood',
-      e.def.skyFor && `summons ${e.def.skyFor} — its sky rides the whole wave`,
-      e.def.counter && 'counter — returns a third of contact damage',
-      e.def.alpha && 'pack leader — rallies packmates\' hits while it lives',
-      e.def.shed && 'shed skin — may slough off every ailment each tick',
-      e.def.charge && 'stampede — paws the ground, then rams across the court',
-      e.def.prank && 'prankster — its opening attack comes early',
-      e.def.pheal && 'poison heal — your venom mends it; burn it instead',
+      e.def.menace && 'intimidates · your hits lose a fifth while it lives',
+      e.def.wguard && 'wonder guard · only super-effective hits land',
+      e.def.sturdy && 'sturdy · hangs on at 1 HP once',
+      e.def.charm && 'cute charm · contact can lull the ball to sleep',
+      e.def.scale && 'multiscale · half damage while its hide is whole',
+      e.def.guts && 'guts · hits 50% harder while statused',
+      e.def.absorb && `${e.def.absorb} hits heal it · absorb`,
+      e.def.truant && 'truant · loiters a round after each attack',
+      e.def.boost && 'speed boost · re-arms faster every attack',
+      e.def.spore && 'effect spore · contact scatters a random ailment',
+      e.def.sync && 'synchronize · contact echoes its ailments to you',
+      e.def.pressure && 'pressure · supers charge at half speed while it lives',
+      e.def.beam && 'signal beam · locks a lane, then burns the channel',
+      e.def.trap && 'arena trap · the ball can\'t flee its neighborhood',
+      e.def.skyFor && `summons ${e.def.skyFor} · its sky rides the whole wave`,
+      e.def.counter && 'counter · returns a third of contact damage',
+      e.def.alpha && 'pack leader · rallies packmates\' hits while it lives',
+      e.def.shed && 'shed skin · may slough off every ailment each tick',
+      e.def.charge && 'stampede · paws the ground, then rams across the court',
+      e.def.prank && 'prankster · its opening attack comes early',
+      e.def.pheal && 'poison heal · your venom mends it; burn it instead',
       e.def.blink && 'teleports when it shimmers',
-      e.def.thief && 'snatches pickups — KO it to take them back',
-      e.def.lay && 'lays spikes in your half — kill it before the court fills',
-      e.def.confuse && 'supersonic — contact rattles your next aim',
-      e.def.anchor && 'too heavy to shove — banks and blasts leave it planted',
-      e.def.flank && 'flanks the pack — it drifts wide before it closes',
-      e.def.forecast && 'forecast — its type wears the sky',
-      e.def.healBlock && 'heal block — your team can\'t mend while it lives',
-      e.def.bond && 'destiny bond — a direct KO takes the striker with it',
-      e.def.armor && 'shell armor — critical hits glance off',
-      e.def.chameleon && 'color change — its hide becomes the type that hit it',
-      e.def.weakArmor && 'weak armor — hits crack it: faster but softer',
-      e.def.moxie && 'moxie — every KO it lands sharpens its bite',
-      e.def.veil && 'sand veil — strikes whiff in a sandstorm',
-      e.def.filter && 'filter — super-effective hits lose their edge',
-      e.def.snipe && 'sniper — marks your farthest mon',
-      e.def.unaware && 'unaware — your attack buffs wash off at its hide',
-      e.def.swift && 'swift swim — presses 1.5× in its own sky',
-      e.def.shielded && 'shell glances hits — flank pays',
+      e.def.thief && 'snatches pickups · KO it to take them back',
+      e.def.lay && 'lays spikes in your half · kill it before the court fills',
+      e.def.confuse && 'supersonic · contact rattles your next aim',
+      e.def.anchor && 'too heavy to shove · banks and blasts leave it planted',
+      e.def.flank && 'flanks the pack · it drifts wide before it closes',
+      e.def.forecast && 'forecast · its type wears the sky',
+      e.def.healBlock && 'heal block · your team can\'t mend while it lives',
+      e.def.bond && 'destiny bond · a direct KO takes the striker with it',
+      e.def.armor && 'shell armor · critical hits glance off',
+      e.def.chameleon && 'color change · its hide becomes the type that hit it',
+      e.def.weakArmor && 'weak armor · hits crack it: faster but softer',
+      e.def.moxie && 'moxie · every KO it lands sharpens its bite',
+      e.def.veil && 'sand veil · strikes whiff in a sandstorm',
+      e.def.filter && 'filter · super-effective hits lose their edge',
+      e.def.snipe && 'sniper · marks your farthest mon',
+      e.def.unaware && 'unaware · your attack buffs wash off at its hide',
+      e.def.swift && 'swift swim · presses 1.5× in its own sky',
+      e.def.shielded && 'shell glances hits · flank pays',
       e.def.spiky && 'bites the ball on contact',
       e.def.regen && 'mends over time',
       e.def.split && 'divides when KO\'d',
       e.def.rage && 'enrages when wounded',
-      e.def.sleepy && 'dozes — the wake-up hit lands big',
+      e.def.sleepy && 'dozes · the wake-up hit lands big',
       (e.def.repel || e.repelR) && 'repels the ball',
       e.def.raider && 'steals field drops',
       e.def.taunt && 'blocks hits on its allies',
@@ -7976,13 +7976,13 @@ export class Battle {
       // pace read locked. The % is live: balls + combo already folded in.
       const pct = this.inTrainer ? 0 : Math.round(Math.min(0.95, this.catchOdds(e)) * 100);
       ctx.fillStyle = this.inTrainer ? '#6a7090' : pct >= 15 ? '#6fdc6f' : pct >= 5 ? '#ffd84d' : '#8890b8';
-      fitFontB(ctx, this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN — ~${pct}%`, 7, w - 60);
-      ctx.fillText(this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN — ~${pct}%`, cx + 50, cy + h - 8);
+      fitFontB(ctx, this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN · ~${pct}%`, 7, w - 60);
+      ctx.fillText(this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN · ~${pct}%`, cx + 50, cy + h - 8);
     } else {
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
       ctx.fillStyle = e.cd <= 0 ? '#6fdc6f' : '#8890b8';
-      const ready = e.cd <= 0 ? `super ready — launch ${e.def.name} to fire it` : `super ready in ${e.cd} shot${e.cd === 1 ? '' : 's'}`;
+      const ready = e.cd <= 0 ? `super ready · launch ${e.def.name} to fire it` : `super ready in ${e.cd} shot${e.cd === 1 ? '' : 's'}`;
       fitFont(ctx, ready, 7, w - 60);
       ctx.fillText(ready, cx + 50, cy + 70);
       ctx.fillStyle = '#6a7498';
@@ -8069,7 +8069,7 @@ export class Battle {
         ctx.arc(ally.x, ally.y, ally.r + 8, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        line('FLY THROUGH A TEAMMATE — THEY FIRE THEIR SUPER');
+        line('FLY THROUGH A TEAMMATE · THEY FIRE THEIR SUPER');
       }
     } else {
       // beats past the pull itself: teach what the field offers — first one
@@ -8085,15 +8085,15 @@ export class Battle {
       };
       if (!u.dead && u.cd <= 0 && u.cdMax > 0) {
         glow(u.x, u.y, u.r + 10);
-        line('PIPS ALL GOLD — THIS LAUNCH FIRES THE SUPER');
+        line('PIPS ALL GOLD · THIS LAUNCH FIRES THE SUPER');
       } else if (this.balls.length) {
         const b = this.balls[0];
         glow(b.x, b.y, 22, '#e8ecf8');
-        line('A BALL DROPPED — IF IT CLICKS SHUT, THE CATCH IS YOURS');
+        line('A BALL DROPPED · IF IT CLICKS SHUT, THE CATCH IS YOURS');
       } else if (this.pickups.length) {
         const pk = this.pickups[0];
         glow(pk.x, pk.y, 18);
-        line('FLY THROUGH THE GLOWING ITEM — THE PICKUP IS YOURS');
+        line('FLY THROUGH THE GLOWING ITEM · THE PICKUP IS YOURS');
       }
     }
     const threat = this.enemies.find((e) => !e.dead && e.timer <= 1);
@@ -8459,7 +8459,7 @@ export class Battle {
     ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
     ctx.font = fontB(9);
     ctx.fillStyle = '#8890b8';
-    ctx.fillText('WILD catchable fight · TRAINER mono-type squad — no catches, better loot', 270, oy + view * cell + 48);
+    ctx.fillText('WILD catchable fight · TRAINER mono-type squad · no catches, better loot', 270, oy + view * cell + 48);
     ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
     // resolved events and egg ticks surface as a toast over the island
     if (this.mapMsgT > 0 && this.mapMsg) {
@@ -9447,9 +9447,9 @@ export class Battle {
         const armed = this.ultArmUid === u.uid && this.time - this.ultArmT < 2;
         if (this.ultFx.t > 0 || (this.ultArmUid !== -1 && !armed)) return;
         const uly = Math.max(u.y - u.r - 52, this.arena.y + 12); // rim-hugging mons keep the tag on-canvas
-        ctx.strokeText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, uly);
+        ctx.strokeText(armed ? 'ULT · AGAIN!' : 'ULT · TAP!', u.x, uly);
         ctx.fillStyle = armed ? '#ff9d4d' : '#ffe76a';
-        ctx.fillText(armed ? 'ULT — AGAIN!' : 'ULT — TAP!', u.x, uly);
+        ctx.fillText(armed ? 'ULT · AGAIN!' : 'ULT · TAP!', u.x, uly);
       }
     }
   }

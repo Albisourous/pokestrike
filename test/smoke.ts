@@ -2394,7 +2394,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     ok(b.heldItems.length === items0 + 1, 'the mystery box pays a relic');
   }
   // shrine: the offer trades hp for levels
-  const shrine = rollEventChoices(b, 'OFFER 15% HP — +2 LEVELS');
+  const shrine = rollEventChoices(b, 'OFFER 15% HP · +2 LEVELS');
   ok(shrine !== null, 'shrine choice surfaced');
   if (shrine) {
     const p = b.players[0];
@@ -2452,7 +2452,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
 
   // macho-brace drills: the ace bleeds, the whole team levels
   const tb = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(77));
-  const drills = rollEventChoices(tb, 'TRAIN — ACE -25% HP, ALL +1 LV');
+  const drills = rollEventChoices(tb, 'TRAIN · ACE -25% HP, ALL +1 LV');
   ok(drills !== null, 'boot-camp drills surfaced in the pool');
   if (drills) {
     const ace = tb.players.filter((p) => !p.dead).sort((a, z) => z.lvl - a.lvl)[0];
@@ -2470,7 +2470,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   let gated = true;
   for (let i = 0; i < 150 && gated; i++) {
     const out = rollEvent(corpses);
-    if (out.choices?.options.some((o) => o.label === 'TRAIN — ACE -25% HP, ALL +1 LV')) gated = false;
+    if (out.choices?.options.some((o) => o.label === 'TRAIN · ACE -25% HP, ALL +1 LV')) gated = false;
     kill();
   }
   ok(gated, 'drills stay out of the pool when nobody can train');

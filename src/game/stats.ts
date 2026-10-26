@@ -26,7 +26,7 @@ export const bumpCooldown = (t: PokeType) => BUMP_CD[t];
 // help index. Keep synced with the bumpAlly switch in battle.ts.
 export const SUPER_DESC: Record<PokeType, string> = {
   normal: 'an unmissable dash slams the nearest, then chains to the next',
-  fighting: 'dashes in for a jab chain — the uppercut flinches',
+  fighting: 'dashes in for a jab chain · the uppercut flinches',
   rock: 'jabs up close, then meteors rain on the farthest',
   flying: 'a vortex piles foes up, then pops them skyward, scrambled',
   water: 'a firehose jet pierces the court; rain widens the lane',
@@ -35,7 +35,7 @@ export const SUPER_DESC: Record<PokeType, string> = {
   poison: 'gas cloud now; the already-poisoned detonate their venom',
   fire: 'flame ring, then fireballs hunt the farthest; sun ignites burns',
   ghost: 'wisps converge on every foe; feasts on the poisoned',
-  psychic: 'shockwave flings enemies — walls pay a slam bonus',
+  psychic: 'shockwave flings enemies · walls pay a slam bonus',
 };
 
 // Signature supers that replace the type default — keep synced with the
@@ -47,13 +47,13 @@ export const MOVE_DESC: Record<string, string> = {
   'ZAP CANNON': 'one huge thunderball hunts down the farthest enemy',
   'PSYCHO BOOST': 'detonates the biggest target in a huge burst',
   'ERUPTION': 'staggered bursts erupt under the whole pack',
-  'EXPLOSION': 'hits everything on the court — costs the caster 15% HP',
+  'EXPLOSION': 'hits everything on the court · costs the caster 15% HP',
   'BLAST BURN': 'a rolling fire wave scorches everything it sweeps',
   'FRENZY PLANT': 'drain orbs swarm the four farthest enemies',
   'OUTRAGE': 'three staggered smashes on the nearest enemy',
   'SHEER COLD': 'a flash-freeze bursts around the nearest enemy',
   'METRONOME': 'wags a finger and casts a rolled signature nuke',
-  'FUTURE SIGHT': 'marks a spot — a huge burst lands there moments later',
+  'FUTURE SIGHT': 'marks a spot · a huge burst lands there moments later',
   'CRUNCH': 'a heavy bite on the nearest enemy that flinches it',
   'ICE BEAM': 'an icy beam pierces the court and freezes every enemy hit',
   'HYPER VOICE': 'a sound ring rattles every enemy around the caster',
@@ -61,8 +61,8 @@ export const MOVE_DESC: Record<string, string> = {
   'FLAMETHROWER': 'a flame cone pierces the court and burns every enemy hit',
   'SPLASH': '…nothing happens',
   'WATER SPOUT': 'a spout that floods harder the healthier the caster is',
-  'FISSURE': 'a crack rips to the farthest grounded foe — survivors sit dazed',
-  'SEISMIC TOSS': 'hurls the nearest foe skyward — the slam scales with level',
+  'FISSURE': 'a crack rips to the farthest grounded foe · survivors sit dazed',
+  'SEISMIC TOSS': 'hurls the nearest foe skyward · the slam scales with level',
   'ENDEAVOR': "drags the nearest foe down to the caster's own HP fraction",
   // name-only canon picks — no castSignature case, so the card wears the
   // name while the type super does the work underneath
@@ -73,12 +73,12 @@ export const MOVE_DESC: Record<string, string> = {
   'FORCE PALM': 'a point-blank palm blast that can leave the mark paralyzed',
   'AURA SPHERE': 'an unmissable orb of aura homes in on the mark',
   'ROAR OF TIME': 'a roar that warps time around the target',
-  'SPACIAL REND': 'tears the very space around the target',
+  'SPACIAL REND': 'tears space around the target',
   'MAGMA STORM': 'a vortex of magma traps the pack and keeps burning',
   'DARK VOID': 'a pitch-black void drags every foe into sleep',
   'SEED FLARE': 'a burst of seeds blooms into a shockwave over the pack',
   'JUDGMENT': 'countless pellets of light rain down on the pack',
-  'V-CREATE': 'a blazing V-shaped dive — the hottest flame there is',
+  'V-CREATE': 'a blazing V-shaped dive · the hottest flame there is',
   'LEAF TORNADO': 'a cyclone of razor leaves whips through the pack',
   'RAZOR SHELL': 'a scalchop slash peels the nearest foe',
   'NIGHT DAZE': 'a wave of darkness swallows the court',

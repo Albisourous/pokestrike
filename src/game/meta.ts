@@ -1472,7 +1472,7 @@ export function debugSeed() {
   store('pk_bag', memBag);
   markCoached();
   markHelpSeen();
-  console.info('[debug] sandbox save seeded — real pk_* untouched; drop ?debug to play for real');
+  console.info('[debug] sandbox save seeded · real pk_* untouched; drop ?debug to play for real');
 }
 
 debugSeed();

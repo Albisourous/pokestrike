@@ -189,7 +189,7 @@ const paintCrash = () => {
     const s = Math.min(el.width / W, el.height / H) || 1;
     c.save();
     c.setTransform(s, 0, 0, s, (el.width - W * s) / 2, (el.height - H * s) / 2);
-    drawFailCard(c, 'CRASHED — SCREENSHOT THIS', crash, false);
+    drawFailCard(c, 'CRASHED · SCREENSHOT THIS', crash, false);
     c.restore();
   } catch {
     /* no context — nothing to paint on */
@@ -374,7 +374,7 @@ if (new URLSearchParams(location.search).has('dev'))
     // audition any track straight from the console — builders can't hear
     song: (name: string) => {
       if (!(name in TRACKS)) {
-        console.log(`no track '${name}' — try: ${Object.keys(TRACKS).join(', ')}`);
+        console.log(`no track '${name}' · try: ${Object.keys(TRACKS).join(', ')}`);
         return;
       }
       unlockAudio();
@@ -2139,7 +2139,7 @@ function update(dt: number) {
         let extra = near
           ? `so close, fell at stage ${stageReached} of ${TOTAL_STAGES}`
           : `reached stage ${stageReached} of ${TOTAL_STAGES}`;
-        if (battle.killer) extra += ` — felled by ${battle.killer.toUpperCase()}`;
+        if (battle.killer) extra += ` · felled by ${battle.killer.toUpperCase()}`;
         // the sting: how close the killing wave itself was to falling
         const left = battle.enemies.filter((e) => !e.dead);
         if (left.length === 1) {
@@ -2161,13 +2161,13 @@ function update(dt: number) {
             nextAsc === 4 ? ' Poké Centers heal less.' :
             nextAsc === 6 ? ' gym leaders arrive enraged.' :
             ' the climb gets meaner.';
-          resultExtra = `ASCENSION ${nextAsc} UNLOCKED —${mod}`;
+          resultExtra = `ASCENSION ${nextAsc} UNLOCKED ·${mod}`;
         }
       }
       const teamNames = battle.players.map((p) => p.def.name).join(' · ');
       shareText = [
         runIsDaily
-          ? `⚾ POKÉSTRIKE DAILY ${new Date().toISOString().slice(0, 10)} — same climb for everyone${runMod ? ` — ${runMod.name}` : ''}`
+          ? `⚾ POKÉSTRIKE DAILY ${new Date().toISOString().slice(0, 10)} · same climb for everyone${runMod ? ` · ${runMod.name}` : ''}`
           : `⚾ POKÉSTRIKE: sling & ricochet Pokémon roguelike`,
         `🗺️ ${stage.name}: ${won ? 'cleared!' : `stage ${stageReached}/${TOTAL_STAGES}`}${battle.asc ? ` · ASC ${battle.asc}` : ''}`,
         share.waves,
@@ -2260,7 +2260,7 @@ function render() {
       pickDefs.length = draft.picked.length;
       for (let i = 0; i < pickDefs.length; i++) pickDefs[i] = draftDef(draft.picked[i]);
       drawPerkPick(ctx, startOffers, 'CHOOSE YOUR CHARM',
-        charmBonus ? (charmPicks > 1 ? 'ASCENSION III BONUS — take two charms' : 'one more — ascension pays')
+        charmBonus ? (charmPicks > 1 ? 'ASCENSION III BONUS · take two charms' : 'one more · ascension pays')
                    : 'one held item starts the climb',
         t, pickDefs);
       break;
@@ -2375,7 +2375,7 @@ function render() {
   if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
   // playtester lifeline: you can't see their console — a crash paints
   // itself with the run's seed and build, so one screenshot is the report
-  if (crash) drawFailCard(ctx, 'CRASHED — SCREENSHOT THIS', crash, false);
+  if (crash) drawFailCard(ctx, 'CRASHED · SCREENSHOT THIS', crash, false);
   // SHOW FPS: dim counter in the bottom-right corner — letterbox on tall
   // screens, the box's bottom edge otherwise; clear of the chips up top
   // a fast lift out of black on every scene change — hard cuts read as bugs

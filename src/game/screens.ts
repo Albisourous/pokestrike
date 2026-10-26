@@ -1577,7 +1577,7 @@ function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean)
     ctx,
     { x: r.x + 16, y: r.y + r.h - 46, w: r.w - 32, h: 34 },
     freeNow
-      ? { c: GOLD, cd: '#c8a44d', tc: INK, label: 'FREE PULL WAITING — TAP TO OPEN' }
+      ? { c: GOLD, cd: '#c8a44d', tc: INK, label: 'FREE PULL WAITING · TAP TO OPEN' }
       : { c: GOLD_HI, cd: '#c8a44d', tc: INK, label: 'TAP TO OPEN THE HATCHER' },
   );
 
@@ -1828,7 +1828,7 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   const sr = SETS_BTN;
   const ready = setsReady();
   const done = setProgress().filter((p) => p.have === p.need).length;
-  uiPanel(ctx, sr, ready.length ? 'LINE SETS — CLAIM!' : 'LINE SETS', {
+  uiPanel(ctx, sr, ready.length ? 'LINE SETS · CLAIM!' : 'LINE SETS', {
     sub: `${done}/${EVO_LINES.length} COMPLETE`,
   });
   ctx.textAlign = 'left';
@@ -1972,7 +1972,7 @@ function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
     ctx.font = font(9);
     ctx.textAlign = 'center';
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('NO SQUAD — START A CLIMB', tr.x + tr.w / 2, tr.y + tr.h / 2 + 12);
+    ctx.fillText('NO SQUAD · START A CLIMB', tr.x + tr.w / 2, tr.y + tr.h / 2 + 12);
   } else {
     const step = Math.min(76, (tr.w - 60) / squad.length);
     const x0 = tr.x + tr.w / 2 - ((squad.length - 1) * step) / 2;
@@ -2245,7 +2245,7 @@ export function drawBugCard(ctx: CanvasRenderingContext2D, seed: number | null) 
   ctx.font = fontB(10);
   ctx.fillStyle = INK_SOFT;
   const lines = [
-    'We collect no telemetry — your report',
+    'We collect no telemetry · your report',
     'IS the log. To file one:',
     '',
     '1. Screenshot what broke (a crash',
@@ -2472,22 +2472,22 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'AIM & POWER',
     lines: [
       'pull back anywhere: the dotted line is the flight path',
-      'pull distance only aims — power is where you let go on the meter',
+      'pull distance only aims · power is where you let go on the meter',
       'let go inside the gold band for a PERFECT full-power shot',
       'fast mons aim high and tight; stronger mons get a faster sweep',
-      'the band drifts a little every pull — read it, don\'t memorize',
+      'the band drifts a little every pull · read it, don\'t memorize',
     ],
     demo: demoAim,
   },
   {
     title: 'ALLY CHAINS',
-    lines: ['fly through a teammate mid-flight — a READY ally fires its super', 'each pass adds damage and speed, so route through allies'],
+    lines: ['fly through a teammate mid-flight · a READY ally fires its super', 'each pass adds damage and speed, so route through allies'],
     demo: demoBump,
   },
   {
     title: 'RICOCHET',
     lines: [
-      'two different touches — foe, ally, wall, stone — in 0.35s flash RICOCHET!',
+      'two different touches (foe, ally, wall, stone) in 0.35s flash RICOCHET!',
       "hitting the same thing twice doesn't count",
       'relics cash it in: Binding Band +40% hits, Ether feeds a pip',
     ],
@@ -2496,7 +2496,7 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'CHARGE PIPS',
     lines: [
-      'shots and KOs fill the gold pips under each mon — all-gold means READY',
+      'shots and KOs fill the gold pips under each mon · all-gold means READY',
       'launch a READY mon and its super fires from the sling (STRIKE SHOT)',
     ],
     demo: demoCharge,
@@ -2504,24 +2504,24 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'ENEMIES',
     lines: [
-      'a foe strikes when its number hits 0 — each shot you take ticks one down',
-      'melee countdowns start low — thin them out first',
-      "a boss's drifting gold star is its weak face — hits there pay triple",
-      'shelled foes glance hits off the plate — bank around the back for a FLANK',
-      'spiked foes bite the ball on contact — hit them clean, don\'t graze',
-      'regen foes mend over time — burst them down, don\'t whittle',
-      'split foes divide when KO\'d — expect two where one fell',
-      'rage foes snap under 30% — a wounded one swings faster',
-      'zZ foes doze till hit — the wake-up shot lands like a crit',
-      'gold halos repel the ball — bank in behind or punch through fast',
-      'thieves dash at your field drops — grab the loot or drop them first',
-      'volley foes fan their shot across three mons — kill the cannon first',
-      'blink foes flicker before they teleport — hold the shot a beat',
-      'SOS callers cry for backup — silence them before the field floods',
-      'mirror blobs transform into your strongest — feed them a weak lead',
-      'FUSE foes detonate at zero — kill fast, or bait the blast into its pack',
-      'HUNTER foes stalk your weakest — park a tank between them',
-      'LEECH foes heal off every hit — burst them, don\'t trade chips',
+      'a foe strikes when its number hits 0 · each shot you take ticks one down',
+      'melee countdowns start low · thin them out first',
+      "a boss's drifting gold star is its weak face · hits there pay triple",
+      'shelled foes glance hits off the plate · bank around the back for a FLANK',
+      'spiked foes bite the ball on contact · hit them clean, don\'t graze',
+      'regen foes mend over time · burst them down, don\'t whittle',
+      'split foes divide when KO\'d · expect two where one fell',
+      'rage foes snap under 30% · a wounded one swings faster',
+      'zZ foes doze till hit · the wake-up shot lands like a crit',
+      'gold halos repel the ball · bank in behind or punch through fast',
+      'thieves dash at your field drops · grab the loot or drop them first',
+      'volley foes fan their shot across three mons · kill the cannon first',
+      'blink foes flicker before they teleport · hold the shot a beat',
+      'SOS callers cry for backup · silence them before the field floods',
+      'mirror blobs transform into your strongest · feed them a weak lead',
+      'FUSE foes detonate at zero · kill fast, or bait the blast into its pack',
+      'HUNTER foes stalk your weakest · park a tank between them',
+      'LEECH foes heal off every hit · burst them, don\'t trade chips',
       'tap (don\'t pull) a foe to scout its name, hp, and next move',
     ],
     demo: demoCountdown,
@@ -2529,57 +2529,57 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'FOE AILMENTS',
     lines: [
-      'SLEEP powder drops a mon a whole turn — sleepers can\'t bump either',
+      'SLEEP powder drops a mon a whole turn · sleepers can\'t bump either',
       'VENOM stings leave a wound that bleeds a tick a round',
-      'WISP flames burn — the victim singes and hits softer',
-      'JOLT waves paralyze — the shocked mon\'s launch limps',
-      'TOXIC hides poison the ball on contact — kill them with banks',
-      'STATIC hides paralyze on contact — touch once, hard',
-      'FLAME hides burn on contact — seared hits lose heat',
-      'CHARM hides lull the striker — contact can put it to sleep',
+      'WISP flames burn · the victim singes and hits softer',
+      'JOLT waves paralyze · the shocked mon\'s launch limps',
+      'TOXIC hides poison the ball on contact · kill them with banks',
+      'STATIC hides paralyze on contact · touch once, hard',
+      'FLAME hides burn on contact · seared hits lose heat',
+      'CHARM hides lull the striker · contact can put it to sleep',
       'SPORE hides scatter a random ailment on contact',
-      'SYNC foes echo their status — burn one and it burns you back',
-      'SHED foes shrug off poison, burns and sleep — burst them',
-      'P-HEAL foes mend off your poison — burn them instead',
-      'DRAIN foes absorb their element — same-type hits heal them',
-      'H-BLOCK foes stop your heals — kill the blocker to mend',
-      'BOND foes drag down whoever lands the KO — finish them with hazards or a catch',
+      'SYNC foes echo their status · burn one and it burns you back',
+      'SHED foes shrug off poison, burns and sleep · burst them',
+      'P-HEAL foes mend off your poison · burn them instead',
+      'DRAIN foes absorb their element · same-type hits heal them',
+      'H-BLOCK foes stop your heals · kill the blocker to mend',
+      'BOND foes drag down whoever lands the KO · finish them with hazards or a catch',
     ],
     demo: demoCountdown,
   },
   {
     title: 'FOE TELLS',
     lines: [
-      'MENACE foes intimidate — your hits lose a fifth while they live',
-      'W-GUARD only falls to super-effective hits — slams still count',
-      'STURDY foes hang on at 1 HP — the first kill shot only wounds',
-      'SCALE hides half damage at full HP — chip it open first',
-      'GUTS foes hit harder while statused — kill them clean',
-      'LOAF foes truant — they fire once, then loiter a round',
-      'BOOST foes speed up every attack — kill them early',
-      'PRESSURE halves your super charge — legends bend the economy',
-      'BEAM foes lock a lane — the dashed line telegraphs the burn',
-      'TRAP foes leash the court — the ball can\'t flee while they live',
-      'SKY callers summon weather — Torkoal brings the drought',
-      'a ball matching the sky launches faster — draft into the weather',
-      'COUNTER foes return a third of contact — chip, don\'t crit',
-      'ALPHA foes rally the pack — kill the leader first',
-      'CHARGE foes paw the ground, then ram — shove them off-line',
-      'PRANK foes strike early — expect an ambush opener',
-      'THIEF foes snatch your pickups — KO them to take it back',
+      'MENACE foes intimidate · your hits lose a fifth while they live',
+      'W-GUARD only falls to super-effective hits · slams still count',
+      'STURDY foes hang on at 1 HP · the first kill shot only wounds',
+      'SCALE hides half damage at full HP · chip it open first',
+      'GUTS foes hit harder while statused · kill them clean',
+      'LOAF foes truant · they fire once, then loiter a round',
+      'BOOST foes speed up every attack · kill them early',
+      'PRESSURE halves your super charge · legends bend the economy',
+      'BEAM foes lock a lane · the dashed line telegraphs the burn',
+      'TRAP foes leash the court · the ball can\'t flee while they live',
+      'SKY callers summon weather · Torkoal brings the drought',
+      'a ball matching the sky launches faster · draft into the weather',
+      'COUNTER foes return a third of contact · chip, don\'t crit',
+      'ALPHA foes rally the pack · kill the leader first',
+      'CHARGE foes paw the ground, then ram · shove them off-line',
+      'PRANK foes strike early · expect an ambush opener',
+      'THIEF foes snatch your pickups · KO them to take it back',
       'SWIFT foes press 1.5× harder in their own sky',
-      'SPIKER foes seed your half with spikes — the court fills while they live',
-      'SONIC foes rattle your aim — a touched mon launches off-line',
-      'ANCHOR foes cannot be shoved — no herding them into hazards',
-      'ARMOR foes shrug off crits — out-muscle them straight',
+      'SPIKER foes seed your half with spikes · the court fills while they live',
+      'SONIC foes rattle your aim · a touched mon launches off-line',
+      'ANCHOR foes cannot be shoved · no herding them into hazards',
+      'ARMOR foes shrug off crits · out-muscle them straight',
     ],
     demo: demoCountdown,
   },
   {
     title: 'FIELD PICKUPS',
     lines: [
-      'each wave seeds a pickup — the colored ring and tag name it',
-      'LUM BERRY cures the team — it only drops when someone is sick',
+      'each wave seeds a pickup · the colored ring and tag name it',
+      'LUM BERRY cures the team · it only drops when someone is sick',
       'berry heals the team, protein buffs the shot, elixir charges pips',
       'fly through the glowing item to collect on touch',
       'one spawns each wave, two when something big lurks',
@@ -2590,7 +2590,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'CATCHING',
     lines: [
       'beaten foes sometimes drop a ball: catches go to your box',
-      'weak foes join easy — ones far above your ace all but refuse',
+      'weak foes join easy · ones far above your ace all but refuse',
       'a catch joins at your team\'s level, never above it',
       'beat a gym and its ace joins your box too',
       'a duplicate feeds the copy you own: +1 LUCK every fusion',
@@ -2603,7 +2603,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'LEVELING UP',
     lines: [
       'every KO levels the mon that launched the shot',
-      'tougher foes teach more — cap Lv100, levels survive evolution',
+      'tougher foes teach more · cap Lv100, levels survive evolution',
       'each win raises ASCENSION: foes get tougher and faster',
       'ASC buys perks: a second charm (3), weaker rests (4), enraged gyms (6)',
     ],
@@ -2615,7 +2615,7 @@ const HELP_SECTIONS: HelpSection[] = [
       '9 stages, a gym every 3rd: pick your route on the map',
       'after each fight: fix the lineup first, then take an item',
       'lose and your fallen team returns next run as the rival',
-      'every run moves your ladder rating — wins climb, wipes drop',
+      'every run moves your ladder rating · wins climb, wipes drop',
     ],
     demo: demoClimb,
   },
@@ -2625,13 +2625,13 @@ const HELP_SECTIONS: HelpSection[] = [
       'rests heal and revive · chests pay an item · a fight still follows',
       'trainer squads pay better loot but can\'t be caught',
       'ELITE doors fight deeper and pay rare+ relics',
-      '??? is a surprise — heal, haul, or ambush',
+      '??? is a surprise · heal, haul, or ambush',
     ],
     demo: demoPickups,
   },
   {
     title: 'SHINIES & STREAKS',
-    lines: ['gold-tinted foes are rare: KO one and it always joins your box', 'perfect releases build a streak — each one hits a bit harder'],
+    lines: ['gold-tinted foes are rare: KO one and it always joins your box', 'perfect releases build a streak · each one hits a bit harder'],
     demo: demoAim,
   },
   {
@@ -2641,13 +2641,13 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'FIELD GIMMICKS',
-    lines: ['red zones chip the ball, violet ones silence supers — foes ignore both', 'warp pads teleport, green pads boost, dark wells bend the path'],
+    lines: ['red zones chip the ball, violet ones silence supers · foes ignore both', 'warp pads teleport, green pads boost, dark wells bend the path'],
     demo: demoHazards,
   },
   {
     title: 'TYPE TRAITS',
     lines: [
-      'field 2+ of a type for a team-wide bonus — shinies count double',
+      'field 2+ of a type for a team-wide bonus · shinies count double',
       'dual-typed mons count for both types and strike with whichever hits harder',
       'the chips on the map screen show what your team is running',
     ],
@@ -2667,7 +2667,7 @@ const HELP_SECTIONS: HelpSection[] = [
     lines: [
       'GRASS drains foes to heal · POISON bleeds foes each shot',
       'FIRE flame ring + fireballs · GHOST hexes every foe',
-      'PSYCHIC shoves the pack away — more charge, bigger effect',
+      'PSYCHIC shoves the pack away · more charge, bigger effect',
     ],
     demo: demoCharge,
   },
@@ -2678,7 +2678,7 @@ const HELP_SECTIONS: HelpSection[] = [
     get lines() {
       return [
         `one shared meter · every shot banks a pip, ${ULT_SHOTS} pips arm it`,
-        'when the gauge floods gold, TAP a glowing mon — tap it again to fire · its type picks the nuke',
+        'when the gauge floods gold, TAP a glowing mon · tap it again to fire · its type picks the nuke',
         'all foes take the hit · bosses shrug off most of it · charge resets each fight',
         // key affordances hide on touch — same (pointer: fine) gate as the [1]/[R] hints
         ...(HAS_KEYS ? ['on keys: ? help · P pause · M mute · arrows turn pages'] : []),
@@ -2727,7 +2727,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   if (welcome) {
     ctx.font = fontB(9);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText('your first fight teaches the pull — this deck is the manual', r.x + r.w / 2, r.y + 62);
+    ctx.fillText('your first fight teaches the pull · this deck is the manual', r.x + r.w / 2, r.y + 62);
   }
 
   uiClose(ctx, HELP_CLOSE);
@@ -2782,7 +2782,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   }
   ctx.font = fontB(8);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`${HELP_PAGES[page].name} — swipe or tap ‹ › · outside closes`, r.x + r.w / 2, r.y + r.h - 8);
+  ctx.fillText(`${HELP_PAGES[page].name} · swipe or tap ‹ › · outside closes`, r.x + r.w / 2, r.y + r.h - 8);
 }
 
 // --- dex overlay: the full register — caught rows draw, unseen ghost as ---
@@ -2890,11 +2890,12 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
   if (denied >= 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = DANGER;
-    ctx.fillText(`WIN A CLIMB — LV ${denied} IS LOCKED`, r.x + r.w / 2, r.y + 104);
+    const short = denied - cap;
+    ctx.fillText(`LV ${denied} IS LOCKED · ${short} WIN${short > 1 ? 'S' : ''} SHORT`, r.x + r.w / 2, r.y + 104);
   } else if (pick === 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText(cap ? 'STANDARD RULES — THE BASE CLIMB' : 'STANDARD RULES — WIN A CLIMB TO HEAT UP', r.x + r.w / 2, r.y + 104);
+    ctx.fillText(cap ? 'STANDARD RULES · THE BASE CLIMB' : 'STANDARD RULES · WIN A CLIMB TO HEAT UP', r.x + r.w / 2, r.y + 104);
   } else {
     const m = ASC_MODS[pick - 1];
     ctx.font = fontB(8);
@@ -2902,7 +2903,7 @@ function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number;
     ctx.fillText(`LV ${pick} · ${m.name.toUpperCase()}`, r.x + r.w / 2, r.y + 98);
     ctx.font = fontB(7);
     ctx.fillStyle = INK_SOFT;
-    const line = `${m.desc.toUpperCase()} — STACKED ON ${pick - 1} RULE${pick > 2 ? 'S' : ''} BELOW`;
+    const line = `${m.desc.toUpperCase()}${pick > 1 ? ' · PLUS EVERY LOWER RUNG' : ''}`;
     fitFontB(ctx, line, 7, r.w - 30);
     ctx.fillText(line, r.x + r.w / 2, r.y + 114);
   }
@@ -3160,31 +3161,31 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     def.pierce && 'PIERCES FOES',
     def.melee && 'LUNGES AT CONTACT',
     def.copy && "COPIES BUMPERS' SUPERS",
-    def.cursed && 'GRUDGE — ITS FAINT SLOWS FOES',
-    def.huge && 'HUGE POWER — 2× CONTACT',
-    def.sturdy && 'STURDY — SURVIVES ONE HIT',
-    def.guts && 'GUTS — STATUS FEEDS IT',
+    def.cursed && 'GRUDGE · ITS FAINT SLOWS FOES',
+    def.huge && 'HUGE POWER · 2× CONTACT',
+    def.sturdy && 'STURDY · SURVIVES ONE HIT',
+    def.guts && 'GUTS · STATUS FEEDS IT',
     def.pheal && 'POISON HEALS IT',
     def.sleepless && 'NEVER SLEEPS',
-    def.pickup && 'PICKUP — FINDS LOOT',
-    def.thickFat && 'THICK FAT — HALF LAVA',
-    def.limber && 'LIMBER — NO PARALYSIS',
-    def.shock && 'STATIC — HITS JOLT BACK',
-    def.toxic && 'POISON POINT — HITS VENOM BACK',
-    def.flame && 'FLAME BODY — HITS SINGE BACK',
-    def.charm && 'CUTE CHARM — HITS LULL BACK',
-    def.spore && 'EFFECT SPORE — HITS SCATTER',
-    def.menace && 'INTIMIDATE — DULLS FOES',
-    def.grace && 'SERENE GRACE — 2× ODDS',
-    def.damp && 'DAMP — FIZZLES BOMBS',
-    def.sync && 'SYNCHRONIZE — ECHOES ILLS',
-    def.swift && 'SWIFT — 1.5× IN ITS SKY',
-    def.taunt && 'FOLLOW ME — DRAWS FIRE',
-    def.tempo && 'OWN TEMPO — CLEAR-HEADED',
-    def.breaker && 'MOLD BREAKER — PIERCES GUARDS',
-    def.shed && 'SHED SKIN — SLAYS OFF ILLS',
-    def.regen && 'REGENERATOR — MENDS EACH TURN',
-    def.friendGuard && 'FRIEND GUARD — SHIELDS TEAM',
+    def.pickup && 'PICKUP · FINDS LOOT',
+    def.thickFat && 'THICK FAT · HALF LAVA',
+    def.limber && 'LIMBER · NO PARALYSIS',
+    def.shock && 'STATIC · HITS JOLT BACK',
+    def.toxic && 'POISON POINT · HITS VENOM BACK',
+    def.flame && 'FLAME BODY · HITS SINGE BACK',
+    def.charm && 'CUTE CHARM · HITS LULL BACK',
+    def.spore && 'EFFECT SPORE · HITS SCATTER',
+    def.menace && 'INTIMIDATE · DULLS FOES',
+    def.grace && 'SERENE GRACE · 2× ODDS',
+    def.damp && 'DAMP · FIZZLES BOMBS',
+    def.sync && 'SYNCHRONIZE · ECHOES ILLS',
+    def.swift && 'SWIFT · 1.5× IN ITS SKY',
+    def.taunt && 'FOLLOW ME · DRAWS FIRE',
+    def.tempo && 'OWN TEMPO · CLEAR-HEADED',
+    def.breaker && 'MOLD BREAKER · PIERCES GUARDS',
+    def.shed && 'SHED SKIN · SLAYS OFF ILLS',
+    def.regen && 'REGENERATOR · MENDS EACH TURN',
+    def.friendGuard && 'FRIEND GUARD · SHIELDS TEAM',
     def.absorb && `${def.absorb.toUpperCase()} HITS HEAL IT`,
   ].filter(Boolean) as string[];
   if (traits.length) {
@@ -3287,18 +3288,18 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
   ctx.textAlign = 'center';
   ctx.font = fontB(8);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('the top climbs logged on this device — score rules all', r.x + r.w / 2, r.y + 57);
+  ctx.fillText('the top climbs logged on this device · score rules all', r.x + r.w / 2, r.y + 57);
 
   const list = board();
   if (!list.length) {
-    fitFont(ctx, 'NO RUNS YET — CLIMB AND CLAIM A SPOT', 10, r.w - 40);
+    fitFont(ctx, 'NO RUNS YET · CLIMB AND CLAIM A SPOT', 10, r.w - 40);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('NO RUNS YET — CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + 192);
+    ctx.fillText('NO RUNS YET · CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + 192);
     // an empty hall still teaches the climb — the rank ladder up the middle
     const rt = tier();
     ctx.font = font(9);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText(`RANK LADDER — YOU'RE ${rt.name}`, r.x + r.w / 2, r.y + 240);
+    ctx.fillText(`RANK LADDER · YOU'RE ${rt.name}`, r.x + r.w / 2, r.y + 240);
     LADDER.forEach((t, i) => {
       const ty = r.y + 264 + i * 44;
       const cur = i === rt.i;
@@ -3882,7 +3883,7 @@ export function drawHatch(
   ctx.textAlign = 'center';
   ctx.font = fontB(6.5);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('buy a mon outright with dust — sparked or pulled, it joins the dex', W / 2, SPARK_VIEW.y - 4);
+  ctx.fillText('buy a mon outright with dust · sparked or pulled, it joins the dex', W / 2, SPARK_VIEW.y - 4);
 
   const seen = new Set(dexIds());
   ctx.save();
@@ -4212,7 +4213,7 @@ function drawShakeScene(
   if (s.results.length > 1) {
     ctx.font = fontB(7);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`${s.i + 1} OF ${s.results.length} — TAP TO HURRY`, cx, cy + 148);
+    ctx.fillText(`${s.i + 1} OF ${s.results.length} · TAP TO HURRY`, cx, cy + 148);
   }
 }
 
@@ -4604,8 +4605,8 @@ function labLayout() {
 }
 function computeLabLayout() {
   const secs: [string, (typeof LAB_UPGRADES)[number][], boolean][] = [
-    ['TRAINING — EVERY RUN STARTS STRONGER', LAB_UPGRADES.filter((u) => LAB_TRAIN.has(u.id)), true],
-    ['RUN TEAM — PER-RUN TOOLS', LAB_UPGRADES.filter((u) => !LAB_TRAIN.has(u.id)), false],
+    ['TRAINING · EVERY RUN STARTS STRONGER', LAB_UPGRADES.filter((u) => LAB_TRAIN.has(u.id)), true],
+    ['RUN TEAM · PER-RUN TOOLS', LAB_UPGRADES.filter((u) => !LAB_TRAIN.has(u.id)), false],
   ];
   const heads: { text: string; y: number }[] = [];
   const cards: { u: (typeof LAB_UPGRADES)[number]; train: boolean; r: { x: number; y: number; w: number; h: number } }[] = [];
@@ -4765,7 +4766,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   ctx.textAlign = 'center';
   ctx.font = fontB(7);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('lab levels persist across runs — every star buys a sure thing · tap outside to close', W / 2, r.y + r.h - 14);
+  ctx.fillText('lab levels persist across runs · every star buys a sure thing · tap outside to close', W / 2, r.y + r.h - 14);
 }
 
 // the BAG row — card-lite chips of stocked consumables; ≤2 ride into the
@@ -4847,11 +4848,11 @@ export function drawDraft(
   const lastIt = !spinning && lastId ? bagRowItems().find((it) => it.id === lastId) : undefined;
   const bagDesc = lastIt?.desc;
   const line = bagDesc
-    ? `${lastIt!.name.toUpperCase()} — ${bagDesc}`
+    ? `${lastIt!.name.toUpperCase()} · ${bagDesc}`
     : spinning
-      ? 'reels rolling — tap to skip'
+      ? 'reels rolling · tap to skip'
       : picked.length === 3
-        ? 'ace round — a veteran anchors the team'
+        ? 'ace round · a veteran anchors the team'
         : 'your picks become the balls you sling';
   if (bagDesc) fitFontB(ctx, line.toUpperCase(), 9, W - 40);
   ctx.fillStyle = bagDesc ? INK_SOFT : INK;
@@ -5276,7 +5277,7 @@ export function drawReward(
     ctx.fillText(recruit.name.toUpperCase() + (recruit.lvl && recruit.lvl > 1 ? ` LV${recruit.lvl}` : ''), r.x + 98, r.y + 46);
     ctx.font = fontB(8);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('in your box — swap first, then pick an item', r.x + 98, r.y + 64);
+    ctx.fillText('in your box · swap first, then pick an item', r.x + 98, r.y + 64);
     ctx.textAlign = 'center';
   }
 
@@ -5290,15 +5291,15 @@ export function drawReward(
   if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
     ctx.font = fontB(8);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('reels rolling — tap to skip', W / 2, 372);
+    ctx.fillText('reels rolling · tap to skip', W / 2, 372);
   } else if (luck > 0) {
     ctx.font = fontB(8);
     ctx.fillStyle = '#6fdc6f';
-    ctx.fillText(`TEAM LUCK ${luck} — fusion dupes + bond feed the gym fountain`, W / 2, 372);
+    ctx.fillText(`TEAM LUCK ${luck} · fusion dupes + bond feed the gym fountain`, W / 2, 372);
   } else {
     ctx.font = fontB(8);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('pick a relic — your box waits on the map', W / 2, 372);
+    ctx.fillText('pick a relic · your box waits on the map', W / 2, 372);
   }
   ctx.font = font(9);
   ctx.fillStyle = INK_FAINT;
@@ -5354,8 +5355,8 @@ export function drawReward(
     scrim(ctx, 0.78);
     ctx.textAlign = 'center';
     ctx.fillStyle = GOLD;
-    fitFont(ctx, `${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, 13, W - 60);
-    ctx.fillText(`${evo.from.name.toUpperCase()} IS EVOLVING — CHOOSE ITS FORM`, W / 2, 372);
+    fitFont(ctx, `${evo.from.name.toUpperCase()} IS EVOLVING · CHOOSE ITS FORM`, 13, W - 60);
+    ctx.fillText(`${evo.from.name.toUpperCase()} IS EVOLVING · CHOOSE ITS FORM`, W / 2, 372);
     evo.options.forEach((opt, i) => {
       const r = evoCardRect(i, evo.options.length);
       uiWindow(ctx, r, { rad: 10 });
@@ -5448,7 +5449,7 @@ function drawRoster(
   ctx.font = font(9);
   ctx.fillStyle = INK_FAINT;
   // odds scale off your ace's level — weaklings easy, far-above foes gated
-  const capLine = `BOX: beaten foes may join — weakest ${Math.round(catchPct * 300)}%`;
+  const capLine = `BOX: beaten foes may join · weakest ${Math.round(catchPct * 300)}%`;
   fitFont(ctx, capLine, 9, W - 40);
   ctx.fillText(capLine, W / 2, 526);
   if (masterArmed) {
@@ -5598,7 +5599,7 @@ function drawRoster(
     const sbl = bondLv(selDef.id);
     ctx.font = fontB(8);
     ctx.fillStyle = GOLD;
-    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} — ${superDesc(selDef.id, selDef.type)}${sbl ? ` · BOND ${sbl}` : ''}`, W / 2, 748); // under the role captions
+    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} · ${superDesc(selDef.id, selDef.type)}${sbl ? ` · BOND ${sbl}` : ''}`, W / 2, 748); // under the role captions
   }
   const hint =
     selTeam >= 0
@@ -5644,7 +5645,7 @@ export function drawTeamMenu(
   if (rewardStep) {
     ctx.font = fontB(9);
     ctx.fillStyle = GOLD;
-    ctx.fillText('FIX YOUR SQUAD — THE ITEM BOARD WAITS BEHIND THIS', W / 2, TEAM_PANEL.y + 52);
+    ctx.fillText('FIX YOUR SQUAD · THE ITEM BOARD WAITS BEHIND THIS', W / 2, TEAM_PANEL.y + 52);
   }
 
   // held items — the run's build, card rows like the bag list: rarity notch,
@@ -5663,7 +5664,7 @@ export function drawTeamMenu(
   if (!shown.length) {
     ctx.font = fontB(8);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('none yet — relic picks and chests stock it', W / 2, 366);
+    ctx.fillText('none yet · relic picks and chests stock it', W / 2, 366);
   }
   shown.forEach((item, i) => {
     const r = { x: TEAM_PANEL.x + 16, y: 336 + i * 34, w: TEAM_PANEL.w - 32, h: 30 };
@@ -5694,7 +5695,7 @@ export function drawTeamMenu(
       // a long name can eat the whole row — no room means no desc, never
       // a negative width that lands text past the row's edge
       if (dscW > 26) {
-        let dsc = `— ${perk.desc}`;
+        let dsc = `· ${perk.desc}`;
         while (dsc.length > 3 && ctx.measureText(dsc + '…').width > dscW) dsc = dsc.slice(0, -1);
         ctx.fillText(dsc, r.x + 48 + nw, r.y + 19);
       }
@@ -5798,7 +5799,7 @@ export function drawResult(
   const depthN = res.depth ?? (res.won ? TOTAL_STAGES : Number(extra?.match(/stage (\d+) of/)?.[1] ?? 0));
   const findings: [label: string, value: string, color: string][] = [
     ['SCORE', res.score.toLocaleString('en-US'), '#f8d030'],
-    ['DEPTH', `${depthN || '—'}/${TOTAL_STAGES}`, INK],
+    ['DEPTH', `${depthN || '0'}/${TOTAL_STAGES}`, INK],
     ['SHOTS', `${res.shots}`, INK],
     ['TIME', `${res.time.toFixed(1)}s`, INK],
     ['CAUGHT', `${res.caught}`, INK],
@@ -5893,7 +5894,7 @@ export function drawResult(
   ctx.textAlign = 'left';
   ctx.font = fontB(7);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('post-climb debrief — filed for the record', ix, panel.y + 50);
+  ctx.fillText('post-climb debrief · filed for the record', ix, panel.y + 50);
 
   // the CASE line is the file's index card — run number when main files
   // one, otherwise the seed carries the reference
@@ -6029,7 +6030,7 @@ export function drawResult(
   if (share) {
     ctx.font = fontB(7);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('— SQUAD ATTACHMENT —', W / 2, ay + 14);
+    ctx.fillText('· SQUAD ATTACHMENT ·', W / 2, ay + 14);
     const sy = ay + 44;
     ctx.font = '30px system-ui';
     ctx.fillText(share.waves, W / 2, sy);
@@ -6701,7 +6702,7 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     ctx.textAlign = 'center';
     ctx.font = font(9);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('ALL CLEAR — CHECK BACK AFTER THE RESET', TASKS_PANEL.x + TASKS_PANEL.w / 2, TASKS_ROWS_Y + 60);
+    ctx.fillText('ALL CLEAR · CHECK BACK AFTER THE RESET', TASKS_PANEL.x + TASKS_PANEL.w / 2, TASKS_ROWS_Y + 60);
   }
 
   views.forEach((v, i) => {
@@ -6841,7 +6842,7 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     fitFontB(ctx, it.name.toUpperCase(), 6.5, r.w - 44);
     ctx.fillText(it.name.toUpperCase(), r.x + 38, r.y + 21);
     ctx.fillStyle = n > 0 ? GOLD : INK_FAINT;
-    ctx.fillText(n > 0 ? `×${n}` : '—', r.x + 38, r.y + 34);
+    ctx.fillText(n > 0 ? `×${n}` : '·', r.x + 38, r.y + 34);
   }
 
   // the × chip rides centered on the wide close rect — the tap zone

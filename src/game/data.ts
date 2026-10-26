@@ -1000,15 +1000,15 @@ export const TOTAL_STAGES = 9;
 // effect, each level also scales enemy bulk (+15%), enemy damage (+8%) and
 // the score premium — `name` is what the in-court tag reads out.
 export const ASC_MODS: { id: string; name: string; desc: string }[] = [
-  { id: 'roamers', name: 'ROAMERS', desc: 'legendary invades + rival echoes roll twice as often' },
+  { id: 'roamers', name: 'ROAMERS', desc: 'legendary invades + rival echoes strike twice as often' },
   { id: 'hair-trigger', name: 'HAIR TRIGGER', desc: 'foes wind up 15% faster' },
   { id: 'fortunate', name: 'FORTUNATE', desc: '+1 charm pick' },
   { id: 'thin-centers', name: 'THIN CENTERS', desc: 'poké center rests heal only 75%' },
-  { id: 'inflation', name: 'INFLATION', desc: 'score premium deepens to +30%/tier' },
+  { id: 'inflation', name: 'INFLATION', desc: 'score premium rises to +30% per level' },
   { id: 'enraged-leaders', name: 'ENRAGED LEADERS', desc: 'gym leaders walk in enraged' },
   { id: 'frenzy', name: 'FRENZY', desc: 'foes press 25% harder on approach' },
-  { id: 'storm', name: 'STORM', desc: 'every wave rolls weather' },
-  { id: 'tag-team', name: 'TAG TEAM', desc: 'the rival echo is owed one visit' },
+  { id: 'storm', name: 'STORM', desc: 'every wave brings weather' },
+  { id: 'tag-team', name: 'TAG TEAM', desc: 'the rival echo always gets one visit' },
 ];
 
 // Enemy placement is normalized arena coords (0..1), so stages are
@@ -1505,10 +1505,10 @@ export function rollWave(rng: () => number, depth: number, theme?: Theme, bossTy
 // systems. The card reads the same pick, so what it advertises is what spawns.
 export const RAID_MODS = [
   { id: 'storm', name: 'STORM CALLER', desc: 'the boss owns the sky all fight' },
-  { id: 'fortress', name: 'FORTRESS', desc: 'furnished court — nowhere clean to bank' },
-  { id: 'enraged', name: 'ENRAGED', desc: 'walks in furious — fast attack cycle' },
+  { id: 'fortress', name: 'FORTRESS', desc: 'furnished court · nowhere clean to bank' },
+  { id: 'enraged', name: 'ENRAGED', desc: 'walks in furious · fast attack cycle' },
   { id: 'laststand', name: 'LAST STAND', desc: 'rises once at half health, enraged' },
-  { id: 'plated', name: 'PLATED', desc: 'the pack rolls shielded — flank or bank' },
+  { id: 'plated', name: 'PLATED', desc: 'the pack rolls shielded · flank or bank' },
   { id: 'warded', name: 'WARDED', desc: 'every foe carries a one-hit ward' },
   { id: 'volatile', name: 'VOLATILE', desc: 'KOs burst and splash the pack' },
   { id: 'frenzy', name: 'FRENZY', desc: 'escorts press 25% harder on approach' },

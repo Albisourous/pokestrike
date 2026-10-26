@@ -85,7 +85,7 @@ const EVENTS: GameEvent[] = [
       const needed = b.players.some((p) => p.dead || p.hp < p.maxHp);
       for (const p of b.players) { p.dead = false; p.hp = p.maxHp; }
       if (needed) sfx('heal'); // the spring revives too — healAll can't reach dead mons
-      return { note: needed ? 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!' : 'A HIDDEN SPRING — BUT NOBODY NEEDED IT.', art: { item: 'mystic-water' }, skip: true };
+      return { note: needed ? 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!' : 'A HIDDEN SPRING · NOBODY NEEDED IT.', art: { item: 'mystic-water' }, skip: true };
     },
   },
   {
@@ -94,8 +94,8 @@ const EVENTS: GameEvent[] = [
       const n = healAll(b, 0.3);
       return {
         note: n
-          ? 'YOU FOUND A BERRY BUSH — THE TEAM RECOVERED 30%!'
-          : 'A BERRY BUSH — BUT THE TEAM WAS ALREADY AT FULL STRENGTH.',
+          ? 'YOU FOUND A BERRY BUSH · THE TEAM RECOVERED 30%!'
+          : 'A BERRY BUSH · THE TEAM WAS ALREADY AT FULL STRENGTH.',
         art: { item: b.roll() < 0.5 ? 'oran-berry' : 'sitrus-berry' },
         skip: true,
       };
@@ -105,7 +105,7 @@ const EVENTS: GameEvent[] = [
     w: 3,
     run: (b) => {
       for (const p of b.players) b.gainLevels(p, 2);
-      return { note: 'YOU DUG UP A RARE CANDY STASH — EVERYONE +2 LEVELS!', art: { item: 'hp-up' }, skip: true };
+      return { note: 'YOU DUG UP A RARE CANDY STASH · EVERYONE +2 LEVELS!', art: { item: 'hp-up' }, skip: true };
     },
   },
   {
@@ -117,7 +117,7 @@ const EVENTS: GameEvent[] = [
       p.cdMax = Math.max(1, p.cdMax - 1);
       p.cd = Math.min(p.cd, p.cdMax);
       return {
-        note: `A WANDERING TUTOR DRILLED ${p.def.name.toUpperCase()} — SUPER -1 SHOT!`,
+        note: `A WANDERING TUTOR DRILLED ${p.def.name.toUpperCase()} · SUPER -1 SHOT!`,
         art: { npc: 'expert_f_down_0' },
         skip: true,
       };
@@ -130,7 +130,7 @@ const EVENTS: GameEvent[] = [
       const lvl = Math.min(100, 5 + b.waveIndex * 10 + Math.floor(b.roll() * 5));
       boxCatch(b, def, lvl, 0.35);
       return {
-        note: `A WOUNDED ${def.name.toUpperCase()} TRUSTS YOU — IT JOINED YOUR BOX!`,
+        note: `A WOUNDED ${def.name.toUpperCase()} TRUSTS YOU · IT JOINED YOUR BOX!`,
         art: { mon: def.id },
         skip: true,
       };
@@ -203,7 +203,7 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A SHADY SALESMAN FLASHES A MYSTERY BOX — 300 SCORE?',
+        prompt: 'A SHADY SALESMAN FLASHES A MYSTERY BOX · 300 SCORE?',
         // the box is a slot reel — it never stops deciding what's inside
         art: { slot: ['poke-ball', 'ultra-ball', 'master-ball', 'revive', 'hp-up', 'lucky-egg', 'leftovers', 'metronome'] },
         options: [
@@ -211,7 +211,7 @@ const EVENTS: GameEvent[] = [
             label: 'PAY 300 SCORE',
             cost: 300, // the wallet tag dims it like every other priced pick
             run: (bb) => {
-              if (bb.score < 300) return { note: 'HE SCOWLED — "COME BACK RICHER."', skip: true };
+              if (bb.score < 300) return { note: 'HE SCOWLED · "COME BACK RICHER."', skip: true };
               bb.score -= 300;
               const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
               if (!p) return { note: 'THE BOX WAS EMPTY. HE VANISHED.', skip: true };
@@ -234,14 +234,14 @@ const EVENTS: GameEvent[] = [
         art: { npc: 'elder_f_down_0' },
         options: [
           {
-            label: 'OFFER 15% HP — +2 LEVELS',
+            label: 'OFFER 15% HP · +2 LEVELS',
             run: (bb) => {
               for (const p of bb.players) {
                 if (p.dead) continue;
                 p.hp = Math.max(1, Math.round(p.hp - p.maxHp * 0.15));
                 bb.gainLevels(p, 2);
               }
-              return { note: 'THE SHRINE DRANK DEEP — EVERYONE GREW +2 LEVELS.', skip: true };
+              return { note: 'THE SHRINE DRANK DEEP · EVERYONE GREW +2 LEVELS.', skip: true };
             },
           },
           { label: 'LEAVE IT', run: () => ({ note: 'THE HUM FADED BEHIND YOU.', skip: true }) },
@@ -256,7 +256,7 @@ const EVENTS: GameEvent[] = [
       let n = 0;
       for (const p of b.players) if (!p.dead && p.cd > 0) { p.cd = 0; n++; }
       return {
-        note: n ? `A MYSTIC TUNED THE TEAM — ${n} SUPER${n > 1 ? 'S' : ''} CHARGED!` : 'THE MYSTIC FOUND NOTHING TO TUNE.',
+        note: n ? `A MYSTIC TUNED THE TEAM · ${n} SUPER${n > 1 ? 'S' : ''} CHARGED!` : 'THE MYSTIC FOUND NOTHING TO TUNE.',
         art: { item: 'metronome' },
         skip: true,
       };
@@ -268,12 +268,12 @@ const EVENTS: GameEvent[] = [
     run: (b) => ({
       note: '',
       choices: {
-        prompt: 'A WELL ECHOES WITH BATTLE CRIES — CLIMB DOWN?',
+        prompt: 'A WELL ECHOES WITH BATTLE CRIES · CLIMB DOWN?',
         // the card flashes whichever ghost is waiting below
         art: { mon: [92, 353, 355, 198, 302][Math.floor(b.roll() * 5)] },
         options: [
           {
-            label: 'CLIMB DOWN — FIGHT',
+            label: 'CLIMB DOWN · FIGHT',
             run: (bb) => ({
               note: 'SOMETHING MOVED IN THE DARK!',
               wave: [92, 353, 355, 198, 302].flatMap((id, i) => {
@@ -287,7 +287,7 @@ const EVENTS: GameEvent[] = [
             label: 'TOSS A COIN IN',
             run: (bb) => {
               bb.score += 100;
-              return { note: 'YOU WISHED FOR LUCK — +100 SCORE.', skip: true };
+              return { note: 'YOU WISHED FOR LUCK · +100 SCORE.', skip: true };
             },
           },
         ],
@@ -301,7 +301,7 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A COLLECTOR WANTS YOUR WEAKEST MON — OFFERS A STRANGER +4 LEVELS.',
+        prompt: 'A COLLECTOR WANTS YOUR WEAKEST MON · OFFERS A STRANGER +4 LEVELS.',
         art: { npc: 'pokefan_down_0' },
         options: [
           {
@@ -331,7 +331,7 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A GENTLEMAN FANS A COIN CASE — THE SLOTS ARE 200 A SPIN.',
+        prompt: 'A GENTLEMAN FANS A COIN CASE · THE SLOTS ARE 200 A SPIN.',
         // FRLG canon: the GAMBLER class wears a suit and answers to GENTLEMAN
         art: { npc: 'gentleman_down_0' },
         options: [
@@ -339,21 +339,21 @@ const EVENTS: GameEvent[] = [
             label: 'SPIN THE REELS',
             cost: 200,
             run: (bb) => {
-              if (bb.score < 200) return { note: 'HE SNAPPED THE CASE SHUT — "COME BACK RICHER."', skip: true };
+              if (bb.score < 200) return { note: 'HE SNAPPED THE CASE SHUT · "COME BACK RICHER."', skip: true };
               bb.score -= 200;
               const r = bb.roll();
-              if (r < 0.5) return { note: 'NOT EVEN A CHERRY — THE HOUSE ATE 200.', skip: true };
+              if (r < 0.5) return { note: 'NOT EVEN A CHERRY · THE HOUSE ATE 200.', skip: true };
               if (r < 0.9) {
                 bb.score += 400;
-                return { note: 'BARS LINE UP — THE SPIN PAID DOUBLE! +400 SCORE.', skip: true };
+                return { note: 'BARS LINE UP · THE SPIN PAID DOUBLE! +400 SCORE.', skip: true };
               }
               const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
               if (!p) {
                 bb.score += 600;
-                return { note: 'THE REELS JAMMED ON 777 — +600 SCORE.', skip: true };
+                return { note: 'THE REELS JAMMED ON 777 · +600 SCORE.', skip: true };
               }
               bb.grantPerk(p);
-              return { note: `777 — JACKPOT! THE MACHINE DROPPED ${p.name.toUpperCase()}!`, skip: true };
+              return { note: `777 · JACKPOT! THE MACHINE DROPPED ${p.name.toUpperCase()}!`, skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'THE REELS SPUN ON WITHOUT YOU.', skip: true }) },
@@ -368,7 +368,7 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A HIKER SQUATS BY A CRACKED BOULDER — SMASH IT OPEN?',
+        prompt: 'A HIKER SQUATS BY A CRACKED BOULDER · SMASH IT OPEN?',
         art: { npc: 'hiker_down_0' },
         options: [
           {
@@ -376,7 +376,7 @@ const EVENTS: GameEvent[] = [
             run: (bb) => {
               if (bb.roll() < 0.3) {
                 // geodude, onix, aron, shuckle — it was a nest
-                return { note: 'THE ROCK FIGHTS BACK — IT WAS A NEST!', wave: gridWave(bb, [74, 95, 304, 213]) };
+                return { note: 'THE ROCK FIGHTS BACK · IT WAS A NEST!', wave: gridWave(bb, [74, 95, 304, 213]) };
               }
               // helix/dome/root/claw/skull/armour fossils — old amber and the
               // living fossil ride the rare pull
@@ -387,7 +387,7 @@ const EVENTS: GameEvent[] = [
               const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
               boxCatch(bb, def, lvl, 0.4);
               return {
-                note: `${rare ? 'AN OLD AMBER' : 'A FOSSIL'} CRACKED OPEN — ${def.name.toUpperCase()} JOINED YOUR BOX!`,
+                note: `${rare ? 'AN OLD AMBER' : 'A FOSSIL'} CRACKED OPEN · ${def.name.toUpperCase()} JOINED YOUR BOX!`,
                 art: { mon: def.id },
                 skip: true,
               };
@@ -405,7 +405,7 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'AN OLD ROD LIES BY A QUIET POOL — CAST A LINE?',
+        prompt: 'AN OLD ROD LIES BY A QUIET POOL · CAST A LINE?',
         art: { npc: 'fisher_down_0' },
         options: [
           {
@@ -420,7 +420,7 @@ const EVENTS: GameEvent[] = [
               const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
               boxCatch(bb, def, lvl, 0.4);
               return {
-                note: `A ${def.name.toUpperCase()} TOOK THE HOOK — IT JOINED YOUR BOX!`,
+                note: `A ${def.name.toUpperCase()} TOOK THE HOOK · IT JOINED YOUR BOX!`,
                 art: { mon: def.id },
                 skip: true,
               };
@@ -438,7 +438,7 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A PECULIAR TREE SHAKES ITS BRANCHES — HEADBUTT IT?',
+        prompt: 'A PECULIAR TREE SHAKES ITS BRANCHES · HEADBUTT IT?',
         art: { mon: 214 },
         options: [
           {
@@ -453,7 +453,7 @@ const EVENTS: GameEvent[] = [
               const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
               boxCatch(bb, def, lvl, 0.4);
               return {
-                note: `${def.name.toUpperCase()} DROPPED OUT — IT JOINED YOUR BOX!`,
+                note: `${def.name.toUpperCase()} DROPPED OUT · IT JOINED YOUR BOX!`,
                 art: { mon: def.id },
                 skip: true,
               };
@@ -472,18 +472,18 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A BLACK BELT BARKS: MACHO-BRACE DRILLS — THE ACE PAYS IN SWEAT.',
+        prompt: 'A BLACK BELT BARKS: MACHO-BRACE DRILLS · THE ACE PAYS IN SWEAT.',
         art: { npc: 'black_belt_down_0' },
         options: [
           {
-            label: 'TRAIN — ACE -25% HP, ALL +1 LV',
+            label: 'TRAIN · ACE -25% HP, ALL +1 LV',
             run: (bb) => {
               const ace = bb.players.filter((p) => !p.dead).sort((a, z) => z.lvl - a.lvl)[0];
               if (!ace) return { note: 'NO ONE STOOD TO TRAIN.', skip: true };
               ace.hp = Math.max(1, ace.hp - Math.round(ace.maxHp * 0.25));
               for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
               return {
-                note: `${ace.def.name.toUpperCase()} LED THE DRILLS — EVERYONE +1 LEVEL!`,
+                note: `${ace.def.name.toUpperCase()} LED THE DRILLS · EVERYONE +1 LEVEL!`,
                 art: { item: 'macho-brace' },
                 skip: true,
               };
@@ -532,24 +532,24 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'AN ELDER TENDS A MOSSY SHRINE — OFFER SCORE FOR LUCK?',
+        prompt: 'AN ELDER TENDS A MOSSY SHRINE · OFFER SCORE FOR LUCK?',
         art: { npc: 'elder_m_down_0' },
         options: [
           {
-            label: 'OFFER 100 — TEAM LUCK +2',
+            label: 'OFFER 100 · TEAM LUCK +2',
             cost: 100,
             run: (bb) => {
-              if (bb.score < 100) return { note: 'THE ELDER SHOOK HIS HEAD — "LUCK FOLLOWS COIN."', skip: true };
+              if (bb.score < 100) return { note: 'THE ELDER SHOOK HIS HEAD · "LUCK FOLLOWS COIN."', skip: true };
               bb.score -= 100;
               for (const p of bb.players) p.def = { ...p.def, luck: Math.min(99, (p.def.luck ?? 0) + 2) };
-              return { note: 'THE SHRINE GLIMMERS — EVERYONE +2 LUCK!', skip: true };
+              return { note: 'THE SHRINE GLIMMERS · EVERYONE +2 LUCK!', skip: true };
             },
           },
           {
-            label: 'BOW AND PASS — +1 LUCK',
+            label: 'BOW AND PASS · +1 LUCK',
             run: (bb) => {
               for (const p of bb.players) p.def = { ...p.def, luck: Math.min(99, (p.def.luck ?? 0) + 1) };
-              return { note: 'A QUIET PRAYER — EVERYONE +1 LUCK.', skip: true };
+              return { note: 'A QUIET PRAYER · EVERYONE +1 LUCK.', skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'THE ELDER WAVED YOU ON.', skip: true }) },
@@ -584,7 +584,7 @@ const EVENTS: GameEvent[] = [
     run: () => ({
       note: '',
       choices: {
-        prompt: 'A SEER MISTS HER CRYSTAL — A READING IS 50 SCORE.',
+        prompt: 'A SEER MISTS HER CRYSTAL · A READING IS 50 SCORE.',
         art: { npc: 'elder_f_down_0' }, // the channeler — Gen 3's hooded mystic
         options: [
           {
@@ -595,7 +595,7 @@ const EVENTS: GameEvent[] = [
               if (!g?.ttype) return { note: 'THE SEER SEES ONLY THE LEAGUE CROWN.', skip: true };
               if (bb.score < 50) return { note: '"COIN BUYS SIGHT," SHE MURMURS.', skip: true };
               bb.score -= 50;
-              return { note: `THE SEER WHISPERS — A ${g.ttype.toUpperCase()} GYM WAITS AHEAD.`, skip: true };
+              return { note: `THE SEER WHISPERS · A ${g.ttype.toUpperCase()} GYM WAITS AHEAD.`, skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'THE CRYSTAL DIMMED.', skip: true }) },
@@ -610,7 +610,7 @@ const EVENTS: GameEvent[] = [
 // final tally. One mart per map half is guaranteed by genRegion. Stock is
 // one-of-each per visit — `sold` rides the re-prompt chain so a bought
 // item leaves the board.
-export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[]; art?: EventArt } {
+export function martStock(b: Battle, prompt = 'POKÉ MART · WHAT\'LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[]; art?: EventArt } {
   const reprompt = (bb: Battle, note: string): EventOutcome => ({ note, choices: martStock(bb, note, sold) });
   // cost renders as a tag on the button's right edge — the label stays short
   // enough to read at full pixel size. martMult is the daily card's discount
@@ -627,9 +627,9 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
     },
   });
   const stock: [string, EventChoice][] = [
-    ['potion', shelf('potion', 200, 'POTION — HEAL 40%', 'potion', (bb) =>
-      healAll(bb, 0.4) ? 'THE TEAM RECOVERED 40%!' : 'ALREADY AT FULL HP — THE SPRAY FIZZLED.')],
-    ['candy', shelf('candy', 400, 'RARE CANDY — +1 LV', 'hp-up', (bb) => {
+    ['potion', shelf('potion', 200, 'POTION · HEAL 40%', 'potion', (bb) =>
+      healAll(bb, 0.4) ? 'THE TEAM RECOVERED 40%!' : 'ALREADY AT FULL HP · THE SPRAY FIZZLED.')],
+    ['candy', shelf('candy', 400, 'RARE CANDY · +1 LV', 'hp-up', (bb) => {
       for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
       return 'EVERYONE GREW +1 LEVEL!';
     })],
@@ -651,7 +651,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART — WHAT\'LL IT BE?', 
     }],
   ];
   if (b.players.some((p) => p.dead))
-    stock.push(['revive', shelf('revive', 350, 'REVIVE — HALF HP', 'revive', (bb) => {
+    stock.push(['revive', shelf('revive', 350, 'REVIVE · HALF HP', 'revive', (bb) => {
       const dead = bb.players.filter((p) => p.dead);
       if (!dead.length) {
         // the shelf only lists revive over a corpse — if that ever went stale

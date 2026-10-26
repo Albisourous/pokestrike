@@ -33,14 +33,14 @@ export interface TaskView {
 
 const kindDesc = (kind: TaskKind, n: number): string =>
   ({
-    kos: `ko ${n} foes`,
-    catches: `catch ${n} mons`,
-    stages: `clear ${n} stages`,
-    gyms: `beat ${n} gyms`,
-    perks: `take ${n} perks`,
+    kos: `ko ${n} foe${n === 1 ? '' : 's'}`,
+    catches: `catch ${n} mon${n === 1 ? '' : 's'}`,
+    stages: `clear ${n} stage${n === 1 ? '' : 's'}`,
+    gyms: `beat ${n} gym${n === 1 ? '' : 's'}`,
+    perks: `take ${n} perk${n === 1 ? '' : 's'}`,
     score: `bank ${n} score`,
     shinies: `catch ${n === 1 ? 'a shiny' : `${n} shinies`}`,
-    runs: `finish ${n} runs`,
+    runs: `finish ${n} run${n === 1 ? '' : 's'}`,
     wins: `win ${n === 1 ? 'a climb' : `${n} climbs`}`,
     maxstage: `reach stage ${n}`,
   })[kind];
