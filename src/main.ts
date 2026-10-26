@@ -1896,12 +1896,13 @@ canvas.addEventListener(
 
 // HUD lives in the strip above the arena — on tall screens that strip is
 // partly the top letterbox, so shift it up along with the arena
-function hud(name: string) {
+function hud() {
   if (!battle) return;
   ctx.save();
   ctx.translate(0, -viewPad);
-  // a pinned arena names the court it previews — the stage tag lies otherwise
-  drawHud(ctx, battle.waveIndex, battle.shots, debugArena() ? battle.themeName : name, battle.score, battle.streak, battle.ultIn, battle.time, battle.phase === 'map');
+  // the tag names the court, not the stage — a fire trainer on a grove
+  // stage fights in Cinder Crag, and a pinned arena reads its own name
+  drawHud(ctx, battle.waveIndex, battle.shots, battle.themeName, battle.score, battle.streak, battle.ultIn, battle.time, battle.phase === 'map');
   ctx.restore();
 }
 
@@ -2299,7 +2300,7 @@ function render() {
         battle.render(ctx);
         // HUD on top — the arena's cliff face extends 19px above the rim
         // and would bury the score chip's lower row
-        hud(battle.stage.name); // the intro banner carries the trainer tag — the HUD tag stays short
+        hud(); // the intro banner carries the trainer tag — the HUD tag stays short
         if (battle.phase === 'reward') {
           drawReward(
             ctx,
@@ -2356,7 +2357,7 @@ function render() {
         ctx.fillStyle = '#0b0e1a';
         ctx.fillRect(0, 0, W, H);
         battle.render(ctx);
-        hud(battle.stage.name);
+        hud();
       }
       if (result) drawResult(ctx, result, resultExtra, share, t, t - sceneT0);
       break;
