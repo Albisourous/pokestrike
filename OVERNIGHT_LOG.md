@@ -616,3 +616,13 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   exported; the test now mirrors the code path.
 - 5e32f36 pushed: Taillow added to ROSTER (draftable) — flying was the
   scarcest primary type (4/98); already wild fodder + EVOS has Swellow.
+- c550aac→571172a pushed (ux audit pass): town rebuilt on Pallet
+  conventions — buildings on lawn, signboards flush at doorsteps,
+  frontage hedges gapped at walks, fronts aligned, pond shore rails;
+  TILE_MUSEUM resliced (was stitching two atlas buildings) then swapped
+  for the satellite-dish institute whose inset dome read chopped.
+  Overlay sweep: pity line fit-fonts inside the panel, trophies gained
+  the dex scroll thumb, empty-dex hint rides a dark chip, help welcome
+  line clears the tutorial pill, hall-of-fame empty state shows the
+  rank ladder. ux_lint score 98 — remaining flags are intentional
+  ?dev/?debug logging + the wheel listener's legit preventDefault.
