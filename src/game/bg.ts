@@ -6,8 +6,13 @@ import { gracidea } from '../core/assets';
 import * as MT from './maptiles';
 import type { TileRect } from './maptiles';
 
-export type Theme = 'grove' | 'cavern' | 'volcano' | 'sky';
-export const THEMES: Theme[] = ['grove', 'cavern', 'volcano', 'sky'];
+export type Theme =
+  | 'grove' | 'cavern' | 'volcano' | 'sky'
+  | 'meadow' | 'shore' | 'plant' | 'marsh' | 'sanctum' | 'dojo' | 'tower';
+export const THEMES: Theme[] = [
+  'grove', 'cavern', 'volcano', 'sky',
+  'meadow', 'shore', 'plant', 'marsh', 'sanctum', 'dojo', 'tower',
+];
 
 export const hash = (n: number) => {
   const s = Math.sin(n * 127.1) * 43758.5453;
@@ -26,12 +31,26 @@ const GROUND: Record<Theme, string> = {
   cavern: '#4c4658',
   volcano: '#40281e',
   sky: '#82c2e6',
+  meadow: '#58a848',
+  shore: '#d0bc74',
+  plant: '#3a3f4c',
+  marsh: '#31543c',
+  sanctum: '#4a4260',
+  dojo: '#a8865a',
+  tower: '#2c2838',
 };
 const RIM: Record<Theme, string> = {
   grove: '#2a6428',
   cavern: '#322d40',
   volcano: '#241610',
   sky: '#5490ba',
+  meadow: '#3a7830',
+  shore: '#9a8850',
+  plant: '#22262e',
+  marsh: '#1e3a26',
+  sanctum: '#302a44',
+  dojo: '#6e5636',
+  tower: '#181522',
 };
 // soft light pool per theme: sun patch / light shaft / ember bed / sun glare
 const GLOW: Record<Theme, [number, number, number, number]> = {
@@ -39,6 +58,13 @@ const GLOW: Record<Theme, [number, number, number, number]> = {
   cavern: [186, 200, 255, 0.10],
   volcano: [255, 116, 40, 0.16],
   sky: [255, 255, 255, 0.14],
+  meadow: [255, 244, 170, 0.13],
+  shore: [255, 240, 190, 0.13],
+  plant: [160, 220, 255, 0.11],
+  marsh: [190, 235, 160, 0.10],
+  sanctum: [210, 180, 255, 0.12],
+  dojo: [255, 226, 170, 0.12],
+  tower: [170, 130, 240, 0.13],
 };
 const TAU = Math.PI * 2;
 
@@ -140,6 +166,13 @@ const FILL: Record<Theme, { r: TileRect; t?: string; s: number; wash?: string }>
   cavern: { r: MT.TILE_COBBLE, t: 'rgba(14,14,34,0.20)', s: 1.3 },
   volcano: { r: MT.TILE_COBBLE, t: 'rgba(96,32,8,0.50)', s: 1.3 },
   sky: { r: MT.TILE_SNOWF, s: 1.6, wash: 'rgba(130,194,232,0.32)' },
+  meadow: { r: MT.TILE_GRASSF, t: 'rgba(140,220,110,0.14)', s: 1.3 },
+  shore: { r: MT.TILE_SAND, s: 1.5, wash: 'rgba(255,238,190,0.14)' },
+  plant: { r: MT.TILE_COBBLE, t: 'rgba(20,26,40,0.38)', s: 1.3 },
+  marsh: { r: MT.TILE_GRASSF, t: 'rgba(14,34,20,0.50)', s: 1.2 },
+  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(56,40,96,0.38)', s: 1.3 },
+  dojo: { r: MT.TILE_SAND, t: 'rgba(120,78,36,0.30)', s: 1.5 },
+  tower: { r: MT.TILE_COBBLE, t: 'rgba(18,14,40,0.50)', s: 1.3 },
 };
 // worn ground stamped into the bake — scuffed dirt / darker stone / basalt /
 // deeper drifts; kills the flat single-tile field without painted markings
@@ -148,6 +181,13 @@ const PATCH: Record<Theme, { r: TileRect; t?: string }> = {
   cavern: { r: MT.TILE_COBBLE, t: 'rgba(0,0,0,0.35)' },
   volcano: { r: MT.TILE_COBBLE, t: 'rgba(30,8,2,0.55)' },
   sky: { r: MT.TILE_DRIFT },
+  meadow: { r: MT.TILE_PATH, t: 'rgba(90,60,30,0.10)' },
+  shore: { r: MT.TILE_WATER, t: 'rgba(90,144,240,0.25)' },
+  plant: { r: MT.TILE_COBBLE, t: 'rgba(0,0,0,0.42)' },
+  marsh: { r: MT.TILE_WATER, t: 'rgba(30,60,40,0.45)' },
+  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(20,12,44,0.50)' },
+  dojo: { r: MT.TILE_PATH, t: 'rgba(120,80,40,0.30)' },
+  tower: { r: MT.TILE_COBBLE, t: 'rgba(8,6,20,0.55)' },
 };
 
 function floor(theme: Theme) {
@@ -182,7 +222,7 @@ function floor(theme: Theme) {
   // luminance — cheap noise that kills the 44px moiré between tile features
   {
     const dark = shade(GROUND[theme], 0.85), lite = shade(GROUND[theme], 1.16);
-    const bladeOdds = theme === 'grove' ? 0.5 : theme === 'sky' ? 0.12 : 0.2;
+    const bladeOdds = theme === 'grove' || theme === 'meadow' ? 0.5 : theme === 'marsh' ? 0.35 : theme === 'sky' ? 0.12 : 0.2;
     for (let i = 0; i < 420; i++) {
       const mx = hash(i * 13.7 + 3) * FW, my = hash(i * 7.9 + 11) * FH;
       g.fillStyle = hash(i * 3.1 + 5) < 0.55 ? dark : lite;
@@ -300,6 +340,61 @@ const WALL_PROPS: Record<Theme, { hi: PropSpec[]; lo: PropSpec[]; pile?: boolean
     lo: [{ r: MT.TILE_DRIFT }, { r: MT.ROCK_SMALL, t: 'rgba(150,190,230,0.45)' }],
     pile: true,
   },
+  meadow: {
+    // route field — garden hedges and rail fences instead of a treeline
+    hi: [{ r: MT.TILE_BUSH }, { r: MT.TREE_ROUND }, { r: MT.TILE_FENCE }],
+    lo: [{ r: MT.TILE_FLOWER }, { r: MT.FLOWER_WILD }, { r: MT.FLOWER_PK }],
+  },
+  shore: {
+    // tideline — beach rocks and the pond fence; pale shells on the sand
+    hi: [{ r: MT.TILE_ROCK, t: 'rgba(200,180,120,0.30)' }, { r: MT.TILE_FENCE }, { r: MT.ROCK_SMALL }],
+    lo: [{ r: MT.ROCK_SMALL }, { r: MT.FLOWER_WILD, t: 'rgba(230,220,180,0.35)' }],
+  },
+  plant: {
+    // power plant — iron-dark rock heaps stand in for scrap and machinery
+    hi: [
+      { r: MT.TILE_ROCK, t: 'rgba(50,60,80,0.45)' },
+      { r: MT.ROCK_SMALL, t: 'rgba(50,60,80,0.45)' },
+      { r: MT.TREE_ASH, t: 'rgba(40,50,70,0.55)' },
+    ],
+    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(50,60,80,0.45)' }, { r: MT.TILE_ROCK, t: 'rgba(50,60,80,0.45)' }],
+    pile: true,
+  },
+  marsh: {
+    // safari bog — drowned snags and weed chokes, everything waterlogged
+    hi: [
+      { r: MT.TREE_ASH, t: 'rgba(40,66,44,0.55)' },
+      { r: MT.TREE_ASH2, t: 'rgba(40,66,44,0.55)' },
+      { r: MT.TILE_ROCK, t: 'rgba(30,60,40,0.45)' },
+    ],
+    lo: [{ r: MT.TILE_FLOWER, t: 'rgba(40,80,44,0.50)' }, { r: MT.ROCK_SMALL, t: 'rgba(30,60,40,0.45)' }],
+    pile: true,
+  },
+  sanctum: {
+    // ruins — the gazebo column reads as broken architecture, violet rubble
+    hi: [
+      { r: MT.TILE_GAZEBO, t: 'rgba(90,70,140,0.35)' },
+      { r: MT.TILE_ROCK, t: 'rgba(70,55,115,0.40)' },
+      { r: MT.TREE_ASH, t: 'rgba(80,60,130,0.50)' },
+    ],
+    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(70,55,115,0.40)' }, { r: MT.FLOWER_PK, t: 'rgba(120,90,180,0.40)' }],
+    pile: true,
+  },
+  dojo: {
+    // training ground — rail fences and packed-stone posts around the ring
+    hi: [{ r: MT.TILE_FENCE }, { r: MT.TILE_ROCK, t: 'rgba(140,100,50,0.30)' }, { r: MT.TILE_BUSH, t: 'rgba(160,120,60,0.30)' }],
+    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(140,100,50,0.30)' }, { r: MT.FLOWER_YB }],
+  },
+  tower: {
+    // graveyard — dead trees and grave-dark stone under no sky
+    hi: [
+      { r: MT.TREE_ASH, t: 'rgba(36,30,60,0.60)' },
+      { r: MT.TREE_ASH2, t: 'rgba(36,30,60,0.60)' },
+      { r: MT.TILE_ROCK, t: 'rgba(30,26,52,0.55)' },
+    ],
+    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(30,26,52,0.55)' }, { r: MT.TILE_ROCK, t: 'rgba(30,26,52,0.55)' }],
+    pile: true,
+  },
 };
 
 // The rim is a cliff face, not boards: a darkened cobble band falls away
@@ -312,6 +407,13 @@ const FACE: Record<Theme, { r: TileRect; t: string; ds: number }> = {
   cavern: { r: MT.TILE_COBBLE, t: 'rgba(8,8,30,0.45)', ds: 0.68 },
   volcano: { r: MT.TILE_COBBLE, t: 'rgba(44,10,2,0.64)', ds: 0.68 },
   sky: { r: MT.TILE_COBBLE, t: 'rgba(130,180,225,0.55)', ds: 0.68 }, // iced mesa
+  meadow: { r: MT.TILE_COBBLE, t: 'rgba(30,52,18,0.50)', ds: 0.68 },
+  shore: { r: MT.TILE_COBBLE, t: 'rgba(70,80,90,0.45)', ds: 0.68 }, // wet cliff
+  plant: { r: MT.TILE_COBBLE, t: 'rgba(14,18,28,0.55)', ds: 0.68 },
+  marsh: { r: MT.TILE_COBBLE, t: 'rgba(14,34,20,0.55)', ds: 0.68 },
+  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(40,28,72,0.55)', ds: 0.68 },
+  dojo: { r: MT.TILE_COBBLE, t: 'rgba(66,44,20,0.50)', ds: 0.68 },
+  tower: { r: MT.TILE_COBBLE, t: 'rgba(12,10,26,0.60)', ds: 0.68 },
 };
 // scaled-down face tile, baked once per theme next to the floor bakes
 const faceTiles = new Map<Theme, HTMLCanvasElement | null>();

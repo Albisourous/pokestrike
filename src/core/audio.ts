@@ -1323,6 +1323,16 @@ export const BIOME_TRACK: Record<string, TrackName> = {
   cavern: 'battle_cavern',
   volcano: 'battle_volcano',
   sky: 'battle_sky',
+  // elemental arenas borrow the nearest written track — no new songs yet:
+  // fields sound pastoral, the shore airy, dark courts ride the cavern,
+  // high-energy courts ride the volcano
+  meadow: 'battle_grove',
+  shore: 'battle_sky',
+  plant: 'battle_volcano',
+  marsh: 'battle_cavern',
+  sanctum: 'battle_cavern',
+  dojo: 'battle_volcano',
+  tower: 'battle_cavern',
 };
 
 // trainer type → song. One march, four tints — each family transposes

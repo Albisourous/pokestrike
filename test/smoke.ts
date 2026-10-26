@@ -8,7 +8,7 @@ import { TRACKS } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
-import { typeMult, strikeType, weatherMult } from '../src/game/types';
+import { typeMult, strikeType, weatherMult, WEATHER_OF } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
 import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
@@ -167,12 +167,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 
   // StS stacking: rung 9 keeps every lower rule live in the same fight —
   // fast wind-up (2), rolled sky (8) on a fodder wave, then enraged boss
-  // (6) + frenzied drift (7) when the gym lands
+  // (6) + frenzied drift (7) when the gym lands. The stage-31 pack is all
+  // melee — compare its wound-up timer against a calm same-seed run.
+  const calm = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (calm as any).spawnWave(0);
+  const cTimer = (calm as any).enemies[0]?.timer;
   const stack = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   stack.asc = 9;
   (stack as any).spawnWave(0);
-  const sTimer = (stack as any).enemies.find((e: any) => !e.def.melee)?.timer;
-  ok(sTimer !== undefined && t0 !== undefined && sTimer < t0, 'ASC 9 still winds up fast (rung 2 live)');
+  const sTimer = (stack as any).enemies[0]?.timer;
+  ok(sTimer !== undefined && cTimer !== undefined && sTimer < cTimer, `ASC 9 still winds up fast (${cTimer} -> ${sTimer})`);
   ok((stack as any).weather != null, 'ASC 9 keeps rung 8: fodder wave rolled weather');
   (stack as any).spawnWave(2);
   const sBoss = (stack as any).enemies.find((e: any) => e.boss);
@@ -677,9 +681,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).grabPickup({ kind: 'revival-herb', x: 100, y: 100, t: 0 });
   ok(!bench.dead && bench.hp === Math.max(1, Math.round(bench.maxHp * 0.25)), `revival herb raises a teammate (hp ${bench.hp})`);
 
-  // intimidate: a living menace shaves a fifth off the team's hits
+  // intimidate: a living menace shaves a fifth off the team's hits.
+  // Crank the striker first — a chip hit rounds the shave away.
   const menace = (b as any).enemies[1];
   menace.def = { ...menace.def, menace: true };
+  const pow0 = striker.pow;
+  striker.pow = 5;
   menace.dead = false;
   menace.hp = menace.maxHp;
   e.dead = false;
@@ -696,6 +703,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const hpFree = e.hp;
   (b as any).strikeEnemy(striker, e);
   const freeHit = hpFree - e.hp;
+  striker.pow = pow0;
   ok(menHit < freeHit && Math.abs(menHit / freeHit - 0.8) < 0.12, `intimidate shaves a fifth (${menHit} vs ${freeHit})`);
 
   // wonder guard: neutral hits whiff, super-effective still lands
@@ -864,10 +872,14 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   legend.dead = false;
   legend.def = legendDef;
 
-  // signal beam: the lane locks, telegraphs, then burns the channel
+  // signal beam: the lane locks, telegraphs, then burns the channel.
+  // The caster slot can land a healer/summoner — strip every flag the
+  // attack dispatch checks before beam so the channel is what fires.
   const caster = (b as any).enemies[1];
   const casterDef = caster.def;
-  caster.def = { ...casterDef, beam: true };
+  caster.def = { ...casterDef, beam: true, fuse: undefined, healer: undefined, raider: undefined, summon: undefined, lay: undefined, charge: undefined, truant: undefined };
+  caster.supp = undefined;
+  caster.asleep = false;
   caster.dead = false;
   caster.hp = caster.maxHp;
   caster.timer = 0;
@@ -1139,10 +1151,16 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(weatherMult('sun', 'fire') === 1.5 && weatherMult('sun', 'water') === 0.75, 'sun boosts fire, dulls water');
   ok(weatherMult(null, 'fire') === 1 && weatherMult('rain', 'grass') === 1, 'clear sky and neutral types unchanged');
   ok(weatherMult('storm', 'electric') === 1.5 && weatherMult('storm', 'grass') === 0.75, 'storm boosts electric, dulls grass');
-  const FOR: Record<string, string> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
+  const FOR: Record<string, string> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind', shore: 'rain', plant: 'storm', marsh: 'rain' };
   const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(7));
   (b as any).spawnWave(0);
-  ok((b as any).weather === null || (b as any).weather === FOR[(b as any).theme], 'wave weather follows the court theme');
+  ok(
+    (b as any).weather === null ||
+      (b as any).weather === FOR[(b as any).theme] ||
+      // a weatherless court rolls any sky from the deck when weather lands
+      (FOR[(b as any).theme] === undefined && (b as any).weather in WEATHER_OF),
+    'wave weather follows the court theme',
+  );
   const strike = (w: string | null) => {
     const bb = new Battle(arena, [speciesById(4)!, ROSTER[1], ROSTER[2], ROSTER[3]], makeStage(3, 'T'), mulberry32(5));
     (bb as any).spawnWave(0);
@@ -3065,7 +3083,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
         ok(ace.enraged, 'ENRAGED: the boss walks in furious');
         break;
       case 'storm': {
-        const want = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind' } as Record<string, string>)[boss.type] ?? WEATHER_FOR[b.theme as Theme]; // unmapped typings keep the re-rolled court's own sky
+        const want = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind', electric: 'storm' } as Record<string, string>)[boss.type] ?? WEATHER_FOR[b.theme as Theme] ?? 'storm'; // unmapped typings keep the court's sky, else the caller brings the storm itself
         ok(b.weather === want, `STORM CALLER: the sky locks to ${b.weather}`);
         break;
       }

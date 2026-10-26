@@ -307,6 +307,13 @@ const DECOR: Record<Theme, { n: number; s: [number, number]; alpha?: number; pro
     props: [{ r: MT.TILE_ROCK, t: 'rgba(70,20,8,0.45)' }, { r: MT.ROCK_SMALL, t: 'rgba(70,20,8,0.45)' }],
   },
   sky: { n: 7, s: [26, 44], alpha: 0.5, props: [{ r: MT.TILE_DRIFT }] },
+  meadow: { n: 14, s: [12, 20], props: [{ r: MT.TILE_FLOWER }, { r: MT.FLOWER_WILD }, { r: MT.FLOWER_YB }] },
+  shore: { n: 9, s: [13, 22], props: [{ r: MT.ROCK_SMALL }, { r: MT.FLOWER_WILD, t: 'rgba(230,220,180,0.35)' }] },
+  plant: { n: 10, s: [13, 22], props: [{ r: MT.ROCK_SMALL, t: 'rgba(50,60,80,0.45)' }, { r: MT.TILE_ROCK, t: 'rgba(50,60,80,0.45)' }] },
+  marsh: { n: 12, s: [12, 21], props: [{ r: MT.TILE_FLOWER, t: 'rgba(40,80,44,0.50)' }, { r: MT.ROCK_SMALL, t: 'rgba(30,60,40,0.45)' }] },
+  sanctum: { n: 9, s: [13, 22], props: [{ r: MT.ROCK_SMALL, t: 'rgba(70,55,115,0.40)' }, { r: MT.FLOWER_PK, t: 'rgba(120,90,180,0.40)' }] },
+  dojo: { n: 8, s: [12, 20], props: [{ r: MT.ROCK_SMALL, t: 'rgba(140,100,50,0.30)' }, { r: MT.FLOWER_YB }] },
+  tower: { n: 9, s: [13, 22], props: [{ r: MT.ROCK_SMALL, t: 'rgba(30,26,52,0.55)' }, { r: MT.TILE_ROCK, t: 'rgba(30,26,52,0.55)' }] },
 };
 
 // ambient drift keyed to the court — petals ride the grove breeze, dust
@@ -317,11 +324,32 @@ const AMBIENT: Record<Theme, { n: number; col: string; vx: number; vy: number; r
   cavern: { n: 12, col: '#8a94c0', vx: 6, vy: 8, r: 1.7, tw: 0.16, wob: 12 }, // dust hangs in the light shafts
   volcano: { n: 20, col: '#ff9d4d', vx: 10, vy: -34, r: 2.0, tw: 0.3, wob: 18 }, // embers climb, flicker hard
   sky: { n: 16, col: '#ffffff', vx: -16, vy: 24, r: 1.9, tw: 0.12, wob: 20 }, // snow slants downwind
+  meadow: { n: 14, col: '#eef0a8', vx: 14, vy: 8, r: 1.9, tw: 0.12, wob: 22 }, // pollen drifts over the field
+  shore: { n: 12, col: '#d8f0ff', vx: -22, vy: -6, r: 1.8, tw: 0.14, wob: 18 }, // sea spray rides in off the water
+  plant: { n: 12, col: '#ffe86a', vx: 6, vy: -18, r: 1.7, tw: 0.55, wob: 10 }, // sparks snap and die fast
+  marsh: { n: 14, col: '#b8e878', vx: 10, vy: -4, r: 1.9, tw: 0.3, wob: 30 }, // fireflies wander the bog
+  sanctum: { n: 12, col: '#c8a8f0', vx: 4, vy: -10, r: 1.8, tw: 0.22, wob: 14 }, // motes rise off the ruin stones
+  dojo: { n: 10, col: '#dcc49a', vx: 12, vy: 4, r: 1.7, tw: 0.1, wob: 16 }, // dust kicked off the packed ring
+  tower: { n: 10, col: '#a880f0', vx: 5, vy: -14, r: 2.0, tw: 0.4, wob: 20 }, // wisps climb, guttering violet
 };
 
+// every sky in the deck — courts that promise weather on a wave with no
+// canon sky (storm chaser, ASC 8, STORM CALLER) roll from this pool
+const ALL_SKIES: Weather[] = ['sun', 'rain', 'sand', 'wind', 'storm'];
+const rolledSky = (rng: () => number): Weather => ALL_SKIES[Math.floor(rng() * ALL_SKIES.length)];
+
 // theme → its sky: groves rain, caverns swirl sand, the volcano bakes
-// under sun, the heights blow. ~Half of rolled courts get weather.
-export const WEATHER_FOR: Record<Theme, Weather> = { grove: 'rain', cavern: 'sand', volcano: 'sun', sky: 'wind' };
+// under sun, the heights blow, the plant crackles under a thunderstorm.
+// Courts with no canon sky run clear — ~half of rolled courts get weather.
+export const WEATHER_FOR: Partial<Record<Theme, Weather>> = {
+  grove: 'rain',
+  cavern: 'sand',
+  volcano: 'sun',
+  sky: 'wind',
+  shore: 'rain',
+  plant: 'storm',
+  marsh: 'rain',
+};
 // block boulders take the wall ring's prop tint so cover reads as the same
 // stone as the court's edge — scorched at the volcano, iced on the summit
 const BLOCK_TINT: Record<Theme, string | undefined> = {
@@ -329,6 +357,13 @@ const BLOCK_TINT: Record<Theme, string | undefined> = {
   cavern: 'rgba(40,40,90,0.30)',
   volcano: 'rgba(70,20,8,0.45)',
   sky: 'rgba(150,190,230,0.45)',
+  meadow: 'rgba(60,110,50,0.30)',
+  shore: 'rgba(190,170,110,0.35)',
+  plant: 'rgba(50,60,80,0.45)',
+  marsh: 'rgba(30,60,40,0.45)',
+  sanctum: 'rgba(70,55,115,0.40)',
+  dojo: 'rgba(140,100,50,0.30)',
+  tower: 'rgba(30,26,52,0.55)',
 };
 // the slab face keys to the court too — mossy stone, deep indigo, ember
 // dark, steel-blue on the summit (still darker than the floor so the
@@ -338,6 +373,13 @@ const BLOCK_FACE: Record<Theme, string> = {
   cavern: 'rgba(30,36,70,0.42)',
   volcano: 'rgba(54,22,12,0.52)',
   sky: 'rgba(95,120,155,0.72)',
+  meadow: 'rgba(40,62,30,0.48)',
+  shore: 'rgba(110,96,58,0.50)',
+  plant: 'rgba(28,34,48,0.55)',
+  marsh: 'rgba(24,44,30,0.52)',
+  sanctum: 'rgba(46,36,80,0.50)',
+  dojo: 'rgba(78,56,30,0.50)',
+  tower: 'rgba(22,18,42,0.58)',
 };
 
 // graphics quality → ambient/weather particle density multiplier — low
@@ -1212,7 +1254,7 @@ export class Battle {
     // weather, which tilts the type table until the wave ends
     const others = THEMES.filter((t) => t !== this.theme);
     this.theme = others[Math.floor(this.rng() * others.length)];
-    this.weather = this.rng() < (this.dailyWeather ? 1 : 0.5) ? WEATHER_FOR[this.theme] : null;
+    this.weather = this.rng() < (this.dailyWeather ? 1 : 0.5) ? (WEATHER_FOR[this.theme] ?? rolledSky(this.rng)) : null;
     // stale super timers mustn't carry hits into the fresh wave — orbs
     // included, or a flight of homers retargets onto the next pack
     this.delays = [];
@@ -1228,8 +1270,8 @@ export class Battle {
     if (this.waveHadGym) playJingle(GYM_STAB[spawns.find((s) => s.boss)?.def.type ?? 'normal'] ?? 'gym_earth');
     // gym leaders own their sky — every gym court runs weather. ASC 8
     // STORM: the sky never clears — every other wave rolls the pool too.
-    if (this.waveHadGym) this.weather = WEATHER_FOR[this.theme];
-    else if (this.asc >= 8) this.weather = WEATHER_FOR[THEMES[Math.floor(this.rng() * THEMES.length)]];
+    if (this.waveHadGym) this.weather = WEATHER_FOR[this.theme] ?? null;
+    else if (this.asc >= 8) this.weather = rolledSky(this.rng); // rung 8 promises a sky — a weatherless court borrows one
     // weather summoners own the sky — a drought caller's arrival overrules
     // whatever rolled, and its banner names the sky it brought
     const caller = spawns.find((s) => s.def.skyFor);
@@ -1242,7 +1284,7 @@ export class Battle {
     // fight — a caller escort may narrate, but the mod's sky wins
     if (this.raid && this.raidMod === 'storm') {
       const bt = spawns.find((s) => s.boss)?.def.type;
-      this.weather = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind', electric: 'storm' } as Partial<Record<PokeType, Weather>>)[bt ?? 'normal'] ?? WEATHER_FOR[this.theme];
+      this.weather = ({ water: 'rain', fire: 'sun', rock: 'sand', flying: 'wind', electric: 'storm' } as Partial<Record<PokeType, Weather>>)[bt ?? 'normal'] ?? WEATHER_FOR[this.theme] ?? 'storm';
     }
     this.inRival = false;
     // ASC 1 ROAMERS: echoes and invades hunt twice as hard. ASC 9 TAG
@@ -1613,7 +1655,7 @@ export class Battle {
     // forecast: the chameleon wears the sky — its type (and its weakness)
     // follows whatever weather the wave is under
     if (def.forecast && this.weather) {
-      const t = { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying' }[this.weather] as PokeType | undefined;
+      const t = { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying', storm: 'electric' }[this.weather] as PokeType | undefined;
       if (t) def = { ...def, type: t };
     }
     return {
@@ -6215,7 +6257,7 @@ export class Battle {
   // swift swim / chlorophyll / sand rush: a ball that matches the sky
   // launches a touch faster — drafting into the weather pays twice
   private swiftMult(u: Unit) {
-    const want = this.weather ? { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying' }[this.weather] : undefined;
+    const want = this.weather ? { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying', storm: 'electric' }[this.weather] : undefined;
     return want && (u.def.type === want || u.def.type2 === want) ? 1.12 : 1;
   }
 

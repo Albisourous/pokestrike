@@ -989,6 +989,20 @@ export const ENEMY_THEME: Record<Theme, SpeciesDef[]> = {
   cavern: [41, 74, 92, 66, 50, 104, 56, 88, 109, 63, 198, 200, 261, 140, 231, 353, 355, 27, 29, 299, 302, 337, 338, 343, 345, 347, 517, 524, 527, 538, 539, 564, 566, 618, 201, 290, 215, 97, 137, 213, 292, 296, 316, 317, 434].map(foe),
   volcano: [37, 58, 77, 126, 218, 74, 50, 104, 111, 228, 128, 231, 240, 322, 324, 513, 631, 449, 185, 339, 24, 138, 340, 345, 347, 564, 566].map(foe),
   sky: [16, 21, 81, 100, 170, 72, 84, 278, 333, 177, 309, 147, 98, 118, 318, 341, 86, 90, 116, 207, 222, 225, 366, 370, 515, 522, 550, 582, 594, 615, 621, 320, 368, 441, 79, 124, 211, 221, 351, 358, 422, 423, 457, 561].map(foe),
+  // Route fields — plain normals, birds and herd mons (Route 1-3 canon)
+  meadow: [19, 16, 21, 163, 216, 263, 276, 84, 108, 128, 162, 203, 234, 264, 287, 288, 327, 352, 400, 531, 626, 333, 187, 420, 415, 206, 43, 421, 351].map(foe),
+  // Cerulean shore — the water table, shells and tidepool mons
+  shore: [72, 278, 98, 118, 79, 170, 86, 90, 116, 138, 140, 222, 283, 318, 341, 366, 370, 320, 339, 340, 368, 422, 423, 457, 515, 550, 564, 594, 211, 124, 272, 400].map(foe),
+  // Kanto Power Plant — every electric plus the man-made and fume mons
+  plant: [81, 100, 170, 309, 311, 312, 522, 125, 618, 137, 109, 88].map(foe),
+  // Fuchsia marsh — Safari Zone bog: poison, weeds, and its safari canon
+  marsh: [88, 109, 29, 46, 48, 69, 43, 167, 13, 10, 268, 269, 204, 401, 402, 412, 413, 316, 317, 434, 114, 455, 270, 283, 24, 211, 102, 111, 128, 147].map(foe),
+  // Alph Ruins — psychics and ancient things; Unown is the resident
+  sanctum: [63, 79, 97, 124, 201, 337, 338, 343, 358, 517, 527, 561, 177, 203, 102, 150].map(foe),
+  // Saffron Dojo — the fighting line plus sparring-tough bodies
+  dojo: [66, 56, 296, 297, 538, 539, 128, 626, 104, 231, 111, 185, 74].map(foe),
+  // Lavender Tower — ghosts, and Cubone mourning in the stairwell
+  tower: [92, 94, 200, 353, 355, 292, 302, 198, 261, 41, 215, 318, 331, 273, 275, 434, 228, 104].map(foe),
 };
 
 // A run is 9 stages; every third is a gym boss. Stages 1-3 are the seeded
@@ -1031,6 +1045,29 @@ const THEME_NAME: Record<Theme, string> = {
   cavern: 'Echo Cavern',
   volcano: 'Cinder Crag',
   sky: 'Gale Heights',
+  meadow: 'Route Fields',
+  shore: 'Cerulean Shore',
+  plant: 'Vermilion Plant',
+  marsh: 'Fuchsia Marsh',
+  sanctum: 'Alph Ruins',
+  dojo: 'Saffron Dojo',
+  tower: 'Lavender Tower',
+};
+
+// the element a court belongs to — trainer/elite/gym stops fight in their
+// type's arena, wild waves in the stage's biome (elemental arenas spec)
+export const TYPE_THEME: Record<PokeType, Theme> = {
+  normal: 'meadow',
+  fire: 'volcano',
+  water: 'shore',
+  grass: 'grove',
+  electric: 'plant',
+  psychic: 'sanctum',
+  rock: 'cavern',
+  poison: 'marsh',
+  flying: 'sky',
+  fighting: 'dojo',
+  ghost: 'tower',
 };
 
 // Spawn positions drawn without replacement from this pool. The tight
@@ -1656,6 +1693,22 @@ export interface HazardSpawn {
 // grounded foes), '6' a gust lane pushing toward mid, '7' a drag patch,
 // '8' an ice slick the ball barely slows on,
 // 'S' lists the wave's spawn anchors.
+// '3' moat cells reskin per biome — a shore pool silences, a plant pad
+// charges, the ruins tug the ball, the tower's hush stills keywords.
+export const MOAT_HAZARD: Record<Theme, HazardKind> = {
+  grove: 'static',
+  cavern: 'static',
+  volcano: 'lava',
+  sky: 'ice',
+  meadow: 'grass',
+  shore: 'static',
+  plant: 'power',
+  marsh: 'static',
+  sanctum: 'well', // the ruins tug the ball off its line
+  dojo: 'boost',
+  tower: 'static', // the hush — keywords go quiet on grave ground
+};
+
 export function buildRoom(grid: string[], theme: Theme, rng: () => number): RoomDef {
   const blocks: BlockDef[] = [];
   const hazards: HazardSpawn[] = [];
@@ -1671,7 +1724,7 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
         run = -1;
       }
       const at = { nx: (c + 0.5) / 9, ny: (r + 0.5) / 11 };
-      if (ch === '3') hazards.push({ kind: theme === 'volcano' ? 'lava' : 'static', ...at, r: 0.062 });
+      if (ch === '3') hazards.push({ kind: MOAT_HAZARD[theme], ...at, r: 0.062 });
       else if (ch === '4') hazards.push({ kind: 'mine', ...at, r: 0.05 });
       else if (ch === '5') hazards.push({ kind: 'spikes', ...at, r: 0.062 });
       else if (ch === '6') hazards.push({ kind: 'gust', ...at, r: 0.062, dir: c < 4 ? 1 : -1 });
