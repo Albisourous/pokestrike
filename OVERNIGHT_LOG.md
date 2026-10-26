@@ -597,3 +597,22 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   featured pull, ball icon + % on dex, type pads on catches), TOWN band
   icons, bodies rebalanced off the dead top space; the asc "flame"
   glyph shipped then reverted — it read as a smudge at pill scale.
+- 7ae0fc3→8e617a1 pushed (afternoon pass, inline implementation after the
+  gstack review): catch odds scale off the level gap to the team's ace
+  (weak ×3 → +7 near-locked), catches join at team average — the scout
+  card prints the live %, roster header + help deck teach the gate.
+  ULTIMATE READY banner/flash/chime on arm. Gold-band jitter widened
+  (pace ±28%, window ±45%, center ±0.18). Text-overflow sweep: FloatText
+  y-clamped, STRIKES/ULT tags clamped above the rim, coach line lifted
+  off the low props, held-item/lab/task/event descs ellipsize, BOX
+  caption refit. Fresh catch lights TEAM·ITEMS gold. Lava pools get a
+  scorched-rock ring (gracidea slice). shots.mjs re-synced to the tabbed
+  title + auto-opening manual (probe is live again — 11 shots verified).
+- 805cc84 pushed: hourglass room joins the hard tail (ROOM_HARD 7→8) —
+  flank slabs rake to a three-gap throat, anchors crowd the gaps.
+  STORM CALLER smoke flake fixed: the assert hardcoded grove's 'rain'
+  fallback while spawnWave re-rolls the theme first — today's ghost-type
+  raid boss under a rolled sky legitimately got 'wind'. WEATHER_FOR
+  exported; the test now mirrors the code path.
+- 5e32f36 pushed: Taillow added to ROSTER (draftable) — flying was the
+  scarcest primary type (4/98); already wild fodder + EVOS has Swellow.
