@@ -7999,6 +7999,9 @@ export class Battle {
     const line = (s: string, color = '#ffe89d') => {
       ctx.font = fontB(10);
       ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
+      ctx.strokeStyle = 'rgba(10,13,24,0.85)'; // units can stand under the band — halo keeps the beat legible
+      ctx.lineWidth = 4;
+      ctx.strokeText(s, a.x + a.w / 2, a.y + a.h - 58);
       ctx.fillStyle = color;
       ctx.fillText(s, a.x + a.w / 2, a.y + a.h - 58); // above the rim's low props, which ink over the floor's last strip
       ctx.globalAlpha = 1;
