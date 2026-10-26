@@ -8855,6 +8855,14 @@ export class Battle {
         ctx.stroke();
       }
     }
+    // the thunderhead's tell — a hard violet-white flash rolls across the
+    // court every few seconds
+    if (w === 'storm' && t % 6 < 0.18) {
+      ctx.globalAlpha = 0.1;
+      ctx.fillStyle = '#e8e0ff';
+      ctx.fillRect(a.x, a.y, a.w, a.h);
+      ctx.globalAlpha = 1;
+    }
     ctx.restore();
   }
 
