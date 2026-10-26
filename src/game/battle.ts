@@ -1386,7 +1386,7 @@ export class Battle {
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
           ? ROOM_BOSS
-          : li > 0 && this.rng() < 0.4 // generated courts share the mid/hard pull; gentle openers stay authored
+          : i !== 0 && li > 0 && this.rng() < 0.4 // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
             : ROOM_LAYOUTS[li],
       this.theme,

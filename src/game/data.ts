@@ -993,7 +993,8 @@ export const ENEMY_THEME: Record<Theme, SpeciesDef[]> = {
   meadow: [19, 16, 21, 163, 216, 263, 276, 84, 108, 128, 162, 203, 234, 264, 287, 288, 327, 352, 400, 531, 626, 333, 187, 420, 415, 206, 43, 421, 351].map(foe),
   // Cerulean shore — the water table, shells and tidepool mons
   shore: [72, 278, 98, 118, 79, 170, 86, 90, 116, 138, 140, 222, 283, 318, 341, 366, 370, 320, 339, 340, 368, 422, 423, 457, 515, 550, 564, 594, 211, 124, 272, 400].map(foe),
-  // Kanto Power Plant — every electric plus the man-made and fume mons
+  // Kanto Power Plant — every electric in the DB plus the man-made and
+  // fume mons (the roster's Pikachu/Mareep live player-side, not enemy-side)
   plant: [81, 100, 170, 309, 311, 312, 522, 125, 618, 137, 109, 88].map(foe),
   // Fuchsia marsh — Safari Zone bog: poison, weeds, and its safari canon
   marsh: [88, 109, 29, 46, 48, 69, 43, 167, 13, 10, 268, 269, 204, 401, 402, 412, 413, 316, 317, 434, 114, 455, 270, 283, 24, 211, 102, 111, 128, 147].map(foe),
@@ -1709,6 +1710,22 @@ export const MOAT_HAZARD: Record<Theme, HazardKind> = {
   tower: 'static', // the hush — keywords go quiet on grave ground
 };
 
+// each court's signature roamer gimmick — the biome's fixture, not a
+// random roll: ruins teleport, open courts spring you, deep ones tug
+const GIMMICK: Record<Theme, 'warp' | 'boost' | 'well'> = {
+  grove: 'well', // the fairy ring pulls you in
+  cavern: 'well', // gravity pocket in the deep
+  volcano: 'boost', // thermal updraft
+  sky: 'boost', // the tailwind lane
+  meadow: 'boost', // open field run
+  shore: 'warp', // twin tide pools
+  plant: 'boost', // the charge pad
+  marsh: 'well', // bog suction
+  sanctum: 'warp', // the ruins' teleport tiles
+  dojo: 'boost', // springboard at the ropes
+  tower: 'warp', // the dead don't stay where you left them
+};
+
 export function buildRoom(grid: string[], theme: Theme, rng: () => number): RoomDef {
   const blocks: BlockDef[] = [];
   const hazards: HazardSpawn[] = [];
@@ -1734,16 +1751,16 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
     }
     if (run >= 0) blocks.push({ nx: run / 9, ny: r / 11, nw: (8 - run) / 9, nh: 1 / 11 });
   }
-  // roamer gimmick: ~1/3 of rooms get one extra MS-style fixture —
-  // a linked warp pair, a boost pad, or a gravity well
+  // roamer gimmick: ~1/3 of rooms get one extra MS-style fixture, keyed to
+  // the court — the ruins' warps, the dojo's springboard, the bog's pull
   if (rng() < 0.35) {
     const spot = (r: number) => ({
       nx: r + rng() * (1 - 2 * r),
       ny: 0.15 + rng() * (Math.min(0.55, 0.75 - r) - 0.15),
       r,
     });
-    const g = rng();
-    if (g < 0.4) {
+    const g = GIMMICK[theme];
+    if (g === 'warp') {
       // MS warp panels: two linked pads — the ball exits the twin keeping
       // its velocity, so a bad lane can become a trick shot
       const a = spot(0.05);
@@ -1751,7 +1768,7 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
       if (Math.hypot(a.nx - b.nx, a.ny - b.ny) > 0.2) {
         hazards.push({ kind: 'warp', ...a, pair: 1 }, { kind: 'warp', ...b, pair: 1 });
       }
-    } else if (g < 0.7) {
+    } else if (g === 'boost') {
       // speed-up panel: crossing it re-launches the ball faster
       hazards.push({ kind: 'boost', ...spot(0.06) });
     } else {
@@ -1794,18 +1811,18 @@ for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
 // cover, sparse single-cell hazards for spice. Every grid is validated like
 // the authored pool (walkable = '0 S 4 P 6 7 8'): P reaches the E strip and
 // every S anchor. Six tries, then the open room — a bad pull never ships.
-const GEN_STAMP: Record<Theme, { cluster: string; lane: string; scatter: string[] }> = {
-  grove: { cluster: '7', lane: '2', scatter: ['4'] },
-  cavern: { cluster: '3', lane: '2', scatter: ['4', '5'] },
-  volcano: { cluster: '3', lane: '2', scatter: ['4'] },
-  sky: { cluster: '8', lane: '2', scatter: ['4'] },
-  meadow: { cluster: '7', lane: '2', scatter: ['4'] },
-  shore: { cluster: '3', lane: '2', scatter: ['4'] },
-  plant: { cluster: '3', lane: '2', scatter: ['4', '5'] },
-  marsh: { cluster: '3', lane: '2', scatter: ['4'] },
-  sanctum: { cluster: '3', lane: '2', scatter: ['4'] },
-  dojo: { cluster: '3', lane: '2', scatter: ['5'] },
-  tower: { cluster: '3', lane: '2', scatter: ['4', '8'] },
+const GEN_STAMP: Record<Theme, { cluster: string; lane: string; scatter: string[]; ring: string }> = {
+  grove: { cluster: '7', lane: '2', scatter: ['4'], ring: '7' },
+  cavern: { cluster: '3', lane: '2', scatter: ['4', '5'], ring: '5' },
+  volcano: { cluster: '3', lane: '2', scatter: ['4'], ring: '3' },
+  sky: { cluster: '8', lane: '2', scatter: ['4'], ring: '8' },
+  meadow: { cluster: '7', lane: '2', scatter: ['4'], ring: '7' },
+  shore: { cluster: '3', lane: '2', scatter: ['4'], ring: '3' },
+  plant: { cluster: '3', lane: '2', scatter: ['4', '5'], ring: '5' },
+  marsh: { cluster: '3', lane: '2', scatter: ['4'], ring: '3' },
+  sanctum: { cluster: '3', lane: '2', scatter: ['4'], ring: '4' },
+  dojo: { cluster: '3', lane: '2', scatter: ['5'], ring: '2' },
+  tower: { cluster: '3', lane: '2', scatter: ['4', '8'], ring: '5' },
 };
 
 const WALKABLE = new Set(['0', 'S', '4', 'P', '6', '7', '8']);
@@ -1863,6 +1880,21 @@ export function genRoom(theme: Theme, rng: () => number): string[] {
     for (let k = 0, sc = 1 + Math.floor(rng() * 3); k < sc; k++) {
       const x = 1 + Math.floor(rng() * 7), y = 1 + Math.floor(rng() * 9);
       if (g[y][x] === '0') g[y][x] = P.scatter[Math.floor(rng() * P.scatter.length)];
+    }
+    // ring — hard rooms fence the edge in the biome's hazard, keep/saltire
+    // style; the P door and E lane stay clear
+    if (rng() < 0.35) {
+      for (let r = 1; r <= 9; r++) {
+        for (const c of [1, 7]) {
+          if (g[r][c] === '0' && rng() < 0.4) g[r][c] = P.ring;
+        }
+      }
+      for (let c = 2; c <= 6; c++) {
+        for (const r of [1, 9]) {
+          if (c === 4 || (r === 9 && Math.abs(c - 4) <= 1)) continue; // the door lane stays open
+          if (g[r][c] === '0' && rng() < 0.4) g[r][c] = P.ring;
+        }
+      }
     }
     // anchors — 4-7 spawn hooks in the top 60%, clear cells only
     for (let k = 0, sn = 4 + Math.floor(rng() * 4); k < sn; k++) {

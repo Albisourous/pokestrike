@@ -351,8 +351,9 @@ const WALL_PROPS: Record<Theme, { hi: PropSpec[]; lo: PropSpec[]; pile?: boolean
     lo: [{ r: MT.ROCK_SMALL }, { r: MT.FLOWER_WILD, t: 'rgba(230,220,180,0.35)' }],
   },
   plant: {
-    // power plant — iron-dark rock heaps stand in for scrap and machinery
+    // power plant — iron railing and rock heaps stand in for scrap and machinery
     hi: [
+      { r: MT.TILE_FENCE, t: 'rgba(50,60,80,0.40)' },
       { r: MT.TILE_ROCK, t: 'rgba(50,60,80,0.45)' },
       { r: MT.ROCK_SMALL, t: 'rgba(50,60,80,0.45)' },
       { r: MT.TREE_ASH, t: 'rgba(40,50,70,0.55)' },
