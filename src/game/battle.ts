@@ -8164,8 +8164,12 @@ export class Battle {
               : e.link
                 ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
-      fitFont(ctx, tag, 8, w - 60);
-      ctx.fillText(tag, cx + 50, cy + 58);
+      const tagPx = e.boss ? fitFontB(ctx, tag, 8, w - 60) : fitFont(ctx, tag, 8, w - 60);
+      const readout = e.boss && tagPx < 8
+        ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)} · GOLD ×3`
+        : tag;
+      if (readout !== tag) fitFontB(ctx, readout, 8, w - 60);
+      ctx.fillText(readout, cx + 50, cy + 58);
       ctx.fillStyle = '#8890b8';
       const line0 = tells.length ? tells[0] : 'fires a projectile';
       fitFontB(ctx, line0, 7, w - 60);
