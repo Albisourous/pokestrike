@@ -93,11 +93,11 @@ ghost pull that repeats until you've really slung one.
    **countdown**, so kill them or keep moving. Wild **healers** patch their
    most-wounded ally instead of attacking (kill the cleric first or the
    fight drags), and bosses
-   **enrage** under 30% HP, attack timers cycling a third faster. Bosses
+   **enrage** under 30% HP, attack timers cycling a third faster. Boss HP
+   comes in 3 bars; each bar starts a new battle with a fresh room and
+   fresh adds. A heavy attack hits the whole team every 7 turns. Bosses
    also carry a drifting gold **weak point** on their rim — contact on
-   that face pays triple — and **cry for help** at 2/3 and 1/3 HP,
-   flooding the court with adds that halve the damage they take until
-   you clear them. Every third boss attack is a teleport hop, so no
+   that face pays triple. Every third boss attack is a teleport hop, so no
    pocket stays safe. Route one shot through every living ally in a
    single launch and they all fire at once — `TEAM CHAIN!`
 5b. **The team ultimate.** One shared charge builds across your shots —
