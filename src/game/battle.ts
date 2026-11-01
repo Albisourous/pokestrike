@@ -6540,9 +6540,11 @@ export class Battle {
       });
       this.burst(e.x, e.y, color, 16, 420);
       this.scar(e.x, e.y, 30);
+      this.screenFlash(color, 0.12);
       this.addShake(12);
       sfx('boom');
     } else {
+      this.screenFlash(color, 0.12);
       sfx('boom');
       this.players.filter((p) => !p.dead).forEach((p, i) => this.later(i * 0.12, () => {
         if (p.dead) return;
