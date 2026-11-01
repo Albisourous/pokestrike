@@ -2507,6 +2507,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'a foe strikes when its number hits 0 · each shot you take ticks one down',
       'melee countdowns start low · thin them out first',
       "a boss's drifting gold star is its weak face · hits there pay triple",
+      'BOSSES fight in 3 bars · new adds each bar · HEAVY clock hits the whole team',
       'shelled foes glance hits off the plate · bank around the back for a FLANK',
       'spiked foes bite the ball on contact · hit them clean, don\'t graze',
       'regen foes mend over time · burst them down, don\'t whittle',

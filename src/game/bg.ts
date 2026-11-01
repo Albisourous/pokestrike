@@ -190,6 +190,23 @@ const PATCH: Record<Theme, { r: TileRect; t?: string }> = {
   tower: { r: MT.TILE_COBBLE, t: 'rgba(8,6,20,0.55)' },
 };
 
+// Centre stage per theme: a contrasting atlas tile painted as one big frayed
+// island under the fight, the way Monster Strike's battle backdrops light a
+// single ground patch so the eye lands mid-court.
+const STAGE: Record<Theme, { r: TileRect; t?: string; s: number; a: number }> = {
+  grove: { r: MT.TILE_SAND, t: 'rgba(96,112,40,0.28)', s: 1.5, a: 0.7 },
+  cavern: { r: MT.TILE_SAND, t: 'rgba(40,44,90,0.55)', s: 1.5, a: 0.75 },
+  volcano: { r: MT.TILE_COBBLE, t: 'rgba(200,70,20,0.45)', s: 1.6, a: 0.8 },
+  sky: { r: MT.TILE_SNOWF, t: 'rgba(255,255,255,0.35)', s: 1.8, a: 0.7 },
+  meadow: { r: MT.TILE_GRASS, s: 1.4, a: 0.8 },
+  shore: { r: MT.TILE_SAND, t: 'rgba(150,110,60,0.30)', s: 1.5, a: 0.8 },
+  plant: { r: MT.TILE_COBBLE, t: 'rgba(120,170,220,0.30)', s: 1.4, a: 0.8 },
+  marsh: { r: MT.TILE_GRASSF, t: 'rgba(20,60,30,0.35)', s: 1.3, a: 0.75 },
+  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(120,96,190,0.36)', s: 1.4, a: 0.65 },
+  dojo: { r: MT.TILE_COBBLE, t: 'rgba(200,160,100,0.30)', s: 1.4, a: 0.8 },
+  tower: { r: MT.TILE_COBBLE, t: 'rgba(140,100,220,0.35)', s: 1.4, a: 0.8 },
+};
+
 function floor(theme: Theme) {
   const hit = floors.get(theme);
   if (hit) return hit;
@@ -300,6 +317,51 @@ function floor(theme: Theme) {
       }
       g.globalAlpha = 1;
     }
+  }
+  {
+    const S = STAGE[theme];
+    const st = slice(S.r, S.t);
+    const cx = FW / 2, cy = FH * 0.47;
+    if (st) {
+      const m = document.createElement('canvas');
+      m.width = FW;
+      m.height = FH;
+      const mg = m.getContext('2d')!;
+      mg.imageSmoothingEnabled = false;
+      const sw = S.r[2] * S.s, sh = S.r[3] * S.s;
+      for (let y = 0; y < FH; y += sh) for (let x = 0; x < FW; x += sw) mg.drawImage(st, x, y, sw, sh);
+      // frayed island mask: hash-jittered radii, edge softened by a blur
+      mg.globalCompositeOperation = 'destination-in';
+      mg.filter = 'blur(10px)';
+      mg.beginPath();
+      for (let i = 0, n = 28; i <= n; i++) {
+        const ang = ((i % n) / n) * TAU;
+        const rj = 0.82 + hash((i % n) * 7.7 + theme.length * 3.3) * 0.22;
+        const px = cx + Math.cos(ang) * FW * 0.4 * rj, py = cy + Math.sin(ang) * FH * 0.31 * rj;
+        if (i) mg.lineTo(px, py);
+        else mg.moveTo(px, py);
+      }
+      mg.fill();
+      // drop shadow first so the island sits a step above the field
+      g.filter = 'brightness(0)';
+      g.globalAlpha = 0.34;
+      g.drawImage(m, 0, 12);
+      // sunlit lip peeking past the north edge, then the lifted island
+      g.filter = 'brightness(1.8)';
+      g.globalAlpha = 0.3;
+      g.drawImage(m, 0, -4);
+      g.filter = 'saturate(1.15) brightness(1.08)';
+      g.globalAlpha = S.a;
+      g.drawImage(m, 0, 0);
+      g.filter = 'none';
+      g.globalAlpha = 1;
+    }
+    // edge vignette: the rim falls off into shade, the centre stays lit
+    const vg = g.createRadialGradient(cx, cy, FW * 0.3, cx, cy, FH * 0.62);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.42)');
+    g.fillStyle = vg;
+    g.fillRect(0, 0, FW, FH);
   }
   floors.set(theme, c);
   return c;

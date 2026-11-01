@@ -74,6 +74,7 @@ interface Unit {
   wMul: number;
   lunging: number; // >0 while mid-lunge (melee attack in flight)
   boss: boolean;
+  bigT: number; // boss heavy-attack countdown (MS bosses run several clocks); 0 = none
   shiny: boolean; // rare alt-palette spawn — always caught when KO'd
   dead: boolean;
   dotTicks: number; // poison ticks remaining
@@ -99,7 +100,7 @@ interface Unit {
   relic?: string; // held-item sprite name — gym bosses roll one quirk each
   sq: number; // squash impulse 0..1 — decays in update, flattens the sprite
   flashT: number; // hit-flash clock — the sprite redraws white-hot on impact
-  sumStage: number; // boss phase summons fired (0..2 — at 2/3 and 1/3 hp)
+  sumStage: number; // boss bar index (0..2)
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
   weakA: number; // boss weak point angle — rotating gold face, ×3 contact
   shieldA: number; // shelled foes: the shell's facing — front hits glance, back hits flank
@@ -402,6 +403,8 @@ const CONTACT_POW = 1.4; // direct hits are the bread and butter again
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
+const BOSS_BARS = [0.3, 0.3, 0.4]; // MS stage data: boss HP split into bars, one battle per bar
+const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
 const SHINY_RATE = 1 / 48; // ~2% of wild spawns roll the gold palette
 // the catch ritual's clock — a fast drop-in, ±0.5rad rocks, then the
 // verdict. Worst case runs 1.75s so a volley of catches stays snappy.
@@ -669,6 +672,8 @@ export class Battle {
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   endT = 0; // win/lose beat — the field report waits for the celebration to land
   weather: Weather | null = null; // this wave's sky — null is a clear court
+  private gymFurnished = false;
+  private barBreak = false;
 
   private dragging = false;
   private dragStart: Vec = vec();
@@ -705,6 +710,7 @@ export class Battle {
   static ffPref = false; // ×2 rides the session — a new Battle spawn inherits it
   ff = Battle.ffPref; // ×2 chip beside it — the sim runs two steps a frame, not a stretched dt
   private pendingAttacks: Unit[] = [];
+  private pendingBig: Unit[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
   private shotCombo = 0; // pass-through links chained this shot
@@ -973,6 +979,7 @@ export class Battle {
         wMul: 0,
         lunging: 0,
         boss: false,
+        bigT: 0,
         shiny: !!def.shiny, // a shiny draft pick stays gold
         dead: false,
         dotTicks: 0,
@@ -1391,6 +1398,8 @@ export class Battle {
     const bossWave = spawns.some((s) => s.boss);
     // ~1 gym in 3 fights in a furnished court — a FORTRESS raid is always one
     const gymFurnished = bossWave && (this.raidMod === 'fortress' || this.rng() < 0.3);
+    this.gymFurnished = gymFurnished;
+    this.barBreak = false;
     let li = 0;
     if (!bossWave) {
       if (i === 0) li = Math.floor(this.rng() * 3); // gentle openers
@@ -1413,20 +1422,7 @@ export class Battle {
       this.theme,
       this.rng,
     );
-    this.blocks = room.blocks.map((b) => ({
-      x: this.arena.x + this.arena.w * b.nx,
-      y: this.arena.y + this.arena.h * b.ny,
-      w: this.arena.w * b.nw,
-      h: this.arena.h * b.nh,
-    }));
-    // a fresh layout can land on a standing teammate — nudge them out
-    for (const p of this.players) {
-      if (!p.dead) {
-        const at = this.unstick(p.x, p.y, p.r + 2);
-        p.x = at.x;
-        p.y = at.y;
-      }
-    }
+    this.installRoom(room);
     // spawn anchors drive enemy placement — Archero foes enter where the
     // room designer put the hooks, not on scattered slots. Bosses keep
     // their authored entrance; leftovers keep rolled positions.
@@ -1704,8 +1700,7 @@ export class Battle {
   }
 
   // One enemy builder for everything the field can field: wave spawns,
-  // boss phase-summons. wi is the wave row so level curves match the wave
-  // the foe arrived on.
+  // wi is the wave row so level curves match the wave the foe arrived on.
   private makeEnemy(s: WaveSpawn, wi: number): Unit {
     const r = s.boss ? 46 : 26;
     const at = this.unstick(this.arena.x + this.arena.w * s.nx, this.arena.y + this.arena.h * s.ny, r + 2);
@@ -1751,6 +1746,7 @@ export class Battle {
       wMul: 1,
       lunging: 0,
       boss: !!s.boss,
+      bigT: s.boss ? BOSS_BIG_TIMER : 0,
       // ASC 6+: gym leaders walk in furious — fast attack cycle from bell
       // one; an ENRAGED raid boss takes the same bell
       enraged: !!s.boss && (this.asc >= 6 || this.raidMod === 'enraged'),
@@ -3202,7 +3198,7 @@ export class Battle {
 
   // Central damage path so every source (contact, bump, orb, dot) behaves alike.
   private hurt(e: Unit, dmg: number, color: string, suffix = '', src?: Unit) {
-    if (e.dead) return;
+    if (e.dead || (e.boss && this.barBreak)) return;
     // absorb: a matching element feeds the hide instead of hurting it —
     // the heal signal travels as negative damage through this one seam
     if (dmg < 0) {
@@ -3249,7 +3245,16 @@ export class Battle {
     // sleep bonus: a dozing foe takes the hit like a free crit — and the
     // hit wakes it, so the ambush is one clean swing per fight
     if (e.asleep) d = Math.max(1, Math.round(d * 1.35));
+    const hpBefore = e.hp;
     e.hp -= d;
+    if (e.boss && !e.dead && hpBefore > 0 && e.sumStage < BOSS_BARS.length - 1) {
+      const floor = 1 - BOSS_BARS.slice(0, e.sumStage + 1).reduce((sum, bar) => sum + bar, 0);
+      if (e.hp < Math.ceil(e.maxHp * floor)) {
+        e.hp = Math.ceil(e.maxHp * floor);
+        e.sumStage++;
+        this.barBreak = true;
+      }
+    }
     e.flashT = 0.12; // the sprite burns white for a beat — every hit confirms
     // weak armor: every landed hit cracks the shell — it sheds weight and
     // presses faster, but the next hit finds a softer hide. Burst it, don't chip.
@@ -3273,15 +3278,6 @@ export class Battle {
     if (!e.dead && !e.boss && e.hp > 0 && e.hp <= e.maxHp * this.t('ghost') * 0.06) {
       this.pushText({ x: e.x, y: e.y - e.r - 34, text: 'EXECUTE!', t: 1, color: '#a868c8', big: true });
       e.hp = 0;
-    }
-    // boss phase summons: crossing 2/3 then 1/3 hp makes it cry for help —
-    // MS add-waves turn the sponge into a fight that escalates
-    if (e.boss && !e.dead && e.hp > 0 && e.sumStage < 2) {
-      const gate = e.sumStage === 0 ? 0.66 : 0.33;
-      if (e.hp / e.maxHp < gate) {
-        e.sumStage++;
-        this.summonAdds(e);
-      }
     }
     // psychic trait: a cut of every hit splashes onto another foe —
     // re-entry guarded so the splash can't splash
@@ -6018,7 +6014,7 @@ export class Battle {
     }
     // held leftovers tick before poison — a healing boss keeps the
     // anti-stall pressure honest
-    for (const e of this.enemies.slice()) { // hurt can summon adds — skip them this pass
+    for (const e of this.enemies.slice()) { // hurt can split foes — skip them this pass
       if (e.boss && e.relic === 'leftovers' && !e.dead) {
         e.hp = Math.min(e.maxHp, e.hp + Math.ceil(e.maxHp * 0.04));
       }
@@ -6114,9 +6110,21 @@ export class Battle {
       this.pushText({ x: u.x, y: u.y - u.r - 18, text: 'WHIFF!', t: 0.9, color: '#8a90a8', big: false });
     }
     this.pendingAttacks = [];
+    this.pendingBig = [];
+    if (this.barBreak) {
+      this.bossBarBreak();
+      this.nextTurn();
+      return;
+    }
     let warned = false;
+    let bigWarned = false;
     for (const e of this.enemies) {
       if (!e.asleep) e.timer--; // a dozing foe's countdown never winds down
+      if (!e.asleep && e.bigT > 0) {
+        e.bigT--;
+        if (e.bigT <= 0) this.pendingBig.push(e);
+        else if (e.bigT === 1) bigWarned = true;
+      }
       if (e.timer <= 0) {
         // full para: the jolt eats the swing — the wind-up restarts a
         // round out, and the charge burns one tick of what held it
@@ -6131,8 +6139,8 @@ export class Battle {
         warned = true; // it swings after this shot — one soft warning tick
       }
     }
-    if (warned) sfx('warn');
-    if (this.pendingAttacks.length > 0) {
+    if (warned || bigWarned) sfx('warn');
+    if (this.pendingAttacks.length > 0 || this.pendingBig.length > 0) {
       this.phase = 'enemy';
       this.enemyPhaseT = ENEMY_TURN_DELAY;
     } else {
@@ -6140,16 +6148,53 @@ export class Battle {
     }
   }
 
-  // Phase summon — the boss howls and fodder floods the upper court.
-  // Twice per boss, capped so a slow fight can't overflow the board.
-  private summonAdds(boss: Unit) {
-    const room = 7 - this.enemies.filter((x) => !x.dead).length;
-    const n = Math.min(2, Math.max(0, room));
-    if (n <= 0) return;
-    this.pushText({ x: boss.x, y: boss.y - boss.r - 20, text: 'CALLED FOR HELP!', t: 1.3, color: '#ff8a8a', big: true });
-    this.screenFlash('#f85888', 0.15);
-    this.addShake(6);
-    sfx('invade');
+  private installRoom(room: ReturnType<typeof buildRoom>) {
+    this.blocks = room.blocks.map((b) => ({
+      x: this.arena.x + this.arena.w * b.nx,
+      y: this.arena.y + this.arena.h * b.ny,
+      w: this.arena.w * b.nw,
+      h: this.arena.h * b.nh,
+    }));
+    for (const p of this.players) {
+      if (!p.dead) {
+        const at = this.unstick(p.x, p.y, p.r + 2);
+        p.x = at.x;
+        p.y = at.y;
+      }
+    }
+  }
+
+  private bossBarBreak() {
+    const boss = this.enemies.find((e) => e.boss && !e.dead && e.hp > 0);
+    if (!boss) {
+      this.barBreak = false;
+      return;
+    }
+    for (const e of this.enemies) {
+      if (e.boss || e.dead) continue;
+      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0, age: 0 });
+      this.burst(e.x, e.y, '#8890b8', 10, 340);
+      this.pushText({ x: e.x, y: e.y - e.r - 20, text: 'FLED', t: 0.9, color: '#c8d0e8', big: false });
+      e.dead = true;
+    }
+    cull(this.enemies, (e) => e.boss && !e.dead);
+    const grid = this.gymFurnished
+      ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
+      : ROOM_BOSS;
+    const room = buildRoom(grid, this.theme, this.rng);
+    this.installRoom(room);
+    this.hazards = room.hazards.map((z) => ({
+      kind: z.kind,
+      x: this.arena.x + this.arena.w * z.nx,
+      y: this.arena.y + this.arena.h * z.ny,
+      r: this.arena.w * z.r,
+      dir: z.dir,
+      pair: z.pair,
+    }));
+    this.relocateBoss(boss);
+    boss.timer = this.enemyReload(boss);
+    boss.bigT = BOSS_BIG_TIMER;
+    const n = Math.min(2 + boss.sumStage, 4, Math.max(0, 7 - this.enemies.filter((e) => !e.dead).length));
     for (let i = 0; i < n; i++) {
       const def = pickWild(this.rng, this.depth);
       const e = this.makeEnemy(
@@ -6162,11 +6207,23 @@ export class Battle {
       this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.6, t: 0.3, life: 0.3, color: '#ff8a8a', hits: new Set() });
       this.burst(e.x, e.y, '#ff8a8a', 10, 340);
     }
+    this.pushText({
+      x: this.arena.x + this.arena.w / 2,
+      y: this.arena.y + this.arena.h / 2,
+      text: `BATTLE ${boss.sumStage + 1}/${BOSS_BARS.length}`,
+      t: 1.5,
+      color: '#ffd84d',
+      big: true,
+    });
+    this.screenFlash('#ffd84d', 0.2);
+    this.addShake(10);
+    sfx('invade');
+    this.barBreak = false;
   }
 
   // Relocation beat — the boss blinks to a fresh spot with a landing
   // sting. The board keeps shifting, so no pocket stays safe to camp in.
-  private bossHop(e: Unit) {
+  private relocateBoss(e: Unit) {
     this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.6, t: 0.25, life: 0.25, color: '#f85888', hits: new Set() });
     this.burst(e.x, e.y, '#f85888', 12, 400);
     const at = this.unstick(
@@ -6182,6 +6239,10 @@ export class Battle {
     this.pushText({ x: e.x, y: e.y - e.r - 14, text: 'TELEPORT!', t: 0.9, color: '#f85888', big: false });
     this.addShake(6);
     sfx('zap');
+  }
+
+  private bossHop(e: Unit) {
+    this.relocateBoss(e);
     for (const p of this.players) {
       if (!p.dead && dist(e, p) <= e.r + p.r + 40) {
         this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, zapPower), e);
@@ -6308,11 +6369,14 @@ export class Battle {
   private resolveEnemyTurn() {
     const attacks = this.pendingAttacks;
     this.pendingAttacks = [];
-    if (!attacks.length) return; // already consumed — the volley's mid-flight
+    const bigAttacks = this.pendingBig;
+    this.pendingBig = [];
+    if (!attacks.length && !bigAttacks.length) return; // already consumed — the volley is mid-flight
     // staggered volley: each attacker fires on its own beat so every hit
     // is attributable instead of one silent wall of damage
     attacks.forEach((e, i) => this.later(i * 0.28, () => this.fireEnemy(e)));
-    this.later(Math.max(0, attacks.length - 1) * 0.28 + 0.35, () => {
+    bigAttacks.forEach((e, i) => this.later((attacks.length + i) * 0.28, () => this.bossBigAttack(e)));
+    this.later(Math.max(0, attacks.length + bigAttacks.length - 1) * 0.28 + 0.35, () => {
       if (this.phase !== 'enemy') return;
       if (this.players.every((p) => p.dead) && !this.ashRevive()) {
         this.wipe();
@@ -6333,6 +6397,24 @@ export class Battle {
       this.burst(pk.x, pk.y, PICKUP_META[pk.kind].color, 8, 240, 0.8);
       this.pushText({ x: pk.x, y: pk.y - 12, text: 'RIPE', t: 0.9, color: PICKUP_META[pk.kind].color, big: false });
     }
+  }
+
+  private bossBigAttack(e: Unit) {
+    if (e.dead) return;
+    this.screenFlash('#ff6b6b', 0.25);
+    this.burst(e.x, e.y, '#f85888', 24, 520, 1.2);
+    this.waves.push({
+      x: e.x, y: e.y, r: 0, maxR: Math.max(this.arena.w, this.arena.h),
+      t: 0.55, life: 0.55, color: '#ff6b6b', hits: new Set(),
+    });
+    this.addShake(14);
+    sfx('boom');
+    for (const p of this.players) {
+      if (p.dead) continue;
+      this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, zapPower) * 2, e);
+      if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
+    }
+    e.bigT = BOSS_BIG_TIMER;
   }
 
   // Fodder artillery: the old instant zap is a hostile orb now — the bolt
@@ -6371,13 +6453,16 @@ export class Battle {
     if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
   }
 
+  private enemyReload(e: Unit) {
+    return (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1) * (e.def.truant ? 2 : 1)
+      // speed boost winds each launch tighter, with a half-speed floor
+      * (e.def.boost ? Math.max(0.5, Math.pow(0.85, e.boostN++)) : 1);
+  }
+
   private fireEnemy(e: Unit) {
     if (e.dead) return; // killed during the windup — the corpse stays down
     {
-      e.timer = (e.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (e.enraged ? 0.66 : 1) * (e.def.truant ? 2 : 1)
-        // speed boost: every launch winds it tighter — floor at half so
-        // it never blurs into an unreadable machine gun
-        * (e.def.boost ? Math.max(0.5, Math.pow(0.85, e.boostN++)) : 1);
+      e.timer = this.enemyReload(e);
       if (e.boss) {
         this.bossAttack(e);
       } else if (e.def.fuse) {
@@ -7702,18 +7787,19 @@ export class Battle {
     if (boss) {
       const bw = 240, bx = 270 - bw / 2, by = a.y + 40;
       const pct = Math.max(boss.hp / boss.maxHp, 0);
+      const title = `${boss.def.name.toUpperCase()} · x${BOSS_BARS.length - boss.sumStage}`;
       ctx.textAlign = 'center';
       ctx.font = font(9);
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      ctx.strokeText(boss.def.name.toUpperCase(), 270, by - 1);
+      ctx.strokeText(title, 270, by - 1);
       ctx.fillStyle = '#f0b02f';
-      ctx.fillText(boss.def.name.toUpperCase(), 270, by - 1);
+      ctx.fillText(title, 270, by - 1);
       // held item on the nameplate — the quirk you're about to fight around
       if (boss.relic) {
         const ri = itemSprite(boss.relic);
         if (ri) {
-          const w = ctx.measureText(boss.def.name.toUpperCase()).width;
+          const w = ctx.measureText(title).width;
           ctx.drawImage(ri, 270 + w / 2 + 5, by - 10, 14, 14);
         }
       }
@@ -7723,6 +7809,12 @@ export class Battle {
       ctx.fillRect(bx, by + 5, bw * pct, 7);
       ctx.strokeStyle = '#f0b02f';
       ctx.lineWidth = 1;
+      let boundary = 1;
+      for (const bar of BOSS_BARS.slice(0, -1)) {
+        boundary -= bar;
+        ctx.fillStyle = '#fff9';
+        ctx.fillRect(bx + bw * boundary - 0.5, by + 3, 1, 11);
+      }
       ctx.strokeRect(bx, by + 5, bw, 7);
     }
 
@@ -8084,7 +8176,7 @@ export class Battle {
     if (foe) {
       ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
       const tag = e.boss
-        ? `ATTACKS IN ${Math.ceil(e.timer)} · GOLD SPOT ×3`
+        ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)} · GOLD SPOT ×3`
         : e.supp === 'medic'
           ? `ATTACKS IN ${Math.ceil(e.timer)} · HEALS ALLIES`
           : e.supp === 'aegis'
@@ -8094,8 +8186,12 @@ export class Battle {
               : e.link
                 ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
-      fitFont(ctx, tag, 8, w - 60);
-      ctx.fillText(tag, cx + 50, cy + 58);
+      const tagPx = e.boss ? fitFontB(ctx, tag, 8, w - 60) : fitFont(ctx, tag, 8, w - 60);
+      const readout = e.boss && tagPx < 8
+        ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)} · GOLD ×3`
+        : tag;
+      if (readout !== tag) fitFontB(ctx, readout, 8, w - 60);
+      ctx.fillText(readout, cx + 50, cy + 58);
       ctx.fillStyle = '#8890b8';
       const line0 = tells.length ? tells[0] : 'fires a projectile';
       fitFontB(ctx, line0, 7, w - 60);
@@ -9435,6 +9531,15 @@ export class Battle {
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = urgent ? '#ff6b6b' : u.timer <= 2 ? '#ffb84d' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
+      if (u.boss) {
+        const heavy = `H${Math.ceil(u.bigT)}`;
+        ctx.font = font(u.bigT <= 1 ? 10 : 9);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText(heavy, u.x + u.r + 14, u.y - u.r + 7);
+        ctx.fillStyle = u.bigT <= 1 ? '#ff6b6b' : '#f0b02f';
+        ctx.fillText(heavy, u.x + u.r + 14, u.y - u.r + 7);
+      }
       // keyword flags — the counter-mechanics read at a glance
       // keyword flags — composite so a dual-trait foe never hides a mechanic
       const kws = [
