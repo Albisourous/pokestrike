@@ -167,8 +167,8 @@ function floor(theme: Theme) {
   g.imageSmoothingEnabled = false;
   tileRect(g, surround, 0, 0, FW, FH);
 
-  // One tile-wide border gives the stage an exact edge, without a mask.
-  const x = 32, y = 88, w = FW - 64, h = FH - 120, band = 16;
+  // Stage edge sits on the physics wall, so the band reads as where balls bounce.
+  const x = 14, y = 30, w = FW - 28, h = FH - 44, band = 16;
   g.fillStyle = 'rgba(0,0,0,0.50)';
   g.fillRect(x - 4, y + 8, w + 8, h + 4);
   tileRect(g, slice(s.edge.r, s.edge.t)!, x, y, w, h);
