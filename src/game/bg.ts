@@ -1,7 +1,4 @@
-// GBA-map arenas: a prerendered floor per theme tiled from gracidea terrain
-// blocks with painted pitch markings (inset boundary, halfway line, center
-// circle, corner arcs) drawn live so they scale to the arena rect, and a
-// wall ring of atlas props standing on the rim — the PokéBonk cliff look.
+// Cached Pokémon tile courts; only the small ambient sprite pass moves.
 import { gracidea } from '../core/assets';
 import * as MT from './maptiles';
 import type { TileRect } from './maptiles';
@@ -19,65 +16,6 @@ export const hash = (n: number) => {
   return s - Math.floor(s);
 };
 
-// multiply a #rrggbb by f — the ±15% luminance steps for floor scatter
-const shade = (hex: string, f: number) => {
-  const n = parseInt(hex.slice(1), 16);
-  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v * f)));
-  return `rgb(${c((n >> 16) & 255)},${c((n >> 8) & 255)},${c(n & 255)})`;
-};
-
-const GROUND: Record<Theme, string> = {
-  grove: '#3e8e3c',
-  cavern: '#4c4658',
-  volcano: '#40281e',
-  sky: '#82c2e6',
-  meadow: '#58a848',
-  shore: '#d0bc74',
-  plant: '#3a3f4c',
-  marsh: '#31543c',
-  sanctum: '#4a4260',
-  dojo: '#a8865a',
-  tower: '#2c2838',
-};
-const RIM: Record<Theme, string> = {
-  grove: '#2a6428',
-  cavern: '#322d40',
-  volcano: '#241610',
-  sky: '#5490ba',
-  meadow: '#3a7830',
-  shore: '#9a8850',
-  plant: '#22262e',
-  marsh: '#1e3a26',
-  sanctum: '#302a44',
-  dojo: '#6e5636',
-  tower: '#181522',
-};
-// soft light pool per theme: sun patch / light shaft / ember bed / sun glare
-const GLOW: Record<Theme, [number, number, number, number]> = {
-  grove: [255, 234, 150, 0.12],
-  cavern: [186, 200, 255, 0.10],
-  volcano: [255, 116, 40, 0.16],
-  sky: [255, 255, 255, 0.14],
-  meadow: [255, 244, 170, 0.13],
-  shore: [255, 240, 190, 0.13],
-  plant: [160, 220, 255, 0.11],
-  marsh: [190, 235, 160, 0.10],
-  sanctum: [210, 180, 255, 0.12],
-  dojo: [255, 226, 170, 0.12],
-  tower: [170, 130, 240, 0.13],
-};
-const TAU = Math.PI * 2;
-
-// light-pool gradients keyed by center+radius+color — static per arena,
-// so the radial bake isn't re-created every frame
-const poolGrads = new Map<string, CanvasGradient>();
-
-// face-tile patterns keyed on the baked face canvas — the cliff-face fill
-// is identical every frame
-const facePatterns = new Map<HTMLCanvasElement, CanvasPattern>();
-
-// A wall prop is a tile rect plus an optional source-atop tint baked into its
-// cached slice — themes darken rocks/dead wood without new art.
 export interface PropSpec {
   r: TileRect;
   t?: string;
@@ -87,10 +25,10 @@ export interface PropSpec {
 // map.ts's drawTile. Terrain fills are opaque so keying is a no-op for them;
 // the tint pass only lands where the sprite does (source-atop keeps alpha).
 const sliceCache = new Map<string, HTMLCanvasElement>();
-export function slice(s: TileRect, tint?: string): HTMLCanvasElement | null {
+export function slice(s: TileRect, tint?: string, chroma?: readonly [number, number, number]): HTMLCanvasElement | null {
   const img = gracidea();
   if (!img) return null;
-  const k = `${s.join(',')}|${tint ?? ''}`;
+  const k = `${s.join(',')}|${tint ?? ''}|${chroma?.join(',') ?? ''}`;
   let c = sliceCache.get(k);
   if (!c) {
     c = document.createElement('canvas');
@@ -103,6 +41,7 @@ export function slice(s: TileRect, tint?: string): HTMLCanvasElement | null {
     for (let i = 0; i < d.length; i += 4) {
       const r = d[i], gg = d[i + 1], b = d[i + 2];
       if (r > 140 && b > 110 && gg < 120 && r - gg > 50 && b - gg > 40) d[i + 3] = 0;
+      if (chroma && r === chroma[0] && gg === chroma[1] && b === chroma[2]) d[i + 3] = 0;
     }
     g.putImageData(id, 0, 0);
     if (tint) {
@@ -134,530 +73,209 @@ export function drawSlice(
   ctx.restore();
 }
 
-// rounded-rect subpath, appended — the face's ring clip needs two of these
-// in one path, so the path-body lives here and rr() wraps it for strokes
-function rrp(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  rrp(ctx, x, y, w, h, r);
-}
-
-// The texture is far too many ops to redraw per frame, so each theme's floor
-// is painted once at logical size and blitted; stretch on odd rects is invisible.
+type Rect = { x: number; y: number; w: number; h: number };
 const FW = 540, FH = 960;
 const floors = new Map<Theme, HTMLCanvasElement>();
-// flat stand-ins served while the atlas streams (title screen) — kept out of
-// `floors` so each court rebakes tiled once gracidea lands
 const flats = new Map<Theme, HTMLCanvasElement>();
 
-// One fill block per theme, stamped interior-first across the court. `t` bakes
-// a shade into the tile (source-atop): cavern drops a shade, volcano cooks the
-// same cobble down to basalt. `s` upscales so the pixel grain reads at court
-// size; `wash` softens sky's snow toward blue.
-const FILL: Record<Theme, { r: TileRect; t?: string; s: number; wash?: string }> = {
-  grove: { r: MT.TILE_GRASSF, s: 1.2 },
-  cavern: { r: MT.TILE_COBBLE, t: 'rgba(14,14,34,0.20)', s: 1.3 },
-  volcano: { r: MT.TILE_COBBLE, t: 'rgba(96,32,8,0.50)', s: 1.3 },
-  sky: { r: MT.TILE_SNOWF, s: 1.6, wash: 'rgba(130,194,232,0.32)' },
-  meadow: { r: MT.TILE_GRASSF, t: 'rgba(140,220,110,0.14)', s: 1.3 },
-  shore: { r: MT.TILE_SAND, s: 1.5, wash: 'rgba(255,238,190,0.14)' },
-  plant: { r: MT.TILE_COBBLE, t: 'rgba(20,26,40,0.38)', s: 1.3 },
-  marsh: { r: MT.TILE_GRASSF, t: 'rgba(14,34,20,0.50)', s: 1.2 },
-  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(56,40,96,0.38)', s: 1.3 },
-  dojo: { r: MT.TILE_SAND, t: 'rgba(120,78,36,0.30)', s: 1.5 },
-  tower: { r: MT.TILE_COBBLE, t: 'rgba(18,14,40,0.50)', s: 1.3 },
-};
-// worn ground stamped into the bake — scuffed dirt / darker stone / basalt /
-// deeper drifts; kills the flat single-tile field without painted markings
-const PATCH: Record<Theme, { r: TileRect; t?: string }> = {
-  grove: { r: MT.TILE_PATH },
-  cavern: { r: MT.TILE_COBBLE, t: 'rgba(0,0,0,0.35)' },
-  volcano: { r: MT.TILE_COBBLE, t: 'rgba(30,8,2,0.55)' },
-  sky: { r: MT.TILE_DRIFT },
-  meadow: { r: MT.TILE_PATH, t: 'rgba(90,60,30,0.10)' },
-  shore: { r: MT.TILE_WATER, t: 'rgba(90,144,240,0.25)' },
-  plant: { r: MT.TILE_COBBLE, t: 'rgba(0,0,0,0.42)' },
-  marsh: { r: MT.TILE_WATER, t: 'rgba(30,60,40,0.45)' },
-  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(20,12,44,0.50)' },
-  dojo: { r: MT.TILE_PATH, t: 'rgba(120,80,40,0.30)' },
-  tower: { r: MT.TILE_COBBLE, t: 'rgba(8,6,20,0.55)' },
+const FILL: Record<Theme, PropSpec> = {
+  grove: { r: MT.TILE_TURF, t: 'rgba(8,36,22,0.72)' },
+  cavern: { r: MT.TILE_GRAVEL, t: 'rgba(10,14,32,0.78)' },
+  volcano: { r: MT.TILE_COBBLE, t: 'rgba(24,8,12,0.80)' },
+  sky: { r: MT.TILE_ICE, t: 'rgba(16,44,70,0.76)' },
+  meadow: { r: MT.TILE_TURF, t: 'rgba(18,44,20,0.72)' },
+  shore: { r: MT.TILE_WATER, t: 'rgba(4,34,56,0.60)' },
+  plant: { r: MT.TILE_BRICK, t: 'rgba(8,24,32,0.80)' },
+  marsh: { r: MT.TILE_WATER, t: 'rgba(12,38,32,0.76)' },
+  sanctum: { r: MT.TILE_FLAGSTONE, t: 'rgba(32,22,62,0.80)' },
+  dojo: { r: MT.TILE_CLAY, t: 'rgba(44,26,16,0.78)' },
+  tower: { r: MT.TILE_BRICK, t: 'rgba(12,8,30,0.86)' },
 };
 
-// Centre stage per theme: a contrasting atlas tile painted as one big frayed
-// island under the fight, the way Monster Strike's battle backdrops light a
-// single ground patch so the eye lands mid-court.
-const STAGE: Record<Theme, { r: TileRect; t?: string; s: number; a: number }> = {
-  grove: { r: MT.TILE_SAND, t: 'rgba(96,112,40,0.28)', s: 1.5, a: 0.7 },
-  cavern: { r: MT.TILE_SAND, t: 'rgba(40,44,90,0.55)', s: 1.5, a: 0.75 },
-  volcano: { r: MT.TILE_COBBLE, t: 'rgba(200,70,20,0.45)', s: 1.6, a: 0.8 },
-  sky: { r: MT.TILE_SNOWF, t: 'rgba(255,255,255,0.35)', s: 1.8, a: 0.7 },
-  meadow: { r: MT.TILE_GRASS, s: 1.4, a: 0.8 },
-  shore: { r: MT.TILE_SAND, t: 'rgba(150,110,60,0.30)', s: 1.5, a: 0.8 },
-  plant: { r: MT.TILE_COBBLE, t: 'rgba(120,170,220,0.30)', s: 1.4, a: 0.8 },
-  marsh: { r: MT.TILE_GRASSF, t: 'rgba(20,60,30,0.35)', s: 1.3, a: 0.75 },
-  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(120,96,190,0.36)', s: 1.4, a: 0.65 },
-  dojo: { r: MT.TILE_COBBLE, t: 'rgba(200,160,100,0.30)', s: 1.4, a: 0.8 },
-  tower: { r: MT.TILE_COBBLE, t: 'rgba(140,100,220,0.35)', s: 1.4, a: 0.8 },
+const STAGE: Record<Theme, { ground: PropSpec; edge: PropSpec }> = {
+  grove: { ground: { r: MT.TILE_TURF, t: 'rgba(40,148,56,0.22)' }, edge: { r: MT.TILE_SAND } },
+  cavern: { ground: { r: MT.TILE_GRAVEL, t: 'rgba(58,72,112,0.38)' }, edge: { r: MT.TILE_FLAGSTONE, t: 'rgba(52,60,96,0.34)' } },
+  volcano: { ground: { r: MT.TILE_CLAY, t: 'rgba(166,50,20,0.26)' }, edge: { r: MT.TILE_LAVA } },
+  sky: { ground: { r: MT.TILE_ICE }, edge: { r: MT.TILE_FLAGSTONE, t: 'rgba(54,128,188,0.34)' } },
+  meadow: { ground: { r: MT.TILE_TURF, t: 'rgba(154,186,58,0.24)' }, edge: { r: MT.TILE_CLAY } },
+  shore: { ground: { r: MT.TILE_SAND }, edge: { r: MT.TILE_DIAMOND, t: 'rgba(198,156,60,0.24)' } },
+  plant: { ground: { r: MT.TILE_BRICK, t: 'rgba(38,116,132,0.34)' }, edge: { r: MT.TILE_STEEL_TRIM } },
+  marsh: { ground: { r: MT.TILE_GRAVEL, t: 'rgba(54,112,66,0.45)' }, edge: { r: MT.TILE_MOSS_TRIM } },
+  sanctum: { ground: { r: MT.TILE_DIAMOND, t: 'rgba(156,130,196,0.16)' }, edge: { r: MT.TILE_FLAGSTONE, t: 'rgba(94,64,142,0.44)' } },
+  dojo: { ground: { r: MT.TILE_CLAY, t: 'rgba(214,170,76,0.16)' }, edge: { r: MT.TILE_TIMBER } },
+  tower: { ground: { r: MT.TILE_BRICK, t: 'rgba(86,60,126,0.48)' }, edge: { r: MT.TILE_FLAGSTONE, t: 'rgba(70,52,114,0.46)' } },
 };
+
+const FACE: Record<Theme, PropSpec> = {
+  grove: { r: MT.TILE_HEDGE_TRIM },
+  cavern: { r: MT.TILE_COBBLE, t: 'rgba(24,26,54,0.38)' },
+  volcano: { r: MT.TILE_COBBLE, t: 'rgba(42,16,12,0.62)' },
+  sky: { r: MT.TILE_ICE, t: 'rgba(66,140,186,0.24)' },
+  meadow: { r: MT.TILE_HEDGE_TRIM, t: 'rgba(112,140,44,0.24)' },
+  shore: { r: MT.TILE_MOSS_TRIM, t: 'rgba(108,96,52,0.24)' },
+  plant: { r: MT.TILE_STEEL_TRIM },
+  marsh: { r: MT.TILE_MOSS_TRIM, t: 'rgba(32,70,42,0.30)' },
+  sanctum: { r: MT.TILE_FLAGSTONE, t: 'rgba(100,70,142,0.40)' },
+  dojo: { r: MT.TILE_TIMBER },
+  tower: { r: MT.TILE_COBBLE, t: 'rgba(28,18,48,0.60)' },
+};
+
+const faceTiles = new Map<Theme, HTMLCanvasElement>();
+function faceTile(theme: Theme) {
+  const hit = faceTiles.get(theme);
+  if (hit) return hit;
+  const f = FACE[theme];
+  const tile = slice(f.r, f.t);
+  if (tile) faceTiles.set(theme, tile);
+  return tile;
+}
+
+function tileRect(g: CanvasRenderingContext2D, tile: HTMLCanvasElement, x: number, y: number, w: number, h: number, scale = 2) {
+  g.save();
+  g.beginPath();
+  g.rect(x, y, w, h);
+  g.clip();
+  const tw = tile.width * scale, th = tile.height * scale;
+  for (let yy = y; yy < y + h; yy += th)
+    for (let xx = x; xx < x + w; xx += tw) g.drawImage(tile, xx, yy, tw, th);
+  g.restore();
+}
 
 function floor(theme: Theme) {
   const hit = floors.get(theme);
   if (hit) return hit;
+  const f = FILL[theme], s = STAGE[theme];
+  const surround = slice(f.r, f.t);
+  if (!surround) {
+    // Keep streaming fallbacks separate so the atlas upgrades on arrival.
+    let flat = flats.get(theme);
+    if (!flat) {
+      flat = document.createElement('canvas');
+      flat.width = FW;
+      flat.height = FH;
+      const g = flat.getContext('2d')!;
+      g.fillStyle = '#101820';
+      g.fillRect(0, 0, FW, FH);
+      flats.set(theme, flat);
+    }
+    return flat;
+  }
   const c = document.createElement('canvas');
   c.width = FW;
   c.height = FH;
   const g = c.getContext('2d')!;
-  g.fillStyle = GROUND[theme];
-  g.fillRect(0, 0, FW, FH);
-  const tile = slice(FILL[theme].r, FILL[theme].t);
-  if (!tile) {
-    // atlas still streaming — serve a cached flat bake so the title screen
-    // doesn't churn canvases; `floors` stays empty so the court upgrades
-    const f = flats.get(theme);
-    if (f) return f;
-    flats.set(theme, c);
-    return c;
-  }
-  const tw = FILL[theme].r[2] * FILL[theme].s, th = FILL[theme].r[3] * FILL[theme].s;
   g.imageSmoothingEnabled = false;
-  // per-tile alpha jitter (±4%) breaks the strict grid at distance
-  for (let y = 0, ty = 0; y < FH; y += th, ty++) {
-    for (let x = 0, tx = 0; x < FW; x += tw, tx++) {
-      g.globalAlpha = 0.96 + (hash(tx * 31.7 + ty * 17.3) - 0.5) * 0.08;
-      g.drawImage(tile, x, y, tw, th);
-    }
-  }
-  g.globalAlpha = 1;
-  // micro-scatter: hash-seeded pebble dots + blade ticks in ±15% ground
-  // luminance — cheap noise that kills the 44px moiré between tile features
-  {
-    const dark = shade(GROUND[theme], 0.85), lite = shade(GROUND[theme], 1.16);
-    const bladeOdds = theme === 'grove' || theme === 'meadow' ? 0.5 : theme === 'marsh' ? 0.35 : theme === 'sky' ? 0.12 : 0.2;
-    for (let i = 0; i < 420; i++) {
-      const mx = hash(i * 13.7 + 3) * FW, my = hash(i * 7.9 + 11) * FH;
-      g.fillStyle = hash(i * 3.1 + 5) < 0.55 ? dark : lite;
-      g.globalAlpha = 0.28 + hash(i * 9.7 + 1) * 0.26;
-      if (hash(i * 5.3 + 7) < bladeOdds) {
-        g.fillRect(mx, my, 1.5 + hash(i * 2.9) * 1.5, 3 + hash(i * 4.3) * 2);
-      } else {
-        g.beginPath();
-        g.arc(mx, my, 1 + hash(i * 4.1 + 2) * 1.6, 0, TAU);
-        g.fill();
-      }
-    }
-    g.globalAlpha = 1;
-  }
-  // worn ground — squashed patches of the theme's terrain tile break the
-  // flat field so the court reads scuffed earth, not a sports pitch
-  {
-    const pt = slice(PATCH[theme].r, PATCH[theme].t);
-    if (pt) {
-      for (let i = 0; i < 5; i++) {
-        const pw = 60 + hash(i * 17.1 + theme.length * 31) * 95;
-        const ph = pw * (0.35 + hash(i * 7.3 + theme.length * 5) * 0.3);
-        const px = 40 + hash(i * 11.9 + theme.length * 13) * (FW - 80 - pw) + pw / 2;
-        const py = 50 + hash(i * 9.4 + theme.length * 7) * (FH - 160 - ph) + ph / 2;
-        g.save();
-        g.globalAlpha = 0.26 + hash(i * 5.9 + 2) * 0.22;
-        g.beginPath();
-        g.ellipse(px, py, pw / 2, ph / 2, hash(i * 3.7) * 0.5 - 0.25, 0, TAU);
-        g.clip();
-        g.imageSmoothingEnabled = false;
-        g.drawImage(pt, px - pw / 2, py - ph / 2, pw, ph);
-        g.restore();
-      }
-    }
-  }
-  if (FILL[theme].wash) {
-    g.fillStyle = FILL[theme].wash;
-    g.fillRect(0, 0, FW, FH);
-  }
-  if (theme === 'volcano') {
-    // basalt mottling + wandering crack seams, a few glowing hot
-    for (let i = 0; i < 70; i++) {
-      const er = 18 + hash(i * 1.3) * 58;
-      g.fillStyle = 'rgba(0,0,0,0.08)';
-      g.beginPath();
-      g.ellipse(hash(i * 7.7) * FW, hash(i * 3.9 + 2) * FH, er, er * 0.6, hash(i) * 3, 0, TAU);
-      g.fill();
-    }
-    for (let i = 0; i < 24; i++) {
-      let px = hash(i * 11.3) * FW, py = hash(i * 7.1 + 5) * FH;
-      const hot = hash(i * 2.9) > 0.78;
-      g.strokeStyle = hot ? 'rgba(255,110,40,0.16)' : 'rgba(0,0,0,0.30)';
-      g.lineWidth = hot ? 4 : 2;
-      g.beginPath();
-      g.moveTo(px, py);
-      const steps = 3 + ((hash(i * 4.7) * 4) | 0);
-      for (let s = 0; s < steps; s++) {
-        const ang = hash(i * 17.3 + s * 3.1) * TAU;
-        const len = 24 + hash(i * 9.1 + s * 1.7) * 55;
-        px += Math.cos(ang) * len;
-        py += Math.sin(ang) * len;
-        g.lineTo(px, py);
-      }
-      g.stroke();
-    }
-  } else if (theme === 'sky') {
-    // a summit court: real snow-drift patches stamped sparse over the
-    // drift floor — the atlas's own asset, not painted bubbles
-    const drift = slice(MT.TILE_DRIFT);
-    if (drift) {
-      for (let i = 0; i < 14; i++) {
-        const s = 1.5 + hash(i * 2.9 + 5) * 1.1;
-        g.globalAlpha = 0.22 + hash(i * 7.3) * 0.3;
-        g.drawImage(drift, hash(i * 5.1) * FW, hash(i * 2.3 + 8) * FH, drift.width * s, drift.height * s);
-      }
-      g.globalAlpha = 1;
-    }
-  }
-  {
-    const S = STAGE[theme];
-    const st = slice(S.r, S.t);
-    const cx = FW / 2, cy = FH * 0.47;
-    if (st) {
-      const m = document.createElement('canvas');
-      m.width = FW;
-      m.height = FH;
-      const mg = m.getContext('2d')!;
-      mg.imageSmoothingEnabled = false;
-      const sw = S.r[2] * S.s, sh = S.r[3] * S.s;
-      for (let y = 0; y < FH; y += sh) for (let x = 0; x < FW; x += sw) mg.drawImage(st, x, y, sw, sh);
-      // frayed island mask: hash-jittered radii, edge softened by a blur
-      mg.globalCompositeOperation = 'destination-in';
-      mg.filter = 'blur(10px)';
-      mg.beginPath();
-      for (let i = 0, n = 28; i <= n; i++) {
-        const ang = ((i % n) / n) * TAU;
-        const rj = 0.82 + hash((i % n) * 7.7 + theme.length * 3.3) * 0.22;
-        const px = cx + Math.cos(ang) * FW * 0.4 * rj, py = cy + Math.sin(ang) * FH * 0.31 * rj;
-        if (i) mg.lineTo(px, py);
-        else mg.moveTo(px, py);
-      }
-      mg.fill();
-      // drop shadow first so the island sits a step above the field
-      g.filter = 'brightness(0)';
-      g.globalAlpha = 0.34;
-      g.drawImage(m, 0, 12);
-      // sunlit lip peeking past the north edge, then the lifted island
-      g.filter = 'brightness(1.8)';
-      g.globalAlpha = 0.3;
-      g.drawImage(m, 0, -4);
-      g.filter = 'saturate(1.15) brightness(1.08)';
-      g.globalAlpha = S.a;
-      g.drawImage(m, 0, 0);
-      g.filter = 'none';
-      g.globalAlpha = 1;
-    }
-    // edge vignette: the rim falls off into shade, the centre stays lit
-    const vg = g.createRadialGradient(cx, cy, FW * 0.3, cx, cy, FH * 0.62);
-    vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,0.42)');
-    g.fillStyle = vg;
-    g.fillRect(0, 0, FW, FH);
-  }
+  tileRect(g, surround, 0, 0, FW, FH);
+
+  // Stage edge sits on the physics wall, so the band reads as where balls bounce.
+  const x = 14, y = 30, w = FW - 28, h = FH - 44, band = 16;
+  g.fillStyle = 'rgba(0,0,0,0.50)';
+  g.fillRect(x - 4, y + 8, w + 8, h + 4);
+  tileRect(g, slice(s.edge.r, s.edge.t)!, x, y, w, h);
+  tileRect(g, slice(s.ground.r, s.ground.t)!, x + band, y + band, w - band * 2, h - band * 2);
+
+  const light = g.createLinearGradient(0, y, 0, y + h);
+  light.addColorStop(0, 'rgba(255,248,216,0.12)');
+  light.addColorStop(0.45, 'rgba(255,248,216,0)');
+  light.addColorStop(1, 'rgba(6,12,28,0.16)');
+  g.fillStyle = light;
+  g.fillRect(0, 0, FW, FH);
+  const vignette = g.createRadialGradient(FW / 2, FH * 0.4, FW * 0.35, FW / 2, FH * 0.45, FH * 0.72);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)');
+  vignette.addColorStop(1, 'rgba(0,0,0,0.5)');
+  g.fillStyle = vignette;
+  g.fillRect(0, 0, FW, FH);
+
+  const face = faceTile(theme)!;
+  tileRect(g, face, 0, 0, FW, 12, 1);
+  tileRect(g, face, 0, FH - 12, FW, 12, 1);
+  tileRect(g, face, 0, 12, 12, FH - 24, 1);
+  tileRect(g, face, FW - 12, 12, 12, FH - 24, 1);
   floors.set(theme, c);
   return c;
 }
 
-// The court's border is a ring of gracidea props standing on the rim — the
-// GBA-map cliff edge, not stadium boards. `hi` pieces take the top and side
-// edges; `lo` pieces are short ground cover for the bottom strip where the
-// team stands. `pile` doubles up the stamp so cavern rocks read as cairns.
-const WALL_PROPS: Record<Theme, { hi: PropSpec[]; lo: PropSpec[]; pile?: boolean }> = {
-  grove: {
-    hi: [{ r: MT.TREE_ROUND }, { r: MT.TREE_PINE }, { r: MT.TREE_OLIVE }, { r: MT.TREE_TEAL }],
-    lo: [{ r: MT.TILE_FLOWER }, { r: MT.FLOWER_YB }, { r: MT.FLOWER_PK }],
-  },
-  cavern: {
-    hi: [{ r: MT.TILE_ROCK }, { r: MT.ROCK_SMALL }, { r: MT.TILE_ROCK, t: 'rgba(40,40,90,0.30)' }],
-    lo: [{ r: MT.ROCK_SMALL }, { r: MT.TILE_ROCK, t: 'rgba(40,40,90,0.30)' }],
-    pile: true,
-  },
-  volcano: {
-    hi: [
-      { r: MT.TREE_ASH, t: 'rgba(115,45,15,0.50)' }, // pale pines cooked into scorched snags
-      { r: MT.TREE_ASH2, t: 'rgba(115,45,15,0.50)' },
-      { r: MT.TILE_ROCK, t: 'rgba(70,20,8,0.45)' },
-    ],
-    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(70,20,8,0.45)' }, { r: MT.TILE_ROCK, t: 'rgba(70,20,8,0.45)' }],
-    pile: true,
-  },
-  sky: {
-    // the summit court — frosted pines and rocks stand the rim; the flat
-    // drifts stay in the low rows where a mound's silhouette works
-    hi: [
-      { r: MT.TREE_ASH, t: 'rgba(150,200,240,0.55)' },
-      { r: MT.TREE_ASH2, t: 'rgba(150,200,240,0.55)' },
-      { r: MT.ROCK_SMALL, t: 'rgba(150,190,230,0.45)' },
-      { r: MT.TILE_ROCK, t: 'rgba(150,190,230,0.40)' },
-    ],
-    lo: [{ r: MT.TILE_DRIFT }, { r: MT.ROCK_SMALL, t: 'rgba(150,190,230,0.45)' }],
-    pile: true,
-  },
-  meadow: {
-    // route field — garden hedges and rail fences instead of a treeline
-    hi: [{ r: MT.TILE_BUSH }, { r: MT.TREE_ROUND }, { r: MT.TILE_FENCE }],
-    lo: [{ r: MT.TILE_FLOWER }, { r: MT.FLOWER_WILD }, { r: MT.FLOWER_PK }],
-  },
-  shore: {
-    // tideline — beach rocks and the pond fence; pale shells on the sand
-    hi: [{ r: MT.TILE_ROCK, t: 'rgba(200,180,120,0.30)' }, { r: MT.TILE_FENCE }, { r: MT.ROCK_SMALL }],
-    lo: [{ r: MT.ROCK_SMALL }, { r: MT.FLOWER_WILD, t: 'rgba(230,220,180,0.35)' }],
-  },
-  plant: {
-    // power plant — iron railing and rock heaps stand in for scrap and machinery
-    hi: [
-      { r: MT.TILE_FENCE, t: 'rgba(50,60,80,0.40)' },
-      { r: MT.TILE_ROCK, t: 'rgba(50,60,80,0.45)' },
-      { r: MT.ROCK_SMALL, t: 'rgba(50,60,80,0.45)' },
-      { r: MT.TREE_ASH, t: 'rgba(40,50,70,0.55)' },
-    ],
-    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(50,60,80,0.45)' }, { r: MT.TILE_ROCK, t: 'rgba(50,60,80,0.45)' }],
-    pile: true,
-  },
-  marsh: {
-    // safari bog — drowned snags and weed chokes, everything waterlogged
-    hi: [
-      { r: MT.TREE_ASH, t: 'rgba(40,66,44,0.55)' },
-      { r: MT.TREE_ASH2, t: 'rgba(40,66,44,0.55)' },
-      { r: MT.TILE_ROCK, t: 'rgba(30,60,40,0.45)' },
-    ],
-    lo: [{ r: MT.TILE_FLOWER, t: 'rgba(40,80,44,0.50)' }, { r: MT.ROCK_SMALL, t: 'rgba(30,60,40,0.45)' }],
-    pile: true,
-  },
-  sanctum: {
-    // ruins — the gazebo column reads as broken architecture, violet rubble
-    hi: [
-      { r: MT.TILE_GAZEBO, t: 'rgba(90,70,140,0.35)' },
-      { r: MT.TILE_ROCK, t: 'rgba(70,55,115,0.40)' },
-      { r: MT.TREE_ASH, t: 'rgba(80,60,130,0.50)' },
-    ],
-    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(70,55,115,0.40)' }, { r: MT.FLOWER_PK, t: 'rgba(120,90,180,0.40)' }],
-    pile: true,
-  },
-  dojo: {
-    // training ground — rail fences and packed-stone posts around the ring
-    hi: [{ r: MT.TILE_FENCE }, { r: MT.TILE_ROCK, t: 'rgba(140,100,50,0.30)' }, { r: MT.TILE_BUSH, t: 'rgba(160,120,60,0.30)' }],
-    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(140,100,50,0.30)' }, { r: MT.FLOWER_YB }],
-  },
-  tower: {
-    // graveyard — dead trees and grave-dark stone under no sky
-    hi: [
-      { r: MT.TREE_ASH, t: 'rgba(36,30,60,0.60)' },
-      { r: MT.TREE_ASH2, t: 'rgba(36,30,60,0.60)' },
-      { r: MT.TILE_ROCK, t: 'rgba(30,26,52,0.55)' },
-    ],
-    lo: [{ r: MT.ROCK_SMALL, t: 'rgba(30,26,52,0.55)' }, { r: MT.TILE_ROCK, t: 'rgba(30,26,52,0.55)' }],
-    pile: true,
-  },
+const WALL_PROPS: Record<Theme, readonly [PropSpec, PropSpec]> = {
+  grove: [{ r: MT.TREE_ROUND }, { r: MT.TREE_OLIVE }],
+  cavern: [{ r: MT.TILE_ROCK }, { r: MT.ROCK_SMALL }],
+  volcano: [{ r: MT.TILE_ROCK, t: 'rgba(72,24,12,0.45)' }, { r: MT.TREE_ASH, t: 'rgba(80,28,12,0.50)' }],
+  sky: [{ r: MT.TREE_ASH, t: 'rgba(180,220,248,0.55)' }, { r: MT.ROCK_SMALL, t: 'rgba(180,220,248,0.40)' }],
+  meadow: [{ r: MT.TREE_OLIVE }, { r: MT.FLOWER_WILD }],
+  shore: [{ r: MT.TILE_ROCK, t: 'rgba(174,154,88,0.28)' }, { r: MT.ROCK_SMALL }],
+  plant: [{ r: MT.TILE_FENCE }, { r: MT.TILE_ROCK, t: 'rgba(22,50,64,0.42)' }],
+  marsh: [{ r: MT.TREE_TEAL, t: 'rgba(32,66,44,0.24)' }, { r: MT.ROCK_SMALL }],
+  sanctum: [{ r: MT.TILE_ROCK, t: 'rgba(114,82,152,0.30)' }, { r: MT.FLOWER_PK }],
+  dojo: [{ r: MT.TILE_FENCE, t: 'rgba(140,96,44,0.24)' }, { r: MT.ROCK_SMALL }],
+  tower: [{ r: MT.TREE_ASH, t: 'rgba(40,28,66,0.50)' }, { r: MT.TILE_ROCK, t: 'rgba(52,34,82,0.40)' }],
 };
 
-// The rim is a cliff face, not boards: a darkened cobble band falls away
-// OUTSIDE the court (the mesa you could fall off), a lit lip sits at the
-// drop line inside the rim, and the face bottoms out in darkness. `ds`
-// shrinks the 28px cobble so the face grain is finer than the floor's.
-const FACE_D = 19;
-const FACE: Record<Theme, { r: TileRect; t: string; ds: number }> = {
-  grove: { r: MT.TILE_COBBLE, t: 'rgba(16,40,14,0.48)', ds: 0.68 },
-  cavern: { r: MT.TILE_COBBLE, t: 'rgba(8,8,30,0.45)', ds: 0.68 },
-  volcano: { r: MT.TILE_COBBLE, t: 'rgba(44,10,2,0.64)', ds: 0.68 },
-  sky: { r: MT.TILE_COBBLE, t: 'rgba(130,180,225,0.55)', ds: 0.68 }, // iced mesa
-  meadow: { r: MT.TILE_COBBLE, t: 'rgba(30,52,18,0.50)', ds: 0.68 },
-  shore: { r: MT.TILE_COBBLE, t: 'rgba(70,80,90,0.45)', ds: 0.68 }, // wet cliff
-  plant: { r: MT.TILE_COBBLE, t: 'rgba(14,18,28,0.55)', ds: 0.68 },
-  marsh: { r: MT.TILE_COBBLE, t: 'rgba(14,34,20,0.55)', ds: 0.68 },
-  sanctum: { r: MT.TILE_COBBLE, t: 'rgba(40,28,72,0.55)', ds: 0.68 },
-  dojo: { r: MT.TILE_COBBLE, t: 'rgba(66,44,20,0.50)', ds: 0.68 },
-  tower: { r: MT.TILE_COBBLE, t: 'rgba(12,10,26,0.60)', ds: 0.68 },
-};
-// scaled-down face tile, baked once per theme next to the floor bakes
-const faceTiles = new Map<Theme, HTMLCanvasElement | null>();
-function faceTile(theme: Theme): HTMLCanvasElement | null {
-  const hit = faceTiles.get(theme);
-  if (hit !== undefined) return hit;
-  const F = FACE[theme];
-  const s = slice(F.r, F.t);
-  if (!s) return null; // atlas still streaming — retry next frame, don't cache
-  const c = document.createElement('canvas');
-  c.width = Math.max(4, Math.round(F.r[2] * F.ds));
-  c.height = Math.max(4, Math.round(F.r[3] * F.ds));
-  const g = c.getContext('2d')!;
-  g.imageSmoothingEnabled = false;
-  g.drawImage(s, 0, 0, c.width, c.height);
-  faceTiles.set(theme, c);
-  return c;
-}
-
-// Prop ring with depth: a dark seat + thin rim keeps the physics edge
-// readable, an inner AO ring is the cliff-shadow, and hash-jittered props
-// hang over the rim into the court — balls sliding under them is the look.
-// `seed` re-dresses the ring per fight — same theme, different treeline.
-export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: number; w: number; h: number }, theme: Theme, seed = 0) {
-  // cliff face — the textured rock band outside the rim, drawn under the
-  // seat shadow so the mesa edge still grounds the court. The even-odd
-  // ring clip keeps the band's corners concentric with the arena's.
-  const ft = faceTile(theme);
-  if (ft) {
-    ctx.save();
-    ctx.beginPath();
-    rrp(ctx, a.x - FACE_D, a.y - FACE_D, a.w + FACE_D * 2, a.h + FACE_D * 2, 34);
-    rrp(ctx, a.x + 2, a.y + 2, a.w - 4, a.h - 4, 16);
-    ctx.clip('evenodd');
-    let pat = facePatterns.get(ft);
-    if (!pat) {
-      pat = ctx.createPattern(ft, 'repeat')!;
-      facePatterns.set(ft, pat);
-    }
-    ctx.fillStyle = pat;
-    ctx.fillRect(a.x - FACE_D, a.y - FACE_D, a.w + FACE_D * 2, a.h + FACE_D * 2);
-    // vertical shading per side: lit where the face leaves the rim, dark as
-    // it falls — the gradient vectors point outward
-    for (const [gx0, gy0, gx1, gy1, rx, ry, rw, rh] of [
-      [a.x, a.y + 2, a.x, a.y - FACE_D, a.x - FACE_D, a.y - FACE_D, a.w + FACE_D * 2, FACE_D + 2],
-      [a.x, a.y + a.h - 2, a.x, a.y + a.h + FACE_D, a.x - FACE_D, a.y + a.h - 2, a.w + FACE_D * 2, FACE_D + 2],
-      [a.x + 2, a.y, a.x - FACE_D, a.y, a.x - FACE_D, a.y + 2, FACE_D + 2, a.h - 4],
-      [a.x + a.w - 2, a.y, a.x + a.w + FACE_D, a.y, a.x + a.w - 2, a.y + 2, FACE_D + 2, a.h - 4],
-    ]) {
-      const gd = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
-      gd.addColorStop(0, 'rgba(255,244,214,0.13)');
-      gd.addColorStop(0.4, 'rgba(0,0,0,0)');
-      gd.addColorStop(1, 'rgba(0,0,0,0.42)');
-      ctx.fillStyle = gd;
-      ctx.fillRect(rx, ry, rw, rh);
-    }
-    ctx.restore();
-    // dark drop — the face's bottom edge lost in shadow
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = 5;
-    rr(ctx, a.x - FACE_D + 2.5, a.y - FACE_D + 2.5, a.w + (FACE_D - 2.5) * 2, a.h + (FACE_D - 2.5) * 2, 32);
-    ctx.stroke();
-  }
-  // seat shadow so the rim lifts off the floor
-  ctx.strokeStyle = 'rgba(0,0,0,0.38)';
-  ctx.lineWidth = 15;
-  rr(ctx, a.x, a.y + 2, a.w, a.h, 18);
-  ctx.stroke();
-  // thin dark rim — the physics edge must stay readable under the props
-  ctx.strokeStyle = RIM[theme];
-  ctx.lineWidth = 7;
-  rr(ctx, a.x, a.y, a.w, a.h, 18);
-  ctx.stroke();
-  if (ft) {
-    // top-light lip — the court's edge catches sun where the drop begins
-    ctx.strokeStyle = 'rgba(255,246,220,0.38)';
-    ctx.lineWidth = 2.5;
-    rr(ctx, a.x + 4.5, a.y + 4.5, a.w - 9, a.h - 9, 14);
-    ctx.stroke();
-  } else {
-    // hairline chalk just inside the rim; props hang over it on purpose
-    ctx.strokeStyle = 'rgba(255,246,220,0.20)';
-    ctx.lineWidth = 2;
-    rr(ctx, a.x + 7, a.y + 7, a.w - 14, a.h - 14, 11);
-    ctx.stroke();
-  }
-  // inner AO — stepped strokes fake a ~24px gradient ring, the shadow the
-  // wall line throws onto the court
-  for (const [inset, al, lw] of [[9, 0.2, 7], [16, 0.11, 8], [24, 0.05, 9]]) {
-    ctx.strokeStyle = `rgba(0,0,0,${al})`;
-    ctx.lineWidth = lw;
-    rr(ctx, a.x + inset, a.y + inset, a.w - inset * 2, a.h - inset * 2, 12);
-    ctx.stroke();
-  }
-  // nothing to stamp until the atlas lands — rim + AO still carry the edge
-  if (!gracidea()) return;
-  const P = WALL_PROPS[theme];
-  // feet-anchored stamp: by is the prop's ground line; a soft contact
-  // shadow underneath keeps it standing on the court, not floating
-  const stamp = (p: PropSpec, bx: number, by: number, s: number) => {
-    const w = p.r[2] * s, h = p.r[3] * s;
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
-    ctx.beginPath();
-    ctx.ellipse(bx, by - 2, w * 0.38, 4.5, 0, 0, TAU);
-    ctx.fill();
-    drawSlice(ctx, p.r, bx - w / 2, by - h, w, h, p.t);
-  };
-  // top treeline — dense, jittered, tops held inside the rim
-  const j = seed * 61.7;
-  for (let i = 0, x = a.x + 24; x < a.x + a.w - 10; i++) {
-    const p = P.hi[Math.floor(hash(i * 7.3 + 2 + j) * P.hi.length)];
-    // over the N LEFT / ASC chips (a.y+48) the props stand clear of them
-    const chip = x < a.x + 70 || x > a.x + a.w - 120;
-    const by = a.y + (chip ? 44 : 46 + (i % 2) * 9);
-    // canopies stay under the rim: the HUD strip sits right above it
-    const s = Math.min(1.0 + hash(i * 5.1 + 4 + j) * 0.45, (by - a.y - 2) / p.r[3]);
-    stamp(p, x + (hash(i * 9.7 + j) - 0.5) * 10, by, s);
-    x += 42 + hash(i * 3.3 + j) * 13;
-  }
-  // side edges — same upright props stepping down; they stop short of the
-  // bottom strip so the team's row stays clear
-  for (let i = 0, y = a.y + 74; y < a.y + a.h - 120; i++) {
-    const p = P.hi[Math.floor(hash(i * 6.1 + 40 + j) * P.hi.length)];
-    const s = 1.0 + hash(i * 4.7 + 9 + j) * 0.45;
-    stamp(p, a.x + 11 + (hash(i * 8.3 + j) - 0.5) * 6, y, s);
-    const p2 = P.hi[Math.floor(hash(i * 5.9 + 80 + j) * P.hi.length)];
-    const s2 = 1.0 + hash(i * 7.7 + 3 + j) * 0.45;
-    stamp(p2, a.x + a.w - 11 + (hash(i * 3.1 + j) - 0.5) * 6, y + (hash(i * 2.3 + j) - 0.5) * 8, s2);
-    if (P.pile) {
-      // a second loose lump turns each boulder into a little cairn —
-      // borrows the theme's low-prop tint so volcano rocks stay scorched
-      stamp({ r: MT.ROCK_SMALL, t: P.lo[0].t }, a.x + 27, y - 6, s * 0.7);
-      stamp({ r: MT.ROCK_SMALL, t: P.lo[0].t }, a.x + a.w - 27, y + 2, s2 * 0.7);
-    }
-    y += 44 + hash(i * 3.9 + j) * 12;
-  }
-  // bottom strip — sparse low cover; nothing tall may hide the team
-  for (let i = 0, x = a.x + 40; x < a.x + a.w - 30; i++) {
-    const p = P.lo[Math.floor(hash(i * 8.9 + 60 + j) * P.lo.length)];
-    const s = 0.9 + hash(i * 6.7 + j) * 0.5;
-    stamp(p, x + (hash(i * 4.3 + j) - 0.5) * 14, a.y + a.h - 7, s);
-    x += 72 + hash(i * 5.5 + j) * 38;
+export function drawWall(ctx: CanvasRenderingContext2D, a: Rect, theme: Theme, seed = 0) {
+  const props = WALL_PROPS[theme];
+  // Four accents only; their feet stay above the chips at a.y + 48.
+  for (let i = 0; i < 4; i++) {
+    const p = props[(i + Math.floor(hash(seed) * 2)) % 2];
+    const w = Math.min(38, p.r[2]), h = w * p.r[3] / p.r[2];
+    const x = a.x + (i % 2 ? a.w - 26 : 26);
+    const y = a.y + (i < 2 ? 36 : a.h - 8);
+    drawSlice(ctx, p.r, Math.round(x - w / 2), Math.round(y - h), w, h, p.t);
   }
 }
 
 export function drawBackdrop(
   ctx: CanvasRenderingContext2D,
-  rect: { x: number; y: number; w: number; h: number },
+  rect: Rect,
   r: number,
   theme: Theme,
-  t: number,
-  pool: { nx: number; ny: number } | null = { nx: 0.78, ny: 0.2 },
 ) {
-  const { x, y, w, h } = rect;
   ctx.save();
-  rr(ctx, x, y, w, h, r);
+  ctx.beginPath();
+  ctx.roundRect(rect.x, rect.y, rect.w, rect.h, r);
   ctx.clip();
-  ctx.drawImage(floor(theme), x, y, w, h);
-  // dark seat under the wall so the rim sits on the floor, not floats
-  ctx.strokeStyle = 'rgba(0,0,0,0.16)';
-  ctx.lineWidth = 12;
-  rr(ctx, x, y, w, h, r);
-  ctx.stroke();
-  // soft light pool, gently pulsing; screens pass null to skip it
-  if (pool) {
-    const [gr, gg, gb, ga] = GLOW[theme];
-    const px = x + pool.nx * w, py = y + pool.ny * h;
-    const pr = Math.min(w, h) * 0.42;
-    // the gradient is static per arena+pool — the pulse rides on
-    // globalAlpha so the color stops bake once instead of per frame
-    const pk = `${gr},${gg},${gb}|${px},${py},${pr}`;
-    let gd = poolGrads.get(pk);
-    if (!gd) {
-      gd = ctx.createRadialGradient(px, py, 0, px, py, pr);
-      gd.addColorStop(0, `rgba(${gr},${gg},${gb},1)`);
-      gd.addColorStop(1, `rgba(${gr},${gg},${gb},0)`);
-      poolGrads.set(pk, gd);
-    }
-    ctx.globalAlpha = ga * (0.85 + 0.15 * Math.sin(t * 1.2));
-    ctx.fillStyle = gd;
-    ctx.fillRect(x, y, w, h);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(floor(theme), rect.x, rect.y, rect.w, rect.h);
+  ctx.restore();
+}
+
+const WATER_KEY = [136, 200, 240] as const;
+const SAND_KEY = [216, 184, 96] as const;
+const LAVA_KEY = [200, 48, 0] as const;
+const AMBIENT: Record<Theme, PropSpec & { chroma?: readonly [number, number, number]; n: number; vx: number; vy: number; size: number; alpha: number }> = {
+  grove: { r: MT.FX_LEAF, n: 18, vx: 13, vy: 22, size: 8, alpha: 0.52 },
+  cavern: { r: MT.FX_DUST, chroma: SAND_KEY, t: 'rgba(170,190,238,0.40)', n: 16, vx: 5, vy: 7, size: 4, alpha: 0.35 },
+  volcano: { r: MT.FX_EMBER, chroma: LAVA_KEY, n: 24, vx: 7, vy: -32, size: 7, alpha: 0.70 },
+  sky: { r: MT.FX_SNOW, chroma: WATER_KEY, n: 22, vx: -16, vy: 24, size: 7, alpha: 0.65 },
+  meadow: { r: MT.FX_PETAL, n: 18, vx: 18, vy: 12, size: 6, alpha: 0.55 },
+  shore: { r: MT.FX_BUBBLE, chroma: WATER_KEY, n: 16, vx: -10, vy: -12, size: 7, alpha: 0.40 },
+  plant: { r: MT.FX_EMBER, chroma: LAVA_KEY, t: 'rgba(255,230,110,0.70)', n: 14, vx: 3, vy: -20, size: 4, alpha: 0.50 },
+  marsh: { r: MT.FX_BUBBLE, chroma: WATER_KEY, t: 'rgba(160,208,110,0.35)', n: 16, vx: 5, vy: -9, size: 7, alpha: 0.50 },
+  sanctum: { r: MT.FX_SNOW, chroma: WATER_KEY, t: 'rgba(184,148,240,0.35)', n: 14, vx: 4, vy: -12, size: 5, alpha: 0.45 },
+  dojo: { r: MT.FX_DUST, chroma: SAND_KEY, n: 14, vx: 14, vy: 8, size: 4, alpha: 0.42 },
+  tower: { r: MT.FX_PETAL, t: 'rgba(160,134,238,0.65)', n: 16, vx: 5, vy: -15, size: 6, alpha: 0.55 },
+};
+const ambientTiles = new Map<Theme, HTMLCanvasElement>();
+
+export function drawAmbient(ctx: CanvasRenderingContext2D, a: Rect, theme: Theme, time: number, quality = 1) {
+  const amb = AMBIENT[theme];
+  let tile = ambientTiles.get(theme);
+  if (!tile) {
+    const loaded = slice(amb.r, amb.t, amb.chroma);
+    if (!loaded) return;
+    ambientTiles.set(theme, loaded);
+    tile = loaded;
+  }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(a.x + 12, a.y + 64, a.w - 24, a.h - 80);
+  ctx.clip();
+  ctx.imageSmoothingEnabled = false;
+  const n = Math.max(1, Math.round(amb.n * quality));
+  for (let k = 0; k < n; k++) {
+    const phase = time * 1.2 + k * 2.3;
+    const x = a.x + ((k * 97.31 + time * amb.vx + Math.sin(phase) * 16) % a.w + a.w) % a.w;
+    const y = a.y + ((k * 61.7 + time * amb.vy) % a.h + a.h) % a.h;
+    const w = amb.size * (0.7 + (k % 3) * 0.15);
+    ctx.globalAlpha = amb.alpha * (0.55 + 0.45 * Math.sin(phase) ** 2);
+    ctx.drawImage(tile, Math.round(x), Math.round(y), w, w * tile.height / tile.width);
   }
   ctx.restore();
 }
