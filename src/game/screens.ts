@@ -6088,76 +6088,55 @@ export function drawResult(
 let scoreStrN = -1;
 let scoreStr = '';
 
-export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, stageName: string, score: number, streak = 0, ultIn = 1, t = 0, onMap = false) {
-  ctx.font = fontB(9);
-  // on the map the region IS the progress readout — the tag, pip row and
-  // streak/ult gauges all duplicate or can't act, so the header keeps score
-  if (!onMap) {
-    // a tiny dark window keeps the stage tag legible over any arena floor.
-    // Right of the corner chips (pause+ff end at x93), capped clear of the
-    // stage pips that start at x182 — long names fit-shrink inside the cap
-    const tagW = Math.min(measureW(ctx, stageName) + 18, 79);
-    uiWindow(ctx, { x: 97, y: 30, w: tagW, h: 20 }, { dark: true, shadow: false });
-    ctx.fillStyle = INK_FAINT;
+export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: number, score: number, ultIn = 1, t = 0, onMap = false) {
+  // on the map the region IS the progress readout, so the header keeps
+  // only SHOTS/SCORE, mirrored to the empty top-left
+  if (onMap) {
+    if (score !== scoreStrN) {
+      scoreStrN = score;
+      scoreStr = score.toLocaleString('en-US'); // a string the frame can reuse — the score barely moves
+    }
+    ctx.font = font(8);
+    const rw = Math.max(measureW(ctx, `SHOTS ${shots}`), measureW(ctx, `SCORE ${scoreStr}`)) + 30;
+    uiWindow(ctx, { x: 14, y: 28, w: rw, h: 40 }, { dark: true, shadow: false });
     ctx.textAlign = 'left';
-    fitFontB(ctx, stageName, 9, tagW - 10);
-    ctx.fillText(stageName, 103, 44);
-    // run map in miniature: a pip per stage, gyms as diamonds — the whole
-    // 9-stage climb is visible from the first fight. 19px gaps keep the row
-    // clear of the stage tag's right edge and the score chip's left
-    const gap = 19;
-    const x0 = W / 2 - ((TOTAL_STAGES - 1) * gap) / 2;
-    for (let i = 0; i < TOTAL_STAGES; i++) {
-      const x = x0 + i * gap;
-      const y = 40;
-      const gym = (i + 1) % 3 === 0;
-      ctx.fillStyle = i < wave ? GOLD : i === wave ? '#ffffff' : '#3a4066';
-      if (gym) {
-        ctx.beginPath();
-        ctx.moveTo(x, y - 7);
-        ctx.lineTo(x + 6, y);
-        ctx.lineTo(x, y + 7);
-        ctx.lineTo(x - 6, y);
-        ctx.closePath();
-        ctx.fill();
-      } else {
-        ctx.beginPath();
-        ctx.arc(x, y, 4, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`SHOTS ${shots}`, 24, 44);
+    ctx.fillStyle = GOLD;
+    ctx.fillText(`SCORE ${scoreStr}`, 24, 60);
+    return;
+  }
+  // battle top strip stays near-empty, Monster Strike style: stage pips and
+  // the ult gauge. Court name, ascension and score live on the pause card;
+  // the PERFECT streak pops as a float when it climbs
+  // run map in miniature: a pip per stage, gyms as diamonds — the whole
+  // 9-stage climb is visible from the first fight. 19px gaps keep the row
+  // centered over the court
+  const gap = 19;
+  const x0 = W / 2 - ((TOTAL_STAGES - 1) * gap) / 2;
+  for (let i = 0; i < TOTAL_STAGES; i++) {
+    const x = x0 + i * gap;
+    const y = 40;
+    const gym = (i + 1) % 3 === 0;
+    ctx.fillStyle = i < wave ? GOLD : i === wave ? '#ffffff' : '#3a4066';
+    if (gym) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 7);
+      ctx.lineTo(x + 6, y);
+      ctx.lineTo(x, y + 7);
+      ctx.lineTo(x - 6, y);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
-  if (score !== scoreStrN) {
-    scoreStrN = score;
-    scoreStr = score.toLocaleString('en-US'); // a string the frame can reuse — the score barely moves
-  }
-  // SHOTS/SCORE ride one dark chip — sized to whichever string runs wider.
-  // On the map the mid-run chips own the top-right corner and the stage
-  // title owns the center — the chip mirrors to the empty top-left instead.
-  ctx.font = font(8);
-  const rw = Math.max(measureW(ctx, `SHOTS ${shots}`), measureW(ctx, `SCORE ${scoreStr}`)) + 30;
-  const rx = onMap ? 14 : W - 22 - rw;
-  uiWindow(ctx, { x: rx, y: 28, w: rw, h: 40 }, { dark: true, shadow: false });
-  ctx.textAlign = onMap ? 'left' : 'right';
-  const tx = onMap ? rx + 10 : rx + rw - 8;
-  ctx.fillStyle = '#fff';
-  ctx.fillText(`SHOTS ${shots}`, tx, 44);
-  ctx.font = font(8);
-  ctx.fillStyle = GOLD;
-  ctx.fillText(`SCORE ${scoreStr}`, tx, 60);
-  // streak + ult share a second row under the stage name — a third right
-  // row would land inside the arena rim and get drawn over. Map skips it:
-  // the charge can't fire from the route board anyway.
-  if (onMap) return;
   ctx.font = fontB(8);
   ctx.textAlign = 'left';
   const ready = ultIn <= 0;
   let ux = 99; // right of the corner chips — the ×2 chip ends at x93
-  if (streak > 1) {
-    ctx.fillStyle = '#f08030';
-    ctx.fillText(`PERFECT ×${streak}`, ux, 60);
-    ux += ctx.measureText(`PERFECT ×${streak}`).width + 10;
-  }
   // the shared charge is a real gauge, not a tally: ULT label + a pip per
   // banked shot, gold flood + pulse once it's armed
   ctx.fillStyle = ready ? GOLD : INK_FAINT;
@@ -6174,12 +6153,6 @@ export function drawHud(ctx: CanvasRenderingContext2D, wave: number, shots: numb
       ctx.fillStyle = `rgba(255,216,77,${(0.25 + 0.35 * glow).toFixed(3)})`;
       ctx.fillRect(ux + i * (pipW + 3) - 1, 51, pipW + 2, 10);
     }
-  }
-  if (ready) {
-    ctx.globalAlpha = glow;
-    ctx.fillStyle = GOLD;
-    ctx.fillText('TAP A TEAMMATE!', ux + ULT_SHOTS * (pipW + 3) + 8, 60);
-    ctx.globalAlpha = 1;
   }
 }
 
