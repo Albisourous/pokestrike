@@ -222,12 +222,13 @@ interface BallDrop {
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
-type PickupKind = 'oran-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb';
+type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb';
 interface Pickup {
   x: number;
   y: number;
   kind: PickupKind;
   t: number; // bob phase
+  age: number; // enemy turns survived
 }
 interface Scar {
   x: number;
@@ -418,10 +419,15 @@ const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir']; // lum r
 // ball reaches it
 const PICKUP_META: Record<PickupKind, { name: string; label: string; color: string }> = {
   'oran-berry': { name: 'ORAN BERRY', label: 'HEAL 15%', color: '#6fdc6f' },
+  'sitrus-berry': { name: 'SITRUS BERRY', label: 'HEAL 30%', color: '#f8d030' },
   protein: { name: 'PROTEIN', label: 'ATK +50%', color: '#f08030' },
   elixir: { name: 'ELIXIR', label: 'SUPER +1', color: '#9ecbff' },
   'lum-berry': { name: 'LUM BERRY', label: 'CURE ALL', color: '#b8f8f8' },
   'revival-herb': { name: 'REVIVAL HERB', label: 'REVIVE', color: '#f8d030' },
+};
+// MS field items grow if left on the field.
+const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }>> = {
+  'oran-berry': { to: 'sitrus-berry', turns: 1 },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 
@@ -1629,6 +1635,7 @@ export class Battle {
             ? 'lum-berry'
             : PICKUP_KINDS[Math.floor(this.rng() * 3)],
         t: this.rng() * 6,
+        age: 0,
       });
     }
     // the room's hazard cells land as zones — lava ponds, silence pools,
@@ -3090,9 +3097,11 @@ export class Battle {
     this.burst(pk.x, pk.y, '#fff8dc', 9, 260, 0.9);
     this.shotLoot++;
     switch (pk.kind) {
-      case 'oran-berry': {
+      case 'oran-berry':
+      case 'sitrus-berry': {
+        const fraction = pk.kind === 'sitrus-berry' ? 0.3 : 0.15;
         const hp0 = this.players.reduce((a, p) => a + p.hp, 0);
-        this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * 0.15)));
+        this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * fraction)));
         // if nobody needed it (full team, heal on cooldown) still say so —
         // a pickup should never vanish without a word
         if (this.players.reduce((a, p) => a + p.hp, 0) === hp0) {
@@ -3576,7 +3585,7 @@ export class Battle {
       // VOLATILE mod: the KO detonates — a chunk of its max hp splashes
       // onto every neighbor, and volatile kills can chain
       // a dead thief coughs up the loot — KO it to take your berry back
-      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0 });
+      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0, age: 0 });
       if (e.volatile && !this.players.some((p) => !p.dead && p.def.damp)) {
         const BR = 110;
         this.waves.push({ x: e.x, y: e.y, r: 0, maxR: BR, t: 0.3, life: 0.3, color: '#ff9a30', hits: new Set() });
@@ -6196,7 +6205,7 @@ export class Battle {
     }
     for (const e of this.enemies) {
       if (e.boss || e.dead) continue;
-      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0 });
+      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0, age: 0 });
       this.burst(e.x, e.y, '#8890b8', 10, 340);
       this.pushText({ x: e.x, y: e.y - e.r - 20, text: 'FLED', t: 0.9, color: '#c8d0e8', big: false });
       e.dead = true;
@@ -6414,8 +6423,21 @@ export class Battle {
         this.wipe();
         return;
       }
+      this.ripenPickups();
       this.nextTurn();
     });
+  }
+
+  private ripenPickups() {
+    for (const pk of this.pickups) {
+      pk.age++;
+      const ripen = PICKUP_RIPEN[pk.kind];
+      if (!ripen || pk.age < ripen.turns) continue;
+      pk.kind = ripen.to;
+      pk.age = 0;
+      this.burst(pk.x, pk.y, PICKUP_META[pk.kind].color, 8, 240, 0.8);
+      this.pushText({ x: pk.x, y: pk.y - 12, text: 'RIPE', t: 0.9, color: PICKUP_META[pk.kind].color, big: false });
+    }
   }
 
   private bossBigAttack(e: Unit) {

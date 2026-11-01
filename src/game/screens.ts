@@ -2582,6 +2582,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'each wave seeds a pickup · the colored ring and tag name it',
       'LUM BERRY cures the team · it only drops when someone is sick',
       'berry heals the team, protein buffs the shot, elixir charges pips',
+      'ORAN BERRY ripens to SITRUS BERRY after one enemy turn',
       'fly through the glowing item to collect on touch',
       'one spawns each wave, two when something big lurks',
     ],
