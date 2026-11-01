@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, type FoeMoveKind } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -66,6 +66,7 @@ interface Unit {
   hp: number;
   maxHp: number;
   timer: number; // enemy countdown; attacks when it hits 0
+  clocks: { kind: FoeMoveKind; move: string; turn: number; t: number }[];
   drift: number; // enemy approach speed (u/s); players always 0
   // wander state — enemies jitter and occasionally dart
   wx: number;
@@ -413,6 +414,10 @@ const ENEMY_MAX = 5; // MS enemy_max: live foes per extra battle
 const PAR_PER_BATTLE = 4;
 const PAR_BOSS = 10;
 const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
+const LASER_HALF_W = 22;
+const QUAKE_R = 150;
+const FOE_MOVE_POW = 0.8;
+const BOSS_MOVE_POW = 1;
 const COURT_SCROLL = 0.55; // s — the court slides in from above on each new battle
 const FOE_DROP = 0.32; // s — foes fall onto the court once it settles
 const FOE_DROP_H = 150; // px — how high they fall from
@@ -727,6 +732,7 @@ export class Battle {
   ff = Battle.ffPref; // ×2 chip beside it — the sim runs two steps a frame, not a stretched dt
   private pendingAttacks: Unit[] = [];
   private pendingBig: Unit[] = [];
+  private pendingMoves: { e: Unit; c: Unit['clocks'][number] }[] = [];
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
   private shotCombo = 0; // pass-through links chained this shot
@@ -990,6 +996,7 @@ export class Battle {
         hp,
         maxHp: hp,
         timer: 0,
+        clocks: [],
         drift: 0,
         wx: 0,
         wy: 0,
@@ -1763,6 +1770,7 @@ export class Battle {
       hp: ehp,
       maxHp: ehp,
       timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (this.raidMod === 'hasty' ? 0.85 : 1) * (s.def.prank ? 0.55 : 1) + (wi === 0 ? 1 : 0),
+      clocks: def.fuse ? [] : foeClocks(def.type, !!s.boss, 0).map(({ kind, move, turn, first }) => ({ kind, move, turn, t: first })),
       // ASC 7 FRENZY: foes press harder — approach speed ×1.25
       drift: enemyDrift(def.stats) * (s.boss ? 0.55 : 1) * (this.asc >= 7 ? 1.25 : 1),
       wx: 0,
@@ -6175,6 +6183,7 @@ export class Battle {
     }
     this.pendingAttacks = [];
     this.pendingBig = [];
+    this.pendingMoves = [];
     if (this.barBreak) {
       this.bossBarBreak();
       this.nextTurn();
@@ -6194,6 +6203,13 @@ export class Battle {
         if (e.bigT <= 0) this.pendingBig.push(e);
         else if (e.bigT === 1) bigWarned = true;
       }
+      if (!e.asleep) for (const c of e.clocks) {
+        c.t--;
+        if (c.t <= 0) {
+          this.pendingMoves.push({ e, c });
+          c.t = c.turn;
+        } else if (c.t === 1) bigWarned = true;
+      }
       if (e.timer <= 0) {
         // full para: the jolt eats the swing — the wind-up restarts a
         // round out, and the charge burns one tick of what held it
@@ -6209,7 +6225,7 @@ export class Battle {
       }
     }
     if (warned || bigWarned) sfx('warn');
-    if (this.pendingAttacks.length > 0 || this.pendingBig.length > 0) {
+    if (this.pendingAttacks.length > 0 || this.pendingBig.length > 0 || this.pendingMoves.length > 0) {
       this.phase = 'enemy';
       this.enemyPhaseT = ENEMY_TURN_DELAY;
     } else {
@@ -6301,6 +6317,7 @@ export class Battle {
     boss.weakA = this.rng() * Math.PI * 2;
     boss.timer = this.enemyReload(boss);
     boss.bigT = BOSS_BIG_TIMER;
+    boss.clocks = foeClocks(boss.def.type, true, boss.sumStage).map(({ kind, move, turn, first }) => ({ kind, move, turn, t: first }));
     const n = Math.min(2 + boss.sumStage, 4, Math.max(0, 7 - this.enemies.filter((e) => !e.dead).length));
     for (let i = 0; i < n; i++) {
       const def = pickWild(this.rng, this.depth);
@@ -6471,17 +6488,87 @@ export class Battle {
     }
   }
 
+  private fireMove(e: Unit, c: Unit['clocks'][number]) {
+    if (e.dead) return;
+    const color = TYPE_COLOR[e.def.type];
+    this.pushText({ x: e.x, y: e.y - e.r - 20, text: c.move, t: 1, color, big: false });
+    const pow = e.boss ? BOSS_MOVE_POW : FOE_MOVE_POW;
+    let thorns = false;
+    const hit = (p: Unit) => {
+      const dmg = Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower) * pow * (c.kind === 'meteor' ? 0.6 : 1));
+      this.damagePlayer(p, dmg, e);
+      if (!thorns && this.thorns > 0) {
+        this.hurt(e, this.thorns, '#c8a44d');
+        thorns = true;
+      }
+    };
+    if (c.kind === 'laser') {
+      const target = this.nearestPlayer(e);
+      if (!target) return;
+      const dir = norm({ x: target.x - e.x, y: target.y - e.y });
+      const x2 = e.x + dir.x * 1400;
+      const y2 = e.y + dir.y * 1400;
+      this.beams.push({ x1: e.x, y1: e.y, x2, y2, t: 0.5, life: 0.5, color, w: 1.6 });
+      this.beams.push({ x1: e.x, y1: e.y, x2, y2, t: 0.35, life: 0.35, color: '#fff', w: 0.6 });
+      for (const p of this.players) {
+        if (p.dead) continue;
+        const dx = p.x - e.x;
+        const dy = p.y - e.y;
+        const along = dx * dir.x + dy * dir.y;
+        const across = Math.abs(dx * dir.y - dy * dir.x);
+        if (along > 0 && across < p.r + LASER_HALF_W) hit(p);
+      }
+      this.screenFlash(color, 0.12);
+      this.addShake(8);
+      this.hitStop = Math.max(this.hitStop, 0.12);
+      sfx('beam');
+    } else if (c.kind === 'cross') {
+      const a = this.arena;
+      this.beams.push({ x1: a.x, y1: e.y, x2: a.x + a.w, y2: e.y, t: 0.5, life: 0.5, color, w: 1.6 });
+      this.beams.push({ x1: e.x, y1: a.y, x2: e.x, y2: a.y + a.h, t: 0.5, life: 0.5, color, w: 1.6 });
+      for (const p of this.players) {
+        if (!p.dead && (Math.abs(p.y - e.y) < p.r + LASER_HALF_W || Math.abs(p.x - e.x) < p.r + LASER_HALF_W)) hit(p);
+      }
+      this.screenFlash(color, 0.12);
+      this.addShake(8);
+      this.hitStop = Math.max(this.hitStop, 0.12);
+      sfx('beam');
+    } else if (c.kind === 'quake') {
+      this.waves.push({
+        x: e.x, y: e.y, r: 0, maxR: QUAKE_R, t: 0.5, life: 0.5, color,
+        hits: new Set(), hostile: true, onHit: (p) => hit(p),
+      });
+      this.burst(e.x, e.y, color, 16, 420);
+      this.scar(e.x, e.y, 30);
+      this.addShake(12);
+      sfx('boom');
+    } else {
+      sfx('boom');
+      this.players.filter((p) => !p.dead).forEach((p, i) => this.later(i * 0.12, () => {
+        if (p.dead) return;
+        this.burst(p.x, p.y, color, 14, 380, 1);
+        this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 46, t: 0.3, life: 0.3, color, hits: new Set() });
+        this.scar(p.x, p.y, 18);
+        this.addShake(8);
+        hit(p);
+      }));
+    }
+  }
+
   private resolveEnemyTurn() {
     const attacks = this.pendingAttacks;
     this.pendingAttacks = [];
     const bigAttacks = this.pendingBig;
     this.pendingBig = [];
-    if (!attacks.length && !bigAttacks.length) return; // already consumed — the volley is mid-flight
+    const moves = this.pendingMoves;
+    this.pendingMoves = [];
+    if (!attacks.length && !bigAttacks.length && !moves.length) return; // already consumed — the volley is mid-flight
     // staggered volley: each attacker fires on its own beat so every hit
     // is attributable instead of one silent wall of damage
     attacks.forEach((e, i) => this.later(i * 0.28, () => this.fireEnemy(e)));
     bigAttacks.forEach((e, i) => this.later((attacks.length + i) * 0.28, () => this.bossBigAttack(e)));
-    this.later(Math.max(0, attacks.length + bigAttacks.length - 1) * 0.28 + 0.35, () => {
+    moves.forEach(({ e, c }, i) => this.later((attacks.length + bigAttacks.length + i) * 0.28, () => this.fireMove(e, c)));
+    this.later(Math.max(0, attacks.length + bigAttacks.length + moves.length - 1) * 0.28 + 0.35, () => {
       if (this.phase !== 'enemy') return;
       if (this.players.every((p) => p.dead) && !this.ashRevive()) {
         this.wipe();
@@ -7363,7 +7450,48 @@ export class Battle {
       }
       ctx.restore();
     }
+    for (const e of this.enemies) {
+      if (e.dead || e.asleep) continue;
+      for (const c of e.clocks) {
+        if (c.t !== 1) continue;
+        ctx.save();
+        ctx.globalAlpha = 0.3 + 0.2 * Math.sin(this.time * 10);
+        ctx.strokeStyle = TYPE_COLOR[e.def.type];
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        ctx.beginPath();
+        if (c.kind === 'laser') {
+          const target = this.nearestPlayer(e);
+          if (target) {
+            const dir = norm({ x: target.x - e.x, y: target.y - e.y });
+            ctx.moveTo(e.x, e.y);
+            ctx.lineTo(e.x + dir.x * 1400, e.y + dir.y * 1400);
+          }
+        } else if (c.kind === 'cross') {
+          const a = this.arena;
+          ctx.moveTo(a.x, e.y);
+          ctx.lineTo(a.x + a.w, e.y);
+          ctx.moveTo(e.x, a.y);
+          ctx.lineTo(e.x, a.y + a.h);
+        } else if (c.kind === 'quake') {
+          ctx.arc(e.x, e.y, QUAKE_R, 0, Math.PI * 2);
+        } else {
+          for (const p of this.players) {
+            if (p.dead) continue;
+            ctx.moveTo(p.x + 26, p.y);
+            ctx.arc(p.x, p.y, 26, 0, Math.PI * 2);
+            ctx.moveTo(p.x - 8, p.y);
+            ctx.lineTo(p.x + 8, p.y);
+            ctx.moveTo(p.x, p.y - 8);
+            ctx.lineTo(p.x, p.y + 8);
+          }
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
     ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
 
     // last-shot echo — the previous arc lingers as a faint dotted line so
     // bank angles are learnable, not guessed (Angry Birds' old-arc trick)
@@ -9672,14 +9800,15 @@ export class Battle {
       }
       // attack countdown — ★ marks a signature attack; urgency reads in
       // color AND size: amber at 2, a throbbing red swell on the last tick
-      const urgent = u.timer <= 1 || u.enraged;
-      ctx.font = font(u.timer <= 1 ? 11 + Math.sin(this.time * 10) * 1.5 + 1.5 : 11);
+      const next = Math.min(u.timer, ...u.clocks.map((c) => c.t));
+      const urgent = next <= 1 || u.enraged;
+      ctx.font = font(next <= 1 ? 11 + Math.sin(this.time * 10) * 1.5 + 1.5 : 11);
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      const tag = u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(u.timer)}` : `${Math.ceil(u.timer)}`;
+      const tag = u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(next)}` : `${Math.ceil(next)}`;
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
-      ctx.fillStyle = urgent ? '#ff6b6b' : u.timer <= 2 ? '#ffb84d' : '#fff';
+      ctx.fillStyle = urgent ? '#ff6b6b' : next <= 2 ? '#ffb84d' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       if (u.boss) {
         const heavy = `H${Math.ceil(u.bigT)}`;

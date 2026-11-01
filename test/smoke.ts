@@ -1,14 +1,14 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin } from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
-import { typeMult, strikeType, weatherMult, WEATHER_OF } from '../src/game/types';
+import { typeMult, strikeType, weatherMult, WEATHER_OF, TYPES } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
 import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
@@ -2202,6 +2202,128 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       ((b as any).rewardPending || b.phase === 'won' || b.phase === 'loot' || b.phase === 'reward'),
     'last bar can KO the boss and clear the wave',
   );
+}
+
+// --- MS attack clocks + type moves ---
+{
+  const electric = foeClocks('electric', false, 0);
+  ok(electric.length === 1 && electric[0].kind === 'laser' && electric[0].move === 'THUNDERBOLT',
+    'fodder gets its electric laser move');
+  ok(TYPES.every((type) => TYPE_MOVE[type]), 'every canonical type has a foe move');
+  ok(
+    foeClocks('electric', true, 0).length === 1 &&
+      foeClocks('electric', true, 1).length === 2 &&
+      foeClocks('electric', true, 2).length === 3,
+    'boss bars add one attack clock each',
+  );
+
+  const spawned = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (spawned as any).spawnWave(0);
+  const spawnedFoe = spawned.enemies.find((e) => !e.def.fuse)!;
+  const initialClock = spawnedFoe.clocks[0];
+  ok(initialClock.t === foeClocks(spawnedFoe.def.type, false, 0)[0].first,
+    'spawned foe clocks start at first_attack_turn');
+
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(0);
+  const foe = b.enemies.find((e) => !e.def.fuse)!;
+  for (const other of b.enemies) if (other !== foe) other.dead = true;
+  foe.timer = 100;
+  const clock = { kind: 'laser' as const, move: 'THUNDERBOLT', turn: 3, t: 3 };
+  foe.clocks = [clock];
+  const endClockTurn = () => {
+    (b as any).phase = 'shot';
+    (b as any).endShot();
+  };
+  endClockTurn();
+  ok((b as any).pendingMoves.length === 0, 'three-turn clock waits after turn one');
+  endClockTurn();
+  ok((b as any).pendingMoves.length === 0, 'three-turn clock waits after turn two');
+  endClockTurn();
+  ok((b as any).pendingMoves.some((m: any) => m.e === foe && m.c === clock) && clock.t === 3,
+    'three-turn clock queues and reloads on turn three');
+
+  const first = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (first as any).spawnWave(0);
+  const firstFoe = first.enemies.find((e) => !e.def.fuse)!;
+  for (const other of first.enemies) if (other !== firstFoe) other.dead = true;
+  firstFoe.timer = 100;
+  const delayed = { kind: 'laser' as const, move: 'THUNDERBOLT', turn: 1, t: 3 };
+  firstFoe.clocks = [delayed];
+  for (let i = 0; i < 2; i++) {
+    (first as any).phase = 'shot';
+    (first as any).endShot();
+    ok((first as any).pendingMoves.length === 0, `first attack delay holds on turn ${i + 1}`);
+  }
+  (first as any).phase = 'shot';
+  (first as any).endShot();
+  ok((first as any).pendingMoves.some((m: any) => m.c === delayed),
+    'first attack delay fires on turn three');
+
+  const laser = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (laser as any).spawnWave(0);
+  const laserFoe = laser.enemies[0];
+  for (const other of laser.enemies) if (other !== laserFoe) other.dead = true;
+  laserFoe.x = 200; laserFoe.y = 400;
+  const [laserHit, laserMiss, ...laserRest] = laser.players;
+  for (const p of laserRest) p.dead = true;
+  laserHit.x = 300; laserHit.y = 400;
+  laserMiss.x = 300; laserMiss.y = 500;
+  const laserHp = [laserHit.hp, laserMiss.hp];
+  (laser as any).fireMove(laserFoe, { kind: 'laser', move: 'THUNDERBOLT', turn: 3, t: 1 });
+  ok(laserHit.hp < laserHp[0] && laserMiss.hp === laserHp[1], 'laser hits its line and spares the off-line player');
+
+  const cross = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (cross as any).spawnWave(0);
+  const crossFoe = cross.enemies[0];
+  for (const other of cross.enemies) if (other !== crossFoe) other.dead = true;
+  crossFoe.x = 200; crossFoe.y = 400;
+  const [crossHit, crossMiss, ...crossRest] = cross.players;
+  for (const p of crossRest) p.dead = true;
+  crossHit.x = 200; crossHit.y = 500;
+  crossMiss.x = 300; crossMiss.y = 500;
+  const crossHp = [crossHit.hp, crossMiss.hp];
+  (cross as any).fireMove(crossFoe, { kind: 'cross', move: 'PSYBEAM', turn: 3, t: 1 });
+  ok(crossHit.hp < crossHp[0] && crossMiss.hp === crossHp[1], 'cross hits vertical alignment and spares unaligned player');
+
+  const quake = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (quake as any).spawnWave(0);
+  const quakeFoe = quake.enemies[0];
+  for (const other of quake.enemies) if (other !== quakeFoe) other.dead = true;
+  quakeFoe.x = 200; quakeFoe.y = 400;
+  const [quakeHit, quakeMiss, ...quakeRest] = quake.players;
+  for (const p of quakeRest) p.dead = true;
+  quakeHit.x = 220; quakeHit.y = 400;
+  quakeMiss.x = 430; quakeMiss.y = 400;
+  const quakeHp = [quakeHit.hp, quakeMiss.hp];
+  (quake as any).fireMove(quakeFoe, { kind: 'quake', move: 'EARTHQUAKE', turn: 3, t: 1 });
+  for (let i = 0; i < 4; i++) quake.update(0.2);
+  ok(quakeHit.hp < quakeHp[0] && quakeMiss.hp === quakeHp[1], 'quake ring damages inside QUAKE_R only');
+
+  const bossBattle = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (bossBattle as any).spawnWave(2);
+  const boss = bossBattle.enemies.find((e) => e.boss)!;
+  boss.sash = false;
+  (bossBattle as any).hurt(boss, Math.ceil(boss.maxHp * 0.5), '#fff');
+  (bossBattle as any).endShot();
+  ok(boss.sumStage === 1 && boss.clocks.length === 2 &&
+    boss.clocks.every((c, i) => c.kind === foeClocks(boss.def.type, true, 1)[i].kind &&
+      c.move === foeClocks(boss.def.type, true, 1)[i].move &&
+      c.t === foeClocks(boss.def.type, true, 1)[i].first),
+  'first boss bar break loads the two-clock bar-one set');
+
+  const asleep = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (asleep as any).spawnWave(0);
+  const sleepingFoe = asleep.enemies[0];
+  for (const other of asleep.enemies) if (other !== sleepingFoe) other.dead = true;
+  sleepingFoe.asleep = true;
+  sleepingFoe.timer = 100;
+  const sleepingClock = { kind: 'laser' as const, move: 'THUNDERBOLT', turn: 3, t: 3 };
+  sleepingFoe.clocks = [sleepingClock];
+  (asleep as any).phase = 'shot';
+  (asleep as any).endShot();
+  ok(sleepingClock.t === 3 && (asleep as any).pendingMoves.length === 0,
+    'asleep foe clocks do not tick');
 }
 
 // --- MS heavy boss clock ---
