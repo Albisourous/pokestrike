@@ -2824,6 +2824,37 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(b.phase === 'aim' && u.vx === 0 && u.vy === 0, 'pointercancel drops the drag, no shot');
 }
 
+// --- MS stage_phases: a wild stop strings battles before its reward ---------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (b as any).spawnWave(1);
+  (b as any).battles = 3;
+  b.phase = 'aim';
+  const first = b.enemies.slice();
+  for (const e of b.enemies) e.dead = true;
+  b.enemies.length = 0;
+  (b as any).waveCleared();
+  ok((b as any).battle === 2 && !(b as any).rewardPending, 'a mid-stop clear loads battle 2, no reward yet');
+  ok(b.enemies.length > 0 && b.enemies.length <= 5 && b.enemies.every((e) => !first.includes(e)), 'battle 2 brings a fresh pack of up to enemy_max');
+  ok((b as any).foeDrop() === 0, 'the next battle scrolls in and drops its foes');
+  b.enemies.length = 0;
+  (b as any).phase = 'shot';
+  (b as any).waveCleared();
+  ok((b as any).battleBreak && (b as any).battle === 2, 'a clear inside a shot waits for endShot');
+  (b as any).nextBattle();
+  b.enemies.length = 0;
+  b.phase = 'aim';
+  (b as any).waveCleared();
+  ok((b as any).battle === 3 && (b as any).rewardPending, 'the last battle pays the stop reward');
+  const lens = new Set<number>();
+  for (let s = 1; s <= 40; s++) {
+    const c = new Battle(arena, team(), makeStage(s, 'T'), mulberry32(s));
+    (c as any).spawnWave(1);
+    if (!c.enemies.some((e) => e.boss) && !(c as any).inRival && !(c as any).inTrainer) lens.add((c as any).battles);
+  }
+  ok([...lens].every((n) => n >= 2 && n <= 4) && lens.size > 1, `skip_rate varies stop length (${[...lens].sort()})`);
+}
+
 // --- drop-in: foes stay off the court until the scroll lands them ----------
 {
   const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));

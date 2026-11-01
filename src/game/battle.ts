@@ -403,6 +403,10 @@ const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
 const BOSS_BARS = [0.3, 0.3, 0.4]; // MS stage data: boss HP split into bars, one battle per bar
+// MS stage_phases: a plain wild stop runs extra battles after the first, each
+// skipped at its skip_rate, so the same stop plays 2 to 4 battles long
+const BATTLE_SKIP = [0, 0.5, 0.7];
+const ENEMY_MAX = 5; // MS enemy_max: live foes per extra battle
 const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
 const COURT_SCROLL = 0.55; // s — the court slides in from above on each new battle
 const FOE_DROP = 0.32; // s — foes fall onto the court once it settles
@@ -673,6 +677,9 @@ export class Battle {
   weather: Weather | null = null; // this wave's sky — null is a clear court
   private gymFurnished = false;
   private barBreak = false;
+  private battle = 1; // battle k of this stop's battles
+  private battles = 1;
+  private battleBreak = false; // the stop's next battle loads after this shot
 
   private dragging = false;
   private dragStart: Vec = vec();
@@ -1438,6 +1445,11 @@ export class Battle {
       s.ny = a.ny;
     }
     this.enemies = spawns.map((s) => this.makeEnemy(s, i));
+    this.battle = 1;
+    this.battles = 1;
+    this.battleBreak = false;
+    if (i > 0 && !bossWave && !this.inTrainer && !this.inEvent && !this.inRival && !this.raid && !this.coach)
+      for (const skip of BATTLE_SKIP) if (this.rng() >= skip) this.battles++;
     // rival echo fights at the levels it earned — the ghost of a stacked
     // run is a real fight, not a victory lap
     if (this.inRival) {
@@ -4993,6 +5005,13 @@ export class Battle {
     // both reach here while the reward's still pending; ceremony and
     // gymsBeaten must never replay
     if (this.rewardPending || this.phase === 'won' || this.phase === 'lost') return;
+    if (this.battle < this.battles) {
+      // mid-stop: no ceremony, the next battle scrolls in. Inside a shot it
+      // waits for endShot, like a boss bar break
+      if (this.phase === 'aim') this.nextBattle();
+      else this.battleBreak = true;
+      return;
+    }
     if (this.coach) this.coachDone = true; // survived a wave — teaching's over
     if (this.inRival) {
       this.echoCleared = true; // the echo is beaten — reclaim it
@@ -6140,6 +6159,11 @@ export class Battle {
       this.nextTurn();
       return;
     }
+    if (this.battleBreak) {
+      this.nextBattle();
+      this.nextTurn();
+      return;
+    }
     let warned = false;
     let bigWarned = false;
     for (const e of this.enemies) {
@@ -6188,6 +6212,45 @@ export class Battle {
     }
   }
 
+  // a fresh room scrolls in under the team: furniture, hazards, drop-in clock
+  private swapCourt(grid: string[]) {
+    const room = buildRoom(grid, this.theme, this.rng);
+    this.installRoom(room);
+    this.courtT = this.time;
+    this.foesLanded = false;
+    this.hazards = room.hazards.map((z) => ({
+      kind: z.kind,
+      x: this.arena.x + this.arena.w * z.nx,
+      y: this.arena.y + this.arena.h * z.ny,
+      r: this.arena.w * z.r,
+      dir: z.dir,
+      pair: z.pair,
+    }));
+    return room;
+  }
+
+  private nextBattle() {
+    this.battleBreak = false;
+    this.battle++;
+    const room = this.swapCourt(ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]);
+    const anchors = [...room.anchors];
+    const spawns = rollWave(this.rng, this.depth, this.theme).filter((s) => !s.boss).slice(0, ENEMY_MAX);
+    this.enemies = spawns.map((s) => {
+      const a = anchors.splice(Math.floor(this.rng() * anchors.length), 1)[0];
+      return this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
+    });
+    this.waveShots = 0;
+    this.pushText({
+      x: this.arena.x + this.arena.w / 2,
+      y: this.arena.y + this.arena.h / 2,
+      text: `BATTLE ${this.battle}/${this.battles}`,
+      t: 1.5,
+      color: '#ffd84d',
+      big: true,
+    });
+    sfx('invade');
+  }
+
   private bossBarBreak() {
     const boss = this.enemies.find((e) => e.boss && !e.dead && e.hp > 0);
     if (!boss) {
@@ -6205,18 +6268,7 @@ export class Battle {
     const grid = this.gymFurnished
       ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
       : ROOM_BOSS;
-    const room = buildRoom(grid, this.theme, this.rng);
-    this.installRoom(room);
-    this.courtT = this.time;
-    this.foesLanded = false;
-    this.hazards = room.hazards.map((z) => ({
-      kind: z.kind,
-      x: this.arena.x + this.arena.w * z.nx,
-      y: this.arena.y + this.arena.h * z.ny,
-      r: this.arena.w * z.r,
-      dir: z.dir,
-      pair: z.pair,
-    }));
+    this.swapCourt(grid);
     // no teleport beat: the boss is off court until the drop-in lands it
     const at = this.unstick(
       this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
