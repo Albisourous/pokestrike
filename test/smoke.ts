@@ -3935,7 +3935,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(deal.id !== raidPick().id && deal.id !== featuredPull().id, 'the deal never mirrors the raid or rate-up');
   ok(dealOff() >= 50 && dealOff() <= 75, `the day's cut stays a deep bargain (${dealOff()}% off)`);
   ok(dealCost(deal) === Math.ceil(dustCost(deal) * (1 - dealOff() / 100)), 'the deal species prices at the day\'s cut');
-  ok(dealOff() === dealOff(Date.now() + 3600000), 'same UTC day hits the memo\'d deal cut');
+  const utcNoon = Date.UTC(2024, 5, 10, 12);
+  ok(dealOff(utcNoon) === dealOff(utcNoon + 3600000), 'same UTC day hits the memo\'d deal cut');
   const offDeal = PULLABLE.find((d) => d.id !== deal.id)!;
   ok(dealCost(offDeal) === dustCost(offDeal), 'every other species keeps list price');
 
