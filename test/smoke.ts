@@ -1709,8 +1709,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const b = new Battle(arena, team(), makeStage(8, 'T'), () => 0); // rng=0 → catches always land
   for (let i = 0; i <= 4; i++) (b as any).spawnWave(i);
   const e = (b as any).enemies[0];
+  e.sumStage = 2;
+  e.hp = Math.ceil(e.maxHp * 0.4);
+  e.sash = false;
+  e.lastStand = false;
   const el = e.lvl;
-  (b as any).hurt(e, e.hp + 50, '#fff');
+  (b as any).hurt(e, e.hp * 4 + 50, '#fff');
   // keeps its level up to the catch cap — the team's own average
   const pl = (b as any).players.map((p: any) => p.lvl);
   const want = Math.min(el, Math.max(1, Math.round(pl.reduce((s: number, l: number) => s + l, 0) / pl.length)));
@@ -1818,7 +1822,9 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const boss = (b as any).enemies.find((e: any) => e.boss);
   ok(!!boss, 'gym wave has a boss');
   if (boss) {
-    (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.75), '#fff');
+    boss.sumStage = 2;
+    boss.hp = Math.ceil(boss.maxHp * 0.4);
+    (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.15), '#fff');
     ok(boss.enraged === true, `boss enrages under 30% hp (${Math.round(boss.hp / boss.maxHp * 100)}%)`);
   }
 }
@@ -1899,6 +1905,8 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     b.enemies.filter((e: any) => !e.boss).every((e: any) => e.def.type === boss.def.type),
     'leader entourage is mono-type',
   );
+  boss.sumStage = 2;
+  boss.hp = Math.ceil(boss.maxHp * 0.4);
   (b as any).hurt(boss, 999999, '#fff'); // KO the leader — caught or fainted, the badge pays
   if (!boss.dead) (b as any).hurt(boss, 999999, '#fff'); // focus sash holds once — the second hit lands
   ok(gymBadges().has(boss.def.id), `gym KO banks the ${badgeOf(boss.def.id)?.name}`);
@@ -2105,21 +2113,46 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(!!b.enemies.find((e) => e.boss)?.relic, 'event alpha carries a held item');
 }
 
-// --- boss escalation: phase summons + teleport rotation ----------------------
+// --- boss bars + teleport rotation ------------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   (b as any).spawnWave(2); // seeded gym wave — has a boss
   const boss = b.enemies.find((e) => e.boss)!;
-  const n0 = b.enemies.length;
-  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.4), '#fff'); // 100% → 60%: crosses the 2/3 gate
-  ok(b.enemies.length > n0, `boss calls for help under 2/3 hp (+${b.enemies.length - n0} adds)`);
-  ok(boss.sumStage === 1, 'first summon threshold consumed');
-  for (const m of b.enemies.filter((e) => e.minion)) m.dead = true; // drop the guard, then hit hard — the counterplay
-  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.3), '#fff'); // 60% → ~30%: crosses the 1/3 gate
-  ok(boss.sumStage === 2, 'second summon threshold consumed');
-  const n2 = b.enemies.length;
-  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.05), '#fff'); // no third gate
-  ok(b.enemies.length === n2, 'summons stop after two phases');
+  const oldFoes = b.enemies.filter((e) => !e.boss);
+  oldFoes[0].stolen = 'oran-berry';
+  const boxBefore = b.box.length;
+  const levelsBefore = b.players.map((p) => p.lvl);
+  const blocksBefore = b.blocks;
+  const hazardsBefore = b.hazards;
+  const stolenBefore = b.pickups.filter((p) => p.kind === 'oran-berry').length;
+  boss.timer = 0.5;
+  (boss as any).bigT = 2;
+  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.5), '#fff');
+  ok(boss.hp === Math.ceil(boss.maxHp * 0.7), `first bar clamps boss at 70% (${boss.hp}/${boss.maxHp})`);
+  ok(boss.sumStage === 1 && (b as any).barBreak, 'first bar break queues after this shot');
+  const breakHp = boss.hp;
+  (b as any).hurt(boss, 100, '#fff');
+  ok(boss.hp === breakHp, 'pending bar break absorbs further hits');
+  (b as any).endShot();
+  const firstEscorts = b.enemies.filter((e) => e.minion);
+  ok(oldFoes.every((e) => !b.enemies.includes(e)), 'old escorts flee without a KO path');
+  ok(firstEscorts.length === 3 && firstEscorts.every((e) => e.timer <= 2), 'first break brings 3 hot escorts');
+  ok(b.box.length === boxBefore && b.players.every((p, i) => p.lvl === levelsBefore[i]), 'fleeing escorts give no catches or XP');
+  ok(b.pickups.filter((p) => p.kind === 'oran-berry').length === stolenBefore + 1, 'fleeing thief returns its stolen pickup');
+  ok(b.blocks !== blocksBefore && b.hazards !== hazardsBefore, 'bar break rebuilds the room');
+  ok((b as any).texts.some((t: any) => t.text === 'BATTLE 2/3'), 'first break announces BATTLE 2/3');
+  ok(boss.timer > 1 && (boss as any).bigT === 7 && !(b as any).barBreak, 'boss returns with both clocks reset');
+
+  for (const m of firstEscorts) m.dead = true;
+  boss.timer = 0.5;
+  (boss as any).bigT = 1;
+  (b as any).hurt(boss, Math.ceil(boss.maxHp * 0.5), '#fff');
+  ok(boss.hp === Math.ceil(boss.maxHp * 0.4) && boss.sumStage === 2 && (b as any).barBreak, 'second bar clamps boss at 40%');
+  (b as any).endShot();
+  const secondEscorts = b.enemies.filter((e) => e.minion);
+  ok(firstEscorts.every((e) => !b.enemies.includes(e)) && secondEscorts.length === 4, 'second break replaces escorts with 4');
+  ok((b as any).texts.some((t: any) => t.text === 'BATTLE 3/3'), 'second break announces BATTLE 3/3');
+  ok(boss.timer > 1 && (boss as any).bigT === 7 && !(b as any).barBreak, 'second break resets both boss clocks');
   // attack rotation: signature, signature, hop — position changes on the 3rd
   const { x: hx, y: hy } = { x: boss.x, y: boss.y };
   (b as any).bossAttack(boss);
@@ -2127,6 +2160,46 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(boss.x === hx && boss.y === hy, 'first two attacks stay put');
   (b as any).bossAttack(boss);
   ok(boss.x !== hx || boss.y !== hy, 'every 3rd attack teleports the boss');
+
+  for (const m of secondEscorts) m.dead = true;
+  boss.sash = false;
+  boss.lastStand = false;
+  (b as any).hurt(boss, boss.maxHp * 2, '#fff');
+  ok(
+    boss.dead && boss.sumStage === 2 && !(b as any).barBreak &&
+      ((b as any).rewardPending || b.phase === 'won' || b.phase === 'loot' || b.phase === 'reward'),
+    'last bar can KO the boss and clear the wave',
+  );
+}
+
+// --- MS heavy boss clock ---
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(2);
+  const boss = b.enemies.find((e) => e.boss)!;
+  for (const e of b.enemies) if (!e.boss) e.dead = true;
+  for (const p of b.players) p.hp = p.maxHp;
+  const hpBefore = b.players.map((p) => p.hp);
+  boss.timer = 100;
+  boss.paraT = 3;
+  (boss as any).bigT = 1;
+  (b as any).endShot();
+  ok(((b as any).pendingBig ?? []).includes(boss), 'heavy clock queues a boss attack at zero');
+  (b as any).resolveEnemyTurn();
+  b.update(0.5);
+  ok(b.players.every((p, i) => p.dead || p.hp < hpBefore[i]), 'heavy attack hits every living player through para');
+  ok((boss as any).bigT === 7, 'heavy attack reloads its clock');
+}
+
+{
+  const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (b as any).spawnWave(2);
+  const boss = b.enemies.find((e) => e.boss)!;
+  boss.asleep = true;
+  boss.timer = 4;
+  (boss as any).bigT = 4;
+  (b as any).endShot();
+  ok(boss.timer === 4 && (boss as any).bigT === 4, 'sleep freezes both boss clocks');
 }
 
 // --- MS mechanics: weak point, minion guard, strike shot, mines, volatile ---
@@ -2157,7 +2230,8 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const b2 = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   (b2 as any).spawnWave(2);
   const boss2 = b2.enemies.find((e) => e.boss)!;
-  (b2 as any).summonAdds(boss2);
+  (b2 as any).hurt(boss2, Math.ceil(boss2.maxHp * 0.5), '#fff');
+  (b2 as any).endShot();
   const mhp0 = boss2.hp;
   (b2 as any).hurt(boss2, 100, '#fff');
   const dGuarded = mhp0 - boss2.hp;
@@ -3199,6 +3273,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
         break;
       case 'laststand': {
         ace.sash = false; // a rolled focus-sash would hang it at 1 first — the stand is what's under test
+        ace.sumStage = 2;
+        ace.hp = Math.ceil(ace.maxHp * 0.4);
         (b as any).hurt(ace, ace.hp + 1, '#fff');
         ok(!ace.dead && ace.hp === Math.ceil(ace.maxHp * 0.45) && ace.enraged, 'LAST STAND: the boss rises once at 45%, enraged');
         break;
