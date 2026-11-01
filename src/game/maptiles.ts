@@ -44,3 +44,25 @@ export const TREE_ASH2: TileRect = [1800, 146, 38, 50]; // second ash variant
 export const ROCK_SMALL: TileRect = [1600, 58, 32, 23]; // loose blue-gray rock
 export const FLOWER_YB: TileRect = [1727, 95, 15, 13]; // yellow+blue pair
 export const FLOWER_PK: TileRect = [1727, 112, 15, 13]; // pink+white pair
+
+// Arena interiors and narrow trim, sampled inside the terrain blocks.
+export const TILE_TURF: TileRect = [26, 407, 32, 32];
+export const TILE_GRAVEL: TileRect = [134, 407, 32, 32];
+export const TILE_FLAGSTONE: TileRect = [242, 407, 32, 32];
+export const TILE_DIAMOND: TileRect = [296, 407, 32, 32];
+export const TILE_BRICK: TileRect = [350, 407, 32, 32];
+export const TILE_CLAY: TileRect = [134, 533, 32, 32];
+export const TILE_ICE: TileRect = [188, 533, 32, 32];
+export const TILE_LAVA: TileRect = [345, 378, 16, 16];
+export const TILE_HEDGE_TRIM: TileRect = [1646, 105, 8, 16];
+export const TILE_MOSS_TRIM: TileRect = [1644, 177, 8, 8];
+export const TILE_STEEL_TRIM: TileRect = [390, 529, 8, 8];
+export const TILE_TIMBER: TileRect = [1944, 254, 8, 8];
+
+// Individual atlas details for the live ambient pass (no drawn particles).
+export const FX_LEAF: TileRect = [1735, 104, 5, 5];
+export const FX_PETAL: TileRect = [1727, 112, 7, 7];
+export const FX_DUST: TileRect = [1920, 653, 4, 3];
+export const FX_EMBER: TileRect = [361, 380, 6, 5];
+export const FX_SNOW: TileRect = [1946, 634, 8, 8];
+export const FX_BUBBLE: TileRect = [1966, 634, 8, 8];

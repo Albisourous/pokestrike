@@ -1023,7 +1023,7 @@ function drawClimbBody(
     const card = ARENA;
     uiWindow(ctx, card, { rad: 10 });
     const inner = { x: card.x + 7, y: card.y + 7, w: card.w - 14, h: card.h - 14 };
-    drawBackdrop(ctx, inner, 8, stg.theme, t, null);
+    drawBackdrop(ctx, inner, 8, stg.theme);
     // the stage plate rides the top rail — what you're climbing into
     chip(ctx, card.x + 12, card.y + 11, `STAGE ${cont ? cont.stage : 1} · ${stg.name.toUpperCase()}`, {
       bg: INK,
@@ -4830,12 +4830,12 @@ export function drawDraft(
   offers: SpeciesDef[],
   picked: SpeciesDef[],
   stageName: string,
-  t: number,
+  _t: number,
   rerolls: number,
   spin: { age: number; pool: SpeciesDef[]; idx: number[] },
   bag: { sel: ReadonlySet<string>; last: string | null },
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky');
 
   // the draft board is one big menu window — the INK band carries the
   // title and the stage, everything below lives on the window's paper
@@ -5717,10 +5717,10 @@ export function drawPerkPick(
   offers: Perk[],
   title: string,
   sub: string,
-  t = 0,
+  _t = 0,
   team: SpeciesDef[] = [],
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky', t * 0.6, null);
+  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky');
   ctx.textAlign = 'center';
   const four = offers.length >= 4; // the lab's FOURTH OPTION hits the charm board too
   // the 2×2 board fills a tall window; the 3-offer row sits in a centered one

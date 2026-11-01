@@ -12,9 +12,9 @@ import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, type RunSave, type Settings } from './meta';
-import { drawBackdrop, drawWall, drawSlice, THEMES, hash } from './bg';
+import { drawBackdrop, drawWall, drawAmbient, drawSlice, THEMES, hash } from './bg';
 import { uiWindow } from './ui';
-import type { Theme, PropSpec } from './bg';
+import type { Theme } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
 import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND, T_GRASS } from './map';
 import * as MT from './maptiles';
@@ -298,44 +298,6 @@ const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
   well: [7, 639, 47, 66], // framed pool — the water drags you in
   boost: MT.TILE_PATH, // dirt pad
   power: MT.TILE_PATH,
-};
-
-// Floor scatter — a wave-seeded handful of small atlas bits stamped between
-// the wall ring and the hazards; deterministic by waveIndex, so each court
-// gets its own dressing with no extra state. Sizes stay in the 12-30px
-// dressing band and everything draws under the units.
-const DECOR: Record<Theme, { n: number; s: [number, number]; alpha?: number; props: PropSpec[] }> = {
-  grove: { n: 12, s: [13, 22], props: [{ r: MT.TILE_FLOWER }, { r: MT.FLOWER_YB }, { r: MT.FLOWER_PK }] },
-  cavern: { n: 10, s: [14, 24], props: [{ r: MT.TILE_ROCK }, { r: MT.ROCK_SMALL }, { r: MT.ROCK_SMALL, t: 'rgba(40,40,90,0.30)' }] },
-  volcano: {
-    n: 9, s: [14, 26],
-    props: [{ r: MT.TILE_ROCK, t: 'rgba(70,20,8,0.45)' }, { r: MT.ROCK_SMALL, t: 'rgba(70,20,8,0.45)' }],
-  },
-  sky: { n: 7, s: [26, 44], alpha: 0.5, props: [{ r: MT.TILE_DRIFT }] },
-  meadow: { n: 14, s: [12, 20], props: [{ r: MT.TILE_FLOWER }, { r: MT.FLOWER_WILD }, { r: MT.FLOWER_YB }] },
-  shore: { n: 9, s: [13, 22], props: [{ r: MT.ROCK_SMALL }, { r: MT.FLOWER_WILD, t: 'rgba(230,220,180,0.35)' }] },
-  plant: { n: 10, s: [13, 22], props: [{ r: MT.ROCK_SMALL, t: 'rgba(50,60,80,0.45)' }, { r: MT.TILE_ROCK, t: 'rgba(50,60,80,0.45)' }] },
-  marsh: { n: 12, s: [12, 21], props: [{ r: MT.TILE_FLOWER, t: 'rgba(40,80,44,0.50)' }, { r: MT.ROCK_SMALL, t: 'rgba(30,60,40,0.45)' }] },
-  sanctum: { n: 9, s: [13, 22], props: [{ r: MT.ROCK_SMALL, t: 'rgba(70,55,115,0.40)' }, { r: MT.FLOWER_PK, t: 'rgba(120,90,180,0.40)' }] },
-  dojo: { n: 8, s: [12, 20], props: [{ r: MT.ROCK_SMALL, t: 'rgba(140,100,50,0.30)' }, { r: MT.FLOWER_YB }] },
-  tower: { n: 9, s: [13, 22], props: [{ r: MT.ROCK_SMALL, t: 'rgba(30,26,52,0.55)' }, { r: MT.TILE_ROCK, t: 'rgba(30,26,52,0.55)' }] },
-};
-
-// ambient drift keyed to the court — petals ride the grove breeze, dust
-// hangs in cavern shafts, embers climb and flicker in the volcano, snow
-// slants through the sky court
-const AMBIENT: Record<Theme, { n: number; col: string; vx: number; vy: number; r: number; tw: number; wob: number }> = {
-  grove: { n: 16, col: '#cfe898', vx: 18, vy: 16, r: 2.1, tw: 0.1, wob: 26 }, // petals fall on the breeze
-  cavern: { n: 12, col: '#8a94c0', vx: 6, vy: 8, r: 1.7, tw: 0.16, wob: 12 }, // dust hangs in the light shafts
-  volcano: { n: 20, col: '#ff9d4d', vx: 10, vy: -34, r: 2.0, tw: 0.3, wob: 18 }, // embers climb, flicker hard
-  sky: { n: 16, col: '#ffffff', vx: -16, vy: 24, r: 1.9, tw: 0.12, wob: 20 }, // snow slants downwind
-  meadow: { n: 14, col: '#eef0a8', vx: 14, vy: 8, r: 1.9, tw: 0.12, wob: 22 }, // pollen drifts over the field
-  shore: { n: 12, col: '#d8f0ff', vx: -22, vy: -6, r: 1.8, tw: 0.14, wob: 18 }, // sea spray rides in off the water
-  plant: { n: 12, col: '#ffe86a', vx: 6, vy: -18, r: 1.7, tw: 0.55, wob: 10 }, // sparks snap and die fast
-  marsh: { n: 14, col: '#b8e878', vx: 10, vy: -4, r: 1.9, tw: 0.3, wob: 30 }, // fireflies wander the bog
-  sanctum: { n: 12, col: '#c8a8f0', vx: 4, vy: -10, r: 1.8, tw: 0.22, wob: 14 }, // motes rise off the ruin stones
-  dojo: { n: 10, col: '#dcc49a', vx: 12, vy: 4, r: 1.7, tw: 0.1, wob: 16 }, // dust kicked off the packed ring
-  tower: { n: 10, col: '#a880f0', vx: 5, vy: -14, r: 2.0, tw: 0.4, wob: 20 }, // wisps climb, guttering violet
 };
 
 // every sky in the deck — courts that promise weather on a wave with no
@@ -7233,9 +7195,7 @@ export class Battle {
       ctx.translate(-cx, -cy);
     }
 
-    // arena: theme-tinted backdrop + prop-lined rim — the wave seed moves
-    // the light pool and re-dresses the wall ring, so two grove courts in
-    // a row don't share one treeline
+    // The court is baked; only corner accents vary between fights.
     const wallSeed = this.waveIndex * 13.7 + this.depth * 3.1;
     const scrollK = Math.min(1, (this.time - this.courtT) / COURT_SCROLL);
     const scrolling = scrollK < 1;
@@ -7248,25 +7208,7 @@ export class Battle {
       ctx.clip();
       ctx.translate(0, dy);
     }
-    drawBackdrop(ctx, a, 18, this.theme, this.time, {
-      nx: 0.45 + hash(wallSeed) * 0.4,
-      ny: 0.08 + hash(wallSeed + 9) * 0.24,
-    });
-
-    // floor scatter — hash-seeded per wave so the court's dressing is
-    // stable for the whole fight; props stay small and under everything
-    {
-      const d = DECOR[this.theme];
-      if (d.alpha) ctx.globalAlpha = d.alpha;
-      for (let i = 0; i < d.n; i++) {
-        const p = d.props[Math.floor(hash(this.waveIndex * 13.1 + i * 3.7) * d.props.length)];
-        const px = a.x + 40 + hash(this.waveIndex * 7.9 + i * 17.3 + 1) * (a.w - 80);
-        const py = a.y + 44 + hash(this.waveIndex * 5.3 + i * 11.7 + 2) * (a.h - 100);
-        const w = d.s[0] + hash(this.waveIndex * 3.1 + i * 7.1 + 3) * (d.s[1] - d.s[0]);
-        drawSlice(ctx, p.r, px - w / 2, py - w / 2, w, w * (p.r[3] / p.r[2]), p.t);
-      }
-      ctx.globalAlpha = 1;
-    }
+    drawBackdrop(ctx, a, 18, this.theme);
 
     // scars left by heavy hits — dark scorches fading on the floor
     for (const s of this.scars) {
@@ -7286,32 +7228,13 @@ export class Battle {
     if (scrolling) {
       ctx.save();
       ctx.translate(0, a.h);
-      drawBackdrop(ctx, a, 18, this.theme, this.time, {
-        nx: 0.45 + hash(wallSeed - 13.7) * 0.4,
-        ny: 0.08 + hash(wallSeed - 4.7) * 0.24,
-      });
+      drawBackdrop(ctx, a, 18, this.theme);
       ctx.restore();
       ctx.restore();
     }
     drawWall(ctx, a, this.theme, wallSeed);
 
-    // ambient drift keyed to the court — petals ride the grove breeze, dust
-    // hangs in cavern shafts, embers climb and flicker in the volcano, snow
-    // slants through the sky court. Still rooms shouldn't read dead.
-    {
-      const amb = AMBIENT[this.theme];
-      const ambN = Math.max(1, Math.round(amb.n * QUALITY_FX[settings().quality]));
-      ctx.fillStyle = amb.col;
-      for (let k = 0; k < ambN; k++) {
-        const mx = a.x + (((k * 97.31 + this.time * amb.vx + Math.sin(this.time * 1.1 + k * 2.3) * amb.wob) % a.w) + a.w) % a.w;
-        const my = a.y + (((k * 61.7 - this.time * amb.vy) % a.h) + a.h) % a.h;
-        ctx.globalAlpha = 0.1 + amb.tw * (1 + Math.sin(this.time * 2.4 + k * 1.7));
-        ctx.beginPath();
-        ctx.arc(mx, my, amb.r * (0.7 + (k % 3) * 0.3), 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
+    drawAmbient(ctx, a, this.theme, this.time, QUALITY_FX[settings().quality]);
 
     this.drawWeather(ctx);
 
