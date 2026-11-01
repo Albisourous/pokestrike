@@ -2226,6 +2226,39 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const flatD = bhp0 - boss.hp;
   ok(weakD > flatD * 2, `weak point pays ~3x (${flatD} → ${weakD})`);
 
+  const regularDamage = (angle: number) => {
+    const run = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(11));
+    (run as any).spawnWave(0);
+    const foe = run.enemies.find((e) => !e.boss && !e.def.shielded)!;
+    for (const other of run.enemies) if (other !== foe) other.dead = true;
+    foe.weakA = 0;
+    const striker = run.players[0];
+    striker.x = foe.x + Math.cos(angle) * (foe.r + striker.r + 4);
+    striker.y = foe.y + Math.sin(angle) * (foe.r + striker.r + 4);
+    striker.vx = 0;
+    striker.vy = 0;
+    const hp = foe.hp;
+    (run as any).strikeEnemy(striker, foe);
+    return { run, foe, damage: hp - foe.hp };
+  };
+  const regularWeak = regularDamage(0);
+  const regularFlat = regularDamage(Math.PI);
+  ok(
+    regularWeak.damage > 0 && Math.abs(regularWeak.damage - regularFlat.damage * 2) <= 1,
+    `regular weak point doubles contact (${regularFlat.damage} → ${regularWeak.damage})`,
+  );
+  regularWeak.foe.def = { ...regularWeak.foe.def, shielded: true };
+  const weakHit = (regularWeak.run as any).weakHit;
+  ok(
+    typeof weakHit === 'function' && !weakHit.call(
+      regularWeak.run,
+      regularWeak.foe,
+      regularWeak.foe.x + regularWeak.foe.r,
+      regularWeak.foe.y,
+    ),
+    'shielded regular foe has no weak point',
+  );
+
   // minion guard: summoned adds halve boss damage until they die
   const b2 = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   (b2 as any).spawnWave(2);

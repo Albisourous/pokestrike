@@ -102,7 +102,7 @@ interface Unit {
   flashT: number; // hit-flash clock — the sprite redraws white-hot on impact
   sumStage: number; // boss bar index (0..2)
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
-  weakA: number; // boss weak point angle — rotating gold face, ×3 contact
+  weakA: number; // weak point angle — regular foes ×2, bosses ×3
   shieldA: number; // shelled foes: the shell's facing — front hits glance, back hits flank
   regenT: number; // regen foes: sparkle throttle — a green puff every ~1.5s of mending
   minion?: boolean; // summoned add — while any live, the boss is guarded
@@ -404,6 +404,7 @@ const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
 const BOSS_BARS = [0.3, 0.3, 0.4]; // MS stage data: boss HP split into bars, one battle per bar
 const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
+const COURT_SCROLL = 0.55; // s — the court slides in from above on each new battle
 const SHINY_RATE = 1 / 48; // ~2% of wild spawns roll the gold palette
 // the catch ritual's clock — a fast drop-in, ±0.5rad rocks, then the
 // verdict. Worst case runs 1.75s so a volley of catches stays snappy.
@@ -664,6 +665,7 @@ export class Battle {
   time = 0;
   waveBanner = 0;
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
+  private courtT = -9;
   endT = 0; // win/lose beat — the field report waits for the celebration to land
   weather: Weather | null = null; // this wave's sky — null is a clear court
   private gymFurnished = false;
@@ -1679,6 +1681,7 @@ export class Battle {
     this.waveBanner = 1.4;
     // the classic "!" tell as control lands — a challenger spots you
     this.waveIntroT = this.time;
+    this.courtT = this.time;
     sfx('warn');
     if (i > 0) {
       this.screenFlash('#ffffff', 0.25);
@@ -1771,7 +1774,7 @@ export class Battle {
       flashT: 0,
       sumStage: 0,
       atkN: 0,
-      weakA: s.boss ? this.rng() * Math.PI * 2 : 0,
+      weakA: s.boss ? this.rng() * Math.PI * 2 : this.uidCtr * 2.39996,
       shieldA: s.def.shielded ? this.rng() * Math.PI * 2 : 0,
       regenT: 0,
       asleep: !!s.def.sleepy && !s.def.sleepless,
@@ -3588,6 +3591,14 @@ export class Battle {
     }
   }
 
+  private weakHit(e: Unit, x: number, y: number): boolean {
+    if (e.dead || (!e.boss && e.def.shielded)) return false;
+    const a = Math.atan2(y - e.y, x - e.x);
+    let dd = Math.abs(a - e.weakA) % (Math.PI * 2);
+    if (dd > Math.PI) dd = Math.PI * 2 - dd;
+    return dd < (e.boss ? 0.62 : 0.45);
+  }
+
   private strikeEnemy(shooter: Unit, e: Unit) {
     const last = e.lastHit.get(shooter.uid) ?? -1;
     if (this.time - last < HIT_COOLDOWN) return;
@@ -3615,15 +3626,8 @@ export class Battle {
     this.shotHitN.set(e.uid, hitN + 1);
     if (rico && !this.inStatic(shooter.x, shooter.y)) this.onRicochet(e.x, e.y);
     const mult = typeMult(at, e.def) * weatherMult(this.weather, at);
-    // weak point: the boss's rotating gold face takes triple contact
-    // damage — MS's signature precision check. Drifts, so read it first.
-    let weak = false;
-    if (e.boss) {
-      const a = Math.atan2(shooter.y - e.y, shooter.x - e.x);
-      let dd = Math.abs(a - e.weakA) % (Math.PI * 2);
-      if (dd > Math.PI) dd = Math.PI * 2 - dd;
-      weak = dd < 0.62;
-    }
+    // read the marked face before damage — every foe has one, except shells
+    const weak = this.weakHit(e, shooter.x, shooter.y);
     // shelled foes face their shell into the fight: hits arriving on it
     // glance to 30%, hits landing behind it pay the flank
     let guarded = false;
@@ -3658,7 +3662,7 @@ export class Battle {
         (shooter.def.huge ? 2 : 1) * // Huge Power: canon attack doubling
         // intimidate: a living menace cowes the whole team — kill it first
         (this.enemies.some((m) => !m.dead && m.def.menace) ? 0.8 : 1) *
-        (weak ? 3 : 1) *
+        (weak ? (e.boss ? 3 : 2) : 1) *
         (guarded ? 0.3 : flanked ? 1.5 : 1) *
         // power zone: hits landed while the ball's inside the ATK field
         // carry the field's charge
@@ -3670,12 +3674,21 @@ export class Battle {
         Math.pow(0.9, hitN),
     );
     if (weak) {
-      this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
-      this.hitStop = Math.max(this.hitStop, 0.16);
-      this.impact(e.x, e.y, '#ffd84d', 1.7);
-      this.addPunch(0.11);
-      this.addShake(11);
-      sfx('perfect');
+      if (e.boss) {
+        this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
+        this.hitStop = Math.max(this.hitStop, 0.16);
+        this.impact(e.x, e.y, '#ffd84d', 1.7);
+        this.addPunch(0.11);
+        this.addShake(11);
+        sfx('perfect');
+      } else {
+        this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: false });
+        this.hitStop = Math.max(this.hitStop, 0.1);
+        this.impact(e.x, e.y, '#ffd84d', 1.3);
+        this.addPunch(0.06);
+        this.addShake(6);
+        sfx('perfect');
+      }
     }
     if (flanked) {
       this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'FLANKED!', t: 0.9, color: '#9df0ff', big: true });
@@ -6174,6 +6187,7 @@ export class Battle {
       : ROOM_BOSS;
     const room = buildRoom(grid, this.theme, this.rng);
     this.installRoom(room);
+    this.courtT = this.time;
     this.hazards = room.hazards.map((z) => ({
       kind: z.kind,
       x: this.arena.x + this.arena.w * z.nx,
@@ -7003,11 +7017,21 @@ export class Battle {
     // the light pool and re-dresses the wall ring, so two grove courts in
     // a row don't share one treeline
     const wallSeed = this.waveIndex * 13.7 + this.depth * 3.1;
+    const scrollK = Math.min(1, (this.time - this.courtT) / COURT_SCROLL);
+    const scrolling = scrollK < 1;
+    if (scrolling) {
+      const e = 1 - (1 - scrollK) ** 3;
+      const dy = -(1 - e) * a.h;
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(a.x, a.y, a.w, a.h);
+      ctx.clip();
+      ctx.translate(0, dy);
+    }
     drawBackdrop(ctx, a, 18, this.theme, this.time, {
       nx: 0.45 + hash(wallSeed) * 0.4,
       ny: 0.08 + hash(wallSeed + 9) * 0.24,
     });
-    drawWall(ctx, a, this.theme, wallSeed);
 
     // floor scatter — hash-seeded per wave so the court's dressing is
     // stable for the whole fight; props stay small and under everything
@@ -7039,6 +7063,17 @@ export class Battle {
 
     // stone blocks — solid cover the ball banks off
     for (const b of this.blocks) this.drawBlock(ctx, b);
+    if (scrolling) {
+      ctx.save();
+      ctx.translate(0, a.h);
+      drawBackdrop(ctx, a, 18, this.theme, this.time, {
+        nx: 0.45 + hash(wallSeed - 13.7) * 0.4,
+        ny: 0.08 + hash(wallSeed - 4.7) * 0.24,
+      });
+      ctx.restore();
+      ctx.restore();
+    }
+    drawWall(ctx, a, this.theme, wallSeed);
 
     // ambient drift keyed to the court — petals ride the grove breeze, dust
     // hangs in cavern shafts, embers climb and flicker in the volcano, snow
@@ -7917,11 +7952,10 @@ export class Battle {
         ctx.fillStyle = WEATHER_TINT[this.weather];
         ctx.fillText(WEATHER_LINE[this.weather], a.x + a.w / 2, cy - 20);
       }
-      // boss weak points are the gym's whole trick — say it on the banner
       if (gym) {
         ctx.font = font(9);
         ctx.fillStyle = '#ffd84d';
-        ctx.fillText('HIT THE GOLD SPOT FOR ×3 DAMAGE', a.x + a.w / 2, cy + 52);
+        ctx.fillText('HIT WEAK SPOTS ×2 · LEADER ×3', a.x + a.w / 2, cy + 52);
         // the leader's face flanks its name — only when the gym label is
         // up (a shiny or special announcement keeps the whole ribbon)
         if (this.waveHadGym && !this.waveSpecial) {
@@ -8154,7 +8188,7 @@ export class Battle {
     if (foe) {
       ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
       const tag = e.boss
-        ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)} · GOLD SPOT ×3`
+        ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)} · WEAK ×3`
         : e.supp === 'medic'
           ? `ATTACKS IN ${Math.ceil(e.timer)} · HEALS ALLIES`
           : e.supp === 'aegis'
@@ -8164,11 +8198,13 @@ export class Battle {
               : e.link
                 ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
-      const tagPx = e.boss ? fitFontB(ctx, tag, 8, w - 60) : fitFont(ctx, tag, 8, w - 60);
+      const weakTag = !e.boss && !e.def.shielded ? ' · WEAK ×2' : '';
+      const readTag = tag + weakTag;
+      const tagPx = e.boss ? fitFontB(ctx, readTag, 8, w - 60) : fitFont(ctx, readTag, 8, w - 60);
       const readout = e.boss && tagPx < 8
-        ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)} · GOLD ×3`
-        : tag;
-      if (readout !== tag) fitFontB(ctx, readout, 8, w - 60);
+        ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)} · WEAK ×3`
+        : readTag;
+      if (readout !== readTag) fitFontB(ctx, readout, 8, w - 60);
       ctx.fillText(readout, cx + 50, cy + 58);
       ctx.fillStyle = '#8890b8';
       const line0 = tells.length ? tells[0] : 'fires a projectile';
@@ -9475,15 +9511,16 @@ export class Battle {
         ctx.arc(u.x, u.y, u.r + 6, u.shieldA - 0.7, u.shieldA + 0.7);
         ctx.stroke();
       }
-      // boss weak point: a drifting gold star on the rim — contact on that
-      // face pays triple. MS's core precision tell.
-      if (u.boss && !u.dead) {
+      // weak point: a gold star on the rim; bosses drift, regular foes stay put
+      if (!u.dead && (u.boss || !u.def.shielded)) {
         const wx = u.x + Math.cos(u.weakA) * u.r * 0.92;
         const wy = u.y + Math.sin(u.weakA) * u.r * 0.92;
-        const s = 7 + Math.sin(this.time * 6) * 2;
+        const s = u.boss ? 7 + Math.sin(this.time * 6) * 2 : 5 + Math.sin(this.time * 6) * 1.5;
         ctx.fillStyle = '#ffd84d';
         ctx.strokeStyle = '#000';
         drawStar(ctx, wx, wy, s, 0.4, 2);
+      }
+      if (u.boss && !u.dead) {
         // minion guard: while summoned adds live, a shield ring orbits —
         // the fight's order of operations at a glance
         if (this.enemies.some((m) => m.minion && !m.dead)) {
@@ -9948,18 +9985,12 @@ export class Battle {
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
-        // weak read — contact inside the boss's ±0.62 rad gold face pays
-        // triple (same cone test as strikeEnemy); a small star marks it
-        if (hit.boss) {
-          const wa = Math.atan2(hy - hit.y, hx - hit.x);
-          let dd = Math.abs(wa - hit.weakA) % (Math.PI * 2);
-          if (dd > Math.PI) dd = Math.PI * 2 - dd;
-          if (dd < 0.62) {
-            const s = 6;
-            ctx.fillStyle = '#ffd84d';
-            ctx.strokeStyle = '#000';
-            drawStar(ctx, hx, hy, s, 0.4, 1.5);
-          }
+        // weak read — the same cone check the contact damage uses
+        if (this.weakHit(hit, hx, hy)) {
+          const s = 6;
+          ctx.fillStyle = '#ffd84d';
+          ctx.strokeStyle = '#000';
+          drawStar(ctx, hx, hy, s, 0.4, 1.5);
         }
       }
     }
@@ -10317,4 +10348,3 @@ const SUPER_SFX: Record<PokeType, Sfx> = {
 // several types share a blip — the type's index pitches it (normal low,
 // ghost high) so every element still reads distinct
 const superPitch = (t: PokeType) => 0.9 + TYPES.indexOf(t) * 0.05;
-
