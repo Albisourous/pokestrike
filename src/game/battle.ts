@@ -140,6 +140,8 @@ interface FloatText {
   w?: number; // text width at the pop=1 font — measured once at push
   ff?: string; // fitted font — cached when the banner can't fit the court
   fw?: number; // width at the fitted font
+  key?: string; // the callout before a ×N repeat count
+  n?: number; // repeats coalesced into this callout
 }
 interface Orb {
   x: number;
@@ -397,6 +399,7 @@ export const WALL_REST = 0.96; // pinball court — walls hand back nearly every
 export const UNIT_REST = 0.94; // meatier ricochets off bodies
 export const FRICTION = 1.7;
 const HIT_COOLDOWN = 0.12;
+const MAX_TEXTS = 8; // floating callouts on court at once — more reads as noise
 const HEAL_CD = 5; // in-battle mends share this cooldown — one heal per few shots
 const SUPER_POW = 0.7; // supers hit softer so clean lines carry the damage
 const CONTACT_POW = 1.4; // direct hits are the bread and butter again
@@ -735,8 +738,6 @@ export class Battle {
   private shotKOs = 0; // kills this shot — multi-KOs name themselves mid-flight
   private comboLabel = ''; // COMBO meter string — rebuilt only when the counters move
   private comboLabelN = -1;
-  private dmgLabel = '';
-  private dmgLabelN = -1;
   private kosThisShot = 0; // enemies downed by the current shot
   private taskDone = new Set<string>(); // a task pings once per run
   private aimCache = { sig: '', dots: [] as Vec[], hit: null as Unit | null, bounced: false, hx: 0, hy: 0 };
@@ -2215,7 +2216,6 @@ export class Battle {
     }
     for (const t of this.texts) t.t -= dt;
     cull(this.texts, (t) => t.t > 0);
-    if (this.texts.length > 40) this.texts.splice(0, this.texts.length - 40); // a huge burst shouldn't stack 100 labels
     for (const f of this.flashes) f.t -= dt;
     cull(this.flashes, (f) => f.t > 0);
     if (this.ultFx.t > 0) this.ultFx.t -= dt; // hit-stop stretches the cinema beat
@@ -3335,8 +3335,6 @@ export class Battle {
     const ascPremium = this.asc >= 5 ? 0.3 : 0.2; // ASC 5 INFLATION: the score premium deepens
     const gain = Math.round(d * (1 + this.asc * ascPremium) * this.scoreMult); // ascension pays a score premium; lucky egg stacks on
     this.score += gain;
-    // action→reward, on screen: every hit feeds its score under the mon
-    this.pushText({ x: e.x, y: e.y + e.r + 10, text: `+${gain}`, t: 0.9, color: '#ffe76a', big: false, size: 0.8 });
     // the run just became your best — celebrate mid-flight, not just on the card
     if (!this.bested && this.bestScore > 0 && this.score > this.bestScore) {
       this.bested = true;
@@ -7012,6 +7010,20 @@ export class Battle {
   // changes, so the draw pass never re-measures the same glyphs. A banner
   // too wide to ever fit the court caches its fitted font too.
   private pushText(t: FloatText) {
+    // a repeat callout near a live copy re-pops that copy with a ×N count
+    // instead of stacking (RICOCHET!, WEAK POINT! on every bounce). Numbers
+    // stay separate: two hits are two damage values, not one
+    if (!/\d/.test(t.text)) {
+      const twin = this.texts.find((o) => (o.key ?? o.text) === t.text && Math.abs(o.x - t.x) < 90 && Math.abs(o.y - t.y) < 90);
+      if (twin) {
+        twin.n = (twin.n ?? 1) + 1;
+        twin.key ??= t.text;
+        t = { ...twin, ...t, text: `${twin.key} ×${twin.n}`, key: twin.key, n: twin.n, size: Math.min((t.size ?? 1) * (1 + 0.08 * twin.n), 1.4), life: undefined };
+        this.texts.splice(this.texts.indexOf(twin), 1);
+      }
+    }
+    // small labels fade faster; banners keep their beat
+    if (!t.big) t.t *= 0.8;
     if (MCTX) {
       MCTX.font = font(16 * (t.size ?? 1));
       t.w = MCTX.measureText(t.text).width;
@@ -7022,6 +7034,11 @@ export class Battle {
       }
     }
     this.texts.push(t);
+    // at most MAX_TEXTS on court: the oldest small label yields first
+    if (this.texts.length > MAX_TEXTS) {
+      const i = this.texts.findIndex((o) => !o.big);
+      this.texts.splice(i >= 0 ? i : 0, 1);
+    }
   }
 
   // Anime shrapnel: velocity streaks, glow dots and a few stars exploding
@@ -7789,19 +7806,6 @@ export class Battle {
       }
       ctx.strokeText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y - 18);
       ctx.fillText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y - 18);
-      // the shot's running damage tally rides under the meter — MS shows it
-      // accumulating mid-flight; small and muted so it supports, not headlines
-      if (this.shotDmg > 0) {
-        if (this.dmgLabelN !== this.shotDmg) {
-          this.dmgLabelN = this.shotDmg;
-          this.dmgLabel = `DMG ${this.shotDmg}`;
-        }
-        ctx.font = font(10);
-        ctx.fillStyle = '#8890b8';
-        ctx.lineWidth = 3;
-        ctx.strokeText(this.dmgLabel, this.arena.x + this.arena.w / 2, this.arena.y - 5);
-        ctx.fillText(this.dmgLabel, this.arena.x + this.arena.w / 2, this.arena.y - 5);
-      }
     }
 
     // screen flashes render unshaken, on top — the accessibility toggle
@@ -7875,26 +7879,24 @@ export class Battle {
       }
     }
 
-    // foes remaining, top-right — the wave's progress bar. It rides a dark
-    // chip under the canopy line: at rim level the trees overhang it, and
-    // pale text on treeline green was unreadable
+    // foes remaining + turn par, top-right — one chip under the canopy
+    // line (at rim level the trees overhang it). TURN goes gold while a
+    // SPEED CLEAR is still on
     let left = 0;
     for (const e of this.enemies) if (!e.dead) left++;
     if ((this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') && left > 0) {
-      const tag = `${left} LEFT`;
-      ctx.font = font(9);
-      const tw = ctx.measureText(tag).width + 16;
-      uiWindow(ctx, { x: a.x + a.w - 10 - tw, y: a.y + 48, w: tw, h: 18 }, { dark: true, shadow: false, rad: 6 });
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#aab4d8';
-      ctx.fillText(tag, a.x + a.w - 10 - tw / 2, a.y + 61);
-      // turn par chip under it: gold while a SPEED CLEAR is still on
+      const tag = `${left} LEFT · `;
       const turn = `TURN ${this.stopShots}/${this.par}`;
       ctx.font = fontB(9);
-      const pw = ctx.measureText(turn).width + 14;
-      uiWindow(ctx, { x: a.x + a.w - 10 - pw, y: a.y + 70, w: pw, h: 16 }, { dark: true, shadow: false, rad: 6 });
+      const lw = ctx.measureText(tag).width;
+      const tw = lw + ctx.measureText(turn).width + 16;
+      const cx = a.x + a.w - 10 - tw;
+      uiWindow(ctx, { x: cx, y: a.y + 48, w: tw, h: 18 }, { dark: true, shadow: false, rad: 6 });
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#aab4d8';
+      ctx.fillText(tag, cx + 8, a.y + 61);
       ctx.fillStyle = this.stopShots <= this.par ? '#ffd84d' : '#6a7090';
-      ctx.fillText(turn, a.x + a.w - 10 - pw / 2, a.y + 82);
+      ctx.fillText(turn, cx + 8 + lw, a.y + 61);
     }
     // pause chip, opposite corner — a quiet brake during the action and the
     // loot lap; the phase list mirrors the pointerDown hit-test
@@ -7984,24 +7986,11 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
-    // ascension tag — the heat marker only; the ladder on CLIMB names the
-    // stacked mods, a marquee of them here just fought the scenery. Same
-    // chip-under-canopy treatment as N LEFT
-    if (this.asc > 0) {
-      const tag = `ASC ${this.asc}`;
-      ctx.font = fontB(9);
-      const tw = ctx.measureText(tag).width + 16;
-      uiWindow(ctx, { x: a.x + 10, y: a.y + 48, w: tw, h: 18 }, { dark: true, shadow: false, rad: 6 });
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#f0b02f';
-      ctx.fillText(tag, a.x + 10 + tw / 2, a.y + 61);
-    }
-
     // team-trait ribbon — the build-around payoff reads at a glance: a
     // type-colored pip per active trait, tier numeral riding it
     const liveTraits = [...this.traits.entries()].sort((x, y) => y[1] - x[1]);
     if (liveTraits.length) {
-      const ty = a.y + 48 + (this.asc > 0 ? 22 : 0);
+      const ty = a.y + 48;
       const tw2 = liveTraits.length * 24 + 8;
       uiWindow(ctx, { x: a.x + 10, y: ty, w: tw2, h: 18 }, { dark: true, shadow: false, rad: 6 });
       ctx.font = fontB(8);
@@ -8116,6 +8105,13 @@ export class Battle {
       ctx.fillStyle = '#8890b8';
       ctx.fillText('tap anywhere to resume', 270, 492);
       ctx.globalAlpha = 1;
+      // the secondary readouts the battle strip dropped: the court (not the
+      // stage, a fire trainer on a grove stage fights in Cinder Crag), heat,
+      // score
+      ctx.font = fontB(11);
+      ctx.fillStyle = '#aab4d8';
+      const info = [this.themeName.toUpperCase(), ...(this.asc > 0 ? [`ASC ${this.asc}`] : []), `SCORE ${this.score.toLocaleString('en-US')}`].join(' · ');
+      ctx.fillText(info, 270, 410);
       // the way out — same pill idiom as the other modal buttons; main.ts
       // hit-tests both rects before the freeze's any-tap thaw
       pill(ctx, PAUSE_SETTINGS, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SETTINGS' });

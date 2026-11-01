@@ -1915,9 +1915,7 @@ function hud() {
   if (!battle) return;
   ctx.save();
   ctx.translate(0, -viewPad);
-  // the tag names the court, not the stage — a fire trainer on a grove
-  // stage fights in Cinder Crag, and a pinned arena reads its own name
-  drawHud(ctx, battle.waveIndex, battle.shots, battle.themeName, battle.score, battle.streak, battle.ultIn, battle.time, battle.phase === 'map');
+  drawHud(ctx, battle.waveIndex, battle.shots, battle.score, battle.ultIn, battle.time, battle.phase === 'map');
   ctx.restore();
 }
 

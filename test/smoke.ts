@@ -2140,6 +2140,26 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(!!b.enemies.find((e) => e.boss)?.relic, 'event alpha carries a held item');
 }
 
+// --- floating text: repeats coalesce, numbers don't, court caps -----------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  const tx = () => (b as any).texts as { text: string; big: boolean }[];
+  tx().length = 0;
+  const push = (text: string, x = 200, big = false) => (b as any).pushText({ x, y: 300, text, t: 1, color: '#fff', big });
+  push('RICOCHET!');
+  push('RICOCHET!', 230);
+  ok(tx().length === 1 && tx()[0].text === 'RICOCHET! ×2', 'a repeat callout coalesces into ×2');
+  push('RICOCHET!', 480);
+  ok(tx().length === 2, 'a far-off repeat gets its own callout');
+  push('-12');
+  push('-12');
+  ok(tx().filter((t) => t.text === '-12').length === 2, 'damage numbers never coalesce');
+  tx().length = 0;
+  push('BANNER', 270, true);
+  for (let i = 0; i < 20; i++) push(`L${i}`, 20 + i * 25);
+  ok(tx().length === 8 && tx().some((t) => t.text === 'BANNER'), 'court caps at 8 callouts, banners outlive small labels');
+}
+
 // --- boss bars + teleport rotation ------------------------------------------
 {
   const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
