@@ -1115,6 +1115,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 {
   const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(2));
   (b as any).spawnWave(0);
+  (b as any).courtT = -9; // court already settled
   b.phase = 'aim';
   const u = (b as any).active;
   b.pointerDown({ x: u.x, y: u.y });
@@ -1509,6 +1510,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 {
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
   (b as any).spawnWave(0);
+  (b as any).courtT = -9; // court already settled
   b.phase = 'aim';
   b.ultIn = 0;
   const u = (b as any).active;
@@ -1523,6 +1525,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok((b as any).enemies.every((e: any, i: number) => e.dead || e.hp < hp0[i]), 'the ult hits every foe on the court');
   b.ultIn = 3; // a part-banked charge rides into the next fight — the run banks it
   (b as any).spawnWave(0);
+  (b as any).courtT = -9; // court already settled
   ok(b.ultIn === 3, 'ult charge carries into the next fight');
   // the charge is the team's — a benched teammate can spend it too
   b.phase = 'aim';
@@ -2821,10 +2824,23 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(b.phase === 'aim' && u.vx === 0 && u.vy === 0, 'pointercancel drops the drag, no shot');
 }
 
+// --- drop-in: foes stay off the court until the scroll lands them ----------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  b.phase = 'aim';
+  const u = (b as any).active;
+  b.pointerDown({ x: u.x, y: u.y });
+  ok(!(b as any).dragging && (b as any).foeDrop() === 0, 'no pull while the court scrolls in');
+  (b as any).time += 1;
+  ok((b as any).foeDrop() === 1, 'foes land once the scroll and drop finish');
+}
+
 // --- a tap on a foe pops its scout card, not a shot ---------------------------
 {
   const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
   (b as any).spawnWave(0);
+  (b as any).courtT = -9; // court already settled
   b.phase = 'aim';
   const u = (b as any).active;
   const e = b.enemies[0];
