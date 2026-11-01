@@ -2855,6 +2855,28 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok([...lens].every((n) => n >= 2 && n <= 4) && lens.size > 1, `skip_rate varies stop length (${[...lens].sort()})`);
 }
 
+// --- MS bonus_turn: a per-stop turn par pays SPEED CLEAR -----------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (b as any).spawnWave(1);
+  const par = (b as any).par;
+  ok(par >= 10 && par <= 24 && par === Math.max(10, (b as any).battles * 4), `stop par sits in MS's 10-24 range (${par})`);
+  (b as any).battles = 1;
+  (b as any).stopShots = par;
+  const s0 = (b as any).score;
+  (b as any).waveCleared();
+  ok((b as any).waveSpecial.includes('SPEED CLEAR') && (b as any).score - s0 >= 100, 'clearing on par pays SPEED CLEAR');
+  const c = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (c as any).spawnWave(1);
+  (c as any).battles = 1;
+  (c as any).stopShots = (c as any).par + 1;
+  (c as any).waveCleared();
+  ok(!(c as any).waveSpecial.includes('SPEED CLEAR'), 'one turn over par forfeits it');
+  const g = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (g as any).spawnWave(2);
+  ok((g as any).par === 14, `a gym stop gets the boss par (${(g as any).par})`);
+}
+
 // --- drop-in: foes stay off the court until the scroll lands them ----------
 {
   const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
