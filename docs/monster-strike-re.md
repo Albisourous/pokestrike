@@ -25,7 +25,7 @@ RTTI class names expose the battle architecture: `TaskCharBall` / `TaskCharBallC
 scenes `SceneBattle`, `SceneBattleResult`, `SceneGacha`, `SceneLuckMax`, and the mission API
 `Mission_Is{BattleClear,CaptureChar,Clear,Progress}` / `Mission_Set{Clear,Open,Progress}`.
 (inferred) Each effect is its own controller class attached to a shared `Task` entity, so it's
-composition over a base entity. A new effect means a new controller, not another branch in the ball.
+composition over a base entity. A new effect gets its own controller on the shared entity.
 
 ### Master table loader `FUN_0012b26c` (code)
 ```c
@@ -55,12 +55,23 @@ which is lazy per-stage spawn tables.
 - `strike_shots` (1140): `require_cnt` = turns to charge, one per character.
 - `advent_phase_rates`: chance a rare boss crashes each phase.
 
+### Battle stage structure (data: `stage/stage_phases_*`, `stage_phase_enemies_*`, `char_enemy_attacks_*`, `char_enemy_collisions_*`, 280 stages)
+- **Battles per stage**: 8 in 145 of 280 stages, 7 in 40, 5 in 38, 6 in 31. Each battle (`stage_phases`) caps live enemies at `enemy_max` (mode 6, then 5, 7, 4, 8).
+- **Boss spans the last battles**: in 8-battle stages the boss first shows up in battle 6 and stays through 8, at the same level (e.g. stage 40090010: battles 6-8 field boss lvl 5700 / hp-level 14000). `stages.boss_hp_bar0..2` splits its HP across those battles (e.g. 30/30/40). The escort grows across them (7 → 9 enemies in stage 40080010).
+- **Optional battles**: some mid battles carry `skip_rate` 50/60/70/85/100. (inferred) a roll can skip that battle, so the same stage plays with a different length.
+- **Spawn pools**: each battle lists more spawn rows than `enemy_max`, each with its own `rate` (25/100/50/70/30 %), so the board differs between plays.
+- **Several attack clocks per enemy**: 1124 enemy/stage pairs have 2 distinct attacks, 502 have 3, 469 have 4. Each attack row has its own `turn` countdown (mode 3, then 2, 5, 4, 7, 1, 11). A typical boss runs 3/4/7/11-turn clocks side by side: short chip attacks plus a long heavy one. `first_attack_turn` (1-4) delays the first fire, and `group_id` swaps the attack set per boss battle (stronger rows such as `value_0` 12000-20000 only in later groups).
+- **Hitboxes with weak points**: enemies carry 2-9 collision circles. Flag 5 is the body (`damage_rate` 100), flag 8 is a small weak point (radius 2).
+- **Battle walls**: `stage_phase_blocks` has per-battle walls (`type` 1: 186 rows, `type` 5: 21), plus code classes `TaskDamageWall`, `TaskMine`, `TaskWarpZone`, `TaskBarrier`.
+
 ## Phase 2: Mathematical and formula extraction (data)
 | system | observed values |
 |---|---|
 | strike-shot charge | `require_cnt` mode 12 (164 rows), then 18, 16, 20, 13, 14, 24 … 30. Stronger shots charge slower |
 | speed-clear par | `bonus_turn` 12 (209 stages), 10 (152), 15, 20, 22, 24. Set per stage, not global |
 | boss HP bars | `35/65` (128 stages), `30/30/40` (28), `40/60`. Each bar is a phase gate |
+| boss attack clocks | per-attack `turn`: 3 (2846 rows), 2 (2440), 5, 4, 7, 1, 11. Each clock counts down on its own and resets after it fires |
+| boss bar battles | bar `i` ends at `hp = maxHp × (1 − Σ bar[0..i])`. (inferred) damage stops at the bar floor and the next battle starts |
 | field item growth | `heal(t) = 50` for `t < 1`, else `100`. Doubles after one ignored turn |
 | enemy HP curve | `enemy_level_adjusts`: 9000 → 50000 in 16-step groups, about +3000–4000 per step (linear) |
 | stat ceilings by rarity (max hp / atk) | r4 ≈ 7000/7716, r5 ≈ 11704/12026, r6 ≈ 17764/19213. `extend_*` "plus" caps add about +3900 hp at r6 |
@@ -79,7 +90,9 @@ Mapped onto Pokéstrike's existing seams (via Graphify: `Battle` is the god node
 |---|---|---|
 | field item evolution | `Pickup` + `PICKUP_META` | **done**: `PICKUP_RIPEN` table + `ripenPickups()` on enemy→player handoff |
 | per-stage `bonus_turn` | `SPEED CLEAR` at a fixed `shots <= 12` | next: par from wave count, e.g. `3 × waves` |
-| boss HP bars 35/65, 30/30/40 | summons at 2/3 and 1/3 HP, enrage < 30% | next: draw the bar split, clamp overflow at a bar break so each phase has to be earned |
+| boss HP bars 35/65, 30/30/40 over the last 3 battles | summons at 2/3 and 1/3 HP, enrage < 30% | **ported** (boss battles PR): `BOSS_BARS = [0.3, 0.3, 0.4]`. Each bar break clamps HP, the escort flees, the room reloads, fresh adds spawn, and the boss's clocks reset |
+| several attack clocks per boss | one `timer` per enemy | **ported** (boss battles PR): bosses add a heavy-attack clock (`BOSS_BIG_TIMER = 7`) that hits the whole team |
+| `skip_rate` optional battles, spawn `rate` pools | seeded StS map, rolled waves | already covered by map branching |
 | per-mon `require_cnt` | team `ULT_SHOTS = 10` | keep team ult. Optionally scale charge by ult power |
 | `hide_wp_rate` weak points | none | candidate: bosses hide a weak spot that takes ×3 |
 | `advent_phase_rates` | legendary invades | already covered |
