@@ -355,32 +355,32 @@ export const WEATHER_FOR: Partial<Record<Theme, Weather>> = {
 // stone as the court's edge — scorched at the volcano, iced on the summit
 const BLOCK_TINT: Record<Theme, string | undefined> = {
   grove: undefined,
-  cavern: 'rgba(40,40,90,0.30)',
-  volcano: 'rgba(70,20,8,0.45)',
-  sky: 'rgba(150,190,230,0.45)',
-  meadow: 'rgba(60,110,50,0.30)',
-  shore: 'rgba(190,170,110,0.35)',
-  plant: 'rgba(50,60,80,0.45)',
-  marsh: 'rgba(30,60,40,0.45)',
-  sanctum: 'rgba(70,55,115,0.40)',
-  dojo: 'rgba(140,100,50,0.30)',
-  tower: 'rgba(30,26,52,0.55)',
+  cavern: 'rgba(40,40,90,0.07)',
+  volcano: 'rgba(70,20,8,0.12)',
+  sky: 'rgba(150,190,230,0.12)',
+  meadow: 'rgba(60,110,50,0.07)',
+  shore: 'rgba(190,170,110,0.09)',
+  plant: 'rgba(50,60,80,0.12)',
+  marsh: 'rgba(30,60,40,0.12)',
+  sanctum: 'rgba(70,55,115,0.1)',
+  dojo: 'rgba(140,100,50,0.07)',
+  tower: 'rgba(30,26,52,0.14)',
 };
 // the slab face keys to the court too — mossy stone, deep indigo, ember
-// dark, steel-blue on the summit (still darker than the floor so the
-// cover silhouette never washes out)
+// dark, steel-blue on the summit; tints run light so the rock art reads
+// bright against the court, the rim stroke keeps the silhouette
 const BLOCK_FACE: Record<Theme, string> = {
-  grove: 'rgba(22,38,24,0.48)',
-  cavern: 'rgba(30,36,70,0.42)',
-  volcano: 'rgba(54,22,12,0.52)',
-  sky: 'rgba(95,120,155,0.72)',
-  meadow: 'rgba(40,62,30,0.48)',
-  shore: 'rgba(110,96,58,0.50)',
-  plant: 'rgba(28,34,48,0.55)',
-  marsh: 'rgba(24,44,30,0.52)',
-  sanctum: 'rgba(46,36,80,0.50)',
-  dojo: 'rgba(78,56,30,0.50)',
-  tower: 'rgba(22,18,42,0.58)',
+  grove: 'rgba(22,38,24,0.12)',
+  cavern: 'rgba(30,36,70,0.1)',
+  volcano: 'rgba(54,22,12,0.13)',
+  sky: 'rgba(95,120,155,0.18)',
+  meadow: 'rgba(40,62,30,0.12)',
+  shore: 'rgba(110,96,58,0.12)',
+  plant: 'rgba(28,34,48,0.14)',
+  marsh: 'rgba(24,44,30,0.13)',
+  sanctum: 'rgba(46,36,80,0.12)',
+  dojo: 'rgba(78,56,30,0.12)',
+  tower: 'rgba(22,18,42,0.14)',
 };
 
 // graphics quality → ambient/weather particle density multiplier — low
@@ -1427,7 +1427,7 @@ export class Battle {
       gymFurnished
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
-          ? ROOM_BOSS
+          ? ROOM_BOSS[0]
           : debugRoom() === 'gen' ||
               (debugRoom() !== 'authored' && i !== 0 && li > 0 && this.rng() < 0.4) // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
@@ -2948,7 +2948,7 @@ export class Battle {
     ctx.lineWidth = 2;
     roundRect(ctx, b.x + 1, b.y + 1, b.w - 2, b.h - 2, 8);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.34)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(b.x + 2, b.y + b.h - 6);
@@ -6279,7 +6279,7 @@ export class Battle {
     cull(this.enemies, (e) => e.boss && !e.dead);
     const grid = this.gymFurnished
       ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
-      : ROOM_BOSS;
+      : ROOM_BOSS[Math.min(boss.sumStage, ROOM_BOSS.length - 1)];
     this.swapCourt(grid);
     // no teleport beat: the boss is off court until the drop-in lands it
     const at = this.unstick(
