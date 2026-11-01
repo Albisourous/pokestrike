@@ -2143,6 +2143,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(b.box.length === boxBefore && b.players.every((p, i) => p.lvl === levelsBefore[i]), 'fleeing escorts give no catches or XP');
   ok(b.pickups.filter((p) => p.kind === 'oran-berry').length === stolenBefore + 1, 'fleeing thief returns its stolen pickup');
   ok(b.blocks !== blocksBefore && b.hazards !== hazardsBefore, 'bar break rebuilds the room');
+  const blocksBar2 = b.blocks;
   ok((b as any).texts.some((t: any) => t.text === 'BATTLE 2/3'), 'first break announces BATTLE 2/3');
   ok(boss.timer > 1 && (boss as any).bigT === 7 && !(b as any).barBreak, 'boss returns with both clocks reset');
 
@@ -2155,6 +2156,10 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const secondEscorts = b.enemies.filter((e) => e.minion);
   ok(firstEscorts.every((e) => !b.enemies.includes(e)) && secondEscorts.length === 4, 'second break replaces escorts with 4');
   ok((b as any).texts.some((t: any) => t.text === 'BATTLE 3/3'), 'second break announces BATTLE 3/3');
+  if (!(b as any).gymFurnished) {
+    const sig = (r: any[]) => JSON.stringify(r.map((k) => [Math.round(k.x), Math.round(k.y), Math.round(k.w), Math.round(k.h)]));
+    ok(new Set([sig(blocksBefore), sig(blocksBar2), sig(b.blocks)]).size === 3, 'each boss bar gets its own authored court');
+  }
   ok(boss.timer > 1 && (boss as any).bigT === 7 && !(b as any).barBreak, 'second break resets both boss clocks');
   // attack rotation: signature, signature, hop — position changes on the 3rd
   const { x: hx, y: hy } = { x: boss.x, y: boss.y };

@@ -1413,7 +1413,7 @@ export class Battle {
       gymFurnished
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
-          ? ROOM_BOSS
+          ? ROOM_BOSS[0]
           : debugRoom() === 'gen' ||
               (debugRoom() !== 'authored' && i !== 0 && li > 0 && this.rng() < 0.4) // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
@@ -6204,7 +6204,7 @@ export class Battle {
     cull(this.enemies, (e) => e.boss && !e.dead);
     const grid = this.gymFurnished
       ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
-      : ROOM_BOSS;
+      : ROOM_BOSS[Math.min(boss.sumStage, ROOM_BOSS.length - 1)];
     const room = buildRoom(grid, this.theme, this.rng);
     this.installRoom(room);
     this.courtT = this.time;
