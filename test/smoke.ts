@@ -90,6 +90,30 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(sa.phase === 'lost', 'one ash per run — the second wipe ends it');
 }
 
+// --- uncollected oran berries ripen after an enemy turn ------------------
+{
+  const b = new Battle(arena, team(), makeStage(9, 'Test'), mulberry32(3));
+  (b as any).spawnWave(0);
+  const enemies = (b as any).enemies;
+  const attacker = enemies[0];
+  attacker.dead = true;
+  if (enemies.every((e: any) => e.dead)) enemies.push({ ...attacker, dead: false });
+  (b as any).pickups = [{ x: 100, y: 100, kind: 'oran-berry', t: 0, age: 0 }];
+  (b as any).pendingAttacks = [attacker];
+  (b as any).phase = 'enemy';
+  (b as any).enemyPhaseT = 100;
+  (b as any).resolveEnemyTurn();
+  b.update(0.4);
+  const pickup = (b as any).pickups[0];
+  ok(pickup.kind === 'sitrus-berry' && pickup.age === 0, 'oran berry ripens into sitrus after an enemy turn');
+
+  const p = b.players[0];
+  p.hp = 1;
+  (b as any).healCd = 0;
+  (b as any).grabPickup({ x: 100, y: 100, kind: 'sitrus-berry', t: 0, age: 0 });
+  ok(p.hp === Math.min(p.maxHp, 1 + Math.round(p.maxHp * 0.3)), 'sitrus berry heals 30% max HP');
+}
+
 // --- ascension scales enemy bulk ----------------------------------------
 {
   const stage = makeStage(7, 'Test');
@@ -404,10 +428,10 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   const e = (b as any).enemies[0];
   e.def = { ...e.def, raider: true };
   e.hp = Math.floor(e.maxHp / 2);
-  (b as any).pickups = [{ x: e.x + 10, y: e.y, kind: 'protein', t: 0 }];
+  (b as any).pickups = [{ x: e.x + 10, y: e.y, kind: 'protein', t: 0, age: 0 }];
   (b as any).fireEnemy(e);
   ok((b as any).pickups.length === 0 && e.hp > Math.floor(e.maxHp / 2), 'raider swallows the drop in reach');
-  (b as any).pickups = [{ x: e.x + 300, y: e.y, kind: 'protein', t: 0 }];
+  (b as any).pickups = [{ x: e.x + 300, y: e.y, kind: 'protein', t: 0, age: 0 }];
   const ex = e.x;
   (b as any).fireEnemy(e);
   ok(Math.abs(e.x - ex) > 40, `raider dashes at the far drop (${ex.toFixed(0)} -> ${e.x.toFixed(0)})`);
@@ -525,7 +549,7 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   // a thief pockets a touched drop and its corpse coughs it back up
   e.def = { ...e.def, thief: true };
   e.vx = 0; e.vy = 0;
-  (b as any).pickups = [{ x: e.x + 5, y: e.y, kind: 'protein', t: 0 }];
+  (b as any).pickups = [{ x: e.x + 5, y: e.y, kind: 'protein', t: 0, age: 0 }];
   (b as any).stepEnemyMovement(0.05);
   ok((b as any).pickups.length === 0 && e.stolen === 'protein', 'thief pockets a touched drop');
   (b as any).hurt(e, e.hp + 1, '#fff');
@@ -672,13 +696,13 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 
   // lum berry washes every ailment off the team at once
   striker.dotTicks = 4; striker.dotDmg = 3; striker.burnT = 4; striker.paraT = 2; striker.asleep = true;
-  (b as any).grabPickup({ kind: 'lum-berry', x: 100, y: 100, t: 0 });
+  (b as any).grabPickup({ kind: 'lum-berry', x: 100, y: 100, t: 0, age: 0 });
   ok(striker.dotTicks === 0 && striker.burnT === 0 && striker.paraT === 0 && !striker.asleep, 'lum berry cures the whole slate');
 
   // revival herb raises the first fallen teammate at a quarter health
   const bench = (b as any).players.find((p) => p !== striker);
   bench.dead = true; bench.hp = 0;
-  (b as any).grabPickup({ kind: 'revival-herb', x: 100, y: 100, t: 0 });
+  (b as any).grabPickup({ kind: 'revival-herb', x: 100, y: 100, t: 0, age: 0 });
   ok(!bench.dead && bench.hp === Math.max(1, Math.round(bench.maxHp * 0.25)), `revival herb raises a teammate (hp ${bench.hp})`);
 
   // intimidate: a living menace shaves a fifth off the team's hits.

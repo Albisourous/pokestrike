@@ -131,7 +131,8 @@ ghost pull that repeats until you've really slung one.
    from inside it hit +50% harder. An
    **Air Balloon** item floats over all of it. **Field pickups** spawn
    each wave and the ball collects them by touch: **Oran Berry** heals the
-   team, **Protein** boosts contact damage for the rest of the shot,
+   team, ripening into a **Sitrus Berry** for 30% healing after one enemy turn
+   if left on the field; **Protein** boosts contact damage for the rest of the shot,
    **Elixir** knocks a notch off every super's cooldown. Heavy hits scar
    the court, and some spawn pairs sit close enough to squeeze the ball
    between them for multi-hits. **Combo shots**: when the ball touches two
