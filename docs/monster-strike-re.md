@@ -89,10 +89,12 @@ Mapped onto Pokéstrike's existing seams (via Graphify: `Battle` is the god node
 | Monster Strike | Pokéstrike today | port |
 |---|---|---|
 | field item evolution | `Pickup` + `PICKUP_META` | **done**: `PICKUP_RIPEN` table + `ripenPickups()` on enemy→player handoff |
-| per-stage `bonus_turn` | `SPEED CLEAR` at a fixed `shots <= 12` | next: par from wave count, e.g. `3 × waves` |
+| per-stage `bonus_turn` | `SPEED CLEAR` at a fixed `shots <= 12` | **ported** (#14): per-stop `par = clamp(4 × battles + 10 if boss, 10, 24)`, `TURN n/par` chip, bonus on the last clear |
 | boss HP bars 35/65, 30/30/40 over the last 3 battles | summons at 2/3 and 1/3 HP, enrage < 30% | **ported** (boss battles PR): `BOSS_BARS = [0.3, 0.3, 0.4]`. Each bar break clamps HP, the escort flees, the room reloads, fresh adds spawn, and the boss's clocks reset |
 | several attack clocks per boss | one `timer` per enemy | **ported** (boss battles PR): bosses add a heavy-attack clock (`BOSS_BIG_TIMER = 7`) that hits the whole team |
-| `skip_rate` optional battles, spawn `rate` pools | seeded StS map, rolled waves | already covered by map branching |
+| `stage_phases` battles, `enemy_max`, `skip_rate` | one battle per stop | **ported** (#13): wild stops run 1 + extras at `BATTLE_SKIP = [0, 0.5, 0.7]` (2 to 4 battles), `ENEMY_MAX = 5` per extra battle. Spawn `rate` pools stay rolled waves |
+| `stage_phase_layouts` per boss battle | one `ROOM_BOSS` for every bar | **ported** (#11): one authored gym room per bar |
+| battle entry: court scrolls, then enemies drop in | foes stood in place during the scroll | **ported** (#10): foes hidden for `COURT_SCROLL`, then fall in over `FOE_DROP`; pulls wait for the landing |
 | per-mon `require_cnt` | team `ULT_SHOTS = 10` | keep team ult. Optionally scale charge by ult power |
 | `hide_wp_rate` weak points | none | candidate: bosses hide a weak spot that takes ×3 |
 | `advent_phase_rates` | legendary invades | already covered |
