@@ -4,6 +4,37 @@ import type { Theme } from './bg';
 import { THEMES } from './bg';
 import { mulberry32 } from '../core/rng';
 
+// MS char_enemy_attacks: a foe runs several attack rows side by side, each on
+// its own turn clock; first_attack_turn delays the opener
+export type FoeMoveKind = 'laser' | 'cross' | 'quake' | 'meteor';
+export interface FoeClock { kind: FoeMoveKind; move: string; turn: number; first: number }
+export const TYPE_MOVE: Record<PokeType, { kind: FoeMoveKind; move: string }> = {
+  normal: { kind: 'laser', move: 'HYPER BEAM' },
+  fire: { kind: 'laser', move: 'FLAMETHROWER' },
+  water: { kind: 'quake', move: 'SURF' },
+  grass: { kind: 'laser', move: 'SOLAR BEAM' },
+  electric: { kind: 'laser', move: 'THUNDERBOLT' },
+  psychic: { kind: 'cross', move: 'PSYBEAM' },
+  rock: { kind: 'meteor', move: 'ROCK SLIDE' },
+  poison: { kind: 'quake', move: 'SLUDGE WAVE' },
+  flying: { kind: 'quake', move: 'HURRICANE' },
+  fighting: { kind: 'laser', move: 'FOCUS BLAST' },
+  ghost: { kind: 'laser', move: 'NIGHT SHADE' },
+};
+export const FOE_CLOCK = { turn: 5, first: 4 };
+export const BOSS_CLOCKS: (FoeClock | { turn: number; first: number })[][] = [
+  [{ turn: 4, first: 3 }],
+  [{ turn: 4, first: 2 }, { kind: 'cross', move: 'HYPER BEAM', turn: 5, first: 3 }],
+  [{ turn: 3, first: 2 }, { kind: 'cross', move: 'HYPER BEAM', turn: 5, first: 3 }, { kind: 'meteor', move: 'ROCK SLIDE', turn: 6, first: 4 }],
+];
+export function foeClocks(type: PokeType, boss: boolean, bar: number): FoeClock[] {
+  if (!boss) return [{ ...TYPE_MOVE[type], ...FOE_CLOCK }];
+  return BOSS_CLOCKS[Math.min(bar, BOSS_CLOCKS.length - 1)].map((clock) => ({
+    ...('kind' in clock ? clock : TYPE_MOVE[type]),
+    ...clock,
+  }));
+}
+
 export interface SpeciesDef {
   id: number; // Pokedex number, also the sprite filename
   name: string;
@@ -1937,4 +1968,3 @@ export function genRoom(theme: Theme, rng: () => number): string[] {
   }
   return ROOM_LAYOUTS[0];
 }
-
