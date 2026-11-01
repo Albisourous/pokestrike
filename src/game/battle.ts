@@ -404,6 +404,14 @@ const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
 const BOSS_BARS = [0.3, 0.3, 0.4]; // MS stage data: boss HP split into bars, one battle per bar
+// MS stage_phases: a plain wild stop runs extra battles after the first, each
+// skipped at its skip_rate, so the same stop plays 2 to 4 battles long
+const BATTLE_SKIP = [0, 0.5, 0.7];
+const ENEMY_MAX = 5; // MS enemy_max: live foes per extra battle
+// MS stages.bonus_turn: a per-stage turn par (10 to 24) for the SPEED CLEAR
+// bonus. Ours scales with the stop: 4 turns a battle, +10 for a boss
+const PAR_PER_BATTLE = 4;
+const PAR_BOSS = 10;
 const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
 const COURT_SCROLL = 0.55; // s — the court slides in from above on each new battle
 const FOE_DROP = 0.32; // s — foes fall onto the court once it settles
@@ -679,6 +687,9 @@ export class Battle {
   weather: Weather | null = null; // this wave's sky — null is a clear court
   private gymFurnished = false;
   private barBreak = false;
+  private battle = 1; // battle k of this stop's battles
+  private battles = 1;
+  private battleBreak = false; // the stop's next battle loads after this shot
 
   private dragging = false;
   private dragStart: Vec = vec();
@@ -893,6 +904,8 @@ export class Battle {
   eggIn = 0; // stops until the egg hatches — the ? pool's slow payoff
   eggJustLaid = false; // the laying arrival doesn't consume a tick
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
+  private stopShots = 0; // shots across every battle of this stop
+  private par = 10; // this stop's SPEED CLEAR turn target
   private sweepStreak = 0; // consecutive one-shot clears — the streak pays
   private waveFlawless = true; // no hit taken this wave — the clear ribbon pays it out
   private splashing = false; // psychic trait re-entry guard
@@ -1286,6 +1299,7 @@ export class Battle {
     this.eliteWave = elite;
     this.inEvent = false;
     this.waveShots = 0;
+    this.stopShots = 0;
     this.waveFlawless = true;
     // ultIn banks across the whole run — pips earned in one fight spend at the next
     this.boxGain = null;
@@ -1444,6 +1458,12 @@ export class Battle {
       s.ny = a.ny;
     }
     this.enemies = spawns.map((s) => this.makeEnemy(s, i));
+    this.battle = 1;
+    this.battles = 1;
+    this.battleBreak = false;
+    if (i > 0 && !bossWave && !this.inTrainer && !this.inEvent && !this.inRival && !this.raid && !this.coach)
+      for (const skip of BATTLE_SKIP) if (this.rng() >= skip) this.battles++;
+    this.par = Math.min(24, Math.max(10, this.battles * PAR_PER_BATTLE + (bossWave ? PAR_BOSS : 0)));
     // rival echo fights at the levels it earned — the ghost of a stacked
     // run is a real fight, not a victory lap
     if (this.inRival) {
@@ -2037,6 +2057,7 @@ export class Battle {
       buzz([20, 30, 40]);
     }
     this.waveShots++; // anti-stall pressure counts shots inside the wave
+    this.stopShots++;
     if (this.waveShots === 8) {
       // three shots of runway before the ramp bites — warn early so a
       // dawdling climb reads as the player's own choice, not a surprise
@@ -5002,6 +5023,13 @@ export class Battle {
     // both reach here while the reward's still pending; ceremony and
     // gymsBeaten must never replay
     if (this.rewardPending || this.phase === 'won' || this.phase === 'lost') return;
+    if (this.battle < this.battles) {
+      // mid-stop: no ceremony, the next battle scrolls in. Inside a shot it
+      // waits for endShot, like a boss bar break
+      if (this.phase === 'aim') this.nextBattle();
+      else this.battleBreak = true;
+      return;
+    }
     if (this.coach) this.coachDone = true; // survived a wave — teaching's over
     if (this.inRival) {
       this.echoCleared = true; // the echo is beaten — reclaim it
@@ -5022,6 +5050,8 @@ export class Battle {
     if (this.sweepStreak > 1) this.score += 60 * this.sweepStreak;
     // flawless carrot — an untouched wave pays a depth-scaled bonus
     if (this.waveFlawless) this.score += 50 + this.depth * 15;
+    const speedClear = this.stopShots <= this.par;
+    if (speedClear) this.score += 100 + this.depth * 25;
     // pickup ability: scavengers root through the arena after the fight —
     // a living carrier may nose out a consumable for the run's bag
     for (const p of this.players) {
@@ -5036,7 +5066,8 @@ export class Battle {
       (this.waveShots === 1
         ? this.sweepStreak > 1 ? ` · SWEEP x${this.sweepStreak}!` : ' · SWEEP!'
         : ` · ${this.waveShots} SHOTS`) +
-      (this.waveFlawless ? ' · FLAWLESS!' : '');
+      (this.waveFlawless ? ' · FLAWLESS!' : '') +
+      (speedClear ? ' · SPEED CLEAR!' : '');
     this.waveBanner = 1.1;
     sfx('wave');
     // a raid is the whole fight — the win beat is short and never rolls the
@@ -6149,6 +6180,11 @@ export class Battle {
       this.nextTurn();
       return;
     }
+    if (this.battleBreak) {
+      this.nextBattle();
+      this.nextTurn();
+      return;
+    }
     let warned = false;
     let bigWarned = false;
     for (const e of this.enemies) {
@@ -6197,6 +6233,45 @@ export class Battle {
     }
   }
 
+  // a fresh room scrolls in under the team: furniture, hazards, drop-in clock
+  private swapCourt(grid: string[]) {
+    const room = buildRoom(grid, this.theme, this.rng);
+    this.installRoom(room);
+    this.courtT = this.time;
+    this.foesLanded = false;
+    this.hazards = room.hazards.map((z) => ({
+      kind: z.kind,
+      x: this.arena.x + this.arena.w * z.nx,
+      y: this.arena.y + this.arena.h * z.ny,
+      r: this.arena.w * z.r,
+      dir: z.dir,
+      pair: z.pair,
+    }));
+    return room;
+  }
+
+  private nextBattle() {
+    this.battleBreak = false;
+    this.battle++;
+    const room = this.swapCourt(ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]);
+    const anchors = [...room.anchors];
+    const spawns = rollWave(this.rng, this.depth, this.theme).filter((s) => !s.boss).slice(0, ENEMY_MAX);
+    this.enemies = spawns.map((s) => {
+      const a = anchors.splice(Math.floor(this.rng() * anchors.length), 1)[0];
+      return this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
+    });
+    this.waveShots = 0;
+    this.pushText({
+      x: this.arena.x + this.arena.w / 2,
+      y: this.arena.y + this.arena.h / 2,
+      text: `BATTLE ${this.battle}/${this.battles}`,
+      t: 1.5,
+      color: '#ffd84d',
+      big: true,
+    });
+    sfx('invade');
+  }
+
   private bossBarBreak() {
     const boss = this.enemies.find((e) => e.boss && !e.dead && e.hp > 0);
     if (!boss) {
@@ -6214,18 +6289,7 @@ export class Battle {
     const grid = this.gymFurnished
       ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
       : ROOM_BOSS[Math.min(boss.sumStage, ROOM_BOSS.length - 1)];
-    const room = buildRoom(grid, this.theme, this.rng);
-    this.installRoom(room);
-    this.courtT = this.time;
-    this.foesLanded = false;
-    this.hazards = room.hazards.map((z) => ({
-      kind: z.kind,
-      x: this.arena.x + this.arena.w * z.nx,
-      y: this.arena.y + this.arena.h * z.ny,
-      r: this.arena.w * z.r,
-      dir: z.dir,
-      pair: z.pair,
-    }));
+    this.swapCourt(grid);
     // no teleport beat: the boss is off court until the drop-in lands it
     const at = this.unstick(
       this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
@@ -7824,6 +7888,13 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.fillStyle = '#aab4d8';
       ctx.fillText(tag, a.x + a.w - 10 - tw / 2, a.y + 61);
+      // turn par chip under it: gold while a SPEED CLEAR is still on
+      const turn = `TURN ${this.stopShots}/${this.par}`;
+      ctx.font = fontB(9);
+      const pw = ctx.measureText(turn).width + 14;
+      uiWindow(ctx, { x: a.x + a.w - 10 - pw, y: a.y + 70, w: pw, h: 16 }, { dark: true, shadow: false, rad: 6 });
+      ctx.fillStyle = this.stopShots <= this.par ? '#ffd84d' : '#6a7090';
+      ctx.fillText(turn, a.x + a.w - 10 - pw / 2, a.y + 82);
     }
     // pause chip, opposite corner — a quiet brake during the action and the
     // loot lap; the phase list mirrors the pointerDown hit-test
