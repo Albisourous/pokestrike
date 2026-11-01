@@ -1427,20 +1427,52 @@ export const ROOM_LAYOUTS: string[][] = [
 // hard tier — it only rides in from depth 2 (stage ~5 up); append new
 // mid-pool rooms before it
 export const ROOM_HARD = 8;
-// Gym arenas stay open — the leader fight is the spectacle, so no
-// furniture; the entourage still enters on the anchor ring.
-export const ROOM_BOSS: string[] = [
-  '1111E1111',
-  '1S0S0S0S1',
-  '1000S0001',
-  '10S0S0S01',
-  '100000001',
-  '10S0S0S01',
-  '100000001',
-  '100000001',
-  '100000001',
-  '1000P0001',
-  '111111111',
+// Gym arenas, one per boss HP bar (MS stage_phase_layouts: each bar is its
+// own battle on its own court). Bar 1 stays open so the leader is the
+// spectacle; bar 2 adds two bank pillars; bar 3 closes in with slabs and
+// moat corners. The entourage still enters on the anchor ring.
+export const ROOM_BOSS: string[][] = [
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '1000S0001',
+    '10S0S0S01',
+    '100000001',
+    '10S0S0S01',
+    '100000001',
+    '100000001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // pillars — two posts to bank the ball around the leader
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '1000S0001',
+    '120000021',
+    '10S0S0S01',
+    '100000001',
+    '102000201',
+    '100000001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // last stand — wing slabs pinch the middle, moats hold the corners
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '1300S0031',
+    '10S020S01',
+    '100000001',
+    '1220S0221',
+    '100000001',
+    '130000031',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 export interface RoomDef {
   blocks: BlockDef[];
@@ -1784,7 +1816,7 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
 // and every spawn anchor (liquids wall off anything that can't swim or
 // fly; mines don't block). Runs at module load — a bad room fails the
 // build, not the player.
-for (const grid of [...ROOM_LAYOUTS, ROOM_BOSS]) {
+for (const grid of [...ROOM_LAYOUTS, ...ROOM_BOSS]) {
   if (grid.length !== 11 || grid.some((row) => row.length !== 9)) throw new Error('room grid must be 9x11');
   const seen = new Set<string>();
   const q = [[4, 9]];

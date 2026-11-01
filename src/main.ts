@@ -2433,6 +2433,7 @@ Promise.all([
   loadItem('poke-ball'),
   loadItem('ui/pokemon-logo'),
   loadItem('oran-berry'),
+  loadItem('sitrus-berry'),
   loadItem('protein'),
   loadItem('elixir'),
   loadItem('lum-berry'),

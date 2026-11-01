@@ -222,12 +222,13 @@ interface BallDrop {
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
-type PickupKind = 'oran-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb';
+type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb';
 interface Pickup {
   x: number;
   y: number;
   kind: PickupKind;
   t: number; // bob phase
+  age: number; // enemy turns survived
 }
 interface Scar {
   x: number;
@@ -355,32 +356,32 @@ export const WEATHER_FOR: Partial<Record<Theme, Weather>> = {
 // stone as the court's edge — scorched at the volcano, iced on the summit
 const BLOCK_TINT: Record<Theme, string | undefined> = {
   grove: undefined,
-  cavern: 'rgba(40,40,90,0.30)',
-  volcano: 'rgba(70,20,8,0.45)',
-  sky: 'rgba(150,190,230,0.45)',
-  meadow: 'rgba(60,110,50,0.30)',
-  shore: 'rgba(190,170,110,0.35)',
-  plant: 'rgba(50,60,80,0.45)',
-  marsh: 'rgba(30,60,40,0.45)',
-  sanctum: 'rgba(70,55,115,0.40)',
-  dojo: 'rgba(140,100,50,0.30)',
-  tower: 'rgba(30,26,52,0.55)',
+  cavern: 'rgba(40,40,90,0.07)',
+  volcano: 'rgba(70,20,8,0.12)',
+  sky: 'rgba(150,190,230,0.12)',
+  meadow: 'rgba(60,110,50,0.07)',
+  shore: 'rgba(190,170,110,0.09)',
+  plant: 'rgba(50,60,80,0.12)',
+  marsh: 'rgba(30,60,40,0.12)',
+  sanctum: 'rgba(70,55,115,0.1)',
+  dojo: 'rgba(140,100,50,0.07)',
+  tower: 'rgba(30,26,52,0.14)',
 };
 // the slab face keys to the court too — mossy stone, deep indigo, ember
-// dark, steel-blue on the summit (still darker than the floor so the
-// cover silhouette never washes out)
+// dark, steel-blue on the summit; tints run light so the rock art reads
+// bright against the court, the rim stroke keeps the silhouette
 const BLOCK_FACE: Record<Theme, string> = {
-  grove: 'rgba(22,38,24,0.48)',
-  cavern: 'rgba(30,36,70,0.42)',
-  volcano: 'rgba(54,22,12,0.52)',
-  sky: 'rgba(95,120,155,0.72)',
-  meadow: 'rgba(40,62,30,0.48)',
-  shore: 'rgba(110,96,58,0.50)',
-  plant: 'rgba(28,34,48,0.55)',
-  marsh: 'rgba(24,44,30,0.52)',
-  sanctum: 'rgba(46,36,80,0.50)',
-  dojo: 'rgba(78,56,30,0.50)',
-  tower: 'rgba(22,18,42,0.58)',
+  grove: 'rgba(22,38,24,0.12)',
+  cavern: 'rgba(30,36,70,0.1)',
+  volcano: 'rgba(54,22,12,0.13)',
+  sky: 'rgba(95,120,155,0.18)',
+  meadow: 'rgba(40,62,30,0.12)',
+  shore: 'rgba(110,96,58,0.12)',
+  plant: 'rgba(28,34,48,0.14)',
+  marsh: 'rgba(24,44,30,0.13)',
+  sanctum: 'rgba(46,36,80,0.12)',
+  dojo: 'rgba(78,56,30,0.12)',
+  tower: 'rgba(22,18,42,0.14)',
 };
 
 // graphics quality → ambient/weather particle density multiplier — low
@@ -426,10 +427,15 @@ const PICKUP_KINDS: PickupKind[] = ['oran-berry', 'protein', 'elixir']; // lum r
 // ball reaches it
 const PICKUP_META: Record<PickupKind, { name: string; label: string; color: string }> = {
   'oran-berry': { name: 'ORAN BERRY', label: 'HEAL 15%', color: '#6fdc6f' },
+  'sitrus-berry': { name: 'SITRUS BERRY', label: 'HEAL 30%', color: '#f8d030' },
   protein: { name: 'PROTEIN', label: 'ATK +50%', color: '#f08030' },
   elixir: { name: 'ELIXIR', label: 'SUPER +1', color: '#9ecbff' },
   'lum-berry': { name: 'LUM BERRY', label: 'CURE ALL', color: '#b8f8f8' },
   'revival-herb': { name: 'REVIVAL HERB', label: 'REVIVE', color: '#f8d030' },
+};
+// MS field items grow if left on the field.
+const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }>> = {
+  'oran-berry': { to: 'sitrus-berry', turns: 1 },
 };
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 
@@ -1427,7 +1433,7 @@ export class Battle {
       gymFurnished
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
-          ? ROOM_BOSS
+          ? ROOM_BOSS[0]
           : debugRoom() === 'gen' ||
               (debugRoom() !== 'authored' && i !== 0 && li > 0 && this.rng() < 0.4) // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
@@ -1649,6 +1655,7 @@ export class Battle {
             ? 'lum-berry'
             : PICKUP_KINDS[Math.floor(this.rng() * 3)],
         t: this.rng() * 6,
+        age: 0,
       });
     }
     // the room's hazard cells land as zones — lava ponds, silence pools,
@@ -2948,7 +2955,7 @@ export class Battle {
     ctx.lineWidth = 2;
     roundRect(ctx, b.x + 1, b.y + 1, b.w - 2, b.h - 2, 8);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.34)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(b.x + 2, b.y + b.h - 6);
@@ -3111,9 +3118,11 @@ export class Battle {
     this.burst(pk.x, pk.y, '#fff8dc', 9, 260, 0.9);
     this.shotLoot++;
     switch (pk.kind) {
-      case 'oran-berry': {
+      case 'oran-berry':
+      case 'sitrus-berry': {
+        const fraction = pk.kind === 'sitrus-berry' ? 0.3 : 0.15;
         const hp0 = this.players.reduce((a, p) => a + p.hp, 0);
-        this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * 0.15)));
+        this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * fraction)));
         // if nobody needed it (full team, heal on cooldown) still say so —
         // a pickup should never vanish without a word
         if (this.players.reduce((a, p) => a + p.hp, 0) === hp0) {
@@ -3597,7 +3606,7 @@ export class Battle {
       // VOLATILE mod: the KO detonates — a chunk of its max hp splashes
       // onto every neighbor, and volatile kills can chain
       // a dead thief coughs up the loot — KO it to take your berry back
-      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0 });
+      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0, age: 0 });
       if (e.volatile && !this.players.some((p) => !p.dead && p.def.damp)) {
         const BR = 110;
         this.waves.push({ x: e.x, y: e.y, r: 0, maxR: BR, t: 0.3, life: 0.3, color: '#ff9a30', hits: new Set() });
@@ -6271,7 +6280,7 @@ export class Battle {
     }
     for (const e of this.enemies) {
       if (e.boss || e.dead) continue;
-      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0 });
+      if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0, age: 0 });
       this.burst(e.x, e.y, '#8890b8', 10, 340);
       this.pushText({ x: e.x, y: e.y - e.r - 20, text: 'FLED', t: 0.9, color: '#c8d0e8', big: false });
       e.dead = true;
@@ -6279,7 +6288,7 @@ export class Battle {
     cull(this.enemies, (e) => e.boss && !e.dead);
     const grid = this.gymFurnished
       ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
-      : ROOM_BOSS;
+      : ROOM_BOSS[Math.min(boss.sumStage, ROOM_BOSS.length - 1)];
     this.swapCourt(grid);
     // no teleport beat: the boss is off court until the drop-in lands it
     const at = this.unstick(
@@ -6478,8 +6487,21 @@ export class Battle {
         this.wipe();
         return;
       }
+      this.ripenPickups();
       this.nextTurn();
     });
+  }
+
+  private ripenPickups() {
+    for (const pk of this.pickups) {
+      pk.age++;
+      const ripen = PICKUP_RIPEN[pk.kind];
+      if (!ripen || pk.age < ripen.turns) continue;
+      pk.kind = ripen.to;
+      pk.age = 0;
+      this.burst(pk.x, pk.y, PICKUP_META[pk.kind].color, 8, 240, 0.8);
+      this.pushText({ x: pk.x, y: pk.y - 12, text: 'RIPE', t: 0.9, color: PICKUP_META[pk.kind].color, big: false });
+    }
   }
 
   private bossBigAttack(e: Unit) {
