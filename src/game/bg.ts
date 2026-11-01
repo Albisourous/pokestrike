@@ -584,12 +584,16 @@ export function drawWall(ctx: CanvasRenderingContext2D, a: { x: number; y: numbe
     ctx.fill();
     drawSlice(ctx, p.r, bx - w / 2, by - h, w, h, p.t);
   };
-  // top treeline — dense, jittered, canopies overhanging the rim
+  // top treeline — dense, jittered, tops held inside the rim
   const j = seed * 61.7;
   for (let i = 0, x = a.x + 24; x < a.x + a.w - 10; i++) {
     const p = P.hi[Math.floor(hash(i * 7.3 + 2 + j) * P.hi.length)];
-    const s = 1.0 + hash(i * 5.1 + 4 + j) * 0.45;
-    stamp(p, x + (hash(i * 9.7 + j) - 0.5) * 10, a.y + 46 + (i % 2) * 9, s);
+    // over the N LEFT / ASC chips (a.y+48) the props stand clear of them
+    const chip = x < a.x + 70 || x > a.x + a.w - 120;
+    const by = a.y + (chip ? 44 : 46 + (i % 2) * 9);
+    // canopies stay under the rim: the HUD strip sits right above it
+    const s = Math.min(1.0 + hash(i * 5.1 + 4 + j) * 0.45, (by - a.y - 2) / p.r[3]);
+    stamp(p, x + (hash(i * 9.7 + j) - 0.5) * 10, by, s);
     x += 42 + hash(i * 3.3 + j) * 13;
   }
   // side edges — same upright props stepping down; they stop short of the
