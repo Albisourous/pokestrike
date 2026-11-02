@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay, makeStage, STAGE_GIMMICKS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, dustCost, AVATARS, EVO_LINES, setPay, STAGE_GIMMICKS } from './data';
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -11,10 +11,12 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, 
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, echoIds, labLevels, LAB_UPGRADES, stars, raidDoneToday, pullCount, loginToday, nextDexReward, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
 import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import { drawRaidLobby } from './home/raid';
 import type { TaskView } from './tasks';
+import { drawClimb, CLIMB_SCENE } from './home/climb';
+export { FREE_BTN, RESTART_BTN, ASC_BTN, CLIMB_FREE, CLIMB_RAID, ascCellRect, hitAscCell, noteAscDeny, takeClimbSeed, echoMonAt } from './home/climb';
 import type { Vec } from '../core/vec';
 import {
   INK, INK_SOFT, INK_FAINT, PAPER, PAPER_HI, PARCH, GOLD, GOLD_HI, ACCENT, DANGER,
@@ -105,8 +107,6 @@ export const TITLE_BTN = { x: W / 2 - 80, y: 772, w: 160, h: 44 };
 // the hero row anchors the bottom stack: ONE primary action (the climb) with
 // RESTART sits under it full-width — a parked climb's burn-and-deal-again
 // door, drawn only while a save exists
-export const FREE_BTN = { x: 46, y: 604, w: W - 92, h: 72 };
-export const RESTART_BTN = { x: FREE_BTN.x, y: FREE_BTN.y + FREE_BTN.h + 10, w: FREE_BTN.w, h: 44 };
 // --- home tabs: the CR-style bottom nav the title's bodies hang off -------
 export type HomeTab = 'shop' | 'mons' | 'climb' | 'raid' | 'town';
 // a floating bar, not flush — its bottom edge keeps ~28px clear of the
@@ -778,33 +778,6 @@ export { font, fontB };
 // --- ambient title: today's offers ----------------------------------------
 // The pitch between the wordmark and the buttons is scenery, not a demo —
 // a TODAY card sells the day's rotating offers. The sling lives in battle.
-const PITCH = { x: 26, y: 268, w: W - 52, h: 396 };
-
-// TODAY's three teasers are doors, not just a poster — rate-up and deal open
-// SHOP's tab, the shiny boss RAID's
-// the climb's centerpiece is the arena itself — a framed court window shows
-// stage 1 of the run a START tap will enter, first pack standing on it. The
-// seed pre-rolls here and newRun() consumes it, so the preview is the truth.
-const ARENA = { x: PITCH.x + 30, y: PITCH.y + 20, w: PITCH.w - 60, h: 160 };
-let climbSeed = (Math.random() * 0x7fffffff) | 0 || 1;
-export function takeClimbSeed() {
-  const s = climbSeed;
-  climbSeed = (Math.random() * 0x7fffffff) | 0 || 1;
-  return s;
-}
-
-// the fallen team's ghosts haunt the pitch foot — a tap on one deep-links
-// its dex card, the same contract as PARTNERS/RAID sprites
-export function echoMonAt(x: number, y: number): number | null {
-  const echo = echoIds();
-  if (!echo?.length) return null;
-  const ids = echo.slice(0, 3);
-  for (let i = 0; i < ids.length; i++) {
-    const ex = PITCH.x + PITCH.w * (0.2 + i * 0.3);
-    if (inRect(x, y, { x: ex - 30, y: PITCH.y + PITCH.h - 100, w: 60, h: 80 })) return ids[i].id;
-  }
-  return null;
-}
 
 // Wild mons at the screen edges — the stadium crowd, clear of the pitch
 const WILD_MONS: [number, number, number][] = [
@@ -987,176 +960,7 @@ function drawClimbBody(
   cont: { stage: number; score: number; seed: number } | null,
   restartArmed: boolean,
 ) {
-  const rookie = nextRookie();
-
-  // wordmark rides upper-left — the action owns the rest of the pitch
-  const logo = itemSprite('ui/pokemon-logo');
-  if (logo) ctx.drawImage(logo, 36, 58, 330, 121);
-  logoBig(ctx, 'STRIKE', 200, 236, 60, 320);
-
-  // ghosts haunt the field under the button stack — everything below them
-  // anchors to the lowest pill, not the pitch's conceptual bottom
-  const ctaBottom = (cont ? RESTART_BTN : FREE_BTN).y + (cont ? RESTART_BTN : FREE_BTN).h;
-  const echo = echoIds();
-  if (echo?.length) {
-    ctx.save();
-    ctx.globalAlpha = 0.34;
-    echo.slice(0, 3).forEach((e, i) => {
-      const ex = PITCH.x + PITCH.w * (0.2 + i * 0.3);
-      const ey = ctaBottom + 28 + Math.sin(t * 1.6 + i * 2.1) * 4;
-      monShadow(ctx, ex, ctaBottom + 28, 44);
-      try {
-        drawMon(ctx, e.id, ex, ey, 44);
-      } catch {
-        /* sprite still warming */
-      }
-      void loadSprite(e.id);
-    });
-    ctx.globalAlpha = 1;
-    ctx.textAlign = 'center';
-    ctx.font = fontB(10);
-    ctx.fillStyle = TYPE_COLOR.ghost;
-    ctx.fillText('RIVALS · WIN TO PUT THEM TO REST', PITCH.x + PITCH.w / 2, ctaBottom + 62);
-    ctx.restore();
-  }
-
-  // ARENA — the diorama CR keeps under its trophies: the mountain's face in
-  // its own window. Court theme + the wave-1 pack at their real spawn spots;
-  // a parked run previews the seed it parked on.
-  {
-    const stg = makeStage(cont?.seed ?? climbSeed);
-    const card = ARENA;
-    uiWindow(ctx, card, { rad: 10 });
-    const inner = { x: card.x + 7, y: card.y + 7, w: card.w - 14, h: card.h - 14 };
-    drawBackdrop(ctx, inner, 8, stg.theme);
-    // the stage plate rides the top rail — what you're climbing into
-    chip(ctx, card.x + 12, card.y + 11, `STAGE ${cont ? cont.stage : 1} · ${stg.name.toUpperCase()}`, {
-      bg: INK,
-      fg: PAPER,
-      fontPx: 8,
-    });
-    // the opener pack keeps its real spawn xs, spread to a minimum spread so
-    // a clustered pull reads as three foes, not a fused blob
-    const xs = stg.waves[0]
-      .map((sp) => inner.w * Math.min(0.9, Math.max(0.1, sp.nx)))
-      .sort((a, b) => a - b);
-    for (let i = 1; i < xs.length; i++) xs[i] = Math.max(xs[i], xs[i - 1] + inner.w * 0.22);
-    const over = xs[xs.length - 1] - inner.w * 0.94;
-    if (over > 0) for (let i = 0; i < xs.length; i++) xs[i] -= over;
-    stg.waves[0].forEach((sp, i) => {
-      const mx = inner.x + xs[i];
-      const my = inner.y + inner.h * Math.min(0.86, Math.max(0.3, sp.ny)) + 26;
-      monShadow(ctx, mx, my, 46);
-      drawMon(ctx, sp.def.id, mx, my + Math.sin(t * 2.2 + i * 1.7) * 2, 46);
-      void loadSprite(sp.def.id);
-    });
-    // foe count plate — right rail, mirrors the stage plate
-    const foes = stg.waves.flat().length;
-    const ft = `${foes} FOES`;
-    ctx.font = fontB(10);
-    chip(ctx, card.x + card.w - 12 - ctx.measureText(ft).width - 14, card.y + 11, ft, { bg: INK, fg: PAPER, fontPx: 8 });
-  }
-
-  // the run's heat picks right on the climb screen — the ladder StS
-  // players expect before the door, parked in the dead pitch band
-  drawAscLadder(ctx, t, ASC_BTN, ascCap(), ascPick());
-
-  // one hero pill — RESTART rides its flank, but only while a save waits.
-  // The raid isn't a door here anymore; its tab carries the boss face + dot.
-  pill(ctx, FREE_BTN, {
-    c: GOLD_HI,
-    cd: '#c8a44d',
-    tc: INK,
-    label: cont ? 'CONTINUE' : 'START CLIMB',
-    // fresh trainers see the ladder's next step on the front door itself
-    sub: cont ? `STAGE ${Math.max(1, cont.stage)}` : rookie ? `ROOKIE ${rookie.n + 1}/${ROOKIE_STEPS.length} · ${rookie.label}` : undefined,
-  });
-  if (cont) {
-    // parked climb's escape hatch, promoted from the old sliver link to a
-    // real pill — two-tap armed, warn-red face while it's lit
-    pill(ctx, RESTART_BTN, restartArmed
-      ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP SAVED RUN?' }
-      : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'RESTART', sub: `SAVED ${cont.score.toLocaleString('en-US')}` });
-    if (restartArmed) {
-      const label = 'DROP SAVED RUN?';
-      fitFont(ctx, label, 10, RESTART_BTN.w - 24);
-      const tw = measureW(ctx, label);
-      cursorTri(
-        ctx,
-        RESTART_BTN.x + RESTART_BTN.w / 2 - tw / 2 - 14,
-        RESTART_BTN.y + (RESTART_BTN.h - 4) / 2,
-        t,
-        '#ffe8e8',
-      );
-    }
-  }
-
-  // the echo's haunt lives on the pitch itself now — spectral mons beat a caption line
-
-  // the records line is the one-more-run hook — ranked ladder, best score.
-  // Re-anchored to the hero row now the chip rows are gone: the +50 clears
-  // the abandon-link / daily-mod tail that still owns the band right below.
-  const b = best();
-  const ld = tier();
-  const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
-  if (b.wins) bits.push(`ASCENSION ${Math.min(b.wins, 9)}`);
-  const wStreak = streakWins();
-  if (wStreak > 1) bits.push(`STREAK ${wStreak}`);
-  // the rating's next rung folds into the records line — one stat row, one bar
-  bits.push(ld.next ? `${ld.name} ${Math.round(ld.prog * 100)}% → ${ld.next.name}` : `${ld.name} MAX`);
-  // a live star-boost tails the records line in muted gold — the quiet
-  // countdown while a finished raid or daily is still paying out
-  const boostMs = boostLeft();
-  const boostTxt = boostMs > 0
-    ? `★ BOOST ×${starBoost()} ${Math.floor(boostMs / 3600000)}h${String(Math.floor((boostMs % 3600000) / 60000)).padStart(2, '0')}m`
-    : '';
-  const recLine = bits.join(' · ');
-  const recFull = boostTxt ? `${recLine} · ${boostTxt}` : recLine;
-  // the dense-stat face — the pixel font's floor can't squeeze this line
-  fitFontB(ctx, recFull, 10, W - 44);
-  const recY = ctaBottom + 76; // clears the echo band's caption
-  const recX = W / 2 - measureW(ctx, recFull) / 2;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#aab4dd';
-  ctx.fillText(boostTxt ? `${recLine} · ` : recLine, recX, recY);
-  if (boostTxt) {
-    ctx.fillStyle = GOLD;
-    ctx.fillText(boostTxt, recX + measureW(ctx, `${recLine} · `), recY);
-  }
-  ctx.textAlign = 'center';
-  // the ladder: a dark inset capsule the band's tier-color fill rides in,
-  // capped by the rung's own ball icons — the current one chases the next
-  const BALL_ICON: Record<string, string> = {
-    'POKé BALL': 'poke-ball',
-    'GREAT BALL': 'great-ball',
-    'ULTRA BALL': 'ultra-ball',
-    'MASTER BALL': 'master-ball',
-    CHAMPION: 'star-piece',
-  };
-  const rw = 200, rx = W / 2 - rw / 2, ry = ctaBottom + 86;
-  roundRect(ctx, rx, ry, rw, 12, 6);
-  ctx.fillStyle = 'rgba(10,13,24,0.6)';
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.22)'; // quartile notches — a measured track
-  for (let i = 1; i < 4; i++) ctx.fillRect(Math.floor(rx + (rw * i) / 4), ry + 3, 1, 6);
-  const fw = rw * ld.prog;
-  if (fw > 2) {
-    roundRect(ctx, rx + 1.5, ry + 1.5, Math.max(5, fw - 3), 9, 4);
-    ctx.fillStyle = ld.color;
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'; // crown sheen
-    roundRect(ctx, rx + 3, ry + 2.5, Math.max(3, fw - 6), 3.5, 2);
-    ctx.fill();
-  }
-  const ci = itemSprite(BALL_ICON[ld.name]);
-  const ni = itemSprite(ld.next ? BALL_ICON[ld.next.name] : 'star-piece');
-  if (ci) ctx.drawImage(ci, rx - 27, ry - 4, 21, 21);
-  else void loadItem(BALL_ICON[ld.name]);
-  if (ni) ctx.drawImage(ni, rx + rw + 6, ry - 4, 21, 21);
-  else void loadItem(ld.next ? BALL_ICON[ld.next.name] : 'star-piece');
+  drawClimb(ctx, t, cont, restartArmed, logoBig);
 
   // the day's login drop — a gold banner over the pitch top for the first
   // seconds on title, so the calendar reads as a reward, not a ledger line
@@ -1178,7 +982,7 @@ function drawClimbBody(
       }
       bw += 40;
       const bh = back ? 56 : 38;
-      const br = { x: W / 2 - bw / 2, y: 264 - bh / 2, w: bw, h: bh };
+      const br = { x: W / 2 - bw / 2, y: CLIMB_SCENE.y + 96, w: bw, h: bh };
       uiWindow(ctx, br, { dark: true, rad: 6, rim: false });
       ctx.textAlign = 'center';
       ctx.fillStyle = GOLD_HI;
@@ -2676,92 +2480,6 @@ export const LAB_BTN = { x: 36, y: 180, w: 150, h: 190 };
 export const TASKS_BTN = { x: 30, y: 462, w: 220, h: 180 };
 export const ACH_BTN = { x: 384, y: 432, w: 124, h: 196 };
 export const BOARD_BTN = { x: 360, y: 186, w: 152, h: 190 };
-// the rung ladder lives on CLIMB now — between the TODAY card and the
-// pills, in the dead pitch band; the gym door's tap routes there
-export const ASC_BTN = { x: 30, y: 452, w: W - 60, h: 122 };
-
-// ASCENSION's rung track — cells 0..9 (0 = the base climb) in one row.
-// StS names each rung's new modifier under the pick; locked rungs stay
-// visible but dim so the next win's prize is always on screen.
-const ASC_CELL_W = 38;
-const ASC_CELL_GAP = 8;
-const ASC_NCELLS = ASC_MODS.length + 1;
-
-export function ascCellRect(i: number) {
-  const w = ASC_NCELLS * ASC_CELL_W + (ASC_NCELLS - 1) * ASC_CELL_GAP;
-  return { x: ASC_BTN.x + (ASC_BTN.w - w) / 2 + i * (ASC_CELL_W + ASC_CELL_GAP), y: ASC_BTN.y + 42, w: ASC_CELL_W, h: 32 };
-}
-
-export function hitAscCell(x: number, y: number): number {
-  if (!inRect(x, y, ASC_BTN)) return -1;
-  for (let i = 0; i < ASC_NCELLS; i++) if (inRect(x, y, ascCellRect(i))) return i;
-  return -1;
-}
-
-// a tap on a locked rung flashes the lock hint under the track for ~1.5s
-let ascDeny = { i: -1, t: -10 };
-export function noteAscDeny(i: number, t: number) {
-  ascDeny = { i, t };
-}
-
-function drawAscLadder(ctx: CanvasRenderingContext2D, t: number, r: { x: number; y: number; w: number; h: number }, cap: number, pick: number) {
-  uiPanel(ctx, r, 'ASCENSION', { rad: 12, sub: cap ? `LV ${cap}/9` : 'LOCKED' });
-
-  // the track behind the rungs
-  const c0 = ascCellRect(0), cN = ascCellRect(ASC_NCELLS - 1);
-  ctx.fillStyle = '#d0d0c8';
-  ctx.fillRect(c0.x + c0.w / 2, c0.y + c0.h / 2 - 1.5, cN.x + cN.w / 2 - (c0.x + c0.w / 2), 3);
-
-  const denied = ascDeny.i >= 0 && t - ascDeny.t < 1.5 ? ascDeny.i : -1;
-  for (let i = 0; i < ASC_NCELLS; i++) {
-    const cr = ascCellRect(i);
-    const sel = i === pick;
-    const locked = i > cap;
-    const live = !locked && !sel && i <= pick; // lower rungs stay lit — every rule stacks, StS-style
-    ctx.save();
-    if (sel) ctx.translate(0, -3); // the picked rung rides proud of the track
-    if (locked) ctx.globalAlpha = 0.45; // locked rungs dim to ghost windows
-    uiWindow(ctx, cr, { rad: 7, shadow: false, ...(sel ? { tint: GOLD } : live ? { tint: '#e8d9a8' } : {}) });
-    ctx.font = fontB(10);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = INK;
-    ctx.fillText(`${i}`, cr.x + cr.w / 2 + (sel ? 4 : 0), cr.y + cr.h / 2 + 5);
-    if (sel) cursorTri(ctx, cr.x + 6, cr.y + cr.h / 2, t);
-    ctx.restore();
-    if (i === denied) {
-      ctx.save();
-      ctx.globalAlpha = 0.4 + 0.3 * Math.sin(t * 10);
-      roundRect(ctx, cr.x, cr.y, cr.w, cr.h, 7);
-      ctx.strokeStyle = DANGER;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.restore();
-    }
-  }
-
-  // the modifier line — StS names each rung's new rule under the pick
-  ctx.textAlign = 'center';
-  if (denied >= 0) {
-    ctx.font = fontB(10);
-    ctx.fillStyle = DANGER;
-    const short = denied - cap;
-    ctx.fillText(`LV ${denied} IS LOCKED · ${short} WIN${short > 1 ? 'S' : ''} SHORT`, r.x + r.w / 2, r.y + 104);
-  } else if (pick === 0) {
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_SOFT;
-    ctx.fillText(cap ? 'STANDARD RULES · THE BASE CLIMB' : 'STANDARD RULES · WIN A CLIMB TO HEAT UP', r.x + r.w / 2, r.y + 104);
-  } else {
-    const m = ASC_MODS[pick - 1];
-    ctx.font = fontB(10);
-    ctx.fillStyle = GOLD;
-    ctx.fillText(`LV ${pick} · ${m.name.toUpperCase()}`, r.x + r.w / 2, r.y + 98);
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_SOFT;
-    const line = `${m.desc.toUpperCase()}${pick > 1 ? ' · PLUS EVERY LOWER RUNG' : ''}`;
-    fitFontB(ctx, line, 10, r.w - 30);
-    ctx.fillText(line, r.x + r.w / 2, r.y + 114);
-  }
-}
 // the hall IS the Poké Center building — same door as TOP RUNS, same board
 export const HALL_BTN = BOARD_BTN;
 // the empty ledger's door — a dead hall still owes you the climb
