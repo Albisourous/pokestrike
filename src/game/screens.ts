@@ -5849,8 +5849,9 @@ export function drawClearCard(ctx: CanvasRenderingContext2D, c: ClearCard, age: 
     ctx.font = fontB(22);
     ctx.fillStyle = INK_SOFT;
     ctx.fillText(label, ix + (1 - a) * 24, y);
+    const lw = ctx.measureText(label).width;
     ctx.textAlign = 'right';
-    ctx.font = font(20);
+    fitFont(ctx, value, 20, vx - ix - lw - 20);
     ctx.fillStyle = i === 0 && speed ? '#2f9a3a' : INK;
     ctx.fillText(value, vx, y);
     const vw = ctx.measureText(value).width;
