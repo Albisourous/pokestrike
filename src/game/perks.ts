@@ -208,7 +208,7 @@ export const PERKS: Perk[] = [
       if (st.lum < 15) return;
       // a clean team keeps the berry primed — the wash lands the moment
       // something sticks, not a quarter-minute late
-      const dirty = b.players.filter((p) => !p.dead && (p.dotTicks > 0 || p.burnT > 0 || p.paraT > 0 || p.asleep));
+      const dirty = b.players.filter((p) => !p.dead && (p.dotTicks > 0 || p.burnT > 0 || p.paraT > 0 || p.asleep || p.confuseT > 0));
       if (!dirty.length) {
         st.lum = 15;
         return;
@@ -216,6 +216,9 @@ export const PERKS: Perk[] = [
       st.lum = 0;
       for (const p of dirty) {
         b.cleanse(p); // the same five fields shed skin sloughs
+        // canon lum also cures confusion — cleanse() deliberately doesn't
+        // (shed keeps the one-shot veer); the berry is the stronger medicine
+        p.confuseT = 0;
         b.pushText({ x: p.x, y: p.y - p.r - 8, text: 'LUM!', t: 0.8, color: '#78c850', big: false });
       }
       sfx('heal');
@@ -710,6 +713,43 @@ export const BAG_ITEMS: BagItem[] = [
     // +1 is stomped by the saved tools blob — no double-charge
     apply: (b) => { b.tools.roll += 1; },
     perTier: (b) => { b.tools.ban += 1; },
+  },
+  {
+    id: 'x-attack', name: 'X Attack', item: 'x-attack',
+    desc: 'team hits +10% harder',
+    // pow is the per-mon stat mult — rides level-ups; physMult is the
+    // ball's whole contact stack (muscle band's knob)
+    apply: (b) => b.players.forEach((p) => { p.pow *= 1.1; }),
+    perTier: (b) => b.players.forEach((p) => { p.pow *= 1.02; }),
+  },
+  {
+    id: 'max-elixir', name: 'Max Elixir', item: 'max-elixir',
+    desc: 'team ult arms 5 shots sooner',
+    // same stamp-order safety as town-map: resume's saved ultIn lands
+    // after apply, so the trim can't double
+    apply: (b) => { b.ultIn = Math.max(0, b.ultIn - 5); },
+    perTier: (b) => { b.ultIn = Math.max(0, b.ultIn - 1); },
+  },
+  {
+    id: 'chesto-berry', name: 'Chesto Berry', item: 'chesto-berry',
+    desc: "your team can't be put to sleep",
+    // sleepless is the standing no-nap flag every sleep path honors; the
+    // cleanse is belt-and-suspenders — fresh units build clean anyway
+    apply: (b) => b.players.forEach((p) => { p.def = { ...p.def, sleepless: true }; b.cleanse(p); }),
+    perTier: (b) => { b.regen += 0.01; },
+  },
+  {
+    id: 'revival-herb', name: 'Revival Herb', item: 'revival-herb',
+    desc: 'first KO stands back up at 50%',
+    // the lab revive token is the standing knob — the spent flag rides
+    // reviveUsed in the save, so a resumed climb can't re-spend it
+    apply: (b) => { b.reviveToken = true; },
+  },
+  {
+    id: 'amulet-coin', name: 'Amulet Coin', item: 'amulet-coin',
+    desc: '+15% star earnings',
+    apply: (b) => { b.starMult += 0.15; },
+    perTier: (b) => { b.starMult += 0.05; },
   },
 ];
 

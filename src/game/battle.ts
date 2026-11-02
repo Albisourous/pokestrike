@@ -1020,7 +1020,7 @@ export class Battle {
   private labHpMult = 1; // 'hp': team maxHp mult
   private labSpcMult = 1; // 'spc': bump-super damage mult
   private labLuck = 0; // 'luck': flat team luck feeding the gym fountain
-  private starMult = 1; // 'earnings': star payout mult, ceil'd per payout
+  starMult = 1; // 'earnings' lab + amulet coin: star payout mult, ceil'd per payout
   starsRun = 0; // star pieces banked this run — the result screen's +N row
   reviveToken = false; // 'revive': the first KO each run stands back up
   reviveUsed = false; // spent flag — persisted like ashArmed
