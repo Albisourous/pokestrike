@@ -393,6 +393,7 @@ export function playJingle(kind: JingleKind) {
 
 export type CryKind = 'boss' | 'ko' | 'ult' | 'catch';
 export const CRY_KO_CAP = 2;
+const CRY_CACHE_MAX = 48; // decoded cries are ~300 KB each at 48 kHz — oldest out first
 const CRY_VOL: Record<CryKind, number> = { boss: 0.8, ult: 0.6, catch: 0.6, ko: 0.4 };
 const cryCache = new Map<number, AudioBuffer | null | Promise<AudioBuffer | null>>();
 let cryFormat: 'ogg' | 'm4a' | null = null;
@@ -423,6 +424,7 @@ function loadCry(id: number, ctx: AudioContext, url: string) {
       return null;
     }
   })();
+  if (cryCache.size >= CRY_CACHE_MAX) cryCache.delete(cryCache.keys().next().value!);
   cryCache.set(id, pending);
   void pending.then((buffer) => {
     if (cryCache.get(id) === pending) cryCache.set(id, buffer);
