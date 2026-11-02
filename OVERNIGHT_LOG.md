@@ -733,3 +733,8 @@ backlog; builders run one iteration each, I verify + commit + push.
   (ultIn −5), chesto-berry (sleepless), revival-herb (revive token),
   amulet-coin (starMult +0.15); Lum perk also clears confusion
   (deliberate divergence from shed's five-field cleanse).
+- 3b93d2e pushed: FIELD NOTES task kind (dex emits at every
+  recordCapture choke — catches/pulls/evos/trades/secrets all bank),
+  Air Lock perk gates weather damage via this.sky (desc scoped to
+  damage honestly — veil/swift/forecast still read weather), tint
+  caches stop keying off the 1x1 404 placeholder.
