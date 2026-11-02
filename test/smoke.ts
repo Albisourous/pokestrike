@@ -5344,5 +5344,16 @@ import * as S from '../src/game/screens';
   ok(pk.h >= 44 && pk.x >= ur.x && pk.y >= ur.y && pk.x + pk.w <= ur.x + ur.w && pk.y + pk.h <= ur.y + ur.h, 'shop: the pack pill sits inside the upgrade rack');
 }
 
+// --- home: raid ---
+import { raidWeaknesses, raidCounters, raidRefresh } from '../src/game/home/raid';
+{
+  const boss = { type: 'water' as const, type2: 'flying' as const };
+  ok(raidWeaknesses(boss)[0].type === 'electric' && raidWeaknesses(boss)[0].mult === 4, 'raid hints respect dual-type weaknesses');
+  const counters = raidCounters(boss, [25, 25, 999999, 4]);
+  ok(counters.length === 1 && counters[0].mon.id === 25 && counters[0].mult === 4, 'raid box counters exclude invalid, duplicate and neutral matches');
+  ok(raidCounters(boss, []).length === 0, 'raid handles an empty box');
+  ok(raidRefresh(Date.UTC(2026, 0, 1)) === '24H 00M' && raidRefresh(Date.UTC(2026, 0, 1, 23, 59, 59)) === '0H 01M', 'raid timer rolls at UTC midnight');
+}
+
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
 process.exit(fails ? 1 : 0);
