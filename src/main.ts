@@ -140,6 +140,7 @@ import {
   RAID_FIGHT,
   echoMonAt,
 } from './game/screens';
+import { drawEvo, evoActive, skipEvo, tickEvo } from './game/evolve';
 import { runCard, shareRun } from './game/share';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
 import { SECRET_IDS } from './game/secret';
@@ -1016,6 +1017,7 @@ canvas.addEventListener('pointerdown', (e) => {
     helpDrag = { x0: p.x, y0: p.y, moved: false };
     return;
   }
+  if (evoActive()) return skipEvo();
   // the bug card swallows its own tap-out — it's a card, not a drag surface
   if (bugOpen) {
     bugOpen = false;
@@ -1998,7 +2000,8 @@ function update(dt: number) {
     }
     if (auto) hatchLockT = t;
   }
-  if (scene === 'battle' && battle && !helpOpen) {
+  tickEvo(dt);
+  if (scene === 'battle' && battle && !helpOpen && !evoActive()) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
     // ×2 is watch-phases only — a second full step, never a stretched dt, so
@@ -2406,6 +2409,7 @@ function render() {
       if (result) drawResult(ctx, result, resultExtra, share, t, t - sceneT0);
       break;
   }
+  drawEvo(ctx);
   drawPickPop(ctx, t);
   // the ? chip reads the same gate as the hit-test — dealt boards included;
   // the mute chip stays between-fights; the pager floats over any scene
