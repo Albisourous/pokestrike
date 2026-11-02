@@ -7,7 +7,7 @@ import { Flee } from './flee';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, TYPE_MOVE, EVO_LINES, LEADER_NPC, type FoeMoveKind } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, TYPE_MOVE, EVO_LINES, LEADER_NPC, type FoeMoveKind } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock, tickDaycare } from './events';
@@ -33,7 +33,7 @@ import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttac
 import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
-import { maybeSecret, enterSecret, secretWon, secretFled, drawSecretNode, type SecretState } from './secret';
+import { maybeSecret, enterSecret, secretWon, secretFled, drawSecretNode, secretSave, secretLoad, bossRooms, secretTheme, type SecretState } from './secret';
 import { MID_SCALE, MID_HP, MID_SIG, midBossStop, evolveOnce, midBossPick, drawMidBar } from './midboss';
 
 import {
@@ -1269,6 +1269,7 @@ export class Battle {
       asc: this.asc,
       mapSeed: this.mapSeed,
       mapNode: this.mapNode,
+      secret: secretSave(this),
       waveIndex: this.waveIndex,
       depth: this.depth,
       // banked mid-reward/loot: the row already fought is resolved, so the
@@ -1342,6 +1343,7 @@ export class Battle {
     this.waveIndex = s.waveIndex;
     this.depth = s.depth;
     this.pendingNext = s.pendingNext;
+    secretLoad(this, s.secret);
     // stage.waves restarts at the seeded 3 — refill the rows this run already
     // passed or the next spawnWave reads waves[i] past the array end. Each
     // row re-rolls at the depth it originally pushed with, gym leaders baked
@@ -1596,7 +1598,7 @@ export class Battle {
     // are always furnished.
     const bossWave = spawns.some((s) => s.boss);
     // ~1 gym in 3 fights in a furnished court — a FORTRESS raid is always one
-    const gymFurnished = bossWave && (this.raidMod === 'fortress' || this.rng() < 0.3);
+    const gymFurnished = bossWave && this.secret?.phase !== 'fight' && (this.raidMod === 'fortress' || this.rng() < 0.3);
     this.gymFurnished = gymFurnished;
     this.barBreak = false;
     let li = 0;
@@ -1613,7 +1615,7 @@ export class Battle {
       gymFurnished
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
-          ? ROOM_BOSS[0]
+          ? bossRooms(this)[0]
           : debugRoom() === 'gen' ||
               (debugRoom() !== 'authored' && i !== 0 && li > 0 && this.rng() < 0.4) // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
@@ -3238,13 +3240,13 @@ export class Battle {
   }
 
   private drawBlock(ctx: CanvasRenderingContext2D, b: typeof this.blocks[number]) {
-    if (b.field) { drawCover(ctx, b, this.theme, []); return; }
+    if (b.field) { drawCover(ctx, b, this.skinTheme, []); return; }
     const w = this.arena.w / 9;
     const occupied = (x: number, y: number) => this.blocks.some((r) =>
       x > r.x - 0.1 && x < r.x + r.w + 0.1 && y > r.y - 0.1 && y < r.y + r.h + 0.1);
     for (let i = 0; i < Math.round(b.w / w); i++) {
       const cell = { x: b.x + i * w, y: b.y, w, h: b.h };
-      drawCover(ctx, cell, this.theme, [
+      drawCover(ctx, cell, this.skinTheme, [
         occupied(cell.x + w / 2, cell.y - 1),
         occupied(cell.x + w + 1, cell.y + cell.h / 2),
         occupied(cell.x + w / 2, cell.y + cell.h + 1),
@@ -3252,6 +3254,8 @@ export class Battle {
       ]);
     }
   }
+
+  private get skinTheme() { return secretTheme(this.theme, this.secret?.phase === 'fight'); }
 
   private hitWalls(u: Unit) {
     const a = this.arena;
@@ -6832,7 +6836,7 @@ export class Battle {
     cull(this.enemies, (e) => e.boss && !e.dead);
     const grid = this.gymFurnished
       ? this.pickNextRoom()
-      : ROOM_BOSS[Math.min(boss.sumStage, ROOM_BOSS.length - 1)];
+      : bossRooms(this)[Math.min(boss.sumStage, bossRooms(this).length - 1)];
     const room = this.swapCourt(grid);
     // no teleport beat: the boss is off court until the drop-in lands it
     const at = this.unstick(
@@ -7889,7 +7893,7 @@ export class Battle {
       ctx.clip();
       ctx.translate(0, dy);
     }
-    drawBackdrop(ctx, a, 18, this.theme);
+    drawBackdrop(ctx, a, 18, this.skinTheme);
 
     // scars left by heavy hits — dark scorches fading on the floor
     for (const s of this.scars) {
@@ -7911,14 +7915,14 @@ export class Battle {
     if (scrolling) {
       ctx.save();
       ctx.translate(0, a.h);
-      drawBackdrop(ctx, a, 18, this.theme);
+      drawBackdrop(ctx, a, 18, this.skinTheme);
       ctx.restore();
       ctx.restore();
     }
-    drawWall(ctx, a, this.theme);
+    drawWall(ctx, a, this.skinTheme);
     this.drawDamageWalls(ctx);
 
-    drawAmbient(ctx, a, this.theme, this.time, QUALITY_FX[settings().quality]);
+    drawAmbient(ctx, a, this.skinTheme, this.time, QUALITY_FX[settings().quality]);
 
     this.drawWeather(ctx);
 
@@ -10001,7 +10005,7 @@ export class Battle {
       const w = this.arena.w / 9, h = this.arena.h / 11;
       const adjacent = (x: number, y: number) => this.hazards.some((z) =>
         z.moat && Math.abs(z.x - x) < 1 && Math.abs(z.y - y) < 1);
-      drawMoat(ctx, { x: hz.x - w / 2, y: hz.y - h / 2, w, h }, this.theme, [
+      drawMoat(ctx, { x: hz.x - w / 2, y: hz.y - h / 2, w, h }, this.skinTheme, [
         adjacent(hz.x, hz.y - h), adjacent(hz.x + w, hz.y),
         adjacent(hz.x, hz.y + h), adjacent(hz.x - w, hz.y),
       ]);

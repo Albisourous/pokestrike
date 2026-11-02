@@ -1,10 +1,11 @@
 import { mulberry32 } from '../core/rng';
 import { playJingle } from '../core/audio';
-import { speciesById, TOTAL_STAGES } from './data';
+import { speciesById, TOTAL_STAGES, fieldRoomReachable, ROOM_BOSS } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { markSecret, recordCapture } from './meta';
-import type { ClearRank } from './meta';
+import type { ClearRank, RunSave } from './meta';
 import type { Battle, Unit } from './battle';
+import type { Theme } from './bg';
 import { MAP_W, MAP_H, T_GRASS, drawTile } from './map';
 import type { MapNode, RegionMap } from './map';
 import * as MT from './maptiles';
@@ -17,7 +18,26 @@ const POOL_0 = [144, 145, 146];
 const POOL_1_A = [243, 244, 245];
 const POOL_1_S = [249, 250, 381];
 export const SECRET_IDS = [...POOL_0, ...POOL_1_A, ...POOL_1_S];
+export const ROOM_LAIR: string[][] = [
+  // shrine — twin pillars guard the altar, still pools at the flanks
+  ['1111E1111','1S0S0S0S1','1020S0201','10S000S01','130020031','100000001','120000021','100303001','100000001','1000P0001','111111111'],
+  // inner sanctum — a pool splits the lane, posts pinch the shot
+  ['1111E1111','1S0S0S0S1','1300S0031','10S020S01','102000201','100030001','120000021','100000001','103000301','1000P0001','111111111'],
+];
+for (const grid of ROOM_LAIR) {
+  if (grid.length !== 11 || grid.some((row) => row.length !== 9)) throw new Error('lair room grid must be 9x11');
+  if (grid.some((row) => [...row].some((cell) => !'0123ESP'.includes(cell)))) throw new Error('bad lair room tile');
+  if (grid.some((row) => row !== [...row].reverse().join(''))) throw new Error('lair room must be mirror-symmetric');
+  if (!fieldRoomReachable(grid)) throw new Error('lair room has no lane to the door or a spawn');
+}
 const secretRoutes = new WeakMap<MapNode, number[]>();
+const secretPool = (row: number, rank: ClearRank) => row < 3 ? POOL_0 : rank === 'S' ? POOL_1_S : POOL_1_A;
+
+export function bossRooms(b: { secret?: { phase: SecretState['phase'] } | null }) {
+  return b.secret?.phase === 'fight' ? ROOM_LAIR : ROOM_BOSS;
+}
+
+export const secretTheme = (theme: Theme, active: boolean): Theme => active ? 'sanctum' : theme;
 
 export const secretRng = (mapSeed: number, row: number) =>
   mulberry32(((mapSeed ^ 0x5ec2e7) + row * 7919) >>> 0);
@@ -30,7 +50,7 @@ export function rollSecret(
 ): SpeciesDef | null {
   const odds = SECRET_ODDS[rank];
   if (row % 3 !== 2 || row >= TOTAL_STAGES - 1 || odds == null || rng() >= odds) return null;
-  const pool = row < 3 ? POOL_0 : rank === 'S' ? POOL_1_S : POOL_1_A;
+  const pool = secretPool(row, rank);
   return speciesById(pool[Math.floor(rng() * pool.length)]) ?? null;
 }
 
@@ -143,6 +163,30 @@ export interface SecretState {
 
 const internals = (b: Battle) => b as unknown as SecretBattle;
 
+export function secretSave(b: Battle): RunSave['secret'] {
+  const s = internals(b).secret;
+  if (s?.phase !== 'open' || (s.rank !== 'S' && s.rank !== 'A')) return;
+  return { row: s.row, id: s.def.id, rank: s.rank };
+}
+
+export function secretLoad(b: Battle, v: unknown) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return;
+  const { row, id, rank } = v as { row?: unknown; id?: unknown; rank?: unknown };
+  if (typeof row !== 'number' || !Number.isInteger(row) || row % 3 !== 2 || row >= TOTAL_STAGES - 1) return;
+  if (typeof rank !== 'string' || (rank !== 'S' && rank !== 'A')) return;
+  if (typeof id !== 'number' || !Number.isInteger(id) || !secretPool(row, rank).includes(id)) return;
+  const x = internals(b);
+  if (x.pendingNext !== row + 1 || x.waveIndex !== row || x.secret) return;
+  const gymIdx = x.regionMap.nodes.findIndex((n) => n.row === row && n.kind === 'gym');
+  const def = speciesById(id);
+  if (gymIdx < 0 || !def) return;
+  const node = placeSecret(x.regionMap, gymIdx);
+  x.secret = {
+    node, gymIdx, def, row, rank, phase: 'open',
+    added: secretRoutes.get(node) ?? [], hpSnap: [], rngSaved: x.rng, had: false,
+  };
+}
+
 export function closeSecret(b: Battle) {
   const x = internals(b);
   const s = x.secret;
@@ -152,7 +196,6 @@ export function closeSecret(b: Battle) {
   if (idx === region.nodes.length - 1) region.nodes.pop();
   const gym = region.nodes[s.gymIdx];
   if (gym) gym.links = gym.links.filter((i) => i !== idx);
-  // shortcut: lair not saved in pk_run, add a RunSave field if players park runs on it
   for (const i of new Set([...s.added, ...(secretRoutes.get(s.node) ?? [])])) region.route.delete(i);
   secretRoutes.delete(s.node);
   x.secret = null;
