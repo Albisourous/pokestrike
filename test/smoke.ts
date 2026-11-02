@@ -2500,7 +2500,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b as any).endShot();
   const firstEscorts = b.enemies.filter((e) => e.minion);
   ok(oldFoes.every((e) => !b.enemies.includes(e)), 'old escorts flee without a KO path');
-  ok(firstEscorts.length === 3 && firstEscorts.every((e) => e.timer <= 2), 'first break brings 3 hot escorts');
+  ok(firstEscorts.length === 1 && firstEscorts.every((e) => e.timer <= 2), 'first break brings one hot guard escort');
   ok(b.box.length === boxBefore && b.players.every((p, i) => p.lvl === levelsBefore[i]), 'fleeing escorts give no catches or XP');
   ok(b.pickups.filter((p) => p.kind === 'oran-berry').length === stolenBefore + 1, 'fleeing thief returns its stolen pickup');
   ok(b.blocks !== blocksBefore && b.hazards !== hazardsBefore, 'bar break rebuilds the room');
@@ -2515,13 +2515,13 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(boss.hp === Math.ceil(boss.maxHp * 0.4) && boss.sumStage === 2 && (b as any).barBreak, 'second bar clamps boss at 40%');
   (b as any).endShot();
   const secondEscorts = b.enemies.filter((e) => e.minion);
-  ok(firstEscorts.every((e) => !b.enemies.includes(e)) && secondEscorts.length === 4, 'second break replaces escorts with 4');
+  ok(firstEscorts.every((e) => !b.enemies.includes(e)) && secondEscorts.length === 2, 'second break replaces escorts with two guards');
   ok(b.telop.texts().includes('BATTLE 3/3'), 'second break announces BATTLE 3/3');
   if (!(b as any).gymFurnished) {
     const sig = (r: any[]) => JSON.stringify(r.map((k) => [Math.round(k.x), Math.round(k.y), Math.round(k.w), Math.round(k.h)]));
     ok(new Set([sig(blocksBefore), sig(blocksBar2), sig(b.blocks)]).size === 3, 'each boss bar gets its own authored court');
   }
-  ok(boss.timer > 1 && (boss as any).bigT === 7 && !(b as any).barBreak, 'second break resets both boss clocks');
+  ok(boss.timer >= 1 && boss.phaseRage && (boss as any).bigT === 7 && !(b as any).barBreak, 'second break resets clocks with final-bar rage');
   // attack rotation: signature, signature, hop — position changes on the 3rd
   const { x: hx, y: hy } = { x: boss.x, y: boss.y };
   (b as any).bossAttack(boss);
@@ -2539,6 +2539,84 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
       ((b as any).rewardPending || b.phase === 'won' || b.phase === 'loot' || b.phase === 'reward'),
     'last bar can KO the boss and clear the wave',
   );
+}
+
+// --- Boss phases: readable weak faces, rage, guards and gauge reset ---
+{
+  const b: any = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  b.spawnWave(2);
+  b.theme = 'grove';
+  const boss = b.enemies.find((e: any) => e.boss);
+  b.enemies = [boss];
+  boss.relic = undefined;
+  const stats = { ...boss.def.stats };
+  const faces = [boss.weakA];
+  ok(!boss.enraged && !boss.phaseRage, 'normal boss starts without final-bar rage');
+  const face = boss.weakA;
+  b.relocateBoss(boss);
+  ok(boss.weakA === face, 'boss teleport keeps the current bar weak face');
+  for (let bar = 1; bar <= 2; bar++) {
+    boss.shieldN = 0;
+    boss.bigT = 1;
+    b.hurt(boss, boss.maxHp * 2, '#fff');
+    const hp = b.players.map((p: any) => p.hp);
+    boss.bigT = 0;
+    b.bossBigAttack(boss);
+    ok(b.players.every((p: any, i: number) => p.hp === hp[i]), `bar ${bar} break cancels a due big move`);
+    b.endShot();
+    faces.push(boss.weakA);
+    ok(boss.bigT === 7 && b.pendingBig.length === 0, `bar ${bar + 1} resets the big countdown and pending attacks`);
+    ok(b.telop.texts().includes('WEAK SPOT MOVED'), `bar ${bar + 1} telegraphs its new weak face`);
+    const guards = b.enemies.filter((e: any) => e.minion && e.shieldN >= 2);
+    ok(guards.length === bar && guards.every((e: any) => e.def.type === boss.def.type || EVO_LINES.some((l) => l.ids.includes(boss.def.id) && l.ids.includes(e.def.id))), `bar ${bar + 1} brings ${bar} matching Reflect guards`);
+    ok(b.enemies.filter((e: any) => !e.dead).length <= 5, `bar ${bar + 1} respects the five-foe cap`);
+    if (bar === 1) ok(!boss.phaseRage && !boss.enraged && boss.def.stats.atk === stats.atk, 'bar two has no rage or stat boost');
+  }
+  ok(new Set(faces).size === 3 && Math.abs((faces[1] - faces[0] + Math.PI * 2) % (Math.PI * 2) - Math.PI * 2 / 3) < 1e-9, 'weak face rotates 120 degrees on each bar');
+  ok(boss.phaseRage && boss.enraged && boss.def.stats.atk === Math.round(stats.atk * 1.2) && boss.def.stats.spa === Math.round(stats.spa * 1.2), 'last bar starts rage with a 20% offensive stat bump');
+  const baseClocks = foeClocks(boss.def.type, true, 2);
+  ok(boss.clocks.every((c: any, i: number) => c.turn === Math.max(1, baseClocks[i].turn - 1) && c.t === Math.max(1, baseClocks[i].first - 1)), 'rage shortens all move clocks by one turn');
+  ok(b.enemyReload(boss) === (boss.def.melee ? 1 : 2), 'rage basic clock loses one turn with a one-turn floor');
+  ok(b.telop.texts().includes('RAGE'), 'last bar announces RAGE through the banner queue');
+  const rageAtk = boss.def.stats.atk;
+  b.enrageBoss(boss);
+  ok(boss.def.stats.atk === rageAtk, 'rage cannot stack its stats twice');
+  while (b.enemies.length < 5) b.enemies.push({ ...boss, boss: false, minion: true });
+  const count = b.enemies.length;
+  b.summonBossAdds(boss, []);
+  ok(b.enemies.length === count, 'summoning into a full enemy roster adds nothing');
+
+  b.enemies = [boss];
+  boss.timer = 100;
+  boss.clocks = [];
+  boss.bigT = 3;
+  for (let turn = 1; turn <= 3; turn++) {
+    b.phase = 'shot';
+    b.endShot();
+    ok(boss.bigT === 3 - turn && b.pendingBig.length === (turn === 3 ? 1 : 0), `big move countdown resolves exactly on turn three, tick ${turn}`);
+  }
+  ok(b.telop.texts().includes(`${TYPE_MOVE[boss.def.type].move} · ALL`), 'FOE TURN names the signature move and whole-team target');
+  clearAnims();
+  const hp = b.players.map((p: any) => p.hp);
+  b.bossBigAttack(boss);
+  ok(b.players.every((p: any, i: number) => p.dead || p.hp < hp[i]), 'signature big move damages every living team member');
+  ok(boss.bigT === 7 && animCount() > 0, 'big move plays Gen 3 recipe visuals and reloads');
+  clearAnims();
+  const after = b.players.map((p: any) => p.hp);
+  b.bossBigAttack(boss);
+  ok(b.players.every((p: any, i: number) => p.hp === after[i]), 'a stale big-move callback cannot fire after the counter resets');
+
+  for (const def of BOSS_POOL) {
+    const guardBattle: any = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+    const ace = guardBattle.makeEnemy({ def, boss: true, nx: 0.5, ny: 0.2 }, 2);
+    ace.sumStage = 2;
+    guardBattle.enemies = [ace];
+    guardBattle.summonBossAdds(ace, [{ nx: 0.25, ny: 0.3 }, { nx: 0.75, ny: 0.3 }]);
+    ok(guardBattle.enemies.length === 3 && guardBattle.enemies.slice(1).every((e: any) => e.shieldN >= 2 && e.def.type === def.type), `${def.name} summons two type-matched Reflect guards`);
+    guardBattle.enemies.push({ ...ace, boss: false });
+    guardBattle.summonBossAdds(ace, []);
+    ok(guardBattle.enemies.length === 5, `${def.name} reduces its summon to one when only one slot remains`);
+  }
 }
 
 // --- MS attack clocks + type moves ---
