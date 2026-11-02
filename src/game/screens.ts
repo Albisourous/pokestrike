@@ -257,7 +257,7 @@ export const TOOL_ROLL = { x: 55, y: 588, w: 190, h: 46 };
 export const TOOL_BAN = { x: W - 55 - 190, y: 588, w: 190, h: 46 };
 // The box is a fixed window into a horizontally scrolling row — catches can
 // outgrow 540px, so the row scrolls instead of centering off-screen.
-export const BOX_STRIP = { x: 24, y: 536, w: W - 48, h: 64 };
+export const BOX_STRIP = { x: 24, y: 528, w: W - 48, h: 64 };
 const BOX_SLOT = 64;
 const BOX_GAP = 10;
 export function boxScrollMax(n: number) {
@@ -270,7 +270,7 @@ export function boxSlotRect(i: number, n: number, scroll = 0) {
 }
 export function teamSlotRect(i: number) {
   const w = 108, gap = 12;
-  return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 632, w, h: 92 };
+  return { x: W / 2 - (4 * (w + gap) - gap) / 2 + i * (w + gap), y: 618, w, h: 100 };
 }
 
 // split-evolution option cards — centered row over the dimmed reward screen
@@ -4119,14 +4119,14 @@ function drawRoster(
   // odds scale off your ace's level — weaklings easy, far-above foes gated
   const capLine = `BOX: beaten foes may join · weakest ${Math.round(catchPct * 300)}%`;
   fitFontB(ctx, capLine, 10, W - 40);
-  ctx.fillText(capLine, W / 2, 526);
+  ctx.fillText(capLine, W / 2, 520);
   if (masterArmed) {
     void loadItem('master-ball');
     const ball = itemSprite('master-ball');
     if (ball) {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(ball, W / 2 + ctx.measureText(capLine).width / 2 + 8, 515, 18, 18);
+      ctx.drawImage(ball, W / 2 + ctx.measureText(capLine).width / 2 + 8, 509, 18, 18);
       ctx.restore();
     }
   }
@@ -4158,6 +4158,7 @@ function drawRoster(
     uiWindow(ctx, card, { rad: 10, dark: sel, tint: !sel && selTeam >= 0 ? GOLD_HI : undefined });
     const ko = (boxHp[i] ?? 1) <= 0;
     ctx.globalAlpha = ko ? 0.3 : 1;
+    monShadow(ctx, r.x + r.w / 2, card.y + 25, 36);
     (def.shiny ? drawShiny : drawMon)(ctx, def.id, r.x + r.w / 2, card.y + 25, 36);
     ctx.globalAlpha = 1;
     if (ko) {
@@ -4174,7 +4175,8 @@ function drawRoster(
     hpBar(ctx, r.x + 6, card.y + 46, r.w - 12, boxHp[i] ?? 1);
     ctx.font = fontB(10);
     ctx.fillStyle = ko ? INK_FAINT : TYPE_COLOR[def.type];
-    ctx.fillText(def.name.slice(0, 9), r.x + r.w / 2, card.y + 58);
+    fitFontB(ctx, def.name, 10, r.w - 6);
+    ctx.fillText(def.name, r.x + r.w / 2, card.y + 58);
     const lvl = boxLvl[i] ?? 1;
     const bl = bondLv(def.id);
     if (lvl > 1 || bl) {
@@ -4205,9 +4207,9 @@ function drawRoster(
     }
   }
 
-  ctx.font = fontB(10);
+  ctx.font = fontB(11);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('YOUR TEAM', W / 2, 622);
+  ctx.fillText('YOUR TEAM', W / 2, 610);
   team.forEach((def, i) => {
     const r = teamSlotRect(i);
     const sel = i === selTeam;
@@ -4217,70 +4219,71 @@ function drawRoster(
     // the box every teammate tints gold — the row of hot swap targets
     uiWindow(ctx, card, { rad: 10, dark: sel, tint: !sel && selBox >= 0 ? GOLD_HI : undefined });
     if (sel) cursorTri(ctx, card.x + 9, card.y + card.h / 2 + 2, performance.now() / 1000, PARCH);
-    // type hairline + draft-card chips: type tag left, level tag right —
-    // a shiny's level rides in gold
-    ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillRect(card.x + 6, card.y + 5, def.type2 ? (card.w - 12) / 2 : card.w - 12, 3);
-    if (def.type2) {
-      ctx.fillStyle = TYPE_COLOR[def.type2];
-      ctx.fillRect(card.x + 6 + (card.w - 12) / 2, card.y + 5, (card.w - 12) / 2, 3);
-    }
-    chip(ctx, card.x + 6, card.y + 12, def.type.toUpperCase(), sel
-      ? { bg: 'rgba(240,230,200,0.16)', fg: TYPE_COLOR[def.type], fontPx: 6 }
-      : { bg: INK, fg: mixHex(TYPE_COLOR[def.type], INK, 0.45), fontPx: 6 });
     const lvl = teamLvl[i] ?? 1;
     const bl = bondLv(def.id);
     const lt = `${def.shiny ? `✦${lvl}` : `Lv${lvl}`}${bl ? `·B${bl}` : ''}`;
-    ctx.font = fontB(10);
-    const lw = ctx.measureText(lt).width + 14;
-    chip(
-      ctx,
-      card.x + card.w - 6 - lw,
-      card.y + 12,
-      lt,
-      def.shiny ? { bg: GOLD, fg: INK } : { bg: 'rgba(12,16,32,0.85)', fg: ACCENT },
-    );
-    ctx.textAlign = 'center';
+    ctx.font = fontB(12);
+    ctx.fillStyle = sel ? PARCH : INK;
+    fitFontB(ctx, def.name, 12, card.w - 12);
+    ctx.fillText(def.name, card.x + card.w / 2, card.y + 17);
+    const patch = { x: card.x + 6, y: card.y + 22, w: card.w - 12, h: 44 };
+    drawBackdrop(ctx, patch, 8, 'meadow');
+    const cx = card.x + card.w / 2;
+    monShadow(ctx, cx, card.y + 44, 48);
     const ko = (teamHp[i] ?? 1) <= 0;
     ctx.globalAlpha = ko ? 0.3 : 1;
-    (def.shiny ? drawShiny : drawMon)(ctx, def.id, card.x + card.w / 2, card.y + 50, 44);
+    (def.shiny ? drawShiny : drawMon)(ctx, def.id, cx, card.y + 44, 48);
     ctx.globalAlpha = 1;
     if (ko) {
       ctx.font = font(10);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillText('KO', card.x + card.w / 2 + 1, card.y + 54);
+      ctx.fillText('KO', cx + 1, card.y + 48);
       ctx.fillStyle = '#ff6b6b';
-      ctx.fillText('KO', card.x + card.w / 2, card.y + 53);
+      ctx.fillText('KO', cx, card.y + 47);
     }
-    hpBar(ctx, card.x + 8, card.y + 74, card.w - 16, teamHp[i] ?? 1);
-    ctx.font = fontB(10);
-    ctx.fillStyle = ko ? INK_FAINT : sel ? PARCH : INK;
-    ctx.fillText(def.name.slice(0, 12), card.x + card.w / 2, card.y + 87);
-    // the ability rides under the card; the 92px face is full
-    ctx.font = fontB(10);
+    chip(ctx, patch.x + 2, patch.y + 2, lt, def.shiny
+      ? { bg: GOLD, fg: INK }
+      : { bg: 'rgba(12,16,32,0.85)', fg: ACCENT });
+    hpBar(ctx, card.x + 8, card.y + 70, card.w - 16, teamHp[i] ?? 1);
+    const types: PokeType[] = def.type2 ? [def.type, def.type2] : [def.type];
+    const typeGap = types.length > 1 ? 4 : 0;
+    const chipW = (card.w - 12 - typeGap) / types.length;
+    types.forEach((type, ti) => {
+      const x = card.x + 6 + ti * (chipW + typeGap);
+      const y = card.y + 76;
+      roundRect(ctx, x, y, chipW, 16, 6);
+      ctx.fillStyle = TYPE_COLOR[type];
+      ctx.fill();
+      ctx.font = fontB(10);
+      ctx.fillStyle = '#fff';
+      const label = type.toUpperCase();
+      fitFontB(ctx, label, 10, chipW - 6);
+      ctx.fillText(label, x + chipW / 2, y + 12);
+    });
+    ctx.font = fontB(12);
     ctx.fillStyle = ko ? '#464e6e' : INK_FAINT;
     fitFontB(ctx, abilityLabel(def), 12, card.w + 4);
-    ctx.fillText(abilityLabel(def), card.x + card.w / 2, card.y + card.h + 12);
+    ctx.fillText(abilityLabel(def), cx, card.y + card.h + 12);
   });
   // the selected mon's super reads here — swapping is a move pick too
   const selDef = selBox >= 0 ? box[selBox] : selTeam >= 0 ? team[selTeam] : null;
   if (selDef) {
     const sbl = bondLv(selDef.id);
+    const abilityHint = [abilityLabel(selDef), abilityOf(selDef)?.hint].filter(Boolean).join(' · ');
     ctx.font = fontB(12); ctx.fillStyle = ACCENT;
-    ctx.fillText([abilityLabel(selDef), abilityOf(selDef)?.hint].filter(Boolean).join(' · '), W / 2, 728);
+    fitFontB(ctx, abilityHint, 12, W - 60);
+    ctx.fillText(abilityHint, W / 2, 752);
+    const moveHint = `★ ${moveOf(selDef.id, selDef.type)} · ${superDesc(selDef.id, selDef.type)}${sbl ? ` · BOND ${sbl}` : ''}`;
     ctx.font = fontB(10);
     ctx.fillStyle = GOLD;
-    ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} · ${superDesc(selDef.id, selDef.type)}${sbl ? ` · BOND ${sbl}` : ''}`, W / 2, 748); // under the role captions
+    fitFontB(ctx, moveHint, 10, W - 60);
+    ctx.fillText(moveHint, W / 2, 770);
+  } else {
+    const hint = 'tap a team mon and a box mon to swap them';
+    ctx.font = fontB(10);
+    const hw = ctx.measureText(hint).width + 14;
+    chip(ctx, W / 2 - hw / 2, 744, hint, { bg: 'rgba(42,36,64,0.8)', fg: '#a8b0d0' });
   }
-  const hint =
-    selTeam >= 0
-      ? 'tap a box mon to swap in'
-      : selBox >= 0
-        ? 'tap a teammate to swap in'
-        : 'tap a team mon and a box mon to swap them';
-  ctx.font = fontB(10);
-  const hw = ctx.measureText(hint).width + 14;
-  chip(ctx, W / 2 - hw / 2, 752, hint, { bg: 'rgba(42,36,64,0.8)', fg: '#a8b0d0' });
   ctx.textAlign = 'center';
 }
 
