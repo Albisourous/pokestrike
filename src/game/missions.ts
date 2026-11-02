@@ -79,6 +79,7 @@ const payIcon = (m: Mission) => (m.pay.kind === 'stars' ? 'star-piece' : 'stardu
 
 export class Missions {
   list: Mission[] = [];
+  rare = false;
   private t0 = -99;
   private ultUsed = false;
   private banked = false;
@@ -87,6 +88,7 @@ export class Missions {
   private cardDrawn = -99; // a card nobody has seen can't eat a tap (headless runs)
 
   start(seed: number, stage: number, teamTypes: PokeType[], ultReady: boolean, now: number, off = false) {
+    this.rare = false;
     this.list = off ? [] : pickMissions(seed, stage, teamTypes, ultReady);
     this.t0 = now;
     this.ultUsed = this.banked = false;
@@ -143,7 +145,7 @@ export class Missions {
     if (this.cardOn && !card) this.dismiss(now); // the shot left aim without a tap (keys)
     ctx.save();
     const a = this.cardOn ? Math.min(1, (now - this.t0) / CARD_FADE) : 1 - (now - this.cardOut) / CARD_FADE;
-    if (card && a > 0) drawStopCard(ctx, card, this.list, arena, a, now);
+    if (card && a > 0) drawStopCard(ctx, card, this.list, arena, a, now, this.rare);
     if (card && this.cardOn) this.cardDrawn = now;
     const c = { x: arena.x + arena.w - 98, y: arena.y + 8, w: 90, h: 30 };
     ctx.globalAlpha = 0.92;
@@ -180,7 +182,7 @@ export function drawMissionTicks(ctx: CanvasRenderingContext2D, list: Mission[],
 
 // MS quest card: court strip with the foes on it, gimmick icons with the
 // team's counters beside each, three mission chips. Held until a tap.
-function drawStopCard(ctx: CanvasRenderingContext2D, c: StopCard, list: Mission[], arena: { x: number; y: number; w: number; h: number }, alpha: number, now: number) {
+function drawStopCard(ctx: CanvasRenderingContext2D, c: StopCard, list: Mission[], arena: { x: number; y: number; w: number; h: number }, alpha: number, now: number, rare: boolean) {
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.fillStyle = 'rgba(10,14,30,0.6)';
@@ -251,6 +253,13 @@ function drawStopCard(ctx: CanvasRenderingContext2D, c: StopCard, list: Mission[
     ctx.fillText(`+${m.pay.n}`, x + mw / 2 - 10, y + 52);
     icon(ctx, payIcon(m), x + mw / 2 + 14, y + 47, 20);
   });
+
+  if (rare) {
+    ctx.textAlign = 'left';
+    ctx.font = fontB(16);
+    ctx.fillStyle = INK;
+    ctx.fillText('? · SOMETHING RARE NEARBY', ir.x + 4, my + 94);
+  }
 
   ctx.globalAlpha = alpha * (0.6 + 0.4 * Math.sin(now * 5));
   ctx.font = font(10);
