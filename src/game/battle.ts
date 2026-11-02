@@ -14,7 +14,7 @@ import type { EventChoice, EventArt } from './events';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, type ClearCard, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawAmbient, drawSlice, drawCover, drawMoat, THEMES, hash } from './bg';
 import { uiWindow, INK, PAPER, PARCH, GOLD_HI, SP } from './ui';
 import type { Theme } from './bg';
@@ -1036,6 +1036,7 @@ export class Battle {
   private stopFaints = 0; // team faints this stop — any faint costs a rank step
   rankStreak = 0; // consecutive A-or-better stop clears
   bestRankStreak = 0; // the run's longest such streak — the run report row
+  runRanks: ClearRank[] = []; // stop ranks by stage index — the share card's gym balls; not saved, a resumed run starts blank
   clearCard: ClearCard | null = null; // last stop's summary — drawn over the reward board until tapped
   private sweepStreak = 0; // consecutive one-shot clears — the streak pays
   private waveFlawless = true; // no hit taken this wave — the clear ribbon pays it out
@@ -1913,6 +1914,7 @@ export class Battle {
     this.rankStreak = rank === 'S' || rank === 'A' ? this.rankStreak + 1 : 0;
     this.bestRankStreak = Math.max(this.bestRankStreak, this.rankStreak);
     const stage = this.waveIndex + 1;
+    this.runRanks[stage - 1] = rank;
     const best = recordClear(stage, rank, this.stopShots, this.stopCombo);
     const pay = RANK_PAY[rank] ? this.earnStars(RANK_PAY[rank]) : 0;
     return { stage, turns: this.stopShots, par: this.par, combo: this.stopCombo, weak: this.stopWeak, kos: this.stopKos, taken: Math.round(this.stopTaken), faints: this.stopFaints, rank, pay, best };

@@ -140,6 +140,7 @@ import {
   RAID_FIGHT,
   echoMonAt,
 } from './game/screens';
+import { runCard, shareRun } from './game/share';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
 import { dailyMod, DAILY_MODS, type DailyMod } from './game/daily';
@@ -962,46 +963,6 @@ const labTap = (p: { x: number; y: number }) => {
   sfx('ui');
 };
 
-// navigator.clipboard rejects on iOS Safari even in a gesture — the
-// textarea + execCommand trick still works there, so it's the fallback
-async function copyText(): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(shareText);
-    return true;
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = shareText;
-    ta.readOnly = true;
-    ta.style.cssText = 'position:fixed;top:0;opacity:0';
-    document.body.appendChild(ta);
-    ta.select();
-    ta.setSelectionRange(0, ta.value.length); // iOS needs the explicit range
-    const ok = document.execCommand('copy');
-    ta.remove();
-    return ok;
-  }
-}
-
-async function shareResult() {
-  if (share) share.failed = false; // a fresh attempt clears the last one's flag
-  // native sheet first: on iOS it's the reliable path and has a Copy
-  // action built in
-  if (navigator.share) {
-    try {
-      await navigator.share({ text: shareText });
-      return;
-    } catch {
-      /* cancelled or unsupported payload — fall through to copy */
-    }
-  }
-  if ((await copyText()) && share) {
-    share.copied = true;
-    setTimeout(() => share && (share.copied = false), 1500);
-  } else if (share) {
-    share.failed = true; // sheet threw and the clipboard said no — the card says so
-  }
-}
-
 // --- input routing ---
 
 // title keeps the title loop; the pick screens get the calmer draft theme;
@@ -1588,7 +1549,7 @@ canvas.addEventListener('pointerdown', (e) => {
   } else if (scene === 'result') {
     if (inRect(p.x, p.y, SHARE_BTN)) {
       sfx('ui');
-      shareResult();
+      if (result && battle) void shareRun(runCard(result, battle, __BUILD__, location.origin + location.pathname), shareText, share);
     } else if (inRect(p.x, p.y, RETRY_BTN)) {
       // REMATCH: one tap back into a fresh draft — rolls fresh unless a
       // ?seed= is pinned, which replays the same island
