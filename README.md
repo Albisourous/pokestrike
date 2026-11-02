@@ -228,8 +228,10 @@ ghost pull that repeats until you've really slung one.
     rarity-colored **run badges** (FLAWLESS, MEGA KO, BOSS THIEF, SHINY
     HUNTER...), an MVP star on your carry, a "N pts short of your best"
     hook, and a `★ NEW RECORD ★` when you top it. **SHARE RESULT**
-    posts a trainer-card readout (team names, score, badges, the grid) with
-    a `?seed=` link: opening it deals that exact climb. A `SEED · build`
+    renders a 540×960 run card (your team on the last court, a rank ball
+    per gym, best combo, treasure, ascension) and shares the PNG with the
+    readout text, or downloads it and copies the `?seed=` link where the
+    share sheet takes no files. Opening the link deals that exact climb. A `SEED · build`
     stub sits in the corner so any screenshot is a complete bug report.
     **REMATCH** drops you straight into a fresh draft.
 

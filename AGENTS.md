@@ -54,6 +54,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/telop.ts` — queues and draws battle banners with priority, deduplication, and Pokémon art.
 - `src/game/map.ts` — seeded island generator for the climb map (value-noise terrain, decor); a fixed-lane StS tree: triplets of fork(2 battle doors) → fan(3 utility doors) → gym(1), edges deterministic by lane (door→own side+center, fan→gym, gym→both doors); tile draws key magenta from the gracidea tileset
 - `src/game/events.ts` — the `?`-stop event pool (heals, catches, ambush scripted waves, egg)
+- `src/game/share.ts` — the result screen's SHARE: an offscreen 540×960 run card (team on the last court, gym rank balls, combo/treasure/ascension, `?seed=` link + build) shared as a PNG via `navigator.share`, else downloaded with the link copied
 - `src/game/traits.ts` — tiered type traits from fielded mons (shiny counts double)
 - `src/game/ui.ts` — the menu-window chrome kit: palette (INK/PAPER/PARCH/GOLD), fonts (`font`/`fontB`), `uiWindow`/`uiBand`/`uiPanel` (double-framed paper windows + INK title band), `uiRow` (list rows, `on`=ink slab, `hot`=gold slab + ▶), `cursorTri` (blinking ▶), `scrim`, `uiClose`. Every panel/overlay draws through these — design spec: `docs/superpowers/specs/2026-10-22-menu-ux-overhaul.md`
 - `src/game/maptiles.ts` — `TILE_*` source rects into `tileset.webp` for the map
