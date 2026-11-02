@@ -26,6 +26,7 @@ import { MISSION_PAY, Missions, pickMissions } from '../src/game/missions';
 import { missionBests, recordMissions } from '../src/game/meta';
 import { BALL_TIERS, DROP_CAP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDrop, rollReward } from '../src/game/loot';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
+import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
 import { installField2, stepField2, laserPlan, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
@@ -3996,6 +3997,42 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   x.spawnWave(0);
   y.spawnWave(0);
   ok(x.missions.list.length === 3 && x.rng() === y.rng(), 'missions leave seeded replays unchanged');
+}
+
+// --- MS ALL CONNECT: every living ally in one shot, next shot ×1.25 -------
+{
+  const mon = (id: number) => ({ dead: false, def: { id }, x: 0, y: 0, r: 20 });
+  const sq = [mon(1), mon(4), mon(7), mon(25)];
+  const tl = new Telops();
+  const c = new Connect();
+  c.launch();
+  ok(!c.touch(sq[1], sq[0], sq, tl) && !c.touch(sq[2], sq[0], sq, tl) && !c.touch(sq[2], sq[0], sq, tl) && !c.armed, 'ALL CONNECT: 2 of 3 allies is no connect');
+  ok(c.touch(sq[3], sq[0], sq, tl) && c.armed && c.alls === 1 && c.best === 3, 'ALL CONNECT fires once every living ally is touched');
+  tl.update(0.01);
+  ok(tl.texts().includes('ALL CONNECT') && tl.cur?.mons?.length === 4, 'ALL CONNECT telop carries the team fronts');
+  ok(!c.touch(sq[1], sq[0], sq, tl) && c.alls === 1, 'ALL CONNECT fires once per shot');
+  ok(c.mult() === 1, 'ALL CONNECT shot itself gets no bonus');
+  c.launch();
+  ok(c.mult() === CONNECT_MUL && !c.armed, 'ALL CONNECT bonus rides the next shot');
+  c.launch();
+  ok(c.mult() === 1, 'ALL CONNECT bonus applies exactly once');
+  sq[3].dead = true;
+  ok(!c.touch(sq[3], sq[0], sq) && !c.touch(sq[1], sq[0], sq) && c.touch(sq[2], sq[0], sq), 'ALL CONNECT skips fainted allies');
+  c.launch();
+  sq[2].dead = true;
+  ok(!c.touch(sq[1], sq[0], sq) && !c.armed, 'ALL CONNECT needs 2 living allies');
+  c.reset();
+  ok(!c.armed && !c.live && c.best === 0 && c.alls === 0, 'ALL CONNECT resets per stop');
+  // battle wiring: the live bonus scales real hits
+  const mk = () => { const bb: any = new Battle(arena, team(), makeStage(42, 'T'), mulberry32(42)); bb.spawnWave(0); bb.critCh = 0; return bb; };
+  const x = mk(), y = mk();
+  y.connect.live = true;
+  const ex = x.enemies[0], ey = y.enemies[0];
+  const hx = ex.hp, hy = ey.hp;
+  x.hurt(ex, 40, '#fff', '', x.players[0]);
+  y.hurt(ey, 40, '#fff', '', y.players[0]);
+  const dx = hx - ex.hp, dy = hy - ey.hp;
+  ok(dx > 0 && Math.abs(dy - Math.round(dx * CONNECT_MUL)) <= 1, `ALL CONNECT bonus scales battle damage (${dx} → ${dy})`);
 }
 
 // --- the pause chip freezes the sim, a tap thaws it ---------------------------
