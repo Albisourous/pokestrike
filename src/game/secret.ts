@@ -3,6 +3,7 @@ import { playJingle } from '../core/audio';
 import { speciesById, TOTAL_STAGES, fieldRoomReachable, ROOM_BOSS } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { markSecret, recordCapture } from './meta';
+import { taskTick } from './tasks';
 import type { ClearRank, RunSave } from './meta';
 import type { Battle, Unit } from './battle';
 import type { Theme } from './bg';
@@ -251,7 +252,7 @@ export function secretWon(b: Battle) {
   if (s.had) x.absorbDupe(rec);
   else if (!x.box.some((d) => d.id === rec.id) && !x.players.some((p) => p.def.id === rec.id)) {
     x.boxAdd(rec);
-    recordCapture([rec.id]);
+    if (recordCapture([rec.id])) taskTick({ dex: 1 });
   }
   const tier = s.row >= 3 ? 1 : 0;
   const pay = x.earnStars(SECRET_STARS[tier]);

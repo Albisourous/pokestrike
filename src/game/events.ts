@@ -8,6 +8,7 @@ import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
 import { rollPerks } from './perks';
 import { recordCapture, recordShiny } from './meta';
+import { taskTick } from './tasks';
 import { sfx } from '../core/audio';
 
 export interface EventChoice {
@@ -58,7 +59,7 @@ const healAll = (b: Battle, frac: number) => {
 // and no catch may outlevel the team it lands on
 const boxCatch = (b: Battle, def: SpeciesDef, lvl: number, hpFrac: number) => {
   b.boxAdd({ ...def, lvl: b.catchLvl(lvl) }, hpFrac);
-  recordCapture([def.id]); // a mid-run tab close keeps the dex honest
+  if (recordCapture([def.id])) taskTick({ dex: 1 }); // a mid-run tab close keeps the dex honest
 };
 
 // 2×2 ambush grid — the rng draw happens per id before the def check so a
@@ -159,7 +160,7 @@ const EVENTS: GameEvent[] = [
       const shiny = b.roll() < (1 / 48) * 3;
       const name = p.def.name.toUpperCase();
       b.applyDef(p, { ...def, shiny: shiny || undefined }, p.lvl, p.hp / p.maxHp);
-      recordCapture([def.id]); // the stranger lands in the dex like any catch
+      if (recordCapture([def.id])) taskTick({ dex: 1 }); // the stranger lands in the dex like any catch
       if (shiny) recordShiny(def.id);
       return {
         note: `${name} LEFT… AND ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED!`,
@@ -316,7 +317,7 @@ const EVENTS: GameEvent[] = [
               const shiny = bb.roll() < 1 / 48;
               const name = weak.def.name.toUpperCase();
               bb.applyDef(weak, { ...def, shiny: shiny || undefined }, Math.min(100, weak.lvl + 4), weak.hp / weak.maxHp);
-              recordCapture([def.id]); // the stranger lands in the dex
+              if (recordCapture([def.id])) taskTick({ dex: 1 }); // the stranger lands in the dex
               if (shiny) recordShiny(def.id); // a shiny arrival counts like a caught one
               return { note: `${name} LEFT… ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED AT Lv${weak.lvl}!`, skip: true };
             },
@@ -754,7 +755,7 @@ const EVENTS: GameEvent[] = [
                 const def = pool[Math.floor(bb.roll() * pool.length)];
                 const name = traded.def.name.toUpperCase();
                 bb.applyDef(traded, def, traded.lvl, traded.hp / traded.maxHp);
-                recordCapture([def.id]);
+                if (recordCapture([def.id])) taskTick({ dex: 1 });
                 return { note: `${name} LEFT · ${def.name.toUpperCase()} ARRIVED!`, art: { mon: def.id }, skip: true };
               },
             })),

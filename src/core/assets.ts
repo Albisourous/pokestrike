@@ -94,7 +94,8 @@ export function shinySprite(id: number): HTMLCanvasElement {
     t.globalCompositeOperation = 'source-atop';
     t.fillStyle = 'rgba(255, 205, 66, 0.5)';
     t.fillRect(0, 0, c.width, c.height);
-    shinyCache.set(id, c);
+    // a 404's 1×1 placeholder mustn't bank — a late fetch can still land the real front
+    if (img.width > 1) shinyCache.set(id, c);
   }
   return c;
 }
@@ -119,7 +120,8 @@ export function whiteSprite(id: number): HTMLCanvasElement {
     t.globalCompositeOperation = 'source-in';
     t.fillStyle = '#ffffff';
     t.fillRect(0, 0, c.width, c.height);
-    whiteCache.set(id, c);
+    // same placeholder guard as shinyCache — don't freeze a 1×1 silhouette
+    if (img.width > 1) whiteCache.set(id, c);
   }
   return c;
 }

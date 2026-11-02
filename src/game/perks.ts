@@ -330,6 +330,12 @@ export const PERKS: Perk[] = [
     apply: (b) => { b.slowImmune = true; },
   },
   {
+    id: 'air-lock', name: 'Air Lock', item: 'air-balloon',
+    desc: 'weather never tilts damage',
+    rarity: 'uncommon',
+    apply: () => {}, // read live off perkIds — battle's weatherMult calls gate on it
+  },
+  {
     id: 'pbracer', name: 'Power Bracer', item: 'power-bracer',
     desc: '+30% damage vs bosses',
     rarity: 'uncommon',

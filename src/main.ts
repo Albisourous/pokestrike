@@ -845,6 +845,7 @@ const doPull = (n: number) => {
   const featuredId = featuredPull().id; // today's 10x rate-up, same for everyone
   const results: PullResult[] = [];
   let dexPay = 0; // milestone stars this pull banked — the summary names them
+  let dexNew = 0; // new species the pulls registered — banks on the dex chore
   for (let k = 0; k < n; k++) {
     const def = pullSpecies(Math.random, { rarePlus: bumpPulls() % PULL_PITY === 0, featuredId });
     const tier = tierOf(def);
@@ -854,7 +855,7 @@ const doPull = (n: number) => {
       dustPay = DUST_BY_TIER[tier];
       addDust(dustPay); // a pulled dupe converts instead of re-recording
     } else {
-      recordCapture([def.id]); // the dex IS the unlock ledger — the draft pool grows
+      dexNew += recordCapture([def.id]); // the dex IS the unlock ledger — the draft pool grows
       dexPay += pullMilestones();
     }
     const shiny = Math.random() < shinyOdds() || DEV_SHINY; // weekends double it
@@ -865,7 +866,7 @@ const doPull = (n: number) => {
     statPull(def.id, dupe);
     results.push({ id: def.id, rarity: INVADER_IDS.has(def.id) || tier >= 3 ? 3 : tier === 2 ? 2 : 1, dupe, shiny, dust: dustPay });
   }
-  taskTick({ pulls: n }); // hatcher pulls bank on the chore board the moment they land
+  taskTick({ pulls: n, dex: dexNew }); // hatcher pulls bank on the chore board the moment they land
   hatch.results = results;
   hatch.dexPay = dexPay;
   hatch.rookiePay = rookieCheck().reduce((s, r) => s + r.pay, 0); // 'HATCH A MON' clears here
@@ -895,7 +896,7 @@ const sparkBuy = (def: SpeciesDef) => {
     sfx('ui', 0.6); // short on dust — the spend itself is the guard
     return;
   }
-  recordCapture([def.id]);
+  if (recordCapture([def.id])) taskTick({ dex: 1 });
   const dexPay = pullMilestones(); // a dust buy can cross a tier too
   const rookie = rookieCheck(); // a spark buy is a hatch for the rookie board
   // one flash can carry both payouts — a buy that hits a dex tier AND a
@@ -2133,7 +2134,7 @@ function update(dt: number) {
           const boss = raidPick(); // day-seeded — same pick startRaid fielded
           const dupe = dexIds().includes(boss.id); // read BEFORE the capture lands
           recordShiny(boss.id); // the prize: a gold entry of today's boss
-          recordCapture([boss.id]);
+          if (recordCapture([boss.id])) taskTick({ dex: 1 });
           if (dupe) addDust(DUST_BY_TIER[3]); // a dupe raid pays epic dust like a dupe pull
           addStars(Math.ceil(40 * starBoost())); // tunable guess: 40★ raid purse
           if (INVADER_IDS.has(boss.id)) unlockAch('myth'); // an invader raid tames the myth
@@ -2254,7 +2255,8 @@ function update(dt: number) {
       share = buildShare(battle, won);
       // catches join the dex either way; a loss leaves the team behind as
       // the next run's rival "echo"
-      recordCapture(battle.box.map((b) => b.id));
+      const dexFresh = recordCapture(battle.box.map((b) => b.id));
+      if (dexFresh) taskTick({ dex: dexFresh });
       result.newDex = dexIds().length - dexBefore;
       const dexPay = claimDexRewards().reduce((s, c) => s + c.pay, 0); // collection tiers pay out
       if (dexPay) {

@@ -101,9 +101,13 @@ export function claimSet(root: number): number {
   return setPay(line);
 }
 
-export function recordCapture(ids: number[]) {
+// returns how many species were new — the 'dex' task kind banks that count
+export function recordCapture(ids: number[]): number {
+  const owned = new Set(dexIds());
+  const fresh = new Set(ids.filter((id) => !owned.has(id))).size;
   for (const id of ids) memDex.add(id);
-  store('pk_dex', [...new Set([...dexIds(), ...ids])]);
+  store('pk_dex', [...new Set([...owned, ...ids])]);
+  return fresh;
 }
 
 // shiny catches get their own ledger — the dex shows them with a gold star

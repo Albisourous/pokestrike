@@ -4880,7 +4880,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(taskViews('daily', t0).length === 3 && localStorage.getItem('pk_tasks') === null, 'taskViews stays read-only — the roll waits for a writer');
 
   // a full-kind beat lands on both periods — but only the kinds on offer
-  taskTick({ kos: 10, catches: 2, stages: 1, gyms: 1, perks: 2, score: 500, shinies: 1, runs: 1, wins: 1, maxstage: 4, combo: 6, pulls: 2, evos: 1 }, t0);
+  taskTick({ kos: 10, catches: 2, stages: 1, gyms: 1, perks: 2, score: 500, shinies: 1, runs: 1, wins: 1, maxstage: 4, combo: 6, pulls: 2, evos: 1, dex: 1 }, t0);
   const dv0 = taskViews('daily', t0);
   const wv0 = taskViews('weekly', t0);
   ok(dv0.length === 3 && wv0.length === 4, 'selections show through the views');
@@ -4890,7 +4890,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(s0.day === dayKey(t0) && s0.dsel.join() === ids.join(), 'tick persisted the seeded board under the day key');
 
   // overshoot is fine — have runs past n, done is the gate
-  taskTick({ kos: 500, catches: 50, stages: 50, gyms: 9, perks: 50, score: 99999, shinies: 5, runs: 5, wins: 2, maxstage: 9, combo: 9, pulls: 10, evos: 3 }, t0);
+  taskTick({ kos: 500, catches: 50, stages: 50, gyms: 9, perks: 50, score: 99999, shinies: 5, runs: 5, wins: 2, maxstage: 9, combo: 9, pulls: 10, evos: 3, dex: 3 }, t0);
   const dv = taskViews('daily', t0);
   ok(dv.every((v) => v.done) && dv.some((v) => v.have > v.n), 'over-ticking overshoots the target — done flags hold');
   const wv = taskViews('weekly', t0);

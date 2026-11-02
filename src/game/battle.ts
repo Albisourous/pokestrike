@@ -13,7 +13,7 @@ import type { Rarity } from './perks';
 import { rollEvent, martStock, tickDaycare } from './events';
 import type { EventChoice, EventArt } from './events';
 import { drawStopScene } from './stops';
-import { taskViews } from './tasks';
+import { taskViews, taskTick } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, best, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
@@ -3276,6 +3276,11 @@ export class Battle {
 
   private get skinTheme() { return secretTheme(this.theme, this.secret?.phase === 'fight'); }
 
+  // Air Lock parks the sky — every weatherMult read goes through the perk gate
+  private get sky(): Weather | null {
+    return this.perkIds.includes('air-lock') ? null : this.weather;
+  }
+
   private hitWalls(u: Unit) {
     const a = this.arena;
     // a bounce only counts when it actually reverses a moving ball —
@@ -4038,7 +4043,7 @@ export class Battle {
           this.boxAdd(e.shiny ? { ...e.def, shiny: true, lvl: cl } : { ...e.def, lvl: cl }, 1, false); // the KO spot already runs the ritual
         }
         // record at capture time — a mid-run tab close keeps the dex honest
-        recordCapture([e.def.id]);
+        if (recordCapture([e.def.id])) taskTick({ dex: 1 });
         this.log(`${e.shiny ? '★ SHINY ' : ''}${e.def.name.toUpperCase()} CAUGHT`);
         if (INVADERS.some((i) => i.id === e.def.id)) this.award('myth');
         if (e.boss) this.caughtBoss = true;
@@ -4146,7 +4151,7 @@ export class Battle {
     const hitN = this.shotHitN.get(e.uid) ?? 0;
     this.shotHitN.set(e.uid, hitN + 1);
     if (rico && !this.inStatic(shooter.x, shooter.y)) this.onRicochet(e.x, e.y);
-    const mult = typeMult(at, e.def) * weatherMult(this.weather, at);
+    const mult = typeMult(at, e.def) * weatherMult(this.sky, at);
     // read the marked face before damage — every foe has one, except shells
     const weak = this.weakHit(e, shooter.x, shooter.y);
     // shelled foes face their shell into the fight: hits arriving on it
@@ -4865,7 +4870,7 @@ export class Battle {
     // shooter's stats and typing, fired from the copier's position
     const src = p.def.copy ? u : p;
     const phys = bumpIsPhysical(src.def.type);
-    const eff = (e: Unit) => typeMult(src.def.type, e.def) * weatherMult(this.weather, src.def.type);
+    const eff = (e: Unit) => typeMult(src.def.type, e.def) * weatherMult(this.sky, src.def.type);
     // Physical bump attacks roll Attack vs Defense; elemental ones SpA vs SpD.
     const bumpDmg = (e: Unit, power: number) =>
       e.def.absorb === src.def.type ? -Math.round(e.maxHp * 0.25)
@@ -5247,7 +5252,7 @@ export class Battle {
     sfx(SUPER_SFX[u.def.type], superPitch(u.def.type));
     buzz([50, 40, 90]);
     const phys = bumpIsPhysical(u.def.type);
-    const multOf = (e: Unit) => typeMult(u.def.type, e.def) * weatherMult(this.weather, u.def.type);
+    const multOf = (e: Unit) => typeMult(u.def.type, e.def) * weatherMult(this.sky, u.def.type);
     const dmgOf = (e: Unit, power = 1) =>
       // wonder guard: only super-effective damage lands — supers included
       e.def.wguard && multOf(e) <= 1 && !u.def.breaker
@@ -5793,7 +5798,7 @@ export class Battle {
     if (next) {
       if (owned) this.evolveUnit(owned, next); // the flicker cinematic owns the payoff
       else this.box[bi] = this.evoMerge(this.box[bi], next, shiny); // markers survive a boxed evolution
-      recordCapture([next.id]); // evo-only species only ever enter the dex here
+      if (recordCapture([next.id])) taskTick({ dex: 1 }); // evo-only species only ever enter the dex here
       if (!owned) startEvo(def.id, next.id, !!this.box[bi].shiny);
       const evoLine = `${def.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`;
       this.pushText({
@@ -5853,7 +5858,7 @@ export class Battle {
         if (u) this.evolveUnit(u, next);
       }
     }
-    recordCapture([next.id]);
+    if (recordCapture([next.id])) taskTick({ dex: 1 });
     const evoLine = `${c.from.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`;
     this.pushText({
       x: this.arena.x + this.arena.w / 2,
@@ -6047,7 +6052,7 @@ export class Battle {
       const rec = this.lastRecruit;
       if (!this.absorbDupe(rec)) {
         this.boxAdd(rec); // boxAdd runs the ball ritual itself
-        recordCapture([rec.id]); // the dex logs it now, not at run end
+        if (recordCapture([rec.id])) taskTick({ dex: 1 }); // the dex logs it now, not at run end
       } else {
         // a prize dupe never reaches boxAdd — run the ritual anyway so the
         // catch chime still waits on the click
@@ -6443,7 +6448,7 @@ export class Battle {
       this.impact(a.x, a.y, '#ffd84d', 0.9);
       playJingle('hatch'); // curious arp — a new face, not a fought catch
     });
-    recordCapture([def.id]);
+    if (recordCapture([def.id])) taskTick({ dex: 1 });
     this.mapMsg = `THE EGG HATCHED · ${def.name.toUpperCase()} JOINED YOUR BOX!`;
     this.log(this.mapMsg);
     this.mapMsgT = 3;
@@ -11136,7 +11141,7 @@ export class Battle {
       // gray = resisted, pale = a neutral trade
       if (hit) {
         const at = strikeType(u.def, hit.def);
-        const eff = typeMult(at, hit.def) * weatherMult(this.weather, at);
+        const eff = typeMult(at, hit.def) * weatherMult(this.sky, at);
         ctx.strokeStyle = eff >= 2 ? '#ffd84d' : eff <= 0.5 ? '#8a90a8' : '#e8ecf8';
         ctx.lineWidth = 2;
         ctx.globalAlpha = 0.85;
