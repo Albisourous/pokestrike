@@ -59,6 +59,26 @@ export const TILE_MOSS_TRIM: TileRect = [1644, 177, 8, 8];
 export const TILE_STEEL_TRIM: TileRect = [390, 529, 8, 8];
 export const TILE_TIMBER: TileRect = [1944, 254, 8, 8];
 
+// Overworld obstacle sets, checked against tileset.json frames 1/7/13/16,
+// 653, 1448, 1906 and 4397. Keep the atlas caps, faces and contact shadows.
+export const WALL_ROCK: TileRect = [235, 1, 52, 52];
+export const WALL_VOLCANIC: TileRect = [289, 1, 52, 52];
+export const WALL_SNOW: TileRect = [127, 1, 52, 52];
+export const WALL_BOULDER: TileRect = [1590, 22, 28, 30];
+export const WALL_METAL: TileRect = [1664, 214, 38, 18];
+export const WALL_WOOD: TileRect = [1768, 292, 48, 12];
+export const WALL_REED: TileRect = [1694, 18, 16, 18];
+export const WALL_BUSH: TileRect = [1712, 9, 48, 26];
+export const WALL_RUIN: TileRect = [1850, 685, 44, 70];
+export const MOAT_SHORE: TileRect = [19, 649, 52, 52];
+export const MOAT_WATER: TileRect = [32, 662, 24, 24];
+export const MOAT_LAVA: TileRect = [345, 378, 48, 16];
+export const WALL_HEDGE: readonly TileRect[] = [
+  [1585, 83, 14, 13], [1600, 83, 20, 13], [1625, 83, 14, 13],
+  [1585, 97, 14, 20], [1601, 86, 20, 8], [1625, 97, 14, 20],
+  [1585, 126, 14, 16], [1600, 94, 20, 16], [1625, 126, 14, 16],
+];
+
 // Individual atlas details for the live ambient pass (no drawn particles).
 export const FX_LEAF: TileRect = [1735, 104, 5, 5];
 export const FX_PETAL: TileRect = [1727, 112, 7, 7];

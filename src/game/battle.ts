@@ -12,7 +12,7 @@ import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
 import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, type RunSave, type Settings } from './meta';
-import { drawBackdrop, drawWall, drawAmbient, drawSlice, THEMES, hash } from './bg';
+import { drawBackdrop, drawWall, drawAmbient, drawSlice, drawCover, drawMoat, THEMES, hash } from './bg';
 import { uiWindow } from './ui';
 import type { Theme } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
@@ -180,6 +180,7 @@ interface Hazard {
   dir?: number; // gust: push direction (+1/-1)
   spent?: boolean; // mines fire once
   pair?: number; // warps: pads sharing an id teleport between each other
+  moat?: boolean; // authored liquid cell, separate from roamer gimmicks
 }
 // Boss hyper beam: a bright line that fades fast after the shot lands.
 interface Beam {
@@ -317,38 +318,6 @@ export const WEATHER_FOR: Partial<Record<Theme, Weather>> = {
   plant: 'storm',
   marsh: 'rain',
 };
-// block boulders take the wall ring's prop tint so cover reads as the same
-// stone as the court's edge — scorched at the volcano, iced on the summit
-const BLOCK_TINT: Record<Theme, string | undefined> = {
-  grove: undefined,
-  cavern: 'rgba(40,40,90,0.07)',
-  volcano: 'rgba(70,20,8,0.12)',
-  sky: 'rgba(150,190,230,0.12)',
-  meadow: 'rgba(60,110,50,0.07)',
-  shore: 'rgba(190,170,110,0.09)',
-  plant: 'rgba(50,60,80,0.12)',
-  marsh: 'rgba(30,60,40,0.12)',
-  sanctum: 'rgba(70,55,115,0.1)',
-  dojo: 'rgba(140,100,50,0.07)',
-  tower: 'rgba(30,26,52,0.14)',
-};
-// the slab face keys to the court too — mossy stone, deep indigo, ember
-// dark, steel-blue on the summit; tints run light so the rock art reads
-// bright against the court, the rim stroke keeps the silhouette
-const BLOCK_FACE: Record<Theme, string> = {
-  grove: 'rgba(22,38,24,0.12)',
-  cavern: 'rgba(30,36,70,0.1)',
-  volcano: 'rgba(54,22,12,0.13)',
-  sky: 'rgba(95,120,155,0.18)',
-  meadow: 'rgba(40,62,30,0.12)',
-  shore: 'rgba(110,96,58,0.12)',
-  plant: 'rgba(28,34,48,0.14)',
-  marsh: 'rgba(24,44,30,0.13)',
-  sanctum: 'rgba(46,36,80,0.12)',
-  dojo: 'rgba(78,56,30,0.12)',
-  tower: 'rgba(22,18,42,0.14)',
-};
-
 // graphics quality → ambient/weather particle density multiplier — low
 // trims to a quarter but never to zero; a still court shouldn't read dead
 const QUALITY_FX: Record<Settings['quality'], number> = { high: 1, medium: 0.55, low: 0.25 };
@@ -644,6 +613,7 @@ export class Battle {
   players: Unit[] = [];
   enemies: Unit[] = [];
   blocks: Rect[] = []; // Archero-style stone clusters — bounceable cover
+  private roomGrid: string[] | null = null;
   phase: Phase = 'aim';
   waveIndex = -1; // -1 = still at HOME — stages begin at the row-0 fork
   activeIdx = 0;
@@ -1399,7 +1369,7 @@ export class Battle {
         li = 1 + Math.floor(this.rng() * (hi - 1));
       }
     }
-    const room = buildRoom(
+    const grid =
       gymFurnished
         ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
         : bossWave
@@ -1407,10 +1377,9 @@ export class Battle {
           : debugRoom() === 'gen' ||
               (debugRoom() !== 'authored' && i !== 0 && li > 0 && this.rng() < 0.4) // generated courts share the mid/hard pull; gentle openers stay authored
             ? genRoom(this.theme, this.rng)
-            : ROOM_LAYOUTS[li],
-      this.theme,
-      this.rng,
-    );
+            : ROOM_LAYOUTS[li];
+    this.roomGrid = grid;
+    const room = buildRoom(grid, this.theme, this.rng);
     this.installRoom(room);
     // spawn anchors drive enemy placement — Archero foes enter where the
     // room designer put the hooks, not on scattered slots. Bosses keep
@@ -1637,6 +1606,7 @@ export class Battle {
       r: this.arena.w * z.r,
       dir: z.dir,
       pair: z.pair,
+      moat: z.moat,
     }));
     if (powerZoneSpawn) { // the 'power' mutator's ATK field, dropped mid-court
       const pr = this.arena.w * 0.14;
@@ -2892,46 +2862,19 @@ export class Battle {
     cull(this.dashes, (d) => !d.done);
   }
 
-  // A stone slab: slate body under a boulder skin tiled from the gracidea
-  // pack (Strength-rock clusters — pure Gen-3 canon), rim + top bevel.
-  // A stone slab: darkened cobble face (the wall ring's cliff look at cover
-  // scale) with real strength-boulders seated along the top edge.
   private drawBlock(ctx: CanvasRenderingContext2D, b: Rect) {
-    ctx.fillStyle = 'rgba(6,8,16,0.4)';
-    roundRect(ctx, b.x + 3, b.y + 5, b.w, b.h, 8);
-    ctx.fill();
-    ctx.save();
-    roundRect(ctx, b.x, b.y, b.w, b.h, 8);
-    ctx.clip();
-    const cell = 22;
-    for (let ty = b.y - cell / 2; ty < b.y + b.h; ty += cell)
-      for (let tx = b.x - cell / 2; tx < b.x + b.w; tx += cell)
-        drawSlice(ctx, MT.TILE_COBBLE, tx, ty, cell, cell, BLOCK_FACE[this.theme]);
-    ctx.restore();
-    // the boulders ARE the cover — a clustered row seated on the slab,
-    // overhanging its lip like the ring props, small rocks at the foot
-    for (let i = 0, tx = b.x + 4; tx < b.x + b.w - 14; i++) {
-      const j = hash(b.x * 7.1 + b.y * 3.9 + i * 11.3);
-      const bs = 38 + j * 14;
-      drawSlice(ctx, MT.TILE_ROCK, tx + (j - 0.5) * 10, b.y - bs * 0.3, bs, bs * (30 / 28), BLOCK_TINT[this.theme]);
-      tx += bs * 0.72;
+    const w = this.arena.w / 9;
+    const occupied = (x: number, y: number) => this.blocks.some((r) =>
+      x > r.x - 0.1 && x < r.x + r.w + 0.1 && y > r.y - 0.1 && y < r.y + r.h + 0.1);
+    for (let i = 0; i < Math.round(b.w / w); i++) {
+      const cell = { x: b.x + i * w, y: b.y, w, h: b.h };
+      drawCover(ctx, cell, this.theme, [
+        occupied(cell.x + w / 2, cell.y - 1),
+        occupied(cell.x + w + 1, cell.y + cell.h / 2),
+        occupied(cell.x + w / 2, cell.y + cell.h + 1),
+        occupied(cell.x - 1, cell.y + cell.h / 2),
+      ]);
     }
-    for (let i = 0, tx = b.x + 10; tx < b.x + b.w - 12; i++) {
-      const j = hash(b.x * 3.7 + b.y * 9.2 + i * 5.5);
-      if (j > 0.55) drawSlice(ctx, MT.ROCK_SMALL, tx + (j - 0.5) * 12, b.y + b.h - 14 - j * 8, 21, 15, BLOCK_TINT[this.theme]);
-      tx += 26 + j * 18;
-    }
-    ctx.strokeStyle = 'rgba(29,35,56,0.9)';
-    ctx.lineWidth = 2;
-    roundRect(ctx, b.x + 1, b.y + 1, b.w - 2, b.h - 2, 8);
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.34)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(b.x + 2, b.y + b.h - 6);
-    ctx.lineTo(b.x + 2, b.y + 8);
-    ctx.lineTo(b.x + b.w - 8, b.y + 8);
-    ctx.stroke();
   }
 
   private hitWalls(u: Unit) {
@@ -6211,6 +6154,7 @@ export class Battle {
 
   // a fresh room scrolls in under the team: furniture, hazards, drop-in clock
   private swapCourt(grid: string[]) {
+    this.roomGrid = grid;
     const room = buildRoom(grid, this.theme, this.rng);
     this.installRoom(room);
     this.courtT = this.time;
@@ -6222,14 +6166,20 @@ export class Battle {
       r: this.arena.w * z.r,
       dir: z.dir,
       pair: z.pair,
+      moat: z.moat,
     }));
     return room;
+  }
+
+  private pickNextRoom() {
+    const pool = ROOM_LAYOUTS.slice(1).filter((grid) => grid !== this.roomGrid);
+    return pool[Math.floor(this.rng() * pool.length)];
   }
 
   private nextBattle() {
     this.battleBreak = false;
     this.battle++;
-    const room = this.swapCourt(ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]);
+    const room = this.swapCourt(this.pickNextRoom());
     const anchors = [...room.anchors];
     const spawns = rollWave(this.rng, this.depth, this.theme).filter((s) => !s.boss).slice(0, ENEMY_MAX);
     this.enemies = spawns.map((s) => {
@@ -6263,7 +6213,7 @@ export class Battle {
     }
     cull(this.enemies, (e) => e.boss && !e.dead);
     const grid = this.gymFurnished
-      ? ROOM_LAYOUTS[1 + Math.floor(this.rng() * (ROOM_LAYOUTS.length - 1))]
+      ? this.pickNextRoom()
       : ROOM_BOSS[Math.min(boss.sumStage, ROOM_BOSS.length - 1)];
     this.swapCourt(grid);
     // no teleport beat: the boss is off court until the drop-in lands it
@@ -7195,8 +7145,7 @@ export class Battle {
       ctx.translate(-cx, -cy);
     }
 
-    // The court is baked; only corner accents vary between fights.
-    const wallSeed = this.waveIndex * 13.7 + this.depth * 3.1;
+    // The tiled court scrolls underneath a fixed, grounded border.
     const scrollK = Math.min(1, (this.time - this.courtT) / COURT_SCROLL);
     const scrolling = scrollK < 1;
     if (scrolling) {
@@ -7232,7 +7181,7 @@ export class Battle {
       ctx.restore();
       ctx.restore();
     }
-    drawWall(ctx, a, this.theme, wallSeed);
+    drawWall(ctx, a, this.theme);
 
     drawAmbient(ctx, a, this.theme, this.time, QUALITY_FX[settings().quality]);
 
@@ -9202,6 +9151,16 @@ export class Battle {
   // with the animated cue that sells what it does. The tinted pad keeps
   // the radius readable while the atlas streams in. Mines are Voltorb.
   private drawHazard(ctx: CanvasRenderingContext2D, hz: Hazard) {
+    if (hz.moat) {
+      const w = this.arena.w / 9, h = this.arena.h / 11;
+      const adjacent = (x: number, y: number) => this.hazards.some((z) =>
+        z.moat && Math.abs(z.x - x) < 1 && Math.abs(z.y - y) < 1);
+      drawMoat(ctx, { x: hz.x - w / 2, y: hz.y - h / 2, w, h }, this.theme, [
+        adjacent(hz.x, hz.y - h), adjacent(hz.x + w, hz.y),
+        adjacent(hz.x, hz.y + h), adjacent(hz.x - w, hz.y),
+      ]);
+      return;
+    }
     const TAU = Math.PI * 2;
     ctx.save();
     ctx.globalAlpha = 0.22;
