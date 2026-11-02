@@ -1901,7 +1901,7 @@ const RATE_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 320, w: HATCH_PANE
 const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 406, w: HATCH_PANEL.w - 32, h: 394 };
 const SPARK_COLS = 4;
 const SPARK_CELL_W = SPARK_VIEW.w / SPARK_COLS;
-const SPARK_CELL_H = 118;
+const SPARK_CELL_H = 132;
 const HATCH_MODAL = { x: 24, y: 170, w: W - 48, h: 500 };
 // SKIP rides the top cinema bar, clear of the flash-beat kick
 export const SKIP_PULL_BTN = { x: W - 128, y: 26, w: 108, h: 38 };
@@ -1958,26 +1958,6 @@ export function balanceChip(
     ctx.fillStyle = PAPER;
     ctx.fillText(`${Math.round(chipDust)}`, tx + 12, r.y + r.h / 2 + 3.5);
   }
-}
-
-// a dust price — a tiny dark window-chip: cyan diamond + count, centered
-function dustTag(ctx: CanvasRenderingContext2D, cx: number, cy: number, n: number, textColor: string) {
-  ctx.font = fontB(10);
-  const label = `${n}`;
-  const tw = ctx.measureText(label).width;
-  const x0 = cx - (tw + 20) / 2;
-  uiWindow(ctx, { x: x0, y: cy - 12, w: tw + 20, h: 18 }, { dark: true, rad: 9, shadow: false });
-  ctx.fillStyle = ACCENT;
-  ctx.beginPath();
-  ctx.moveTo(x0 + 8.5, cy - 7);
-  ctx.lineTo(x0 + 12, cy - 3);
-  ctx.lineTo(x0 + 8.5, cy + 1);
-  ctx.lineTo(x0 + 5, cy - 3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = textColor;
-  ctx.textAlign = 'left';
-  ctx.fillText(label, x0 + 15, cy);
 }
 
 // the price INSIDE a pull pill — a dark plaque: star icon + count, or the
@@ -2251,9 +2231,13 @@ export function drawHatch(
   ctx.beginPath();
   ctx.rect(SPARK_VIEW.x - 4, SPARK_VIEW.y, SPARK_VIEW.w + 8, SPARK_VIEW.h);
   ctx.clip();
+  // the shelf sits on the mart floor, same back room as the theatre
+  drawCounterStrip(ctx, { x: SPARK_VIEW.x - 4, y: SPARK_VIEW.y, w: SPARK_VIEW.w + 8, h: SPARK_VIEW.h }, 0);
   const row0 = Math.max(0, Math.floor(s.sparkScroll / SPARK_CELL_H));
   const rowN = Math.ceil((s.sparkScroll + SPARK_VIEW.h) / SPARK_CELL_H);
   const deal = dealPick(); // one seeded roll a frame — dealCost re-rolled it per cell
+  void loadItem('poke-ball');
+  const dexBall = itemSprite('poke-ball');
   for (let i = row0 * SPARK_COLS; i < rowN * SPARK_COLS && i < PULLABLE.length; i++) {
     const def = PULLABLE[i];
     const cx = SPARK_VIEW.x + (i % SPARK_COLS) * SPARK_CELL_W;
@@ -2261,110 +2245,118 @@ export function drawHatch(
     const owned = seen.has(def.id);
     const spTier = tierOf(def);
     const epic = spTier >= 3 || INVADER_IDS.has(def.id);
-    const cell = { x: cx + 4, y: cy + 4, w: SPARK_CELL_W - 8, h: SPARK_CELL_H - 8 };
+    const cell = { x: cx + 4, y: cy + 6, w: SPARK_CELL_W - 8, h: SPARK_CELL_H - 10 };
+    const mx = cell.x + cell.w / 2;
     const tcol = epic ? '#f0b02f' : spTier === 2 ? '#5a9bf0' : '#d0d0c8';
-    // each shelf item is a small window — rare+ keeps its tint as a rim trace
-    uiWindow(ctx, cell, { rad: 8, shadow: false });
-    if (spTier >= 2) rim(ctx, cell, 8, tcol, 1.5);
-    // a type-tinted floor pad — the cell's mon stands on its own color
-    ctx.fillStyle = `${TYPE_COLOR[def.type]}26`;
-    ctx.beginPath();
-    ctx.ellipse(cell.x + cell.w / 2, cell.y + 60, 38, 9, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // missing stock is a lit paper card; owned ones go dark behind the glass
+    uiWindow(ctx, cell, { rad: 8, dark: owned, shadow: !owned });
+    if (spTier >= 2 && !owned) rim(ctx, cell, 8, tcol, 2);
     ctx.save();
-    ctx.globalAlpha = owned ? 0.4 : 1;
+    ctx.globalAlpha = owned ? 0.5 : 1;
+    monShadow(ctx, mx, cell.y + 40, 76);
     void loadSprite(def.id);
     try {
-      drawMon(ctx, def.id, cell.x + cell.w / 2, cell.y + 34, 52);
+      drawMon(ctx, def.id, mx, cell.y + 40, 76);
     } catch {
       /* sprite still warming */
     }
     ctx.restore();
     // rare+ stock wears its tier as a corner flag — the rim color made words
-    if (spTier >= 2) {
+    if (spTier >= 2 && !owned) {
       ctx.font = fontB(10);
       const tl = epic ? 'EPIC' : 'RARE';
       const tw = ctx.measureText(tl).width + 8;
       ctx.fillStyle = tcol;
-      ctx.fillRect(cell.x, cell.y, tw, 12);
+      ctx.fillRect(cell.x, cell.y, tw, 13);
       ctx.textAlign = 'left';
       ctx.fillStyle = PAPER_HI;
-      ctx.fillText(tl, cell.x + 4, cell.y + 9);
+      ctx.fillText(tl, cell.x + 4, cell.y + 10);
     }
     ctx.textAlign = 'center';
     fitFontB(ctx, def.name.toUpperCase(), 10, cell.w - 10);
-    ctx.fillStyle = owned ? INK_FAINT : INK;
-    ctx.fillText(def.name.toUpperCase(), cell.x + cell.w / 2, cell.y + 74);
+    ctx.fillStyle = owned ? '#a8b0d0' : INK;
+    ctx.fillText(def.name.toUpperCase(), mx, cell.y + 84);
+    const strip = { x: cell.x + 5, y: cell.y + cell.h - 27, w: cell.w - 10, h: 22 };
     if (owned) {
-      // caught reads as a green tag, not a dim-out — the grid's owned state
-      ctx.font = fontB(10);
-      const ow = ctx.measureText('IN DEX').width + 26;
-      const ox = cell.x + cell.w / 2 - ow / 2;
-      roundRect(ctx, ox, cell.y + 84, ow, 16, 8);
+      // caught: a green IN DEX strip with the ball it's filed under
+      roundRect(ctx, strip.x, strip.y, strip.w, strip.h, 7);
       ctx.fillStyle = '#1d3524';
       ctx.fill();
       ctx.strokeStyle = '#6fdc6f';
       ctx.lineWidth = 1;
       ctx.stroke();
-      ctx.strokeStyle = '#9fe89f';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(ox + 7, cell.y + 92);
-      ctx.lineTo(ox + 10, cell.y + 95);
-      ctx.lineTo(ox + 15, cell.y + 88);
-      ctx.stroke();
-      ctx.fillStyle = '#9fe89f';
-      ctx.fillText('IN DEX', ox + ow / 2 + 4, cell.y + 96);
-    } else {
-      const isDeal = def.id === deal.id;
-      // the day's cut is memo'd, so per-cell dealCost is a lookup not a roll
-      const cost = dealCost(def);
-      const armed = info.armedId === def.id;
-      if (armed) {
-        // two-tap confirm: pulse the rim, spend the price line on the cue,
-        // and burn the window down a bottom strip
+      ctx.font = fontB(10);
+      const lw = ctx.measureText('IN DEX').width;
+      if (dexBall) {
         ctx.save();
-        ctx.globalAlpha = 0.55 + 0.45 * Math.sin(s.t * 10);
-        roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 8);
-        ctx.strokeStyle = GOLD;
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(dexBall, mx - lw / 2 - 18, strip.y + 2, 18, 18);
         ctx.restore();
-        const cue = `TAP AGAIN · ◆${cost}`;
-        fitFontB(ctx, cue, 10, cell.w - 26);
-        ctx.textAlign = 'center';
-        ctx.fillStyle = GOLD;
-        ctx.fillText(cue, cell.x + cell.w / 2, cell.y + 92);
-        // the armed row earns the handheld ▶ — its blink is the cursor's own
-        cursorTri(ctx, cell.x + cell.w / 2 - ctx.measureText(cue).width / 2 - 11, cell.y + 88, s.t, GOLD);
-        ctx.fillStyle = GOLD;
-        ctx.fillRect(cell.x + 4, cell.y + cell.h - 5, (cell.w - 8) * Math.max(0, info.armedFrac ?? 0), 3);
-      } else {
-        dustTag(ctx, cell.x + cell.w / 2 - (isDeal ? 12 : 0), cell.y + 92, cost, info.dust >= cost ? ACCENT : '#ff6b6b');
       }
-      if (isDeal && !armed) {
-        // the struck list price beside the deal price — the bargain shows
-        const wl = `${dustCost(def)}`;
-        ctx.font = fontB(10);
-        ctx.textAlign = 'left';
-        ctx.fillStyle = INK_FAINT;
-        const wx = cell.x + cell.w / 2 + 14;
-        ctx.fillText(wl, wx, cell.y + 92);
-        ctx.strokeStyle = INK_FAINT;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(wx, cell.y + 89);
-        ctx.lineTo(wx + ctx.measureText(wl).width, cell.y + 89);
-        ctx.stroke();
-        // the daily discount tab — a gold corner flag
-        ctx.fillStyle = GOLD;
-        ctx.fillRect(cell.x + cell.w - 36, cell.y, 36, 14);
-        ctx.textAlign = 'center';
-        ctx.font = fontB(10);
-        ctx.fillStyle = INK;
-        ctx.fillText(`−${dealOff()}%`, cell.x + cell.w - 18, cell.y + 10);
-      }
+      ctx.fillStyle = '#9fe89f';
+      ctx.fillText('IN DEX', mx + 9, strip.y + 15);
+      continue;
     }
+    const isDeal = def.id === deal.id;
+    // the day's cut is memo'd, so per-cell dealCost is a lookup not a roll
+    const cost = dealCost(def);
+    const can = info.dust >= cost;
+    if (info.armedId === def.id) {
+      // two-tap confirm: pulse the rim, the price strip turns gold, and the
+      // window burns down along the cell's bottom edge
+      ctx.save();
+      ctx.globalAlpha = 0.55 + 0.45 * Math.sin(s.t * 10);
+      roundRect(ctx, cell.x, cell.y, cell.w, cell.h, 8);
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+      ctx.restore();
+      roundRect(ctx, strip.x, strip.y, strip.w, strip.h, 7);
+      ctx.fillStyle = GOLD_HI;
+      ctx.fill();
+      const cue = `TAP AGAIN · ◆${cost}`;
+      fitFontB(ctx, cue, 10, strip.w - 8);
+      ctx.fillStyle = INK;
+      ctx.fillText(cue, mx, strip.y + 15);
+      ctx.fillStyle = GOLD;
+      ctx.fillRect(cell.x + 4, cell.y + cell.h - 3, (cell.w - 8) * Math.max(0, info.armedFrac ?? 0), 3);
+      continue;
+    }
+    // the price: a dark strip, dust blue when affordable, red when short
+    uiWindow(ctx, strip, { dark: true, rad: 7, shadow: false, rim: false });
+    if (isDeal) rim(ctx, strip, 7, GOLD, 1.5);
+    const price = `◆ ${cost}`;
+    ctx.font = fontB(12);
+    const pw = ctx.measureText(price).width;
+    const was = isDeal ? `${dustCost(def)}` : '';
+    ctx.font = fontB(9);
+    const ww = was ? ctx.measureText(was).width + 6 : 0;
+    const px = mx - (pw + ww) / 2;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(12);
+    ctx.fillStyle = !can ? '#ff8a8a' : isDeal ? GOLD_HI : '#9fd0ff';
+    ctx.fillText(price, px, strip.y + 16);
+    if (was) {
+      // the struck list price beside the deal price — the bargain shows
+      ctx.font = fontB(9);
+      ctx.fillStyle = '#a8b0d0';
+      const wx = px + pw + 6;
+      ctx.fillText(was, wx, strip.y + 15);
+      ctx.strokeStyle = '#a8b0d0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(wx, strip.y + 11);
+      ctx.lineTo(wx + ww - 6, strip.y + 11);
+      ctx.stroke();
+      // the daily discount tab — a gold corner flag
+      ctx.fillStyle = GOLD;
+      ctx.fillRect(cell.x + cell.w - 36, cell.y, 36, 14);
+      ctx.textAlign = 'center';
+      ctx.font = fontB(10);
+      ctx.fillStyle = INK;
+      ctx.fillText(`−${dealOff()}%`, cell.x + cell.w - 18, cell.y + 10);
+    }
+    ctx.textAlign = 'center';
   }
   ctx.restore();
 

@@ -782,6 +782,8 @@ function rerollDraft() {
 
 // --- the hatcher: the pull machine + the dust spark shop -----------------
 // tunables (Oct-21 spec — guesses, marked for playtesting)
+// ?dev&shiny forces every pull shiny, for eyeballing the shiny reveal
+const DEV_SHINY = ['dev', 'shiny'].every((k) => new URLSearchParams(location.search).has(k));
 const HATCH_SHAKE_T = 1.15; // base ball-rock seconds before the reveal
 const HATCH_REVEAL_T = 1.7; // a card holds this long, then the reel plays itself
 // bigger pulls buy a longer stage — epic and shiny each add runway
@@ -833,7 +835,7 @@ const doPull = (n: number) => {
       recordCapture([def.id]); // the dex IS the unlock ledger — the draft pool grows
       dexPay += pullMilestones();
     }
-    const shiny = Math.random() < shinyOdds(); // weekends double it
+    const shiny = Math.random() < shinyOdds() || DEV_SHINY; // weekends double it
     if (shiny) {
       recordShiny(def.id); // shiny logs either way — dupe or new face
       if (unlockAch('shiny')) playJingle('task');
