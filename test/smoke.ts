@@ -19,6 +19,7 @@ import type { Theme } from '../src/game/bg';
 import { ROOM_BOSS, STAGE_GIMMICKS, BULLET_GIMMICKS, bulletHints } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, dexBuyRect, partnersStripAt, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
+import { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_LOTS } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
@@ -5382,6 +5383,20 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   const pullable = PULLABLE.find((d) => !dexIds().includes(d.id));
   const buy = pullable ? dexBuyRect(pullable.id) : null;
   ok(!!buy && buy.x >= DEX_DETAIL_R.x && buy.x + buy.w <= DEX_DETAIL_R.x + DEX_DETAIL_R.w && buy.y >= DEX_DETAIL_R.y && buy.y + buy.h <= DEX_DETAIL_R.y + DEX_DETAIL_R.h, 'unowned pullable buy target fits inside the detail frame');
+}
+
+// --- home: town -----------------------------------------------------------
+{
+  const targets = [LAB_BTN, BOARD_BTN, TASKS_BTN, ACH_BTN];
+  ok(targets.every((r) => r.w >= 44 && r.h >= 44 && r.x >= 0 && r.x + r.w <= 540 && r.y >= 70 && r.y + r.h <= 856),
+    'town building targets are large and clear of chrome');
+  ok(targets.every((a, i) => targets.slice(i + 1).every((b) =>
+    a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y)),
+  'town building targets do not overlap');
+  ok(HALL_BTN === BOARD_BTN, 'hall hit target aliases the job-board route');
+  ok(TOWN_FOLK.every((folk) => TOWN_LOTS.every((lot) =>
+    folk.x1 <= lot.x || lot.x + lot.w <= folk.x0 || folk.y1 <= lot.y || lot.y + lot.h <= folk.y0)),
+  'town villager beats stay clear of building sprites');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

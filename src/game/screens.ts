@@ -4,10 +4,10 @@ import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PU
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
-import { drawBackdrop, hash } from './bg';
+import { drawBackdrop } from './bg';
 import { drawTile } from './map';
 import { drawShopScene } from './home/shop';
-import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, TILE_HALL, TILE_CAFE, TILE_GAZEBO, TILE_BUSH, TILE_FENCE, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_PINK, FLOWER_WILD, ROCK_SMALL } from './maptiles';
+import { TILE_TOWN } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -25,6 +25,9 @@ import {
 import { drawMonsBody } from './home/mons';
 export { DEX_BTN, SETS_BTN, PARTNERS_BTN, TEAM_BTN, EDIT_TEAM_BTN, partnersStripAt, teamStageAt } from './home/mons';
 export { DEX_DETAIL_R, dexBuyRect, dexRowAt, dexScrollMax, drawDex, drawDexDetail } from './home/mons';
+import { drawTownBody } from './home/town';
+export { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_FOLK, TOWN_LOTS, townStrollAt } from './home/town';
+export type { TownStroll } from './home/town';
 
 export const W = 540;
 export const H = 960;
@@ -1073,7 +1076,7 @@ function drawTabBar(
     }
 
     const icY = cell.y + 25;
-    const tint = lit ? INK : '#8890b8';
+    const tint = lit ? INK : '#c8cce8';
     // press-pop — the just-tapped pill squashes for ~0.16s (stamp set in main)
     const pop = on ? Math.max(0, 1 - (t - tabPressT) / 0.16) : 0;
     // every tab icon is a real asset that says what the tab is: the amulet
@@ -1089,8 +1092,8 @@ function drawTabBar(
             ? itemSprite('master-ball')
             : undefined;
     ctx.save();
-    ctx.globalAlpha = 0.55 + 0.45 * clamp01(grow); // the icon fades in with the pop
-    const iscale = (1 + 0.4 * grow) * (1 - 0.15 * pop); // icon rides the pill's grow — ~1.4× lit
+    ctx.globalAlpha = 0.9 + 0.1 * clamp01(grow);
+    const iscale = (1 + 0.22 * grow) * (1 - 0.1 * pop);
     if (iscale !== 1) {
       ctx.translate(cx, icY);
       ctx.scale(iscale, iscale);
@@ -1098,11 +1101,11 @@ function drawTabBar(
     }
     if (spr) {
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(spr, cx - 12, icY - 12, 24, 24);
-    } else if (cell.tab === 'town') drawTile(ctx, TILE_TOWN, cx - 12, icY - 14, 24, 24);
+      ctx.drawImage(spr, cx - 18, icY - 18, 36, 36);
+    } else if (cell.tab === 'town') drawTile(ctx, TILE_TOWN, cx - 18, icY - 20, 36, 36);
     else if (cell.tab === 'mons') {
       try {
-        drawMon(ctx, 25, cx, icY, 26);
+        drawMon(ctx, 25, cx, icY, 38);
       } catch {
         ballGlyph(ctx, cx, icY, 1, tint);
       }
@@ -1113,9 +1116,9 @@ function drawTabBar(
     }
     ctx.restore();
 
-    ctx.font = fontB(10);
+    ctx.font = fontB(12);
     ctx.textAlign = 'center';
-    ctx.fillStyle = lit ? INK : '#8890b8';
+    ctx.fillStyle = lit ? INK : '#c8cce8';
     ctx.fillText(cell.tab.toUpperCase(), cx, cell.y + cell.h - 14);
 
     // badge dots — the notification pull. SHOP breathes gold while the
@@ -1374,239 +1377,6 @@ function drawShopBody(
 // --- RAID: the day's seeded chroma boss — free retries till it falls ------
 function drawRaidBody(ctx: CanvasRenderingContext2D, t: number) {
   drawRaidLobby(ctx, t, RAID_FIGHT);
-}
-
-// --- TOWN: a real little town — the buildings ARE the menu; tap a door ----
-// Structures + scenery are gracidea tileset slices (the RSE canon), villagers
-// from the npcs atlas. Signs posted at each door carry the stats the old
-// cards did. The gym's rung board anchors the bottom edge.
-
-// a door sign — a tiny menu-window plaque on a post, name + one stat line
-function townSign(ctx: CanvasRenderingContext2D, cx: number, y: number, w: number, name: string, sub: string) {
-  ctx.fillStyle = '#8a6238';
-  ctx.fillRect(cx - 2, y + 28, 4, 10);
-  const r = { x: cx - w / 2, y, w, h: 32 };
-  uiWindow(ctx, r, { rad: 6 });
-  ctx.textAlign = 'center';
-  fitFontB(ctx, name, 10, w - 10);
-  ctx.fillStyle = INK;
-  ctx.fillText(name, cx, y + 14);
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText(sub, cx, y + 26);
-}
-
-// the town's villagers each stroll a bounded beat: every leg picks a spot in
-// the box, walks it cardinally — GBA npcs never cut diagonals — then idles a
-// beat at the far end. Leg length ≥ the longest possible walk + 1.5s idle, so
-// walks always finish inside their leg and the t-keyed math never teleports
-// anyone. Pure function of t — no walker state, replays stay deterministic.
-export interface TownStroll {
-  id: string;             // npc-atlas frame prefix
-  seed: number;           // decorrelates the hash picks
-  hx: number; hy: number; // home post — leg 0 walks out of it; inside the box
-  x0: number; y0: number; x1: number; y1: number; // wander box, feet coords
-  speed: number;          // px/s
-  h: number;              // sprite height
-  noRight?: boolean;      // atlas lacks right_* — draw the left frames flipped
-}
-
-export const TOWN_FOLK: TownStroll[] = [
-  { id: 'scientist',    seed: 3.1, hx: 96,  hy: 344, x0: 48,  y0: 330, x1: 148, y1: 360, speed: 26, h: 30 }, // lab's west lawn, clear of the door board
-  { id: 'lass',         seed: 7.7, hx: 348, hy: 402, x0: 302, y0: 388, x1: 496, y1: 420, speed: 30, h: 30 }, // north street, east half
-  { id: 'gentleman',    seed: 5.3, hx: 476, hy: 676, x0: 302, y0: 660, x1: 500, y1: 694, speed: 20, h: 30 }, // south street, east half
-  { id: 'shopkeeper_m', seed: 9.9, hx: 214, hy: 596, x0: 152, y0: 570, x1: 234, y1: 630, speed: 26, h: 30 }, // café's east patio side, clear of the board
-  { id: 'norman',       seed: 4.2, hx: 275, hy: 716, x0: 68, y0: 704, x1: 468, y1: 730, speed: 24, h: 32, noRight: true }, // the grass band at the park's mouth — wandering down to the pond
-  { id: 'youngster',    seed: 8.8, hx: 60,  hy: 402, x0: 44,  y0: 388, x1: 496, y1: 420, speed: 55, h: 30 }, // sprints the whole north street
-];
-
-type NpcDir = 'down' | 'up' | 'left' | 'right';
-
-// where villager w stands at t — feet {x,y}, the atlas frame name, and a flip
-// flag for the npc families missing a right_* set
-export function townStrollAt(w: TownStroll, t: number): { x: number; y: number; frame: string; flip: boolean } {
-  const legT = Math.hypot(w.x1 - w.x0, w.y1 - w.y0) / w.speed + 1.5;
-  const k = Math.floor(t / legT);
-  let tau = t - k * legT;
-  const pt = (j: number): [number, number] => (j <= 0
-    ? [w.hx, w.hy]
-    : [w.x0 + hash(w.seed + j * 13.7) * (w.x1 - w.x0), w.y0 + hash(w.seed + j * 7.3 + 4) * (w.y1 - w.y0)]);
-  const [ax, ay] = pt(k), [bx, by] = pt(k + 1);
-  // the leg walks x-then-y or y-then-x, seeded per leg
-  const segs: [number, number][] = hash(w.seed + k * 3.1 + 9) < 0.5 ? [[bx - ax, 0], [0, by - ay]] : [[0, by - ay], [bx - ax, 0]];
-  let x = ax, y = ay, dir: NpcDir = 'down', walking = false;
-  for (const [dx, dy] of segs) {
-    const dur = Math.abs(dx || dy) / w.speed;
-    if (tau < dur) {
-      const u = tau / dur;
-      x += dx * u; y += dy * u;
-      dir = dx ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-      walking = true;
-      break;
-    }
-    tau -= dur;
-    x += dx; y += dy;
-    if (dx || dy) dir = dx ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
-  }
-  const flip = !!w.noRight && dir === 'right';
-  const fr = walking ? [0, 1, 0, 2][Math.floor(t * 6) % 4] : 0;
-  return { x, y, frame: `${w.id}_${flip ? 'left' : dir}_${fr}`, flip };
-}
-
-function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: number) {
-  // clip the whole scene to the play area — the tile loops' last column and
-  // the flank trees overrun W, and without this they paint the right pillar
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, W, H);
-  ctx.clip();
-
-  // grass slab under the tab body — the interior tile at 1.5× reads as
-  // chunky GBA ground. Tiles top to bottom: the chrome draws after the body
-  // now, so nothing buries the wallet bar under the lawn
-  for (let gy = 0; gy < H; gy += 66) for (let gx = 0; gx < W; gx += 66) drawTile(ctx, TILE_GRASSF, gx, gy, 66, 66);
-
-  // the treeline — the classic GBA town wall: a canopy band across the top
-  // plus flank trees stepping down both edges, so the town reads walled-in
-  for (let i = 0; i < 11; i++) drawTile(ctx, [TREE_ROUND, TREE_PINE, TREE_TEAL][i % 3], 20 + i * 46, 96, 40, 42);
-  for (let i = 0; i < 7; i++) {
-    drawTile(ctx, [TREE_PINE, TREE_TEAL, TREE_ROUND][i % 3], 4, 168 + i * 88, 34, 36);
-    drawTile(ctx, [TREE_TEAL, TREE_ROUND, TREE_PINE][i % 3], 504, 184 + i * 88, 34, 36);
-  }
-
-  // Pallet-convention lots: buildings sit on the lawn — no paved pens.
-  // A low hedge lines each frontage, gapped where the door walk meets the
-  // street, the way FRLG fences a yard without caging it
-  const hedgeRow = (x0: number, x1: number, y: number, doorCx = 0) => {
-    for (let x = x0; x <= x1; x += 22) {
-      if (doorCx && Math.abs(x + 9 - doorCx) < 26) continue;
-      drawTile(ctx, TILE_BUSH, x, y - 4, 24, 30);
-    }
-  };
-
-  // the street plan: a north street under the civic row (lab + hall), a
-  // south street under the commerce row (mart + tower), and a lane down the
-  // lot line joining them and running on into the park — no dead grass
-  const NORTH_Y = 372, SOUTH_Y = 648, LANE_X = 244;
-  hedgeRow(36, 232, 366, 116); // frontage hedges, gapped at each door walk
-  hedgeRow(306, 504, 366, 406);
-  hedgeRow(36, 232, 638, 136);
-  hedgeRow(306, 504, 638, 406);
-
-  for (let gx = 0; gx < W; gx += 52) {
-    drawTile(ctx, TILE_PATH, gx, NORTH_Y, 52, 52);
-    drawTile(ctx, TILE_PATH, gx, SOUTH_Y, 52, 52);
-  }
-  // the lane — joins the two streets through the lot-line gap, then runs on
-  // south and dies at the park pond's shore
-  for (let y = NORTH_Y + 52; y < SOUTH_Y; y += 32) drawTile(ctx, TILE_PATH, LANE_X, y, 52, 32);
-  for (let y = SOUTH_Y + 52; y < 748; y += 32) drawTile(ctx, TILE_PATH, LANE_X + 10, y, 32, 32);
-
-  // door walks — a path from each doorstep to its street
-  const stub = (cx: number, y0: number, y1: number) => {
-    for (let y = y0; y < y1; y += 30) drawTile(ctx, TILE_PATH, cx - 16, y, 32, 32);
-  };
-  stub(116, 341, NORTH_Y); // the institute's door lands right-of-center in the slice
-  stub(406, 340, NORTH_Y);
-  stub(136, 577, SOUTH_Y);
-  stub(406, 575, SOUTH_Y);
-
-  // civic row — the institute west, the hall east, doors on the north
-  // street. Fronts align along the street like a real block; the museum's
-  // dome tower + columned entrance nearly fills its lot — an institute looms
-  drawTile(ctx, TILE_MUSEUM, 135 - 70, 188, 140, 159);
-  drawTile(ctx, TILE_HALL, 406 - 63, 234, 126, 106);
-  // commerce row — the café hall west (its own patio paves the doorstep),
-  // the trophy tower east, doors on the south street
-  drawTile(ctx, TILE_CAFE, 135 - 68, 444, 136, 133);
-  drawTile(ctx, TILE_TOWER, 406 - 48, 467, 96, 108);
-
-  // drifting pollen — a little life over the grass, riding the same
-  // ambient-sparkle opt-out as the map's sea glints
-  if (settings().mapGlints) {
-    ctx.fillStyle = 'rgba(255,255,240,0.45)';
-    for (let i = 0; i < 9; i++) {
-      const px = (i * 97 + t * 11) % (W + 24) - 12;
-      const py = 156 + ((i * 67) % 600) + Math.sin(t * 1.2 + i * 1.9) * 7;
-      ctx.fillRect(px, py, 3, 3);
-    }
-  }
-
-  // flowerbeds dress the lane's ends and the lot corners — real wildflower
-  // clusters, not blob daubs
-  drawTile(ctx, FLOWER_WILD, 262, 346, 34, 24);
-  drawTile(ctx, FLOWER_PINK, 254, 432, 30, 26);
-  drawTile(ctx, FLOWER_WILD, 214, 618, 34, 24);
-  drawTile(ctx, FLOWER_PINK, 300, 618, 30, 26);
-  drawTile(ctx, FLOWER_PINK, 44, 330, 28, 24);
-  drawTile(ctx, FLOWER_WILD, 478, 330, 30, 24);
-  drawTile(ctx, FLOWER_WILD, 46, 560, 30, 24);
-  drawTile(ctx, FLOWER_PINK, 480, 596, 28, 24);
-  drawTile(ctx, TILE_ROCK, 226, 304, 26, 28);
-  drawTile(ctx, ROCK_SMALL, 310, 566, 30, 24);
-
-  // door signs — what the old cards said, now the signboard each doorstep
-  // posts flush against its front, like the read-me posts beside FRLG doors
-  const lvls = labLevelMap();
-  const trained = LAB_UPGRADES.filter((u) => (lvls.get(u.id) ?? 0) > 0).length;
-  const b = best();
-  const runs = board().length;
-  townSign(ctx, 116, 343, 104, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
-  townSign(ctx, 406, 341, 118, 'HALL OF FAME', b.score ? `BEST ${b.score.toLocaleString('en-US')}` : `${runs} RUNS LOGGED`);
-  townSign(ctx, 406, 576, 108, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
-  townSign(ctx, 136, 578, 110, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`);
-  // a claimable task pins the red count pip on the sign's corner — the same
-  // badge the old card corner wore
-  if (taskN > 0) {
-    const bx = 136 + 55, by = 578;
-    ctx.beginPath();
-    ctx.arc(bx, by, 9, 0, Math.PI * 2);
-    ctx.fillStyle = '#e03c34';
-    ctx.fill();
-    ctx.strokeStyle = '#0a0d18';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.font = fontB(10);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = PAPER;
-    ctx.fillText(taskN > 9 ? '9+' : `${taskN}`, bx, by + 3.5);
-  }
-
-  // villagers stroll their beats — Norman takes the day off on the park's
-  // south shore, the youngster sprints the whole north street
-  for (const w of TOWN_FOLK) {
-    const s = townStrollAt(w, t);
-    drawNpc(ctx, s.frame, s.x, s.y, w.h, s.flip);
-  }
-
-  // the park — the lane's south end opens on the pond: sand shore ring,
-  // water inset, trees ringing it, a boulder sunning itself
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(270, 782, 118, 36, 0, 0, Math.PI * 2);
-  ctx.clip();
-  for (let y = 740; y < 822; y += 32) for (let x = 140; x < 400; x += 32) drawTile(ctx, TILE_SAND, x, y, 32, 32);
-  ctx.beginPath();
-  ctx.ellipse(270, 780, 100, 26, 0, 0, Math.PI * 2);
-  ctx.clip();
-  for (let y = 744; y < 812; y += 32) for (let x = 160; x < 390; x += 32) drawTile(ctx, TILE_WATER, x, y, 32, 32);
-  ctx.restore();
-  drawTile(ctx, TREE_ROUND, 128, 738, 44, 46);
-  drawTile(ctx, TREE_PINE, 366, 730, 40, 44);
-  drawTile(ctx, TREE_TEAL, 432, 768, 36, 38);
-  drawTile(ctx, TREE_ROUND, 84, 784, 36, 38);
-  drawTile(ctx, TILE_ROCK, 182, 746, 40, 43);
-  drawTile(ctx, ROCK_SMALL, 468, 776, 40, 30);
-  drawTile(ctx, FLOWER_PINK, 236, 730, 28, 24);
-  drawTile(ctx, FLOWER_WILD, 306, 800, 30, 24);
-  // shore rail — the lane dies at the pond; guard rails flank its mouth
-  drawTile(ctx, TILE_FENCE, 176, 742, 60, 22);
-  drawTile(ctx, TILE_FENCE, 306, 742, 60, 22);
-  // the gazebo watches the pond from the northeast shore — Norman's stroll
-  // runs the south shore, well clear of its deck
-  drawTile(ctx, TILE_GAZEBO, 348, 692, 48, 79);
-
-  ctx.restore();
 }
 
 // The crash-receipt instructions, in a card — the game collects no
@@ -2178,14 +1948,6 @@ export const UPGRADES_BTN = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 12, w: W - 60,
 // the pack pill is the rack's right column — exported for main's two-tap
 // armed-buy routing
 export const PACK_PILL = { x: UPGRADES_BTN.x + UPGRADES_BTN.w - 158, y: UPGRADES_BTN.y + 50, w: 140, h: 74 };
-// TOWN's hit rects are building footprints — door + roof + its sign, so a
-// tap anywhere on a structure opens its overlay.
-export const LAB_BTN = { x: 36, y: 180, w: 150, h: 190 };
-export const TASKS_BTN = { x: 30, y: 462, w: 220, h: 180 };
-export const ACH_BTN = { x: 384, y: 432, w: 124, h: 196 };
-export const BOARD_BTN = { x: 360, y: 186, w: 152, h: 190 };
-// the hall IS the Poké Center building — same door as TOP RUNS, same board
-export const HALL_BTN = BOARD_BTN;
 // the empty ledger's door — a dead hall still owes you the climb
 export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 88, w: 220, h: 52 };
 // RAID: one boss card — today's shiny fight + its loaner trio — then the
