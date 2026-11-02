@@ -7869,8 +7869,8 @@ export class Battle {
       } else {
         tx = Math.min(Math.max(t.x, half + inset), W_CANVAS_FALLBACK - half - inset);
       }
-      // rim-top banners ride up off-canvas — clamp the float inside the frame
-      ctx.translate(tx, Math.min(Math.max(t.y - dy, 30), 930));
+      const glyph = ctx.measureText(t.text);
+      ctx.translate(tx, this.calloutY(t.y - dy, glyph.actualBoundingBoxAscent, glyph.actualBoundingBoxDescent, Math.abs(Math.sin(t.tilt ?? 0)) * half));
       ctx.rotate(t.tilt ?? 0);
       ctx.strokeText(t.text, 0, 0);
       ctx.fillText(t.text, 0, 0);
@@ -8123,6 +8123,12 @@ export class Battle {
       pill(ctx, PAUSE_SETTINGS, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SETTINGS' });
       pill(ctx, PAUSE_QUIT, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'QUIT TO TITLE' });
     }
+  }
+
+  private calloutY(y: number, ascent: number, descent: number, rotatedHalf = 0) {
+    const a = this.arena;
+    const inset = 12 + this.shake / 2 + a.h / 2 * this.punch + rotatedHalf;
+    return Math.min(Math.max(y, a.y + ascent + inset), a.y + a.h - 64 - descent - inset);
   }
 
   private drawBattleHud(ctx: CanvasRenderingContext2D) {
