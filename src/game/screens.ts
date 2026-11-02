@@ -1,4 +1,5 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
+import { drawMissionTicks } from './missions';
 import { isMuted } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
@@ -4589,6 +4590,7 @@ export function drawClearCard(ctx: CanvasRenderingContext2D, c: ClearCard, age: 
     ctx.fillStyle = RANK_INK[c.rank];
     ctx.fillText(c.rank, cx - 10, ry + 46);
     if (c.best.rank) bestTag(ctx, vx, ry - 26);
+    if (c.missions) drawMissionTicks(ctx, c.missions, cx + 70, ry, pop * ra);
   }
   // the payout ticks up once the rank lands
   const pa = clamp01((age - rankAt - 0.3) / 0.4);

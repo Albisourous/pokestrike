@@ -1,6 +1,7 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { Treasure } from './loot';
+import { Missions } from './missions';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
@@ -785,6 +786,7 @@ export class Battle {
   private abilityText = (text: string, u: { x: number; y: number; r: number }) => this.pushText({ x: u.x, y: u.y - u.r - 40, text, t: 1.1, color: '#ffd848', big: false });
   telop = new Telops(); // battle banners: start, boss, clears, ULT READY
   treasure = new Treasure(); // MS treasure drops + the stop-end reveal
+  missions = new Missions(); // MS stop missions: 3 optional goals per battle stop
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   private courtT = -9;
   private foesLanded = true; // the drop-in landing beat fired for this court
@@ -1295,6 +1297,7 @@ export class Battle {
       shiniesCaught: this.shiniesCaught,
       maxCombo: this.maxCombo,
       maxKos: this.maxKos,
+      treasure: this.treasure.opened,
       totalKos: this.totalKos,
       caughtBoss: this.caughtBoss,
       coachDone: this.coachDone,
@@ -1386,6 +1389,7 @@ export class Battle {
     this.shiniesCaught = s.shiniesCaught;
     this.maxCombo = s.maxCombo;
     this.maxKos = s.maxKos;
+    this.treasure.opened = s.treasure ?? 0;
     this.totalKos = s.totalKos;
     this.caughtBoss = s.caughtBoss;
     this.coachDone = s.coachDone;
@@ -1439,6 +1443,7 @@ export class Battle {
     this.waveShots = 0;
     this.stopShots = 0;
     this.stopCombo = this.stopWeak = this.stopKos = this.stopTaken = this.stopFaints = 0;
+    this.missions.start(this.mapSeed, i + 1, this.players.map((p) => p.def.type), this.ultIn <= 6, this.time, this.raid || !!this.pendingEventWave);
     this.clearCard = null;
     this.waveFlawless = true;
     // ultIn banks across the whole run — pips earned in one fight spend at the next
@@ -3834,6 +3839,7 @@ export class Battle {
         this.pushText({ x: e.x, y: e.y - e.r - 70, text: `BOUNTY +${got} ★`, t: 1.2, color: '#c9a8ff', big: true });
       }
       this.maxKos = Math.max(this.maxKos, this.kosThisShot);
+      this.missions.ko(this.kosThisShot, this.battle >= this.battles && this.enemies.every((x) => x.dead) ? src?.def.type ?? null : undefined);
       // EXP: the mon that launched this shot levels up — growth you can
       // watch mid-run. Bigger foes teach more, and punching up doubles it,
       // like real XP. Cap keeps the multiplier sane.
@@ -5128,6 +5134,7 @@ export class Battle {
     this.ultIn = ULT_SHOTS;
     this.ultFill = 0;
     this.ultHint = false;
+    this.missions.ult();
     const color = TYPE_COLOR[u.def.type];
     this.pushText({
       x: u.x, y: u.y - u.r - 48,
@@ -5469,6 +5476,7 @@ export class Battle {
     const speedClear = this.stopShots <= this.par;
     if (speedClear) this.score += 100 + this.depth * 25;
     if (!this.raid) this.clearCard = this.stopSummary();
+    if (this.clearCard) this.clearCard.missions = this.missions.clear(this.waveIndex + 1, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints }, (n) => this.earnStars(n));
     this.treasure.endStop(this.time, this.arena.x + this.arena.w / 2, this.arena.y, (n) => this.earnStars(n));
     // pickup ability: scavengers root through the arena after the fight —
     // a living carrier may nose out a consumable for the run's bag
@@ -8714,6 +8722,7 @@ export class Battle {
     ctx.font = fontB(12);
     ctx.fillText(this.enemies.filter((e) => !e.dead).length + ' FOES LEFT', f.x + f.w / 2, f.y + 22);
     ctx.fillText(this.phase === 'enemy' ? 'FOES ATTACK' : this.phase === 'shot' ? 'IN FLIGHT' : 'TURN ' + (this.stopShots + 1) + '/' + this.par, f.x + f.w / 2, f.y + 42);
+    this.missions.draw(ctx, this.time, this.arena, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints });
 
     if (this.ultHint && this.phase === 'aim') {
       const h = { x: 76, y: this.arena.y + 60, w: 388, h: 64 };
