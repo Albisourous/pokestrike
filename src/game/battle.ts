@@ -292,14 +292,13 @@ const DECOR_MONS: Record<'tree' | 'rock' | 'flower', [number, number, number][]>
 // footprint; the tint pad underlays each so its radius stays readable
 const HZ_TINT: Record<Hazard['kind'], string> = {
   lava: '#c23a0e', grass: '#2f7a2a', gust: '#bfe6ff', spikes: '#241f30', static: '#4a2a78',
-  mine: '#ff9a30', warp: '#c890ff', boost: '#2a5a30', well: '#101826', power: '#d83018',
+  mine: '#ff9a30', warp: '#c890ff', boost: '#2a5a30', well: TYPE_COLOR.psychic, power: '#d83018',
   ice: '#9adcff', heal: '#6fdc6f', gravity: '#9aa7b8',
 };
 const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
   grass: [1715, 93, 78, 33], // tall-grass tufts
   static: [90, 268, 55, 42], // still pond — keywords go quiet inside
   warp: [292, 140, 40, 23], // cave mouth — enter here, exit the twin
-  well: [7, 639, 47, 66], // framed pool — the water drags you in
   boost: MT.TILE_PATH, // dirt pad
   power: MT.TILE_PATH,
 };
@@ -6192,6 +6191,7 @@ export class Battle {
     for (const z of room.hazards) {
       if (z.kind === 'heal') void loadItem('oran-berry');
       if (z.kind === 'gravity') void loadItem('hard-stone');
+      if (z.kind === 'well' && !z.moat) void loadItem('twisted-spoon');
     }
     this.blocks = room.blocks.map((b) => ({
       x: this.arena.x + this.arena.w * b.nx,
@@ -9249,22 +9249,31 @@ export class Battle {
 
   private drawFieldPanel(ctx: CanvasRenderingContext2D, hz: Hazard) {
     const healing = hz.kind === 'heal';
+    const pulling = hz.kind === 'well';
     const color = HZ_TINT[hz.kind];
     ctx.save();
-    drawTile(ctx, MT.TILE_PATH, hz.x - hz.r, hz.y - hz.r * 0.6, hz.r * 2, hz.r * 1.2);
+    if (!pulling) drawTile(ctx, MT.TILE_PATH, hz.x - hz.r, hz.y - hz.r * 0.6, hz.r * 2, hz.r * 1.2);
     ctx.globalAlpha = healing && hz.healShot === this.stopShots ? 0.35 : 0.7 + Math.sin(this.time * 4) * 0.15;
     ctx.strokeStyle = color;
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.6, 0, 0, Math.PI * 2);
     ctx.stroke();
-    const img = itemSprite(healing ? 'oran-berry' : 'hard-stone');
+    if (pulling) {
+      const radius = hz.r * (1 - (this.time * 0.7) % 1);
+      ctx.globalAlpha *= radius / hz.r;
+      ctx.beginPath();
+      ctx.ellipse(hz.x, hz.y, radius, radius * 0.6, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    const img = itemSprite(healing ? 'oran-berry' : pulling ? 'twisted-spoon' : 'hard-stone');
     if (img) ctx.drawImage(img, hz.x - 14, hz.y - 18, 28, 28);
     ctx.font = fontB(11);
     ctx.textAlign = 'center';
     ctx.strokeStyle = '#101826';
     ctx.lineWidth = 3;
-    const label = healing ? 'HEAL' : 'GRAVITY';
+    const label = healing ? 'HEAL' : pulling ? 'PULL' : 'GRAVITY';
     ctx.strokeText(label, hz.x, hz.y + 19);
     ctx.fillStyle = color;
     ctx.fillText(label, hz.x, hz.y + 19);
@@ -9282,7 +9291,7 @@ export class Battle {
       ]);
       return;
     }
-    if (hz.kind === 'heal' || hz.kind === 'gravity') {
+    if (hz.kind === 'heal' || hz.kind === 'gravity' || hz.kind === 'well') {
       this.drawFieldPanel(ctx, hz);
       return;
     }
@@ -9395,22 +9404,6 @@ export class Battle {
         ctx.lineTo(cx + 5, cy + 4);
         ctx.stroke();
       }
-    } else if (hz.kind === 'well') {
-      // whirlpool: arcs spiral inward over the deep pool
-      ctx.globalAlpha = 0.6;
-      ctx.strokeStyle = '#7ab8ff';
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 3; i++) {
-        const a = this.time * 2 + i * (TAU / 3);
-        const rr = hz.r * (0.35 + ((this.time * 0.5 + i / 3) % 1) * 0.65);
-        ctx.beginPath();
-        ctx.arc(hz.x, hz.y, rr, a, a + 2.2);
-        ctx.stroke();
-      }
-      ctx.fillStyle = '#7ab8ff';
-      ctx.beginPath();
-      ctx.arc(hz.x, hz.y, hz.r * 0.1, 0, TAU);
-      ctx.fill();
     } else if (hz.kind === 'mine') {
       // Voltorb IS the mine — the dashed rim marks the blast reach
       const pulse = 0.6 + Math.sin(this.time * 5) * 0.4;
