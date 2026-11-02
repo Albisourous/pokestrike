@@ -768,3 +768,40 @@ backlog; builders run one iteration each, I verify + commit + push.
   resumeRun never restored battle.coach so a quit mid-coached-run lost
   the tutorial + flipped mission rules mid-run. Dimmed beats now gate
   pause/ult/inspect taps alike (shots<=1).
+
+## Morning brief — what tonight changed
+
+Friend's complaints → what landed:
+- "wayyy too much information": help deck no longer auto-opens; coached
+  run skips charm + stop card; draft cards go thin for new players;
+  battle HUD dropped ~40% of its simultaneous text (turn cue, 4 ULT
+  prompts, FOE TURN banners, move-name labels, intro tag flood, callout
+  cap); dex stats fold behind a STATS row; map legend/log/traits quiet;
+  stop cards auto-dismiss after 3 viewings; result findings cap at 6.
+- "won 4 levels spamming mindlessly": THE bug — foeAtk never read e.pow,
+  so enemy offense was flat vs ~5x player HP growth. Foes now pay
+  sqrt(pow): Lv5 unchanged, Lv85 ~3.2x. Plus staggered spawn clocks so
+  volleys spread and "which one first" is a real read.
+- "how do enemies deal damage / how does priority work": countdown
+  discs, priced leashes (-N) and scout card (HITS ~N) showing the real
+  number, ACTS FIRST tag, per-attacker name floats, IT ATTACKS NEXT
+  ribbon, tell art per firing recipe.
+- "why can't random actions win": hidden levers now visible — HOT rail
+  marks the >450 u/s zone, COMBO prints +N% DMG, PERFECT! names +20%.
+- "just spammed, didn't learn the slingshot": Clash-style coach — dim
+  spotlight over guided beats, un-losable first release, map rings its
+  stops, stray taps can't derail, resumed coached runs keep the tutorial.
+- Plus: FIRST WIN +20★ dopamine, 9 hardening fixes (sprite-404 boot,
+  crash latch, corrupt-save ids), 4 rooms, 5 mons, 3 perks, 5 bag items,
+  3 events, 4 task kinds, kit-duck intensity layers (MUSIC.md done),
+  secret-lair exploit closed, broad review FIX-FIRSTs (zapPow
+  precedence, coach-on-resume).
+
+Verify: build+typecheck+smoke green every commit (2366 oks); playwright
+screens verified coach scrim/thin cards/NEXT cell/HOT rail/fresh title;
+full E2E of the coached first run (4 shots → CLEAR → reward).
+
+Open for next session: real-touch feel pass (scrim hole size, 1.5s
+auto-card, HOT tag position); support foes still show ~N on heal turns
+(by-design read); sparkBuy doesn't tick pulls (pity semantics);
+visual pass on the 4 new rooms via ?debug=arena.
