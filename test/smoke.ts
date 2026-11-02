@@ -5331,5 +5331,18 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     && !countersGimmick(speciesById(4)!, STAGE_GIMMICKS.marsh), 'stop hints and roster counter flags match the real hazard rule');
 }
 
+// --- home: shop ---
+import * as S from '../src/game/screens';
+{
+  const shop = { SHOP_SCENE: S.SHOP_SCENE, HATCH_BTN: S.HATCH_BTN, SHOP_MORE_BTN: S.SHOP_MORE_BTN, DEAL_BTN: S.DEAL_BTN, UPGRADES_BTN: S.UPGRADES_BTN };
+  const rs = Object.entries(shop);
+  ok(rs.every(([, r]) => r.w >= 44 && r.h >= 44 && r.x >= 0 && r.x + r.w <= 540 && r.y >= 96 && r.y + r.h <= S.TAB_BAR.y - 12),
+    'shop: every tap target is >=44px, on screen, and clear of the currency bar and tab bar');
+  ok(rs.every(([, r], i) => rs.slice(i + 1).every(([, q]) => r.x + r.w <= q.x || q.x + q.w <= r.x || r.y + r.h <= q.y || q.y + q.h <= r.y)),
+    'shop: scene, pull, ×10, deal and upgrade rects never overlap');
+  const pk = S.PACK_PILL, ur = S.UPGRADES_BTN;
+  ok(pk.h >= 44 && pk.x >= ur.x && pk.y >= ur.y && pk.x + pk.w <= ur.x + ur.w && pk.y + pk.h <= ur.y + ur.h, 'shop: the pack pill sits inside the upgrade rack');
+}
+
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
 process.exit(fails ? 1 : 0);
