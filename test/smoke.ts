@@ -21,6 +21,7 @@ import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { BOX_STRIP, DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, MENU_CLOSE, MENU_QUIT, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, TEAM_PANEL, boxSlotRect, dexBuyRect, partnersStripAt, teamSlotRect, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_LOTS } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
+import { BALL_TIERS, DROP_CAP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDrop, rollReward } from '../src/game/loot';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
@@ -3847,6 +3848,45 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(seq(a) === seq(b), 'same seed → same wave (replayable climbs)');
 }
 
+// --- MS treasure drops: bounded odds, boss floor, existing pools, side stream --
+{
+  const bagIds = new Set(BAG_ITEMS.map((i) => i.id));
+  const perfs = [false, true].flatMap((boss) => [false, true].flatMap((weak) => [false, true].flatMap((finisher) => [false, true].flatMap((speed) => [0, 4, 12, 99].map((combo) => ({ boss, weak, finisher, speed, combo }))))));
+  ok(perfs.every((p) => { const o = dropOdds(p); return o.chance > 0 && o.chance <= (p.boss ? 1 : DROP_CAP) && o.weights.every((w) => w >= 0 && Number.isFinite(w)); }), 'treasure drop odds stay bounded');
+  const plain = dropOdds({ boss: false, weak: false, finisher: false, speed: false, combo: 0 });
+  const star = dropOdds({ boss: false, weak: true, finisher: true, speed: true, combo: 12 });
+  const rare = (o: typeof plain) => (o.weights[2] + o.weights[3]) / o.weights.reduce((a, b) => a + b, 0);
+  ok(star.chance > plain.chance && rare(star) > rare(plain), 'weak/finisher/combo/speed raise treasure odds');
+  const r = mulberry32(5);
+  const bossTiers = Array.from({ length: 500 }, () => rollDrop(r, { boss: true, weak: false, finisher: false, speed: false, combo: 0 }));
+  ok(bossTiers.every((t) => t && t !== 'poke-ball'), 'bosses always drop a Great Ball or better');
+  const rewards = BALL_TIERS.flatMap((t) => Array.from({ length: 300 }, () => rollReward(r, t)));
+  ok(rewards.every((w) => (w.kind === 'stars' || w.kind === 'dust') ? w.n > 0 : w.kind === 'item' && bagIds.has(w.id!)), 'treasure rewards come from stars, dust and the bag pool only');
+  ok(Object.values(LOOT_TABLE).every((slots) => slots.length <= 4), 'each ball keeps at most 4 drop slots');
+  // a full drop stop banks once, tallies, and the reveal skips then closes
+  const tr = new Treasure();
+  for (let i = 0; i < 40; i++) tr.ko({ x: 100, y: 100, r: 20 }, i, { boss: true, weak: false, finisher: false, speed: false, combo: 0 }, 0);
+  ok(tr.field.length === STOP_CAP, 'treasure drops cap per stop');
+  const s0 = stars(), d0 = dust();
+  let starsIn = 0;
+  tr.endStop(1, 270, 160, (n) => { starsIn += n; return n; });
+  const dustIn = tr.reveal.filter((w) => w.kind === 'dust').reduce((a, w) => a + w.n, 0);
+  ok(tr.opened === STOP_CAP && tr.reveal.length === STOP_CAP && dust() === d0 + dustIn && stars() === s0, 'stop end banks every ball once');
+  spendDust(dustIn); // later wallet checks read an untouched dust balance
+  tr.endStop(2, 270, 160, () => 0);
+  ok(tr.opened === STOP_CAP && tr.reveal.length === 0, 'collected balls never bank twice');
+  tr.reveal = rewards.slice(0, 3);
+  tr.show(10);
+  ok(tr.showing() && tr.tap(10.1) && tr.showing() && tr.tap(10.2) && !tr.showing(), 'one tap skips the reveal, the next closes it');
+  // drops roll off their own stream: the run rng order is unchanged
+  const mk = () => { const bb: any = new Battle(arena, team(), makeStage(42, 'T'), mulberry32(42)); bb.spawnWave(0); return bb; };
+  const a = mk(), b = mk();
+  b.treasure.ko = () => null;
+  for (const bb of [a, b]) for (const e of [...bb.enemies]) bb.hurt(e, 1e6, '#fff');
+  ok(a.treasure.field.length > 0 && b.treasure.field.length === 0, 'KO hook rolls treasure');
+  ok(a.rng() === b.rng() && a.score === b.score, 'treasure rolls leave seeded replays unchanged');
+}
+
 // --- the pause chip freezes the sim, a tap thaws it ---------------------------
 {
   const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
@@ -4478,7 +4518,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(addStars(42) === s0 + 42 && stars() === s0 + 42, 'stars bank and read back');
   ok(!spendStars(stars() + 1) && stars() === s0 + 42, 'spendStars refuses when short — balance unchanged');
   ok(spendStars(PULL_COST) && stars() === s0 + 12, 'a pull-priced spend deducts');
-  ok(addDust(25) === 25 && spendDust(10) && !spendDust(99) && dust() === 15, 'dust banks, spends, guards');
+  const d0 = dust(); // treasure balls from the climbs above banked real dust
+  ok(addDust(25) === d0 + 25 && spendDust(10) && !spendDust(d0 + 99) && dust() === d0 + 15, 'dust banks, spends, guards');
   ok(bumpPulls() === 1 && pullCount() === 1, 'pull counter bumps');
 
   const pullIds = new Set(PULLABLE.map((d) => d.id));
