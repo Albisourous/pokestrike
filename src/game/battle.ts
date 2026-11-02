@@ -461,7 +461,7 @@ function resolveBlock(u: Ball, b: Rect): boolean {
 // them — everything else banks off the surface like a stone slab.
 const flies = (d: SpeciesDef) => d.type === 'flying' || d.type2 === 'flying' || FLOATERS.has(d.id);
 const canSwim = (d: SpeciesDef) => d.type === 'water' || d.type2 === 'water' || flies(d);
-const isWater = (hz: Hazard) => hz.kind === 'static' || hz.kind === 'well';
+const isWater = (hz: Hazard) => hz.kind === 'static' || (hz.kind === 'well' && !!hz.moat);
 const isSolid = (hz: Hazard, d: SpeciesDef) =>
   (isWater(hz) && !canSwim(d)) || (hz.kind === 'spikes' && !flies(d));
 
@@ -2710,13 +2710,12 @@ export class Battle {
           }
         }
       }
-      // the court herds the pack too — a well's undertow drags swimmers
-      // into a clump (the kill-zone you fire into; grounded foes bank off
-      // the shore anyway), a gust lane sweeps creeps off their cover.
+      // Wells gather foes into a kill-zone; only swimmers enter moat wells.
+      // Gust lanes sweep creeps off their cover.
       // Bosses stay planted; the court is their turf.
       if (!e.dead && !e.boss) {
         for (const hz of this.hazards) {
-          if (hz.kind === 'well' && canSwim(e.def) && dist(e, hz) <= hz.r + e.r) {
+          if (hz.kind === 'well' && (!isWater(hz) || canSwim(e.def)) && dist(e, hz) <= hz.r + e.r) {
             const d = Math.max(30, dist(e, hz));
             e.x += ((hz.x - e.x) / d) * 160 * dt;
             e.y += ((hz.y - e.y) / d) * 160 * dt;
