@@ -360,11 +360,10 @@ export function recordBoard(e: BoardEntry): number {
 export function echoIds(): { id: number; lvl: number }[] | null {
   const raw = load<unknown>('pk_echo');
   const arr = Array.isArray(raw) ? raw : memEcho;
-  return (
-    arr
-      ?.map((e) => (typeof e === 'number' ? { id: e, lvl: 1 } : e))
-      .filter((e): e is { id: number; lvl: number } => !!e && Number.isFinite(e.id) && Number.isFinite(e.lvl) && !!speciesById(e.id)) ?? null
-  );
+  const out = arr
+    ?.map((e) => (typeof e === 'number' ? { id: e, lvl: 1 } : e))
+    .filter((e): e is { id: number; lvl: number } => !!e && Number.isFinite(e.id) && Number.isFinite(e.lvl) && !!speciesById(e.id));
+  return out?.length ? out : null; // all-corrupt reads as no echo, not an empty stage header
 }
 
 export function saveEcho(mons: { id: number; lvl: number }[]) {

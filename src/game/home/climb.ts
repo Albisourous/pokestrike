@@ -320,8 +320,8 @@ export function drawClimb(
   const boss = raidPick();
   const raided = raidDoneToday();
   door(ctx, CLIMB_RAID, (x, y) => {
-    void loadSprite(boss.id);
-    drawMon(ctx, boss.id, x, y, 48);
+    void loadSprite(boss.id).catch(() => {});
+    try { drawMon(ctx, boss.id, x, y, 48); } catch { /* sprite still landing */ }
   }, `TODAY'S RAID · ${boss.name.toUpperCase()}`, raided ? 'CLEARED TODAY' : 'READY · OPEN RAID', !raided);
 
 }

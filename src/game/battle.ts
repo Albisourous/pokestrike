@@ -6734,7 +6734,7 @@ export class Battle {
         } else {
           this.pendingAttacks.push(e);
         }
-      } else if (e.timer === 1) {
+      } else if (e.timer <= 1) {
         warned = true; // it swings after this shot — one soft warning tick
         // the first live 1-clock a run: name the counter before it bites
         if (!e.dead && this.telop.once('clock1'))
