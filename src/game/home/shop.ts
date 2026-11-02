@@ -204,8 +204,8 @@ export function drawPullStage(ctx: CanvasRenderingContext2D, w: number, h: numbe
 }
 
 // the featured rate-up's header strip inside the hatcher window
-export function drawCounterStrip(ctx: CanvasRenderingContext2D, r: Rect) {
-  const bg = backRoom(r.w, r.h, Math.round(r.h * 0.42), false);
+export function drawCounterStrip(ctx: CanvasRenderingContext2D, r: Rect, wallK = 0.42) {
+  const bg = backRoom(r.w, r.h, Math.round(r.h * wallK), false);
   ctx.save();
   rr(ctx, r.x, r.y, r.w, r.h, 10);
   ctx.clip();
