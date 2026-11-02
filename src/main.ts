@@ -102,6 +102,8 @@ import {
   taskRowHit,
   settingsSegSet,
   HATCH_BTN,
+  SHOP_MORE_BTN,
+  SHOP_SCENE,
   LAB_BTN,
   PULL1_BTN,
   PULL10_BTN,
@@ -1190,11 +1192,13 @@ canvas.addEventListener('pointerdown', (e) => {
       dexPick = dealPick().id;
       return;
     }
-    if (homeTab === 'shop' && inRect(p.x, p.y, HATCH_BTN)) {
+    if (homeTab === 'shop' && (inRect(p.x, p.y, HATCH_BTN) || inRect(p.x, p.y, SHOP_MORE_BTN) || inRect(p.x, p.y, SHOP_SCENE))) {
       sfx('ui');
       hatchOpen = true;
       hatch = { phase: 'idle', t: 0, tMax: 0, results: [], i: 0, sparkScroll: 0 };
       sparkArm = { id: -1, t: -10 };
+      // the big button pulls at once; the counter and ×10 open the hatcher to browse
+      if (inRect(p.x, p.y, HATCH_BTN)) doPull(1);
       return;
     }
     if (homeTab === 'mons' && inRect(p.x, p.y, SETS_BTN)) {

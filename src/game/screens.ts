@@ -6,6 +6,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, hash } from './bg';
 import { drawTile } from './map';
+import { drawShopScene } from './home/shop';
 import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, TILE_HALL, TILE_CAFE, TILE_GAZEBO, TILE_BUSH, TILE_FENCE, TILE_TOWN, TILE_TOWER, TREE_ROUND, TREE_PINE, TREE_TEAL, FLOWER_PINK, FLOWER_WILD, ROCK_SMALL } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
@@ -1362,55 +1363,137 @@ function drawShopBody(
   packArmed = false,
   packFlashId: string | null = null,
 ) {
-  hatcherCard(ctx, t, freeNow);
+  drawShopScene(ctx, SHOP_SCENE, t, featuredPull());
 
-  // the day's deep spark bargain — its own window so the deal sells itself
+  // the focal pull — gold when it can fire, pity pips under the label
+  const hb = HATCH_BTN;
+  const canPull = freeNow || stars() >= PULL_COST;
+  if (freeNow) {
+    ctx.save();
+    ctx.globalAlpha = 0.4 + Math.sin(t * 5) * 0.3;
+    ctx.strokeStyle = '#ffe89d';
+    ctx.lineWidth = 3;
+    roundRect(ctx, hb.x - 4, hb.y - 4, hb.w + 8, hb.h + 8, 17);
+    ctx.stroke();
+    ctx.restore();
+  }
+  uiWindow(ctx, hb, { tint: canPull ? GOLD_HI : '#d8d8d0', rad: 14 });
+  const star = itemSprite('star-piece');
+  void loadItem('star-piece');
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.font = font(15);
+  const lab = freeNow ? 'FREE PULL' : 'PULL';
+  const cost = freeNow ? '' : `${PULL_COST}`;
+  const lw = ctx.measureText(lab).width;
+  ctx.font = fontB(15);
+  const cw = cost ? 12 + 24 + 4 + ctx.measureText(cost).width : 0;
+  let lx = hb.x + (hb.w - lw - cw) / 2;
+  ctx.font = font(15);
+  ctx.fillStyle = canPull ? INK : INK_FAINT;
+  ctx.fillText(lab, lx, hb.y + 40);
+  if (cost) {
+    lx += lw + 12;
+    if (star) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(star, lx, hb.y + 17, 24, 24);
+      ctx.restore();
+    }
+    ctx.font = fontB(15);
+    ctx.fillStyle = canPull ? INK : DANGER;
+    ctx.fillText(cost, lx + 28, hb.y + 38);
+  }
+  const done = pullCount() % PULL_PITY;
+  const pipW = 14, px0 = hb.x + 22;
+  for (let i = 0; i < PULL_PITY; i++) {
+    ctx.fillStyle = i < done ? GOLD : 'rgba(40,48,88,0.22)';
+    ctx.beginPath();
+    ctx.arc(px0 + i * pipW + 5, hb.y + 63, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.font = fontB(12);
+  ctx.fillStyle = INK_SOFT;
+  ctx.textAlign = 'right';
+  ctx.fillText(`RARE+ IN ${PULL_PITY - done}`, hb.x + hb.w - 20, hb.y + 69);
+
+  // the ×10 and the spark exchange live inside the hatcher — this opens it
+  const mb = SHOP_MORE_BTN;
+  uiWindow(ctx, mb, { rad: 14 });
+  ctx.textAlign = 'center';
+  ctx.font = font(13);
+  ctx.fillStyle = INK;
+  ctx.fillText('×10', mb.x + mb.w / 2, mb.y + 34);
+  ctx.font = fontB(13);
+  const c10 = `${PULL10_COST}`;
+  const c10w = 22 + ctx.measureText(c10).width;
+  if (star) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(star, mb.x + (mb.w - c10w) / 2, mb.y + 41, 18, 18);
+    ctx.restore();
+  }
+  ctx.textAlign = 'left';
+  ctx.fillStyle = stars() >= PULL10_COST ? GOLD : DANGER;
+  ctx.fillText(c10, mb.x + (mb.w - c10w) / 2 + 22, mb.y + 56);
+  ctx.textAlign = 'center';
+  ctx.font = fontB(11);
+  ctx.fillStyle = INK_SOFT;
+  ctx.fillText('SPARKS · ODDS ›', mb.x + mb.w / 2, mb.y + 74);
+
+  // the day's spark bargain — price, list price, and when it rolls over
   const dr = DEAL_BTN;
-  uiPanel(ctx, dr, `SPARK DEAL −${dealOff()}%`);
+  const dc = uiPanel(ctx, dr, `DAILY DEAL · −${dealOff()}%`);
   const deal = dealPick();
-  // a type-tinted pad — the bargain stands on its own color like the rest
-  const dcx = dr.x + 82, dcy = dr.y + 102;
+  const dcx = dr.x + 80, dcy = dc.y + 40;
   ctx.fillStyle = `${TYPE_COLOR[deal.type]}30`;
   ctx.beginPath();
-  ctx.ellipse(dcx, dcy + 44, 64, 15, 0, 0, Math.PI * 2);
+  ctx.ellipse(dcx, dcy + 34, 56, 13, 0, 0, Math.PI * 2);
   ctx.fill();
-  monShadow(ctx, dcx, dcy + 4, 78);
+  monShadow(ctx, dcx, dcy, 72);
   try {
-    drawMon(ctx, deal.id, dcx, dcy + Math.sin(t * 2.4) * 2.5, 78);
+    drawMon(ctx, deal.id, dcx, dcy + Math.sin(t * 2.4) * 2.5, 72);
   } catch {
     void loadSprite(deal.id);
   }
-  const tx2 = dr.x + 156;
+  const tx2 = dr.x + 150;
+  const chip = { x: dr.x + dr.w - 112, y: dc.y + 4, w: 96, h: 54 };
   ctx.textAlign = 'left';
-  ctx.font = fontB(10);
-  ctx.fillStyle = ACCENT;
-  ctx.fillText('TODAY ONLY', tx2, dr.y + 58);
-  fitFont(ctx, deal.name.toUpperCase(), 12, dr.x + dr.w - tx2 - 14);
+  const dn = deal.name.toUpperCase();
+  fitFont(ctx, dn, 13, chip.x - 12 - tx2);
   ctx.fillStyle = INK;
-  ctx.fillText(deal.name.toUpperCase(), tx2, dr.y + 82);
-  ctx.font = fontB(10);
+  ctx.fillText(dn, tx2, dc.y + 24);
+  ctx.font = fontB(12);
   ctx.fillStyle = TYPE_COLOR[deal.type];
-  ctx.fillText(deal.type2 ? `${deal.type} · ${deal.type2}`.toUpperCase() : deal.type.toUpperCase(), tx2, dr.y + 101);
-  // the price leads; the struck list price beside it makes the day's cut land
-  const was = dustCost(deal);
-  ctx.font = fontB(11);
-  ctx.fillStyle = ACCENT;
-  const cost = `${dealCost(deal)}`;
-  ctx.fillText(`◆ ${cost}`, tx2, dr.y + 123);
-  const pw = ctx.measureText(`◆ ${cost}`).width;
-  ctx.font = fontB(10);
-  const wl = `was ◆ ${was}`;
+  ctx.fillText(deal.type2 ? `${deal.type} · ${deal.type2}`.toUpperCase() : deal.type.toUpperCase(), tx2, dc.y + 47);
+  const price = dealCost(deal);
+  const ps = `◆ ${price}`;
+  ctx.font = fontB(16);
+  ctx.fillStyle = dust() >= price ? ACCENT : DANGER;
+  ctx.fillText(ps, tx2, dc.y + 80);
+  const pw = ctx.measureText(ps).width;
+  ctx.font = fontB(12);
+  const wl = `was ◆ ${dustCost(deal)}`;
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText(wl, tx2 + pw + 12, dr.y + 121);
+  ctx.fillText(wl, tx2 + pw + 12, dc.y + 78);
   ctx.strokeStyle = INK_FAINT;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(tx2 + pw + 12, dr.y + 118);
-  ctx.lineTo(tx2 + pw + 12 + ctx.measureText(wl).width, dr.y + 118);
+  ctx.moveTo(tx2 + pw + 12, dc.y + 73);
+  ctx.lineTo(tx2 + pw + 12 + ctx.measureText(wl).width, dc.y + 73);
   ctx.stroke();
-  ctx.font = fontB(10);
+  uiWindow(ctx, chip, { tint: PARCH, rad: 8, rim: false, shadow: false });
+  ctx.textAlign = 'center';
+  ctx.font = fontB(11);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('TAP TO VIEW ›', tx2, dr.y + 170);
+  ctx.fillText('ENDS', chip.x + chip.w / 2, chip.y + 21);
+  ctx.font = font(10);
+  ctx.fillStyle = INK;
+  ctx.fillText(taskResetsIn('daily'), chip.x + chip.w / 2, chip.y + 44);
+  ctx.textAlign = 'right';
+  ctx.font = fontB(12);
+  ctx.fillStyle = ACCENT;
+  ctx.fillText('VIEW ›', dr.x + dr.w - 18, dc.y + 80);
 
   // the upgrade rack — held items tier up off cheap dust packs; the shelf
   // lists every bag item's pips so a pack's bump has a visible home, and
@@ -1418,14 +1501,13 @@ function drawShopBody(
   const ur = UPGRADES_BTN;
   const uc = uiPanel(ctx, ur, 'ITEM UPGRADES');
   const pk = PACK_PILL;
-  // the shelf spreads seven columns across the strip left of the pill
   const rackW = pk.x - 12 - uc.x;
   const pitch = Math.floor((rackW - 28) / 6);
   const x0 = uc.x + 14 + (rackW - 28 - pitch * 6) / 2;
   BAG_ITEMS.forEach((it, i) => {
     const col = i % 7, row = (i / 7) | 0;
     const cx = x0 + col * pitch;
-    const cy = uc.y + 16 + row * 46;
+    const cy = uc.y + 16 + row * 44;
     // ghosted = none in the bag — its tier just waits for stock to land
     ctx.globalAlpha = (bagStock()[it.id] ?? 0) > 0 ? 1 : 0.55;
     const spr = itemSprite(it.item);
@@ -1436,7 +1518,6 @@ function drawShopBody(
       ctx.drawImage(spr, cx - 14, cy - 14, 28, 28);
       ctx.restore();
     }
-    // tier pips — five slots under the icon, gold where earned
     const tt = itemTier(it.id);
     for (let p = 0; p < ITEM_TIER_CAP; p++) {
       ctx.fillStyle = p < tt ? GOLD : 'rgba(40,44,70,0.25)';
@@ -1456,13 +1537,13 @@ function drawShopBody(
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.textAlign = 'center';
-  ctx.font = fontB(10);
-  ctx.fillStyle = packArmed ? '#c8dcff' : maxed || !canPay ? '#7a82a0' : INK;
-  ctx.fillText(maxed ? 'ALL MAXED' : packArmed ? 'TAP AGAIN' : 'UPGRADE', pk.x + pk.w / 2, pk.y + 26);
-  ctx.fillText(maxed ? '' : packArmed ? 'TO BUY' : 'PACK', pk.x + pk.w / 2, pk.y + 40);
-  ctx.font = fontB(10);
-  ctx.fillStyle = packArmed ? '#9df0ff' : maxed || !canPay ? '#5a6280' : INK;
-  ctx.fillText(`◆ ${ITEM_PACK_COST}`, pk.x + pk.w / 2, pk.y + 58);
+  ctx.font = fontB(12);
+  ctx.fillStyle = packArmed ? '#c8dcff' : maxed || !canPay ? '#9aa2c0' : INK;
+  ctx.fillText(maxed ? 'ALL MAXED' : packArmed ? 'TAP AGAIN' : 'UPGRADE', pk.x + pk.w / 2, pk.y + 28);
+  ctx.fillText(maxed ? '' : packArmed ? 'TO BUY' : 'PACK', pk.x + pk.w / 2, pk.y + 45);
+  ctx.font = fontB(13);
+  ctx.fillStyle = packArmed ? '#9df0ff' : maxed || !canPay ? '#8a92b0' : INK;
+  ctx.fillText(`◆ ${ITEM_PACK_COST}`, pk.x + pk.w / 2, pk.y + 64);
   if (packFlashId) {
     ctx.fillStyle = GOLD;
     const fn = BAG_ITEMS.find((i) => i.id === packFlashId)?.name.toUpperCase() ?? '';
@@ -1470,130 +1551,15 @@ function drawShopBody(
     ctx.fillText(`${fn} T${itemTier(packFlashId)}!`, uc.x + rackW / 2, ur.y + ur.h - 9);
   }
 
-  // the honest cut, visible before the hatcher opens — same rarity table as
-  // the overlay prints, plus the pity count, two columns so it fits the
-  // leftover strip above the tab bar
-  const orr = { x: 30, y: UPGRADES_BTN.y + UPGRADES_BTN.h + 14, w: W - 60, h: TAB_BAR.y - 20 - (UPGRADES_BTN.y + UPGRADES_BTN.h + 14) };
-  const oc = uiPanel(ctx, orr, 'PULL ODDS', { sub: `RARE+ IN ${PULL_PITY - (pullCount() % PULL_PITY)} PULLS` });
-  ([['COMMON', PULL_RATES.common, '#b8b8b0'], ['RARE', PULL_RATES.rare, '#5a9bf0'], ['EPIC', PULL_RATES.epic, '#f0b02f'], ['SHINY', shinyOdds(), '#ffd848']] as const).forEach(([label, pct, color], i) => {
-    const lx = oc.x + 12 + ((i / 2) | 0) * (oc.w / 2);
-    const ly = oc.y + 13 + (i % 2) * 17;
-    ctx.textAlign = 'left';
-    ctx.font = fontB(10);
-    ctx.fillStyle = color;
-    ctx.fillText(label, lx, ly);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = INK;
-    ctx.fillText(`${Math.round(pct * 100)}%`, lx + oc.w / 2 - 24, ly);
-  });
-}
-
-// the hatcher's hero card — featured pull on its type stage, pity, prices
-function hatcherCard(ctx: CanvasRenderingContext2D, t: number, freeNow: boolean) {
-  const pullN = pullCount();
-  const r = HATCH_BTN;
-  // the economy's front door — a titled window; the free pull flags in-band
-  uiPanel(ctx, r, 'THE HATCHER', { h: 36, sub: freeNow ? 'FREE PULL TODAY' : undefined });
-
-  // the day's rate-up face on a stage of its own — a type-glow card with
-  // pedestal, ball watermark, and twinkles breathing around the sprite
-  const feat = featuredPull();
-  const ftc = TYPE_COLOR[feat.type];
-  const stage = { x: r.x + 16, y: r.y + 50, w: 200, h: 146 };
-  ctx.save();
-  roundRect(ctx, stage.x, stage.y, stage.w, stage.h, 10);
-  ctx.clip();
-  ctx.fillStyle = PAPER_HI;
-  ctx.fillRect(stage.x, stage.y, stage.w, stage.h);
-  const sg = ctx.createRadialGradient(
-    stage.x + stage.w / 2,
-    stage.y + stage.h * 0.44,
-    8,
-    stage.x + stage.w / 2,
-    stage.y + stage.h * 0.44,
-    stage.w * 0.9,
-  );
-  sg.addColorStop(0, `${ftc}33`);
-  sg.addColorStop(1, `${ftc}00`);
-  ctx.fillStyle = sg;
-  ctx.fillRect(stage.x, stage.y, stage.w, stage.h);
-  ctx.restore();
-  rim(ctx, stage, 10, `${ftc}88`, 1.5);
-
-  const fcx = stage.x + stage.w / 2, fcy = stage.y + 72;
-  ballGlyph(ctx, fcx, fcy - 6, 4.6, 'rgba(40,48,88,0.08)');
-  ctx.fillStyle = `${ftc}40`;
-  ctx.beginPath();
-  ctx.ellipse(fcx, fcy + 42, 68, 17, 0, 0, Math.PI * 2);
-  ctx.fill();
-  monShadow(ctx, fcx, fcy + 6, 100);
-  try {
-    drawMon(ctx, feat.id, fcx, fcy + Math.sin(t * 2.2) * 3, 100);
-  } catch {
-    void loadSprite(feat.id);
-  }
-  const twk: [number, number][] = [[-70, -42], [66, -50], [56, 28]];
-  ctx.fillStyle = GOLD;
-  twk.forEach(([dx, dy], i) => {
-    ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.sin(t * 2.6 + i * 2.1));
-    fillStar(ctx, fcx + dx, fcy + dy, 4.5);
-  });
-  ctx.globalAlpha = 1;
-  ctx.font = fontB(10);
+  // the honest cut, visible before the hatcher opens — one line
+  const orr = { x: 30, y: UPGRADES_BTN.y + UPGRADES_BTN.h + 10, w: W - 60, h: 46 };
+  uiWindow(ctx, orr, { rad: 10, rim: false });
+  const odds = ([['COMMON', PULL_RATES.common], ['RARE', PULL_RATES.rare], ['EPIC', PULL_RATES.epic], ['SHINY', shinyOdds()]] as const)
+    .map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(' · ');
   ctx.textAlign = 'center';
-  ctx.fillStyle = mixHex(ftc, INK, 0.2);
-  ctx.fillText(
-    feat.type2 ? `${feat.type} · ${feat.type2}`.toUpperCase() : feat.type.toUpperCase(),
-    fcx,
-    stage.y + stage.h - 12,
-  );
-
-  const tx = stage.x + stage.w + 18;
-  ctx.textAlign = 'left';
-  ctx.font = fontB(10);
-  ctx.fillStyle = GOLD;
-  ctx.fillText('RATE-UP TODAY', tx, r.y + 72);
-  fitFont(ctx, feat.name.toUpperCase(), 13, r.x + r.w - tx - 14);
-  ctx.fillStyle = INK;
-  ctx.fillText(feat.name.toUpperCase(), tx, r.y + 98);
-  ctx.font = fontB(10);
+  fitFontB(ctx, odds, 12, orr.w - 28);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('10× ODDS IN THE RARE+ POOL', tx, r.y + 118);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`RARE+ GUARANTEED IN ${PULL_PITY - (pullN % PULL_PITY)} PULLS`, tx, r.y + 137);
-  // the price of admission — two cost chips: the single, the discounted ten
-  const pw = (r.x + r.w - 16 - tx - 10) / 2;
-  ([['×1', PULL_COST], ['×10', PULL10_COST]] as [string, number][]).forEach(([k, cost], i) => {
-    const px = tx + i * (pw + 10);
-    uiWindow(ctx, { x: px, y: r.y + 148, w: pw, h: 32 }, { rad: 8, rim: false, shadow: false });
-    ctx.textAlign = 'center';
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`PULL ${k}`, px + pw / 2, r.y + 161);
-    ctx.font = fontB(10);
-    ctx.fillStyle = GOLD;
-    ctx.fillText(`★${cost}`, px + pw / 2, r.y + 176);
-  });
-
-  // the whole card is the button — the pill at its foot says so out loud
-  pill(
-    ctx,
-    { x: r.x + 16, y: r.y + r.h - 46, w: r.w - 32, h: 34 },
-    freeNow
-      ? { c: GOLD, cd: '#c8a44d', tc: INK, label: 'FREE PULL WAITING · TAP TO OPEN' }
-      : { c: GOLD_HI, cd: '#c8a44d', tc: INK, label: 'TAP TO OPEN THE HATCHER' },
-  );
-
-  // the old chip's breathing glow — today's free pull still sells itself
-  if (freeNow) {
-    ctx.save();
-    ctx.globalAlpha = 0.4 + Math.sin(t * 5) * 0.3;
-    ctx.strokeStyle = '#ffe89d';
-    ctx.lineWidth = 2.5;
-    roundRect(ctx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, 15);
-    ctx.stroke();
-    ctx.restore();
-  }
+  ctx.fillText(odds, orr.x + orr.w / 2, orr.y + 29);
 }
 
 // --- MONS: the collection — dex, evolution sets, latest catches ------------
@@ -2795,12 +2761,16 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
 // home-tab card rects — the same _BTN names the hit tests know, re-homed to
 // the cards the tab bodies draw. SHOP owns the hatcher hero + spark deal;
 // MONS owns dex / line-sets / catches; TOWN owns the 2-col grid + ASC + HALL.
-export const HATCH_BTN = { x: 30, y: 110, w: W - 60, h: 250 };
-export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 16, w: W - 60, h: 190 };
-export const UPGRADES_BTN = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 14, w: W - 60, h: 150 };
+// SHOP: the counter scene opens the hatcher; HATCH_BTN pulls ×1 straight
+// away, SHOP_MORE_BTN opens it for ×10 + sparks
+export const SHOP_SCENE = { x: 20, y: 102, w: W - 40, h: 258 };
+export const HATCH_BTN = { x: 30, y: SHOP_SCENE.y + SHOP_SCENE.h + 10, w: 322, h: 84 };
+export const SHOP_MORE_BTN = { x: HATCH_BTN.x + HATCH_BTN.w + 10, y: HATCH_BTN.y, w: W - 60 - HATCH_BTN.w - 10, h: 84 };
+export const DEAL_BTN = { x: 30, y: HATCH_BTN.y + HATCH_BTN.h + 12, w: W - 60, h: 148 };
+export const UPGRADES_BTN = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 12, w: W - 60, h: 144 };
 // the pack pill is the rack's right column — exported for main's two-tap
 // armed-buy routing
-export const PACK_PILL = { x: UPGRADES_BTN.x + UPGRADES_BTN.w - 158, y: UPGRADES_BTN.y + 52, w: 140, h: 74 };
+export const PACK_PILL = { x: UPGRADES_BTN.x + UPGRADES_BTN.w - 158, y: UPGRADES_BTN.y + 50, w: 140, h: 74 };
 export const DEX_BTN = { x: 30, y: 110, w: W - 60, h: 240 };
 export const SETS_BTN = { x: 30, y: DEX_BTN.y + DEX_BTN.h + 16, w: W - 60, h: 160 };
 // the partners strip upgrades from LATEST CATCHES once any bond exists —
