@@ -9154,7 +9154,7 @@ export class Battle {
       // through the same stack damagePlayer applies at land time
       const tgt = this.nearestPlayer(e);
       const zap = tgt ? ` ~${this.foeDmg(e, tgt, e.boss ? blastPower : this.zapPow(e), e.boss)}` : '';
-      const hits = tgt ? ` · HITS${zap}` : '';
+      const hits = tgt && !e.supp ? ` · HITS${zap}` : ''; // support foes name their act — a price on a heal turn lies
       const heavy = tgt && (e.boss || e.mid) ? ` ~${this.foeDmg(e, tgt, zapPower * BOSS_BIG_POW, true)}` : '';
       const tag = this.flee.is(e) ? 'FLEEING' : e.boss
         ? `ATTACKS IN ${Math.ceil(e.timer)}${hits} · HEAVY IN ${Math.ceil(e.bigT)}${heavy} · WEAK ×3`
