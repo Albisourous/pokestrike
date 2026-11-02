@@ -3080,7 +3080,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   tx().length = 0;
   push('BANNER', 270, true);
   for (let i = 0; i < 20; i++) push(`L${i}`, 20 + i * 25);
-  ok(tx().length === 8 && tx().some((t) => t.text === 'BANNER'), 'court caps at 8 callouts, banners outlive small labels');
+  ok(tx().length === 5 && tx().some((t) => t.text === 'BANNER'), 'court caps at 5 callouts, banners outlive small labels');
 }
 
 // --- field labels: one intro per pickup kind, foe priority, no overlap -----
@@ -3246,7 +3246,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     b.endShot();
     ok(boss.bigT === 3 - turn && b.pendingBig.length === (turn === 3 ? 1 : 0), `big move countdown resolves exactly on turn three, tick ${turn}`);
   }
-  ok(b.telop.texts().includes(`${TYPE_MOVE[boss.def.type].move} · ALL`), 'FOE TURN names the signature move and whole-team target');
+  ok(!b.telop.texts().includes('FOE TURN'), 'per-attacker FOE TURN banners stay silent — the countdown carries it');
   clearAnims();
   const hp = b.players.map((p: any) => p.hp);
   b.bossBigAttack(boss);
@@ -5463,13 +5463,17 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   // a live task ping: BATTLE TESTED sits one KO short when the fight starts
   saveTaskState({ day: dayKey(Date.now()), dp: { kos: 14 }, dsel: ['d-kos'], dclaim: [], week: weekKey(Date.now()), wp: {}, wsel: [], wclaim: [] });
   const sK = kb.starsRun;
+  let taskPing = false; // the cap is small — catch the ping before later banners evict it
   for (let w = 0; w < 3 && (kb as any).totalKos < 5; w++) {
     (kb as any).spawnWave(w);
     // Keep clear rank at C so this assertion isolates the KO bounty.
     (kb as any).stopShots = Math.ceil((kb as any).par * 1.5) + 1;
     (kb as any).stopFaints = 1;
     for (const e of [...(kb as any).enemies]) {
-      while (!e.dead && (kb as any).totalKos < 5) (kb as any).hurt(e, e.hp + 50, '#fff');
+      while (!e.dead && (kb as any).totalKos < 5) {
+        (kb as any).hurt(e, e.hp + 50, '#fff');
+        taskPing ||= (kb as any).texts.some((tx: any) => tx.text === 'TASK: BATTLE TESTED ✓');
+      }
       if ((kb as any).totalKos >= 5) break;
     }
   }
@@ -5478,10 +5482,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     (kb as any).totalKos >= 5 && kb.starsRun === sK + wantK,
     `the 5th enemy KO pays its star bounty (+${kb.starsRun - sK})`,
   );
-  ok(
-    (kb as any).texts.some((tx: any) => tx.text === 'TASK: BATTLE TESTED ✓'),
-    'crossing a task goal pings mid-fight, not at the report',
-  );
+  ok(taskPing, 'crossing a task goal pings mid-fight, not at the report');
   localStorage.removeItem('pk_tasks');
 }
 
@@ -5735,7 +5736,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     u0.pointerMove({ x: u.x + 60, y: u.y + 40 });
     u0.pointerUp();
   }
-  ok(ults === 1, `ULT READY fires once when the meter fills (${ults})`);
+  ok(ults === 0, `ULT READY stays on the chip pulse — no banner (${ults})`);
   (u0 as any).wipe();
   ok(u0.telop.queue.some((t) => t.kind === 'over') || u0.telop.cur?.kind === 'over', 'a wipe calls GAME OVER');
 }

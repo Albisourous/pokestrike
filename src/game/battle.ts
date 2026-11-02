@@ -370,7 +370,7 @@ const SMASH_HITS = 3;
 const CUT_HITS = 2;
 const FIELD_HIT_SPEED = STOP_SPEED;
 const FIELD_UNIT_GAP = 4;
-const MAX_TEXTS = 8; // floating callouts on court at once — more reads as noise
+const MAX_TEXTS = 5; // floating callouts on court at once — more reads as noise
 export const LABEL_PX = 22; // field labels: phone-readable floor
 const CALLOUT_PX = 18; // Press Start 2P caps run 0.875em, so 18 matches a 22px rc label
 export const LABEL_INTRO = 2.2; // s a pickup/hazard/foe tag shows before the icon carries the read
@@ -1984,14 +1984,6 @@ export class Battle {
     return true;
   }
 
-  // foe clocks hit zero: name who swings and with what
-  private foeTelop() {
-    const m = this.pendingMoves[0];
-    const big = this.pendingBig[0];
-    const e = big ?? m?.e ?? this.pendingAttacks[0];
-    if (e) this.telop.push({ kind: 'foe', title: 'FOE TURN', sub: `${e.def.name.toUpperCase()} · ${big ? `${TYPE_MOVE[big.def.type].move} · ALL` : m ? m.c.move.toUpperCase() : 'ATTACK'}`, mon: e.def.id });
-  }
-
   // One enemy builder for everything the field can field: wave spawns,
   // wi is the wave row so level curves match the wave the foe arrived on.
   private makeEnemy(s: WaveSpawn, wi: number): Unit {
@@ -2337,9 +2329,8 @@ export class Battle {
     this.ultHint = false;
     this.shots++;
     if (this.ultIn > 0 && --this.ultIn === 0) {
-      // the charge just armed — announce it, or the HUD's gold pulse reads
-      // as decoration and the ult sits unfired
-      this.telop.push({ kind: 'ult', title: 'ULT READY', sub: 'TAP ULT TO FIRE', mon: this.active.def.id, icon: 'master-ball' });
+      // the charge just armed — the chip's gold pulse is the tell, backed
+      // by a flash so it doesn't read as decoration
       this.screenFlash('#ffd84d', 0.15);
       sfx('ready');
       buzz([20, 30, 40]);
@@ -3555,7 +3546,7 @@ export class Battle {
         sfx('ready');
         this.pushText({ x: pk.x, y: pk.y - 12, text: 'ULT +1!', t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
         if (this.telop.once('pk:pp-up')) this.telop.push({ kind: 'combo', title: 'PP UP', sub: 'ULT CHARGE +1', icon: 'pp-up' });
-        if (this.ultIn > 0 && --this.ultIn === 0) this.telop.push({ kind: 'ult', title: 'ULT READY', sub: 'TAP ULT TO FIRE', mon: this.active.def.id, icon: 'master-ball' });
+        if (this.ultIn > 0) this.ultIn--;
         break;
       case 'chesto-berry':
         sfx('ready');
@@ -3575,7 +3566,7 @@ export class Battle {
         sfx('ready');
         const ticks = pk.kind === 'max-elixir' ? 2 : 1;
         for (const p of this.players) for (let i = 0; i < ticks; i++) this.chargeUp(p);
-        this.pushText({ x: pk.x, y: pk.y - 12, text: `CD -${ticks}!`, t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
+        if (this.waveIndex >= 2) this.pushText({ x: pk.x, y: pk.y - 12, text: `CD -${ticks}!`, t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
         break;
       }
       case 'lum-berry': {
@@ -4141,7 +4132,8 @@ export class Battle {
       taunter = this.tauntFoe = this.enemies.find((x) => !x.dead && x.def.taunt) ?? null;
     }
     if (taunter && e !== taunter) {
-      this.pushText({ x: e.x, y: e.y - e.r - 8, text: 'BLOCKED', t: 0.7, color: '#8a90a8', big: false });
+      // quiet in the early stages — the shrug-off needs no footnote yet
+      if (this.waveIndex >= 2) this.pushText({ x: e.x, y: e.y - e.r - 8, text: 'BLOCKED', t: 0.7, color: '#8a90a8', big: false });
       return;
     }
     // engine cap: repeat hits on the same target decay — variety chains
@@ -4223,14 +4215,14 @@ export class Battle {
       this.impact(e.x, e.y, '#9df0ff', 1.2);
       sfx('hit');
     } else if (guarded) {
-      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'GUARDED', t: 0.7, color: '#8a90a8', big: false });
+      if (this.waveIndex >= 2) this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'GUARDED', t: 0.7, color: '#8a90a8', big: false });
       sfx('bounce');
     }
     const color = mult > 1 ? '#ffd84d' : mult < 1 ? '#8a90a8' : '#ffffff';
     // sand veil: in its own weather the carrier's a mirage — the strike
     // whiffs clean (the collider still bounces the ball off its body)
     if (e.def.veil === this.weather && this.rng() < 0.25) {
-      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'MISS!', t: 0.7, color: '#c8b88a', big: false });
+      if (this.waveIndex >= 2) this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'MISS!', t: 0.7, color: '#c8b88a', big: false });
       sfx('bounce');
       return;
     }
@@ -6752,7 +6744,6 @@ export class Battle {
     if (warned || bigWarned) sfx('warn');
     if (this.pendingAttacks.length > 0 || this.pendingBig.length > 0 || this.pendingMoves.length > 0) {
       this.phase = 'enemy';
-      this.foeTelop();
       this.enemyPhaseT = ENEMY_TURN_DELAY;
     } else {
       this.nextTurn();
@@ -8782,7 +8773,7 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
-    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') this.drawTurnCue(ctx);
+    if (this.phase === 'aim') this.drawTurnCue(ctx);
 
     // tapped-foe scout card — floats while aiming, a pull dismisses it
     if (this.inspect && this.phase === 'aim') this.drawInspect(ctx);
@@ -8908,38 +8899,20 @@ export class Battle {
     }
   }
 
+  // aim phase only: a small NEXT cell — the FOES chip already names the
+  // phase and the active mon wears its own arrow + name tag
   private drawTurnCue(ctx: CanvasRenderingContext2D) {
-    const a = this.arena;
-    const r = { x: a.x + 8, y: a.y + a.h - 56, w: a.w - 16, h: 48 };
-    uiWindow(ctx, r, { rad: 10 });
-    const u = this.active;
-    drawMon(ctx, u.def.id, r.x + 28, r.y + 24, 42);
-    ctx.fillStyle = INK;
-    ctx.textAlign = 'left';
-    ctx.font = fontB(12);
-    ctx.fillText(this.phase === 'aim' ? 'YOUR SHOT' : this.phase === 'enemy' ? 'FOES ATTACK' : 'IN FLIGHT', r.x + 56, r.y + 19);
-    ctx.font = fontB(13);
-    ctx.fillText(u.def.name, r.x + 56, r.y + 39);
-    const gaugeIcon = gaugeCounter(u.def) ? itemSprite(GAUGE_ICON) : null;
-    if (gaugeIcon) {
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(gaugeIcon, r.x + 62 + ctx.measureText(u.def.name).width, r.y + 29, 20, 20);
-      ctx.restore();
-    }
     const next = this.players.slice(this.activeIdx + 1).concat(this.players.slice(0, this.activeIdx)).find((p) => !p.dead);
-    if (this.phase === 'aim' && !this.dragging && this.shots < 2) {
-      ctx.font = fontB(11);
-      ctx.textAlign = 'right';
-      ctx.fillText(this.shots === 0 ? 'pull back to aim,' : 'bounce through allies', r.x + r.w - 16, r.y + 20);
-      ctx.fillText(this.shots === 0 ? 'release in the gold' : 'to fire their supers', r.x + r.w - 16, r.y + 38);
-    } else if (next) {
-      ctx.font = fontB(11);
-      ctx.textAlign = 'right';
-      ctx.fillText('NEXT', r.x + r.w - 52, r.y + 20);
-      ctx.fillText(next.def.name, r.x + r.w - 52, r.y + 38);
-      drawMon(ctx, next.def.id, r.x + r.w - 27, r.y + 24, 38);
-    }
+    if (!next) return;
+    const a = this.arena;
+    const r = { x: a.x + a.w - 148, y: a.y + a.h - 56, w: 140, h: 48 };
+    uiWindow(ctx, r, { rad: 10 });
+    ctx.fillStyle = INK;
+    ctx.font = fontB(11);
+    ctx.textAlign = 'right';
+    ctx.fillText('NEXT', r.x + r.w - 52, r.y + 20);
+    ctx.fillText(next.def.name, r.x + r.w - 52, r.y + 38);
+    drawMon(ctx, next.def.id, r.x + r.w - 27, r.y + 24, 38);
   }
 
   // The capture ritual: the mon sucks into the ball as it drops in, the
@@ -9334,9 +9307,6 @@ export class Battle {
       ctx.arc(threat.x, threat.y, threat.r + 12, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
-      ctx.font = fontB(10);
-      ctx.fillStyle = '#ffb0b0';
-      ctx.fillText('STRIKES AT 0', threat.x, Math.max(threat.y - threat.r - 20, a.y + 12));
     }
     ctx.restore();
   }
@@ -10749,8 +10719,9 @@ export class Battle {
         }
       }
       const intro = this.introAlpha();
-      const traitTag = intro > 0 ? this.foeTag(u, false) : this.phase === 'aim' ? this.foeTag(u, true) : undefined;
-      if (traitTag) this.fieldLabel(ctx, traitTag, u.x, u.y + u.r + 22, FOE_TAG_COLOR[traitTag] ?? '#ff8aa8', intro > 0 ? intro : 1);
+      // no intro tag pass — the scout card + this aim-phase pull tag carry it
+      const traitTag = intro <= 0 && this.phase === 'aim' ? this.foeTag(u, true) : undefined;
+      if (traitTag) this.fieldLabel(ctx, traitTag, u.x, u.y + u.r + 22, FOE_TAG_COLOR[traitTag] ?? '#ff8aa8', 1);
       if (u === this.firstFoeU) this.fieldLabel(ctx, 'ACTS FIRST', u.x, u.y - u.r - 22, '#ff6b6b', intro, true);
       if (u.wpPopT !== undefined && !u.dead && this.time - u.wpPopT < WP_POP_T) this.fieldLabel(ctx, 'WEAK POINT!', u.x, u.y - u.r - 22, '#ffd84d', Math.min(1, (WP_POP_T - (this.time - u.wpPopT)) / 0.3), true);
       // a loaded thief wears its take — the loot floats at its shoulder so
@@ -10776,8 +10747,8 @@ export class Battle {
         ctx.fillStyle = i < filled ? (u.cd <= 0 ? '#ffd84d' : TYPE_COLOR[u.def.type]) : 'rgba(0,0,0,0.45)';
         ctx.fillRect(u.x + (i - (dots - 1) / 2) * 7 - 2.5, u.y + u.r + 12, 5, 5);
       }
-      if (u.cd <= 0) {
-        // ready: the move's name sits overhead — this is the thing to hit
+      if (u === this.active && u.cd <= 0) {
+        // ready: only the active mon names its move — the bench stays quiet
         const label = moveOf(u.def.id, u.def.type);
         const ly = u.y + u.r + 30;
         ctx.font = fontB(10);
@@ -10824,15 +10795,15 @@ export class Battle {
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        // an armed ult marks its own mon — second tap on it fires. While
-        // one is armed the others' tags drop, and during the fire cinema
-        // the banner owns the court — no labels under it.
+        // an armed ult marks its own mon — second tap on it fires. Only
+        // that tag draws: the chip says TAP ULT, the gold ring marks the
+        // rest, and during the fire cinema the banner owns the court.
         const armed = this.ultArmUid === u.uid && this.time - this.ultArmT < 2;
-        if (this.ultFx.t > 0 || (this.ultArmUid !== -1 && !armed)) return;
+        if (this.ultFx.t > 0 || !armed) return;
         const uly = Math.max(u.y - u.r - 52, this.arena.y + 12); // rim-hugging mons keep the tag on-canvas
-        ctx.strokeText(armed ? 'TAP AGAIN' : 'TAP ULT', u.x, uly);
-        ctx.fillStyle = armed ? '#ff9d4d' : '#ffe76a';
-        ctx.fillText(armed ? 'TAP AGAIN' : 'TAP ULT', u.x, uly);
+        ctx.strokeText('TAP AGAIN', u.x, uly);
+        ctx.fillStyle = '#ff9d4d';
+        ctx.fillText('TAP AGAIN', u.x, uly);
       }
     }
   }
