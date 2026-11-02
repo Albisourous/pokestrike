@@ -9,7 +9,7 @@ import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, type Theme } from './bg';
 import { drawTile } from './map';
 import { drawShopScene, drawPullStage, drawCounterStrip, ballFor, ballDrop, DROP_H, DROP_SETTLE } from './home/shop';
-import { TILE_TOWN, TILE_GYM, TILE_GRASS, TILE_ROCK, TILE_BUSH, TILE_LAVA, TILE_BRICK, type TileRect } from './maptiles';
+import { TILE_GYM, TILE_GRASS, TILE_ROCK, TILE_BUSH, TILE_LAVA, TILE_BRICK, type TileRect } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -5106,6 +5106,17 @@ export function taskRowHit(p: Vec, views: TaskView[]): TasksHit | null {
     if (inRect(p.x, p.y, taskClaimRect(taskRowRect(i, views.length)))) return { kind: 'claim', i };
   }
   return null; // dead panel space is still modal
+}
+
+function overlayBandTitle(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, title: string, o: Parameters<typeof uiBand>[3] = {}) {
+  uiBand(ctx, r, '', o);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = PARCH;
+  fitFontB(ctx, title, 18, r.w - 40);
+  ctx.fillText(title, r.x + r.w / 2, r.y + 19);
+  ctx.restore();
 }
 
 export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab: 'daily' | 'weekly', t: number, flash?: string) {
