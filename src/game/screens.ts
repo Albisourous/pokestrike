@@ -4859,7 +4859,7 @@ export function drawSettings(
   // the live category's header — an ink slab row under the title band.
   // (SET_BAND's old y already clears the uiBand; the nudge keeps it so.)
   const P = SET_PANEL;
-  uiRow(ctx, { x: SET_ROW.x, y: SET_BAND.y + 24, w: SET_ROW.w, h: 36 }, cdef.name, {
+  uiRow(ctx, { x: SET_ROW.x, y: SET_BAND.y + 22, w: SET_ROW.w, h: 42 }, cdef.name, {
     on: true,
     sub: cdef.sub,
     px: 11,
@@ -4929,7 +4929,8 @@ export function drawSettings(
     // sliders/segs/subs pin theirs to the top 36px, controls below
     const stripH = row.kind === 'toggle' && !row.sub ? r.h : 36;
     uiWindow(ctx, { x: r.x - 4, y: r.y, w: r.w + 8, h: r.h }, { rad: 8, shadow: false });
-    uiRow(ctx, { x: r.x, y: r.y, w: r.w, h: stripH }, row.label, { sub: row.sub, px: 10 });
+    // the strip sits 6px into the card so the pixel caps clear its top frame
+    uiRow(ctx, { x: r.x, y: stripH === 36 ? r.y + 6 : r.y, w: r.w, h: stripH }, row.label, { sub: row.sub, px: 10 });
     if (row.kind === 'slider') {
       // a throttled write keeps the thumb live from the pending value —
       // vals[] only catches up at the ~4Hz flush
@@ -4937,7 +4938,7 @@ export function drawSettings(
       ctx.font = fontB(10);
       ctx.fillStyle = GOLD;
       ctx.textAlign = 'right';
-      ctx.fillText(`${Math.round(v * 100)}%`, r.x + r.w - 2, r.y + 18);
+      ctx.fillText(`${Math.round(v * 100)}%`, r.x + r.w - 10, r.y + 24);
       const ty = r.y + (row.sub ? 48 : 54);
       roundRect(ctx, SET_TRACK.x, ty, SET_TRACK.w, SET_TRACK.h, 5);
       ctx.fillStyle = '#0a0d18';
