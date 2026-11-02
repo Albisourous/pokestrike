@@ -6568,6 +6568,16 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   tickFame(0.6);
   ok(!fameActive(), 'a held press skips the scene');
 }
+{
+  const gym = { def: { ...ROSTER[0], id: 130 }, nx: 0.5, ny: 0.3, boss: true };
+  const st = { name: 'T', theme: 'grove' as const, waves: [[gym], [gym]] };
+  const b = new Battle(arena, team(), st, mulberry32(7));
+  b.runRanks[1] = 'A';
+  startFame(b);
+  const got = fameScene()!.badges;
+  while (fameActive()) fameDown();
+  ok(got.length === 1 && got[0] === badgeOf(130)!.icon, `hall of fame shows only this run's beaten leaders (${got})`);
+}
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
 process.exit(fails ? 1 : 0);

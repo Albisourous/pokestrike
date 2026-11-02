@@ -5,7 +5,7 @@
 // shows the final frame only.
 import { cry } from '../core/audio';
 import { drawMon, drawNpc, drawShiny, itemSprite, loadItem, loadSprite } from '../core/assets';
-import { BADGES, gymBadges, trainerPick } from './meta';
+import { badgeOf, trainerPick } from './meta';
 import { TYPE_COLOR, type PokeType } from './types';
 import { font, fontB, uiWindow, GOLD_HI } from './ui';
 import type { Battle } from './battle';
@@ -46,7 +46,8 @@ export const fameScene = (): Readonly<Fame> | null => fame;
 
 export function startFame(b: Battle) {
   const team = b.players.map((p) => ({ id: p.def.id, name: p.def.name, lvl: p.lvl, type: p.def.type, shiny: p.shiny }));
-  const badges = BADGES.filter((g) => gymBadges().has(g.boss)).map((g) => g.icon);
+  // this run's leaders: a ranked stop (cleared) whose row fielded a badge boss
+  const badges = b.stage.waves.flatMap((w, i) => (b.runRanks[i] ? w.flatMap((s) => (s.boss && badgeOf(s.def.id)?.icon) || []) : []));
   for (const m of team) void loadSprite(m.id).catch(() => null);
   for (const n of badges) void loadItem(`badges/${n}`).catch(() => null);
   const slot = SLIDES / Math.max(1, team.length);
