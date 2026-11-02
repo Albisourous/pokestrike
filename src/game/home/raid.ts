@@ -32,8 +32,6 @@ const PANEL = { x: 30, y: 108, w: 480, h: 604 };
 const COURT = { x: 42, y: 156, w: 456, h: 200 };
 const courts = new Map<Theme, HTMLCanvasElement>();
 const requested = new Set<string>();
-let scoutKey = '';
-let scouts: ReturnType<typeof raidCounters> = [];
 
 function mon(ctx: CanvasRenderingContext2D, def: SpeciesDef, x: number, y: number, size: number, shiny = false) {
   try {
@@ -90,11 +88,6 @@ export function drawRaidLobby(ctx: CanvasRenderingContext2D, t: number, fight: R
   const now = Date.now();
   const boss = raidPick(now), done = raidDoneToday(now), mod = raidMod(now);
   const owned = dexIds();
-  const key = `${boss.id}:${owned.join(',')}`;
-  if (key !== scoutKey) {
-    scoutKey = key;
-    scouts = raidCounters(boss, owned);
-  }
   const theme = THEMES[daySeed(now) % THEMES.length];
   const weaknesses = raidWeaknesses(boss);
   ctx.save();
@@ -164,18 +157,6 @@ export function drawRaidLobby(ctx: CanvasRenderingContext2D, t: number, fight: R
     ctx.textAlign = 'left';
     ctx.font = fontB(13);
     ctx.fillText(def.name, x + 48, 598, 88);
-  });
-
-  ctx.fillStyle = INK_SOFT;
-  ctx.font = fontB(13);
-  ctx.fillText('BOX COUNTERS · SCOUT ONLY', 48, 642);
-  if (!scouts.length) ctx.fillText('No strong type match in your box yet.', 48, 666);
-  scouts.forEach(({ mon: def, mult }, i) => {
-    const x = 48 + i * 148;
-    mon(ctx, def, x + 16, 662, 32);
-    ctx.fillStyle = INK;
-    ctx.font = fontB(13);
-    ctx.fillText(`${def.name} ×${mult}`, x + 34, 668, 110);
   });
 
   item(ctx, 'star-piece', 48, 676, 28);

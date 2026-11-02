@@ -16,7 +16,7 @@ import { moveOf, roleOf, superDesc } from '../stats';
 import { TYPE_COLOR } from '../types';
 import {
   ACCENT, GOLD, GOLD_HI, INK, INK_FAINT, INK_SOFT, font, fontB, scrim, uiClose,
-  uiPanel, uiWindow,
+  uiPanel, uiRow, uiWindow,
 } from '../ui';
 import { ballGlyph, fillStar, fitFontB, monShadow, pill, rim, roundRect } from '../screens';
 
@@ -496,6 +496,14 @@ export function dexBuyRect(id: number) {
   return { x: W / 2 - 110, y: DEX_DETAIL_R.y + DEX_DETAIL_R.h - 56, w: 220, h: 32 };
 }
 
+// the detail card's fold: bond, traits and the stat block sit behind one
+// STATS row — session state only, keyed to the open card's id
+export const DEX_STATS = { x: DEX_DETAIL_R.x + 24, y: DEX_DETAIL_R.y + 344, w: DEX_DETAIL_R.w - 48, h: 30 };
+let statsFor = -1;
+export function dexStatsFlip(id: number) {
+  statsFor = statsFor === id ? -1 : id;
+}
+
 export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, armed = false) {
   void t;
   const def = speciesById(id);
@@ -549,84 +557,93 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     fitFontB(ctx, hint, 11, r.w - 48);
     ctx.fillText(hint, cx, r.y + 280);
   }
-  void loadItem('friend-ball');
-  const pts = bondOf(id), lv = bondLv(id);
-  const friend = itemSprite('friend-ball');
-  if (friend) {
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(friend, r.x + 24, r.y + 300, 20, 20);
-    ctx.restore();
-  }
-  ctx.textAlign = 'left';
-  ctx.font = fontB(12);
-  ctx.fillStyle = INK_SOFT;
-  const next = BOND_LEVELS[lv];
-  const luck = Math.floor(lv / 2) ? ` · +${Math.floor(lv / 2)} LUCK` : '';
-  ctx.fillText(pts ? `BOND LV${lv} · ${next ? `${pts}/${next}` : 'MAX'} PTS${luck}` : 'FIELD IT TO BOND', r.x + 52, r.y + 316);
-  for (let p = 0; p < BOND_LEVELS.length; p++) {
-    ctx.fillStyle = p < lv ? GOLD : '#d8d8d0';
-    ctx.beginPath();
-    ctx.arc(r.x + r.w - 28 - (BOND_LEVELS.length - 1 - p) * 16, r.y + 312, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
   ctx.textAlign = 'center';
   ctx.font = fontB(12);
   ctx.fillStyle = INK;
-  ctx.fillText(`${roleOf(def)} · ${moveOf(id, def.type).toUpperCase()}`, cx, r.y + 340);
+  ctx.fillText(`${roleOf(def)} · ${moveOf(id, def.type).toUpperCase()}`, cx, r.y + 310);
   const desc = superDesc(id, def.type).toUpperCase();
   ctx.fillStyle = INK_FAINT;
   fitFontB(ctx, desc, 12, r.w - 48);
-  ctx.fillText(desc, cx, r.y + 360);
-  const traits = [
-    def.healer && 'BUMP HEALS THE TEAM', def.pierce && 'PIERCES FOES', def.melee && 'LUNGES AT CONTACT',
-    def.copy && "COPIES BUMPERS' SUPERS", def.cursed && 'GRUDGE · ITS FAINT SLOWS FOES',
-    def.huge && 'HUGE POWER · 2× CONTACT', def.sturdy && 'STURDY · SURVIVES ONE HIT',
-    def.guts && 'GUTS · STATUS FEEDS IT', def.pheal && 'POISON HEALS IT', def.sleepless && 'NEVER SLEEPS',
-    def.pickup && 'PICKUP · FINDS LOOT', def.thickFat && 'THICK FAT · HALF LAVA',
-    def.limber && 'LIMBER · NO PARALYSIS', def.shock && 'STATIC · HITS JOLT BACK',
-    def.toxic && 'POISON POINT · HITS VENOM BACK', def.flame && 'FLAME BODY · HITS SINGE BACK',
-    def.charm && 'CUTE CHARM · HITS LULL BACK', def.spore && 'EFFECT SPORE · HITS SCATTER',
-    def.menace && 'INTIMIDATE · DULLS FOES', def.grace && 'SERENE GRACE · 2× ODDS',
-    def.damp && 'DAMP · FIZZLES BOMBS', def.sync && 'SYNCHRONIZE · ECHOES ILLS',
-    def.swift && 'SWIFT · 1.5× IN ITS SKY', def.taunt && 'FOLLOW ME · DRAWS FIRE',
-    def.tempo && 'OWN TEMPO · CLEAR-HEADED', def.breaker && 'MOLD BREAKER · PIERCES GUARDS',
-    def.shed && 'SHED SKIN · SLAYS OFF ILLS', def.regen && 'REGENERATOR · MENDS EACH TURN',
-    def.friendGuard && 'FRIEND GUARD · SHIELDS TEAM', def.absorb && `${def.absorb.toUpperCase()} HITS HEAL IT`,
-  ].filter(Boolean) as string[];
-  if (traits.length) {
-    ctx.fillStyle = ACCENT;
-    fitFontB(ctx, traits.join(' · '), 11, r.w - 48);
-    ctx.fillText(traits.join(' · '), cx, r.y + 382);
-  }
+  ctx.fillText(desc, cx, r.y + 330);
 
-  const stats: [string, number][] = [
-    ['HP', def.stats.hp], ['ATK', def.stats.atk], ['DEF', def.stats.def],
-    ['SPA', def.stats.spa], ['SPD', def.stats.spd], ['SPE', def.stats.spe],
-  ];
-  stats.forEach(([name, value], i) => {
-    const y = r.y + 403 + i * 23;
+  // the fold: one STATS row owns bond, trait flags and the stat block —
+  // the default card stops at the super, the depth stays a tap away
+  const open = statsFor === id;
+  uiRow(ctx, DEX_STATS, 'STATS · BOND · TRAITS', { on: open, right: open ? '▲' : '▼' });
+
+  if (open) {
+    void loadItem('friend-ball');
+    const pts = bondOf(id), lv = bondLv(id);
+    const friend = itemSprite('friend-ball');
+    if (friend) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(friend, r.x + 24, r.y + 388, 20, 20);
+      ctx.restore();
+    }
     ctx.textAlign = 'left';
     ctx.font = fontB(12);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText(name, r.x + 24, y + 13);
-    ctx.fillStyle = '#e8e8e0';
-    ctx.fillRect(r.x + 72, y + 1, r.w - 144, 12);
-    ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillRect(r.x + 72, y + 1, Math.max(3, (r.w - 144) * Math.min(1, value / 200)), 12);
+    const next = BOND_LEVELS[lv];
+    const luck = Math.floor(lv / 2) ? ` · +${Math.floor(lv / 2)} LUCK` : '';
+    ctx.fillText(pts ? `BOND LV${lv} · ${next ? `${pts}/${next}` : 'MAX'} PTS${luck}` : 'FIELD IT TO BOND', r.x + 52, r.y + 404);
+    for (let p = 0; p < BOND_LEVELS.length; p++) {
+      ctx.fillStyle = p < lv ? GOLD : '#d8d8d0';
+      ctx.beginPath();
+      ctx.arc(r.x + r.w - 28 - (BOND_LEVELS.length - 1 - p) * 16, r.y + 400, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.textAlign = 'center';
+    const traits = [
+      def.healer && 'BUMP HEALS THE TEAM', def.pierce && 'PIERCES FOES', def.melee && 'LUNGES AT CONTACT',
+      def.copy && "COPIES BUMPERS' SUPERS", def.cursed && 'GRUDGE · ITS FAINT SLOWS FOES',
+      def.huge && 'HUGE POWER · 2× CONTACT', def.sturdy && 'STURDY · SURVIVES ONE HIT',
+      def.guts && 'GUTS · STATUS FEEDS IT', def.pheal && 'POISON HEALS IT', def.sleepless && 'NEVER SLEEPS',
+      def.pickup && 'PICKUP · FINDS LOOT', def.thickFat && 'THICK FAT · HALF LAVA',
+      def.limber && 'LIMBER · NO PARALYSIS', def.shock && 'STATIC · HITS JOLT BACK',
+      def.toxic && 'POISON POINT · HITS VENOM BACK', def.flame && 'FLAME BODY · HITS SINGE BACK',
+      def.charm && 'CUTE CHARM · HITS LULL BACK', def.spore && 'EFFECT SPORE · HITS SCATTER',
+      def.menace && 'INTIMIDATE · DULLS FOES', def.grace && 'SERENE GRACE · 2× ODDS',
+      def.damp && 'DAMP · FIZZLES BOMBS', def.sync && 'SYNCHRONIZE · ECHOES ILLS',
+      def.swift && 'SWIFT · 1.5× IN ITS SKY', def.taunt && 'FOLLOW ME · DRAWS FIRE',
+      def.tempo && 'OWN TEMPO · CLEAR-HEADED', def.breaker && 'MOLD BREAKER · PIERCES GUARDS',
+      def.shed && 'SHED SKIN · SLAYS OFF ILLS', def.regen && 'REGENERATOR · MENDS EACH TURN',
+      def.friendGuard && 'FRIEND GUARD · SHIELDS TEAM', def.absorb && `${def.absorb.toUpperCase()} HITS HEAL IT`,
+    ].filter(Boolean) as string[];
+    if (traits.length) {
+      ctx.fillStyle = ACCENT;
+      fitFontB(ctx, traits.join(' · '), 11, r.w - 48);
+      ctx.fillText(traits.join(' · '), cx, r.y + 430);
+    }
+
+    const stats: [string, number][] = [
+      ['HP', def.stats.hp], ['ATK', def.stats.atk], ['DEF', def.stats.def],
+      ['SPA', def.stats.spa], ['SPD', def.stats.spd], ['SPE', def.stats.spe],
+    ];
+    stats.forEach(([name, value], i) => {
+      const y = r.y + 448 + i * 19;
+      ctx.textAlign = 'left';
+      ctx.font = fontB(12);
+      ctx.fillStyle = INK_SOFT;
+      ctx.fillText(name, r.x + 24, y + 13);
+      ctx.fillStyle = '#e8e8e0';
+      ctx.fillRect(r.x + 72, y + 1, r.w - 144, 12);
+      ctx.fillStyle = TYPE_COLOR[def.type];
+      ctx.fillRect(r.x + 72, y + 1, Math.max(3, (r.w - 144) * Math.min(1, value / 200)), 12);
+      ctx.textAlign = 'right';
+      ctx.fillStyle = INK;
+      ctx.fillText(`${value}`, r.x + r.w - 24, y + 13);
+    });
     ctx.textAlign = 'right';
-    ctx.fillStyle = INK;
-    ctx.fillText(`${value}`, r.x + r.w - 24, y + 13);
-  });
-  ctx.textAlign = 'right';
-  ctx.font = fontB(12);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`BASE TOTAL ${stats.reduce((sum, stat) => sum + stat[1], 0)}`, r.x + r.w - 24, r.y + 560);
+    ctx.font = fontB(12);
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText(`BASE TOTAL ${stats.reduce((sum, stat) => sum + stat[1], 0)}`, r.x + r.w - 24, r.y + 568);
+  }
 
   const buy = dexBuyRect(id);
   const line = EVO_LINES.find((l) => l.ids.includes(id));
-  const labelY = r.y + (buy ? 594 : 628);
+  const labelY = r.y + (open ? (buy ? 594 : 628) : (buy ? 470 : 500));
   ctx.textAlign = 'left';
   ctx.font = fontB(12);
   ctx.fillStyle = INK_SOFT;

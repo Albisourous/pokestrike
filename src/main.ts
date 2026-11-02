@@ -76,11 +76,13 @@ import {
   HELP_CLOSE_HIT,
   HELP_PAGE_COUNT,
   DEX_BTN,
+  DEX_STATS,
   drawDex,
   drawDexDetail,
   dexBuyRect,
   dexRowAt,
   dexScrollMax,
+  dexStatsFlip,
   ACH_BTN,
   drawAch,
   achScrollMax,
@@ -1699,6 +1701,10 @@ canvas.addEventListener('pointerup', (e) => {
         if (buyR && inRect(p.x, p.y, buyR) && dexPick != null) {
           const d = speciesById(dexPick);
           if (d) sparkBuy(d);
+        } else if (dexPick != null && inRect(p.x, p.y, DEX_STATS)) {
+          // the fold's STATS row flips the deep panel instead of closing
+          dexStatsFlip(dexPick);
+          sfx('ui');
         } else if (dexPick != null) {
           dexPick = null;
           sfx('ui');

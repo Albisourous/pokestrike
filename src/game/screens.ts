@@ -13,7 +13,7 @@ import { TILE_GYM, TILE_GRASS, TILE_ROCK, TILE_BUSH, TILE_LAVA, TILE_BRICK, type
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, settings, setSetting, bagStock, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
+import { dexIds, settings, setSetting, bagStock, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, coachDone, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
 import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost, raidPick } from './tasks';
 import { drawRaidLobby } from './home/raid';
 import type { TaskView } from './tasks';
@@ -26,7 +26,7 @@ import {
 } from './ui';
 import { drawMonsBody } from './home/mons';
 export { DEX_BTN, SETS_BTN, PARTNERS_BTN, TEAM_BTN, EDIT_TEAM_BTN, partnersStripAt, teamStageAt } from './home/mons';
-export { DEX_DETAIL_R, dexBuyRect, dexRowAt, dexScrollMax, drawDex, drawDexDetail } from './home/mons';
+export { DEX_DETAIL_R, DEX_STATS, dexBuyRect, dexRowAt, dexScrollMax, dexStatsFlip, drawDex, drawDexDetail } from './home/mons';
 import { drawTownBody } from './home/town';
 export { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_DOORS, TOWN_FOLK, TOWN_LOTS, TOWN_PLATES, townStrollAt } from './home/town';
 export type { TownStroll } from './home/town';
@@ -1210,11 +1210,6 @@ function drawShopBody(
     ctx.arc(px0 + i * pipW + 5, hb.y + 63, 5, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.font = fontB(12);
-  ctx.fillStyle = INK_SOFT;
-  ctx.textAlign = 'right';
-  ctx.fillText(`RARE+ IN ${PULL_PITY - done}`, hb.x + hb.w - 20, hb.y + 69);
-
   // the ×10 and the spark exchange live inside the hatcher — this opens it
   const mb = SHOP_MORE_BTN;
   uiWindow(ctx, mb, { rad: 14 });
@@ -1348,16 +1343,6 @@ function drawShopBody(
     fitFontB(ctx, `${fn} T${itemTier(packFlashId)}!`, 10, rackW);
     ctx.fillText(`${fn} T${itemTier(packFlashId)}!`, uc.x + rackW / 2, ur.y + ur.h - 9);
   }
-
-  // the honest cut, visible before the hatcher opens — one line
-  const orr = { x: 30, y: UPGRADES_BTN.y + UPGRADES_BTN.h + 10, w: W - 60, h: 46 };
-  uiWindow(ctx, orr, { rad: 10, rim: false });
-  const odds = ([['COMMON', PULL_RATES.common], ['RARE', PULL_RATES.rare], ['EPIC', PULL_RATES.epic], ['SHINY', shinyOdds()]] as const)
-    .map(([k, v]) => `${k} ${Math.round(v * 100)}%`).join(' · ');
-  ctx.textAlign = 'center';
-  fitFontB(ctx, odds, 12, orr.w - 28);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText(odds, orr.x + orr.w / 2, orr.y + 29);
 }
 
 // --- MONS: the collection — dex, evolution sets, latest catches ------------
@@ -3202,59 +3187,67 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
   ctx.fillStyle = INK;
   ctx.fillText(def.name, r.x + r.w / 2, r.y + 138);
 
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 156);
+  // a coached run deals the thin face — sprite, name, chips and the super;
+  // once the coach banks, the card shows its whole scouting hand again
+  const full = coachDone();
+  if (full) {
+    ctx.font = fontB(10);
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 156);
 
-  ctx.font = fontB(10);
-  ctx.fillStyle = TYPE_COLOR[def.type];
-  ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 174);
+    ctx.font = fontB(10);
+    ctx.fillStyle = TYPE_COLOR[def.type];
+    ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 174);
 
-  // evolution hint + trait tag sit with the stats — Magikarp is secretly
-  // Gyarados; PIERCE/COPY hold the right edge of the same line
-  const tagW = def.pierce || def.copy
-    ? (() => { ctx.font = fontB(10); return ctx.measureText(def.pierce ? 'PIERCE' : 'COPY').width + 8; })()
-    : 0;
-  if (def.evolvesTo != null) {
-    const nx = Array.isArray(def.evolvesTo)
-      ? `${def.evolvesTo.length} FORMS`
-      : speciesById(def.evolvesTo)?.name.toUpperCase();
-    if (nx) {
-      ctx.textAlign = 'left';
+    // evolution hint + trait tag sit with the stats — Magikarp is secretly
+    // Gyarados; PIERCE/COPY hold the right edge of the same line
+    const tagW = def.pierce || def.copy
+      ? (() => { ctx.font = fontB(10); return ctx.measureText(def.pierce ? 'PIERCE' : 'COPY').width + 8; })()
+      : 0;
+    if (def.evolvesTo != null) {
+      const nx = Array.isArray(def.evolvesTo)
+        ? `${def.evolvesTo.length} FORMS`
+        : speciesById(def.evolvesTo)?.name.toUpperCase();
+      if (nx) {
+        ctx.textAlign = 'left';
+        ctx.font = fontB(10);
+        ctx.fillStyle = ACCENT;
+        fitFontB(ctx, `→ ${nx}`, 10, r.w - 22 - tagW);
+        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 192);
+      }
+    }
+    if (def.pierce || def.copy) {
+      ctx.textAlign = 'right';
+      ctx.font = fontB(10);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 193);
+      ctx.fillStyle = GOLD;
+      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 192);
+    }
+
+    // the ability row — the flags that change how the pick actually plays
+    // sit above the fold: a draft is a bet, so the card shows its hand
+    const flags = [abilityLabel(def), abilityOf(def)?.hint].filter(Boolean).join(' · ');
+    if (flags) {
+      ctx.textAlign = 'center';
       ctx.font = fontB(10);
       ctx.fillStyle = ACCENT;
-      fitFontB(ctx, `→ ${nx}`, 10, r.w - 22 - tagW);
-      ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 192);
+      fitFontB(ctx, flags, 12, r.w - 16);
+      ctx.fillText(flags, r.x + r.w / 2, r.y + 116);
     }
   }
-  if (def.pierce || def.copy) {
-    ctx.textAlign = 'right';
-    ctx.font = fontB(10);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 193);
-    ctx.fillStyle = GOLD;
-    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 192);
-  }
 
-  // the bump super this mon fires — a draft decision you can taste
+  // the bump super this mon fires — a draft decision you can taste; the thin
+  // face pulls it up under the name and keeps the desc to one line
+  const sy = full ? 212 : 188;
   ctx.textAlign = 'center';
   ctx.font = fontB(11);
   ctx.fillStyle = GOLD;
-  ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 212);
+  ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + sy);
   ctx.font = fontB(10);
   ctx.fillStyle = INK_SOFT;
-  fitWrap(ctx, superDesc(def.id, def.type), r.w - 20, 10, 3).forEach((line, li) =>
-    ctx.fillText(line, r.x + r.w / 2, r.y + 226 + li * 12));
-
-  // the ability row — the flags that change how the pick actually plays
-  // sit above the fold: a draft is a bet, so the card shows its hand
-  const flags = [abilityLabel(def), abilityOf(def)?.hint].filter(Boolean).join(' · ');
-  if (flags) {
-    ctx.font = fontB(10);
-    ctx.fillStyle = ACCENT;
-    fitFontB(ctx, flags, 12, r.w - 16);
-    ctx.fillText(flags, r.x + r.w / 2, r.y + 116);
-  }
+  fitWrap(ctx, superDesc(def.id, def.type), r.w - 20, 10, full ? 3 : 1).forEach((line, li) =>
+    ctx.fillText(line, r.x + r.w / 2, r.y + sy + 14 + li * 12));
 
 }
 
@@ -3640,16 +3633,6 @@ export function drawReward(
     ctx.fillStyle = INK_FAINT;
     ctx.fillText('pick a relic · your box waits on the map', W / 2, 354);
   }
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(
-    next.gym
-      ? `stage ${next.stage} of ${TOTAL_STAGES}: a gym leader waits`
-      : `stage ${next.stage} of ${TOTAL_STAGES}: the waves get meaner`,
-    W / 2,
-    314,
-  );
-
   const four = offers.length >= 4; // the lab's FOURTH OPTION board goes 2×2
   offers.forEach((perk, i) =>
     drawPerkCard(ctx, perkCardRect(i, offers.length), perk, { age: spin, i }, { owned: !!perk.id && !!perkIds?.includes(perk.id) }),
@@ -4337,6 +4320,17 @@ export function drawResult(
   }
   if (res.newDex > 0) findings.push(['NEW DEX', `+${res.newDex}`, ACCENT]);
 
+  // six rows carry the ledger: the run's vitals, then its payouts — the
+  // bookkeeping rest folds into a +N tail line
+  const pinned = (l: string) => l === 'SCORE' || l === 'DEPTH' || l === 'CAUGHT';
+  const shown = [
+    ...findings.filter(([l]) => pinned(l)),
+    ...findings.filter(([l, , c]) => !pinned(l) && c !== INK),
+    ...findings.filter(([l, , c]) => !pinned(l) && c === INK),
+  ].slice(0, 6);
+  const moreN = findings.length - shown.length;
+  const findingsRows = shown.length + (moreN > 0 ? 1 : 0);
+
   ctx.font = fontB(10);
   const noteLines = extra ? wrap2(ctx, extra, W - 92) : []; // interior width of the report card
 
@@ -4352,7 +4346,7 @@ export function drawResult(
   const stackCap = RETRY_BTN.y - 8 - 46;
   const size = (rowH: number, badgeCap: number, noteCap: number) =>
     findingsY +
-    findings.length * rowH +
+    findingsRows * rowH +
     recH +
     (extra ? 18 + Math.min(noteLines.length, noteCap) * 18 + 6 : 0) +
     (res.newAch.length ? 20 : 0) +
@@ -4449,7 +4443,7 @@ export function drawResult(
   ctx.rect(panel.x, panel.y + 44, panel.w, panel.h - 44);
   ctx.clip();
 
-  findings.forEach(([label, value, color], i) => {
+  shown.forEach(([label, value, color], i) => {
     const fy = panel.y + findingsY + i * rowH;
     // the ledger files row by row — each finding ticks in 70ms apart
     const rowA = clamp01((age - 0.2 - i * 0.07) / 0.18);
@@ -4470,7 +4464,20 @@ export function drawResult(
     ctx.fillRect(ix, fy + 9, panel.w - 32, 1);
     ctx.globalAlpha = 1;
   });
-  let yy = panel.y + findingsY + findings.length * rowH;
+  if (moreN > 0) {
+    const fy = panel.y + findingsY + shown.length * rowH;
+    const rowA = clamp01((age - 0.2 - shown.length * 0.07) / 0.18);
+    if (rowA > 0) {
+      ctx.globalAlpha = rowA;
+      ctx.textAlign = 'center';
+      ctx.font = fontB(10);
+      ctx.fillStyle = INK_FAINT;
+      ctx.fillText(`+ ${moreN} MORE`, panel.x + panel.w / 2, fy);
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = 1;
+    }
+  }
+  let yy = panel.y + findingsY + findingsRows * rowH;
 
   // so-close framing — the near-record loss is the strongest rematch pull
   if (res.newBest) {

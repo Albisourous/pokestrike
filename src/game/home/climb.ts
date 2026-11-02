@@ -175,14 +175,17 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
 
   plate(ctx, S.x + 12, S.y + 12, `STAGE ${cont ? Math.max(1, cont.stage) : 1} · ${stg.name.toUpperCase()}`);
   plate(ctx, S.x + S.w - 12, S.y + 12, `${stg.waves.flat().length} FOES`, true);
-  // records plate: the one-more-run hook (rank, best, ball tier, streak, boost)
+  // records plate: the one-more-run hook (rank, best, ball tier, streak,
+  // boost) — a fresh save has no records to hook, so the plate stays home
   const b = best();
-  const ld = tier();
-  const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
-  bits.push(ld.next ? `${ld.name} ${Math.round(ld.prog * 100)}%` : `${ld.name} MAX`);
-  const wStreak = streakWins();
-  if (wStreak > 1) bits.push(`STREAK ${wStreak}`);
-  plate(ctx, S.x + 12, S.y + 44, bits.join(' · '), false, '#d8def8');
+  if (b.runs > 0) {
+    const ld = tier();
+    const bits = [`RANK ${rankName()}`, `BEST ${b.score.toLocaleString('en-US')}`];
+    bits.push(ld.next ? `${ld.name} ${Math.round(ld.prog * 100)}%` : `${ld.name} MAX`);
+    const wStreak = streakWins();
+    if (wStreak > 1) bits.push(`STREAK ${wStreak}`);
+    plate(ctx, S.x + 12, S.y + 44, bits.join(' · '), false, '#d8def8');
+  }
   const boostMs = boostLeft();
   if (boostMs > 0)
     plate(ctx, S.x + S.w - 12, S.y + 44, `★ BOOST ×${starBoost()} ${Math.floor(boostMs / 3600000)}h${String(Math.floor((boostMs % 3600000) / 60000)).padStart(2, '0')}m`, true, GOLD_HI);
