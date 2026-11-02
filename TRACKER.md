@@ -328,3 +328,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `f0b0cff` | rooms | +4: lagoon (moat-sea), quarry plugs (boulder puzzle), jetstream (horizontal gust), thicket→hard tail (Cut lattice); ROOM_HARD 10→11 | `git revert f0b0cff` |
 | 2026-11-02 | `6544927` | content | breeder event (pick-1-of-3 catch); dojo visitor (+2 Lv fighting, comp-gated); BANK SHOT task kind; Town Map bag item | `git revert 6544927` |
 | 2026-11-02 | `961c0bd` | leftovers2 | live combo ping; Lum Berry perk (15s ailment wash, shed's cleanse); map trait chips gated; draft ‹ TITLE back-out | `git revert 961c0bd` |
+| 2026-11-02 | `15578b0` | content | EGG HUNT/NEW FORM task kinds; old-couple blessing doubles next chest (SAVE_VER 7) | `git revert 15578b0` |

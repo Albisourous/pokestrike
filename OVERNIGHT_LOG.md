@@ -725,3 +725,7 @@ backlog; builders run one iteration each, I verify + commit + push.
 - 961c0bd pushed: leftovers 2 — combo pings live on new highs, Lum Berry
   perk washes the shed five every 15s (confusion self-consumes, stays),
   map trait chips gated like the legend, draft gains a ‹ TITLE back-out.
+
+- 15578b0 pushed: content — EGG HUNT (pulls count at doPull) + NEW FORM
+  (evos count at startEvo) task kinds; the old couple's blessing doubles
+  the next chest (pk_run v7, optional field).
