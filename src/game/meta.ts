@@ -1007,35 +1007,9 @@ export const setTrainer = (id: string): void => {
   store('pk_trainer', { pick: id });
 };
 
-// pk_avatars — the wardrobe: which AVATARS ids this save owns. The first two
-// hang in every closet; the rest roll in one per wardrobe pull. An old
-// save's stored pick counts owned — confiscating a look isn't a rule, it's a
-// downgrade. Same unversioned-blob shape-check as pk_lab.
-let memAvatars: string[] = [];
-const avatarStock = (): string[] => {
-  const raw = load<Partial<{ own: string[] }>>('pk_avatars');
-  return raw && typeof raw === 'object' && Array.isArray(raw.own)
-    ? raw.own.filter((x) => typeof x === 'string' && AVATARS.some((a) => a.id === x))
-    : memAvatars;
-};
-export const avatarOwned = (id: string): boolean =>
-  id === 'may' || id === 'wally' || avatarStock().includes(id) || trainerPick() === id;
-export const avatarUnlock = (id: string): void => {
-  if (!AVATARS.some((a) => a.id === id) || avatarStock().includes(id)) return;
-  const own = [...avatarStock(), id];
-  memAvatars = own;
-  store('pk_avatars', { own });
-};
-export const AVATAR_ROLL_COST = 20;
-// the wardrobe pull — Math.random like every title-side spend (never runRng),
-// so a roll can't shift a resumed climb's stream
-export const avatarRoll = (): string | null => {
-  const locked = AVATARS.filter((a) => !avatarOwned(a.id));
-  if (!locked.length || !spendStars(AVATAR_ROLL_COST)) return null;
-  const pick = locked[Math.floor(Math.random() * locked.length)];
-  avatarUnlock(pick.id);
-  return pick.id;
-};
+// every look hangs in the closet from boot — MAY and WALLY are the whole
+// wardrobe, no unlocks
+export const avatarOwned = (id: string): boolean => AVATARS.some((a) => a.id === id);
 
 // pk_itemtiers — held-item tiers bought in the shop's upgrade pack: cheap
 // dust, small bumps (cap 5), meant to stay gentler than the lab's star

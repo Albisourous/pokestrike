@@ -292,7 +292,7 @@ export function drawClimb(
   logoBig: (ctx: CanvasRenderingContext2D, text: string, cx: number, baseY: number, size: number, maxW: number) => void,
 ) {
   const logo = itemSprite('ui/pokemon-logo');
-  if (logo) ctx.drawImage(logo, W / 2 - 150, 50, 300, 110);
+  if (logo) ctx.drawImage(logo, W / 2 - 136, 66, 272, 100);
   logoBig(ctx, 'STRIKE', W / 2, 206, 46, 300);
 
   drawScene(ctx, t, cont);

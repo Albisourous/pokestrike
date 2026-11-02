@@ -6,7 +6,7 @@
 import { drawMon, itemSprite, loadItem } from '../../core/assets';
 import { TOTAL_STAGES } from '../data';
 import {
-  ACHIEVEMENTS, BADGES, LAB_UPGRADES, LADDER, best, board, dexIds, gymBadges, labLevels, streakDaily, streakWins, tier, unlockedAch,
+  ACHIEVEMENTS, BADGES, BOARD_MAX, LAB_UPGRADES, LADDER, best, board, dexIds, gymBadges, labLevels, streakDaily, streakWins, tier, unlockedAch,
 } from '../meta';
 import { CATCHABLE, balanceChip, chip, fitFont, fitFontB, monShadow, pill, rim, roundRect } from '../screens';
 import { GOLD, GOLD_HI, INK, INK_FAINT, INK_SOFT, PAPER_HI, PARCH, fontB, scrim, uiBand, uiClose, uiWindow, type Rect } from '../ui';
@@ -221,6 +221,21 @@ export function drawBoard(ctx: CanvasRenderingContext2D) {
       }
     });
   });
+
+  // a short board still seats BOARD_MAX — the unposted slots stay on the
+  // ledger as ghost plaques so the paper below never reads as a dead window
+  for (let i = list.length; i < BOARD_MAX; i++) {
+    const r = { x: P.x + 14, y: HOF_TOP + i * HOF_PITCH, w: P.w - 28, h: HOF_PITCH - 8 };
+    if (r.y + r.h > VIEW_BOT) break;
+    uiWindow(ctx, r, { rad: 8, tint: '#eeede4', shadow: false });
+    icon(ctx, HOF_BALL[i] ?? 'poke-ball', r.x + 30, r.y + 28, 30, 0.22);
+    ctx.textAlign = 'center';
+    ctx.font = fontB(10);
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText(`#${i + 1}`, r.x + 30, r.y + r.h - 10);
+    ctx.textAlign = 'left';
+    ctx.fillText(i === list.length ? 'NEXT CLIMB POSTS HERE' : 'OPEN', r.x + 60, r.y + r.h / 2 + 4);
+  }
   closeChip(ctx);
 }
 
@@ -308,7 +323,7 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.rect(v.x, v.y, v.w, v.h);
   ctx.clip();
   ACHIEVEMENTS.forEach((a, i) => {
-    const r = { x: v.x + 4, y: v.y + 4 + i * ACH_PITCH - scroll, w: v.w - 18, h: ACH_PITCH - 8 };
+    const r = { x: v.x + 4, y: v.y + 4 + i * ACH_PITCH - scroll, w: v.w - 26, h: ACH_PITCH - 8 };
     if (r.y + r.h < v.y || r.y > v.y + v.h) return;
     const has = got.has(a.id);
     uiWindow(ctx, r, { rad: 8, tint: has ? undefined : '#eeede4' });
@@ -343,15 +358,16 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
     if (prog) groove(ctx, { x: tx, y: r.y + r.h - 16, w: right - tx, h: 8 }, prog[0] / prog[1]);
   });
   ctx.restore();
-  rail(ctx, v.x + v.w - 8, v.y, v.h, scroll, ACHIEVEMENTS.length * ACH_PITCH + 4);
+  rail(ctx, P.x + P.w - 11, v.y, v.h, scroll, ACHIEVEMENTS.length * ACH_PITCH + 4);
   closeChip(ctx);
 }
 
 // --- the lab: the deterministic sink, every star buys a sure thing ----------
 const LAB_COLS = 2;
-const LAB_CARD_W = 219;
+const LAB_CARD_W = 212;
 const LAB_CARD_H = 144;
 const LAB_GAP = 10;
+const LAB_GRID_W = LAB_COLS * LAB_CARD_W + (LAB_COLS - 1) * LAB_GAP;
 const LAB_VIEW = { x: P.x + 16, y: P.y + 86, w: P.w - 32, h: 0 };
 LAB_VIEW.h = VIEW_BOT - LAB_VIEW.y;
 // section split by id: the rest of LAB_UPGRADES lands in RUN TEAM
@@ -470,7 +486,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   ctx.clip();
   for (const hd of heads) {
     const hy = v.y + hd.y - scroll;
-    uiBand(ctx, { x: v.x, y: hy, w: v.w, h: 20 }, hd.text, { h: 20, rad: 5 });
+    uiBand(ctx, { x: v.x, y: hy, w: LAB_GRID_W, h: 20 }, hd.text, { h: 20, rad: 5 });
   }
   for (const c of cards) {
     const cr = { ...c.r, y: c.r.y + v.y - scroll };
@@ -478,7 +494,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
     drawLabCard(ctx, cr, c.u, c.train, stars, lvls[c.u.id] ?? 0);
   }
   ctx.restore();
-  rail(ctx, P.x + P.w - 12, v.y, v.h, scroll, h);
+  rail(ctx, P.x + P.w - 11, v.y, v.h, scroll, h);
   closeChip(ctx);
 }
 

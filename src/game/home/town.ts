@@ -375,9 +375,9 @@ function drawPlate(ctx: CanvasRenderingContext2D, r: Rect, name: string, sub: st
   ctx.fillText(sub, r.x + r.w / 2, r.y + 34);
 
   if (ready > 0) {
-    const x = r.x + r.w - 11, y = r.y + 10;
+    const x = r.x + r.w - 5, y = r.y + 5;
     ctx.beginPath();
-    ctx.arc(x, y, 8, 0, Math.PI * 2);
+    ctx.arc(x, y, 9, 0, Math.PI * 2);
     ctx.fillStyle = '#e03c34';
     ctx.fill();
     ctx.strokeStyle = INK;
@@ -422,8 +422,8 @@ export function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: nu
   const runs = board().length;
   drawPlate(ctx, LAB_PLATE, 'THE LAB', `${trained}/${LAB_UPGRADES.length} TRAINED`);
   drawPlate(ctx, HALL_PLATE, 'HALL OF FAME', record.score
-    ? `BEST ${record.score.toLocaleString('en-US')} · ${runs} RUNS`
-    : `${runs} RUNS LOGGED`);
+    ? `BEST ${record.score.toLocaleString('en-US')}`
+    : `${runs} ${runs === 1 ? 'RUN' : 'RUNS'} LOGGED`);
   drawPlate(ctx, BOARD_PLATE, 'JOB BOARD', taskN > 0 ? `${taskN} READY` : `RESETS ${taskResetsIn('daily')}`, taskN);
   drawPlate(ctx, TOWER_PLATE, 'TROPHIES', `★ ${unlockedAch().size}/${ACHIEVEMENTS.length}`);
 }

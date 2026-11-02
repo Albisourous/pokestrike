@@ -154,9 +154,9 @@ export function loadNpcs(): Promise<void> {
 // Draw an NPC sprite feet-anchored at x,y scaled to `h` px tall. The atlas
 // is already transparent — no keying pass needed. `flip` mirrors for the
 // families that only ship one horizontal direction (norman lacks right_*).
-export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number, y: number, h: number, flip = false) {
+export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number, y: number, h: number, flip = false): boolean {
   const f = npcFrames[frame];
-  if (!npcsImg || !f) return;
+  if (!npcsImg || !f) return false;
   ctx.imageSmoothingEnabled = false;
   if (!f.rot) {
     const w = (h / f.h) * f.w;
@@ -166,10 +166,10 @@ export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number,
       ctx.scale(-1, 1);
       ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, 0, 0, w, h);
       ctx.restore();
-      return;
+      return true;
     }
     ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, x - w / 2, y - h, w, h); // feet stand on y
-    return;
+    return true;
   }
   // packed 90° CW: upright dims are the packed w/h swapped — pivot at the
   // feet's left corner, turn the canvas so the sprite lands upright
@@ -180,4 +180,5 @@ export function drawNpc(ctx: CanvasRenderingContext2D, frame: string, x: number,
   if (flip) ctx.scale(1, -1);
   ctx.drawImage(npcsImg, f.x, f.y, f.w, f.h, 0, 0, h, uw);
   ctx.restore();
+  return true;
 }
