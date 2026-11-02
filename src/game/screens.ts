@@ -7,7 +7,7 @@ import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, type Theme } from './bg';
 import { drawTile } from './map';
-import { drawShopScene } from './home/shop';
+import { drawShopScene, drawPullStage, drawCounterStrip, ballFor, ballDrop, DROP_H, DROP_SETTLE } from './home/shop';
 import { TILE_TOWN } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
@@ -2228,14 +2228,15 @@ export const HATCH_PANEL = DEX_PANEL;
 const FEAT_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 76, w: HATCH_PANEL.w - 32, h: 110 };
 export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 198, w: 218, h: 64 };
 export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 198, w: 218, h: 64 };
-const PITY_BAR = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 288, w: HATCH_PANEL.w - 32, h: 18 };
-const RATE_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 314, w: HATCH_PANEL.w - 32, h: 54 };
+const PITY_WIN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 272, w: HATCH_PANEL.w - 32, h: 44 };
+const RATE_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 320, w: HATCH_PANEL.w - 32, h: 48 };
 const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 406, w: HATCH_PANEL.w - 32, h: 394 };
 const SPARK_COLS = 4;
 const SPARK_CELL_W = SPARK_VIEW.w / SPARK_COLS;
 const SPARK_CELL_H = 118;
-const HATCH_MODAL = { x: 80, y: 244, w: W - 160, h: 400 };
-export const SKIP_PULL_BTN = { x: HATCH_MODAL.x + HATCH_MODAL.w - 92, y: HATCH_MODAL.y + 12, w: 80, h: 30 };
+const HATCH_MODAL = { x: 24, y: 170, w: W - 48, h: 500 };
+// SKIP rides the top cinema bar, clear of the flash-beat kick
+export const SKIP_PULL_BTN = { x: W - 128, y: 26, w: 108, h: 38 };
 
 // the wallet pill — star pieces buy pulls, dust buys sparks outright
 // the wallet counts chase the real numbers — a tick-up reads as paid, a
@@ -2397,37 +2398,24 @@ export function drawHatch(
   const fc = f ? TYPE_COLOR[f.type] : '#8a5cff';
   // a content card inside the window: the type tint keeps its gradient face,
   // the frame is the double-frame canon and a hairline of the tint rings it
-  uiWindow(ctx, FEAT_BAND, { rad: 10 });
-  ctx.save();
-  roundRect(ctx, FEAT_BAND.x + 7, FEAT_BAND.y + 7, FEAT_BAND.w - 14, FEAT_BAND.h - 14, 5);
-  ctx.clip();
-  const fg = gradFor(ctx, `feat:${fc}`, (cc) => {
-    const lg = cc.createLinearGradient(0, FEAT_BAND.y, 0, FEAT_BAND.y + FEAT_BAND.h);
-    lg.addColorStop(0, mixHex(fc, PAPER, 0.22));
-    lg.addColorStop(1, mixHex(fc, PAPER, 0.8));
-    return lg;
-  });
-  ctx.fillStyle = fg;
-  ctx.fillRect(FEAT_BAND.x + 7, FEAT_BAND.y + 7, FEAT_BAND.w - 14, FEAT_BAND.h - 14);
-  stripes(ctx, { x: FEAT_BAND.x + 7, y: FEAT_BAND.y + 7, w: FEAT_BAND.w - 14, h: FEAT_BAND.h - 14 });
-  ctx.restore();
+  drawCounterStrip(ctx, FEAT_BAND);
   rim(ctx, FEAT_BAND, 10, fc, 1.5);
   if (f) {
     void loadSprite(f.id);
     // the stage — a type-tinted pedestal under a faint ball watermark
     const scx = FEAT_BAND.x + 68, scy = FEAT_BAND.y + FEAT_BAND.h / 2 + 2;
-    ballGlyph(ctx, scx, scy - 4, 4.2, 'rgba(255,255,255,0.09)');
-    ctx.fillStyle = `${fc}50`;
+    ctx.fillStyle = `${fc}55`;
     ctx.beginPath();
-    ctx.ellipse(scx, scy + 42, 62, 15, 0, 0, Math.PI * 2);
+    ctx.ellipse(scx, scy + 42, 58, 13, 0, 0, Math.PI * 2);
     ctx.fill();
-    monShadow(ctx, scx, scy + 4, 96);
+    monShadow(ctx, scx, scy + 2, 96);
     try {
       drawMon(ctx, f.id, scx, scy + Math.sin(s.t * 2.4) * 2.5, 96);
     } catch {
       /* sprite still warming */
     }
     const tx = FEAT_BAND.x + 140;
+    uiWindow(ctx, { x: tx - 12, y: FEAT_BAND.y + 18, w: FEAT_BAND.x + FEAT_BAND.w - 92 - (tx - 12), h: 78 }, { dark: true, rad: 8, rim: false, shadow: false });
     ctx.textAlign = 'left';
     fitFont(ctx, f.name.toUpperCase(), 14, FEAT_BAND.x + FEAT_BAND.w - tx - 96);
     ctx.fillStyle = '#f8f4e4';
@@ -2435,7 +2423,7 @@ export function drawHatch(
     ctx.font = fontB(10);
     ctx.fillStyle = mixHex(fc, '#ffffff', 0.45);
     ctx.fillText(f.type2 ? `${f.type} · ${f.type2}`.toUpperCase() : f.type.toUpperCase(), tx, FEAT_BAND.y + 64);
-    ctx.fillStyle = INK_SOFT;
+    ctx.fillStyle = PARCH;
     ctx.fillText('10× ODDS IN THE RARE+ POOL', tx, FEAT_BAND.y + 84);
     // the badge — FEATURED flags the corner, 10× is the band's one number
     chip(ctx, FEAT_BAND.x + FEAT_BAND.w - 61, FEAT_BAND.y + 10, 'FEATURED', { bg: INK, fg: PARCH });
@@ -2504,35 +2492,36 @@ export function drawHatch(
   // reads as banked progress; the last pip keeps a gold outline — the prize
   // slot — and pityIn counting to 1 means the NEXT pull is the guarantee
   const done = PULL_PITY - info.pityIn;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = info.pityIn <= 1 ? GOLD : INK_SOFT;
-  fitFont(
-    ctx,
-    info.pityIn <= 1 ? 'NEXT PULL IS A GUARANTEED RARE+' : `${info.pityIn} MORE PULLS TO A GUARANTEED RARE+`,
-    9,
-    PITY_BAR.w - 8,
-  );
-  ctx.fillText(
-    info.pityIn <= 1 ? 'NEXT PULL IS A GUARANTEED RARE+' : `${info.pityIn} MORE PULLS TO A GUARANTEED RARE+`,
-    W / 2,
-    PITY_BAR.y - 6, // glyph tops stay clear of the pull pills' ink lip
-  );
-  const pgap = 4;
-  const pseg = (PITY_BAR.w - pgap * (PULL_PITY - 1)) / PULL_PITY;
+  const next = info.pityIn <= 1;
+  uiWindow(ctx, PITY_WIN, { dark: true, rad: 10, shadow: false, rim: false });
+  if (next) rim(ctx, PITY_WIN, 10, GOLD_HI, 2);
+  const pw = PITY_WIN, ps = 22, pg = 2;
+  const px0 = pw.x + pw.w - 12 - PULL_PITY * ps - (PULL_PITY - 1) * pg;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = next ? GOLD_HI : PARCH;
+  const pl = next ? 'NEXT PULL · RARE+' : `RARE+ IN ${info.pityIn}`;
+  fitFont(ctx, pl, 10, px0 - pw.x - 24);
+  ctx.fillText(pl, pw.x + 14, pw.y + 22);
+  ctx.font = fontB(10);
+  ctx.fillStyle = '#a8b0d0';
+  ctx.fillText(`${done} / ${PULL_PITY} BANKED`, pw.x + 14, pw.y + 38);
+  // one Poké Ball per banked pull; the guarantee slot is an Ultra Ball
+  void loadItem('ultra-ball');
+  const pb = itemSprite('poke-ball'), ub = itemSprite('ultra-ball');
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
   for (let i = 0; i < PULL_PITY; i++) {
-    const sx = PITY_BAR.x + i * (pseg + pgap);
-    roundRect(ctx, sx, PITY_BAR.y, pseg, PITY_BAR.h, 4);
-    if (i < done) {
-      ctx.fillStyle = GOLD;
-      ctx.fill();
-    } else {
-      ctx.fillStyle = '#e8e8e0';
-      ctx.fill();
-      ctx.strokeStyle = i === PULL_PITY - 1 ? GOLD : '#d0d0c8';
-      ctx.lineWidth = i === PULL_PITY - 1 ? 1.5 : 1;
-      ctx.stroke();
+    const bx = px0 + i * (ps + pg), by = pw.y + (pw.h - ps) / 2;
+    const last = i === PULL_PITY - 1;
+    const img = last ? ub : pb;
+    ctx.globalAlpha = i < done ? 1 : last ? (next ? 0.7 + 0.3 * Math.sin(s.t * 6) : 0.6) : 0.35;
+    if (img) ctx.drawImage(img, bx - 2, by - 2, ps + 4, ps + 4);
+    else {
+      ctx.fillStyle = i < done ? GOLD : '#3a4160';
+      ctx.fillRect(bx + 4, by + 4, ps - 8, ps - 8);
     }
   }
+  ctx.restore();
 
   // the odds, tiered — one glanceable rate card: tier name, the number big,
   // and a bar drawn to scale. Buckets read PULL_RATES straight so the print
@@ -2730,6 +2719,15 @@ const LB_H = 88; // letterbox bar height once fully closed
 const LB_SLAM = 0.4; // seconds for the bars to slam shut
 const FLASH_T = 0.34; // the silhouette→color beat inside the reveal
 const PRISM = ['#ff6b6b', GOLD, '#7dff8a', '#6bb6ff', '#c05df0'];
+const FLOOR_Y = SHOW_CY + 56; // the counter floor the ball bounces on and the mon lands on
+const BALL_S = 96;
+// the glow each ball casts — the ball is the star tier, the glow says it again
+const BALL_GLOW: Record<string, string> = {
+  'poke-ball': '#c0c8e0',
+  'great-ball': '#5a9bf0',
+  'ultra-ball': GOLD,
+  'master-ball': '#c05df0',
+};
 const RAY_N = [0, 10, 16]; // god-ray wedges by hype
 const BURST_N = [26, 46, 74]; // spark count on the flash beat by hype
 const KICK = [0, 5, 10]; // screen-kick px on the flash beat by hype
@@ -2742,10 +2740,9 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
     drawPullSummary(ctx, s);
     return;
   }
-  // the theatre runs the whole letterboxed screen — the modal stays parked
-  ctx.fillStyle = 'rgba(4,6,14,0.92)';
-  ctx.fillRect(0, 0, W, H);
+  // the theatre runs on the prize counter's back room, lights down
   const res = s.results[s.i];
+  pullStage(ctx, res ? ballFor(res.rarity, res.shiny) : 'poke-ball');
   const def = res && speciesById(res.id);
   const tier = def ? tierOf(def) : 0; // BST tier — invaders ride rarity 3 past it
   const hype = res ? (res.shiny || res.rarity >= 3 || tier >= 3 ? 2 : res.rarity === 2 || tier === 2 ? 1 : 0) : 0;
@@ -2761,6 +2758,27 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
   // the bars slam shut on s.t — a shake-skip or raid entry just finishes
   // the close inside the reveal; the summary draws its own sliding back out
   letterbox(ctx, clamp01(s.t / LB_SLAM));
+  // SKIP ≫ rides the top bar, outside the kick, for the whole reel
+  if (s.results.length > 1) pill(ctx, SKIP_PULL_BTN, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP ≫' });
+}
+
+// the Gracidea back room dimmed to a spotlit floor, tinted by the ball's tier
+function pullStage(ctx: CanvasRenderingContext2D, ball: string) {
+  drawPullStage(ctx, W, H, FLOOR_Y);
+  ctx.fillStyle = 'rgba(8,10,24,0.62)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.save();
+  ctx.translate(W / 2, FLOOR_Y);
+  ctx.scale(1, 0.32);
+  const sp = ctx.createRadialGradient(0, 0, 10, 0, 0, 230);
+  sp.addColorStop(0, 'rgba(255,248,220,0.42)');
+  sp.addColorStop(0.6, withA(BALL_GLOW[ball] ?? '#c0c8e0', 0.16));
+  sp.addColorStop(1, 'rgba(255,248,220,0)');
+  ctx.fillStyle = sp;
+  ctx.beginPath();
+  ctx.arc(0, 0, 230, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 // seeded hash — the reel's spark layouts can't Math.random or a seeded
@@ -2846,8 +2864,18 @@ function drawShakeScene(
   // the tell: rares+ glow gold, epic/shiny prism — and ~1-in-6 commons fake
   // the gold anyway (Monster Strike's fake-out, kept from the old reel)
   const fake = res ? ((res.id * 2654435761) >>> 0) % 100 < 16 : false;
+  // every pull lands as a Poké Ball; rare+ upgrades to its real ball mid-wobble
+  const target = res ? ballFor(res.rarity, res.shiny) : 'poke-ball';
+  const upAt = DROP_SETTLE + (T - DROP_SETTLE) * 0.35;
+  const shown = s.t >= upAt ? target : 'poke-ball';
   const tellC =
-    hype === 2 ? PRISM[Math.floor(s.t * 9) % PRISM.length] : hype === 1 || fake ? GOLD : '#c0c8e0';
+    hype === 2 && shown !== 'poke-ball'
+      ? PRISM[Math.floor(s.t * 9) % PRISM.length]
+      : shown !== 'poke-ball'
+        ? BALL_GLOW[shown]
+        : fake
+          ? '#5a9bf0'
+          : '#c0c8e0';
 
   // inbound spark lanes — seeded per pull so the charge reads identical
   // every frame (and every replay)
@@ -2884,19 +2912,38 @@ function drawShakeScene(
   ctx.fillStyle = glow;
   ctx.fillRect(cx - 170, cy - 170, 340, 340);
 
-  // the ball — jitter frequency and amplitude both ramp toward the pop
-  const ball = itemSprite('poke-ball');
-  const freq = 13 + p * 50;
-  const amp = 1.5 + p * 13;
+  // the ball drops onto the floor, hops, then rocks harder toward the pop
+  for (const id of ['great-ball', 'ultra-ball', 'master-ball']) void loadItem(id);
+  const ball = itemSprite(shown);
+  const d = ballDrop(s.t);
+  const w = clamp01((s.t - DROP_SETTLE) / Math.max(0.01, T - DROP_SETTLE));
+  const squash = d.hit >= 0 && d.hit < 0.1 ? 0.24 * (1 - d.hit / 0.1) : 0;
+  const lift = Math.min(1, d.h / DROP_H);
+  ctx.fillStyle = `rgba(4,6,16,${0.45 - lift * 0.3})`;
+  ctx.beginPath();
+  ctx.ellipse(cx, FLOOR_Y, BALL_S * (0.42 - lift * 0.22), 9 - lift * 5, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.save();
-  ctx.translate(cx + Math.sin(s.t * freq) * amp * 0.45, cy + Math.cos(s.t * freq * 0.87) * amp * 0.3);
-  ctx.rotate(Math.sin(s.t * freq) * (0.12 + p * 0.3));
+  ctx.translate(cx, FLOOR_Y - d.h);
+  if (d.h === 0 && s.t > DROP_SETTLE) ctx.rotate(Math.sin(s.t * (11 + w * 26)) * (0.1 + w * 0.32));
+  ctx.scale(1 + squash, 1 - squash);
   ctx.imageSmoothingEnabled = false;
-  if (ball) {
-    const bs = 108 + Math.sin(s.t * freq * 0.5) * 4 * p;
-    ctx.drawImage(ball, -bs / 2, -bs / 2, bs, bs);
-  }
+  if (ball) ctx.drawImage(ball, -BALL_S / 2, -BALL_S, BALL_S, BALL_S);
   ctx.restore();
+  // the upgrade pops a ring off the ball as the new tier lands
+  const ut = s.t - upAt;
+  if (target !== 'poke-ball' && ut >= 0 && ut < 0.4) {
+    const q = ut / 0.4;
+    ctx.globalAlpha = 1 - q;
+    ctx.strokeStyle = tellC;
+    ctx.lineWidth = 6 - q * 5;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 40 + eo(q) * 120, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = `rgba(255,255,255,${0.5 * (1 - q)})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalAlpha = 1;
+  }
 
   // the last beat — the seam cracks light before the cut to reveal
   if (p > 0.85) {
@@ -2907,18 +2954,16 @@ function drawShakeScene(
 
   ctx.textAlign = 'center';
   ctx.font = fontB(10);
-  ctx.fillStyle = hype === 2 ? GOLD : INK_FAINT;
+  ctx.fillStyle = hype === 2 ? GOLD : '#c0c8e0';
   const dots = '.'.repeat(1 + (Math.floor(s.t * 3) % 3));
   ctx.fillText(
     hype === 2 ? `THE AIR CRACKLES${dots}` : hype === 1 || fake ? `THE BALL GLOWS${dots}` : `THE BALL TWITCHES${dots}`,
     cx,
     cy + 124,
   );
-  if (s.results.length > 1) {
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`${s.i + 1} OF ${s.results.length} · TAP TO HURRY`, cx, cy + 148);
-  }
+  ctx.font = fontB(10);
+  ctx.fillStyle = PARCH;
+  ctx.fillText(s.results.length > 1 ? `${s.i + 1} OF ${s.results.length} · TAP TO HURRY` : 'TAP TO SKIP', cx, cy + 148);
 }
 
 // the reveal — the mon's dark silhouette holds a beat, then FLASH_T cracks
@@ -3000,7 +3045,7 @@ function drawRevealScene(
 
   // the type-tinted stage glow the mon lands on
   ctx.save();
-  ctx.translate(cx, cy + 88);
+  ctx.translate(cx, FLOOR_Y);
   ctx.scale(1, 0.3);
   const gg = ctx.createRadialGradient(0, 0, 6, 0, 0, 130);
   gg.addColorStop(0, withA(typeC, 0.55 * fade));
@@ -3043,6 +3088,7 @@ function drawRevealScene(
     ctx.save();
     try {
       ctx.globalAlpha = clamp01(ft / 0.1);
+      monShadow(ctx, cx, cy + 4, sz);
       (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, cy + up, sz);
     } catch {
       /* sprite still warming */
@@ -3063,6 +3109,28 @@ function drawRevealScene(
     if (wa > 0.01) {
       ctx.fillStyle = `rgba(255,255,255,${wa})`;
       ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // shiny: a gold flash, then Star Pieces orbit the mon while the card holds
+  if (res.shiny && ft >= 0) {
+    if (ft < 0.35) {
+      ctx.fillStyle = `rgba(255,224,120,${0.55 * (1 - ft / 0.35)})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    const sp = itemSprite('star-piece');
+    void loadItem('star-piece');
+    if (sp) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      for (let k = 0; k < 6; k++) {
+        const a = s.t * 1.6 + (k / 6) * Math.PI * 2;
+        const r = 70 + 14 * Math.sin(s.t * 3 + k);
+        const ps = 22 + 6 * Math.sin(s.t * 7 + k * 2);
+        ctx.globalAlpha = clamp01(ft / 0.2) * fade;
+        ctx.drawImage(sp, cx + Math.cos(a) * r - ps / 2, cy + Math.sin(a) * r * 0.7 - ps / 2, ps, ps);
+      }
+      ctx.restore();
     }
   }
 
@@ -3103,11 +3171,14 @@ function drawRevealScene(
   const ny = cy + 124;
   const nameK = eo(clamp01((s.t - 0.45) / 0.25));
   if (nameK > 0) {
+    ctx.globalAlpha = nameK;
+    uiWindow(ctx, { x: cx - 150, y: ny - 32, w: 300, h: 84 }, { dark: true, rad: 10, shadow: false });
+    ctx.globalAlpha = 1;
     ctx.fillStyle = typeC;
     ctx.fillRect(cx - 95 * nameK, ny + 13, 190 * nameK, 3);
     ctx.textAlign = 'center';
-    fitFont(ctx, def.name.toUpperCase(), 13, W - 90);
-    ctx.fillStyle = INK;
+    fitFont(ctx, def.name.toUpperCase(), 13, 270);
+    ctx.fillStyle = PARCH;
     ctx.save();
     ctx.translate(cx, ny);
     const sc = nameK + 0.4 * Math.sin(Math.PI * clamp01((s.t - 0.45) / 0.3));
@@ -3132,7 +3203,7 @@ function drawRevealScene(
   const stampK = clamp01((s.t - 0.66) / 0.2);
   if (stampK > 0) {
     ctx.save();
-    ctx.translate(cx, ny + 74);
+    ctx.translate(cx, ny + 96);
     ctx.rotate(-0.08);
     const sc = 2 - eo(stampK);
     ctx.scale(sc, sc);
@@ -3157,91 +3228,95 @@ function drawRevealScene(
     ctx.restore();
   }
 
-  // reel position + the out — SKIP ≫ keeps its hit rect inside the parked rim
+  // reel position — one ball per card, the current one lit
   if (s.results.length > 1) {
-    const pw = s.results.length * 10 - 6;
-    for (let k = 0; k < s.results.length; k++) {
-      ctx.fillStyle = k === s.i ? GOLD : '#3a4160';
-      ctx.fillRect(cx - pw / 2 + k * 10, H - LB_H - 44, 6, 6);
-    }
-    pill(ctx, SKIP_PULL_BTN, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP ≫' });
+    const pw = s.results.length * 22 - 4;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    s.results.forEach((r, k) => {
+      const img = itemSprite(ballFor(r.rarity, r.shiny));
+      ctx.globalAlpha = k === s.i ? 1 : k < s.i ? 0.7 : 0.25;
+      if (img) ctx.drawImage(img, cx - pw / 2 + k * 22, H - LB_H - 56, 18, 18);
+    });
+    ctx.restore();
   }
   ctx.textAlign = 'center';
   ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
+  ctx.fillStyle = PARCH;
   ctx.fillText(s.results.length > 1 ? 'TAP FOR NEXT' : 'TAP TO CONTINUE', cx, H - LB_H - 22);
 }
 // 'results' — the whole pull laid out in the parked modal; a single pull
 // gets the hero card. The theatre's bars slide back open over the top.
 function drawPullSummary(ctx: CanvasRenderingContext2D, s: HatchState) {
-  scrim(ctx, 0.72);
+  const best = s.results.reduce((a, r) => (r.shiny ? 9 : r.rarity) > (a.shiny ? 9 : a.rarity) ? r : a, s.results[0]);
+  pullStage(ctx, best ? ballFor(best.rarity, best.shiny) : 'poke-ball');
   const m = HATCH_MODAL;
   uiPanel(ctx, m, s.label ?? 'PULL RESULTS');
   const cx = m.x + m.w / 2;
-
-  // a winning queue warms the whole card — gold haze behind the header
-  if (s.results.some((r) => r.shiny || r.rarity >= 2)) {
-    ctx.save();
-    roundRect(ctx, m.x + 4, m.y + 36, m.w - 8, m.h - 40, 7);
-    ctx.clip();
-    const wg = ctx.createRadialGradient(cx, m.y + 90, 10, cx, m.y + 90, 240);
-    wg.addColorStop(0, 'rgba(255,216,77,0.14)');
-    wg.addColorStop(1, 'rgba(255,216,77,0)');
-    ctx.fillStyle = wg;
-    ctx.fillRect(m.x, m.y, m.w, m.h);
-    ctx.restore();
-  }
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
   if (s.results.length === 1) {
     const res = s.results[0];
     const def = res && speciesById(res.id);
     if (res && def) {
       void loadSprite(res.id);
-      // the hero card pops in like the reveal did — overshoot, then settle;
-      // a small window is the stage it bursts out of
-      uiWindow(ctx, { x: cx - 80, y: m.y + 94, w: 160, h: 134 }, { shadow: false });
+      // the hero card pops in like the reveal did, standing in its own ball's glow
+      const hero = { x: cx - 110, y: m.y + 70, w: 220, h: 200 };
+      uiWindow(ctx, hero, { shadow: false });
+      const ball = ballFor(res.rarity, res.shiny);
+      rim(ctx, hero, 10, BALL_GLOW[ball], 2);
+      const bi = itemSprite(ball);
+      if (bi) ctx.drawImage(bi, hero.x + 8, hero.y + 8, 30, 30);
       const k = eo(clamp01(s.t / 0.3));
+      const sc = 0.6 + 0.4 * k + 0.15 * Math.sin(Math.PI * clamp01(s.t / 0.35));
+      const my = hero.y + 108;
+      monShadow(ctx, cx, my, 120);
       ctx.save();
-      ctx.translate(cx, m.y + 170);
-      ctx.scale(0.6 + 0.4 * k + 0.15 * Math.sin(Math.PI * clamp01(s.t / 0.35)), 0.6 + 0.4 * k + 0.15 * Math.sin(Math.PI * clamp01(s.t / 0.35)));
-      ctx.translate(-cx, -(m.y + 170));
+      ctx.translate(cx, my);
+      ctx.scale(sc, sc);
+      ctx.translate(-cx, -my);
       try {
-        (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, m.y + 170, 110);
+        (res.shiny ? drawShiny : drawMon)(ctx, def.id, cx, my, 120);
       } catch {
         /* sprite still warming */
       }
       ctx.restore();
       ctx.globalAlpha = k;
+      if (!res.dupe) newTag(ctx, hero.x + hero.w - 8, hero.y + 10, 12);
       const starC = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? GOLD : '#a8b0c8';
-      for (let k = 0; k < res.rarity; k++) {
+      for (let j = 0; j < res.rarity; j++) {
         ctx.fillStyle = starC;
-        fillStar(ctx, cx + (k - (res.rarity - 1) / 2) * 22, m.y + 244, 9);
+        fillStar(ctx, cx + (j - (res.rarity - 1) / 2) * 24, m.y + 300, 10);
       }
-      fitFont(ctx, def.name.toUpperCase(), 11, m.w - 40);
+      ctx.textAlign = 'center';
+      fitFont(ctx, def.name.toUpperCase(), 13, m.w - 40);
       ctx.fillStyle = INK;
-      ctx.fillText(def.name.toUpperCase(), cx, m.y + 278);
+      ctx.fillText(def.name.toUpperCase(), cx, m.y + 342);
       ctx.font = font(10);
-      ctx.fillStyle = res.dupe ? '#5a9bf0' : GOLD;
-      ctx.fillText(res.dupe ? `DUPE +${res.dust} DUST` : 'NEW!', cx, m.y + 306);
+      ctx.fillStyle = res.dupe ? '#3a78d0' : res.shiny ? '#b08020' : '#d0483e';
+      ctx.fillText(res.dupe ? `DUPE +${res.dust} DUST` : res.shiny ? 'SHINY · NEW' : 'NEW TO YOUR DEX', cx, m.y + 376);
       ctx.globalAlpha = 1;
     }
   } else {
     const cols = 5;
-    const cw = (m.w - 32) / cols;
-    const rh = 96;
+    const cw = (m.w - 24) / cols;
+    const rh = 176;
     s.results.forEach((res, i) => {
-      // cards deal in one by one — the reel's last staggered beat
+      // cards deal in one by one, the reel's last staggered beat
       const k = eo(clamp01((s.t - i * 0.05) / 0.22));
       if (k <= 0) return;
-      const cell = { x: m.x + 16 + (i % cols) * cw + 3, y: m.y + 52 + Math.floor(i / cols) * rh + 3, w: cw - 6, h: rh - 6 };
+      const def = speciesById(res.id);
+      const cell = { x: m.x + 12 + (i % cols) * cw + 3, y: m.y + 50 + Math.floor(i / cols) * rh + 3, w: cw - 6, h: rh - 8 };
+      const mx = cell.x + cell.w / 2;
       ctx.save();
-      ctx.translate(cell.x + cell.w / 2, cell.y + cell.h / 2);
+      ctx.translate(mx, cell.y + cell.h / 2);
       const sc = (0.4 + 0.6 * k) * (1 + 0.3 * Math.sin(Math.PI * k));
       ctx.scale(sc, sc);
-      ctx.translate(-(cell.x + cell.w / 2), -(cell.y + cell.h / 2));
-      // each dealt card is a small window — rare+ keeps its tint on the rim
+      ctx.translate(-mx, -(cell.y + cell.h / 2));
+      const ball = ballFor(res.rarity, res.shiny);
       uiWindow(ctx, cell, { rad: 7, shadow: false, rim: false });
-      if (res.rarity >= 2) rim(ctx, cell, 7, res.rarity >= 3 ? '#c05df0' : '#5a9bf0', 1.5);
-      // big pulls keep their win shimmer — a second rim that breathes
+      if (ball !== 'poke-ball') rim(ctx, cell, 7, BALL_GLOW[ball], 2);
+      // big pulls keep their win shimmer, a second rim that breathes
       if (res.shiny || res.rarity >= 3) {
         ctx.globalAlpha = 0.45 + 0.3 * Math.sin(s.t * 6 + i);
         ctx.strokeStyle = res.shiny ? GOLD : '#c05df0';
@@ -3250,34 +3325,55 @@ function drawPullSummary(ctx: CanvasRenderingContext2D, s: HatchState) {
         ctx.stroke();
         ctx.globalAlpha = 1;
       }
+      const bi = itemSprite(ball);
+      if (bi) ctx.drawImage(bi, cell.x + 3, cell.y + 3, 24, 24);
+      if (!res.dupe) newTag(ctx, cell.x + cell.w - 4, cell.y + 6, 9);
       void loadSprite(res.id);
+      monShadow(ctx, mx, cell.y + 66, 70);
       try {
-        (res.shiny ? drawShiny : drawMon)(ctx, res.id, cell.x + cell.w / 2, cell.y + 30, 44);
+        (res.shiny ? drawShiny : drawMon)(ctx, res.id, mx, cell.y + 66, 70);
       } catch {
         /* sprite still warming */
       }
       const sc2 = res.rarity >= 3 ? '#c05df0' : res.rarity === 2 ? GOLD : '#a8b0c8';
-      for (let k = 0; k < res.rarity; k++) {
+      for (let j = 0; j < res.rarity; j++) {
         ctx.fillStyle = sc2;
-        fillStar(ctx, cell.x + cell.w / 2 + (k - (res.rarity - 1) / 2) * 12, cell.y + 58, 5);
+        fillStar(ctx, mx + (j - (res.rarity - 1) / 2) * 14, cell.y + 114, 6);
       }
       ctx.textAlign = 'center';
+      const nm = def ? def.name.toUpperCase() : '';
+      fitFontB(ctx, nm, 10, cell.w - 8);
+      ctx.fillStyle = INK;
+      ctx.fillText(nm, mx, cell.y + 138);
       ctx.font = fontB(10);
-      ctx.fillStyle = res.dupe ? '#5a9bf0' : GOLD;
-      ctx.fillText(res.dupe ? `+${res.dust}` : 'NEW', cell.x + cell.w / 2, cell.y + 76);
+      ctx.fillStyle = res.dupe ? '#3a78d0' : res.shiny ? '#b08020' : INK_SOFT;
+      ctx.fillText(res.dupe ? `+${res.dust} DUST` : res.shiny ? 'SHINY' : 'CAUGHT', mx, cell.y + 156);
       ctx.restore();
     });
   }
+  ctx.restore();
   const news = s.results.filter((r) => !r.dupe).length;
   const dust = s.results.reduce((a, r) => a + r.dust, 0);
   ctx.textAlign = 'center';
+  ctx.font = fontB(11);
+  ctx.fillStyle = INK;
+  ctx.fillText(`${news} NEW${dust ? ` · +${dust} DUST` : ''}${s.dexPay ? ` · DEX +${s.dexPay}★` : ''}${s.rookiePay ? ` · ROOKIE +${s.rookiePay}★` : ''}`, cx, m.y + m.h - 44);
   ctx.font = fontB(10);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText(`${news} NEW${dust ? ` · +${dust} DUST` : ''}${s.dexPay ? ` · DEX +${s.dexPay}★` : ''}${s.rookiePay ? ` · ROOKIE +${s.rookiePay}★` : ''}`, cx, m.y + m.h - 40);
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('TAP TO COLLECT', cx, m.y + m.h - 24);
+  ctx.fillText('TAP TO COLLECT', cx, m.y + m.h - 22);
   letterbox(ctx, 1 - clamp01(s.t / 0.4)); // the bars ride back out over the card
+}
+
+// red NEW ribbon, right-aligned at x
+function newTag(ctx: CanvasRenderingContext2D, x: number, y: number, px: number) {
+  ctx.font = fontB(px);
+  const tw = ctx.measureText('NEW').width + 10;
+  roundRect(ctx, x - tw, y, tw, px * 1.4 + 6, 5);
+  ctx.fillStyle = '#d0483e';
+  ctx.fill();
+  ctx.fillStyle = '#fff5d6';
+  ctx.textAlign = 'center';
+  ctx.fillText('NEW', x - tw / 2, y + px * 1.4 + 1);
 }
 
 // --- the lab: the deterministic sink — every star buys a sure thing ---------
