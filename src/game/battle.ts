@@ -33,6 +33,7 @@ import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
 import { maybeSecret, enterSecret, secretWon, secretFled, drawSecretNode, type SecretState } from './secret';
+import { MID_SCALE, MID_HP, MID_SIG, midBossStop, evolveOnce, midBossPick, drawMidBar } from './midboss';
 
 import {
   playerHp,
@@ -91,6 +92,7 @@ export interface Unit {
   lunging: number; // >0 while mid-lunge (melee attack in flight)
   boss: boolean;
   bars?: readonly number[];
+  mid?: boolean; // MS mid-boss: the last battle's strongest foe, evolved
   bigT: number; // boss heavy-attack countdown (MS bosses run several clocks); 0 = none
   shiny: boolean; // rare alt-palette spawn — always caught when KO'd
   dead: boolean;
@@ -3790,7 +3792,7 @@ export class Battle {
         sfx('invade');
         return;
       }
-      this.treasure.ko(e, (this.mapSeed * 977 + this.waveIndex * 131 + this.battle * 17 + e.uid * 7919) >>> 0, { boss: e.boss, weak: !!src && this.weakHit(e, src.x, src.y), finisher: this.battle >= this.battles && this.enemies.every((x) => x === e || x.dead), combo: this.shotCombo, speed: this.stopShots <= this.par, off: this.raid }, this.time);
+      this.treasure.ko(e, (this.mapSeed * 977 + this.waveIndex * 131 + this.battle * 17 + e.uid * 7919) >>> 0, { boss: e.boss || !!e.mid, weak: !!src && this.weakHit(e, src.x, src.y), finisher: this.battle >= this.battles && this.enemies.every((x) => x === e || x.dead), combo: this.shotCombo, speed: this.stopShots <= this.par, off: this.raid }, this.time);
       e.dead = true;
       cry(e.def.id, 'ko');
       this.koX = e.x;
@@ -6758,7 +6760,29 @@ export class Battle {
     this.armWeakPoints();
     this.waveShots = 0;
     this.telop.push({ kind: 'start', title: `BATTLE ${this.battle}/${this.battles}`, sub: STAGE_GIMMICKS[this.theme].label, mon: this.active.def.id, icon: 'poke-ball' });
+    this.makeMidBoss();
     sfx('invade');
+  }
+
+  private makeMidBoss() {
+    if (!midBossStop({ stop: this.waveIndex, battle: this.battle, battles: this.battles, gym: this.waveHadGym, trainer: this.inTrainer, event: this.inEvent })) return;
+    const i = midBossPick(this.enemies);
+    if (i < 0) return;
+    const mid = this.enemies[i];
+    mid.def = evolveOnce(mid.def);
+    mid.r *= MID_SCALE;
+    mid.maxHp = mid.hp = Math.round(mid.maxHp * MID_HP);
+    mid.mid = true;
+    mid.bigT = MID_SIG;
+    mid.timer = (mid.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (this.raidMod === 'hasty' ? 0.85 : 1) * (mid.def.prank ? 0.55 : 1) + (this.waveIndex === 0 ? 1 : 0);
+    mid.clocks = mid.def.fuse ? [] : foeClocks(mid.def.type, false, 0).map(({ kind, move, turn, first }) => ({ kind, move, turn, t: first }));
+    mid.drift = enemyDrift(mid.def.stats) * (this.asc >= 7 ? 1.25 : 1);
+    mid.sash = !!mid.def.sturdy;
+    mid.pow = lvlPow(offStat(mid.def.stats, mid.def.type), mid.lvl);
+    mid.asleep = !!mid.def.sleepy && !mid.def.sleepless;
+    mid.repelR = mid.def.repel ? 90 : 0;
+    this.telop.push({ kind: 'boss', title: 'MID-BOSS', sub: `${mid.def.name.toUpperCase()} · SIGNATURE IN ${MID_SIG}`, mon: mid.def.id, icon: 'great-ball' });
+    cry(mid.def.id, 'boss');
   }
 
   private bossBarBreak() {
@@ -8604,7 +8628,7 @@ export class Battle {
         ctx.fillRect(bx + bw * boundary - 0.5, by + 3, 1, 11);
       }
       ctx.strokeRect(bx, by + 5, bw, 7);
-    }
+    } else { const mid = this.enemies.find((e) => e.mid && !e.dead); if (mid) drawMidBar(ctx, mid, a); }
 
     // victory loot HUD — a gold fuse draining over the court
     if (this.phase === 'loot') {
@@ -8986,7 +9010,9 @@ export class Battle {
       ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
       const tag = e.boss
         ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)} · WEAK ×3`
-        : e.supp === 'medic'
+        : e.mid
+          ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)}`
+          : e.supp === 'medic'
           ? `ATTACKS IN ${Math.ceil(e.timer)} · HEALS ALLIES`
           : e.supp === 'aegis'
             ? `ATTACKS IN ${Math.ceil(e.timer)} · SHIELDS ALLIES`
@@ -8998,8 +9024,8 @@ export class Battle {
       const weakTag = !e.boss && !e.def.shielded ? (e.wpHidden ? ' · WEAK HIDDEN' : ' · WEAK ×2') : '';
       const readTag = tag + weakTag;
       const tagPx = fitFontB(ctx, readTag, 10, w - 60);
-      const readout = e.boss && tagPx < 8
-        ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)} · WEAK ×3`
+      const readout = (e.boss || e.mid) && tagPx < 8
+        ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)}${e.boss ? ' · WEAK ×3' : weakTag}`
         : readTag;
       if (readout !== readTag) fitFontB(ctx, readout, 10, w - 60);
       ctx.fillText(readout, cx + 50, cy + 58);
@@ -10496,7 +10522,7 @@ export class Battle {
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = urgent ? '#ff6b6b' : next <= 2 ? '#ffb84d' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
-      if (u.boss) {
+      if (u.boss || u.mid) {
         const heavy = `${TYPE_MOVE[u.def.type].move} · ${Math.ceil(u.bigT)} · ALL`;
         ctx.font = fontB(13);
         const w = ctx.measureText(heavy).width + 16;
