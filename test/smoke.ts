@@ -1,6 +1,6 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T } from '../src/game/battle';
+import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T, placeLabel, LABEL_INTRO } from '../src/game/battle';
 import * as battleModule from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
@@ -2595,6 +2595,51 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   push('BANNER', 270, true);
   for (let i = 0; i < 20; i++) push(`L${i}`, 20 + i * 25);
   ok(tx().length === 8 && tx().some((t) => t.text === 'BANNER'), 'court caps at 8 callouts, banners outlive small labels');
+}
+
+// --- field labels: one intro per pickup kind, foe priority, no overlap -----
+{
+  const b: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  b.pickups = [{ x: 200, y: 400, kind: 'oran-berry', t: 0, age: 0 }];
+  b.update(0.016);
+  ok(b.pickups[0]?.tag === LABEL_INTRO, 'first oran shows its tag');
+  let elapsed = 0.016;
+  while (elapsed <= LABEL_INTRO + 0.1) {
+    b.update(0.1);
+    elapsed += 0.1;
+  }
+  ok(b.pickups[0]?.tag === 0, 'tag hides after LABEL_INTRO');
+  b.pickups.push(
+    { x: 200, y: 400, kind: 'oran-berry', t: 0, age: 0 },
+    { x: 240, y: 400, kind: 'protein', t: 0, age: 0 },
+  );
+  b.update(0.016);
+  ok(b.pickups[1]?.tag === 0, 'repeat kind stays icon-only');
+  ok(b.pickups[2]?.tag === LABEL_INTRO, 'new kind shows its tag');
+
+  const foe = { safeguard: true, def: { regen: true } };
+  ok(b.foeTag(foe, true) === 'SAFEGUARD', 'pull tag favors safeguard');
+  foe.safeguard = false;
+  foe.def.regen = true;
+  ok(b.foeTag(foe, true) === undefined && b.foeTag(foe, false) === 'REGEN', 'intro foe tag includes non-pull traits');
+
+  const boxes = new Float32Array(32 * 4);
+  let count = 0;
+  for (let i = 0; i < 6; i++)
+    placeLabel(boxes, count++, 270, 300, 120, 16, 3, 100, 800, i % 2 === 0);
+  placeLabel(boxes, count++, 270, 105, 120, 16, 3, 100, 800, true);
+  placeLabel(boxes, count++, 270, 105, 120, 16, 3, 100, 800, true);
+  let disjoint = true;
+  let within = true;
+  for (let i = 0; i < count; i++) {
+    const x0 = boxes[i * 4], y0 = boxes[i * 4 + 1], x1 = boxes[i * 4 + 2], y1 = boxes[i * 4 + 3];
+    within &&= y0 >= 100 && y1 <= 800;
+    for (let j = i + 1; j < count; j++) {
+      const ox0 = boxes[j * 4], oy0 = boxes[j * 4 + 1], ox1 = boxes[j * 4 + 2], oy1 = boxes[j * 4 + 3];
+      if (x0 < ox1 && x1 > ox0 && y0 < oy1 && y1 > oy0) disjoint = false;
+    }
+  }
+  ok(disjoint && within, 'field labels nudge apart and stay off the HUD');
 }
 
 // --- boss bars + teleport rotation ------------------------------------------

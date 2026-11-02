@@ -242,6 +242,7 @@ interface Pickup {
   kind: PickupKind;
   t: number; // bob phase
   age: number; // enemy turns survived
+  tag?: number; // s its first-of-this-battle label still shows
 }
 interface Scar {
   x: number;
@@ -352,6 +353,114 @@ const CUT_HITS = 2;
 const FIELD_HIT_SPEED = STOP_SPEED;
 const FIELD_UNIT_GAP = 4;
 const MAX_TEXTS = 8; // floating callouts on court at once — more reads as noise
+export const LABEL_PX = 22; // field labels: phone-readable floor
+const CALLOUT_PX = 18; // Press Start 2P caps run 0.875em, so 18 matches a 22px rc label
+export const LABEL_INTRO = 2.2; // s a pickup/hazard/foe tag shows before the icon carries the read
+const LABEL_SLOTS = 32;
+
+// Nudges a label's baseline vertically until its box clears every box already
+// placed this frame, within [top, bottom]; records the box. Returns the new y.
+export function placeLabel(boxes: Float32Array, n: number, x: number, y: number, w: number, asc: number, desc: number, top: number, bottom: number, up: boolean): number {
+  let flipped = false;
+  for (let i = 0; i < LABEL_SLOTS + 2; i++) {
+    const clamped = Math.min(Math.max(y, top + asc + 2), bottom - desc - 2);
+    if (clamped !== y) {
+      y = clamped;
+      if (!flipped) {
+        up = !up;
+        flipped = true;
+      }
+      continue;
+    }
+    const x0 = x - w / 2 - 2;
+    const x1 = x + w / 2 + 2;
+    const y0 = y - asc - 2;
+    const y1 = y + desc + 2;
+    let hit = -1;
+    for (let j = 0; j < n && j < boxes.length / 4; j++) {
+      const at = j * 4;
+      if (x0 < boxes[at + 2] && x1 > boxes[at] && y0 < boxes[at + 3] && y1 > boxes[at + 1]) {
+        hit = at;
+        break;
+      }
+    }
+    if (hit < 0) break;
+    const next = up ? boxes[hit + 1] - desc - 3 : boxes[hit + 3] + asc + 3;
+    y = next;
+  }
+  if (n < boxes.length / 4) {
+    const at = n * 4;
+    boxes[at] = x - w / 2 - 2;
+    boxes[at + 1] = y - asc - 2;
+    boxes[at + 2] = x + w / 2 + 2;
+    boxes[at + 3] = y + desc + 2;
+  }
+  return y;
+}
+
+const FOE_TAGS: [keyof SpeciesDef, string][] = [
+  ['cursed', 'CURSE'],
+  ['regen', 'REGEN'],
+  ['split', 'SPLIT'],
+  ['rage', 'RAGE'],
+  ['raider', 'RAIDER'],
+  ['volley', 'VOLLEY'],
+  ['summon', 'SOS'],
+  ['mirror', 'MIRROR'],
+  ['fuse', 'FUSE'],
+  ['hunter', 'HUNTER'],
+  ['leech', 'LEECH'],
+  ['drowsy', 'SLEEP'],
+  ['venom', 'STING'],
+  ['burn', 'WISP'],
+  ['para', 'JOLT'],
+  ['toxic', 'TOXIC'],
+  ['shock', 'STATIC'],
+  ['flame', 'FLAME'],
+  ['menace', 'MENACE'],
+  ['charm', 'CHARM'],
+  ['guts', 'GUTS'],
+  ['truant', 'LOAF'],
+  ['boost', 'BOOST'],
+  ['spore', 'SPORE'],
+  ['sync', 'SYNC'],
+  ['pressure', 'PRESSURE'],
+  ['beam', 'BEAM'],
+  ['trap', 'TRAP'],
+  ['skyFor', 'SKY'],
+  ['alpha', 'ALPHA'],
+  ['shed', 'SHED'],
+  ['charge', 'CHARGE'],
+  ['prank', 'PRANK'],
+  ['thief', 'THIEF'],
+  ['lay', 'SPIKER'],
+  ['confuse', 'SONIC'],
+  ['anchor', 'ANCHOR'],
+  ['flank', 'FLANK'],
+  ['forecast', 'FORECAST'],
+  ['healBlock', 'H-BLOCK'],
+  ['bond', 'BOND'],
+  ['armor', 'ARMOR'],
+  ['chameleon', 'CAMO'],
+  ['weakArmor', 'W-ARMOR'],
+  ['moxie', 'MOXIE'],
+  ['veil', 'VEIL'],
+  ['filter', 'FILTER'],
+  ['snipe', 'SNIPE'],
+  ['unaware', 'UNAWARE'],
+  ['swift', 'SWIFT'],
+  ['pheal', 'P-HEAL'],
+  ['blink', 'BLINK'],
+];
+const FOE_TAG_COLOR: Record<string, string> = {
+  SAFEGUARD: '#f8a8d8',
+  MAGNET: '#ffd84d',
+  SHELL: '#c8d4e4',
+  'W-GUARD': '#c8a8f8',
+  REGEN: '#a0e060',
+  SPLIT: '#a0e060',
+  CURSE: '#c890e0',
+};
 const HEAL_CD = 5; // in-battle mends share this cooldown — one heal per few shots
 const SUPER_POW = 0.7; // supers hit softer so clean lines carry the damage
 const CONTACT_POW = 1.4; // direct hits are the bread and butter again
@@ -733,6 +842,10 @@ export class Battle {
   private flashes: ScreenFlash[] = [];
   private balls: BallDrop[] = []; // live capture rituals — ball drops, rocks, clicks or bursts
   private pickups: Pickup[] = []; // touch to collect while the ball flies
+  private pickupSeen = new Set<PickupKind>();
+  private lblBox = new Float32Array(LABEL_SLOTS * 4);
+  private lblN = 0;
+  private lblW = new Map<string, number>();
   private scars: Scar[] = []; // impact craters scarring the court
   private hazards: Hazard[] = []; // this wave's court gimmicks
   private damageWalls: DamageWall[] = [];
@@ -1714,6 +1827,7 @@ export class Battle {
     // the classic "!" tell as control lands — a challenger spots you
     this.waveIntroT = this.time;
     this.courtT = this.time;
+    this.pickupSeen.clear();
     this.foesLanded = false;
     sfx('warn');
     if (i > 0) {
@@ -2296,6 +2410,12 @@ export class Battle {
       const inGold = Math.abs(this.charge() - z.c) <= z.hw;
       if (inGold && !this.wasGold) { sfx('tick'); buzz(8); } // haptic nod on the gold edge
       this.wasGold = inGold;
+    }
+    for (const pk of this.pickups) {
+      if (pk.tag === undefined) {
+        pk.tag = this.pickupSeen.has(pk.kind) ? 0 : LABEL_INTRO;
+        this.pickupSeen.add(pk.kind);
+      } else pk.tag = Math.max(0, pk.tag - dt);
     }
     for (const t of this.texts) t.t -= dt;
     cull(this.texts, (t) => t.t > 0);
@@ -6477,6 +6597,7 @@ export class Battle {
     const room = buildRoom(grid, this.theme, this.rng, phase);
     this.installRoom(room);
     this.courtT = this.time;
+    this.pickupSeen.clear();
     this.foesLanded = false;
     this.hazards = room.hazards.map((z) => ({
       kind: z.kind,
@@ -7440,12 +7561,13 @@ export class Battle {
     }
     // small labels fade faster; banners keep their beat
     t.t = t.big ? Math.min(t.t, 1.2) : Math.min(t.t * 0.8, 0.9);
+    t.size = Math.max(t.size ?? 1, 1);
     if (MCTX) {
-      MCTX.font = font(16 * (t.size ?? 1));
+      MCTX.font = font(CALLOUT_PX * t.size);
       t.w = MCTX.measureText(t.text).width;
       t.wf = MCTX.font;
       if (t.w > W_CANVAS_FALLBACK - 16) {
-        const s = fitFont(MCTX, t.text, 37 * (t.size ?? 1), W_CANVAS_FALLBACK - 16); // 37 ≥ the punch-in pop max
+        const s = fitFont(MCTX, t.text, 42 * t.size, W_CANVAS_FALLBACK - 16); // 42 ≥ the punch-in pop max
         t.ff = font(s);
         t.fw = MCTX.measureText(t.text).width;
       }
@@ -7610,9 +7732,9 @@ export class Battle {
 
     this.drawWeather(ctx);
 
-    // field pickups: a kind-colored ring + tag under the bobbing item icon —
-    // you can tell what it is (and that it's worth steering through) before
-    // the ball reaches it
+    this.lblN = 0;
+    // field pickups: the icon is the read; the effect tag shows once per
+    // kind per battle
     for (const pk of this.pickups) {
       const bob = Math.sin(this.time * 3 + pk.t) * 2.5;
       const meta = PICKUP_META[pk.kind];
@@ -7633,19 +7755,8 @@ export class Battle {
       }
       const img = itemSprite(pk.kind);
       if (img) ctx.drawImage(img, pk.x - 13, pk.y - 13 + bob, 26, 26);
-      ctx.textAlign = 'center';
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = 3;
-      // the item's name rides above the icon, its payoff below — reads as a
-      // real Pokémon drop, not an anonymous orb
-      ctx.font = fontB(10);
-      ctx.strokeText(meta.name, pk.x, pk.y - 19 + bob);
-      ctx.fillStyle = '#f4f6ff';
-      ctx.fillText(meta.name, pk.x, pk.y - 19 + bob);
-      ctx.font = fontB(10);
-      ctx.strokeText(meta.label, pk.x, pk.y + 28);
-      ctx.fillStyle = meta.color;
-      ctx.fillText(meta.label, pk.x, pk.y + 28);
+      if ((pk.tag ?? 0) > 0)
+        this.fieldLabel(ctx, meta.label, pk.x, pk.y + 32, meta.color, Math.min(1, (pk.tag ?? 0) / 0.3));
     }
 
     // victory loot — each kind reads at a glance: gold coins, cyan gems,
@@ -8184,7 +8295,7 @@ export class Battle {
       const ease = 1 + 2.70158 * (k - 1) ** 3 + 1.70158 * (k - 1) ** 2;
       const pop = (t.big ? 2.3 : 1.9) * (1 - ease) + ease;
       ctx.globalAlpha = Math.min(t.t / 0.3, 1);
-      ctx.font = font(16 * pop * (t.size ?? 1));
+      ctx.font = font(CALLOUT_PX * pop * (t.size ?? 1));
       ctx.textAlign = 'center';
       ctx.fillStyle = t.color;
       ctx.strokeStyle = '#000';
@@ -8209,7 +8320,7 @@ export class Battle {
           half = t.fw! / 2;
         } else {
           // only overflows mid punch-in — rare enough to measure on the spot
-          fitFont(ctx, t.text, 16 * pop * (t.size ?? 1), textW);
+          fitFont(ctx, t.text, CALLOUT_PX * pop * (t.size ?? 1), textW);
           half = ctx.measureText(t.text).width / 2;
         }
         tx = W_CANVAS_FALLBACK / 2;
@@ -8217,7 +8328,8 @@ export class Battle {
         tx = Math.min(Math.max(t.x, half + inset), W_CANVAS_FALLBACK - half - inset);
       }
       const glyph = ctx.measureText(t.text);
-      ctx.translate(tx, this.calloutY(t.y - dy, glyph.actualBoundingBoxAscent, glyph.actualBoundingBoxDescent, Math.abs(Math.sin(t.tilt ?? 0)) * half));
+      const y = this.calloutY(t.y - dy, glyph.actualBoundingBoxAscent, glyph.actualBoundingBoxDescent, Math.abs(Math.sin(t.tilt ?? 0)) * half);
+      ctx.translate(tx, this.place(tx, y, half * 2, glyph.actualBoundingBoxAscent, glyph.actualBoundingBoxDescent, true));
       ctx.rotate(t.tilt ?? 0);
       ctx.strokeText(t.text, 0, 0);
       ctx.fillText(t.text, 0, 0);
@@ -8435,6 +8547,34 @@ export class Battle {
     const inset = 12 + this.shake / 2 + a.h / 2 * (this.punch + 2 * this.finZoom()) + rotatedHalf;
     return Math.min(Math.max(y, a.y + ascent + inset), a.y + a.h - 64 - descent - inset);
   }
+
+  private place(x: number, y: number, w: number, asc: number, desc: number, up: boolean) {
+    const placed = placeLabel(this.lblBox, this.lblN, x, y, w, asc, desc, this.arena.y, this.arena.y + this.arena.h - 64, up);
+    this.lblN++;
+    return placed;
+  }
+
+  private fieldLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, color: string, alpha: number, up = false) {
+    ctx.font = fontB(LABEL_PX);
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#000';
+    let w = this.lblW.get(text);
+    if (w === undefined) {
+      w = ctx.measureText(text).width;
+      this.lblW.set(text, w);
+    }
+    y = this.place(x, y, w, LABEL_PX * 0.75, LABEL_PX * 0.12, up);
+    ctx.globalAlpha = alpha;
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+    ctx.globalAlpha = 1;
+  }
+
+  private introLeft() { return this.courtT + COURT_SCROLL + FOE_DROP + LABEL_INTRO - this.time; }
+  private introAlpha() { return Math.min(1, Math.max(0, this.introLeft() / 0.3)); }
 
   private drawBattleHud(ctx: CanvasRenderingContext2D) {
     const c = this.pauseChip();
@@ -9552,6 +9692,7 @@ export class Battle {
   // the radius readable while the atlas streams in. Mines are Voltorb.
   private drawDamageWalls(ctx: CanvasRenderingContext2D) {
     const a = this.arena;
+    const labelAlpha = this.introAlpha();
     for (const w of this.damageWalls) {
       const vertical = w.edge === 'left' || w.edge === 'right';
       const span = (vertical ? a.h : a.w) * (w.end - w.start);
@@ -9567,13 +9708,16 @@ export class Battle {
       ctx.globalAlpha = 0.8 + Math.sin(this.time * 5) * 0.2;
       for (let at = 0; at < span; at += 16) drawTile(ctx, tile, at, -6, Math.min(16, span - at), 12);
       ctx.globalAlpha = 1;
-      ctx.font = fontB(10);
-      ctx.textAlign = 'center';
-      ctx.strokeStyle = '#101826';
-      ctx.lineWidth = 3;
-      ctx.strokeText('DMG WALL', span / 2, -10);
-      ctx.fillStyle = TYPE_COLOR[w.type];
-      ctx.fillText('DMG WALL', span / 2, -10);
+      if (labelAlpha > 0) {
+        ctx.globalAlpha = labelAlpha;
+        ctx.font = fontB(LABEL_PX);
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#101826';
+        ctx.lineWidth = 5;
+        ctx.strokeText('DMG WALL', span / 2, -10);
+        ctx.fillStyle = TYPE_COLOR[w.type];
+        ctx.fillText('DMG WALL', span / 2, -10);
+      }
       ctx.restore();
     }
   }
@@ -9600,14 +9744,11 @@ export class Battle {
     }
     const img = itemSprite(healing ? 'oran-berry' : pulling ? 'twisted-spoon' : 'hard-stone');
     if (img) ctx.drawImage(img, hz.x - 14, hz.y - 18, 28, 28);
-    ctx.font = fontB(11);
-    ctx.textAlign = 'center';
-    ctx.strokeStyle = '#101826';
-    ctx.lineWidth = 3;
-    const label = healing ? 'HEAL' : pulling ? 'PULL' : 'GRAVITY';
-    ctx.strokeText(label, hz.x, hz.y + 19);
-    ctx.fillStyle = color;
-    ctx.fillText(label, hz.x, hz.y + 19);
+    const alpha = this.introAlpha();
+    if (alpha > 0) {
+      const label = healing ? 'HEAL' : pulling ? 'PULL' : 'GRAVITY';
+      this.fieldLabel(ctx, label, hz.x, hz.y + 26, color, alpha);
+    }
     ctx.restore();
   }
 
@@ -9842,6 +9983,25 @@ export class Battle {
     ctx.setLineDash([]);
     ctx.restore();
     drawTell(ctx, e.def.type, e.x, e.y, t.x, t.y, this.time);
+  }
+
+  // one tag per foe: what changes the next pull first; the full set only for the intro beat
+  private foeTag(u: Unit, pullOnly: boolean): string | undefined {
+    const d = u.def;
+    if (u.safeguard) return 'SAFEGUARD';
+    if (d.shielded) return 'SHELL';
+    if (d.wguard) return 'W-GUARD';
+    if (d.taunt) return 'MAGNET';
+    if (d.repel) return 'REPEL';
+    if (d.spiky) return 'SPIKY';
+    if (d.counter) return 'COUNTER';
+    if (d.sturdy && u.sash) return 'STURDY';
+    if (pullOnly) return undefined;
+    for (let i = 0; i < FOE_TAGS.length; i++) if (d[FOE_TAGS[i][0]]) return FOE_TAGS[i][1];
+    if (d.scale && u.hp >= u.maxHp) return 'SCALE';
+    if (d.absorb) return 'DRAIN';
+    for (let i = 0; i < u.clocks.length; i++) if (u.clocks[i].drain) return u.clocks[i].move;
+    if (u.dotTicks > 0) return 'VENOM';
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
@@ -10171,84 +10331,17 @@ export class Battle {
         ctx.fill();
         ctx.fillStyle = u.bigT <= 1 ? '#ff6b6b' : PAPER;
         ctx.fillText(heavy, x, y);
+        if (this.lblN < this.lblBox.length / 4) {
+          const at = this.lblN++ * 4;
+          this.lblBox[at] = x - w / 2;
+          this.lblBox[at + 1] = y - 18;
+          this.lblBox[at + 2] = x + w / 2;
+          this.lblBox[at + 3] = y + 8;
+        }
       }
-      // keyword flags — the counter-mechanics read at a glance
-      // keyword flags — composite so a dual-trait foe never hides a mechanic
-      const kws = [
-        u.def.taunt && 'MAGNET',
-        u.def.cursed && 'CURSE',
-        u.def.shielded && 'SHELL',
-        u.def.spiky && 'SPIKY',
-        u.def.regen && 'REGEN',
-        u.def.split && 'SPLIT',
-        u.def.rage && 'RAGE',
-        u.def.repel && 'REPEL',
-        u.def.raider && 'RAIDER',
-        u.def.volley && 'VOLLEY',
-        u.def.summon && 'SOS',
-        u.def.mirror && 'MIRROR',
-        u.def.fuse && 'FUSE',
-        u.def.hunter && 'HUNTER',
-        u.def.leech && 'LEECH',
-        u.safeguard && 'SAFEGUARD',
-        u.clocks.find((c) => c.drain)?.move,
-        u.def.drowsy && 'SLEEP',
-        u.def.venom && 'STING',
-        u.def.burn && 'WISP',
-        u.def.para && 'JOLT',
-        u.def.toxic && 'TOXIC',
-        u.def.shock && 'STATIC',
-        u.def.flame && 'FLAME',
-        u.def.menace && 'MENACE',
-        u.def.wguard && 'W-GUARD',
-        u.def.sturdy && u.sash && 'STURDY',
-        u.def.charm && 'CHARM',
-        u.def.scale && u.hp >= u.maxHp && 'SCALE',
-        u.def.guts && 'GUTS',
-        u.def.absorb && `DRAIN:${u.def.absorb.toUpperCase().slice(0, 3)}`,
-        u.def.truant && 'LOAF',
-        u.def.boost && 'BOOST',
-        u.def.spore && 'SPORE',
-        u.def.sync && 'SYNC',
-        u.def.pressure && 'PRESSURE',
-        u.def.beam && 'BEAM',
-        u.def.trap && 'TRAP',
-        u.def.skyFor && 'SKY',
-        u.def.counter && 'COUNTER',
-        u.def.alpha && 'ALPHA',
-        u.def.shed && 'SHED',
-        u.def.charge && 'CHARGE',
-        u.def.prank && 'PRANK',
-        u.def.thief && 'THIEF',
-        u.def.lay && 'SPIKER',
-        u.def.confuse && 'SONIC',
-        u.def.anchor && 'ANCHOR',
-        u.def.flank && 'FLANK',
-        u.def.forecast && 'FORECAST',
-        u.def.healBlock && 'H-BLOCK',
-        u.def.bond && 'BOND',
-        u.def.armor && 'ARMOR',
-        u.def.chameleon && 'CAMO',
-        u.def.weakArmor && 'W-ARMOR',
-        u.def.moxie && 'MOXIE',
-        u.def.veil && 'VEIL',
-        u.def.filter && 'FILTER',
-        u.def.snipe && 'SNIPE',
-        u.def.unaware && 'UNAWARE',
-        u.def.swift && 'SWIFT',
-        u.def.pheal && 'P-HEAL',
-        u.def.blink && 'BLINK',
-        u.dotTicks > 0 && 'VENOM',
-      ].filter(Boolean) as string[];
-      // cap the ribbon at three — a stacked vet would spill off the unit,
-      // and the scout card already lists every flag it carries
-      const kw = kws.length > 3 ? `${kws.slice(0, 3).join('·')}+${kws.length - 3}` : kws.join('·');
-      if (kw) {
-        ctx.font = fontB(10);
-        ctx.strokeText(kw, u.x, u.y + u.r + 14);
-        ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.regen || u.def.split ? '#a0e060' : u.def.shielded ? '#9aa7b8' : '#f85888';
-        ctx.fillText(kw, u.x, u.y + u.r + 14);
-      }
+      const intro = this.introAlpha();
+      const traitTag = intro > 0 ? this.foeTag(u, false) : this.phase === 'aim' ? this.foeTag(u, true) : undefined;
+      if (traitTag) this.fieldLabel(ctx, traitTag, u.x, u.y + u.r + 22, FOE_TAG_COLOR[traitTag] ?? '#ff8aa8', intro > 0 ? intro : 1);
       // a loaded thief wears its take — the loot floats at its shoulder so
       // you can see exactly what KOing it buys back
       if (u.stolen) {
