@@ -1579,6 +1579,51 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // lagoon — a liquid sea floods mid-court; dry edge columns carry the
+  // approach while islets (rock banks, anchor pads) break the water
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '103333301',
+    '10S323S01',
+    '103333301',
+    '103S3S301',
+    '100000001',
+    '10S0S0S01',
+    '1000P0001',
+    '111111111',
+  ],
+  // quarry plugs — a slab wall seals mid; its only gaps are boulder plugs
+  // to shove open (or bank around the ends)
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '10S0S0S01',
+    '102000201',
+    '102B2B201',
+    '102000201',
+    '10S0S0S01',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // jetstream — a two-deep gust band crosses mid; every lane blows inward,
+  // squeezing crossing shots toward the center column
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '10S0S0S01',
+    '166666661',
+    '166666661',
+    '10S0S0S01',
+    '100000001',
+    '100S0S001',
+    '1000P0001',
+    '111111111',
+  ],
   // pincer — mine claws rake both flanks; the center lane stays clean till
   // the blast wall closes it
   [
@@ -1728,9 +1773,24 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // thicket — a staggered tree lattice screens the northern pack; Cut
+  // (Grass ×1) carves the door, or the ball threads the offset gaps
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '1T0T0T0T1',
+    '10TSTST01',
+    '1T0T0T0T1',
+    '100000001',
+    '10S0S0S01',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 // The hard tail starts at pincer and only appears from depth 2.
-export const ROOM_HARD = 10;
+export const ROOM_HARD = 11;
 // Gym arenas, one per boss HP bar (MS stage_phase_layouts: each bar is its
 // own battle on its own court). Bar 1 stays open so the leader is the
 // spectacle; bar 2 adds two bank pillars; bar 3 closes in with slabs and
