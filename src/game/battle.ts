@@ -25,7 +25,7 @@ import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
 import { STAGE_GIMMICKS, BULLET_GIMMICKS, DRAIN_MOVE, DRAIN_PCT, isGentleRoom, bulletHints, type BulletGimmick, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
-import { installField2, stepField2, drawField2, labelField2, drawField2Hint, type Field2, type Field2Fx } from './gimmicks2';
+import { installField2, stepField2, drawField2, drawField2Floor, blockField2, labelField2, drawField2Hint, type Field2, type Field2Fx } from './gimmicks2';
 import { abilityNotice } from './abilities';
 import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, abilityLabel, weatherSpeed, resetAbilities } from './abilities';
 import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
@@ -2776,7 +2776,7 @@ export class Battle {
           sfx('sizzle');
         }
       }
-      stepField2(this.field2, u, h, this.time, this.field2Fx);
+      this.shotT += stepField2(this.field2, u, h, this.time, this.field2Fx, this.shots);
       // the court can kill the ball mid-flight — a dead mon connects nothing
       if (u.dead) break;
       // snapshot: strikeEnemy→hurt can summon boss adds mid-loop — fresh
@@ -2922,6 +2922,7 @@ export class Battle {
       e.vy *= kn;
       e.x += e.vx * dt;
       e.y += e.vy * dt;
+      blockField2(this.field2, e);
       if (alive.length > 0) {
         // nearest living player — squared scan, one sqrt for the whole pick
         let target: Unit = alive[0];
@@ -6676,7 +6677,7 @@ export class Battle {
   }
 
   private installRoom(room: ReturnType<typeof buildRoom>) {
-    this.field2 = installField2(this.roomGrid, this.theme, this.arena, this.battle);
+    this.field2 = installField2(this.roomGrid, this.theme, this.arena, this.battle, room.hazards);
     this.damageWalls = room.damageWalls.map((w) => ({ ...w, t0: this.time }));
     this.wallShot0 = this.shots;
     this.wallTurn = 0;
@@ -7833,6 +7834,7 @@ export class Battle {
     ctx.globalAlpha = 1;
 
     // court gimmicks — the themed hazard zones under everything else
+    drawField2Floor(ctx, this.field2, this.time, this.shots);
     for (const hz of this.hazards) if (!hz.spent) this.drawHazard(ctx, hz);
     drawField2(ctx, this.field2, this.time);
 

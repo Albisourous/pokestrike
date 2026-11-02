@@ -28,7 +28,7 @@ import { BALL_TIERS, DROP_CAP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDro
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
-import { installField2, stepField2, laserPlan, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
+import { installField2, stepField2, laserPlan, icePlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
 import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
 
@@ -550,6 +550,66 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(!!bb.field2?.laser, 'battle installs the laser fence on a non-gentle court');
   bb.swapCourt(ROOM_LAYOUTS[0]);
   ok(bb.field2 === null, 'gentle court clears the field gimmick');
+}
+
+// --- ice path: glide patches pause the shot clock, Fire melts, ice abilities skate
+{
+  const fx: Field2Fx = { hurt: () => {}, burst: () => {}, notice: () => {}, shake: () => {} };
+  const ball = (d: number, x: number, y: number, vx = 0): Field2Ball => ({ uid: d, def: speciesById(d)!, x, y, vx, vy: 0, r: 22, maxHp: 100, dead: false });
+  const glide = (f: any, u: Field2Ball, steps: number, shot: number) => {
+    let paused = 0;
+    for (let i = 0; i < steps; i++) paused += stepField2(f, u, 1 / 120, i / 120, fx, shot);
+    return paused;
+  };
+  const icy = (Object.keys(STAGE_GIMMICKS2) as Theme[]).filter((t) => STAGE_GIMMICKS2[t]!.kind === 'ice');
+  ok(icy.includes('cavern'), 'cave courts carry the ice path');
+  ok([0, 1, 2].every((i) => !installField2(ROOM_LAYOUTS[i], 'cavern', arena, 1)), 'gentle openers carry no ice path');
+  let iced = 0, floor = true;
+  for (const grid of [...ROOM_LAYOUTS.slice(3), ...ROOM_BOSS]) {
+    const plan = icePlan(grid);
+    if (plan.length) iced++;
+    floor &&= plan.every((p) => p.c0 + p.c1 === 8 || plan.some((q) => q.r0 === p.r0 && q.c0 === 8 - p.c1))
+      && plan.every((p) => [p.r0, p.r0 + 1].every((r) => grid[r].slice(p.c0, p.c1 + 1) === '0'.repeat(p.c1 - p.c0 + 1)));
+  }
+  ok(iced >= 10 && floor, `ice patches sit mirror-symmetric on open floor (${iced} rooms)`);
+  const grid = ROOM_LAYOUTS.slice(3).find((g) => icePlan(g).length)!;
+  const p0 = icePlan(grid)[0];
+  const blocked = installField2(grid, 'cavern', arena, 1, [{ nx: (p0.c0 + 0.5) / 9, ny: (p0.r0 + 0.5) / 11 }]) as any;
+  ok(!blocked || blocked.ice.every((p: any) => !(p.x <= arena.x + arena.w * (p0.c0 + 0.5) / 9 && p.x + p.w >= arena.x + arena.w * (p0.c0 + 0.5) / 9 && p.y <= arena.y + arena.h * (p0.r0 + 0.5) / 11 && p.y + p.h >= arena.y + arena.h * (p0.r0 + 0.5) / 11)), 'ice skips cells a room hazard sits on');
+  const f: any = installField2(grid, 'cavern', arena, 1);
+  const pt = f.ice[0], cx = pt.x + pt.w / 2, cy = pt.y + pt.h / 2;
+  const half = glide(f, ball(1, cx, cy), 60, 1);
+  ok(Math.abs(half - 0.5) < 1e-9, `ice pauses the shot clock while gliding (${half.toFixed(3)} s)`);
+  const capped = glide(f, ball(1, cx, cy), 300, 1);
+  ok(Math.abs(half + capped - ICE_PAUSE_MAX) < 1e-9, `the pause is bounded per shot (${(half + capped).toFixed(3)} s)`);
+  ok(Math.abs(glide(f, ball(1, cx, cy), 60, 2) - 0.5) < 1e-9, 'the next shot banks a fresh glide');
+  ok(glide(f, ball(1, pt.x - 30, pt.y - 30), 60, 3) === 0, 'off the patch the clock runs');
+  const seal = ball(363, cx, cy, 100);
+  stepField2(f, seal, 1 / 120, 0, fx, 4);
+  stepField2(f, seal, 1 / 120, 0, fx, 4);
+  ok(Math.abs(seal.vx - 100 * ICE_SKATE) < 1e-9, `Thick Fat skates +10% once per patch per shot (vx ${seal.vx.toFixed(1)})`);
+  const flame = ball(4, cx, cy);
+  ok(glide(f, flame, 10, 5) === 0 && pt.melt === 5, 'a Fire ball melts the patch it crosses');
+  ok(glide(f, ball(1, cx, cy), 10, 5) === 0, 'a melted patch stops gliding for the rest of that shot');
+  ok(glide(f, ball(1, cx, cy), 10, 6) > 0, 'the patch refreezes on the next shot');
+
+  const room = ROOM_LAYOUTS.slice(3).find((g) => laserPlan(g))!;
+  const lf: any = installField2(room, 'plant', arena, 1);
+  const foe = { x: (lf.laser.a.x + lf.laser.b.x) / 2, y: lf.laser.a.y + 10, vx: 0, vy: -200, r: 24 };
+  blockField2(lf, foe);
+  ok(foe.vy > 0 && foe.y >= lf.laser.a.y + 28 - 1e-9, 'laser beam blocks foe movement too');
+
+  const bb: any = new Battle(arena, [speciesById(1)!, speciesById(4)!, speciesById(7)!, speciesById(25)!], makeStage(4, 'T'), mulberry32(18));
+  bb.spawnWave(0);
+  bb.theme = 'cavern';
+  bb.swapCourt(grid);
+  bb.enemies = []; bb.blocks = []; bb.damageWalls = []; bb.hazards = []; bb.pickups = [];
+  bb.activeIdx = 0; bb.phase = 'shot'; bb.shotT = bb.time;
+  const icePt = bb.field2?.ice?.[0], u = bb.players[0];
+  u.x = icePt.x + icePt.w / 2; u.y = icePt.y + icePt.h / 2; u.vx = 30; u.vy = 0;
+  const t0 = bb.shotT;
+  bb.stepShot(1 / 60);
+  ok(Math.abs(bb.shotT - t0 - 1 / 60) < 1e-9, 'battle shot clock holds while the ball is on ice');
 }
 
 // --- bag items: pk_bag stock, constructor applies the run-start picks ------
