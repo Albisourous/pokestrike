@@ -102,6 +102,7 @@ import {
   TASKS_BTN,
   TASKS_TABS,
   HOF_CLIMB,
+  OVL_CLOSE,
   drawTasks,
   taskRowHit,
   settingsSegSet,
@@ -952,7 +953,7 @@ const labTap = (p: { x: number; y: number }) => {
     else sfx('ui', 0.6); // broke or maxed — the price pill was red
     return;
   }
-  if (inRect(p.x, p.y, HATCH_PANEL)) return; // inside dead space is modal
+  if (inRect(p.x, p.y, HATCH_PANEL) && !inRect(p.x, p.y, OVL_CLOSE)) return; // inside dead space is modal
   labOpen = false;
   sfx('ui');
 };
