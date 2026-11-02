@@ -3,6 +3,7 @@ import { drawMissionTicks } from './missions';
 import { isMuted } from '../core/audio';
 import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
+import { gaugeCounter } from './gauge';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, type Theme } from './bg';
@@ -4009,7 +4010,7 @@ export function drawCounterHint(ctx: CanvasRenderingContext2D, gimmick: typeof S
   ctx.fillText(hint, x, y);
   const matches = team.filter((def) => countersGimmick(def, gimmick));
   if (matches.length) {
-    const label = matches[0].name.toUpperCase() + (matches.length > 1 ? ` +${matches.length - 1}` : '');
+    const label = matches[0].name.toUpperCase() + (matches.length > 1 ? ` +${matches.length - 1}` : '') + (gaugeCounter(matches[0]) ? ' · GOLD SHOT' : '');
     fitFontB(ctx, label, 12, width);
     ctx.strokeText(label, x, y + 14);
     ctx.fillText(label, x, y + 14);

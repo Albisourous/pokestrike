@@ -6,6 +6,7 @@ import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
 import { Battle, PAUSE_QUIT, PAUSE_SETTINGS, debugArena, WEATHER_FOR } from './game/battle';
+import { GAUGE_ICON } from './game/gauge';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
 import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom, ENEMY_THEME, MOAT_HAZARD, GIMMICK, THEME_NAME } from './game/data';
@@ -2496,6 +2497,7 @@ Promise.all([
   loadGracidea(),
   loadNpcs(),
   loadItem('poke-ball'),
+  loadItem(GAUGE_ICON),
   loadItem('ui/pokemon-logo'),
   loadItem('oran-berry'),
   loadItem('sitrus-berry'),

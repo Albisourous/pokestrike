@@ -27,7 +27,8 @@ import { STAGE_GIMMICKS, BULLET_GIMMICKS, DRAIN_MOVE, DRAIN_PCT, isGentleRoom, b
 import { Telops } from './telop';
 import { installField2, stepField2, drawField2, labelField2, drawField2Hint, type Field2, type Field2Fx } from './gimmicks2';
 import { abilityNotice } from './abilities';
-import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, weatherSpeed, resetAbilities } from './abilities';
+import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, abilityLabel, weatherSpeed, resetAbilities } from './abilities';
+import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
 
@@ -2233,7 +2234,8 @@ export class Battle {
     // resets the moment a release misses the gold
     this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
-    this.shotGold = gold;
+    this.shotGold = gold && !quietOpener(this.waveIndex, isGentleRoom(this.roomGrid));
+    if (this.shotGold && gaugeCounter(u.def)) this.gaugeOn(u);
     const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (u.paraT > 0 ? 0.65 : 1) * (0.4 + 0.6 * (gold ? 1 : charge)) * this.swiftMult(u);
     u.vx = dir.x * speed;
     u.vy = dir.y * speed;
@@ -2376,6 +2378,17 @@ export class Battle {
     const drift = Math.max(d - 0.5, 0) * 0.16 * Math.sin(this.dragT * 2.4);
     const c = Math.min(Math.max(0.66 + 0.27 * n + drift + this.gaugeJit * 0.18, hw), 1 - hw);
     return { c, hw };
+  }
+
+  // MS gauge ability: a gauge mon's counter is live only on its own gold shot
+  private counterOn(u: Unit) {
+    return counterLive(u.def, u === this.active && this.phase === 'shot' && this.shotGold);
+  }
+
+  private gaugeOn(u: Unit) {
+    this.pushText({ x: u.x, y: u.y - u.r - 30, text: `${abilityLabel(u.def)} ON`, t: 1, color: '#ffd84d', big: false });
+    this.waves.push({ x: u.x, y: u.y, r: 0, maxR: u.r * 2.2, t: 0.25, life: 0.25, color: '#ffd84d', hits: new Set() });
+    sfx('perfect', 1.3);
   }
 
   // --- simulation ---
@@ -2602,7 +2615,7 @@ export class Battle {
       for (const e of wave) {
         if (e.dead || !e.gravR) continue;
         if (Math.hypot(u.x - e.x, u.y - e.y) < e.gravR + u.r) {
-          if (abilityHazard(this, u, 'gravity', this.abilityText)) continue;
+          if (this.counterOn(u) && abilityHazard(this, u, 'gravity', this.abilityText)) continue;
           const gd = Math.exp(-5 * h);
           u.vx *= gd;
           u.vy *= gd;
@@ -2650,7 +2663,7 @@ export class Battle {
         // a landlocked ball never enters the water — hitSolid banks it
         // off the surface, so its effects only touch swimmers
         if (isWater(hz) && !canSwim(u.def)) continue;
-        if (abilityHazard(this, u, hz.kind, this.abilityText)) continue;
+        if (this.counterOn(u) && abilityHazard(this, u, hz.kind, this.abilityText)) continue;
         if (hz.kind === 'mine') {
           // MS mine: the ball's touch detonates it — the blast SHOVES the
           // pack around (enemies take no environment damage; the court is
@@ -3241,7 +3254,7 @@ export class Battle {
         wall ??= this.damageWallAt('bottom', (u.x - a.x) / a.w);
       }
     }
-    if (wall && u.side === 'player' && !abilityWall(this, u, wall.type, this.abilityText) && !this.slowImmune
+    if (wall && u.side === 'player' && !(this.counterOn(u) && abilityWall(this, u, wall.type, this.abilityText)) && !this.slowImmune
         && u.def.type !== wall.type && u.def.type2 !== wall.type
         && typeMult(wall.type, u.def) > 0
         && !(wall.type === 'grass' && (u.airborne || flies(u.def)))) {
@@ -3621,7 +3634,7 @@ export class Battle {
     // aegis ward: a shielded foe eats the whole hit — crack the guardian
     // first, or the pack soaks your best lines for free
     if (e.shieldN > 0) {
-      if (src) abilityReflect(this, src, e, this.abilityText);
+      if (src && this.counterOn(src)) abilityReflect(this, src, e, this.abilityText);
       e.shieldN--;
       if (e.shieldN) this.pushText({ x: e.x, y: e.y - e.r - 30, text: `REFLECT ${e.shieldN}`, t: 0.9, color: TYPE_COLOR[e.def.type], big: false });
       else this.telop.push({ kind: 'shield', title: 'REFLECT BROKEN', sub: e.def.name.toUpperCase(), mon: e.def.id, icon: 'hard-stone' });
@@ -8754,6 +8767,13 @@ export class Battle {
     ctx.fillText(this.phase === 'aim' ? 'YOUR SHOT' : this.phase === 'enemy' ? 'FOES ATTACK' : 'IN FLIGHT', r.x + 56, r.y + 19);
     ctx.font = fontB(13);
     ctx.fillText(u.def.name, r.x + 56, r.y + 39);
+    const gaugeIcon = gaugeCounter(u.def) ? itemSprite(GAUGE_ICON) : null;
+    if (gaugeIcon) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(gaugeIcon, r.x + 62 + ctx.measureText(u.def.name).width, r.y + 29, 20, 20);
+      ctx.restore();
+    }
     const next = this.players.slice(this.activeIdx + 1).concat(this.players.slice(0, this.activeIdx)).find((p) => !p.dead);
     if (this.phase === 'aim' && !this.dragging && this.shots < 2) {
       ctx.font = fontB(11);
@@ -10596,6 +10616,13 @@ export class Battle {
     const bx = a.x + (a.w - bw) / 2;
     const by = a.y + 14;
     const zx = bx + bw * zone.c, zw = bw * 2 * zone.hw;
+    const gaugeIcon = gaugeCounter(this.active.def) ? itemSprite(GAUGE_ICON) : null;
+    if (gaugeIcon) {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(gaugeIcon, bx - 24, by - 1, 18, 18);
+      ctx.restore();
+    }
     // bezel plate + a lighter top edge — the FRLG meter bevel
     ctx.fillStyle = 'rgba(10,14,32,0.8)';
     ctx.fillRect(bx - 4, by - 4, bw + 8, bh + 8);
