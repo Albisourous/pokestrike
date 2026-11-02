@@ -9754,9 +9754,9 @@ export class Battle {
         const k = Math.max(0, Math.min(1, (age - WALL_DELAY) / WALL_FADE));
         ctx.globalAlpha = 0.45 * k;
         for (let at = 0; at < span; at += 16) drawTile(ctx, tile, at, -6, Math.min(16, span - at), 12);
-        ctx.globalAlpha = 0.6;
+        ctx.globalAlpha = 0.85;
         ctx.strokeStyle = '#aab4d8';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.setLineDash(WALL_DASH);
         ctx.strokeRect(0, -10, span, 20);
       } else if (live) {
@@ -9788,9 +9788,10 @@ export class Battle {
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#101826';
         ctx.lineWidth = 5;
-        ctx.strokeText('DMG WALL', span / 2, -10);
+        const ly = w.edge === 'top' ? 26 : -10; // the top rim sits under the HUD, so its tag hangs inside
+        ctx.strokeText('DMG WALL', span / 2, ly);
         ctx.fillStyle = TYPE_COLOR[w.type];
-        ctx.fillText('DMG WALL', span / 2, -10);
+        ctx.fillText('DMG WALL', span / 2, ly);
       }
       ctx.setLineDash(NO_DASH);
       ctx.restore();
