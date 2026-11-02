@@ -9,6 +9,28 @@ Ground rules: anything marked **(data)** was read directly from a RomFS CSV, **(
 decompile or RTTI strings, **(inferred)** is our reading of it. Ideas get reinvented for Pokéstrike.
 We don't port them line for line.
 
+## Where the RE files live
+
+Everything stays off-repo, on Albin's Mac under `~/Documents/MonsterStrike/`. Reuse it instead of
+re-extracting or re-decompiling.
+
+| What | Path (under `~/Documents/MonsterStrike/re/`) |
+|---|---|
+| ExeFS `code.bin` | `exefs/` |
+| RomFS (stage CSVs, `2d/bg/btl*.arc`, `2d/ui/battle*`) | `romfs/` |
+| Full decompile, every function in one file | `analysis/decomp/monst_decomp_all.c` |
+| Function index (address, name, size) | `analysis/decomp/functions.tsv` |
+| Round 1 decompile (CSV table loader `FUN_0012b26c`) | `analysis/decomp/decomp_out.c` |
+| Analysed Ghidra 12.2 project, open without re-analysis | `analysis/ghidra/gproj/monst.gpr` |
+| Headless scripts (`ExportAll.java`, `DecompXrefs.java`) | `analysis/ghidra/scripts/` |
+| `strings` dump of code.bin (RTTI class names, CSV paths) | `analysis/code_strings.txt` |
+| SARC / BFLIM / stage CSV tools | `analysis/tools/` |
+| Decoded battle backgrounds, walls, UI (PNG + contact sheets) | `analysis/art_png/` |
+
+To find a class's code: RTTI name in `code_strings.txt` → typeinfo → vtable → slot 5 (per-frame
+update) → look the address up in `functions.tsv` → grep `@<address>` in `monst_decomp_all.c`.
+`analysis/README.md` has the re-run command.
+
 ## Phase 1: Pure logic analysis
 
 ### Binary layout (code)
@@ -132,7 +154,7 @@ Sitrus heals 30% max HP (MS: 50 → 100, so ×2). It shares the oran heal branch
   uses float HP with `Math.round` at heal time, so heal amounts can differ by ±1 from an integer port.
   That's harmless here, but any future port of the 9000→50000 enemy curve should round once at spawn.
 - Open: the per-turn evolution routine itself wasn't located in `.text` yet (only the loader). Next step:
-  xref `field_items` table global `DAT_0012b734` in Ghidra (`~/re/gproj/monst`).
+  xref `field_items` table global `DAT_0012b734` in Ghidra (`analysis/ghidra/gproj`, see "Where the RE files live").
 
 ## code.bin findings (Ghidra 12.2, raw ARM v6 @ 0x100000)
 
