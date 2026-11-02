@@ -329,3 +329,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `6544927` | content | breeder event (pick-1-of-3 catch); dojo visitor (+2 Lv fighting, comp-gated); BANK SHOT task kind; Town Map bag item | `git revert 6544927` |
 | 2026-11-02 | `961c0bd` | leftovers2 | live combo ping; Lum Berry perk (15s ailment wash, shed's cleanse); map trait chips gated; draft ‹ TITLE back-out | `git revert 961c0bd` |
 | 2026-11-02 | `15578b0` | content | EGG HUNT/NEW FORM task kinds; old-couple blessing doubles next chest (SAVE_VER 7) | `git revert 15578b0` |
+| 2026-11-02 | `dc2d75c` | content | 5 bag items on existing knobs; Lum cures confusion too; `starMult`/`reviveToken` exposed | `git revert dc2d75c` |

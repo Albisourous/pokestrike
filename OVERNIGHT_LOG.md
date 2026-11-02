@@ -729,3 +729,7 @@ backlog; builders run one iteration each, I verify + commit + push.
 - 15578b0 pushed: content — EGG HUNT (pulls count at doPull) + NEW FORM
   (evos count at startEvo) task kinds; the old couple's blessing doubles
   the next chest (pk_run v7, optional field).
+- dc2d75c pushed: bag fills out — x-attack (pow ×1.1), max-elixir
+  (ultIn −5), chesto-berry (sleepless), revival-herb (revive token),
+  amulet-coin (starMult +0.15); Lum perk also clears confusion
+  (deliberate divergence from shed's five-field cleanse).
