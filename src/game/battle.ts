@@ -547,6 +547,10 @@ const PICKUP_META: Record<PickupKind, { name: string; label: string; color: stri
 const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }>> = {
   'oran-berry': { to: 'sitrus-berry', turns: 1 },
 };
+// EXP per KO: the launcher learns foe Lv × KO_LV_RATE (×2 punching up); the
+// rest of the living team learns KO_LV_SHARE of that, so the bench keeps pace
+const KO_LV_RATE = 0.05;
+const KO_LV_SHARE = 0.5;
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 
 // ?debug=arena1..11 or ?dev&arena=<name|index> — pin every wave's court
@@ -3907,8 +3911,9 @@ export class Battle {
       // like real XP. Cap keeps the multiplier sane.
       const lv = this.active;
       if (lv && !lv.dead && lv.lvl < LV_CAP) {
-        this.gainLevels(lv, Math.max(1, Math.round(e.lvl * 0.05)) * (e.lvl > lv.lvl ? 2 : 1));
+        this.gainLevels(lv, Math.max(1, Math.round(e.lvl * KO_LV_RATE)) * (e.lvl > lv.lvl ? 2 : 1));
       }
+      for (const p of this.players) if (p !== lv && KO_LV_SHARE > 0) this.gainLevels(p, Math.max(1, Math.round(e.lvl * KO_LV_RATE * KO_LV_SHARE)));
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
         this.pushText({ x: e.x, y: e.y - e.r - 46, text: label, t: 1.1, color: '#ffd84d', big: true });

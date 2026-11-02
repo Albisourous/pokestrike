@@ -1547,7 +1547,7 @@ const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'LEVELING UP',
     cards: [
-      ['exp-share', 'every KO levels the mon that launched the shot'],
+      ['exp-share', 'every KO levels the mon that launched the shot · the rest of the team learns a little too'],
       ['macho-brace', 'tougher foes teach more · cap Lv100, levels survive evolution'],
       ['badges/3', 'each win raises ASCENSION: foes get tougher and faster'],
       ['dire-hit', 'ASC buys perks: a second charm (3), weaker rests (4), enraged gyms (6)'],
