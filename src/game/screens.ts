@@ -30,7 +30,8 @@ export { DEX_DETAIL_R, dexBuyRect, dexRowAt, dexScrollMax, drawDex, drawDexDetai
 import { drawTownBody } from './home/town';
 export { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_FOLK, TOWN_LOTS, townStrollAt } from './home/town';
 export type { TownStroll } from './home/town';
-export { HOF_CLIMB, OVL_CLOSE, achScrollMax, drawAch, drawBoard, drawLab, labHit, labScrollMax } from './home/overlays';
+export { HOF_CLIMB, OVL_CLOSE, achScrollMax, drawAch, drawBoard, drawLab, drawPauseCard, labHit, labScrollMax } from './home/overlays';
+import { drawLoginDrop } from './home/overlays';
 
 export const W = 540;
 export const H = 960;
@@ -986,32 +987,7 @@ function drawClimbBody(
   if (lt) {
     if (loginT0 < 0) loginT0 = t;
     const age = t - loginT0;
-    if (age < 6) {
-      ctx.save();
-      ctx.globalAlpha = Math.min(1, (6 - age) / 1.5);
-      const msg = `DAY ${lt.n} LOGIN · +${lt.prize}★`;
-      const back = lt.back > 0 ? `WELCOME BACK · +${lt.back}★` : '';
-      ctx.font = font(11);
-      let bw = ctx.measureText(msg).width;
-      if (back) {
-        ctx.font = fontB(10);
-        bw = Math.max(bw, ctx.measureText(back).width);
-        ctx.font = font(11);
-      }
-      bw += 40;
-      const bh = back ? 56 : 38;
-      const br = { x: W / 2 - bw / 2, y: CLIMB_SCENE.y + 96, w: bw, h: bh };
-      uiWindow(ctx, br, { dark: true, rad: 6, rim: false });
-      ctx.textAlign = 'center';
-      ctx.fillStyle = GOLD_HI;
-      ctx.fillText(msg, W / 2, br.y + (back ? 24 : 25));
-      if (back) {
-        ctx.font = fontB(10);
-        ctx.fillStyle = PAPER;
-        ctx.fillText(back, W / 2, br.y + 42);
-      }
-      ctx.restore();
-    }
+    if (age < 6) drawLoginDrop(ctx, lt, CLIMB_SCENE.y + 96, Math.min(1, (6 - age) / 1.5));
   }
 
   // build tag — bug reports should name their build
@@ -4950,6 +4926,7 @@ export function drawSettings(
     // the label rides a uiRow strip — a lone toggle centers in its row;
     // sliders/segs/subs pin theirs to the top 36px, controls below
     const stripH = row.kind === 'toggle' && !row.sub ? r.h : 36;
+    uiWindow(ctx, { x: r.x - 4, y: r.y, w: r.w + 8, h: r.h }, { rad: 8, shadow: false });
     uiRow(ctx, { x: r.x, y: r.y, w: r.w, h: stripH }, row.label, { sub: row.sub, px: 10 });
     if (row.kind === 'slider') {
       // a throttled write keeps the thumb live from the pending value —
