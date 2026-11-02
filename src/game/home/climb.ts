@@ -8,7 +8,7 @@ import * as MT from '../maptiles';
 import type { TileRect } from '../maptiles';
 import { INK, INK_SOFT, INK_FAINT, PAPER, GOLD, GOLD_HI, DANGER, font, fontB, uiWindow, uiPanel, cursorTri } from '../ui';
 import {
-  ascCap, ascPick, best, bondPts, boostLeft, echoIds, freePullLeft, nextRookie, raidDoneToday, rankName,
+  ascCap, ascPick, best, bondPts, boostLeft, coachDone, echoIds, freePullLeft, nextRookie, raidDoneToday, rankName,
   ROOKIE_STEPS, runSave, settings, starBoost, streakWins, tier, trainerPick,
 } from '../meta';
 import { raidPick } from '../tasks';
@@ -26,6 +26,10 @@ export const RESTART_BTN = { x: 376, y: FREE_BTN.y, w: W - 20 - 376, h: FREE_BTN
 export const ASC_BTN = { x: 20, y: 598, w: W - 40, h: 146 };
 export const CLIMB_FREE = { x: 20, y: 758, w: 244, h: 60 };
 export const CLIMB_RAID = { x: 276, y: 758, w: 244, h: 60 };
+
+// fresh-save diet: before the coached first run, the climb tab is just the
+// court + START — ladder and side doors draw and hit-test behind this gate
+export const freshClimb = () => !coachDone() && best().runs === 0;
 
 // stage 1's seed pre-rolls here and newRun() consumes it, so the preview is the truth
 let climbSeed = (Math.random() * 0x7fffffff) | 0 || 1;
@@ -298,6 +302,8 @@ export function drawClimb(
       ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP RUN?', sub: 'TAP AGAIN' }
       : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'RESTART', sub: 'NEW SEED' });
   }
+
+  if (freshClimb()) return; // logo, diorama, START — the rest earns its place after run one
 
   drawAscLadder(ctx, t, ASC_BTN, ascCap(), ascPick());
 

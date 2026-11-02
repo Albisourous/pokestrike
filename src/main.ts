@@ -42,6 +42,7 @@ import {
   ASC_BTN,
   hitAscCell,
   noteAscDeny,
+  freshClimb,
   HELP_BTN,
   HELP_CHIP_HIT,
   GEAR_BTN,
@@ -572,6 +573,13 @@ const draftPick = (i: number) => {
   // ?dev exposes the live battle for poking around during playtests
   if (new URLSearchParams(location.search).has('dev'))
     (window as unknown as { __battle: Battle }).__battle = battle;
+  // the coached first run skips the charm board — the wave teaches by doing
+  if (battle.coach) {
+    scene = 'battle';
+    inputLockT = t + 0.25; // the climb board is live — eat this tap's companion
+    sceneMusic();
+    return;
+  }
   // the charm pick gates the climb — ASC 3+ pays out a second charm
   startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes(), undefined, battle.perkOfferN); // lab 'fourth' deals a fourth charm card too
   charmBonus = battle.asc >= 3;
@@ -1298,7 +1306,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sfx('ui');
       return;
     }
-    if (homeTab === 'climb' && inRect(p.x, p.y, ASC_BTN)) {
+    if (homeTab === 'climb' && !freshClimb() && inRect(p.x, p.y, ASC_BTN)) {
       // the rung ladder — a tap sets the heat directly; locked rungs deny
       const i = hitAscCell(p.x, p.y);
       if (i >= 0) {
@@ -1344,7 +1352,7 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (homeTab === 'climb' && (inRect(p.x, p.y, CLIMB_FREE) || inRect(p.x, p.y, CLIMB_RAID))) {
+    if (homeTab === 'climb' && !freshClimb() && (inRect(p.x, p.y, CLIMB_FREE) || inRect(p.x, p.y, CLIMB_RAID))) {
       // side doors: free pull opens SHOP, today's raid opens RAID
       noteTabSwap(t, homeTab);
       homeTab = inRect(p.x, p.y, CLIMB_FREE) ? 'shop' : 'raid';
@@ -2501,13 +2509,9 @@ Promise.all([
       scene = 'battle';
       sceneMusic();
     }
-    // first boot opens the help deck — the kinetic coach then teaches the
-    // pull itself inside run one. Later boots leave it under the ? chip
-    if (!debugArena() && !helpSeen()) {
-      helpOpen = true;
-      helpWelcome = true;
-      markHelpSeen();
-    }
+    // first boot used to open the help deck — now it stays under the ?
+    // chip; the kinetic coach teaches the pull inside run one
+    if (!debugArena() && !helpSeen()) markHelpSeen();
     startLoop(update, render);
   })
   .catch((err) => {
