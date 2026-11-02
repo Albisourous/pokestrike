@@ -4487,6 +4487,35 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string | RegExp
   x.spawnWave(0);
   y.spawnWave(0);
   ok(x.missions.list.length === 3 && x.rng() === y.rng(), 'missions leave seeded replays unchanged');
+  // pk_stops counts card shows; past the third the card goes auto — it still
+  // eats a tap inside its beat, then drops itself. Draw headless on a stub
+  // ctx the way the share card does.
+  const fakeCtx: any = new Proxy({}, {
+    get: (_, k) =>
+      k === 'measureText' ? () => ({ width: 40 })
+      : k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern' ? () => ({ addColorStop() {} })
+      : () => {},
+    set: () => true,
+  });
+  const doc0 = (globalThis as Record<string, unknown>).document;
+  (globalThis as Record<string, unknown>).document = { createElement: () => ({ width: 0, height: 0, getContext: () => fakeCtx }) };
+  const st0 = { shots: 0, par: 10, weak: 0, faints: 0 };
+  const sc = { theme: 'grove', name: 'N', sub: 'S', foes: [], team: [] } as any;
+  globalThis.localStorage.setItem('pk_stops', '{"n":0}');
+  const c2 = new Missions();
+  c2.start(1, 1, types, true, 0);
+  c2.draw(fakeCtx, 1, arena, st0, sc);
+  ok(c2.dismiss(1.1) && !c2.dismiss(1.2), 'a fresh stop card still holds for the tap');
+  globalThis.localStorage.setItem('pk_stops', '{"n":3}');
+  const c3 = new Missions();
+  c3.start(1, 1, types, true, 0);
+  c3.draw(fakeCtx, 0.1, arena, st0, sc);
+  ok(c3.dismiss(0.2), 'the auto card still eats a tap inside its beat');
+  const c4 = new Missions();
+  c4.start(1, 1, types, true, 0);
+  c4.draw(fakeCtx, 1.6, arena, st0, sc);
+  ok(!c4.dismiss(1.7), 'the auto card drops itself after the beat');
+  (globalThis as Record<string, unknown>).document = doc0;
 }
 
 // --- MS ALL CONNECT: every living ally in one shot, next shot ×1.25 -------

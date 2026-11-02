@@ -9629,30 +9629,27 @@ export class Battle {
     ctx.fillRect(0, 0, 540, 960);
 
     // the field log docks along the viewport's bottom edge — cleared island
-    // rows are dead space (taps only ever reach linked stops)
+    // rows are dead space (taps only ever reach linked stops). One strip:
+    // the freshest note, the rest is scrollback
     if (this.fieldLog.length) {
-      const lx = ox - 4, ly = oy + view * cell - 52, lw = MAP_W * cell + 8;
+      const lx = ox - 4, ly = oy + view * cell - 30, lw = MAP_W * cell + 8;
       ctx.fillStyle = 'rgba(10,14,28,0.78)';
-      ctx.fillRect(lx, ly, lw, 48);
+      ctx.fillRect(lx, ly, lw, 26);
       ctx.strokeStyle = '#2a3560';
       ctx.lineWidth = 2;
-      ctx.strokeRect(lx + 1, ly + 1, lw - 2, 46);
+      ctx.strokeRect(lx + 1, ly + 1, lw - 2, 24);
       ctx.textAlign = 'left';
       ctx.font = fontB(10);
       ctx.fillStyle = '#ffd84d';
-      ctx.fillText('FIELD LOG', lx + 10, ly + 10);
-      ctx.font = fontB(10);
-      const tail = this.fieldLog.slice(-3);
-      tail.forEach((line, i) => {
-        ctx.globalAlpha = i === tail.length - 1 ? 1 : i === tail.length - 2 ? 0.6 : 0.35;
-        ctx.fillStyle = '#e8ecf8';
-        // a runaway note used to ink past the dock's right edge — cap it
-        let t2 = line;
-        while (t2.length > 3 && ctx.measureText(t2 + '…').width > lw - 20) t2 = t2.slice(0, -1);
-        if (t2 !== line) t2 += '…';
-        ctx.fillText(t2, lx + 10, ly + 22 + i * 11);
-      });
-      ctx.globalAlpha = 1;
+      ctx.fillText('FIELD LOG', lx + 10, ly + 16);
+      const tx = lx + 18 + ctx.measureText('FIELD LOG').width;
+      const line = this.fieldLog[this.fieldLog.length - 1];
+      ctx.fillStyle = '#e8ecf8';
+      // a runaway note used to ink past the dock's right edge — cap it
+      let t2 = line;
+      while (t2.length > 3 && tx + ctx.measureText(t2 + '…').width > lx + lw - 10) t2 = t2.slice(0, -1);
+      if (t2 !== line) t2 += '…';
+      ctx.fillText(t2, tx, ly + 16);
       ctx.textAlign = 'center';
     }
 
@@ -9670,10 +9667,14 @@ export class Battle {
     ctx.font = fontB(10);
     ctx.fillStyle = '#aab4d8';
     ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
-    ctx.font = fontB(10);
-    ctx.fillStyle = '#8890b8';
-    ctx.fillText('WILD catchable fight · TRAINER mono-type squad · no catches, better loot', 270, oy + view * cell + 48);
-    ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
+    // the stop legend is onboarding text — the signs carry it after the
+    // first couple of rows
+    if (this.waveIndex < 2) {
+      ctx.font = fontB(10);
+      ctx.fillStyle = '#8890b8';
+      ctx.fillText('WILD catchable fight · TRAINER mono-type squad · no catches, better loot', 270, oy + view * cell + 48);
+      ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
+    }
     // resolved events and egg ticks surface as a toast over the island
     if (this.mapMsgT > 0 && this.mapMsg) {
       ctx.globalAlpha = Math.min(1, this.mapMsgT);

@@ -9,7 +9,7 @@ import { STAGE_GIMMICKS2, countersGimmick2 } from './gimmicks2';
 import { fitFontB, fitWrap, monShadow, roundRect } from './screens';
 import { TYPE_COLOR } from './types';
 import { mulberry32 } from '../core/rng';
-import { addDust, recordMissions } from './meta';
+import { addDust, noteStopCard, recordMissions } from './meta';
 import type { PokeType } from './types';
 import { GOLD, INK, INK_FAINT, INK_SOFT, PAPER, PARCH, font, fontB, uiPanel, uiWindow } from './ui';
 
@@ -19,6 +19,7 @@ export interface Mission { id: MissionId; label: string; state: MissionState; pa
 export interface StopStats { shots: number; par: number; weak: number; faints: number }
 export const MISSION_N = 3;
 const CARD_FADE = 0.2; // s the quest card takes to fade in and out
+const CARD_AUTO = 1.5; // s a seen-it-all card lingers before dropping itself
 export interface StopCard { theme: Theme; name: string; sub: string; foes: SpeciesDef[]; team: SpeciesDef[] }
 // the same item art the arena props use where one exists
 const GIMMICK_ICON: Record<string, string> = {
@@ -86,6 +87,7 @@ export class Missions {
   private cardOn = false;
   private cardOut = -99;
   private cardDrawn = -99; // a card nobody has seen can't eat a tap (headless runs)
+  private cardAuto = false;
 
   start(seed: number, stage: number, teamTypes: PokeType[], ultReady: boolean, now: number, off = false) {
     this.rare = false;
@@ -93,6 +95,9 @@ export class Missions {
     this.t0 = now;
     this.ultUsed = this.banked = false;
     this.cardOn = this.list.length > 0;
+    // count the show, not the wave — after 3 cards it's ritual, so this one
+    // flashes and drops itself (a tap inside the window still dismisses)
+    this.cardAuto = this.cardOn && noteStopCard() > 3;
   }
   // tap anywhere drops the quest card; true = the tap was spent on it
   dismiss(now: number) {
@@ -142,6 +147,10 @@ export class Missions {
   draw(ctx: CanvasRenderingContext2D, now: number, arena: { x: number; y: number; w: number; h: number }, s: StopStats, card?: StopCard) {
     if (!this.list.length) return;
     this.tick(s);
+    if (this.cardOn && this.cardAuto && now - this.t0 >= CARD_AUTO) {
+      this.cardOn = false;
+      this.cardOut = now;
+    }
     if (this.cardOn && !card) this.dismiss(now); // the shot left aim without a tap (keys)
     ctx.save();
     const a = this.cardOn ? Math.min(1, (now - this.t0) / CARD_FADE) : 1 - (now - this.cardOut) / CARD_FADE;

@@ -238,6 +238,22 @@ export function markUltHintSeen() {
   store('pk_ult_hint', true);
 }
 
+// pk_stops { n } counts stop cards shown — same { n } one-counter as
+// pk_dexrw. Once it's old hat the quest card stops holding for a tap.
+let memStops = 0;
+const stopsSeen = (): number => {
+  const raw = load<Partial<{ n: number }>>('pk_stops');
+  const n = raw && typeof raw === 'object' && typeof raw.n === 'number' && Number.isFinite(raw.n) ? raw.n : memStops;
+  return Math.max(0, Math.floor(n));
+};
+// counts a card the moment it's shown; returns the running total
+export function noteStopCard(): number {
+  const n = stopsSeen() + 1;
+  memStops = n;
+  store('pk_stops', { n });
+  return n;
+}
+
 const gyms = () => {
   const g = load<unknown>('pk_gyms');
   return typeof g === 'number' && Number.isFinite(g) ? g : memGyms;
