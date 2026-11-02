@@ -156,7 +156,7 @@ const drawFailCard = (c: CanvasRenderingContext2D, title: string, msg: string, r
   c.font = font(11);
   c.fillStyle = '#ff6b6b';
   c.fillText(title, W / 2, H / 2 - 76);
-  c.font = fontB(9);
+  c.font = fontB(10);
   c.fillStyle = '#f8d030';
   let seed = 0;
   try {
@@ -165,7 +165,7 @@ const drawFailCard = (c: CanvasRenderingContext2D, title: string, msg: string, r
     /* module eval died before the seed line ran */
   }
   c.fillText(`seed ${seed} · ${__BUILD__}`, W / 2, H / 2 - 48);
-  c.font = fontB(8);
+  c.font = fontB(10);
   c.fillStyle = '#fff';
   // crude mid-word wrap — detail beats pretty on a fail card
   const m = msg.slice(0, 150);
@@ -1912,10 +1912,10 @@ canvas.addEventListener(
 // HUD lives in the strip above the arena — on tall screens that strip is
 // partly the top letterbox, so shift it up along with the arena
 function hud() {
-  if (!battle) return;
+  if (!battle || battle.phase !== 'map') return;
   ctx.save();
   ctx.translate(0, -viewPad);
-  drawHud(ctx, battle.waveIndex, battle.shots, battle.score, battle.ultIn, battle.time, battle.phase === 'map');
+  drawHud(ctx, battle.shots, battle.score);
   ctx.restore();
 }
 
@@ -2414,7 +2414,7 @@ function render() {
   }
   if (settings().fps) {
     ctx.textAlign = 'right';
-    ctx.font = fontB(9);
+    ctx.font = fontB(10);
     ctx.fillStyle = '#ffffff60';
     ctx.fillText(`${Math.round(fpsEma)} FPS`, W - 10, H + viewPad - 10);
   }

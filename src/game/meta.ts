@@ -14,6 +14,7 @@ let memGyms = 0;
 let memEcho: { id: number; lvl: number }[] | null = null;
 let memBest: Best | null = null;
 let memCoach = false;
+let memUltHint = false;
 
 // meta readers run ~10-15 keys a frame on the title screen — cache each
 // key's parse against its raw string: identical raw (incl. both null) skips
@@ -229,6 +230,12 @@ export function markCoached() {
 export function resetCoach() {
   memCoach = false;
   store('pk_coach', false);
+}
+
+export const ultHintSeen = () => load<unknown>('pk_ult_hint') === true || memUltHint;
+export function markUltHintSeen() {
+  memUltHint = true;
+  store('pk_ult_hint', true);
 }
 
 const gyms = () => {

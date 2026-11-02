@@ -11,9 +11,9 @@ import type { EventChoice, EventArt } from './events';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawAmbient, drawSlice, drawCover, drawMoat, THEMES, hash } from './bg';
-import { uiWindow } from './ui';
+import { uiWindow, INK, PAPER, PARCH, GOLD_HI, SP } from './ui';
 import type { Theme } from './bg';
 import { typeMult, strikeType, TYPE_COLOR, weatherMult, WEATHER_LINE, WEATHER_TINT, TYPES } from './types';
 import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WATER, T_SAND, T_GRASS } from './map';
@@ -657,6 +657,9 @@ export class Battle {
   // second tap inside the window fires — anything else stands it down
   private ultArmUid = -1;
   private ultArmT = -9;
+  private ultFill = 0;
+  private ultHintPending = !ultHintSeen();
+  ultHint = false;
   // the fired ult gets a letterboxed cinema beat — banner + type-tinted
   // vignette over the fight while the map-wide attack lands
   private ultFx = { text: '', color: '#ffd84d', t: 0, life: 1.15 };
@@ -1160,6 +1163,7 @@ export class Battle {
     if (s.ashArmed != null) this.ashArmed = s.ashArmed;
     this.reviveUsed = s.reviveUsed ?? false; // a spent token stays spent
     this.ultIn = s.ultIn ?? ULT_SHOTS; // older saves re-arm the charge
+    this.ultFill = ULT_SHOTS - this.ultIn;
     this.starsRun = s.starsRun ?? 0;
     // a spent echo visit stays spent — without this a park/resume re-arms it
     this.tagEchoDone = s.tagEchoDone ?? false;
@@ -1793,14 +1797,31 @@ export class Battle {
 
   // pause chip lives just inside the arena's top-left corner
   private pauseChip() {
-    // header band, top-left — never inside the arena, or a ball resting in
-    // that corner gets caught under the chip and can't be pulled. 40px hit
-    // floor like every other chip; the drawn circle keeps the same center.
-    return { x: 9, y: 25, w: 40, h: 40 };
+    return { x: SP.lg, y: this.arena.y - 64, w: 48, h: 52 };
+  }
+
+  private ultChip() {
+    return { x: 76, y: this.arena.y - 64, w: 244, h: 52 };
+  }
+
+  private tapUlt(u: Unit) {
+    if (this.ultArmUid === u.uid && this.time - this.ultArmT < 2) {
+      this.ultArmUid = -1;
+      this.fireUlt(u);
+    } else {
+      this.ultArmUid = u.uid;
+      this.ultArmT = this.time;
+      sfx('ui', 0.8);
+    }
   }
 
   pointerDown(p: Vec) {
     if (this.paused) { // any tap unfreezes
+      if (p.x >= PAUSE_SPEED.x && p.x <= PAUSE_SPEED.x + PAUSE_SPEED.w && p.y >= PAUSE_SPEED.y && p.y <= PAUSE_SPEED.y + PAUSE_SPEED.h) {
+        this.ff = Battle.ffPref = !this.ff;
+        sfx('ui');
+        return;
+      }
       this.paused = false;
       sfx('ui');
       return;
@@ -1813,10 +1834,14 @@ export class Battle {
         sfx('ui');
         return;
       }
-      const f = { x: c.x + c.w + 4, y: c.y, w: c.w, h: c.h };
-      if (p.x >= f.x && p.x <= f.x + f.w && p.y >= f.y && p.y <= f.y + f.h) {
-        this.ff = Battle.ffPref = !this.ff;
-        sfx('ui', this.ff ? 1.3 : 0.8);
+      const ult = this.ultChip();
+      if (p.x >= ult.x && p.x <= ult.x + ult.w && p.y >= ult.y && p.y <= ult.y + ult.h) {
+        if (this.phase === 'aim' && !this.active.dead) {
+          if (this.ultIn <= 0) {
+            const armed = this.players.find((u) => u.uid === this.ultArmUid && !u.dead && this.time - this.ultArmT < 2);
+            this.tapUlt(armed ?? this.active);
+          } else this.ultHint = !this.ultHint;
+        }
         return;
       }
     }
@@ -1922,15 +1947,7 @@ export class Battle {
       // the tapped mon's own signature is the one that detonates. One tap
       // arms it for 2s; the second tap on the same mon fires.
       if (hit && hit.side === 'player' && this.ultIn <= 0 && this.phase === 'aim') {
-        if (this.ultArmUid === hit.uid && this.time - this.ultArmT < 2) {
-          this.ultArmUid = -1;
-          this.fireUlt(hit);
-        } else {
-          this.ultArmUid = hit.uid;
-          this.ultArmT = this.time;
-          this.pushText({ x: hit.x, y: hit.y - hit.r - 64, text: 'ULT? TAP AGAIN', t: 2, color: '#ffe76a', big: true });
-          sfx('ui', 0.8); // armed, not fired — a lower click than the confirm
-        }
+        this.tapUlt(hit);
         return;
       }
       this.ultArmUid = -1; // a tap anywhere else stands the ult down
@@ -1990,6 +2007,7 @@ export class Battle {
     // sling — MS's namesake. Spends the cooldown, erupts immediately.
     if (u.cd <= 0) this.bumpAlly(u, u);
     this.phase = 'shot';
+    this.ultHint = false;
     this.shots++;
     if (this.ultIn > 0 && --this.ultIn === 0) {
       // the charge just armed — announce it, or the HUD's gold pulse reads
@@ -1997,8 +2015,8 @@ export class Battle {
       this.pushText({
         x: this.arena.x + this.arena.w / 2,
         y: this.arena.y + 58,
-        text: 'ULTIMATE READY · TAP A TEAMMATE!',
-        t: 1.7, color: '#ffd84d', big: true,
+        text: 'ULT READY',
+        t: 1.1, color: '#ffd84d', big: true,
       });
       this.screenFlash('#ffd84d', 0.15);
       sfx('ready');
@@ -2147,6 +2165,13 @@ export class Battle {
     if (hit) this.hitStop -= dt0;
     const dt = hit ? dt0 * 0.3 : dt0;
     this.time += dt;
+    if (this.time - this.ultArmT >= 2) this.ultArmUid = -1;
+    this.ultFill += (ULT_SHOTS - Math.max(0, this.ultIn) - this.ultFill) * Math.min(1, dt0 * 12);
+    if (this.ultHintPending && this.phase === 'aim' && this.time - this.courtT > 0.75) {
+      this.ultHintPending = false;
+      this.ultHint = true;
+      markUltHintSeen();
+    }
     this.cardT += dt;
     if (!this.foesLanded && this.foeDrop() >= 1) this.landFoes();
     // periodic perk triggers only tick while the ball/enemies move — parking
@@ -4693,6 +4718,8 @@ export class Battle {
   // staggered beam per enemy. Z-move energy: a flash, then everything pays.
   private fireUlt(u: Unit) {
     this.ultIn = ULT_SHOTS;
+    this.ultFill = 0;
+    this.ultHint = false;
     const color = TYPE_COLOR[u.def.type];
     this.pushText({
       x: u.x, y: u.y - u.r - 48,
@@ -7078,7 +7105,7 @@ export class Battle {
       }
     }
     // small labels fade faster; banners keep their beat
-    if (!t.big) t.t *= 0.8;
+    t.t = t.big ? Math.min(t.t, 1.2) : Math.min(t.t * 0.8, 0.9);
     if (MCTX) {
       MCTX.font = font(16 * (t.size ?? 1));
       t.w = MCTX.measureText(t.text).width;
@@ -7271,11 +7298,11 @@ export class Battle {
       ctx.lineWidth = 3;
       // the item's name rides above the icon, its payoff below — reads as a
       // real Pokémon drop, not an anonymous orb
-      ctx.font = fontB(6.5);
+      ctx.font = fontB(10);
       ctx.strokeText(meta.name, pk.x, pk.y - 19 + bob);
       ctx.fillStyle = '#f4f6ff';
       ctx.fillText(meta.name, pk.x, pk.y - 19 + bob);
-      ctx.font = fontB(7);
+      ctx.font = fontB(10);
       ctx.strokeText(meta.label, pk.x, pk.y + 28);
       ctx.fillStyle = meta.color;
       ctx.fillText(meta.label, pk.x, pk.y + 28);
@@ -7869,8 +7896,8 @@ export class Battle {
         this.comboLabelN = this.shotCombo;
         this.comboLabel = `COMBO ×${this.shotCombo}`;
       }
-      ctx.strokeText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y - 18);
-      ctx.fillText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y - 18);
+      ctx.strokeText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y + 140);
+      ctx.fillText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y + 140);
     }
 
     // screen flashes render unshaken, on top — the accessibility toggle
@@ -7915,7 +7942,7 @@ export class Battle {
       ctx.strokeText(u.text, 270, cy);
       ctx.fillStyle = u.color;
       ctx.fillText(u.text, 270, cy);
-      ctx.font = fontB(9);
+      ctx.font = fontB(10);
       ctx.lineWidth = 3;
       ctx.strokeText('MAP-WIDE · EVERY FOE TAKES THE HIT', 270, cy + 26);
       ctx.fillStyle = '#e8ecf8';
@@ -7944,58 +7971,7 @@ export class Battle {
       }
     }
 
-    // foes remaining + turn par, top-right — one chip under the canopy
-    // line (at rim level the trees overhang it). TURN goes gold while a
-    // SPEED CLEAR is still on
-    let left = 0;
-    for (const e of this.enemies) if (!e.dead) left++;
-    if ((this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') && left > 0) {
-      const tag = `${left} LEFT · `;
-      const turn = `TURN ${this.stopShots}/${this.par}`;
-      ctx.font = fontB(9);
-      const lw = ctx.measureText(tag).width;
-      const tw = lw + ctx.measureText(turn).width + 16;
-      const cx = a.x + a.w - 10 - tw;
-      uiWindow(ctx, { x: cx, y: a.y + 48, w: tw, h: 18 }, { dark: true, shadow: false, rad: 6 });
-      ctx.textAlign = 'left';
-      ctx.fillStyle = '#aab4d8';
-      ctx.fillText(tag, cx + 8, a.y + 61);
-      ctx.fillStyle = this.stopShots <= this.par ? '#ffd84d' : '#6a7090';
-      ctx.fillText(turn, cx + 8 + lw, a.y + 61);
-    }
-    // pause chip, opposite corner — a quiet brake during the action and the
-    // loot lap; the phase list mirrors the pointerDown hit-test
-    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy' || this.phase === 'loot') {
-      const c = this.pauseChip();
-      ctx.globalAlpha = 0.6;
-      ctx.fillStyle = '#101430';
-      ctx.beginPath();
-      ctx.arc(c.x + c.w / 2, c.y + c.h / 2, 14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = '#8890b8';
-      ctx.fillRect(c.x + c.w / 2 - 5, c.y + c.h / 2 - 7, 4, 14);
-      ctx.fillRect(c.x + c.w / 2 + 2, c.y + c.h / 2 - 7, 4, 14);
-      // fast-forward chip, right of pause — lit gold while ×2 is armed
-      const f = { x: c.x + c.w + 4, y: c.y, w: c.w, h: c.h };
-      ctx.globalAlpha = this.ff ? 0.9 : 0.6;
-      ctx.fillStyle = '#101430';
-      ctx.beginPath();
-      ctx.arc(f.x + f.w / 2, f.y + f.h / 2, 14, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = this.ff ? '#ffd84d' : '#8890b8';
-      const fx = f.x + f.w / 2, fy = f.y + f.h / 2;
-      for (const dx of [-7, 0]) {
-        ctx.beginPath();
-        ctx.moveTo(fx + dx, fy - 6);
-        ctx.lineTo(fx + dx + 7, fy);
-        ctx.lineTo(fx + dx, fy + 6);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-
+    this.drawBattleHud(ctx);
     // boss nameplate — the gym fight reads as a real boss encounter
     // (sits below the timing-bar zone so it never overlaps the aim meter)
     const boss = this.enemies.find((e) => e.boss && !e.dead);
@@ -8004,7 +7980,7 @@ export class Battle {
       const pct = Math.max(boss.hp / boss.maxHp, 0);
       const title = `${boss.def.name.toUpperCase()} · x${BOSS_BARS.length - boss.sumStage}`;
       ctx.textAlign = 'center';
-      ctx.font = font(9);
+      ctx.font = fontB(10);
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
       ctx.strokeText(title, 270, by - 1);
@@ -8047,52 +8023,16 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.globalAlpha = 0.6 + Math.sin(this.time * 5) * 0.25;
       ctx.fillStyle = '#ffe89d';
-      ctx.fillText(this.lootDrag ? 'SCOOP THEM UP!' : 'drag your mon through the coins!', 270, a.y + a.h - 14);
+      ctx.fillText(this.lootDrag ? 'SCOOP THEM UP!' : 'Drag through the coins', 270, a.y + a.h - 14);
       ctx.globalAlpha = 1;
     }
 
-    // team-trait ribbon — the build-around payoff reads at a glance: a
-    // type-colored pip per active trait, tier numeral riding it
-    const liveTraits = [...this.traits.entries()].sort((x, y) => y[1] - x[1]);
-    if (liveTraits.length) {
-      const ty = a.y + 48;
-      const tw2 = liveTraits.length * 24 + 8;
-      uiWindow(ctx, { x: a.x + 10, y: ty, w: tw2, h: 18 }, { dark: true, shadow: false, rad: 6 });
-      ctx.font = fontB(8);
-      ctx.textAlign = 'center';
-      liveTraits.forEach(([t, tier], i) => {
-        const cx = a.x + 10 + 14 + i * 24;
-        ctx.fillStyle = TYPE_COLOR[t];
-        ctx.beginPath();
-        ctx.arc(cx - 5, ty + 9, 4.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fff';
-        ctx.fillText(`${tier}`, cx + 6, ty + 12);
-      });
-    }
+    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy') this.drawTurnCue(ctx);
 
     // tapped-foe scout card — floats while aiming, a pull dismisses it
     if (this.inspect && this.phase === 'aim') this.drawInspect(ctx);
 
-    // onboarding: the first run gets kinetic coaching (a ghost pull on
-    // loop); after that the same two faint captions show on any run
-    if (this.phase === 'aim' && !this.dragging && !this.active.dead) {
-      if (this.coach) this.drawCoach(ctx);
-      else if (this.shots < 2) {
-        ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
-        ctx.font = fontB(9);
-        ctx.textAlign = 'center';
-        ctx.fillStyle = '#e8ecff';
-        ctx.fillText(
-          this.shots === 0
-            ? 'pull back to aim, release in the gold'
-            : 'bounce through allies to fire their supers',
-          a.x + a.w / 2,
-          a.y + a.h - 16,
-        );
-        ctx.globalAlpha = 1;
-      }
-    }
+    if (this.phase === 'aim' && !this.dragging && !this.active.dead && this.coach) this.drawCoach(ctx);
 
     // the arrival tell — a gold ! pops at arena top as control lands
     const intro = this.time - this.waveIntroT;
@@ -8137,12 +8077,12 @@ export class Battle {
       ctx.fillText(label, a.x + a.w / 2, cy + 12);
       // the sky calls itself out in the ribbon — weather tilts the matchup
       if (this.weather) {
-        ctx.font = font(9);
+        ctx.font = fontB(10);
         ctx.fillStyle = WEATHER_TINT[this.weather];
         ctx.fillText(WEATHER_LINE[this.weather], a.x + a.w / 2, cy - 20);
       }
       if (gym) {
-        ctx.font = font(9);
+        ctx.font = fontB(10);
         ctx.fillStyle = '#ffd84d';
         ctx.fillText('HIT WEAK SPOTS ×2 · LEADER ×3', a.x + a.w / 2, cy + 52);
         // the leader's face flanks its name — only when the gym label is
@@ -8179,8 +8119,89 @@ export class Battle {
       ctx.fillText(info, 270, 410);
       // the way out — same pill idiom as the other modal buttons; main.ts
       // hit-tests both rects before the freeze's any-tap thaw
+      pill(ctx, PAUSE_SPEED, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: this.ff ? 'SPEED ×2' : 'SPEED ×1' });
       pill(ctx, PAUSE_SETTINGS, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SETTINGS' });
       pill(ctx, PAUSE_QUIT, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'QUIT TO TITLE' });
+    }
+  }
+
+  private drawBattleHud(ctx: CanvasRenderingContext2D) {
+    const c = this.pauseChip();
+    uiWindow(ctx, c, { rad: 10 });
+    ctx.fillStyle = INK;
+    ctx.fillRect(c.x + 16, c.y + 17, 5, 18);
+    ctx.fillRect(c.x + 27, c.y + 17, 5, 18);
+
+    const r = this.ultChip();
+    const ready = this.ultIn <= 0;
+    const armed = this.time - this.ultArmT < 2 && this.players.some((u) => u.uid === this.ultArmUid && !u.dead);
+    uiWindow(ctx, r, { rad: 10, tint: ready ? GOLD_HI : PAPER });
+    if (ready) {
+      ctx.save();
+      ctx.strokeStyle = GOLD_HI;
+      ctx.lineWidth = 3;
+      ctx.globalAlpha = 0.5 + Math.sin(this.time * 6) * 0.25;
+      roundRect(ctx, r.x - 3, r.y - 3, r.w + 6, r.h + 6, 12);
+      ctx.stroke();
+      ctx.restore();
+    }
+    const caster = armed ? this.players.find((u) => u.uid === this.ultArmUid)! : this.active;
+    drawMon(ctx, caster.def.id, r.x + 28, r.y + 27, 44);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = INK;
+    ctx.font = fontB(13);
+    const banked = ULT_SHOTS - Math.max(0, this.ultIn);
+    ctx.fillText(ready ? this.phase === 'aim' ? armed ? 'TAP AGAIN' : 'TAP ULT' : 'ULT READY' : 'ULT · ' + banked + '/' + ULT_SHOTS, r.x + 54, r.y + 23);
+    for (let i = 0; i < ULT_SHOTS; i++) {
+      const x = r.x + 54 + i * 17;
+      ctx.fillStyle = PARCH;
+      ctx.fillRect(x, r.y + 32, 14, 10);
+      ctx.fillStyle = '#c58d20';
+      ctx.fillRect(x, r.y + 32, 14 * Math.max(0, Math.min(1, this.ultFill - i)), 10);
+    }
+
+    const f = { x: 332, y: r.y, w: 192, h: r.h };
+    uiWindow(ctx, f, { rad: 10 });
+    ctx.textAlign = 'center';
+    ctx.fillStyle = INK;
+    ctx.font = fontB(12);
+    ctx.fillText(this.enemies.filter((e) => !e.dead).length + ' FOES LEFT', f.x + f.w / 2, f.y + 22);
+    ctx.fillText(this.phase === 'enemy' ? 'FOES ATTACK' : this.phase === 'shot' ? 'IN FLIGHT' : 'TURN ' + (this.stopShots + 1) + '/' + this.par, f.x + f.w / 2, f.y + 42);
+
+    if (this.ultHint && this.phase === 'aim') {
+      const h = { x: 76, y: this.arena.y + 60, w: 388, h: 64 };
+      uiWindow(ctx, h, { rad: 10 });
+      ctx.fillStyle = INK;
+      ctx.font = fontB(13);
+      ctx.fillText('Every shot charges ULT', 270, h.y + 26);
+      ctx.fillText('Full? Tap ULT, then tap again to unleash', 270, h.y + 49);
+    }
+  }
+
+  private drawTurnCue(ctx: CanvasRenderingContext2D) {
+    const a = this.arena;
+    const r = { x: a.x + 8, y: a.y + a.h - 56, w: a.w - 16, h: 48 };
+    uiWindow(ctx, r, { rad: 10 });
+    const u = this.active;
+    drawMon(ctx, u.def.id, r.x + 28, r.y + 24, 42);
+    ctx.fillStyle = INK;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(12);
+    ctx.fillText(this.phase === 'aim' ? 'YOUR SHOT' : this.phase === 'enemy' ? 'FOES ATTACK' : 'IN FLIGHT', r.x + 56, r.y + 19);
+    ctx.font = fontB(13);
+    ctx.fillText(u.def.name, r.x + 56, r.y + 39);
+    const next = this.players.slice(this.activeIdx + 1).concat(this.players.slice(0, this.activeIdx)).find((p) => !p.dead);
+    if (this.phase === 'aim' && !this.dragging && this.shots < 2) {
+      ctx.font = fontB(11);
+      ctx.textAlign = 'right';
+      ctx.fillText(this.shots === 0 ? 'pull back to aim,' : 'bounce through allies', r.x + r.w - 16, r.y + 20);
+      ctx.fillText(this.shots === 0 ? 'release in the gold' : 'to fire their supers', r.x + r.w - 16, r.y + 38);
+    } else if (next) {
+      ctx.font = fontB(11);
+      ctx.textAlign = 'right';
+      ctx.fillText('NEXT', r.x + r.w - 52, r.y + 20);
+      ctx.fillText(next.def.name, r.x + r.w - 52, r.y + 38);
+      drawMon(ctx, next.def.id, r.x + r.w - 27, r.y + 24, 38);
     }
   }
 
@@ -8326,8 +8347,8 @@ export class Battle {
       e.def.cursed && 'its KO taxes your supers',
     ].filter(Boolean) as string[]) : [];
     const a = this.arena;
-    const w = 200; // dual-type tags need the room a 176 card never had
-    const h = foe ? 90 + (tells.length > 1 ? 10 : 0) : 100; // teammates get two lines for what the super does
+    const w = Math.min(400, a.w - 24);
+    const h = 140;
     const cx = Math.min(Math.max(e.x - w / 2, a.x + 6), a.x + a.w - w - 6);
     const cy = Math.max(a.y + 8, e.y - e.r - h - 16);
     ctx.save();
@@ -8351,7 +8372,7 @@ export class Battle {
     // the type tag owns the right edge — measure it first so a long name
     // shrinks into what's left instead of colliding off the card
     const typeStr = e.def.type2 ? `${e.def.type}/${e.def.type2}`.toUpperCase() : e.def.type.toUpperCase();
-    ctx.font = fontB(8);
+    ctx.font = fontB(10);
     const typeW = ctx.measureText(typeStr).width;
     ctx.fillStyle = TYPE_COLOR[e.def.type];
     ctx.textAlign = 'right';
@@ -8360,9 +8381,9 @@ export class Battle {
     ctx.fillStyle = '#f0e6c8';
     let nameStr = `${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}  LV${e.lvl}`;
     // the LV drops before the name eats the type tag — fitFont floors at 6px
-    if (fitFont(ctx, nameStr, 9, w - 60 - typeW - 8) <= 6 && ctx.measureText(nameStr).width > w - 60 - typeW - 8) {
+    if (fitFontB(ctx, nameStr, 10, w - 60 - typeW - 8) <= 6 && ctx.measureText(nameStr).width > w - 60 - typeW - 8) {
       nameStr = `${e.shiny ? '★ ' : ''}${e.def.name.toUpperCase()}`;
-      fitFont(ctx, nameStr, 9, w - 60 - typeW - 8);
+      fitFontB(ctx, nameStr, 10, w - 60 - typeW - 8);
     }
     ctx.fillText(nameStr, cx + 50, cy + 16);
     // hp bar — the number players actually scout for
@@ -8375,12 +8396,12 @@ export class Battle {
     }
     ctx.fillStyle = e.hp / e.maxHp > 0.3 ? '#6fdc6f' : '#ff6b6b';
     ctx.fillRect(cx + 50, cy + 24, (w - 62) * Math.max(0, e.hp / e.maxHp), 7);
-    ctx.font = fontB(9);
+    ctx.font = fontB(10);
     ctx.fillStyle = '#e8ecf8';
     ctx.fillText(`${Math.ceil(e.hp)}/${e.maxHp}`, cx + 50, cy + 42);
     // the readout — foes show their attack clock; teammates show their super
     ctx.textAlign = 'left';
-    ctx.font = fontB(8);
+    ctx.font = fontB(10);
     if (foe) {
       ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
       const tag = e.boss
@@ -8396,36 +8417,34 @@ export class Battle {
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
       const weakTag = !e.boss && !e.def.shielded ? ' · WEAK ×2' : '';
       const readTag = tag + weakTag;
-      const tagPx = e.boss ? fitFontB(ctx, readTag, 8, w - 60) : fitFont(ctx, readTag, 8, w - 60);
+      const tagPx = fitFontB(ctx, readTag, 10, w - 60);
       const readout = e.boss && tagPx < 8
         ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)} · WEAK ×3`
         : readTag;
-      if (readout !== readTag) fitFontB(ctx, readout, 8, w - 60);
+      if (readout !== readTag) fitFontB(ctx, readout, 10, w - 60);
       ctx.fillText(readout, cx + 50, cy + 58);
       ctx.fillStyle = '#8890b8';
-      const line0 = tells.length ? tells[0] : 'fires a projectile';
-      fitFontB(ctx, line0, 7, w - 60);
-      ctx.fillText(line0, cx + 50, cy + 70);
-      if (tells.length > 1) {
-        fitFontB(ctx, tells[1], 7, w - 60);
-        ctx.fillText(tells[1], cx + 50, cy + 80);
-      }
+      const line0 = tells.length ? tells.slice(0, 2).join(' · ') : 'fires a projectile';
+      ctx.font = fontB(10);
+      wrap2(ctx, line0, w - 60).slice(0, 2).forEach((l, li) =>
+        ctx.fillText(l, cx + 50, cy + 80 + li * 18));
       // the catch read — weaklings jump in the ball, aces above the team's
       // pace read locked. The % is live: balls + combo already folded in.
       const pct = this.inTrainer ? 0 : Math.round(Math.min(0.95, this.catchOdds(e)) * 100);
       ctx.fillStyle = this.inTrainer ? '#6a7090' : pct >= 15 ? '#6fdc6f' : pct >= 5 ? '#ffd84d' : '#8890b8';
-      fitFontB(ctx, this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN · ~${pct}%`, 7, w - 60);
+      fitFontB(ctx, this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN · ~${pct}%`, 10, w - 60);
       ctx.fillText(this.inTrainer ? 'STAYS WITH ITS TRAINER' : `KO MAY JOIN · ~${pct}%`, cx + 50, cy + h - 8);
     } else {
       ctx.fillStyle = '#ffd84d';
       ctx.fillText(`★ ${moveOf(e.def.id, e.def.type)}`, cx + 50, cy + 58);
       ctx.fillStyle = e.cd <= 0 ? '#6fdc6f' : '#8890b8';
       const ready = e.cd <= 0 ? `super ready · launch ${e.def.name} to fire it` : `super ready in ${e.cd} shot${e.cd === 1 ? '' : 's'}`;
-      fitFont(ctx, ready, 7, w - 60);
+      fitFontB(ctx, ready, 10, w - 60);
       ctx.fillText(ready, cx + 50, cy + 70);
       ctx.fillStyle = '#6a7498';
-      wrap2(ctx, superDesc(e.def.id, e.def.type), w - 60).forEach((l, li) =>
-        ctx.fillText(l, cx + 50, cy + 80 + li * 9));
+      ctx.font = fontB(10);
+      wrap2(ctx, superDesc(e.def.id, e.def.type), w - 60).slice(0, 2).forEach((l, li) =>
+        ctx.fillText(l, cx + 50, cy + 94 + li * 18));
     }
     ctx.restore();
   }
@@ -8490,7 +8509,6 @@ export class Battle {
       ctx.fill();
       ctx.stroke();
       ctx.globalAlpha = 1;
-      line('PULL BACK TO AIM · LET GO IN THE GOLD');
     } else if (this.shots === 1) {
       const ally = this.players.find((p) => p !== u && !p.dead);
       if (ally) {
@@ -8507,7 +8525,6 @@ export class Battle {
         ctx.arc(ally.x, ally.y, ally.r + 8, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        line('FLY THROUGH A TEAMMATE · THEY FIRE THEIR SUPER');
       }
     } else {
       // beats past the pull itself: teach what the field offers — first one
@@ -8543,7 +8560,7 @@ export class Battle {
       ctx.arc(threat.x, threat.y, threat.r + 12, 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
-      ctx.font = font(9);
+      ctx.font = fontB(10);
       ctx.fillStyle = '#ffb0b0';
       ctx.fillText('STRIKES AT 0', threat.x, Math.max(threat.y - threat.r - 20, a.y + 12));
     }
@@ -8803,7 +8820,7 @@ export class Battle {
       // type the same way
       if (n.kind === 'trainer' || n.kind === 'elite' || n.kind === 'gym') {
         const ty = (n.ttype ?? 'normal').toUpperCase();
-        ctx.font = font(8);
+        ctx.font = fontB(10);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
         ctx.strokeText(ty, nx, ny - cell * 0.95 + 12);
@@ -8868,10 +8885,10 @@ export class Battle {
       ctx.lineWidth = 2;
       ctx.strokeRect(lx + 1, ly + 1, lw - 2, 46);
       ctx.textAlign = 'left';
-      ctx.font = fontB(7);
+      ctx.font = fontB(10);
       ctx.fillStyle = '#ffd84d';
       ctx.fillText('FIELD LOG', lx + 10, ly + 10);
-      ctx.font = fontB(8);
+      ctx.font = fontB(10);
       const tail = this.fieldLog.slice(-3);
       tail.forEach((line, i) => {
         ctx.globalAlpha = i === tail.length - 1 ? 1 : i === tail.length - 2 ? 0.6 : 0.35;
@@ -8897,10 +8914,10 @@ export class Battle {
     ctx.fillStyle = '#8890b8';
     ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 88);
 
-    ctx.font = font(9);
+    ctx.font = fontB(10);
     ctx.fillStyle = '#aab4d8';
     ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
-    ctx.font = fontB(9);
+    ctx.font = fontB(10);
     ctx.fillStyle = '#8890b8';
     ctx.fillText('WILD catchable fight · TRAINER mono-type squad · no catches, better loot', 270, oy + view * cell + 48);
     ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
@@ -9087,7 +9104,7 @@ export class Battle {
           ctx.textAlign = 'left';
           ctx.fillStyle = afford ? '#f0e6c8' : '#6a7090';
           ctx.fillText(lab, lx, ty);
-          ctx.font = font(9);
+          ctx.font = fontB(10);
           ctx.textAlign = 'right';
           ctx.strokeStyle = '#000';
           ctx.lineWidth = 3;
@@ -9806,7 +9823,7 @@ export class Battle {
       // color AND size: amber at 2, a throbbing red swell on the last tick
       const next = Math.min(u.timer, ...u.clocks.map((c) => c.t));
       const urgent = next <= 1 || u.enraged;
-      ctx.font = font(next <= 1 ? 11 + Math.sin(this.time * 10) * 1.5 + 1.5 : 11);
+      ctx.font = font(next <= 1 ? 15 : 14);
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
@@ -9816,7 +9833,7 @@ export class Battle {
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
       if (u.boss) {
         const heavy = `H${Math.ceil(u.bigT)}`;
-        ctx.font = font(u.bigT <= 1 ? 10 : 9);
+        ctx.font = font(11);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
         ctx.strokeText(heavy, u.x + u.r + 14, u.y - u.r + 7);
@@ -9893,7 +9910,7 @@ export class Battle {
       // and the scout card already lists every flag it carries
       const kw = kws.length > 3 ? `${kws.slice(0, 3).join('·')}+${kws.length - 3}` : kws.join('·');
       if (kw) {
-        ctx.font = font(8);
+        ctx.font = fontB(10);
         ctx.strokeText(kw, u.x, u.y + u.r + 14);
         ctx.fillStyle = u.def.taunt ? '#ffd84d' : u.def.cursed ? '#a868c8' : u.def.regen || u.def.split ? '#a0e060' : u.def.shielded ? '#9aa7b8' : '#f85888';
         ctx.fillText(kw, u.x, u.y + u.r + 14);
@@ -9925,7 +9942,7 @@ export class Battle {
         // ready: the move's name sits overhead — this is the thing to hit
         const label = moveOf(u.def.id, u.def.type);
         const ly = u.y + u.r + 30;
-        ctx.font = fontB(8);
+        ctx.font = fontB(10);
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
@@ -9948,7 +9965,7 @@ export class Battle {
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
-        ctx.font = font(9);
+        ctx.font = fontB(10);
         ctx.textAlign = 'center';
         ctx.lineWidth = 3;
         ctx.strokeText(u.def.name.toUpperCase(), u.x, ty - 17);
@@ -9965,7 +9982,7 @@ export class Battle {
         ctx.arc(u.x, u.y, u.r + 7 + pulse * 4, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
-        ctx.font = font(7);
+        ctx.font = fontB(10);
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
@@ -9975,9 +9992,9 @@ export class Battle {
         const armed = this.ultArmUid === u.uid && this.time - this.ultArmT < 2;
         if (this.ultFx.t > 0 || (this.ultArmUid !== -1 && !armed)) return;
         const uly = Math.max(u.y - u.r - 52, this.arena.y + 12); // rim-hugging mons keep the tag on-canvas
-        ctx.strokeText(armed ? 'ULT · AGAIN!' : 'ULT · TAP!', u.x, uly);
+        ctx.strokeText(armed ? 'TAP AGAIN' : 'TAP ULT', u.x, uly);
         ctx.fillStyle = armed ? '#ff9d4d' : '#ffe76a';
-        ctx.fillText(armed ? 'ULT · AGAIN!' : 'ULT · TAP!', u.x, uly);
+        ctx.fillText(armed ? 'TAP AGAIN' : 'TAP ULT', u.x, uly);
       }
     }
   }
@@ -10489,7 +10506,7 @@ export class Battle {
             const eff = typeMult(strikeType(u.def, foeHit!.def), foeHit!.def);
             if (eff > 1.01 || eff < 0.99) {
               const tag = eff > 1.01 ? 'SE' : 'NVE';
-              ctx.font = font(8);
+              ctx.font = fontB(10);
               ctx.lineWidth = 3;
               ctx.strokeStyle = '#000';
               ctx.strokeText(tag, hx, hy - 12);
@@ -10607,6 +10624,7 @@ const W_CANVAS_FALLBACK = 540;
 // the freeze frame's escape rows, centered under PAUSED — drawn by the
 // overlay, hit-tested in main.ts where the paused tap is routed (any other
 // tap still thaws). 46px tall like the MAP_MENU/TOOL row buttons.
+const PAUSE_SPEED = { x: W_CANVAS_FALLBACK / 2 - 120, y: 636, w: 240, h: 46 };
 export const PAUSE_SETTINGS = { x: W_CANVAS_FALLBACK / 2 - 120, y: 520, w: 240, h: 46 };
 export const PAUSE_QUIT = { x: W_CANVAS_FALLBACK / 2 - 120, y: 578, w: 240, h: 46 };
 

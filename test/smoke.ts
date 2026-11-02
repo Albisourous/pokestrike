@@ -18,6 +18,7 @@ import type { Theme } from '../src/game/bg';
 import { ROOM_BOSS, STAGE_GIMMICKS } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
+import { ultHintSeen } from '../src/game/meta';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -30,6 +31,26 @@ const ok = (cond: boolean, msg: string) => {
 
 const arena = { x: 30, y: 160, w: 480, h: 620 };
 const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
+
+// The first settled battle teaches ULT once, without changing charge or turns.
+{
+  localStorage.setItem('pk_ult_hint', '"bad"');
+  ok(!ultHintSeen(), 'a malformed ULT hint flag is not treated as seen');
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  (b as any).courtT = -9;
+  b.phase = 'aim';
+  b.update(0.01);
+  ok(b.ultHint && ultHintSeen(), 'first settled battle shows and banks the ULT hint');
+  ok(localStorage.getItem('pk_ult_hint') === 'true', 'ULT teaching persists a small boolean flag');
+  ok(b.shots === 0 && b.ultIn === ULT_SHOTS, 'ULT teaching never spends a turn or charge');
+  const again = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (again as any).spawnWave(0);
+  (again as any).courtT = -9;
+  again.phase = 'aim';
+  again.update(0.01);
+  ok(!again.ultHint, 'later battles do not repeat ULT teaching');
+}
 
 // --- stage gimmicks: real bounce contacts, shields and field panels -----
 {
@@ -1691,6 +1712,22 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   (b as any).spawnWave(0);
   (b as any).courtT = -9; // court already settled
   ok(b.ultIn === 3, 'ult charge carries into the next fight');
+  const chip = (b as any).ultChip();
+  ok(chip.w >= 44 && chip.h >= 44, 'ULT header has a thumb-sized hit target');
+  b.pointerDown({ x: chip.x + chip.w / 2, y: chip.y + chip.h / 2 });
+  b.pointerUp();
+  ok(b.ultIn === 3 && b.phase === 'aim' && !(b as any).dragging, 'charging ULT tap teaches without shooting');
+  b.ultIn = 0;
+  b.pointerDown({ x: chip.x + chip.w / 2, y: chip.y + chip.h / 2 });
+  b.pointerUp();
+  ok(b.ultIn === 0, 'ready ULT header tap arms without firing');
+  b.update(2.1);
+  b.pointerDown({ x: chip.x + chip.w / 2, y: chip.y + chip.h / 2 });
+  b.pointerUp();
+  ok(b.ultIn === 0, 'expired ULT confirmation must arm again');
+  b.pointerDown({ x: chip.x + chip.w / 2, y: chip.y + chip.h / 2 });
+  b.pointerUp();
+  ok(b.ultIn === ULT_SHOTS && !b.ultHint, 'ULT header confirmation fires and dismisses teaching');
   // the charge is the team's — a benched teammate can spend it too
   b.phase = 'aim';
   b.ultIn = 0;
@@ -1701,6 +1738,12 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
     b.pointerDown({ x: bench.x, y: bench.y }); // arm, then confirm
     b.pointerUp();
     ok(b.ultIn === ULT_SHOTS, 'a teammate can spend the shared ult charge');
+    b.ultIn = 0;
+    b.pointerDown({ x: bench.x, y: bench.y });
+    b.pointerUp();
+    b.pointerDown({ x: chip.x + chip.w / 2, y: chip.y + chip.h / 2 });
+    b.pointerUp();
+    ok(b.ultIn === ULT_SHOTS && (b as any).ultFx.text === moveOf(bench.def.id, bench.def.type), 'header confirms the teammate displayed in its caster icon');
   }
 }
 
@@ -3245,6 +3288,10 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   const chip = (b as any).pauseChip();
   b.pointerDown({ x: chip.x + 15, y: chip.y + 15 });
   ok(b.paused === true, 'pause chip freezes the fight');
+  b.pointerDown({ x: 270, y: 659 });
+  ok(b.paused && (b as any).ff, 'pause card speed control toggles without resuming');
+  b.pointerDown({ x: 270, y: 659 });
+  ok(b.paused && !(b as any).ff, 'pause card restores normal speed');
   const ehp = b.enemies.map((e) => e.hp).join(',');
   for (let i = 0; i < 120; i++) b.update(1 / 60);
   ok(b.enemies.map((e) => e.hp).join(',') === ehp && b.phase === 'aim', 'nothing moves while paused');
