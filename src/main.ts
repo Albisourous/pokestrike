@@ -140,6 +140,7 @@ import {
   RAID_FIGHT,
   echoMonAt,
 } from './game/screens';
+import { drawFame, fameActive, fameDown, fameUp, startFame, tickFame } from './game/fame';
 import { drawEvo, evoActive, skipEvo, tickEvo } from './game/evolve';
 import { runCard, shareRun } from './game/share';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
@@ -1018,6 +1019,7 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (evoActive()) return skipEvo();
+  if (fameActive()) return fameDown();
   // the bug card swallows its own tap-out — it's a card, not a drag surface
   if (bugOpen) {
     bugOpen = false;
@@ -1637,6 +1639,7 @@ canvas.addEventListener('pointermove', (e) => {
 canvas.addEventListener('pointerup', (e) => {
   if (e.pointerId !== activeId) return; // not the gesture's finger — its lift fires nothing
   activeId = null;
+  fameUp();
   if (settingsDrag) {
     settingsDrag = null;
     settingsSliderFlush(); // drag values are write-throttled — bank the last x
@@ -2001,6 +2004,7 @@ function update(dt: number) {
     if (auto) hatchLockT = t;
   }
   tickEvo(dt);
+  if (tickFame(dt)) sceneT0 = t; // the result card's intro plays once the Hall of Fame closes
   if (scene === 'battle' && battle && !helpOpen && !evoActive()) {
     // the manual freezes the fight — reading help mid-shot shouldn't cost HP
     battle.update(dt);
@@ -2237,6 +2241,7 @@ function update(dt: number) {
       ].join('\n');
       clearRun(); // the climb is over — nothing to continue into
       scene = 'result';
+      if (won) startFame(battle);
       music(won ? 'win' : null); // clear fanfare, or cut to silence on a loss
       if (!won) playJingle('lose'); // the descent fills the silence
     }
@@ -2409,6 +2414,7 @@ function render() {
       if (result) drawResult(ctx, result, resultExtra, share, t, t - sceneT0);
       break;
   }
+  drawFame(ctx);
   drawEvo(ctx);
   drawPickPop(ctx, t);
   // the ? chip reads the same gate as the hit-test — dealt boards included;
