@@ -18,7 +18,7 @@ export const T_WATER = 0;
 export const T_SAND = 1;
 export const T_GRASS = 2;
 
-export type NodeKind = 'start' | 'wild' | 'trainer' | 'elite' | 'chest' | 'rest' | 'mart' | 'event' | 'gym';
+export type NodeKind = 'start' | 'wild' | 'trainer' | 'elite' | 'chest' | 'rest' | 'mart' | 'event' | 'gym' | 'secret';
 export interface MapNode {
   tx: number;
   ty: number;

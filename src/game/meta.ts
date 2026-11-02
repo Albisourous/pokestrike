@@ -1565,3 +1565,19 @@ export function debugSeed() {
 }
 
 debugSeed();
+
+let memSecrets: number[] = [];
+export function secretIds(): number[] {
+  const raw = load<unknown>('pk_secrets');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [...memSecrets];
+  const ids = Array.isArray((raw as { ids?: unknown }).ids) ? (raw as { ids: unknown[] }).ids : [];
+  memSecrets = [...new Set(ids.filter((id): id is number => Number.isInteger(id)))];
+  return [...memSecrets];
+}
+export function markSecret(id: number): boolean {
+  const ids = secretIds();
+  if (!Number.isInteger(id) || ids.includes(id)) return false;
+  memSecrets = [...ids, id];
+  store('pk_secrets', { ids: memSecrets });
+  return true;
+}
