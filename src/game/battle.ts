@@ -4,6 +4,7 @@ import { Treasure } from './loot';
 import { Missions } from './missions';
 import { Connect } from './connect';
 import { Flee } from './flee';
+import { Radar } from './radar';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
@@ -801,6 +802,7 @@ export class Battle {
   missions = new Missions(); // MS stop missions: 3 optional goals per battle stop
   connect = new Connect(); // MS ALL CONNECT: link every ally in one shot, next shot ×1.25
   flee = new Flee();
+  radar = new Radar();
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   private courtT = -9;
   private foesLanded = true; // the drop-in landing beat fired for this court
@@ -1484,6 +1486,7 @@ export class Battle {
     this.stopShots = 0;
     this.stopCombo = this.stopWeak = this.stopKos = this.stopTaken = this.stopFaints = 0;
     this.connect.reset();
+    this.radar.reset();
     this.missions.start(this.mapSeed, i + 1, this.players.map((p) => p.def.type), this.ultIn <= 6, this.time, this.raid || !!this.pendingEventWave);
     this.clearCard = null;
     this.waveFlawless = true;
@@ -1644,12 +1647,13 @@ export class Battle {
     }
     this.enemies = spawns.map((s) => this.makeEnemy(s, i));
     this.battle = 1;
+    this.radar.spawn(this.enemies, (Math.imul(this.mapSeed, 0x7f4a7c15) + Math.imul(this.waveIndex + 1, 0x6a09e667) + Math.imul(this.battle, 0x3c6ef372)) >>> 0, this.inTrainer || this.inRival ? 0 : this.shinyRate);
     resetAbilities(this);
     this.battles = 1;
     this.battleBreak = false;
     if (i > 0 && !bossWave && !this.inTrainer && !this.inEvent && !this.inRival && !this.raid && !this.coach)
       for (const skip of BATTLE_SKIP) if (this.rng() >= skip) this.battles++;
-    this.missions.rare = this.flee.plan((Math.imul(this.mapSeed, 2654435761) + Math.imul(i, 40503) + 0xf1ee) >>> 0, i + 1, this.battles, bossWave || this.raid || this.inEvent || this.inTrainer || this.inRival || this.coach || !!this.pendingEventWave);
+    this.missions.rare = this.flee.plan((Math.imul(this.mapSeed, 2654435761) + Math.imul(i, 40503) + 0xf1ee) >>> 0, i + 1, this.battles, bossWave || this.raid || this.inEvent || this.inTrainer || this.inRival || this.coach || !!this.pendingEventWave, isGentleRoom(this.roomGrid));
     if (this.flee.at === this.battle && !isGentleRoom(this.roomGrid)) this.enemies.push(this.flee.spawn(this.flee.build(this as any, () => this.makeEnemy(this.flee.spawnAt(), this.waveIndex))));
     this.par = Math.min(24, Math.max(10, this.battles * PAR_PER_BATTLE + (bossWave ? PAR_BOSS : 0)));
     // rival echo fights at the levels it earned — the ghost of a stacked
@@ -3828,6 +3832,7 @@ export class Battle {
         return;
       }
       this.treasure.ko(e, (this.mapSeed * 977 + this.waveIndex * 131 + this.battle * 17 + e.uid * 7919) >>> 0, { boss: e.boss || !!e.mid, weak: !!src && this.weakHit(e, src.x, src.y), finisher: this.battle >= this.battles && this.enemies.every((x) => x === e || x.dead), combo: this.shotCombo, speed: this.stopShots <= this.par, off: this.raid, rare: this.flee.is(e) }, this.time);
+      this.radar.ko(e, this.telop);
       if (this.flee.is(e)) this.pushText({ x: e.x, y: e.y - e.r - 60, text: this.flee.ko(e, (n) => this.earnStars(n)), t: 1.4, color: '#ffd84d', big: false });
       e.dead = true;
       cry(e.def.id, 'ko');
@@ -6789,13 +6794,14 @@ export class Battle {
     this.battleBreak = false;
     this.battle++;
     resetAbilities(this);
-    const room = this.swapCourt(this.pickNextRoom());
+    const room = this.swapCourt(this.flee.room(this.battle, this.pickNextRoom()));
     const anchors = [...room.anchors];
     const spawns = rollWave(this.rng, this.depth, this.theme).filter((s) => !s.boss).slice(0, ENEMY_MAX);
     this.enemies = spawns.map((s) => {
       const a = anchors.splice(Math.floor(this.rng() * anchors.length), 1)[0];
       return this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
     });
+    this.radar.spawn(this.enemies, (Math.imul(this.mapSeed, 0x7f4a7c15) + Math.imul(this.waveIndex + 1, 0x6a09e667) + Math.imul(this.battle, 0x3c6ef372)) >>> 0, this.inTrainer || this.inRival ? 0 : this.shinyRate);
     if (this.flee.at === this.battle && !isGentleRoom(this.roomGrid)) this.enemies.push(this.flee.spawn(this.flee.build(this as any, () => this.makeEnemy(this.flee.spawnAt(), this.waveIndex))));
     this.armWeakPoints();
     this.waveShots = 0;
@@ -8811,6 +8817,7 @@ export class Battle {
     ctx.fillText(this.enemies.filter((e) => !e.dead).length + ' FOES LEFT', f.x + f.w / 2, f.y + 22);
     ctx.fillText(this.phase === 'enemy' ? 'FOES ATTACK' : this.phase === 'shot' ? 'IN FLIGHT' : 'TURN ' + (this.stopShots + 1) + '/' + this.par, f.x + f.w / 2, f.y + 42);
     this.connect.draw(ctx, this.arena);
+    this.radar.draw(ctx, this.arena);
     this.missions.draw(ctx, this.time, this.arena, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints }, this.phase === 'aim' ? { theme: this.theme, name: this.themeName, sub: `STAGE ${this.waveIndex + 1}/${TOTAL_STAGES}`, foes: this.enemies.filter((e) => !e.dead).map((e) => e.def), team: this.players.filter((p) => !p.dead).map((p) => p.def) } : undefined);
 
     if (this.ultHint && this.phase === 'aim') {

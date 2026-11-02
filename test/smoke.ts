@@ -27,6 +27,7 @@ import { MISSION_PAY, Missions, pickMissions } from '../src/game/missions';
 import { missionBests, recordMissions } from '../src/game/meta';
 import { BALL_TIERS, DROP_CAP, HIT_DROP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDrop, rollReward } from '../src/game/loot';
 import { FLEE_DEF, FLEE_DUST, FLEE_FROM, FLEE_RATE, FLEE_SHINY, FLEE_STARS, FLEE_TURNS, Flee } from '../src/game/flee';
+import { RADAR_CAP, RADAR_STEP, RADAR_TELOP, Radar } from '../src/game/radar';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
@@ -4314,6 +4315,29 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string | RegExp
   const rate = spawns / 6000;
   ok(rate >= 0.13 && rate <= 0.2, 'rare foe rate stays near one in six');
   ok(!flee.plan(42, 4, 1, true) && !flee.plan(42, FLEE_FROM - 1, 1, false), 'rare foe never plans for excluded stops');
+  let gentleSeed: number | undefined;
+  let skipsGentleBattle = true;
+  for (let seed = 0; seed < 6000; seed++) {
+    const candidate = new Flee();
+    candidate.plan(seed, 4, 2, false, true);
+    if (candidate.at === 1) skipsGentleBattle = false;
+    if (candidate.at === 2 && gentleSeed === undefined) gentleSeed = seed;
+  }
+  ok(skipsGentleBattle && gentleSeed !== undefined, 'gentle opener never receives the rare foe');
+  const gentleFlee = new Flee();
+  gentleFlee.plan(gentleSeed!, 4, 2, false, true);
+  const replacedRoom = gentleFlee.room(2, ROOM_LAYOUTS[1]);
+  ok(gentleFlee.at === 2 && replacedRoom !== ROOM_LAYOUTS[1] && ROOM_LAYOUTS.indexOf(replacedRoom) >= 3, 'planned foe swaps gentle room for non-gentle room');
+  ok(gentleFlee.room(1, ROOM_LAYOUTS[1]) === ROOM_LAYOUTS[1] && gentleFlee.room(2, ROOM_LAYOUTS[3]) === ROOM_LAYOUTS[3], 'room substitution leaves unplanned and non-gentle rooms alone');
+  const roomRngNext = (replace: boolean) => {
+    const rng = mulberry32(82);
+    const battle = new Battle(arena, team(), makeStage(82, 'T'), rng) as any;
+    battle.flee.plan(gentleSeed!, 4, 2, false, true);
+    battle.pickNextRoom();
+    if (replace) battle.flee.room(2, ROOM_LAYOUTS[1]);
+    return rng();
+  };
+  ok(roomRngNext(true) === roomRngNext(false), 'planned room substitution preserves the primary battle RNG');
   const planSeed = Array.from({ length: 6000 }, (_, seed) => seed).find((seed) => new Flee().plan(seed, 4, 1, false))!;
   const snapshot = (seed: number) => {
     const f = new Flee();
@@ -4397,6 +4421,56 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string | RegExp
   };
   ok(nextRng(false) === nextRng(true), 'rare foe construction preserves the primary battle RNG sequence');
   ok(FLEE_TURNS === 2 && FLEE_SHINY === 1 / 8, 'rare foe countdown and Ditto shiny odds stay settled');
+}
+
+// --- Poké Radar: KO chain boosts matching shiny spawns ---
+{
+  const pidgey = speciesById(16)!;
+  const rattata = speciesById(19)!;
+  const enemy = (def: typeof pidgey, uid: number, boss = false, shiny = false) => ({ uid, def, boss, shiny });
+  const radar = new Radar();
+  const telop = new Telops();
+  for (let i = 0; i < 3; i++) radar.ko(enemy(pidgey, i), telop);
+  ok(radar.id === pidgey.id && radar.n === 3 && radar.bonus(pidgey.id) === 3 * RADAR_STEP, 'same-species KOs grow Radar chain and bonus');
+  radar.ko(enemy(rattata, 4), telop);
+  ok(radar.id === rattata.id && radar.n === 1 && radar.bonus(pidgey.id) === 0, 'different species breaks Radar chain');
+
+  const fifth = new Radar();
+  const fifthTelop = new Telops();
+  for (let i = 0; i < RADAR_TELOP - 1; i++) fifth.ko(enemy(pidgey, i), fifthTelop);
+  ok(fifthTelop.texts() === '', 'Radar chain telop waits until link five');
+  fifth.ko(enemy(pidgey, RADAR_TELOP), fifthTelop);
+  ok(fifthTelop.texts() === 'CHAIN ×5 · SHINY ODDS UP', 'Radar pushes the chain-five telop once');
+
+  fifth.n = 50;
+  ok(fifth.bonus(pidgey.id) === RADAR_CAP && fifth.bonus(rattata.id) === 0, 'Radar bonus caps and excludes other species');
+
+  const chain = new Radar();
+  chain.id = pidgey.id;
+  chain.n = 50;
+  const spawnFlags = (seed: number) => {
+    const foes = [enemy(pidgey, 31), enemy(rattata, 32), enemy(pidgey, 33, true), enemy(pidgey, 34, false, true)];
+    chain.spawn(foes, seed, 1);
+    return foes.map((foe) => foe.shiny);
+  };
+  const shinySeed = Array.from({ length: 1000 }, (_, seed) => seed).find((seed) => spawnFlags(seed)[0]);
+  const flags = spawnFlags(shinySeed!);
+  ok(shinySeed !== undefined && flags[0] && !flags[1] && !flags[2] && flags[3], 'Radar shiny roll affects matching non-boss foes only');
+  ok(JSON.stringify(flags) === JSON.stringify(spawnFlags(shinySeed!)), 'Radar shiny rolls are deterministic per seed');
+
+  const nextRng = (withRadar: boolean) => {
+    const rng = mulberry32(314);
+    const battle = new Battle(arena, team(), makeStage(314, 'T'), rng) as any;
+    battle.spawnWave(0);
+    const target = battle.enemies.find((foe: any) => !foe.boss)!;
+    target.shiny = false;
+    battle.radar.id = target.def.id;
+    battle.radar.n = 50;
+    if (!withRadar) battle.radar.spawn = () => {};
+    battle.radar.spawn(battle.enemies, 991, 1);
+    return rng();
+  };
+  ok(nextRng(true) === nextRng(false), 'Radar spawn preserves the primary battle RNG');
 }
 
 // --- MS stop missions: deterministic picks, ticks, pay once, seed-stable -----
