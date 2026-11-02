@@ -756,3 +756,6 @@ backlog; builders run one iteration each, I verify + commit + push.
   PROGRESS), per-individual shiny flags win over species set, ?seed=
   pins climbSeed so links preview their real stage, confirm arms reset
   on tab-hide, Esc closes the detail card, backRoom keys on props.
+- c49d6f8 pushed: detail card dead-space gate + OUTSIDE CLOSES caption,
+  N FOES plate hidden on rolled-stage parks, raid loaner cards tag
+  counter multipliers (raidCounters finally drawn).

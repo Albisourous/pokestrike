@@ -334,3 +334,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `a20a3d5` | fixes | scout sweep — lair exploit + Lv1-catch + LINK chip + streak gate + cardAuto clock + imul seed + SOLAR BEAM + warp frame + laser plans | `git revert a20a3d5` |
 | 2026-11-02 | `d9a3e60` | fixes | sweep leftovers — finish-on-flee, secret clock pick, tell art by recipe, HOT clamp | `git revert d9a3e60` |
 | 2026-11-02 | `31aa675` | home | modal dead-space gates, CONTINUE stage pack + label, per-mon shiny, pinClimbSeed, arm resets on tab-hide, Esc detail-close, backRoom props key | `git revert 31aa675` |
+| 2026-11-02 | `c49d6f8` | home | detail-card dead-space gate, N FOES honesty, raid counter tags | `git revert c49d6f8` |
