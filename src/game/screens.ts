@@ -8,7 +8,7 @@ import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, type Theme } from './bg';
 import { drawTile } from './map';
 import { drawShopScene, drawPullStage, drawCounterStrip, ballFor, ballDrop, DROP_H, DROP_SETTLE } from './home/shop';
-import { TILE_TOWN } from './maptiles';
+import { TILE_TOWN, TILE_GYM, TILE_GRASS, TILE_ROCK, TILE_BUSH, TILE_LAVA, TILE_BRICK, type TileRect } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
@@ -1411,457 +1411,260 @@ export function drawBugCard(ctx: CanvasRenderingContext2D, seed: number | null) 
   ctx.fillText('tap anywhere to close', W / 2, r.y + r.h - 18);
 }
 
-// --- help overlay: scrollable sections, each a mini diagram + a caption ---
+// --- help overlay: job-board paper cards, one idea each beside a real ------
+// --- asset (mon front, item, badge, gracidea tile, battle-anim frame) ------
 
-function helpArrow(ctx: CanvasRenderingContext2D, x0: number, y0: number, x1: number, y1: number, color: string, dash: number[] = []) {
-  ctx.save();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5;
-  ctx.setLineDash(dash);
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y1);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  const a = Math.atan2(y1 - y0, x1 - x0);
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x1 - Math.cos(a - 0.45) * 10, y1 - Math.sin(a - 0.45) * 10);
-  ctx.lineTo(x1 - Math.cos(a + 0.45) * 10, y1 - Math.sin(a + 0.45) * 10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-}
-
-function demoAim(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const mx = x + w * 0.3, my = y + h * 0.68;
-  drawMon(ctx, 7, mx, my, 46);
-  // pull-back drag (gold) mirrors the flight path (dotted) through the mon —
-  // both arrows start at its edge so the slingshot reads at a glance
-  const fx = x + w * 0.78, fy = y + h * 0.3;
-  const dl = Math.hypot(fx - mx, fy - my);
-  const ux = (fx - mx) / dl, uy = (fy - my) / dl;
-  helpArrow(ctx, mx - ux * 24, my - uy * 24, mx - ux * 96, my - uy * 96, GOLD);
-  helpArrow(ctx, mx + ux * 24, my + uy * 24, fx - ux * 16, fy - uy * 16, INK, [3, 7]);
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(fx, fy, 12, 0, Math.PI * 2);
-  ctx.stroke();
-  // mini meter: the gold band isn't pinned to the top — it follows the mon
-  const bw = w * 0.56, bx = x + w * 0.22, by = y + h * 0.88;
-  ctx.fillStyle = '#ffffff1c';
-  ctx.fillRect(bx, by, bw, 6);
-  ctx.fillStyle = '#ffd84d55';
-  ctx.fillRect(bx + bw * 0.68, by, bw * 0.16, 6);
-  ctx.fillStyle = '#58a8f8';
-  ctx.fillRect(bx, by, bw * 0.74, 6);
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(bx + bw * 0.68, by - 2, 2, 10);
-  ctx.fillRect(bx + bw * 0.84 - 2, by - 2, 2, 10);
-}
-
-function demoBump(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const ax = x + w * 0.16, ay = y + h * 0.72;
-  const bx = x + w * 0.48, by = y + h * 0.3;
-  const ex = x + w * 0.82, ey = y + h * 0.62;
-  helpArrow(ctx, ax + 16, ay - 18, bx - 14, by + 18, INK, [3, 6]);
-  helpArrow(ctx, bx + 16, by + 10, ex - 18, ey - 8, GOLD, [3, 6]);
-  drawMon(ctx, 25, ax, ay, 42); // you
-  drawMon(ctx, 7, bx, by, 42); // ally — the bumper
-  drawMon(ctx, 19, ex, ey, 44); // enemy
-  // super burst on the enemy
-  ctx.strokeStyle = GOLD;
-  ctx.lineWidth = 2;
-  for (let k = 0; k < 6; k++) {
-    const a = (k / 6) * Math.PI * 2 + 0.3;
-    ctx.beginPath();
-    ctx.moveTo(ex + Math.cos(a) * 26, ey + Math.sin(a) * 26);
-    ctx.lineTo(ex + Math.cos(a) * 34, ey + Math.sin(a) * 34);
-    ctx.stroke();
-  }
-}
-
-function demoCharge(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const mx = x + w / 2, my = y + h * 0.42;
-  drawMon(ctx, 4, mx, my, 46);
-  // hp bar + pip row, same language as the battle HUD
-  ctx.fillStyle = '#000a';
-  ctx.fillRect(mx - 26, my + 26, 52, 4);
-  ctx.fillStyle = '#6fdc6f';
-  ctx.fillRect(mx - 26, my + 26, 52 * 0.7, 4);
-  for (let k = 0; k < 4; k++) {
-    ctx.fillStyle = k < 3 ? GOLD : '#d0d0c8';
-    ctx.fillRect(mx - 26 + k * 14, my + 36, 10, 5);
-  }
-}
-
-function demoCountdown(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const spots: [number, number, string, string][] = [
-    [0.3, 0.55, '2', '#ffffff'],
-    [0.7, 0.5, '1', '#ff6b6b'],
-  ];
-  for (const [fx, fy, n, c] of spots) {
-    const mx = x + w * fx, my = y + h * fy;
-    drawMon(ctx, n === '1' ? 41 : 43, mx, my, 44);
-    ctx.font = font(14);
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#0a0d18';
-    ctx.fillText(n, mx + 1, my - 30 + 1);
-    ctx.fillStyle = c;
-    ctx.fillText(n, mx, my - 30);
-  }
-}
-
-function demoPickups(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const kinds: [string, string][] = [
-    ['oran-berry', 'HEAL'],
-    ['protein', 'ATK UP'],
-    ['elixir', 'CD -1'],
-  ];
-  ctx.font = fontB(10);
-  ctx.textAlign = 'center';
-  kinds.forEach(([item, lab], i) => {
-    const ix = x + w * (0.22 + i * 0.28), iy = y + h * 0.42;
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#fff8dc';
-    ctx.beginPath();
-    ctx.ellipse(ix, iy + 18, 13, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    const img = itemSprite(item);
-    if (img) ctx.drawImage(img, ix - 15, iy - 15, 30, 30);
-    ctx.fillStyle = INK;
-    ctx.fillText(lab, ix, iy + 34);
-  });
-}
-
-function demoCatch(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const mx = x + w * 0.3, my = y + h * 0.52;
-  drawMon(ctx, 16, mx, my, 46);
-  ctx.fillStyle = '#000a';
-  ctx.fillRect(mx - 24, my + 26, 48, 4);
-  ctx.fillStyle = '#ff6b6b';
-  ctx.fillRect(mx - 24, my + 26, 48 * 0.2, 4);
-  const ball = itemSprite('poke-ball');
-  const bx = x + w * 0.68, by = y + h * 0.5;
-  if (ball) ctx.drawImage(ball, bx - 16, by - 16, 32, 32);
-  helpArrow(ctx, mx + 30, my, bx - 22, by, INK, [3, 6]);
-}
-
-function demoClimb(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const n = 9, gap = (w * 0.7) / (n - 1), x0 = x + w * 0.15, my = y + h * 0.5;
-  for (let i = 0; i < n; i++) {
-    const px = x0 + i * gap;
-    const gym = (i + 1) % 3 === 0;
-    ctx.fillStyle = i < 3 ? GOLD : '#3a4066';
-    if (gym) {
-      ctx.beginPath();
-      ctx.moveTo(px, my - 8);
-      ctx.lineTo(px + 7, my);
-      ctx.lineTo(px, my + 8);
-      ctx.lineTo(px - 7, my);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.arc(px, my, 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-}
-
-function demoHazards(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const spots: [number, string, string][] = [
-    [0.25, '#f08030', 'HURT'],
-    [0.5, '#b090ff', 'HUSH'],
-    [0.75, '#58d858', 'BOOST'],
-  ];
-  ctx.font = fontB(10);
-  ctx.textAlign = 'center';
-  for (const [fx, c, lab] of spots) {
-    const hx = x + w * fx, hy = y + h * 0.42;
-    ctx.globalAlpha = 0.28;
-    ctx.fillStyle = c;
-    ctx.beginPath();
-    ctx.arc(hx, hy, 26, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = c;
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.fillStyle = INK;
-    ctx.fillText(lab, hx, hy + 44);
-  }
-}
-
-function demoTraits(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  drawMon(ctx, 4, x + w * 0.34, y + h * 0.45, 46);
-  drawMon(ctx, 6, x + w * 0.66, y + h * 0.45, 46);
-  ctx.font = fontB(10);
-  ctx.textAlign = 'center';
-  const label = 'FIRE T2';
-  const tw = ctx.measureText(label).width + 12;
-  ctx.fillStyle = PAPER;
-  ctx.fillRect(x + w / 2 - tw / 2, y + h * 0.7, tw, 18);
-  ctx.fillStyle = '#f08030';
-  ctx.fillText(label, x + w / 2, y + h * 0.7 + 13);
-}
+// a dex id draws the FRLG front · a string is an item path for loadItem
+// ('badges/1', 'anims/<sheet>' crops frame 0) · a TileRect blits gracidea
+type HelpIcon = number | string | TileRect;
+type HelpCard = readonly [HelpIcon, string];
 
 interface HelpSection {
   title: string;
-  lines: string[];
-  demo: (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) => void;
+  cards: HelpCard[];
 }
 
 const HELP_SECTIONS: HelpSection[] = [
   {
     title: 'AIM & POWER',
-    lines: [
-      'pull back anywhere: the dotted line is the flight path',
-      'pull distance only aims · power is where you let go on the meter',
-      'let go inside the gold band for a PERFECT full-power shot',
-      'fast mons aim high and tight; stronger mons get a faster sweep',
-      'the band drifts a little every pull · read it, don\'t memorize',
-      'speed dies fast after 1.5s · the early banks hit hardest',
+    cards: [
+      ['poke-ball', 'pull back anywhere: the dotted line is the flight path'],
+      ['great-ball', 'pull distance only aims · power is where you let go on the meter'],
+      ['master-ball', 'let go inside the gold band for a PERFECT full-power shot'],
+      [135, 'fast mons aim high and tight; stronger mons get a faster sweep'],
+      ['wide-lens', 'the band drifts a little every pull · read it, don\'t memorize'],
+      ['quick-claw', 'speed dies fast after 1.5s · the early banks hit hardest'],
     ],
-    demo: demoAim,
   },
   {
     title: 'ALLY CHAINS',
-    lines: ['fly through a teammate mid-flight · a READY ally fires its super', 'each pass adds damage and speed, so route through allies'],
-    demo: demoBump,
+    cards: [
+      [25, 'fly through a teammate mid-flight · a READY ally fires its super'],
+      ['muscle-band', 'each pass adds damage and speed, so route through allies'],
+    ],
   },
   {
     title: 'RICOCHET',
-    lines: [
-      'two different touches (foe, ally, wall, stone) in 0.35s flash RICOCHET!',
-      "hitting the same thing twice doesn't count",
-      'relics cash it in: Binding Band +40% hits, Ether feeds a pip',
+    cards: [
+      ['anims/impact', 'two different touches (foe, ally, wall, stone) in 0.35s flash RICOCHET!'],
+      ['metronome', "hitting the same thing twice doesn't count"],
+      ['grip-claw', 'relics cash it in: Binding Band +40% hits, Ether feeds a pip'],
     ],
-    demo: demoBump,
   },
   {
     title: 'CHARGE PIPS',
-    lines: [
-      'shots and KOs fill the gold pips under each mon · all-gold means READY',
-      'launch a READY mon and its super fires from the sling (STRIKE SHOT)',
+    cards: [
+      ['elixir', 'shots and KOs fill the gold pips under each mon · all-gold means READY'],
+      ['power-herb', 'launch a READY mon and its super fires from the sling (STRIKE SHOT)'],
     ],
-    demo: demoCharge,
   },
   {
     title: 'ENEMIES',
-    lines: [
-      'a foe strikes when its number hits 0 · each shot you take ticks one down',
-      'at 1 the move shows its target · a dashed line or a ghosted footprint',
-      'melee countdowns start low · thin them out first',
-      'gold stars mark weak spots · some hide till first contact · ×2, bosses ×3',
-      'BOSSES fight in 3 bars · new court, new adds, the weak spot moves',
-      'a boss ★ clock is its signature move · HEAVY hits the whole team',
-      'bar 3 is RAGE · every boss clock starts a turn sooner',
-      'shelled foes glance hits off the plate · bank around the back for a FLANK',
-      'spiked foes bite the ball on contact · hit them clean, don\'t graze',
-      'regen foes mend over time · burst them down, don\'t whittle',
-      'split foes divide when KO\'d · expect two where one fell',
-      'rage foes snap under 30% · a wounded one swings faster',
-      'zZ foes doze till hit · the wake-up shot lands like a crit',
-      'gold halos repel the ball · bank in behind or punch through fast',
-      'thieves dash at your field drops · grab the loot or drop them first',
-      'volley foes fan their shot across three mons · kill the cannon first',
-      'blink foes flicker before they teleport · hold the shot a beat',
-      'SOS callers cry for backup · silence them before the field floods',
-      'mirror blobs transform into your strongest · feed them a weak lead',
-      'FUSE foes detonate at zero · kill fast, or bait the blast into its pack',
-      'HUNTER foes stalk your weakest · park a tank between them',
-      'LEECH foes heal off every hit · burst them, don\'t trade chips',
-      'tap (don\'t pull) a foe to scout its name, hp, and next move',
+    cards: [
+      ['anims/gold_ring', 'a foe strikes when its number hits 0 · each shot you take ticks one down'],
+      ['scope-lens', 'at 1 the move shows its target · a dashed line or a ghosted footprint'],
+      [56, 'melee countdowns start low · thin them out first'],
+      ['star-piece', 'gold stars mark weak spots · some hide till first contact · ×2, bosses ×3'],
+      [TILE_GYM, 'BOSSES fight in 3 bars · new court, new adds, the weak spot moves'],
+      [150, 'a boss ★ clock is its signature move · HEAVY hits the whole team'],
+      [130, 'bar 3 is RAGE · every boss clock starts a turn sooner'],
+      [91, 'shelled foes glance hits off the plate · bank around the back for a FLANK'],
+      [28, 'spiked foes bite the ball on contact · hit them clean, don\'t graze'],
+      ['leftovers', 'regen foes mend over time · burst them down, don\'t whittle'],
+      ['anims/orbs', 'split foes divide when KO\'d · expect two where one fell'],
+      [57, 'rage foes snap under 30% · a wounded one swings faster'],
+      [143, 'zZ foes doze till hit · the wake-up shot lands like a crit'],
+      ['bright-powder', 'gold halos repel the ball · bank in behind or punch through fast'],
+      [52, 'thieves dash at your field drops · grab the loot or drop them first'],
+      ['wide-lens', 'volley foes fan their shot across three mons · kill the cannon first'],
+      [63, 'blink foes flicker before they teleport · hold the shot a beat'],
+      [293, 'SOS callers cry for backup · silence them before the field floods'],
+      [132, 'mirror blobs transform into your strongest · feed them a weak lead'],
+      [100, 'FUSE foes detonate at zero · kill fast, or bait the blast into its pack'],
+      ['razor-claw', 'HUNTER foes stalk your weakest · park a tank between them'],
+      ['big-root', 'LEECH foes heal off every hit · burst them, don\'t trade chips'],
+      ['sign', 'tap (don\'t pull) a foe to scout its name, hp, and next move'],
     ],
-    demo: demoCountdown,
   },
   {
     title: 'FOE AILMENTS',
-    lines: [
-      'SLEEP powder drops a mon a whole turn · sleepers can\'t bump either',
-      'VENOM stings leave a wound that bleeds a tick a round',
-      'WISP flames burn · the victim singes and hits softer',
-      'JOLT waves paralyze · the shocked mon\'s launch limps',
-      'TOXIC hides poison the ball on contact · kill them with banks',
-      'STATIC hides paralyze on contact · touch once, hard',
-      'FLAME hides burn on contact · seared hits lose heat',
-      'CHARM hides lull the striker · contact can put it to sleep',
-      'SPORE hides scatter a random ailment on contact',
-      'SYNC foes echo their status · burn one and it burns you back',
-      'SHED foes shrug off poison, burns and sleep · burst them',
-      'P-HEAL foes mend off your poison · burn them instead',
-      'DRAIN foes absorb their element · same-type hits heal them',
-      'H-BLOCK foes stop your heals · kill the blocker to mend',
-      'BOND foes drag down whoever lands the KO · finish them with hazards or a catch',
+    cards: [
+      [43, 'SLEEP powder drops a mon a whole turn · sleepers can\'t bump either'],
+      ['poison-barb', 'VENOM stings leave a wound that bleeds a tick a round'],
+      ['charcoal', 'WISP flames burn · the victim singes and hits softer'],
+      ['magnet', 'JOLT waves paralyze · the shocked mon\'s launch limps'],
+      [89, 'TOXIC hides poison the ball on contact · kill them with banks'],
+      [125, 'STATIC hides paralyze on contact · touch once, hard'],
+      [126, 'FLAME hides burn on contact · seared hits lose heat'],
+      [35, 'CHARM hides lull the striker · contact can put it to sleep'],
+      [46, 'SPORE hides scatter a random ailment on contact'],
+      [196, 'SYNC foes echo their status · burn one and it burns you back'],
+      [147, 'SHED foes shrug off poison, burns and sleep · burst them'],
+      ['anims/poison_bubble', 'P-HEAL foes mend off your poison · burn them instead'],
+      [134, 'DRAIN foes absorb their element · same-type hits heal them'],
+      ['potion', 'H-BLOCK foes stop your heals · kill the blocker to mend'],
+      ['anims/shadow_ball', 'BOND foes drag down whoever lands the KO · finish them with hazards or a catch'],
     ],
-    demo: demoCountdown,
   },
   {
     title: 'FOE TELLS',
-    lines: [
-      'MENACE foes intimidate · your hits lose a fifth while they live',
-      'W-GUARD only falls to super-effective hits · slams still count',
-      'STURDY foes hang on at 1 HP · the first kill shot only wounds',
-      'SCALE hides half damage at full HP · chip it open first',
-      'GUTS foes hit harder while statused · kill them clean',
-      'LOAF foes truant · they fire once, then loiter a round',
-      'BOOST foes speed up every attack · kill them early',
-      'PRESSURE halves your super charge · legends bend the economy',
-      'BEAM foes lock a lane · the dashed line telegraphs the burn',
-      'TRAP foes leash the court · the ball can\'t flee while they live',
-      'SKY callers summon weather · Torkoal brings the drought',
-      'a ball matching the sky launches faster · draft into the weather',
-      'COUNTER foes return a third of contact · chip, don\'t crit',
-      'ALPHA foes rally the pack · kill the leader first',
-      'CHARGE foes paw the ground, then ram · shove them off-line',
-      'PRANK foes strike early · expect an ambush opener',
-      'THIEF foes snatch your pickups · KO them to take it back',
-      'SWIFT foes press 1.5× harder in their own sky',
-      'SPIKER foes seed your half with spikes · the court fills while they live',
-      'SONIC foes rattle your aim · a touched mon launches off-line',
-      'ANCHOR foes cannot be shoved · no herding them into hazards',
-      'ARMOR foes shrug off crits · out-muscle them straight',
+    cards: [
+      [24, 'MENACE foes intimidate · your hits lose a fifth while they live'],
+      [292, 'W-GUARD only falls to super-effective hits · slams still count'],
+      [74, 'STURDY foes hang on at 1 HP · the first kill shot only wounds'],
+      [149, 'SCALE hides half damage at full HP · chip it open first'],
+      [66, 'GUTS foes hit harder while statused · kill them clean'],
+      [287, 'LOAF foes truant · they fire once, then loiter a round'],
+      [291, 'BOOST foes speed up every attack · kill them early'],
+      [144, 'PRESSURE halves your super charge · legends bend the economy'],
+      ['choice-specs', 'BEAM foes lock a lane · the dashed line telegraphs the burn'],
+      [50, 'TRAP foes leash the court · the ball can\'t flee while they live'],
+      [324, 'SKY callers summon weather · Torkoal brings the drought'],
+      [351, 'a ball matching the sky launches faster · draft into the weather'],
+      [202, 'COUNTER foes return a third of contact · chip, don\'t crit'],
+      ['kings-rock', 'ALPHA foes rally the pack · kill the leader first'],
+      [128, 'CHARGE foes paw the ground, then ram · shove them off-line'],
+      [302, 'PRANK foes strike early · expect an ambush opener'],
+      ['amulet-coin', 'THIEF foes snatch your pickups · KO them to take it back'],
+      ['anims/splash', 'SWIFT foes press 1.5× harder in their own sky'],
+      ['anims/rocks', 'SPIKER foes seed your half with spikes · the court fills while they live'],
+      [41, 'SONIC foes rattle your aim · a touched mon launches off-line'],
+      ['iron', 'ANCHOR foes cannot be shoved · no herding them into hazards'],
+      [141, 'ARMOR foes shrug off crits · out-muscle them straight'],
     ],
-    demo: demoCountdown,
   },
   {
     title: 'FIELD PICKUPS',
-    lines: [
-      'each wave seeds a pickup · the colored ring and tag name it',
-      'LUM BERRY cures the team · it only drops when someone is sick',
-      'berry heals the team, protein buffs the shot, elixir charges pips',
-      'ORAN BERRY ripens to SITRUS BERRY after one enemy turn',
-      'PP UP adds one ULT charge · CHESTO BERRY winds every foe clock back',
-      'some courts drop berries on KOs · DRAIN foes heal off their hits',
-      'SAFEGUARD foes take no damage · grab a berry to break it',
-      'fly through the glowing item to collect on touch',
-      'one spawns each wave, two when something big lurks',
+    cards: [
+      ['stardust', 'each wave seeds a pickup · the colored ring and tag name it'],
+      ['lum-berry', 'LUM BERRY cures the team · it only drops when someone is sick'],
+      ['protein', 'berry heals the team, protein buffs the shot, elixir charges pips'],
+      ['sitrus-berry', 'ORAN BERRY ripens to SITRUS BERRY after one enemy turn'],
+      ['pp-up', 'PP UP adds one ULT charge · CHESTO BERRY winds every foe clock back'],
+      ['oran-berry', 'some courts drop berries on KOs · DRAIN foes heal off their hits'],
+      ['anims/ice_crystals_0', 'SAFEGUARD foes take no damage · grab a berry to break it'],
+      ['power-herb', 'fly through the glowing item to collect on touch'],
+      ['lucky-egg', 'one spawns each wave, two when something big lurks'],
     ],
-    demo: demoPickups,
   },
   {
     title: 'CATCHING',
-    lines: [
-      'beaten foes sometimes drop a ball: catches go to your box',
-      'weak foes join easy · ones far above your ace all but refuse',
-      'a catch joins at your team\'s level, never above it',
-      'beat a gym and its ace joins your box too',
-      'a duplicate feeds the copy you own: +1 LUCK every fusion',
-      'luck pays out in gym loot',
-      'split evolutions (Eevee, Tyrogue…) ask which form after the fight',
+    cards: [
+      ['poke-ball', 'beaten foes sometimes drop a ball: catches go to your box'],
+      ['great-ball', 'weak foes join easy · ones far above your ace all but refuse'],
+      ['ultra-ball', 'a catch joins at your team\'s level, never above it'],
+      ['badges/2', 'beat a gym and its ace joins your box too'],
+      ['friend-ball', 'a duplicate feeds the copy you own: +1 LUCK every fusion'],
+      ['amulet-coin', 'luck pays out in gym loot'],
+      [133, 'split evolutions (Eevee, Tyrogue…) ask which form after the fight'],
     ],
-    demo: demoCatch,
   },
   {
     title: 'LEVELING UP',
-    lines: [
-      'every KO levels the mon that launched the shot',
-      'tougher foes teach more · cap Lv100, levels survive evolution',
-      'each win raises ASCENSION: foes get tougher and faster',
-      'ASC buys perks: a second charm (3), weaker rests (4), enraged gyms (6)',
+    cards: [
+      ['exp-share', 'every KO levels the mon that launched the shot'],
+      ['macho-brace', 'tougher foes teach more · cap Lv100, levels survive evolution'],
+      ['badges/3', 'each win raises ASCENSION: foes get tougher and faster'],
+      ['dire-hit', 'ASC buys perks: a second charm (3), weaker rests (4), enraged gyms (6)'],
     ],
-    demo: demoCharge,
   },
   {
     title: 'THE CLIMB',
-    lines: [
-      '9 stages, a gym every 3rd: pick your route on the map',
-      'after each fight: fix the lineup first, then take an item',
-      'lose and your fallen team returns next run as the rival',
-      'every run moves your ladder rating · wins climb, wipes drop',
-      'wild stops run 2 to 4 battles against a turn par',
-      'CLEAR card: S on par with no faints · S A B pay star pieces',
+    cards: [
+      [TILE_GYM, '9 stages, a gym every 3rd: pick your route on the map'],
+      ['choice-band', 'after each fight: fix the lineup first, then take an item'],
+      ['dusk-ball', 'lose and your fallen team returns next run as the rival'],
+      ['badges/8', 'every run moves your ladder rating · wins climb, wipes drop'],
+      [TILE_GRASS, 'wild stops run 2 to 4 battles against a turn par'],
+      ['star-piece', 'CLEAR card: S on par with no faints · S A B pay star pieces'],
     ],
-    demo: demoClimb,
   },
   {
     title: 'MAP STOPS',
-    lines: [
-      'rests heal and revive · chests pay an item · a fight still follows',
-      'trainer squads pay better loot but can\'t be caught',
-      'ELITE doors fight deeper and pay rare+ relics',
-      '??? is a surprise · heal, haul, or ambush',
+    cards: [
+      ['revive', 'rests heal and revive · chests pay an item · a fight still follows'],
+      ['black-belt', 'trainer squads pay better loot but can\'t be caught'],
+      ['adamant-orb', 'ELITE doors fight deeper and pay rare+ relics'],
+      ['moomoo-milk', '??? is a surprise · heal, haul, or ambush'],
     ],
-    demo: demoPickups,
   },
   {
     title: 'SHINIES & STREAKS',
-    lines: ['gold-tinted foes are rare: KO one and it always joins your box', 'perfect releases build a streak · each one hits a bit harder'],
-    demo: demoAim,
+    cards: [
+      ['shiny-charm', 'gold-tinted foes are rare: KO one and it always joins your box'],
+      ['expert-belt', 'perfect releases build a streak · each one hits a bit harder'],
+    ],
   },
   {
     title: 'STONE WALLS',
-    lines: [
-      'boulder clusters wall off the lane: the ball banks right off them',
-      'boulder bounces count as wall hits: banking still pays damage',
-      'ROCK SMASH rocks break in 3 hits · CUT trees in 2, or 1 from Grass',
-      'STRENGTH boulders shove one cell when you hit them hard',
+    cards: [
+      [TILE_ROCK, 'boulder clusters wall off the lane: the ball banks right off them'],
+      ['hard-stone', 'boulder bounces count as wall hits: banking still pays damage'],
+      [TILE_BUSH, 'ROCK SMASH rocks break in 3 hits · CUT trees in 2, or 1 from Grass'],
+      [68, 'STRENGTH boulders shove one cell when you hit them hard'],
     ],
-    demo: demoBump,
   },
   {
     title: 'FIELD GIMMICKS',
-    lines: [
-      'red zones chip the ball, violet ones silence supers · foes ignore both',
-      'warp pads teleport, green pads boost, dark wells bend the path',
-      'DMG WALL edges fade in, then bite any mon that banks off them',
-      'walls switch by turn · NEXT TURN marks the edge about to light',
-      'DMG WALLs spare their own type · stop tags name the ABILITY that helps',
+    cards: [
+      [TILE_LAVA, 'red zones chip the ball, violet ones silence supers · foes ignore both'],
+      ['float-stone', 'warp pads teleport, green pads boost, dark wells bend the path'],
+      [TILE_BRICK, 'DMG WALL edges fade in, then bite any mon that banks off them'],
+      ['metronome', 'walls switch by turn · NEXT TURN marks the edge about to light'],
+      [92, 'DMG WALLs spare their own type · stop tags name the ABILITY that helps'],
     ],
-    demo: demoHazards,
   },
   {
     title: 'TYPE TRAITS',
-    lines: [
-      'field 2+ of a type for a team-wide bonus · shinies count double',
-      'dual-typed mons count for both types and strike with whichever hits harder',
-      'the chips on the map screen show what your team is running',
+    cards: [
+      ['silk-scarf', 'field 2+ of a type for a team-wide bonus · shinies count double'],
+      [6, 'dual-typed mons count for both types and strike with whichever hits harder'],
+      ['eviolite', 'the chips on the map screen show what your team is running'],
     ],
-    demo: demoTraits,
   },
   {
     title: 'SUPER INDEX I',
-    lines: [
-      'NORMAL dash-slams the nearest · FIGHTING rains meteors',
-      'ROCK rains meteors · FLYING piles foes with a vortex',
-      'WATER sends homing orbs · ELECTRIC chains lightning',
+    cards: [
+      ['anims/punch_impact', 'NORMAL dash-slams the nearest · FIGHTING rains meteors'],
+      ['anims/rocks', 'ROCK rains meteors · FLYING piles foes with a vortex'],
+      ['mystic-water', 'WATER sends homing orbs · ELECTRIC chains lightning'],
     ],
-    demo: demoBump,
   },
   {
     title: 'SUPER INDEX II',
-    lines: [
-      'GRASS drains foes to heal · POISON bleeds foes each shot',
-      'FIRE flame ring + fireballs · GHOST hexes every foe',
-      'PSYCHIC shoves the pack away · more charge, bigger effect',
+    cards: [
+      ['miracle-seed', 'GRASS drains foes to heal · POISON bleeds foes each shot'],
+      ['charcoal', 'FIRE flame ring + fireballs · GHOST hexes every foe'],
+      ['twisted-spoon', 'PSYCHIC shoves the pack away · more charge, bigger effect'],
     ],
-    demo: demoCharge,
   },
   {
     title: 'ULTIMATE',
-    // lazy: ULT_SHOTS lives in battle.ts, which imports this module — a
-    // top-level read would hit the const before it's initialized
-    get lines() {
-      return [
-        `Every shot charges ULT · ${ULT_SHOTS} shots fill it`,
-        'Full? Tap ULT, then tap again to unleash · or tap a glowing teammate twice',
-        'Hits all foes · bosses resist it · charge carries between fights',
-        // key affordances hide on touch — same (pointer: fine) gate as the [1]/[R] hints
-        ...(HAS_KEYS ? ['on keys: ? help · P pause · M mute · arrows turn pages'] : []),
-      ];
-    },
-    demo: demoCharge,
+    cards: [
+      // {ULT} resolves at draw: ULT_SHOTS lives in battle.ts, which imports
+      // this module, so a top-level read would hit it before it's initialized
+      ['soul-dew', 'Every shot charges ULT · {ULT} shots fill it'],
+      ['focus-sash', 'Full? Tap ULT, then tap again to unleash · or tap a glowing teammate twice'],
+      ['life-orb', 'Hits all foes · bosses resist it · charge carries between fights'],
+      // key affordances hide on touch, same (pointer: fine) gate as the [1]/[R] hints
+      ...(HAS_KEYS ? [['sign', 'on keys: ? help, P pause, M mute · arrows turn pages'] as const] : []),
+    ],
+  },
+  {
+    title: 'TL;DR',
+    cards: [
+      ['poke-ball', 'PULL · drag back, let go in the gold band'],
+      [25, 'BOUNCE · bank off walls, fly through allies to fire supers'],
+      ['badges/1', 'BREAK BARS · drop each boss bar before its clocks hit 0'],
+      ['star-piece', 'CLEAR FAST · on par with no faints ranks S'],
+    ],
   },
 ];
 
-// Help is reference, not onboarding: two sections a page so nobody scrolls
-// a manual. Pages pair what belongs together — shot basics with the enemy
-// countdown, supers with their pips, map stops with the climb.
-const HELP_PAGES: { name: string; secs: number[] }[] = [
+// topic groups in reading order · a group spills onto as many evenly
+// filled pages as its cards need, and the dots track groups, not pages
+const HELP_GROUPS: { name: string; secs: number[] }[] = [
+  { name: 'TL;DR', secs: [19] },
   { name: 'YOUR SHOT', secs: [0, 2] },
   { name: 'FOES', secs: [4] },
   { name: 'AILMENTS', secs: [5] },
@@ -1874,11 +1677,27 @@ const HELP_PAGES: { name: string; secs: number[] }[] = [
   { name: 'THE CLIMB', secs: [10, 11] },
   { name: 'GIMMICKS', secs: [14, 15] },
 ];
-export const HELP_PAGE_COUNT = HELP_PAGES.length;
+const HELP_PER_PAGE = 7;
+export const HELP_DECK: { name: string; group: number; cards: HelpCard[] }[] = HELP_GROUPS.flatMap((g, gi) => {
+  const all = g.secs.flatMap((si) => HELP_SECTIONS[si].cards);
+  const n = Math.ceil(all.length / HELP_PER_PAGE);
+  const per = Math.ceil(all.length / n);
+  return Array.from({ length: n }, (_, i) => ({
+    name: n > 1 ? `${g.name} ${i + 1}/${n}` : g.name,
+    group: gi,
+    cards: all.slice(i * per, (i + 1) * per),
+  }));
+});
+export const HELP_PAGE_COUNT = HELP_DECK.length;
 
 export const HELP_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
 const HELP_HEAD = 64; // title band inside the panel
 const HELP_FOOT = 44; // nav band
+const HELP_CARD_Y = HELP_PANEL.y + HELP_HEAD + 40; // under the page name
+const HELP_CARD_H = 86; // three 20px lines
+const HELP_CARD_GAP = 8;
+const HELP_TEXT_PX = 14; // fontB(14) = 20 logical ≈ 14.4px at 390 wide
+const HELP_TEXT_MIN = 13.5; // the 19-logical floor
 // 40px touch floor — the same size as the corner chips these sit beside
 export const HELP_PREV = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 40 };
 export const HELP_NEXT = { x: HELP_PANEL.x + HELP_PANEL.w - 62, y: HELP_PANEL.y + HELP_PANEL.h - HELP_FOOT + 4, w: 48, h: 40 };
@@ -1886,20 +1705,69 @@ export const HELP_CLOSE = { x: HELP_PANEL.x + HELP_PANEL.w - 48, y: HELP_PANEL.y
 // modal corner targets get the full pad — nothing else hit-tests up there
 export const HELP_CLOSE_HIT = { x: HELP_CLOSE.x - 8, y: HELP_CLOSE.y - 8, w: 56, h: 56 };
 // re-arms the kinetic battle coach — top-left, kept narrow to clear the title
-export const HELP_TUT = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + 12, w: 96, h: 40 };
+export const HELP_TUT = { x: HELP_PANEL.x + 14, y: HELP_PANEL.y + 12, w: 116, h: 40 };
+
+// greedy word-wrap at the current font, no line cap
+function wrapAll(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+  const out: string[] = [];
+  let cur = '';
+  for (const word of text.split(' ')) {
+    const next = cur ? `${cur} ${word}` : word;
+    if (cur && measureW(ctx, next) > maxW) {
+      out.push(cur);
+      cur = word;
+    } else cur = next;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+// each `·` clause gets its own line(s) · shrink in half steps until the card
+// holds three lines, never under the floor
+function helpLines(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
+  const parts = text.split(' · ');
+  let px = HELP_TEXT_PX;
+  for (;;) {
+    ctx.font = fontB(px);
+    const lines = parts.map((p, i) => wrapAll(ctx, p, maxW).map((l) => ({ l, lead: i === 0 }))).flat();
+    if (lines.length <= 3 || px <= HELP_TEXT_MIN) return { lines, px };
+    px -= 0.5;
+  }
+}
+
+const helpMonReady = new Set<number>();
+function drawHelpIcon(ctx: CanvasRenderingContext2D, icon: HelpIcon, cx: number, cy: number) {
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (typeof icon === 'number') {
+    if (helpMonReady.has(icon)) {
+      monShadow(ctx, cx, cy + 2, 56);
+      drawMon(ctx, icon, cx, cy, 60);
+    } else void loadSprite(icon).then(() => helpMonReady.add(icon));
+  } else if (typeof icon === 'string') {
+    void loadItem(icon);
+    const img = itemSprite(icon);
+    if (img && img.width) {
+      // anim sheets are strips of square frames · show frame 0
+      const fw = icon.startsWith('anims/') ? img.height : img.width;
+      const sz = icon.startsWith('badges/') ? 40 : 52;
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 2;
+      ctx.drawImage(img, 0, 0, fw, img.height, cx - sz / 2, cy - sz / 2, sz, sz);
+    }
+  } else {
+    const k = 52 / Math.max(icon[2], icon[3]);
+    drawTile(ctx, icon, cx - (icon[2] * k) / 2, cy - (icon[3] * k) / 2, icon[2] * k, icon[3] * k);
+  }
+  ctx.restore();
+}
 
 export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed = false, welcome = false) {
   const r = HELP_PANEL;
+  const pg = HELP_DECK[page];
   scrim(ctx);
   uiPanel(ctx, r, 'HOW TO PLAY', { rad: 14 });
-
-  ctx.textAlign = 'center';
-  if (welcome) {
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_SOFT;
-    ctx.fillText('your first fight teaches the pull · this deck is the manual', r.x + r.w / 2, r.y + 62);
-  }
-
   uiClose(ctx, HELP_CLOSE);
 
   // TUTORIAL pill — re-arms the in-battle coach (ghost pull + field beats).
@@ -1910,51 +1778,62 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   ctx.strokeStyle = coachArmed ? '#6fdc6f' : PARCH;
   ctx.lineWidth = 1.5;
   ctx.stroke();
-  ctx.font = fontB(10);
+  ctx.textAlign = 'center';
+  const tut = coachArmed ? 'TUTORIAL ON' : '▶ TUTORIAL';
+  fitFontB(ctx, tut, HELP_TEXT_MIN, HELP_TUT.w - 12);
   ctx.fillStyle = coachArmed ? '#9fe89f' : PARCH;
-  ctx.fillText(coachArmed ? 'TUTORIAL ON' : '▶ TUTORIAL', HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 25);
+  ctx.fillText(tut, HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 27);
 
-  // cards flow down the page — each section's slot is exactly as tall as
-  // its own content, so a glossary page can pack nineteen lines
-  let sy = r.y + HELP_HEAD + 14;
-  HELP_PAGES[page].secs.forEach((si) => {
-    const s = HELP_SECTIONS[si];
-    const dx = r.x + 22, dw = r.w - 44;
-    ctx.font = font(11);
-    ctx.fillStyle = INK;
-    ctx.fillText(s.title, r.x + r.w / 2, sy + 12);
+  fitFont(ctx, pg.name, 14, r.w - 40);
+  ctx.fillStyle = INK;
+  ctx.fillText(pg.name, r.x + r.w / 2, r.y + HELP_HEAD + 28);
 
-    const dy = sy + 20;
-    uiWindow(ctx, { x: dx, y: dy, w: dw, h: 180 }, { shadow: false });
-    ctx.save();
-    roundRect(ctx, dx, dy, dw, 180, 8);
-    ctx.clip();
-    s.demo(ctx, dx, dy, dw, 180);
-    ctx.restore();
+  // one paper card per idea: asset cell left, its clauses stacked right
+  const cx = r.x + 14, cw = r.w - 28;
+  const tx = cx + 84, tw = cw - 84 - 14;
+  pg.cards.forEach(([icon, raw], i) => {
+    const text = raw.replace('{ULT}', String(ULT_SHOTS));
+    const y = HELP_CARD_Y + i * (HELP_CARD_H + HELP_CARD_GAP);
+    uiWindow(ctx, { x: cx, y, w: cw, h: HELP_CARD_H }, { rad: 8, shadow: false });
+    roundRect(ctx, cx + 8, y + 8, 68, HELP_CARD_H - 16, 6);
+    ctx.fillStyle = 'rgba(40,48,88,0.08)';
+    ctx.fill();
+    drawHelpIcon(ctx, icon, cx + 42, y + HELP_CARD_H / 2);
 
-    ctx.fillStyle = INK;
-    s.lines.forEach((line, li) => {
-      fitFontB(ctx, line, 10, r.w - 28);
-      ctx.fillText(line, r.x + r.w / 2, dy + 212 + li * 15);
+    const { lines, px } = helpLines(ctx, text, tw);
+    const lh = px * 1.4 + 3;
+    const top = y + HELP_CARD_H / 2 - (lines.length * lh) / 2 + lh * 0.72;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(px);
+    lines.forEach(({ l, lead }, li) => {
+      ctx.fillStyle = lead ? INK : INK_SOFT;
+      ctx.fillText(l, tx, top + li * lh);
     });
-    sy += 224 + s.lines.length * 15 + 8;
   });
 
-  // footer nav: ‹ › arrows flank the page dots — same dots, new chrome
+  if (welcome && page === 0) {
+    const y = HELP_CARD_Y + pg.cards.length * (HELP_CARD_H + HELP_CARD_GAP) + 30;
+    ctx.textAlign = 'center';
+    ctx.font = fontB(HELP_TEXT_PX);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText('your first fight teaches the pull', r.x + r.w / 2, y);
+    ctx.fillText('the rest of this deck is the manual', r.x + r.w / 2, y + 26);
+  }
+
+  // footer nav: ‹ › arrows flank one dot per topic group
+  ctx.textAlign = 'center';
   ctx.font = font(14);
   ctx.fillStyle = page > 0 ? INK : INK_FAINT;
-  ctx.fillText('‹', HELP_PREV.x + HELP_PREV.w / 2, HELP_PREV.y + 22);
+  ctx.fillText('‹', HELP_PREV.x + HELP_PREV.w / 2, HELP_PREV.y + 26);
   ctx.fillStyle = page < HELP_PAGE_COUNT - 1 ? INK : INK_FAINT;
-  ctx.fillText('›', HELP_NEXT.x + HELP_NEXT.w / 2, HELP_NEXT.y + 22);
-  for (let i = 0; i < HELP_PAGE_COUNT; i++) {
-    ctx.fillStyle = i === page ? GOLD : INK_FAINT;
+  ctx.fillText('›', HELP_NEXT.x + HELP_NEXT.w / 2, HELP_NEXT.y + 26);
+  const groups = HELP_GROUPS.length;
+  for (let i = 0; i < groups; i++) {
+    ctx.fillStyle = i === pg.group ? GOLD : INK_FAINT;
     ctx.beginPath();
-    ctx.arc(r.x + r.w / 2 + (i - (HELP_PAGE_COUNT - 1) / 2) * 16, HELP_PREV.y + 16, 4, 0, Math.PI * 2);
+    ctx.arc(r.x + r.w / 2 + (i - (groups - 1) / 2) * 20, HELP_PREV.y + 20, i === pg.group ? 6 : 4.5, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`${HELP_PAGES[page].name} · swipe or tap ‹ › · outside closes`, r.x + r.w / 2, r.y + r.h - 8);
 }
 
 // --- dex overlay: the full register — caught rows draw, unseen ghost as ---
