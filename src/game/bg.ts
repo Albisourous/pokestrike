@@ -106,28 +106,111 @@ const STAGE: Record<Theme, { ground: PropSpec; edge: PropSpec }> = {
   tower: { ground: { r: MT.TILE_BRICK, t: 'rgba(86,60,126,0.48)' }, edge: { r: MT.TILE_FLAGSTONE, t: 'rgba(70,52,114,0.46)' } },
 };
 
-const FACE: Record<Theme, PropSpec> = {
-  grove: { r: MT.TILE_HEDGE_TRIM },
-  cavern: { r: MT.TILE_COBBLE, t: 'rgba(24,26,54,0.38)' },
-  volcano: { r: MT.TILE_COBBLE, t: 'rgba(42,16,12,0.62)' },
-  sky: { r: MT.TILE_ICE, t: 'rgba(66,140,186,0.24)' },
-  meadow: { r: MT.TILE_HEDGE_TRIM, t: 'rgba(112,140,44,0.24)' },
-  shore: { r: MT.TILE_MOSS_TRIM, t: 'rgba(108,96,52,0.24)' },
-  plant: { r: MT.TILE_STEEL_TRIM },
-  marsh: { r: MT.TILE_MOSS_TRIM, t: 'rgba(32,70,42,0.30)' },
-  sanctum: { r: MT.TILE_FLAGSTONE, t: 'rgba(100,70,142,0.40)' },
-  dojo: { r: MT.TILE_TIMBER },
-  tower: { r: MT.TILE_COBBLE, t: 'rgba(28,18,48,0.60)' },
-};
+function nineTiles(r: TileRect, edge: number): readonly TileRect[] {
+  const xs = [r[0], r[0] + edge, r[0] + r[2] - edge];
+  const ys = [r[1], r[1] + edge, r[1] + r[3] - edge];
+  return ys.flatMap((y, row) => xs.map((x, col): TileRect =>
+    [x, y, col === 1 ? r[2] - edge * 2 : edge, row === 1 ? r[3] - edge * 2 : edge]));
+}
 
-const faceTiles = new Map<Theme, HTMLCanvasElement>();
-function faceTile(theme: Theme) {
-  const hit = faceTiles.get(theme);
+const WALL_TILES: Record<Theme, readonly TileRect[]> = {
+  grove: MT.WALL_HEDGE, meadow: MT.WALL_HEDGE,
+  cavern: nineTiles(MT.WALL_ROCK, 12), tower: nineTiles(MT.WALL_ROCK, 12),
+  volcano: nineTiles(MT.WALL_VOLCANIC, 12), sky: nineTiles(MT.WALL_SNOW, 12),
+  shore: nineTiles(MT.WALL_ROCK, 12), plant: nineTiles(MT.WALL_METAL, 4),
+  dojo: nineTiles(MT.WALL_WOOD, 4), marsh: MT.WALL_HEDGE,
+  sanctum: nineTiles(MT.WALL_ROCK, 12),
+};
+const WATER_TILES = nineTiles(MT.MOAT_SHORE, 8).map((r, i) => i === 4 ? MT.MOAT_WATER : r);
+const lavaTiles = new Map<string, HTMLCanvasElement>();
+
+function lavaTile(r: TileRect) {
+  if (r === MT.MOAT_WATER) return slice(MT.MOAT_LAVA);
+  const water = slice(r);
+  if (!water) return null;
+  const key = r.join(',');
+  const hit = lavaTiles.get(key);
   if (hit) return hit;
-  const f = FACE[theme];
-  const tile = slice(f.r, f.t);
-  if (tile) faceTiles.set(theme, tile);
-  return tile;
+  const fill = slice(MT.MOAT_LAVA);
+  if (!fill) return null;
+  const c = document.createElement('canvas');
+  c.width = r[2]; c.height = r[3];
+  const g = c.getContext('2d')!;
+  tileRect(g, fill, 0, 0, c.width, c.height, 1);
+  g.globalCompositeOperation = 'destination-in';
+  g.drawImage(water, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  g.drawImage(slice(r, undefined, [112, 184, 240])!, 0, 0);
+  lavaTiles.set(key, c);
+  return c;
+}
+
+// Joined sides use the interior tile; exposed sides keep the original caps.
+function drawPatch(ctx: CanvasRenderingContext2D, b: Rect, tiles: readonly TileRect[], joins: readonly boolean[], rim = false, shadow = false, lava = false) {
+  const edge = Math.min(12, b.w / 3, b.h / 3);
+  const xs = [b.x, b.x + edge, b.x + b.w - edge, b.x + b.w];
+  const ys = [b.y, b.y + edge, b.y + b.h - edge, b.y + b.h];
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  if (shadow) ctx.globalAlpha *= 0.24;
+  for (let row = 0; row < 3; row++) for (let col = 0; col < 3; col++) {
+    if (rim && row === 1 && col === 1) continue;
+    const sy = (row === 0 && joins[0]) || (row === 2 && joins[2]) ? 1 : row;
+    const sx = (col === 0 && joins[3]) || (col === 2 && joins[1]) ? 1 : col;
+    const r = tiles[sy * 3 + sx];
+    const tile = lava ? lavaTile(r) : slice(r, shadow ? '#101820' : undefined);
+    if (!tile) continue;
+    const w = xs[col + 1] - xs[col], h = ys[row + 1] - ys[row];
+    const tw = sx === 1 ? tile.width * 2 : w;
+    const th = sy === 1 ? tile.height * 2 : h;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(xs[col], ys[row] + (shadow ? 3 : 0), w, h);
+    ctx.clip();
+    const x0 = sx === 1 ? Math.floor(xs[col] / tw) * tw : xs[col];
+    const y0 = sy === 1 ? Math.floor(ys[row] / th) * th : ys[row];
+    for (let y = y0; y < ys[row + 1]; y += th) for (let x = x0; x < xs[col + 1]; x += tw)
+      ctx.drawImage(tile, x, y + (shadow ? 3 : 0), tw, th);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+export function drawCover(ctx: CanvasRenderingContext2D, b: Rect, theme: Theme, joins: readonly boolean[]) {
+  const prop = theme === 'shore' ? MT.WALL_BOULDER : theme === 'sanctum' ? MT.WALL_RUIN
+    : theme === 'marsh' ? MT.WALL_REED : theme === 'dojo' ? MT.WALL_WOOD : theme === 'plant' ? MT.WALL_METAL
+    : theme === 'grove' || theme === 'meadow' ? MT.WALL_BUSH : null;
+  if (prop) {
+    if (theme === 'shore' || theme === 'sanctum') {
+      drawPatch(ctx, b, WALL_TILES[theme], joins, false, true);
+      drawPatch(ctx, b, WALL_TILES[theme], joins);
+    }
+    for (const shadow of [true, false]) {
+      const tile = slice(prop, shadow ? '#101820' : undefined);
+      if (!tile) continue;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      if (shadow) ctx.globalAlpha *= 0.24;
+      if (theme === 'shore' || theme === 'sanctum' || theme === 'dojo' || theme === 'plant')
+        ctx.drawImage(tile, b.x, b.y + (shadow ? 3 : 0), b.w, b.h);
+      else {
+        const scale = b.w / tile.width, h = tile.height * scale;
+        ctx.beginPath();
+        ctx.rect(b.x, b.y + (shadow ? 3 : 0), b.w, b.h);
+        ctx.clip();
+        for (let y = b.y; y < b.y + b.h; y += h - 4)
+          ctx.drawImage(tile, b.x, y + (shadow ? 3 : 0), b.w, h);
+      }
+      ctx.restore();
+    }
+    return;
+  }
+  drawPatch(ctx, b, WALL_TILES[theme], joins, false, true);
+  drawPatch(ctx, b, WALL_TILES[theme], joins);
+}
+
+export function drawMoat(ctx: CanvasRenderingContext2D, b: Rect, theme: Theme, joins: readonly boolean[]) {
+  drawPatch(ctx, b, WATER_TILES, joins, false, false, theme === 'volcano');
 }
 
 function tileRect(g: CanvasRenderingContext2D, tile: HTMLCanvasElement, x: number, y: number, w: number, h: number, scale = 2) {
@@ -186,39 +269,33 @@ function floor(theme: Theme) {
   g.fillStyle = vignette;
   g.fillRect(0, 0, FW, FH);
 
-  const face = faceTile(theme)!;
-  tileRect(g, face, 0, 0, FW, 12, 1);
-  tileRect(g, face, 0, FH - 12, FW, 12, 1);
-  tileRect(g, face, 0, 12, 12, FH - 24, 1);
-  tileRect(g, face, FW - 12, 12, 12, FH - 24, 1);
   floors.set(theme, c);
   return c;
 }
 
-const WALL_PROPS: Record<Theme, readonly [PropSpec, PropSpec]> = {
-  grove: [{ r: MT.TREE_ROUND }, { r: MT.TREE_OLIVE }],
-  cavern: [{ r: MT.TILE_ROCK }, { r: MT.ROCK_SMALL }],
-  volcano: [{ r: MT.TILE_ROCK, t: 'rgba(72,24,12,0.45)' }, { r: MT.TREE_ASH, t: 'rgba(80,28,12,0.50)' }],
-  sky: [{ r: MT.TREE_ASH, t: 'rgba(180,220,248,0.55)' }, { r: MT.ROCK_SMALL, t: 'rgba(180,220,248,0.40)' }],
-  meadow: [{ r: MT.TREE_OLIVE }, { r: MT.FLOWER_WILD }],
-  shore: [{ r: MT.TILE_ROCK, t: 'rgba(174,154,88,0.28)' }, { r: MT.ROCK_SMALL }],
-  plant: [{ r: MT.TILE_FENCE }, { r: MT.TILE_ROCK, t: 'rgba(22,50,64,0.42)' }],
-  marsh: [{ r: MT.TREE_TEAL, t: 'rgba(32,66,44,0.24)' }, { r: MT.ROCK_SMALL }],
-  sanctum: [{ r: MT.TILE_ROCK, t: 'rgba(114,82,152,0.30)' }, { r: MT.FLOWER_PK }],
-  dojo: [{ r: MT.TILE_FENCE, t: 'rgba(140,96,44,0.24)' }, { r: MT.ROCK_SMALL }],
-  tower: [{ r: MT.TREE_ASH, t: 'rgba(40,28,66,0.50)' }, { r: MT.TILE_ROCK, t: 'rgba(52,34,82,0.40)' }],
-};
-
-export function drawWall(ctx: CanvasRenderingContext2D, a: Rect, theme: Theme, seed = 0) {
-  const props = WALL_PROPS[theme];
-  // Four accents only; their feet stay above the chips at a.y + 48.
-  for (let i = 0; i < 4; i++) {
-    const p = props[(i + Math.floor(hash(seed) * 2)) % 2];
-    const w = Math.min(38, p.r[2]), h = w * p.r[3] / p.r[2];
-    const x = a.x + (i % 2 ? a.w - 26 : 26);
-    const y = a.y + (i < 2 ? 36 : a.h - 8);
-    drawSlice(ctx, p.r, Math.round(x - w / 2), Math.round(y - h), w, h, p.t);
+export function drawWall(ctx: CanvasRenderingContext2D, a: Rect, theme: Theme) {
+  if (theme === 'plant' || theme === 'dojo') {
+    const prop = theme === 'plant' ? MT.WALL_METAL : MT.WALL_WOOD;
+    for (const shadow of [true, false]) {
+      const tile = slice(prop, shadow ? '#101820' : undefined);
+      if (!tile) continue;
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      if (shadow) ctx.globalAlpha *= 0.24;
+      ctx.translate(a.x, a.y + (shadow ? 3 : 0));
+      const scale = 12 / tile.height;
+      tileRect(ctx, tile, 0, 0, a.w, 12, scale);
+      tileRect(ctx, tile, 0, a.h - 12, a.w, 12, scale);
+      ctx.translate(12, 12);
+      ctx.rotate(Math.PI / 2);
+      tileRect(ctx, tile, 0, 0, a.h - 24, 12, scale);
+      tileRect(ctx, tile, 0, 12 - a.w, a.h - 24, 12, scale);
+      ctx.restore();
+    }
+    return;
   }
+  drawPatch(ctx, a, WALL_TILES[theme], [], true, true);
+  drawPatch(ctx, a, WALL_TILES[theme], [], true);
 }
 
 export function drawBackdrop(

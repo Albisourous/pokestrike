@@ -1317,6 +1317,118 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // switchback corridor — paired rails with a wide mid-court crossing
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100202001',
+    '1S02S20S1',
+    '100000001',
+    '1S02S20S1',
+    '100202001',
+    '10S0S0S01',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // L banks — mirrored elbows shelter the pack above a low bank wall
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '1220S0221',
+    '102000201',
+    '10S0S0S01',
+    '102000201',
+    '102222201',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // split spine — two islands divide the flanks; the crossing stays clear
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100020001',
+    '1S00200S1',
+    '10S0S0S01',
+    '100020001',
+    '1S00200S1',
+    '10S0S0S01',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // diamond — a solid stepped island leaves two bank-shot flank lanes
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '1S00200S1',
+    '100222001',
+    '1S22222S1',
+    '100222001',
+    '1S00200S1',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // zigzag teeth — the mirrored banks step toward a clear central lane
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '122000221',
+    '1020S0201',
+    '1S02020S1',
+    '10S0S0S01',
+    '1020S0201',
+    '122000221',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // bank pockets — outward-facing hooks invite shots off the side walls
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '102202201',
+    '1020S0201',
+    '1S00000S1',
+    '1002S2001',
+    '102202201',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // twin canals — dry center and flank lanes skirt the connected ponds
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '103303301',
+    '1S30S03S1',
+    '103000301',
+    '10S0S0S01',
+    '100000001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // stepped terraces — offset double banks open into a mid-court plaza
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '102000201',
+    '1022S2201',
+    '1S02020S1',
+    '10S0S0S01',
+    '100202001',
+    '1022S2201',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
   // the keep — a moat castle mid-court: gate gaps top and bottom let the
   // ball in, the four anchors inside are the prize
   [
@@ -1453,11 +1565,37 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // bastion gates — banked entries cross a moat into a mined courtyard
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '102202201',
+    '1020S0201',
+    '102040201',
+    '102S0S201',
+    '102202201',
+    '133303331',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // mined chevrons — sloping banks and mine tips pinch both approaches
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '102202201',
+    '102040201',
+    '1S02020S1',
+    '104020401',
+    '1S0S0S0S1',
+    '102000201',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
-// the keep/pincer/saltire/moat-gate/sluice/bramble/crosswind tail is the
-// hard tier — it only rides in from depth 2 (stage ~5 up); append new
-// mid-pool rooms before it
-export const ROOM_HARD = 8;
+// The hard tail starts at pincer and only appears from depth 2.
+export const ROOM_HARD = 10;
 // Gym arenas, one per boss HP bar (MS stage_phase_layouts: each bar is its
 // own battle on its own court). Bar 1 stays open so the leader is the
 // spectacle; bar 2 adds two bank pillars; bar 3 closes in with slabs and
@@ -1749,6 +1887,7 @@ export interface HazardSpawn {
   r: number;
   dir?: number; // gust only: -1/1, the way the wind pushes
   pair?: number; // warp only: pads sharing an id are linked
+  moat?: boolean; // room liquid art; the theme still determines its effect
 }
 
 // Compile one room template into court furniture: '2' cells merge into
@@ -1804,7 +1943,7 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
         run = -1;
       }
       const at = { nx: (c + 0.5) / 9, ny: (r + 0.5) / 11 };
-      if (ch === '3') hazards.push({ kind: MOAT_HAZARD[theme], ...at, r: 0.062 });
+      if (ch === '3') hazards.push({ kind: MOAT_HAZARD[theme], ...at, r: 0.062, moat: true });
       else if (ch === '4') hazards.push({ kind: 'mine', ...at, r: 0.05 });
       else if (ch === '5') hazards.push({ kind: 'spikes', ...at, r: 0.062 });
       else if (ch === '6') hazards.push({ kind: 'gust', ...at, r: 0.062, dir: c < 4 ? 1 : -1 });
