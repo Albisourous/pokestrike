@@ -21,6 +21,7 @@ import { ROOM_BOSS, STAGE_GIMMICKS, BULLET_GIMMICKS, bulletHints, fieldRoomReach
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { BOX_STRIP, DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, MENU_CLOSE, MENU_QUIT, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, TEAM_PANEL, boxSlotRect, dexBuyRect, partnersStripAt, teamSlotRect, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_LOTS } from '../src/game/screens';
+import { TAB_CELLS, TOWN_DOORS, TOWN_PLATES } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
 import { MISSION_PAY, Missions, pickMissions } from '../src/game/missions';
 import { missionBests, recordMissions } from '../src/game/meta';
@@ -5724,20 +5725,6 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   ok(!!buy && buy.x >= DEX_DETAIL_R.x && buy.x + buy.w <= DEX_DETAIL_R.x + DEX_DETAIL_R.w && buy.y >= DEX_DETAIL_R.y && buy.y + buy.h <= DEX_DETAIL_R.y + DEX_DETAIL_R.h, 'unowned pullable buy target fits inside the detail frame');
 }
 
-// --- home: town -----------------------------------------------------------
-{
-  const targets = [LAB_BTN, BOARD_BTN, TASKS_BTN, ACH_BTN];
-  ok(targets.every((r) => r.w >= 44 && r.h >= 44 && r.x >= 0 && r.x + r.w <= 540 && r.y >= 70 && r.y + r.h <= 856),
-    'town building targets are large and clear of chrome');
-  ok(targets.every((a, i) => targets.slice(i + 1).every((b) =>
-    a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y)),
-  'town building targets do not overlap');
-  ok(HALL_BTN === BOARD_BTN, 'hall hit target aliases the job-board route');
-  ok(TOWN_FOLK.every((folk) => TOWN_LOTS.every((lot) =>
-    folk.x1 <= lot.x || lot.x + lot.w <= folk.x0 || folk.y1 <= lot.y || lot.y + lot.h <= folk.y0)),
-  'town villager beats stay clear of building sprites');
-}
-
 // --- home: mons (team menu) ---
 {
   const team = [0, 1, 2, 3].map(teamSlotRect);
@@ -6162,6 +6149,31 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
     if (live.mids !== 1 || live.next !== stubbed.next || JSON.stringify(live.foes) !== JSON.stringify(stubbed.foes)) stable = false;
   }
   ok(stable, 'mid-boss promotion keeps seeded non-mid spawns and run rng unchanged');
+}
+
+// --- home: town -----------------------------------------------------------
+{
+  const targets = [LAB_BTN, BOARD_BTN, TASKS_BTN, ACH_BTN];
+  ok(targets.every((r) => r.w >= 44 && r.h >= 44 && r.x >= 0 && r.x + r.w <= 540 && r.y >= 70 && r.y + r.h <= 856),
+    'town building targets are large and clear of chrome');
+  ok(targets.every((a, i) => targets.slice(i + 1).every((b) =>
+    a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y)),
+  'town building targets do not overlap');
+  ok(HALL_BTN === BOARD_BTN, 'hall hit target aliases the job-board route');
+  ok(TOWN_FOLK.every((folk) => TOWN_LOTS.every((lot) =>
+    folk.x1 <= lot.x || lot.x + lot.w <= folk.x0 || folk.y1 <= lot.y || lot.y + lot.h <= folk.y0)),
+  'town villager beats stay clear of building sprites');
+  const plates = Object.values(TOWN_PLATES);
+  const doors = Object.values(TOWN_DOORS);
+  ok(plates.every((p, i) => p.x >= 52 && p.x + p.w <= 488 && Math.abs(p.x + p.w / 2 - doors[i]) <= 2),
+    'town plates stay in bounds and centered under doors');
+  ok(plates.every((a, i) => plates.slice(i + 1).every((b) =>
+    a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y) &&
+    TOWN_LOTS.every((lot) => a.x + a.w <= lot.x || lot.x + lot.w <= a.x || a.y + a.h <= lot.y || lot.y + lot.h <= a.y)),
+  'town plates stay clear of each other and buildings');
+  ok(TAB_CELLS.length === 5 && TAB_CELLS.every((c, i) =>
+    c.x === TAB_BAR.x + i * TAB_BAR.w / 5 && c.y === TAB_BAR.y && c.w === TAB_BAR.w / 5 && c.h === TAB_BAR.h),
+  'tab cells preserve the shared bar geometry');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
