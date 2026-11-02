@@ -309,5 +309,6 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `f7f7208` | mons | `drawMonsBody()` centers party stage and EDIT TEAM; dex grid and detail move to home module (#39) | `git revert f7f7208` |
 | 2026-11-02 | `ab3d304` | town | `drawTownBody()` frames the Gen 3 village; sign plates, street villagers and larger nav icons (#40) | `git revert ab3d304` |
 | 2026-11-02 | `663c330` | roster | `drawRoster()` fits type chips on grounded team cards; `teamSlotRect` moves with the row (#41) | `git revert 663c330` |
+| 2026-11-02 | `89bec44` | battle | `FOE_CLOCK2` + `type2` arg: dual-type non-bosses tick a second typing move on the slower 7/6 clock (MS multi-attack rows); `fireMove` + scout tell honor the clock's own type (#42) | `git revert 89bec44` |
 | 2026-11-02 | `3804c1f` | pickups | protein/elixir ripen to X ATTACK / MAX ELIXIR after 3 ignored turns — MS `field_items` rows 5→6, 7→8 (#81) | `git revert 3804c1f` |
 | 2026-11-02 | `64c790f` | docs | monster-strike-re round 4 — meta scene map, retention-loop synthesis, refreshed port status (#82) | `git revert 64c790f` |
