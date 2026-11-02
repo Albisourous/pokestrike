@@ -220,3 +220,97 @@ the CSV tables above.
 Kept on purpose: Pokémon type chart (×2/×0.5/×0) instead of MS ×1.33,
 existing weak-point/crit numbers (not confirmed in code), ult and combo
 rules.
+
+## code.bin findings, round 2 (hit damage, counters)
+
+Same setup as round 1. This pass followed the element table, the
+strike-shot counter item and the attack-counter-reset item into their
+callers. Every "confirmed" row below was read in the function that uses
+it; "inferred" rows are our reading of a field whose meaning comes from
+context (its data source or the effect it fires), not from a name.
+
+### Hit damage (confirmed)
+
+One function computes the damage of a ball (or bullet) touching an
+enemy. It has a single caller, the hit dispatcher, so normal hits,
+bump-combo bullets and strike shots all pass through it. The shape:
+
+`damage = attack × element × part × killer × (one factor per active ability)`
+
+Each ability factor is a whole-number percent read from the character's
+ability data and scaled by `0.01`. The result is truncated to an
+integer; anything below 2 becomes exactly 1 and swaps in a separate
+low-damage hit effect (we read it as the "resisted" pop). Damage above
+3000 picks a heavier hit effect.
+
+| Item | What the code does | Status |
+|---|---|---|
+| Attack vs defense | No defense term. Base is the attacker's attack stat; the enemy side only contributes multipliers (element, part, its own resist abilities) | confirmed |
+| Element table | 6×6 float table (none, fire, water, wood, light, dark), indexed `[attacker][defender]`; out-of-range ids fall back to a default of 1 | confirmed |
+| Element values | Advantage `1.33`, disadvantage `0.66` (stored as 1.33 / 0.66, not 1.3333 / 0.6667). Fire > wood > water > fire; light and dark are both 1.33 against each other | confirmed |
+| Element boost abilities | `e' = 1 + (e − 1) × pct × 0.01`, then floored at 0.3 | confirmed |
+| Minimum damage | Truncated damage under 2 is set to 1; a landed hit never deals 0 | confirmed |
+| Weak point | No fixed weak-point constant. Each enemy hitbox carries its own multiplier from the collision table (`damage_rate`). Parts without the weak flag are capped at ×1, so only flagged parts can multiply up | confirmed (cap); values are per-enemy data |
+| Killer | A separate check asks the attacker for a percent against the enemy's race, then against its element; it only applies when the result is above ×1 | confirmed |
+| Critical | No random roll anywhere in the hit path. Criticals are ability-driven multipliers, not a base-game chance | confirmed (absence in this function) |
+| 1.3333 / 0.6667 literals | Not in the hit path. They sit in bullet-controller and pull-feedback pools | inferred unrelated |
+
+### Strike-shot charge (partly confirmed)
+
+The ball keeps a charge counter that counts *up* toward the strike
+shot's required count (the `require_cnt` column, looked up per strike
+shot id). The add routine only adds while the counter is below the
+requirement. The `StrikeShotCounterUp` field item drifts across the
+board, and when a ball touches it, it adds its stored amount to that
+ball's counter; the constructor sets the amount to 1, so one pickup
+removes one turn of charge.
+
+| Item | Value | Status |
+|---|---|---|
+| Counter direction | Counts up to `require_cnt` | confirmed |
+| Pickup amount | +1 (default; per-item field) | confirmed |
+| Add rule | Only while below the requirement | confirmed |
+| Per-turn tick | Not located: the add routine's only caller is the pickup, so the per-turn step is inlined somewhere else | not located |
+
+### Enemy attack countdown (partly confirmed)
+
+Each enemy keeps one countdown per attack slot (multi-part enemies keep
+one per part row), each with its own maximum from the attack data. The
+`AttackCounterReset` item waits one second, then for every enemy in its
+target range sets each slot whose counter is below its maximum back to
+that maximum, plays its effect, and ends 1.5 s later. It only raises
+counters; a slot already at or above its maximum is left alone.
+
+| Item | Value | Status |
+|---|---|---|
+| Counter model | One countdown per attack slot, each with its own max | confirmed |
+| Reset rule | `counter = max` only where `counter < max` | confirmed |
+| Reset delay / lifetime | 1 s, then ends after 1.5 s | confirmed |
+| Per-turn decrement | Not located | not located |
+| Boss phase transitions | `TaskEnemyCtrBoss`'s update is a thunk into the base enemy update; no boss-only phase logic found in it. Phase changes come from the stage tables (`boss_hp_bar` split, `group_id` attack sets) | inferred |
+
+### Friendship combo (not located)
+
+The combo effect ids (combo, three "combo just" tiers, combo-up) are in
+the effect table, but the code that detects ball-on-ally contact and
+fires the combo was not found this pass. Its once-per-shot rule and
+power scaling stay unknown.
+
+### Damage wall, hop, pull (no change)
+
+No new evidence for the 18/30/45/83 frame timings, the hop sub-state or
+the pull curve beyond round 1.
+
+### Ported (round 2)
+
+| MS behaviour | PokeStrike |
+|---|---|
+| A landed hit deals at least 1 | `hitFloor(raw, mult)` in `stats.ts`, used by `strikeEnemy()`. Type immunity (×0) still deals 0 |
+
+Kept on purpose: Pokémon `typeMult` (×2/×0.5/×0) instead of the 1.33 /
+0.66 table; the 2 / 3 weak-point numbers (MS values are per-enemy data,
+not a constant); the crit chance perk (MS has no base crit roll, but the
+perk is a run upgrade); Pokémon Atk/Def mitigation (MS has no defense
+term, but stats are the Pokémon identity here); `ULT_SHOTS = 10` and the
+foe clock numbers (per-turn steps not located; MS values are per-unit
+data).

@@ -5,7 +5,7 @@ import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, ti
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
-import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift, launchMult } from '../src/game/stats';
+import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift, launchMult, hitFloor } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult, WEATHER_OF, TYPES } from '../src/game/types';
@@ -4608,6 +4608,15 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   clearAnims();
   ok(animCount() === 0 && drainAnimRequests().shake === 0, 'clear resets instances and requests');
   drawAnims(stub);
+}
+
+// --- MS hit floor: landed hits deal at least 1, immunity stays 0 ---
+{
+  ok(hitFloor(0.2, 0.5) === 1, 'positive multiplier floors sub-one damage to 1');
+  ok(hitFloor(0, 0.25) === 1, 'positive multiplier floors zero raw damage to 1');
+  ok(hitFloor(7.6, 2) === 8, 'hit floor rounds damage normally above 1');
+  ok(hitFloor(5, 0) === 0, 'type immunity stays at 0');
+  ok(hitFloor(1.4, 1) === 1, 'positive multiplier preserves rounded 1 damage');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

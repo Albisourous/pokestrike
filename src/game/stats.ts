@@ -104,6 +104,9 @@ export const physDamage = (atk: number, def: number, mult = 1, power = 1) =>
 export const specDamage = (spa: number, spd: number, mult = 1, power = 1) =>
   Math.round(spa * power * mult * mit(spd));
 
+// MS hit floor: any connected hit deals at least 1; type immunity (×0) stays 0
+export const hitFloor = (raw: number, mult: number) => (mult > 0 ? Math.max(1, Math.round(raw)) : 0);
+
 // Role-based HP: players need to survive a few rounds, bosses are sponges.
 export const playerHp = (s: Stats) => 60 + Math.round(s.hp * 1.15);
 export const enemyHp = (s: Stats) => 50 + Math.round(s.hp * 1.0);

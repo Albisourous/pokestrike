@@ -32,6 +32,7 @@ import {
   launchMult,
   physDamage,
   specDamage,
+  hitFloor,
   bumpIsPhysical,
   zapPower,
   blastPower,
@@ -3719,7 +3720,7 @@ export class Battle {
     const spdMul = 1 + Math.min(0.4, Math.max(0, spd - 450) / 3000);
     // every link in the chain adds momentum: +10% contact damage per pass;
     // grip claw stacks its own ramp per wall bounce this shot
-    const dmg = Math.round(
+    const dmg = hitFloor(
       physDamage(shooter.def.stats.atk, e.def.stats.def, mult, CONTACT_POW) *
         // unaware: the carrier reads the mon, not the buffs — protein and
         // pow stacks wash off at its hide
@@ -3745,6 +3746,7 @@ export class Battle {
         // first, then bring the finisher
         (e.def.scale && e.hp >= e.maxHp && !shooter.def.breaker ? 0.5 : 1) *
         Math.pow(0.9, hitN),
+      mult,
     );
     if (weak) {
       if (e.boss) {
