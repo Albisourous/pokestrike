@@ -111,8 +111,11 @@ export const enemyHp = (s: Stats) => 50 + Math.round(s.hp * 1.0);
 // fight's difficulty now instead of a long HP wall
 export const bossHp = (s: Stats) => Math.round(s.hp * 2.2);
 
-// Speed -> motion. Spe 90 ≈ 1.35x launch; enemies approach at ~30 u/s.
-export const launchMult = (s: Stats) => 0.75 + s.spe / 150;
+// MS clamps the speed curve to 0.7..1.4; Spe 75 = 1.0.
+export const launchMult = (s: Stats) => {
+  const k = s.spe / 75;
+  return Math.min(1.4, Math.max(0.7, (0.8 + 0.2 * k) * k));
+};
 export const enemyDrift = (s: Stats) => 12 + s.spe * 0.22;
 
 // Enemy attacks: zap is physical, boss blast is special.
@@ -250,4 +253,3 @@ export const MOVE_OF: Record<number, string> = {
 };
 
 export const moveOf = (id: number, type: PokeType): string => MOVE_OF[id] ?? MOVE_NAME[type];
-
