@@ -1497,7 +1497,7 @@ export class Battle {
     this.stopCombo = this.stopWeak = this.stopKos = this.stopTaken = this.stopFaints = 0;
     this.connect.reset();
     this.lastKoType = undefined;
-    this.missions.start(this.mapSeed, i + 1, this.players.map((p) => p.def.type), this.ultIn <= 6, this.time, this.raid || this.coach || !!this.pendingEventWave);
+    this.missions.start(this.mapSeed, i + 1, this.players.map((p) => p.def.type), this.ultIn <= 6, this.time, this.raid || this.coach || !!this.pendingEventWave || !!debugArena());
     this.clearCard = null;
     this.waveFlawless = true;
     // ultIn banks across the whole run — pips earned in one fight spend at the next
