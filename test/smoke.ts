@@ -5,7 +5,7 @@ import * as battleModule from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
-import { TRACKS } from '../src/core/audio';
+import { TRACKS, cry, cryIO, cryLive, cryReset, CRY_KO_CAP } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift, launchMult, hitFloor } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
@@ -32,6 +32,110 @@ const ok = (cond: boolean, msg: string) => {
     console.error(`FAIL  ${msg}`);
   }
 };
+
+{
+  const originalCtx = cryIO.ctx;
+  const originalOut = cryIO.out;
+  const originalFetch = cryIO.fetch;
+  const originalAudio = Object.getOwnPropertyDescriptor(globalThis, 'Audio');
+  const sources: any[] = [];
+  const fakeBuf = {} as AudioBuffer;
+  const fakeCtx: any = {
+    state: 'running',
+    currentTime: 0,
+    decodeAudioData: async () => fakeBuf,
+    createBufferSource: () => {
+      const src = {
+        buffer: null,
+        playbackRate: { value: 1 },
+        onended: null as (() => void) | null,
+        connect: (node: any) => node,
+        start: () => {},
+        stop: () => {},
+      };
+      sources.push(src);
+      return src;
+    },
+    createGain: () => ({
+      gain: {
+        value: 0,
+        setValueAtTime(value: number) { this.value = value; },
+        linearRampToValueAtTime(value: number) { this.value = value; },
+      },
+      connect: (node: any) => node,
+    }),
+  };
+  const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  let unhandled = 0;
+  const onUnhandled = () => { unhandled++; };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    cryReset();
+    let headlessThrew = false;
+    try { cry(25, 'ko'); } catch { headlessThrew = true; }
+    ok(!headlessThrew && cryLive() === 0, 'headless cry stays silent');
+
+    Object.defineProperty(globalThis, 'Audio', {
+      configurable: true,
+      value: class { canPlayType() { return 'probably'; } },
+    });
+    cryIO.ctx = () => fakeCtx;
+    cryIO.out = () => ({} as AudioNode);
+    cryIO.fetch = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }) as Response;
+    cry(25, 'ko');
+    await tick();
+    ok(cryLive() === 1, 'cry preload starts playback');
+    sources[0].onended?.();
+    for (let i = 0; i < 5; i++) cry(25, 'ko');
+    ok(cryLive() === CRY_KO_CAP, 'ko cries respect the live cap');
+    cry(25, 'boss');
+    ok(cryLive() === CRY_KO_CAP + 1, 'boss cries bypass the ko cap');
+    sources[1].onended?.();
+    ok(cryLive() === CRY_KO_CAP, 'ended cries leave the live count');
+
+    cryReset();
+    let failedCalls = 0, missingThrew = false;
+    cryIO.fetch = async () => { failedCalls++; return { ok: false } as Response; };
+    try { cry(9999, 'ko'); } catch { missingThrew = true; }
+    await tick();
+    cry(9999, 'ko');
+    await tick();
+    ok(!missingThrew && failedCalls === 1 && cryLive() === 0, 'missing cry is cached silently');
+
+    let rejectedCalls = 0, fetchThrew = false;
+    cryIO.fetch = async () => { rejectedCalls++; throw new Error('fetch failed'); };
+    try { cry(9998, 'ko'); } catch { fetchThrew = true; }
+    await tick();
+    cry(9998, 'ko');
+    await tick();
+    ok(!fetchThrew && rejectedCalls === 1, 'rejected cry fetch is cached silently');
+
+    let decodeFetches = 0, decodeCalls = 0, decodeThrew = false;
+    cryIO.fetch = async () => {
+      decodeFetches++;
+      return { ok: true, arrayBuffer: async () => new ArrayBuffer(8) } as Response;
+    };
+    fakeCtx.decodeAudioData = async () => { decodeCalls++; throw new Error('decode failed'); };
+    try { cry(9997, 'ko'); } catch { decodeThrew = true; }
+    await tick();
+    cry(9997, 'ko');
+    await tick();
+    ok(!decodeThrew && decodeFetches === 1 && decodeCalls === 1, 'rejected cry decode is cached silently');
+    await tick();
+    ok(unhandled === 0, 'cry failures produce no unhandled rejection');
+
+    const cryIds = new Set([...ROSTER, ...BOSS_POOL].map((species) => species.id));
+    ok([...cryIds].every((id) => existsSync(`public/cries/${id}.ogg`) && existsSync(`public/cries/${id}.m4a`)), 'all roster and boss cries are vendored in both formats');
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+    cryReset();
+    cryIO.ctx = originalCtx;
+    cryIO.out = originalOut;
+    cryIO.fetch = originalFetch;
+    if (originalAudio) Object.defineProperty(globalThis, 'Audio', originalAudio);
+    else delete (globalThis as any).Audio;
+  }
+}
 
 const arena = { x: 30, y: 160, w: 480, h: 620 };
 const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];

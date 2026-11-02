@@ -1,7 +1,7 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
-import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
+import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, TYPE_MOVE, EVO_LINES, LEADER_NPC, type FoeMoveKind } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
@@ -1858,6 +1858,7 @@ export class Battle {
     const label = this.waveSpecial?.replace(/!/g, '') ?? (boss && this.waveHadGym ? `GYM LEADER ${boss.def.name.toUpperCase()}` : `STAGE ${this.waveIndex + 1}/${TOTAL_STAGES}`);
     this.telop.push({ kind: 'start', title: `BATTLE ${this.battle}/${this.battles}`, sub: [label, STAGE_GIMMICKS[this.theme].label, this.weather && WEATHER_LINE[this.weather].split(' · ')[1]].filter(Boolean).join(' · '), mon: this.active.def.id, icon: 'poke-ball' });
     if (boss) this.telop.push({ kind: 'boss', title: 'BOSS INCOMING', sub: `${boss.def.name.toUpperCase()} · WEAK SPOT ×3`, mon: boss.def.id, icon: this.bossIcon(boss) });
+    if (boss) cry(boss.def.id, 'boss');
   }
 
   private bossIcon(boss: Unit) {
@@ -3733,6 +3734,7 @@ export class Battle {
         return;
       }
       e.dead = true;
+      cry(e.def.id, 'ko');
       this.koX = e.x;
       this.koY = e.y;
       this.koSeen = true;
@@ -3895,6 +3897,7 @@ export class Battle {
               this.pushText({ x: e.x, y: e.y - e.r - 56, text: 'SHINY BONUS +250', t: 1.4, color: '#ffd84d', big: true });
             }
             playJingle('catch');
+            cry(e.def.id, 'catch');
             buzz([30, 50, 30, 50, 60]);
           } else {
             // broke out — the escape plays the same faint it always was
@@ -5083,6 +5086,7 @@ export class Battle {
   // any teammate and ITS signature detonates across the whole court, one
   // staggered beam per enemy. Z-move energy: a flash, then everything pays.
   private fireUlt(u: Unit) {
+    cry(u.def.id, 'ult');
     const anim = recipeFor(u.def.type, moveOf(u.def.id, u.def.type));
     animBurst(anim, u.x, u.y, true);
     this.ultIn = ULT_SHOTS;
