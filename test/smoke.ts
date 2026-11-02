@@ -37,6 +37,7 @@ import { EVO_FLASH, EVO_T, evoActive, evoScene, skipEvo, startEvo, tickEvo } fro
 import { drawRunCard, shareLink, type RunCard } from '../src/game/share';
 import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
 import { SECRET_IDS, rollSecret, maybeSecret, enterSecret, placeSecret, closeSecret } from '../src/game/secret';
+import * as secretExports from '../src/game/secret';
 import { evolveOnce, midBossPick, midBossStop } from '../src/game/midboss';
 
 let fails = 0;
@@ -6195,6 +6196,74 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   };
   const opened = findOpen();
   ok(opened.b.rng === opened.before, 'secret discovery does not advance the main RNG');
+  const saveCase = findOpen();
+  const saving: any = saveCase.b;
+  saving.phase = 'map';
+  saving.pendingNext = saving.secret.row + 1;
+  saving.mapNode = saving.secret.gymIdx;
+  const save = saving.snapshot();
+  const savedSecret = (save as any)?.secret;
+  ok(savedSecret?.row === saving.secret.row && savedSecret.id === saving.secret.def.id && savedSecret.rank === saving.secret.rank, 'open lair is included in pk_run snapshots');
+  if (save) {
+    const resumed: any = new Battle(arenaSecret, secretTeam(), makeStage(saveCase.seed, 'T'), mulberry32(saveCase.seed));
+    resumed.applySnapshot(save);
+    const resumedNode = resumed.regionMap.nodes.find((n: any) => n.kind === 'secret');
+    const sourceNode = saving.secret.node;
+    ok(resumed.secret?.phase === 'open' && resumed.secret.def.id === savedSecret?.id, 'resuming restores the open legendary');
+    ok(resumedNode?.tx === sourceNode.tx && resumedNode?.ty === sourceNode.ty && JSON.stringify(resumedNode?.links) === JSON.stringify(sourceNode.links), 'resuming rebuilds the same lair node and links');
+    const plainSave: any = { ...save };
+    delete plainSave.secret;
+    const plain: any = new Battle(arenaSecret, secretTeam(), makeStage(saveCase.seed, 'T'), mulberry32(saveCase.seed));
+    plain.applySnapshot(plainSave);
+    ok(!plain.secret && !plain.regionMap.nodes.some((n: any) => n.kind === 'secret'), 'a run save without a lair resumes without one');
+    const invalidSecrets = [
+      { ...savedSecret, row: 1 },
+      { ...savedSecret, id: 1 },
+      { ...savedSecret, rank: 'B' },
+      { ...savedSecret, row: String(savedSecret?.row ?? 2) },
+      null,
+    ];
+    const invalidIgnored = invalidSecrets.every((secret) => {
+      const bad: any = { ...save, secret };
+      globalThis.localStorage.setItem('pk_run', JSON.stringify(bad));
+      const kept = runSave() != null;
+      const loaded: any = new Battle(arenaSecret, secretTeam(), makeStage(saveCase.seed, 'T'), mulberry32(saveCase.seed));
+      loaded.applySnapshot(bad);
+      return kept && !loaded.secret && !loaded.regionMap.nodes.some((n: any) => n.kind === 'secret') && loaded.mapSeed === save.mapSeed;
+    });
+    globalThis.localStorage.removeItem('pk_run');
+    ok(invalidIgnored, 'invalid lair data is ignored without invalidating the rest of pk_run');
+    const withoutSecret: any = { ...save };
+    delete withoutSecret.secret;
+    const rngWith: any = new Battle(arenaSecret, secretTeam(), makeStage(saveCase.seed, 'T'), mulberry32(saveCase.seed));
+    const rngWithout: any = new Battle(arenaSecret, secretTeam(), makeStage(saveCase.seed, 'T'), mulberry32(saveCase.seed));
+    rngWith.applySnapshot(save);
+    rngWithout.applySnapshot(withoutSecret);
+    ok(rngWith.rng() === rngWithout.rng(), 'restoring an open lair consumes no run RNG');
+    if (resumed.secret?.node) {
+      enterSecret(resumed, resumed.secret.node);
+      ok(resumed.secret?.phase === 'fight' && resumed.mapNode === resumed.regionMap.nodes.indexOf(resumed.secret.node), 'the restored lair can be entered');
+    } else ok(false, 'the restored lair can be entered');
+  } else {
+    ok(false, 'open lair snapshot exists for resume tests');
+  }
+  const lairRooms = (secretExports as any).ROOM_LAIR as string[][] | undefined;
+  ok(Array.isArray(lairRooms) && lairRooms.length === 2 && lairRooms.every((grid) =>
+    grid.length === 11 && grid.every((row) => row.length === 9 && [...row].every((cell) => '0123ESP'.includes(cell)) && row === [...row].reverse().join('')) && fieldRoomReachable(grid)),
+  'both lair courts are symmetric, reachable 9x11 rooms');
+  const chooseBossRooms = (secretExports as any).bossRooms;
+  ok(typeof chooseBossRooms === 'function' && chooseBossRooms({ secret: { phase: 'fight' } }) === lairRooms && chooseBossRooms({}) === ROOM_BOSS, 'lair room lookup preserves normal gym rooms');
+  const lairCourt = findOpen().b as any;
+  lairCourt.pendingNext = lairCourt.secret.row + 1;
+  enterSecret(lairCourt, lairCourt.secret.node);
+  ok(JSON.stringify(lairCourt.roomGrid) === JSON.stringify(lairRooms?.[0]), 'a lair fight starts in its first authored court');
+  const lairBoss = lairCourt.enemies.find((e: any) => e.boss);
+  if (lairBoss) { lairBoss.sumStage = 1; lairCourt.gymFurnished = false; lairCourt.bossBarBreak(); }
+  ok(JSON.stringify(lairCourt.roomGrid) === JSON.stringify(lairRooms?.[1]), 'a lair bar break selects its second authored court');
+  const normalGym: any = new Battle(arenaSecret, secretTeam(), makeStage(31, 'T'), mulberry32(11));
+  normalGym.rng = () => 0.99;
+  normalGym.spawnWave(2);
+  ok(JSON.stringify(normalGym.roomGrid) === JSON.stringify(ROOM_BOSS[0]), 'normal gyms keep the first boss court');
   const regionBefore = opened.b.regionMap.nodes.length;
   const gymIdx = opened.b.secret.gymIdx;
   const secretNode = opened.b.secret.node;
@@ -6215,6 +6284,7 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   ok(wb.phase === 'map' && wb.pendingNext === winState.row + 1 && wb.mapNode === winState.gymIdx, 'secret win returns to the next map row');
   ok(wb.regionMap.nodes.length === nodeCount - 1 && wb.box.some((d: any) => d.id === winState.def.id), 'secret win closes the node and banks the legendary');
   ok(wb.starsRun >= starsBefore + 40 && secretIds().includes(winState.def.id), 'secret win awards stars and records the legendary');
+  ok((wb.snapshot() as any)?.secret === undefined, 'a win omits closed lair data from the snapshot');
   const dupe = findOpen();
   const db: any = dupe.b;
   db.boxAdd({ ...db.secret.def, lvl: 1 }, 1, false);
@@ -6240,6 +6310,7 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   lb.wipe();
   ok(lb.phase === 'map' && lb.players.every((p: any, i: number) => p.hp === hpSnap[i].hp && p.dead === hpSnap[i].dead), 'secret lose restores the player state');
   ok(lb.telop.texts().includes('IT FLED') && lb.regionMap.nodes.length === 19, 'secret lose seals the lair without ending the run');
+  ok((lb.snapshot() as any)?.secret === undefined, 'a flee omits closed lair data from the snapshot');
   for (let i = 0; i < 300; i++) lb.update(1 / 60);
   ok(lb.phase === 'map', 'secret lose survives 300 map updates');
 
