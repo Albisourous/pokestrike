@@ -1621,6 +1621,9 @@ const HELP_SECTIONS: HelpSection[] = [
       [TILE_BRICK, 'DMG WALL edges fade in, then bite any mon that banks off them'],
       ['metronome', 'walls switch by turn · NEXT TURN marks the edge about to light'],
       [92, 'DMG WALLs spare their own type · stop tags name the ABILITY that helps'],
+      [18, 'PIDGEOT wind strips push the ball sideways · FLYING or LEVITATE ignore them'],
+      [81, 'MAGNEMITE posts hold a beam that blocks and chips the ball · 2 hits on a post drop it'],
+      ['magnet', 'ELECTRIC or VOLT ABSORB mons pass straight through the beam'],
     ],
   },
   {
@@ -1668,6 +1671,19 @@ const HELP_SECTIONS: HelpSection[] = [
       ['star-piece', 'CLEAR FAST · on par with no faints ranks S'],
     ],
   },
+  {
+    title: 'TREASURE & MISSIONS',
+    cards: [
+      ['ultra-ball', 'KO\'d foes may drop a treasure ball · Poké, Great, Ultra or Master'],
+      ['master-ball', 'bosses always drop one, Great Ball or better'],
+      ['amulet-coin', 'weak-point KOs, finishers, speed clears and combos lift the odds'],
+      ['stardust', 'balls open after the CLEAR card: star pieces, dust or a bag item'],
+      ['exp-share', 'each battle stop sets up to 3 missions · the HUD chip ticks them live'],
+      ['lucky-egg', 'speed clear · KO 2 in one shot · hit 3 weak points'],
+      ['badges/3', 'no faints · use a ULT · finish with a named type'],
+      ['star-piece', 'each mission done pays star pieces or dust on the CLEAR card · raids skip drops and missions'],
+    ],
+  },
 ];
 
 // topic groups in reading order · a group spills onto as many evenly
@@ -1684,6 +1700,7 @@ const HELP_GROUPS: { name: string; secs: number[] }[] = [
   { name: 'THE FIELD', secs: [7, 13] },
   { name: 'GROWTH', secs: [8, 9] },
   { name: 'THE CLIMB', secs: [10, 11] },
+  { name: 'TREASURE', secs: [20] },
   { name: 'GIMMICKS', secs: [14, 15] },
 ];
 const HELP_PER_PAGE = 7;
