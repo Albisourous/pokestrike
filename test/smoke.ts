@@ -1738,9 +1738,12 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   const e = (b as any).enemies[0];
   const pow0 = shooter.pow;
   const lvl0 = shooter.lvl;
+  const bench = (b as any).players.filter((p: any) => p !== shooter && !p.dead);
+  const bench0 = bench.map((p: any) => p.lvl);
   (b as any).hurt(e, e.hp + 50, '#fff');
   ok(e.dead, 'lethal hit kills');
   ok(shooter.lvl > lvl0 && shooter.pow > pow0, `KO levels shooter (lv${lvl0}->${shooter.lvl} pow ${shooter.pow.toFixed(2)})`);
+  ok(bench.length > 0 && bench.every((p: any, i: number) => p.lvl === bench0[i] + Math.max(1, Math.round(e.lvl * 0.05 * 0.5))), `KO shares EXP with the living bench (${bench0.join(',')} -> ${bench.map((p: any) => p.lvl).join(',')})`);
 }
 
 // --- evolution preserves earned levels ------------------------------------
