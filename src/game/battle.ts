@@ -23,6 +23,8 @@ import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
 import { STAGE_GIMMICKS, BULLET_GIMMICKS, DRAIN_MOVE, DRAIN_PCT, isGentleRoom, bulletHints, type BulletGimmick, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
+import { installField2, stepField2, drawField2, labelField2, drawField2Hint, type Field2, type Field2Fx } from './gimmicks2';
+import { abilityNotice } from './abilities';
 import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, weatherSpeed, resetAbilities } from './abilities';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
@@ -862,6 +864,8 @@ export class Battle {
   private pickupSeen = new Set<PickupKind>();
   private lblBox = new Float32Array(LABEL_SLOTS * 4);
   private lblN = 0;
+  private field2: Field2 | null = null;
+  private field2Fx: Field2Fx = { hurt: (u, n) => this.damagePlayer(u as Unit, n), burst: (x, y, c) => this.burst(x, y, c, 10, 320), notice: (u) => abilityNotice(this, u as Unit, this.abilityText), shake: (n) => this.addShake(n) };
   private lblW = new Map<string, number>();
   private scars: Scar[] = []; // impact craters scarring the court
   private hazards: Hazard[] = []; // this wave's court gimmicks
@@ -2750,6 +2754,7 @@ export class Battle {
           sfx('sizzle');
         }
       }
+      stepField2(this.field2, u, h, this.time, this.field2Fx);
       // the court can kill the ball mid-flight — a dead mon connects nothing
       if (u.dead) break;
       // snapshot: strikeEnemy→hurt can summon boss adds mid-loop — fresh
@@ -6643,6 +6648,7 @@ export class Battle {
   }
 
   private installRoom(room: ReturnType<typeof buildRoom>) {
+    this.field2 = installField2(this.roomGrid, this.theme, this.arena, this.battle);
     this.damageWalls = room.damageWalls.map((w) => ({ ...w, t0: this.time }));
     this.wallShot0 = this.shots;
     this.wallTurn = 0;
@@ -7800,6 +7806,7 @@ export class Battle {
 
     // court gimmicks — the themed hazard zones under everything else
     for (const hz of this.hazards) if (!hz.spent) this.drawHazard(ctx, hz);
+    drawField2(ctx, this.field2, this.time);
 
     // stone blocks — solid cover the ball banks off
     for (const b of this.blocks) this.drawBlock(ctx, b);
@@ -7820,6 +7827,7 @@ export class Battle {
     this.lblN = 0;
     this.drawWallWarnings(ctx);
     this.treasure.draw(ctx, this.time);
+    labelField2(this.field2, this.introAlpha(), (t, x, y, c, al) => this.fieldLabel(ctx, t, x, y, c, al));
     // field pickups: the icon is the read; the effect tag shows once per
     // kind per battle
     for (const pk of this.pickups) {
@@ -9374,6 +9382,7 @@ export class Battle {
         ctx.fillStyle = TYPE_COLOR[gimmick.type];
         ctx.fillText(glabel, nx, ny - cell * 0.95 + 25);
         drawCounterHint(ctx, gimmick, this.players.filter((p) => !p.dead).map((p) => p.def), nx, ny - cell * 0.95 + 40, cell * 4.5);
+        drawField2Hint(ctx, TYPE_THEME[n.ttype ?? 'normal'], this.players.filter((p) => !p.dead).map((p) => p.def), nx, ny - cell * 0.95 + 68, cell * 4.5);
       }
     });
     // the trainer draws last — she walks in front of the stops, and at
