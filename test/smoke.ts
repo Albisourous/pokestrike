@@ -25,7 +25,8 @@ import { TAB_CELLS, TOWN_DOORS, TOWN_PLATES } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
 import { MISSION_PAY, Missions, pickMissions } from '../src/game/missions';
 import { missionBests, recordMissions } from '../src/game/meta';
-import { BALL_TIERS, DROP_CAP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDrop, rollReward } from '../src/game/loot';
+import { BALL_TIERS, DROP_CAP, HIT_DROP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDrop, rollReward } from '../src/game/loot';
+import { FLEE_DEF, FLEE_DUST, FLEE_FROM, FLEE_RATE, FLEE_SHINY, FLEE_STARS, FLEE_TURNS, Flee } from '../src/game/flee';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
@@ -4112,6 +4113,99 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   ok(a.rng() === b.rng() && a.score === b.score, 'treasure rolls leave seeded replays unchanged');
 }
 
+// --- MS fleeing rare foe: seeded plan, isolated build, countdown and loot ---
+{
+  const flee = new Flee();
+  let spawns = 0;
+  for (let seed = 0; seed < 6000; seed++) if (flee.plan(seed, 4, 1, false)) spawns++;
+  const rate = spawns / 6000;
+  ok(rate >= 0.13 && rate <= 0.2, 'rare foe rate stays near one in six');
+  ok(!flee.plan(42, 4, 1, true) && !flee.plan(42, FLEE_FROM - 1, 1, false), 'rare foe never plans for excluded stops');
+  const planSeed = Array.from({ length: 6000 }, (_, seed) => seed).find((seed) => new Flee().plan(seed, 4, 1, false))!;
+  const snapshot = (seed: number) => {
+    const f = new Flee();
+    f.plan(seed, 4, 3, false);
+    const spawn = f.spawnAt();
+    const host = { rng: mulberry32(99) };
+    const built = f.build(host, () => host.rng());
+    return [f.at, spawn.def.id, spawn.nx, spawn.ny, spawn.lvl, built];
+  };
+  ok(JSON.stringify(snapshot(planSeed)) === JSON.stringify(snapshot(planSeed)), 'rare foe plan and spawn placement are deterministic');
+  flee.plan(planSeed, 4, 1, false);
+  const plan = flee.spawnAt();
+  ok(!plan.def.blink && !plan.def.mirror && !plan.def.healer && !plan.def.copy, 'rare species side mechanics are stripped');
+
+  const unit = (id: number) => ({
+    uid: 41, def: speciesById(id)!, maxHp: 100, hp: 100, timer: 3, clocks: [{ t: 1 }], bigT: 9,
+    shiny: true, dead: false, x: 210, y: 330, r: 20,
+  });
+  const dittoShinySeed = Array.from({ length: 6000 }, (_, seed) => seed).find((seed) => {
+    const f = new Flee();
+    if (!f.plan(seed, 4, 1, false) || f.spawnAt().def.id !== 132) return false;
+    return f.spawn({ ...unit(132), def: f.spawnAt().def }).shiny;
+  });
+  ok(dittoShinySeed !== undefined, 'planned shiny Ditto keeps its seeded shiny state');
+  const tracked = flee.spawn(unit(plan.def.id));
+  ok(tracked.hp === 35 && tracked.maxHp === 35 && tracked.timer === 99 && tracked.clocks.length === 0 && tracked.bigT === 0, 'rare spawn gets reduced HP and no attack clocks');
+  ok(flee.is(tracked) && flee.def(tracked, 30) === Math.max(1, Math.round(30 * FLEE_DEF)), 'rare foe damage scales by FLEE_DEF');
+  const hit1 = flee.hitSeed(tracked, 7, 3, 2);
+  const hit2 = flee.hitSeed(tracked, 7, 3, 2);
+  ok(hit1 === ((7 * 977 + 3 * 131 + 2 * 17 + tracked.uid * 7919 + 104729) >>> 0) && hit2 === ((7 * 977 + 3 * 131 + 2 * 17 + tracked.uid * 7919 + 2 * 104729) >>> 0), 'rare hit seeds advance deterministically per foe');
+
+  const chanseySeed = Array.from({ length: 6000 }, (_, seed) => seed).find((seed) => {
+    const f = new Flee();
+    return f.plan(seed, 4, 1, false) && f.spawnAt().def.id === 113;
+  })!;
+  const chanseyFlee = new Flee();
+  chanseyFlee.plan(chanseySeed, 4, 1, false);
+  const chansey = chanseyFlee.spawn({ ...unit(113), def: chanseyFlee.spawnAt().def });
+  const dustBefore = dust();
+  let starsPaid = 0;
+  const bonus = chanseyFlee.ko(chansey, (n) => { starsPaid += n; return n; });
+  const again = chanseyFlee.ko(chansey, (n) => { starsPaid += n; return n; });
+  ok(bonus === `+${FLEE_DUST} DUST · +${FLEE_STARS} STAR PIECES` && again === '' && dust() === dustBefore + FLEE_DUST && starsPaid === FLEE_STARS, 'Chansey bonus pays exactly once');
+  spendDust(FLEE_DUST);
+
+  const full = new Treasure();
+  for (let i = 0; i < STOP_CAP; i++) full.ko({ x: 10, y: 20, r: 8 }, i, { boss: true, weak: false, finisher: false, speed: false, combo: 0 }, 0);
+  const rareBall = full.ko({ x: 10, y: 20, r: 8 }, 123, { boss: false, weak: false, finisher: false, speed: false, combo: 0, rare: true, off: true }, 1);
+  ok(rareBall === 'ultra-ball' && full.field.length === STOP_CAP + 1, 'rare KO guarantees Ultra Ball over the stop cap');
+
+  const hitSeed = Array.from({ length: 1000 }, (_, seed) => seed).find((seed) => mulberry32(seed)() < HIT_DROP)!;
+  const hitTarget = { x: 100, y: 120, r: 14 };
+  const hitLoot = (seed: number) => {
+    const treasure = new Treasure();
+    const tier = treasure.hit(hitTarget, seed, 2);
+    return { tier, field: treasure.field };
+  };
+  const hitA = hitLoot(hitSeed), hitB = hitLoot(hitSeed);
+  ok(hitA.tier === 'poke-ball' && hitA.field[0].tier === 'poke-ball' && JSON.stringify(hitA) === JSON.stringify(hitB), 'surviving rare hits drop deterministic Poke Balls only');
+
+  const battle = new Battle(arena, team(), makeStage(71, 'T'), mulberry32(71)) as any;
+  battle.spawnWave(0);
+  ok(battle.flee.plan(planSeed, 4, 1, false), 'integration seed plans a rare foe');
+  const escaping = battle.flee.spawn(battle.flee.build(battle, () => battle.makeEnemy(battle.flee.spawnAt(), battle.waveIndex)));
+  battle.enemies = [escaping];
+  const kosBefore = battle.stopKos;
+  battle.endShot();
+  battle.endShot();
+  battle.update(0.01);
+  ok(escaping.dead && battle.telop.texts().includes(`${escaping.def.name.toUpperCase()} FLED`) && battle.stopKos === kosBefore, 'two turns flee without KO credit and clear an empty court');
+
+  const nextRng = (withRare: boolean) => {
+    const rng = mulberry32(981);
+    const b: any = new Battle(arena, team(), makeStage(981, 'T'), rng);
+    b.spawnWave(0);
+    if (withRare) {
+      b.flee.plan(planSeed, 4, 1, false);
+      b.enemies.push(b.flee.spawn(b.flee.build(b, () => b.makeEnemy(b.flee.spawnAt(), b.waveIndex))));
+    }
+    return rng();
+  };
+  ok(nextRng(false) === nextRng(true), 'rare foe construction preserves the primary battle RNG sequence');
+  ok(FLEE_TURNS === 2 && FLEE_SHINY === 1 / 8, 'rare foe countdown and Ditto shiny odds stay settled');
+}
+
 // --- MS stop missions: deterministic picks, ticks, pay once, seed-stable -----
 {
   const types = ['fire', 'water', 'grass'] as any;
@@ -4123,7 +4217,9 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   const m = new Missions();
   m.start(1, 1, types, true, 0, true);
   ok(m.list.length === 0, 'event and raid stops roll no missions');
+  m.rare = true;
   m.start(1, 1, types, true, 0);
+  ok(!m.rare, 'mission start clears a planned rare preview');
   m.list = (['par', 'multiko', 'weak3', 'nofaint', 'ult', 'finish'] as const).map((id) => ({ id, label: id, state: 'live' as const, pay: MISSION_PAY[id], type: id === 'finish' ? 'fire' as any : undefined }));
   m.ko(1);
   ok(m.list[1].state === 'live', 'a lone KO leaves the 2-KO goal live');

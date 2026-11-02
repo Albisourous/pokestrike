@@ -3,6 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { Treasure } from './loot';
 import { Missions } from './missions';
 import { Connect } from './connect';
+import { Flee } from './flee';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
@@ -795,6 +796,7 @@ export class Battle {
   treasure = new Treasure(); // MS treasure drops + the stop-end reveal
   missions = new Missions(); // MS stop missions: 3 optional goals per battle stop
   connect = new Connect(); // MS ALL CONNECT: link every ally in one shot, next shot ×1.25
+  flee = new Flee();
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   private courtT = -9;
   private foesLanded = true; // the drop-in landing beat fired for this court
@@ -1620,6 +1622,8 @@ export class Battle {
     this.battleBreak = false;
     if (i > 0 && !bossWave && !this.inTrainer && !this.inEvent && !this.inRival && !this.raid && !this.coach)
       for (const skip of BATTLE_SKIP) if (this.rng() >= skip) this.battles++;
+    this.missions.rare = this.flee.plan((Math.imul(this.mapSeed, 2654435761) + Math.imul(i, 40503) + 0xf1ee) >>> 0, i + 1, this.battles, bossWave || this.raid || this.inEvent || this.inTrainer || this.inRival || this.coach || !!this.pendingEventWave);
+    if (this.flee.at === this.battle && !isGentleRoom(this.roomGrid)) this.enemies.push(this.flee.spawn(this.flee.build(this as any, () => this.makeEnemy(this.flee.spawnAt(), this.waveIndex))));
     this.par = Math.min(24, Math.max(10, this.battles * PAR_PER_BATTLE + (bossWave ? PAR_BOSS : 0)));
     // rival echo fights at the levels it earned — the ghost of a stacked
     // run is a real fight, not a victory lap
@@ -3642,6 +3646,7 @@ export class Battle {
     }
     d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1) * (1 + e.armorN * 0.12)); // a cracked shell reads softer
     d = Math.round(d * this.connect.mult());
+    d = this.flee.def(e, d);
     // aegis ward: a shielded foe eats the whole hit — crack the guardian
     // first, or the pack soaks your best lines for free
     if (e.shieldN > 0) {
@@ -3665,6 +3670,7 @@ export class Battle {
     if (e.asleep) d = Math.max(1, Math.round(d * 1.35));
     const hpBefore = e.hp;
     e.hp -= d;
+    if (this.flee.is(e) && e.hp > 0 && !e.dead) this.treasure.hit(e, this.flee.hitSeed(e, this.mapSeed, this.waveIndex, this.battle), this.time);
     if (e.boss && !e.dead && hpBefore > 0 && e.sumStage < (e.bars ?? BOSS_BARS).length - 1) {
       const floor = 1 - (e.bars ?? BOSS_BARS).slice(0, e.sumStage + 1).reduce((sum, bar) => sum + bar, 0);
       if (e.hp < Math.ceil(e.maxHp * floor)) {
@@ -3792,7 +3798,8 @@ export class Battle {
         sfx('invade');
         return;
       }
-      this.treasure.ko(e, (this.mapSeed * 977 + this.waveIndex * 131 + this.battle * 17 + e.uid * 7919) >>> 0, { boss: e.boss || !!e.mid, weak: !!src && this.weakHit(e, src.x, src.y), finisher: this.battle >= this.battles && this.enemies.every((x) => x === e || x.dead), combo: this.shotCombo, speed: this.stopShots <= this.par, off: this.raid }, this.time);
+      this.treasure.ko(e, (this.mapSeed * 977 + this.waveIndex * 131 + this.battle * 17 + e.uid * 7919) >>> 0, { boss: e.boss || !!e.mid, weak: !!src && this.weakHit(e, src.x, src.y), finisher: this.battle >= this.battles && this.enemies.every((x) => x === e || x.dead), combo: this.shotCombo, speed: this.stopShots <= this.par, off: this.raid, rare: this.flee.is(e) }, this.time);
+      if (this.flee.is(e)) this.pushText({ x: e.x, y: e.y - e.r - 60, text: this.flee.ko(e, (n) => this.earnStars(n)), t: 1.4, color: '#ffd84d', big: false });
       e.dead = true;
       cry(e.def.id, 'ko');
       this.koX = e.x;
@@ -6652,6 +6659,7 @@ export class Battle {
     }
     let warned = false;
     let bigWarned = false;
+    this.flee.turn(this.enemies, this.telop);
     for (const e of this.enemies) {
       if (!e.asleep) e.timer--; // a dozing foe's countdown never winds down
       if (!e.asleep && e.bigT > 0) {
@@ -6757,6 +6765,7 @@ export class Battle {
       const a = anchors.splice(Math.floor(this.rng() * anchors.length), 1)[0];
       return this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
     });
+    if (this.flee.at === this.battle && !isGentleRoom(this.roomGrid)) this.enemies.push(this.flee.spawn(this.flee.build(this as any, () => this.makeEnemy(this.flee.spawnAt(), this.waveIndex))));
     this.armWeakPoints();
     this.waveShots = 0;
     this.telop.push({ kind: 'start', title: `BATTLE ${this.battle}/${this.battles}`, sub: STAGE_GIMMICKS[this.theme].label, mon: this.active.def.id, icon: 'poke-ball' });
@@ -8255,6 +8264,7 @@ export class Battle {
         ctx.restore();
       }
     }
+    if (fall >= 1) this.flee.draw(ctx);
     for (const p of this.players) this.drawUnit(ctx, p);
 
     // KO ghost-pops — the fallen sprite flares white and drifts skyward
@@ -9008,7 +9018,7 @@ export class Battle {
     ctx.font = fontB(10);
     if (foe) {
       ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
-      const tag = e.boss
+      const tag = this.flee.is(e) ? 'FLEEING' : e.boss
         ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)} · WEAK ×3`
         : e.mid
           ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)}`
@@ -10518,7 +10528,7 @@ export class Battle {
       ctx.textAlign = 'center';
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      const tag = u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(next)}` : `${Math.ceil(next)}`;
+      const tag = this.flee.is(u) ? '' : u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(next)}` : `${Math.ceil(next)}`;
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = urgent ? '#ff6b6b' : next <= 2 ? '#ffb84d' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);

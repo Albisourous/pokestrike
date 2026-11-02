@@ -37,6 +37,7 @@ leaders to win the run.
 - **Clear ranks** · each stop ends on a CLEAR card: S/A/B/C rank ball, turns, max combo, weak hits, KOs, damage taken, per-stage bests.
 - **Treasure + stop missions** · KO'd foes drop Poké to Master Balls that open after the CLEAR card. Each battle stop also rolls 3 optional missions, ticked live and paid in star pieces or dust.
 - **ALL CONNECT** · one shot that passes through every living teammate fires a friendship banner and gives the next shot ×1.25 damage.
+- **Escape foe** · a rare Abra, Chansey or Ditto gives you two turns to land a hit for bonus loot.
 - **Telops and Gen 3 animations** · Monster Strike-style banners for battle start, boss, phase, clear and ULT, and move sprites from pokeemerald's battle anims.
 - **Real cries** · at boss intros, KOs, ultimates and catches.
 - **Home tabs** · SHOP prize counter, MONS party stage + dex, CLIMB court with the ascension ladder, RAID boss lobby, TOWN village with lab, board, hall and trophies.
