@@ -1,10 +1,11 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T, placeLabel, LABEL_INTRO } from '../src/game/battle';
+import { Battle, HIDE_WP_RATE, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T, placeLabel, LABEL_INTRO } from '../src/game/battle';
 import * as battleModule from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
+import { hideWpRate } from '../src/game/weakpoint';
 import { TRACKS, cry, cryIO, cryLive, cryReset, CRY_KO_CAP } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift, launchMult, hitFloor } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
@@ -5452,6 +5453,48 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   ok(team.every((r) => r.h >= 44 && inside(r)), 'team slots are thumb-sized and inside the team panel');
   ok(team.every((r) => [BOX_STRIP, MENU_CLOSE, MENU_QUIT].every((s) => !overlaps(r, s))), 'team slots do not overlap the box strip or menu buttons');
   ok(inside(boxSlotRect(0, 1)), 'first box slot is inside the team panel');
+}
+
+// --- hidden weak points (MS hide_wp_rate) ---
+{
+  ok(hideWpRate(HIDE_WP_RATE, 0, false) === 0 && hideWpRate(HIDE_WP_RATE, 2, false) === 0 && hideWpRate(HIDE_WP_RATE, 8, true) === 0
+    && hideWpRate(HIDE_WP_RATE, 4, false) > 0 && hideWpRate(HIDE_WP_RATE, 8, false) > hideWpRate(HIDE_WP_RATE, 4, false),
+  'hidden weak points: none early or in gentle rooms, rate rises with depth');
+  const b: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  b.spawnWave(0);
+  b.theme = 'meadow';
+  b.enemies = [0.25, 0.5, 0.75].map((nx) => b.makeEnemy({ def: speciesById(1)!, nx, ny: 0.3 }, 0));
+  b.waveIndex = 8;
+  b.roomGrid = ROOM_LAYOUTS[1];
+  b.armWeakPoints(() => 0);
+  ok(b.enemies.every((e: any) => !e.wpHidden), 'gentle rooms never hide weak points');
+  b.roomGrid = ROOM_LAYOUTS[3];
+  b.armWeakPoints(() => 0);
+  ok(b.enemies.every((e: any) => e.wpHidden), 'deep rooms can hide non-boss weak points');
+  const s = b.players[0];
+  const at = (f: any, ang: number) => { s.x = f.x + Math.cos(ang) * (f.r + s.r); s.y = f.y + Math.sin(ang) * (f.r + s.r); f.lastHit.clear(); };
+  const e0 = b.enemies[0];
+  at(e0, e0.weakA + Math.PI);
+  const w0 = b.stopWeak;
+  b.strikeEnemy(s, e0);
+  ok(!e0.wpHidden && e0.wpPopT === b.time && b.enemies[1].wpHidden && b.stopWeak === w0, 'first contact reveals only that foe, off-spot contact is no weak hit');
+  b.telop = new Telops();
+  b.shotWeak = 0;
+  for (const f of b.enemies) { at(f, f.weakA); b.strikeEnemy(s, f); }
+  ok(b.shotWeak === 3 && b.telop.texts().includes('WEAK POINT ×3'), 'three weak hits in one shot raise the WEAK POINT ×3 tally');
+  let same = true, hidden = 0;
+  for (const seed of [42, 7, 99]) for (const w of [4, 7]) {
+    const run = (off: boolean) => {
+      const r = mulberry32(seed);
+      const bb: any = new Battle(arena, team(), makeStage(seed, 'T'), r);
+      if (off) bb.armWeakPoints = () => {};
+      bb.spawnWave(w);
+      if (!off) hidden += bb.enemies.filter((e: any) => e.wpHidden).length;
+      return bb.enemies.map((e: any) => `${e.def.id}@${e.x.toFixed(1)},${e.y.toFixed(1)}:${e.hp}`).join(' ') + ` next=${r()}`;
+    };
+    if (run(false) !== run(true)) same = false;
+  }
+  ok(same && hidden > 0, 'hidden weak points roll off a side stream: seeded spawns and run rng unchanged');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

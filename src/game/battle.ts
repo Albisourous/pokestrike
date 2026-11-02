@@ -25,6 +25,7 @@ import { STAGE_GIMMICKS, BULLET_GIMMICKS, DRAIN_MOVE, DRAIN_PCT, isGentleRoom, b
 import { Telops } from './telop';
 import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, weatherSpeed, resetAbilities } from './abilities';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
+import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
 
 import {
   playerHp,
@@ -112,6 +113,8 @@ interface Unit {
   sumStage: number; // boss bar index (0..2)
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
   weakA: number; // weak point angle — regular foes ×2, bosses ×3
+  wpHidden?: boolean; // MS hidden weak point: unmarked until the first contact
+  wpPopT?: number; // reveal time — the WEAK POINT! label fades off it
   shieldA: number; // shelled foes: the shell's facing — front hits glance, back hits flank
   regenT: number; // regen foes: sparkle throttle — a green puff every ~1.5s of mending
   minion?: boolean; // summoned add — while any live, the boss is guarded
@@ -143,6 +146,7 @@ interface FloatText {
   t: number;
   color: string;
   big: boolean;
+  gold?: boolean; // weak-point damage: gold face, amber rim
   size?: number; // scale multiplier — damage numbers grow with the hit
   life?: number; // stamped on first frame so easings know the full span
   tilt?: number; // radians of lean — damage numbers land off-axis for juice
@@ -483,6 +487,10 @@ const PAR_BOSS = 10;
 const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
 const BOSS_BIG_POW = 2;
 const BOSS_WEAK_SHIFT = Math.PI * 2 / 3;
+export const HIDE_WP_RATE = [0, 0.2, 0.35]; // MS hide_wp_rate: non-boss weak points hidden, stops 1-3 / 4-6 / 7-9
+const WEAK_TALLY = 3; // weak hits in one shot before the WEAK POINT ×n banner
+const WEAK_SFX_PITCH = 1.5; // weak hits ring a higher 'perfect'
+const WP_POP_T = 0.9; // reveal label life, s
 const BOSS_RAGE_STAT = 1.2;
 const BOSS_RAGE_TURN_CUT = 1;
 const BOSS_GUARDS = [0, 1, 2];
@@ -1013,6 +1021,7 @@ export class Battle {
   private par = 10; // this stop's SPEED CLEAR turn target
   private stopCombo = 0; // best pass-chain this stop — the clear card's MAX COMBO
   private stopWeak = 0; // weak-point hits this stop
+  private shotWeak = 0; // weak-point hits this shot — 3+ fire the tally banner
   private stopKos = 0; // foes downed this stop
   private stopTaken = 0; // damage the team took this stop
   private stopFaints = 0; // team faints this stop — any faint costs a rank step
@@ -1786,6 +1795,7 @@ export class Battle {
       });
     }
     this.armBullets();
+    this.armWeakPoints();
     // the room's hazard cells land as zones — lava ponds, silence pools,
     // mines (normalized layout → arena px)
     this.hazards = room.hazards.map((z) => ({
@@ -1897,6 +1907,11 @@ export class Battle {
 
   // first weak-point hit per foe gets the banner; repeats keep the float
   private weakTelop(e: Unit) {
+    // one shot through 3+ weak points: a single tally banner, restyled in place as it climbs
+    if (this.shotWeak >= WEAK_TALLY) {
+      this.telop.push({ kind: 'weak', title: `WEAK POINT ×${this.shotWeak}`, sub: 'ONE SHOT', mon: this.active.def.id, icon: 'scope-lens' });
+      return true;
+    }
     if (!this.telop.once(`weak${e.uid}`)) return false;
     this.telop.push({ kind: 'weak', title: 'WEAK POINT', sub: `${e.def.name.toUpperCase()} · ${e.boss ? '×3' : '×2'}`, mon: e.def.id, icon: 'scope-lens' });
     return true;
@@ -2236,6 +2251,7 @@ export class Battle {
     this.shotVolleyBoost = 0;
     this.lastContact = { t: -9, id: -1 };
     this.shotHitN.clear();
+    this.shotWeak = 0;
     this.gustSounded = false;
     this.stopTimer = 0;
     this.slowT = 0;
@@ -3697,8 +3713,9 @@ export class Battle {
         y: e.y - e.r - 8,
         text: immune ? 'IMMUNE' : crit ? `${d} CRIT!` : `${d}${suffix}`,
         t: 0.9,
-        color: immune ? '#8a90a8' : crit ? '#ffd84d' : color,
+        color: immune ? '#8a90a8' : crit || this.hitWeak ? '#ffd84d' : color,
         big: crit || suffix === '!',
+        gold: this.hitWeak && !immune,
         // the number sells the hit — chunkier damage pops bigger
         size: dmgNumSize(d, e.maxHp, this.hitWeak),
         tilt: (Math.random() - 0.5) * 0.16,
@@ -3994,10 +4011,19 @@ export class Battle {
     return dd < (e.boss ? 0.62 : 0.45);
   }
 
+  // hidden weak point: first contact pops it into view, no banner
+  private revealWeak(e: Unit) {
+    e.wpHidden = false;
+    e.wpPopT = this.time;
+    animRing(recipeFor('psychic'), e.x + Math.cos(e.weakA) * e.r * 0.92, e.y + Math.sin(e.weakA) * e.r * 0.92, 24);
+    sfx('tick', WEAK_SFX_PITCH);
+  }
+
   private strikeEnemy(shooter: Unit, e: Unit) {
     const last = e.lastHit.get(shooter.uid) ?? -1;
     if (this.time - last < HIT_COOLDOWN) return;
     e.lastHit.set(shooter.uid, this.time);
+    if (e.wpHidden) this.revealWeak(e);
     // impact ring in the attacker's type color — every contact pops
     // dual-typed strikers lead with whichever type hits this target harder
     const at = strikeType(shooter.def, e.def);
@@ -4072,20 +4098,22 @@ export class Battle {
     );
     if (weak) {
       this.stopWeak++;
+      this.shotWeak++;
+      this.waves.push({ x: e.x + Math.cos(e.weakA) * e.r * 0.92, y: e.y + Math.sin(e.weakA) * e.r * 0.92, r: 0, maxR: e.r * 1.5, t: 0.22, life: 0.22, color: '#fff3a0', hits: new Set() });
       if (e.boss) {
         if (!this.weakTelop(e)) this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
         this.hitStop = Math.max(this.hitStop, 0.16);
         this.impact(e.x, e.y, '#ffd84d', 1.7);
         this.addPunch(0.11);
         this.addShake(11);
-        sfx('perfect');
+        sfx('perfect', WEAK_SFX_PITCH);
       } else {
         if (!this.weakTelop(e)) this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: false });
         this.hitStop = Math.max(this.hitStop, 0.1);
         this.impact(e.x, e.y, '#ffd84d', 1.3);
         this.addPunch(0.06);
         this.addShake(6);
-        sfx('perfect');
+        sfx('perfect', WEAK_SFX_PITCH);
       }
     }
     if (flanked) {
@@ -6680,6 +6708,7 @@ export class Battle {
       const a = anchors.splice(Math.floor(this.rng() * anchors.length), 1)[0];
       return this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
     });
+    this.armWeakPoints();
     this.waveShots = 0;
     this.telop.push({ kind: 'start', title: `BATTLE ${this.battle}/${this.battles}`, sub: STAGE_GIMMICKS[this.theme].label, mon: this.active.def.id, icon: 'poke-ball' });
     sfx('invade');
@@ -7041,6 +7070,10 @@ export class Battle {
       this.bulletN.safeguard++;
       this.dropAt('oran-berry');
     }
+  }
+
+  private armWeakPoints(rng = wpRng(this.mapSeed, this.battle, this.waveIndex)) {
+    hideWeakPoints(this.enemies, hideWpRate(HIDE_WP_RATE, this.waveIndex, isGentleRoom(this.roomGrid)), rng);
   }
 
   private dropAt(kind: PickupKind) {
@@ -8352,8 +8385,8 @@ export class Battle {
       ctx.font = font(CALLOUT_PX * pop * (t.size ?? 1));
       ctx.textAlign = 'center';
       ctx.fillStyle = t.color;
-      ctx.strokeStyle = '#000';
-      ctx.lineWidth = t.big ? 4 : 3;
+      ctx.strokeStyle = t.gold ? '#7a3c00' : '#000';
+      ctx.lineWidth = (t.big ? 4 : 3) + (t.gold ? 1 : 0);
       const dy = 52 * (1 - (1 - age) ** 3); // launch up fast, drift to a stop
       ctx.save();
       // a wall-hugging mon's banner must not spill off-canvas — shrink
@@ -8923,7 +8956,7 @@ export class Battle {
               : e.link
                 ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
                 : `ATTACKS IN ${Math.ceil(e.timer)}`;
-      const weakTag = !e.boss && !e.def.shielded ? ' · WEAK ×2' : '';
+      const weakTag = !e.boss && !e.def.shielded ? (e.wpHidden ? ' · WEAK HIDDEN' : ' · WEAK ×2') : '';
       const readTag = tag + weakTag;
       const tagPx = fitFontB(ctx, readTag, 10, w - 60);
       const readout = e.boss && tagPx < 8
@@ -10383,13 +10416,14 @@ export class Battle {
         ctx.stroke();
       }
       // Weak points hold their face through a bar so the next pull can line up.
-      if (!u.dead && (u.boss || !u.def.shielded)) {
+      if (!u.dead && !u.wpHidden && (u.boss || !u.def.shielded)) {
         const wx = u.x + Math.cos(u.weakA) * u.r * 0.92;
         const wy = u.y + Math.sin(u.weakA) * u.r * 0.92;
         const s = u.boss ? 7 + Math.sin(this.time * 6) * 2 : 5 + Math.sin(this.time * 6) * 1.5;
+        const pop = u.wpPopT === undefined ? 0 : Math.max(0, 1 - (this.time - u.wpPopT) / 0.35);
         ctx.fillStyle = '#ffd84d';
         ctx.strokeStyle = '#000';
-        drawStar(ctx, wx, wy, s, 0.4, 2);
+        drawStar(ctx, wx, wy, s * (1 + pop * 1.5), 0.4, 2);
       }
       if (u.boss && !u.dead) {
         // minion guard: while summoned adds live, a shield ring orbits —
@@ -10440,6 +10474,7 @@ export class Battle {
       const intro = this.introAlpha();
       const traitTag = intro > 0 ? this.foeTag(u, false) : this.phase === 'aim' ? this.foeTag(u, true) : undefined;
       if (traitTag) this.fieldLabel(ctx, traitTag, u.x, u.y + u.r + 22, FOE_TAG_COLOR[traitTag] ?? '#ff8aa8', intro > 0 ? intro : 1);
+      if (u.wpPopT !== undefined && !u.dead && this.time - u.wpPopT < WP_POP_T) this.fieldLabel(ctx, 'WEAK POINT!', u.x, u.y - u.r - 22, '#ffd84d', Math.min(1, (WP_POP_T - (this.time - u.wpPopT)) / 0.3), true);
       // a loaded thief wears its take — the loot floats at its shoulder so
       // you can see exactly what KOing it buys back
       if (u.stolen) {
@@ -10800,7 +10835,7 @@ export class Battle {
         }
         ctx.globalAlpha = 1;
         // weak read — the same cone check the contact damage uses
-        if (this.weakHit(hit, hx, hy)) {
+        if (!hit.wpHidden && this.weakHit(hit, hx, hy)) {
           const s = 6;
           ctx.fillStyle = '#ffd84d';
           ctx.strokeStyle = '#000';
