@@ -1787,6 +1787,8 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(e.dead, 'lethal hit kills');
   ok(shooter.lvl > lvl0 && shooter.pow > pow0, `KO levels shooter (lv${lvl0}->${shooter.lvl} pow ${shooter.pow.toFixed(2)})`);
   ok(bench.length > 0 && bench.every((p: any, i: number) => p.lvl === bench0[i] + Math.max(1, Math.round(e.lvl * 0.05 * 0.5))), `KO shares EXP with the living bench (${bench0.join(',')} -> ${bench.map((p: any) => p.lvl).join(',')})`);
+  const lvTexts = (b as any).texts.map((t: any) => t.text);
+  ok(lvTexts.filter((t: string) => /^LV \d+!$/.test(t)).length === 1 && lvTexts.filter((t: string) => t === 'TEAM LV UP').length === 1, `shared EXP is quiet: one LV popup for the launcher, one TEAM LV UP (${lvTexts.join('|')})`);
 }
 
 // --- evolution preserves earned levels ------------------------------------
