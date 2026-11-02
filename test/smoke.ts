@@ -3290,6 +3290,14 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(initialClock.t === foeClocks(spawnedFoe.def.type, false, 0)[0].first,
     'spawned foe clocks start at first_attack_turn');
 
+  const dual = foeClocks('ghost', false, 0, 'poison');
+  ok(dual.length === 2 && dual[1].kind === TYPE_MOVE.poison.kind && dual[1].move === TYPE_MOVE.poison.move &&
+    dual[1].turn > dual[0].turn && dual[1].first > dual[0].first && dual[1].type === 'poison',
+    'dual-type foes carry a slower second-typing clock');
+  const dualFoe = (spawned as any).makeEnemy({ def: speciesById(93)!, nx: 0.5, ny: 0.5, lvl: 10 }, 0);
+  ok(dualFoe.clocks.length === 2 && dualFoe.clocks[1].move === 'SLUDGE WAVE' && dualFoe.clocks[1].t === dual[1].first,
+    'spawned dual-type foe fields both wind-ups');
+
   const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   (b as any).spawnWave(0);
   const foe = b.enemies.find((e) => !e.def.fuse)!;

@@ -7,7 +7,7 @@ import { mulberry32 } from '../core/rng';
 // MS char_enemy_attacks: a foe runs several attack rows side by side, each on
 // its own turn clock; first_attack_turn delays the opener
 export type FoeMoveKind = 'laser' | 'cross' | 'quake' | 'meteor';
-export interface FoeClock { kind: FoeMoveKind; move: string; turn: number; first: number }
+export interface FoeClock { kind: FoeMoveKind; move: string; turn: number; first: number; type?: PokeType }
 export const TYPE_MOVE: Record<PokeType, { kind: FoeMoveKind; move: string }> = {
   normal: { kind: 'laser', move: 'HYPER BEAM' },
   fire: { kind: 'laser', move: 'FLAMETHROWER' },
@@ -22,13 +22,20 @@ export const TYPE_MOVE: Record<PokeType, { kind: FoeMoveKind; move: string }> = 
   ghost: { kind: 'laser', move: 'NIGHT SHADE' },
 };
 export const FOE_CLOCK = { turn: 5, first: 4 };
+export const FOE_CLOCK2 = { turn: 7, first: 6 }; // MS: a foe's second attack row rides the longer clock
 export const BOSS_CLOCKS: (FoeClock | { turn: number; first: number })[][] = [
   [{ turn: 4, first: 3 }],
   [{ turn: 4, first: 2 }, { kind: 'cross', move: 'HYPER BEAM', turn: 5, first: 3 }],
   [{ turn: 3, first: 2 }, { kind: 'cross', move: 'HYPER BEAM', turn: 5, first: 3 }, { kind: 'meteor', move: 'ROCK SLIDE', turn: 6, first: 4 }],
 ];
-export function foeClocks(type: PokeType, boss: boolean, bar: number): FoeClock[] {
-  if (!boss) return [{ ...TYPE_MOVE[type], ...FOE_CLOCK }];
+export function foeClocks(type: PokeType, boss: boolean, bar: number, type2?: PokeType): FoeClock[] {
+  if (!boss) {
+    const clocks: FoeClock[] = [{ ...TYPE_MOVE[type], ...FOE_CLOCK }];
+    // MS runs 2-4 attack clocks per enemy — a second typing is a second
+    // attack row, ticking on its own slower countdown
+    if (type2) clocks.push({ ...TYPE_MOVE[type2], ...FOE_CLOCK2, type: type2 });
+    return clocks;
+  }
   return BOSS_CLOCKS[Math.min(bar, BOSS_CLOCKS.length - 1)].map((clock) => ({
     ...('kind' in clock ? clock : TYPE_MOVE[type]),
     ...clock,

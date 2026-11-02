@@ -83,7 +83,7 @@ export interface Unit {
   hp: number;
   maxHp: number;
   timer: number; // enemy countdown; attacks when it hits 0
-  clocks: { kind: FoeMoveKind; move: string; turn: number; t: number; drain?: boolean }[];
+  clocks: { kind: FoeMoveKind; move: string; turn: number; t: number; drain?: boolean; type?: PokeType }[];
   safeguard?: boolean; // heart barrier: immune until a berry is grabbed
   drift: number; // enemy approach speed (u/s); players always 0
   // wander state — enemies jitter and occasionally dart
@@ -2023,7 +2023,7 @@ export class Battle {
       hp: ehp,
       maxHp: ehp,
       timer: (s.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (this.raidMod === 'hasty' ? 0.85 : 1) * (s.def.prank ? 0.55 : 1) + (wi === 0 ? 1 : 0),
-      clocks: def.fuse ? [] : foeClocks(def.type, !!s.boss, 0).map(({ kind, move, turn, first }) => ({ kind, move, turn, t: first })),
+      clocks: def.fuse ? [] : foeClocks(def.type, !!s.boss, 0, def.type2).map(({ kind, move, turn, first, type }) => ({ kind, move, turn, t: first, type })),
       // ASC 7 FRENZY: foes press harder — approach speed ×1.25
       drift: enemyDrift(def.stats) * (s.boss ? 0.55 : 1) * (this.asc >= 7 ? 1.25 : 1),
       wx: 0,
@@ -6829,7 +6829,7 @@ export class Battle {
     mid.mid = true;
     mid.bigT = MID_SIG;
     mid.timer = (mid.def.melee ? MELEE_TIMER : ENEMY_BASE_TIMER) * this.foeCdMult * this.ascTimerMult() * (this.raidMod === 'hasty' ? 0.85 : 1) * (mid.def.prank ? 0.55 : 1) + (this.waveIndex === 0 ? 1 : 0);
-    mid.clocks = mid.def.fuse ? [] : foeClocks(mid.def.type, false, 0).map(({ kind, move, turn, first }) => ({ kind, move, turn, t: first }));
+    mid.clocks = mid.def.fuse ? [] : foeClocks(mid.def.type, false, 0, mid.def.type2).map(({ kind, move, turn, first, type }) => ({ kind, move, turn, t: first, type }));
     mid.drift = enemyDrift(mid.def.stats) * (this.asc >= 7 ? 1.25 : 1);
     mid.sash = !!mid.def.sturdy;
     mid.pow = lvlPow(offStat(mid.def.stats, mid.def.type), mid.lvl);
@@ -6868,8 +6868,8 @@ export class Battle {
     boss.weakA = (boss.weakA + BOSS_WEAK_SHIFT) % (Math.PI * 2);
     boss.timer = this.enemyReload(boss);
     boss.bigT = BOSS_BIG_TIMER;
-    boss.clocks = foeClocks(boss.def.type, true, boss.sumStage).map(({ kind, move, turn, first }) => ({ kind, move,
-      turn: Math.max(1, turn - (boss.phaseRage ? BOSS_RAGE_TURN_CUT : 0)), t: Math.max(1, first - (boss.phaseRage ? BOSS_RAGE_TURN_CUT : 0)) }));
+    boss.clocks = foeClocks(boss.def.type, true, boss.sumStage).map(({ kind, move, turn, first, type }) => ({ kind, move,
+      turn: Math.max(1, turn - (boss.phaseRage ? BOSS_RAGE_TURN_CUT : 0)), t: Math.max(1, first - (boss.phaseRage ? BOSS_RAGE_TURN_CUT : 0)), type }));
     this.summonBossAdds(boss, room.anchors);
     this.telop.push({ kind: 'phase', title: boss.phaseRage ? 'RAGE' : 'PHASE CLEAR', sub: `BATTLE ${boss.sumStage + 1}/${(boss.bars ?? BOSS_BARS).length} · WEAK SPOT MOVED`, mon: boss.def.id, icon: this.bossIcon(boss), color: boss.phaseRage ? TYPE_COLOR[boss.def.type] : undefined });
     this.screenFlash('#ffd84d', 0.2);
@@ -7055,8 +7055,8 @@ export class Battle {
 
   private fireMove(e: Unit, c: Unit['clocks'][number]) {
     if (e.dead) return;
-    const anim = recipeFor(e.def.type, c.move);
-    const color = TYPE_COLOR[e.def.type];
+    const anim = recipeFor(c.type ?? e.def.type, c.move);
+    const color = TYPE_COLOR[c.type ?? e.def.type];
     this.pushText({ x: e.x, y: e.y - e.r - 20, text: c.move, t: 1, color, big: false });
     const pow = e.boss ? BOSS_MOVE_POW : FOE_MOVE_POW;
     let thorns = false;
@@ -8956,6 +8956,7 @@ export class Battle {
       e.def.hunter && 'hunts your weakest mon',
       e.def.leech && 'heals off every hit it lands',
       e.clocks.some((c) => c.drain) && 'drain move · heals off its hit',
+      !e.boss && e.clocks.length > 1 && 'dual typing · second wind-up on its own clock',
       e.safeguard && 'safeguard · grab a berry to break it',
       e.def.drowsy && 'its hits can put a mon to sleep',
       e.def.venom && 'its sting leaves a bleeding wound',
