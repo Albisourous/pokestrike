@@ -1447,7 +1447,8 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
-    if (battle?.phase === 'reward' && battle.clearCard) { battle.clearCard = null; rewardT0 = t; sfx('ui'); return; }
+    if (battle?.phase === 'reward' && battle.treasure.tap(t)) { rewardT0 = t; sfx('ui'); return; }
+    if (battle?.phase === 'reward' && battle.clearCard) { battle.clearCard = null; battle.treasure.show(t); rewardT0 = t; sfx('ui'); return; }
     // mid-run chips — the ? half of this gate moved up to helpChipUp() so the
     // dealt boards share it; the mute chip stays a between-fights control.
     // Neither answers under a modal (event card, evo pick) — that layer owns input
@@ -2039,7 +2040,7 @@ function update(dt: number) {
     wasReward = itemStep;
     // reward sequencing: the roster opens over the item board once — swap
     // first, then the pick. An evo card still outranks it on the frame.
-    if (battle.phase === 'reward' && battle.wantMenu && !menuOpen && !battle.evoChoice && !battle.mapModal && !battle.clearCard) {
+    if (battle.phase === 'reward' && battle.wantMenu && !menuOpen && !battle.evoChoice && !battle.mapModal && !battle.clearCard && !battle.treasure.showing()) {
       battle.wantMenu = false;
       menuOpen = true;
       battle.boxSel = battle.teamSel = -1;
@@ -2178,6 +2179,7 @@ function update(dt: number) {
         bondUps: bond.ups.length ? bond.ups : undefined, // who leveled — tagged on the squad attachment
         rookie: rookieCheck(), // run/stage/win steps clear when the run banks
         bestCombo: battle.maxCombo,
+        loot: battle.treasure.opened, // treasure balls opened this run
         rankStreak: battle.bestRankStreak,
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
@@ -2411,6 +2413,7 @@ function render() {
           );
         }
         if (battle.phase === 'reward' && battle.clearCard) drawClearCard(ctx, battle.clearCard, t - (battle.clearCard.t0 ??= t));
+        else if (battle.phase === 'reward') battle.treasure.drawReveal(ctx, t);
       }
       break;
     case 'result':

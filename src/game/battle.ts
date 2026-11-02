@@ -1,5 +1,6 @@
 import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
+import { Treasure } from './loot';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
@@ -773,6 +774,7 @@ export class Battle {
   time = 0;
   private abilityText = (text: string, u: { x: number; y: number; r: number }) => this.pushText({ x: u.x, y: u.y - u.r - 40, text, t: 1.1, color: '#ffd848', big: false });
   telop = new Telops(); // battle banners: start, boss, clears, ULT READY
+  treasure = new Treasure(); // MS treasure drops + the stop-end reveal
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   private courtT = -9;
   private foesLanded = true; // the drop-in landing beat fired for this court
@@ -3733,6 +3735,7 @@ export class Battle {
         sfx('invade');
         return;
       }
+      this.treasure.ko(e, (this.mapSeed * 977 + this.waveIndex * 131 + this.battle * 17 + e.uid * 7919) >>> 0, { boss: e.boss, weak: !!src && this.weakHit(e, src.x, src.y), finisher: this.battle >= this.battles && this.enemies.every((x) => x === e || x.dead), combo: this.shotCombo, speed: this.stopShots <= this.par, off: this.raid }, this.time);
       e.dead = true;
       cry(e.def.id, 'ko');
       this.koX = e.x;
@@ -5433,6 +5436,7 @@ export class Battle {
     const speedClear = this.stopShots <= this.par;
     if (speedClear) this.score += 100 + this.depth * 25;
     if (!this.raid) this.clearCard = this.stopSummary();
+    this.treasure.endStop(this.time, this.arena.x + this.arena.w / 2, this.arena.y, (n) => this.earnStars(n));
     // pickup ability: scavengers root through the arena after the fight —
     // a living carrier may nose out a consumable for the run's bag
     for (const p of this.players) {
@@ -6663,6 +6667,7 @@ export class Battle {
   }
 
   private nextBattle() {
+    this.treasure.collect(this.time, this.arena.x + this.arena.w / 2, this.arena.y);
     this.koSeen = false;
     this.fin.t = 0;
     this.battleBreak = false;
@@ -7781,6 +7786,7 @@ export class Battle {
 
     this.lblN = 0;
     this.drawWallWarnings(ctx);
+    this.treasure.draw(ctx, this.time);
     // field pickups: the icon is the read; the effect tag shows once per
     // kind per battle
     for (const pk of this.pickups) {
