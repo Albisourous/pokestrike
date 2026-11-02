@@ -49,7 +49,7 @@ The game is also deployed to GitHub Pages on every push to `main`
 https://albisourous.github.io/pokestrike/.
 
 Open the printed URL. Works on desktop and touch. The `?` button opens a
-scrollable in-game manual — and your first wave teaches by doing, with a
+scrollable in-game manual, and your first wave teaches by doing, with a
 ghost pull that repeats until you've really slung one.
 
 1. Hit **START CLIMB** for a 9-stage climb (Slay the Spire style): random wild
@@ -100,12 +100,12 @@ ghost pull that repeats until you've really slung one.
    **enrage** under 30% HP, attack timers cycling a third faster. Boss HP
    comes in 3 bars; each bar starts a new battle with a fresh room and
    fresh adds. A heavy attack hits the whole team every 7 turns. Bosses
-   also carry a drifting gold **weak point** on their rim — contact on
+   also carry a drifting gold **weak point** on their rim; contact on
    that face pays triple. Every third boss attack is a teleport hop, so no
    pocket stays safe. Route one shot through every living ally in a
-   single launch and they all fire at once — `TEAM CHAIN!`
-5b. **The team ultimate.** One shared charge builds across your shots —
-   when it fills, every living teammate glows gold. Tap any of them and
+   single launch, and they all fire at once: `TEAM CHAIN!`
+5b. **The team ultimate.** One shared charge builds across your shots.
+   When it fills, every living teammate glows gold. Tap any of them and
    *that* mon's signature detonates across the whole court, shaped by its
    type: fire rains meteors that crater and burn, water sweeps a tidal
    front that piles foes into a wall, psychic drags everything to center
@@ -118,20 +118,20 @@ ghost pull that repeats until you've really slung one.
    to ambient embers, petals, and wisps drifting over the floor.
    **Stone clusters** stand mid-court as bounceable cover; bank off them
    like walls for the same per-bounce damage bonus. The court
-   fights back too — but only against you (enemies take no environment
+   fights back too, but only against you (enemies take no environment
    damage): **lava pools** scorch the ball, **tall grass** drags your
    launch to a crawl, **wind bands** push the ball sideways, **spike
    strips** chip it on contact, and **mine pads** detonate when the ball
-   touches them — the blast still chips you, but it shoves the pack
+   touches them; the blast still chips you, but it shoves the pack
    around for free repositioning. Deep waves can roll a **mutator**: SWARM
    floods in extra fodder, HASTY starts timers low, VOLATILE makes KOs
    burst onto neighbors, A BIG ONE supersizes a fodder, a gold glint
    guarantees one shiny in the pack, and a **soul-linked pair** shares a
-   green tether — fell one and its partner drags it back at partial HP
+   green tether: fell one and its partner drags it back at partial HP
    (twice each, then they're done), so drop both in the same shot.
    Rarer affixes: a **skull-marked foe** pays a team heal + score bounty
    on KO, a **gravity aura** carrier slows your ball to a crawl inside
-   its bubble, and a **power zone** paints an ATK field — shots landing
+   its bubble, and a **power zone** paints an ATK field; shots landing
    from inside it hit +50% harder. An
    **Air Balloon** item floats over all of it. **Field pickups** spawn
    each wave and the ball collects them by touch: **Oran Berry** heals the
@@ -140,14 +140,14 @@ ghost pull that repeats until you've really slung one.
    **Elixir** knocks a notch off every super's cooldown. Heavy hits scar
    the court, and some spawn pairs sit close enough to squeeze the ball
    between them for multi-hits. **Combo shots**: when the ball touches two
-   different things — foe, ally, wall, stone — inside a 0.35s window, the
+   different things (foe, ally, wall, stone) inside a 0.35s window, the
    second contact flashes `COMBO SHOT!` (banks only count while the ball
    still has speed). Relics are what make them pay: **Binding Band** gives
    +40% contact damage on the hit and **Ether** feeds the launcher a
    super pip.
 7. **Catch 'em.** A KO has a chance to send the enemy to your **box**
    (`CAUGHT!` ball wiggle and all); beating a **gym leader** is the only
-   guaranteed catch — their ace joins you, and the boss bursts into a
+   guaranteed catch: their ace joins you, and the boss bursts into a
    **coin shower**: a few seconds to drag your mon through the spinning
    PokéCoins before they fade, +25 score each. Swap boxed
    mons onto the team freely between stages. HP follows the mon, so
@@ -165,23 +165,23 @@ ghost pull that repeats until you've really slung one.
 8. **Choose an item between stages** (Slay the Spire style): heals, +max HP,
    +damage, faster recharges, launch speed, revive. Builds stack across the
    run, so draft for synergy and item for the holes. Cold board? **Decline**
-   the reward for +150 score instead. Mid-pick the **TEAM · ITEMS** button —
-   or a tap on the **NEW CATCH** card — opens the same box panel the map
+   the reward for +150 score instead. Mid-pick the **TEAM · ITEMS** button
+   (or a tap on the **NEW CATCH** card) opens the same box panel the map
    carries, so a fresh catch can be swapped in before you even pick the
    relic. **Type charms** (Charcoal,
    Mystic Water, Magnet...) give +20% to one type and stack; going mono-type
    is a real build (they only roll for types you actually field). Then pick
    your **route** on the region map: non-gym rows
    offer 1-2 linked stops to tap: safe **wilds** (catchable fights),
-   **trainers** (a real NPC class fields a mono-type squad — no catches,
+   **trainers** (a real NPC class fields a mono-type squad: no catches,
    no shinies, but elite-tier loot), **chests** (a free relic),
    **Poké Center rests** (full heal and fainted mons revived), and **?**
-   event stops — a roll from the event pool: a heal, a free catch, a
+   event stops (a roll from the event pool): a heal, a free catch, a
    rare candy stash, a wonder trade, an egg that hatches a few stops
    later, or an ambush (an alpha guarding treasure, a wild pack) that
    fields a scripted wave. Field two or more mons of one type and its
    **type trait** kicks in (shinies count double, fainted mons don't):
-   fire burns brighter, ghosts execute low foes, psychic hits splash —
+   fire burns brighter, ghosts execute low foes, psychic hits splash;
    tiers show as chips under the map. Waves that outlast 10 shots ramp
    enemy damage, so stalls get punished. Gyms are
    forced singles every third row; the island itself is a seeded
@@ -192,10 +192,10 @@ ghost pull that repeats until you've really slung one.
    gated items in the pool. Your **best score** lives on
    the title screen. Tap the dex count on the title for the **Pokédex**, every
    catchable species lit when owned. **TOP RUNS** keeps your eight best
-   climbs — score, stage, and the team's sprites on a plaque (a legacy best
+   climbs: score, stage, and the team's sprites on a plaque (a legacy best
    from before the board gets seeded in as the bar to beat). Every finished
-   run moves the **ranked ladder** — POKé BALL → GREAT → ULTRA → MASTER →
-   CHAMPION — deep runs climb, early wipes bleed. Each leader's first KO
+   run moves the **ranked ladder**: POKé BALL → GREAT → ULTRA → MASTER →
+   CHAMPION; deep runs climb, early wipes bleed. Each leader's first KO
    banks a **gym badge** toward the LEAGUE CHAMPION case, and a **trophy
    shelf** of achievements pays out the rest (FLAWLESS climbs, ricochet
    streaks, shiny catches, one scalp per leader). Lose a run and that exact
@@ -226,7 +226,7 @@ ghost pull that repeats until you've really slung one.
     HUNTER...), an MVP star on your carry, a "N pts short of your best"
     hook, and a `★ NEW RECORD ★` when you top it. **SHARE RESULT**
     posts a trainer-card readout (team names, score, badges, the grid) with
-    a `?seed=` link — opening it deals that exact climb. A `SEED · build`
+    a `?seed=` link: opening it deals that exact climb. A `SEED · build`
     stub sits in the corner so any screenshot is a complete bug report.
     **REMATCH** drops you straight into a fresh draft.
 
@@ -263,15 +263,15 @@ audio assets.
 | Fire | Flame Burst: a shockwave ring shoves enemies back as it rolls out, then 3 homing fire-orbs arc into the farthest stragglers |
 | Electric | Chain lightning: hops between up to 3 enemies, each hit landing a beat apart |
 | Grass | Giga Drain: a field saps nearby foes and heals the team by a cut of it, while 2 seed flares siphon the farthest |
-| Water | Hydro Pump: a fat pressurized jet spears the court on a lane to the nearest foe — everything it crosses gets hosed and washed downstream |
+| Water | Hydro Pump: a fat pressurized jet spears the court on a lane to the nearest foe; everything it crosses gets hosed and washed downstream |
 | Psychic | Telekinetic shove: a real knockback impulse flings enemies off walls and each other, plus 2 psy-orbs hunt the farthest stragglers |
 | Flying | Hurricane: a vortex drags every nearby enemy into a pile on the ally, setting up your next combo |
 | Poison | Toxic: a gas cloud now, then a cut of max HP after each of your shots; re-toxining stacks the timer |
-| Rock / Fighting | Meteor shower: a jab on the nearest, then 3 meteors rain on the farthest — the craters stay on the court |
-| Ghost | Hex: a whole-court shadow ring — every enemy on the field takes the hit |
+| Rock / Fighting | Meteor shower: a jab on the nearest, then 3 meteors rain on the farthest; the craters stay on the court |
+| Ghost | Hex: a whole-court shadow ring; every enemy on the field takes the hit |
 | Normal | Quick Attack: the ally physically dashes to the nearest enemy, slams it, and stays beside it |
 
-~130 species shout their **own** canon move instead of the type default —
+~130 species shout their **own** canon move instead of the type default:
 Pikachu fires `THUNDERBOLT`, Magikarp `SPLASH`. Eleven of those get bespoke
 FX on top of the type behavior: `HYPER BEAM` is a golden wall of light,
 `ZAP CANNON` tracks the farthest foe, `PSYCHO BOOST` detonates the biggest
@@ -281,21 +281,21 @@ flash-freezes a zone, and `ERUPTION`, `BLAST BURN`, `FRENZY PLANT`,
 
 ## Team ultimates by type
 
-One shared charge — tap any glowing teammate and its type decides the shape:
+One shared charge: tap any glowing teammate and its type decides the shape:
 
 | Type | Ultimate |
 | --- | --- |
-| Fire | Flare Rain: a fireball streaks down on each foe — craters and a short burn |
+| Fire | Flare Rain: a fireball streaks down on each foe; craters and a short burn |
 | Water | Tidal Wave: a front sweeps in off the wall and shoves every foe into a pile |
 | Grass | Frenzy Plant: vines root every foe (their countdowns slip) and siphon a third of the damage back |
 | Electric | Volt Surge: a bolt hops foe to foe nearest-first, each arc weaker than the last |
 | Psychic | Mind Grip: five pulses drag the court to the center, then the implosion pays out |
-| Rock | Rock Slide: one boulder per foe, dead center — no RNG |
+| Rock | Rock Slide: one boulder per foe, dead center; no RNG |
 | Poison | Venom Burst: the whole court eats the hit and survivors keep ticking |
 | Flying | Sky Dive: an orbital sweep clips each foe in turn, knocking them toward the middle |
 | Fighting | Final Rush: real dashes foe to foe, the last hit a 1.9× FINISHER |
-| Ghost | Ominous Wind: wisps converge on every foe — double damage on the healthy |
-| Normal | Giga Romp: giant mode — fatter hitbox and double contact until its next launch |
+| Ghost | Ominous Wind: wisps converge on every foe; double damage on the healthy |
+| Normal | Giga Romp: giant mode, with a fatter hitbox and double contact until its next launch |
 
 ## Install it like an app
 
@@ -317,25 +317,25 @@ worker (`public/sw.js`) registered only in production builds.
   `src/game/types.ts`, stages as wave lists with normalized arena coords.
   Adding a Pokémon is a data change, not a code change.
 - **Seeded everything**: `makeStage(seed)` builds the opening stretch and
-  `rollWave` the deeper stages — but the whole run's roll source
+  `rollWave` the deeper stages, but the whole run's roll source
   (`mulberry32`) is seeded too, so draft deals and battle rolls all
   reproduce from one number. `?seed=NNN` pins it, every share card carries
   it, and **DAILY** is today's UTC date as the seed.
 - **Meta persistence**: `src/game/meta.ts` keeps the dex, badges,
   achievements, rating, hall of fame, and rival echo in localStorage,
-  behind a `pk_ver` schema stamp — `migrateSaves()` upgrades old saves at
+  behind a `pk_ver` schema stamp: `migrateSaves()` upgrades old saves at
   boot instead of breaking them.
 - **Mid-run save**: `pk_run` banks the climb at every map safe point (and
-  on tab-close) — team HP/levels, box, perks, score, and the island's
-  `mapSeed`. The title screen shows **CONTINUE — STAGE N**; winning or
+  on tab-close): team HP/levels, box, perks, score, and the island's
+  `mapSeed`. The title screen shows **CONTINUE: STAGE N**; winning or
   losing clears it.
 - **Decision telemetry**: `pk_stats` logs every offer board (shown vs
-  taken) and which stage each run died on — the on-device version of
+  taken) and which stage each run died on; it's the on-device version of
   MegaCrit's metric server. `?dev` exposes `__dbg` (scene, live battle,
   coordinate probe) plus `__dbg.stats()` to dump it.
 - **Built for bug reports**: the title screen carries a git-hash build
   tag, the result screen a `SEED · build` stub, and any uncaught error
-  paints a crash card with both — one screenshot is a complete report.
+  paints a crash card with both, so one screenshot is a complete report.
 - **Phone-ready**: `touch-action`/`overscroll` killed, `visualViewport`
   sizing, and a screen wake lock holds while a run is live.
 - **Fixed logical resolution**: 540×960 letterboxed to any window.
@@ -383,9 +383,9 @@ non-commercial project, not affiliated with or endorsed by them.
 
 The climb is the game. What's next, in rough order:
 
-- Balance passes driven by `pk_stats` pick rates and stage deaths —
+- Balance passes driven by `pk_stats` pick rates and stage deaths:
   balance from logs, not vibes
 - More canon signature FX and species-unique ultimates
   (`docs/ultimates.md` is the design doc)
-- Endless mode past the 9th gym — deliberately deferred until the core
+- Endless mode past the 9th gym, deliberately deferred until the core
   climb is rock solid
