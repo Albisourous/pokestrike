@@ -22,6 +22,8 @@ import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { BOX_STRIP, DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, MENU_CLOSE, MENU_QUIT, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, TEAM_PANEL, boxSlotRect, dexBuyRect, partnersStripAt, teamSlotRect, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_LOTS } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
+import { MISSION_PAY, Missions, pickMissions } from '../src/game/missions';
+import { missionBests, recordMissions } from '../src/game/meta';
 import { BALL_TIERS, DROP_CAP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDrop, rollReward } from '../src/game/loot';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
@@ -3957,6 +3959,43 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   for (const bb of [a, b]) for (const e of [...bb.enemies]) bb.hurt(e, 1e6, '#fff');
   ok(a.treasure.field.length > 0 && b.treasure.field.length === 0, 'KO hook rolls treasure');
   ok(a.rng() === b.rng() && a.score === b.score, 'treasure rolls leave seeded replays unchanged');
+}
+
+// --- MS stop missions: deterministic picks, ticks, pay once, seed-stable -----
+{
+  const types = ['fire', 'water', 'grass'] as any;
+  const a = pickMissions(42, 3, types, true), b = pickMissions(42, 3, [...types].reverse(), true);
+  ok(JSON.stringify(a) === JSON.stringify(b) && a.length === 3 && new Set(a.map((m) => m.id)).size === 3, 'missions pick deterministically, 3 unique');
+  const spread = new Set(Array.from({ length: 30 }, (_, i) => pickMissions(i, 1, types, true).map((m) => m.id).join()));
+  ok(spread.size > 3, 'missions vary with seed');
+  ok(Array.from({ length: 50 }, (_, i) => pickMissions(i, 2, types, false)).every((l) => l.every((m) => m.id !== 'ult')), 'ULT mission only when the charge can land');
+  const m = new Missions();
+  m.start(1, 1, types, true, 0, true);
+  ok(m.list.length === 0, 'event and raid stops roll no missions');
+  m.start(1, 1, types, true, 0);
+  m.list = (['par', 'multiko', 'weak3', 'nofaint', 'ult', 'finish'] as const).map((id) => ({ id, label: id, state: 'live' as const, pay: MISSION_PAY[id], type: id === 'finish' ? 'fire' as any : undefined }));
+  m.ko(1);
+  ok(m.list[1].state === 'live', 'a lone KO leaves the 2-KO goal live');
+  m.ko(2);
+  m.ult();
+  m.tick({ shots: 11, par: 10, weak: 3, faints: 1 });
+  ok(m.list.map((x) => x.state).join() === 'fail,done,done,fail,done,live', 'missions tick live');
+  m.ko(1, 'fire' as any);
+  const d0 = dust();
+  let starsIn = 0;
+  m.clear(77, { shots: 11, par: 10, weak: 3, faints: 1 }, (n) => { starsIn += n; return n; });
+  m.clear(77, { shots: 11, par: 10, weak: 3, faints: 1 }, (n) => { starsIn += n; return n; });
+  ok(starsIn === MISSION_PAY.finish.n && dust() === d0 + MISSION_PAY.multiko.n + MISSION_PAY.weak3.n + MISSION_PAY.ult.n, 'mission pay banks once');
+  ok(missionBests()['77'] === 3, 'mission best records, clamped to 3');
+  ok(recordMissions(78, 2) && missionBests()['78'] === 2 && !recordMissions(78, 1) && recordMissions(78, 3) && missionBests()['78'] === 3, 'mission best keeps the max');
+  spendDust(dust() - d0);
+  // the run rng never feeds the pick: same seed, stubbed missions, same wave
+  const mk = () => { const bb: any = new Battle(arena, team(), makeStage(42, 'T'), mulberry32(42)); return bb; };
+  const x = mk(), y = mk();
+  y.missions.start = () => {};
+  x.spawnWave(0);
+  y.spawnWave(0);
+  ok(x.missions.list.length === 3 && x.rng() === y.rng(), 'missions leave seeded replays unchanged');
 }
 
 // --- the pause chip freezes the sim, a tap thaws it ---------------------------

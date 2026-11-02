@@ -1135,6 +1135,7 @@ export interface RunSave {
   ashArmed?: boolean;
   reviveUsed?: boolean; // the lab revive token is one-shot per run — a spent revive stays spent (v4+)
   ultIn?: number; // banked ult charge — shots until the team ultimate arms (v6+)
+  treasure?: number; // treasure balls opened so far this run
   score: number;
   starsRun?: number; // star pieces banked this run — the result screen's +N row (v4+)
   perksTaken: number;
@@ -1473,6 +1474,7 @@ export interface ClearCard {
   rank: ClearRank; pay: number; // pay = stars actually credited
   best: { rank: boolean; turns: boolean; combo: boolean }; // beat an existing record
   t0?: number; // main.ts stamps the first drawn frame
+  missions?: import('./missions').Mission[]; // the stop's goals, settled at clear
 }
 let memClear: Record<string, StageBest> = {};
 export function clearBests(): Record<string, StageBest> {
@@ -1495,6 +1497,26 @@ export function clearBests(): Record<string, StageBest> {
   }
   return bests;
 }
+// per-stage best count of stop missions done — unversioned, shape-checked
+let memMissions: Record<string, number> = {};
+export function missionBests(): Record<string, number> {
+  const out = { ...memMissions };
+  const raw = load<unknown>('pk_missions');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [stage, n] of Object.entries(raw)) if (Number.isInteger(n) && (n as number) >= 0 && (n as number) <= 3) out[stage] = n as number;
+  return out;
+}
+export function recordMissions(stage: number, n: number): boolean {
+  n = Math.min(3, Math.max(0, Math.floor(n)));
+  const all = missionBests();
+  const key = String(stage);
+  if ((all[key] ?? -1) >= n) return false;
+  all[key] = n;
+  memMissions = all;
+  store('pk_missions', all);
+  return true;
+}
+
 export function recordClear(stage: number, rank: ClearRank, turns: number, combo: number): { rank: boolean; turns: boolean; combo: boolean } {
   const all = clearBests();
   const key = String(stage);
