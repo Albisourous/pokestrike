@@ -1,18 +1,40 @@
 // MS stop missions: each battle stop draws up to 3 optional goals off its
 // own seeded stream. They tick live in a HUD chip and each pays a small
 // star-piece or dust bonus on the CLEAR card.
-import { itemSprite, loadItem } from '../core/assets';
+import { drawMon, itemSprite, loadItem } from '../core/assets';
+import { counterHint, countersGimmick } from './abilities';
+import { drawBackdrop, type Theme } from './bg';
+import { STAGE_GIMMICKS, bulletHints, type SpeciesDef } from './data';
+import { STAGE_GIMMICKS2, countersGimmick2 } from './gimmicks2';
+import { fitFontB, fitWrap, monShadow, roundRect } from './screens';
+import { TYPE_COLOR } from './types';
 import { mulberry32 } from '../core/rng';
 import { addDust, recordMissions } from './meta';
 import type { PokeType } from './types';
-import { INK, INK_SOFT, PAPER, font, fontB, uiWindow } from './ui';
+import { GOLD, INK, INK_FAINT, INK_SOFT, PAPER, PARCH, font, fontB, uiPanel, uiWindow } from './ui';
 
 export type MissionId = 'par' | 'multiko' | 'weak3' | 'nofaint' | 'ult' | 'finish';
 export type MissionState = 'live' | 'done' | 'fail';
 export interface Mission { id: MissionId; label: string; state: MissionState; pay: { kind: 'stars' | 'dust'; n: number }; type?: PokeType }
 export interface StopStats { shots: number; par: number; weak: number; faints: number }
 export const MISSION_N = 3;
-export const PREVIEW_T = 3.2; // seconds the stop-start mission card holds
+const CARD_FADE = 0.2; // s the quest card takes to fade in and out
+export interface StopCard { theme: Theme; name: string; sub: string; foes: SpeciesDef[]; team: SpeciesDef[] }
+// the same item art the arena props use where one exists
+const GIMMICK_ICON: Record<string, string> = {
+  heal: 'oran-berry', gravity: 'hard-stone', warp: 'twisted-spoon', boost: 'quick-claw', power: 'muscle-band',
+  mine: 'poison-barb', 'damage-wall': 'rocky-helmet', barrier: 'bright-powder', DRAIN: 'big-root', SAFEGUARD: 'lum-berry',
+};
+interface GimmickCell { label: string; hint?: string; icon?: string; mon?: number; color: string; counters: SpeciesDef[] }
+function gimmickCells(c: StopCard): GimmickCell[] {
+  const g = STAGE_GIMMICKS[c.theme];
+  const out: GimmickCell[] = [{ label: g.label, hint: counterHint(g).split(' · ')[1], icon: GIMMICK_ICON[g.kind], color: TYPE_COLOR[g.type], counters: c.team.filter((d) => countersGimmick(d, g)) }];
+  const g2 = STAGE_GIMMICKS2[c.theme];
+  // Pidgeot blows the wind strip, Magnemite holds the laser posts
+  if (g2) out.push({ label: g2.label, hint: g2.hint, mon: g2.kind === 'wind' ? 18 : 81, color: TYPE_COLOR[g2.type], counters: c.team.filter((d) => countersGimmick2(d, g2)) });
+  for (const h of new Set(c.foes.flatMap((f) => bulletHints(c.theme, f.type)))) out.push({ label: h, icon: GIMMICK_ICON[h], color: INK_FAINT, counters: [] });
+  return out;
+}
 export const MISSION_PAY: Record<MissionId, Mission['pay']> = {
   par: { kind: 'stars', n: 2 },
   multiko: { kind: 'dust', n: 4 },
@@ -60,11 +82,22 @@ export class Missions {
   private t0 = -99;
   private ultUsed = false;
   private banked = false;
+  private cardOn = false;
+  private cardOut = -99;
+  private cardDrawn = -99; // a card nobody has seen can't eat a tap (headless runs)
 
   start(seed: number, stage: number, teamTypes: PokeType[], ultReady: boolean, now: number, off = false) {
     this.list = off ? [] : pickMissions(seed, stage, teamTypes, ultReady);
     this.t0 = now;
     this.ultUsed = this.banked = false;
+    this.cardOn = this.list.length > 0;
+  }
+  // tap anywhere drops the quest card; true = the tap was spent on it
+  dismiss(now: number) {
+    if (!this.cardOn || now - this.cardDrawn > 0.5) return false;
+    this.cardOn = false;
+    this.cardOut = now;
+    return true;
   }
   ult() {
     this.ultUsed = true;
@@ -104,32 +137,14 @@ export class Missions {
   }
 
   // the stop-start card, then a small chip of three ticks under the HUD
-  draw(ctx: CanvasRenderingContext2D, now: number, arena: { x: number; y: number; w: number; h: number }, s: StopStats) {
+  draw(ctx: CanvasRenderingContext2D, now: number, arena: { x: number; y: number; w: number; h: number }, s: StopStats, card?: StopCard) {
     if (!this.list.length) return;
     this.tick(s);
+    if (this.cardOn && !card) this.dismiss(now); // the shot left aim without a tap (keys)
     ctx.save();
-    const age = now - this.t0;
-    if (age < PREVIEW_T) {
-      const a = Math.min(1, age / 0.2, (PREVIEW_T - age) / 0.4);
-      ctx.globalAlpha = a;
-      const r = { x: arena.x + 40, y: arena.y + arena.h * 0.58, w: arena.w - 80, h: 40 + this.list.length * 40 };
-      uiWindow(ctx, r, { rad: 10 });
-      ctx.textAlign = 'center';
-      ctx.font = font(14);
-      ctx.fillStyle = INK;
-      ctx.fillText('MISSIONS', r.x + r.w / 2, r.y + 28);
-      this.list.forEach((m, i) => {
-        const y = r.y + 62 + i * 40;
-        ctx.textAlign = 'left';
-        ctx.font = fontB(20);
-        ctx.fillStyle = INK;
-        ctx.fillText(m.label, r.x + 20, y);
-        ctx.textAlign = 'right';
-        ctx.fillStyle = INK_SOFT;
-        ctx.fillText(`+${m.pay.n}`, r.x + r.w - 46, y);
-        icon(ctx, payIcon(m), r.x + r.w - 28, y - 7, 26);
-      });
-    }
+    const a = this.cardOn ? Math.min(1, (now - this.t0) / CARD_FADE) : 1 - (now - this.cardOut) / CARD_FADE;
+    if (card && a > 0) drawStopCard(ctx, card, this.list, arena, a, now);
+    if (card && this.cardOn) this.cardDrawn = now;
     const c = { x: arena.x + arena.w - 98, y: arena.y + 8, w: 90, h: 30 };
     ctx.globalAlpha = 0.92;
     uiWindow(ctx, c, { rad: 8, tint: PAPER });
@@ -160,5 +175,86 @@ export function drawMissionTicks(ctx: CanvasRenderingContext2D, list: Mission[],
     ctx.fillStyle = done ? '#2f9a3a' : INK_SOFT;
     ctx.fillText(done ? `✓ +${m.pay.n}` : '✗', x + 30, ry);
   });
+  ctx.restore();
+}
+
+// MS quest card: court strip with the foes on it, gimmick icons with the
+// team's counters beside each, three mission chips. Held until a tap.
+function drawStopCard(ctx: CanvasRenderingContext2D, c: StopCard, list: Mission[], arena: { x: number; y: number; w: number; h: number }, alpha: number, now: number) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(10,14,30,0.6)';
+  ctx.fillRect(arena.x, arena.y, arena.w, arena.h);
+  const r = { x: arena.x + 12, y: arena.y + 136, w: arena.w - 24, h: 436 };
+  const ir = uiPanel(ctx, r, c.name.toUpperCase(), { sub: c.sub });
+  ctx.textAlign = 'center';
+
+  const strip = { x: ir.x, y: ir.y, w: ir.w, h: 104 };
+  drawBackdrop(ctx, strip, 8, c.theme);
+  const foes = c.foes.slice(0, 5);
+  const step = Math.min(84, strip.w / Math.max(1, foes.length));
+  foes.forEach((f, i) => {
+    const fx = strip.x + strip.w / 2 + (i - (foes.length - 1) / 2) * step;
+    monShadow(ctx, fx, strip.y + 42, 64);
+    drawMon(ctx, f.id, fx, strip.y + 48, 72);
+  });
+
+  const head = (t: string, y: number) => {
+    ctx.textAlign = 'left';
+    ctx.font = fontB(12);
+    ctx.fillStyle = INK_FAINT;
+    ctx.fillText(t, ir.x + 2, y);
+    ctx.textAlign = 'center';
+  };
+  const cells = gimmickCells(c);
+  const gy = strip.y + strip.h + 24;
+  head('GIMMICKS', gy);
+  const gw = (ir.w - (cells.length - 1) * 8) / cells.length;
+  cells.forEach((g, i) => {
+    const x = ir.x + i * (gw + 8), y = gy + 8, mid = x + gw / 2;
+    roundRect(ctx, x, y, gw, 92, 8);
+    ctx.fillStyle = 'rgba(42,36,64,0.08)';
+    ctx.fill();
+    ctx.fillStyle = g.color;
+    ctx.fillRect(x + 8, y + 88, gw - 16, 3);
+    const mons = g.counters.slice(0, 2);
+    const extra = g.counters.length - mons.length;
+    let px = mid - (mons.length * 42 + (extra ? 20 : 0)) / 2;
+    if (g.mon) drawMon(ctx, g.mon, px, y + 24, 52);
+    else if (g.icon) icon(ctx, g.icon, px, y + 24, 40);
+    mons.forEach((d) => drawMon(ctx, d.id, (px += 42), y + 24, 48));
+    if (extra) {
+      ctx.font = fontB(12);
+      ctx.fillStyle = INK_SOFT;
+      ctx.fillText(`+${extra}`, px + 28, y + 29);
+    }
+    ctx.fillStyle = INK;
+    fitFontB(ctx, g.label, 14, gw - 10);
+    ctx.fillText(g.label, mid, y + 58);
+    if (g.hint) {
+      ctx.fillStyle = INK_SOFT;
+      fitWrap(ctx, g.hint, gw - 10, 11, 2).forEach((l, li) => ctx.fillText(l, mid, y + 73 + li * 12));
+    }
+  });
+
+  const my = gy + 8 + 92 + 26;
+  head('MISSIONS', my);
+  const mw = (ir.w - 16) / 3;
+  list.slice(0, 3).forEach((m, i) => {
+    const x = ir.x + i * (mw + 8), y = my + 8;
+    uiWindow(ctx, { x, y, w: mw, h: 62 }, { rad: 8, dark: true });
+    ctx.fillStyle = PARCH;
+    const lines = fitWrap(ctx, m.label, mw - 14, 13, 2);
+    lines.forEach((l, li) => ctx.fillText(l, x + mw / 2, y + (lines.length > 1 ? 20 : 27) + li * 14));
+    ctx.font = fontB(13);
+    ctx.fillStyle = GOLD;
+    ctx.fillText(`+${m.pay.n}`, x + mw / 2 - 10, y + 52);
+    icon(ctx, payIcon(m), x + mw / 2 + 14, y + 47, 20);
+  });
+
+  ctx.globalAlpha = alpha * (0.6 + 0.4 * Math.sin(now * 5));
+  ctx.font = font(10);
+  ctx.fillStyle = INK;
+  ctx.fillText('TAP TO START', r.x + r.w / 2, r.y + r.h - 16);
   ctx.restore();
 }

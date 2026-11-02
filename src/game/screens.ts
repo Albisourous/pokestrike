@@ -572,7 +572,7 @@ const roleTag = (def: SpeciesDef) => {
 // short enough that a third line never earns its keep
 // greedy wrap into at most n lines, stepping the font down until all of it
 // fits: card blurbs never get cut or ellipsized
-function fitWrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, px: number, n: number, minPx = 9) {
+export function fitWrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, px: number, n: number, minPx = 9) {
   for (let size = px; ; size -= 0.5) {
     ctx.font = fontB(size);
     const lines: string[] = [];
