@@ -183,7 +183,10 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
   // stages 1-3 are seeded — stg.name is their biome; deeper rows roll off
   // runRng mid-run, so the seed can't name them and the plate stays honest
   plate(ctx, S.x + 12, S.y + 12, `STAGE ${cont ? Math.max(1, cont.stage) : 1} · ${!cont || cont.stage <= stg.waves.length ? stg.name.toUpperCase() : 'IN PROGRESS'}`);
-  plate(ctx, S.x + S.w - 12, S.y + 12, `${stg.waves.flat().length} FOES`, true);
+  // stg.waves only ships the seeded 3 — past them the count would lie, and
+  // the STAGE plate's IN PROGRESS already covers the deep park
+  if (!cont || cont.stage <= stg.waves.length)
+    plate(ctx, S.x + S.w - 12, S.y + 12, `${stg.waves.flat().length} FOES`, true);
   // records plate: the one-more-run hook (rank, best, ball tier, streak,
   // boost) — a fresh save has no records to hook, so the plate stays home
   const b = best();

@@ -149,7 +149,11 @@ export function drawRaidLobby(ctx: CanvasRenderingContext2D, t: number, fight: R
 
   ctx.fillStyle = INK;
   ctx.fillText('YOUR LV30 LOANERS · FIXED TEAM', 48, 560);
-  raidTeam(now).forEach((def, i) => {
+  const team = raidTeam(now);
+  // counters wear their strike type + mult over the card — the WEAK TO
+  // line's promise made visible on the loaners that cash it
+  const counterOf = new Map(raidCounters(boss, team.map((d) => d.id)).map((h) => [h.mon.id, h]));
+  team.forEach((def, i) => {
     const x = 48 + i * 148;
     uiWindow(ctx, { x, y: 568, w: 140, h: 48 }, { shadow: false });
     mon(ctx, def, x + 24, 592, 44);
@@ -157,6 +161,14 @@ export function drawRaidLobby(ctx: CanvasRenderingContext2D, t: number, fight: R
     ctx.textAlign = 'left';
     ctx.font = fontB(13);
     ctx.fillText(def.name, x + 48, 598, 88);
+    const hit = counterOf.get(def.id);
+    if (hit) {
+      const strike = strikeType(def, boss);
+      ctx.textAlign = 'right';
+      ctx.font = fontB(11);
+      ctx.fillStyle = TYPE_COLOR[strike];
+      ctx.fillText(`${strike.toUpperCase()} ×${hit.mult}`, x + 134, 584);
+    }
   });
 
   item(ctx, 'star-piece', 48, 676, 28);

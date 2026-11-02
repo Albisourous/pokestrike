@@ -78,6 +78,7 @@ import {
   HELP_CLOSE_HIT,
   HELP_PAGE_COUNT,
   DEX_BTN,
+  DEX_DETAIL_R,
   DEX_STATS,
   drawDex,
   drawDexDetail,
@@ -1738,18 +1739,25 @@ canvas.addEventListener('pointerup', (e) => {
       else if (labOpen) labTap(p);
       else if (dexOpen || dexPick != null) {
         // the detail card's buy pill first — it spends dust, so a tap there
-        // sells instead of closing; then a row pick, then tap-to-close
+        // sells instead of closing; then its own rects, then a register pick
         const buyR = dexPick != null ? dexBuyRect(dexPick) : null;
         if (buyR && inRect(p.x, p.y, buyR) && dexPick != null) {
           const d = speciesById(dexPick);
           if (d) sparkBuy(d);
-        } else if (dexPick != null && inRect(p.x, p.y, DEX_STATS)) {
-          // the fold's STATS row flips the deep panel instead of closing
-          dexStatsFlip(dexPick);
-          sfx('ui');
         } else if (dexPick != null) {
-          dexPick = null;
-          sfx('ui');
+          if (inRect(p.x, p.y, DEX_STATS)) {
+            // the fold's STATS row flips the deep panel instead of closing
+            dexStatsFlip(dexPick);
+            sfx('ui');
+          } else if (
+            // inside dead space is modal like the siblings — the drawn ×
+            // chip or a tap past the card's edge dismisses, nothing else
+            inRect(p.x, p.y, { x: DEX_DETAIL_R.x + DEX_DETAIL_R.w - 48, y: DEX_DETAIL_R.y + 12, w: 40, h: 40 }) ||
+            !inRect(p.x, p.y, DEX_DETAIL_R)
+          ) {
+            dexPick = null;
+            sfx('ui');
+          }
         } else {
           const pick = dexRowAt(p.x, p.y, dexScroll);
           if (pick != null) {

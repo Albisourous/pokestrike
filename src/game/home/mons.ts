@@ -715,5 +715,5 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
   }
   ctx.font = fontB(11);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('TAP TO CLOSE', cx, r.y + r.h - 12);
+  ctx.fillText('OUTSIDE CLOSES', cx, r.y + r.h - 12);
 }
