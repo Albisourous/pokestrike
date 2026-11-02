@@ -639,3 +639,66 @@ KNOWN LEFTOVERS (conscious skips, not bugs)
   ULT — AGAIN! tag (the other three drop), the fire cinema suppresses
   labels entirely, and the TROPHY banner now spawns 38px deeper so its
   52px rise parks below the N-LEFT chip instead of stamping under it.
+
+## Session 2026-11-02 — friend-feedback sprint (onboarding + legibility)
+
+Playtest report driving this session: "wayyy too much information, needs
+90% simpler"; "I read everything then ignored it and spammed"; "won 4
+levels in LA spamming mindlessly — random actions shouldn't win"; "how do
+enemies deal damage / what is turn priority". Four parallel scouts
+(onboarding, info density, combat legibility, stability) built the
+backlog; builders run one iteration each, I verify + commit + push.
+
+- 5dd6481 pushed: first-boot diet — the 27-page manual no longer
+  auto-opens on boot (stays under ?), the coached run skips the charm
+  board and the missions stop card (was eating the player's first tap),
+  fresh-save CLIMB tab sheds the locked ascension ladder + FREE PULL /
+  RAID doors behind `freshClimb()` (draw + hit-test share the gate).
+- a480a00 pushed: coach guardrails — `coachDim` evenodd scrim punches
+  soft holes over the actors during beats 0-1 (destination-out would have
+  erased the court art); `sweetSpot` returns the whole gold band on the
+  coached first release (can't whiff); stray taps during beat 0 can't
+  open the scout card. The `!` arrival tell moved under the scrim.
+
+- 471b4fe pushed: hardening batch — sprite 404s can't dead-boot (cached
+  1×1 placeholder mirrors loadItem), the crash card sheds on the next
+  clean frame instead of covering a recovered game forever, save-derived
+  ids (echo/bond/run/lead/hof) validate through speciesById + async
+  loadSprite calls carry .catch, 4 spawn-slot destructures + map-node
+  derefs guarded.
+- 34aac76 pushed: threat legibility — fodder spawns on staggered clocks
+  (si%3, zero rng consumed so seeds hold), the multiplier stack extracted
+  to foeHitMult so the scout card's HITS ~N and the leash's -N tag price
+  the same path the orb pays (flat flag, shown = landed), countdown
+  digits get a dark disc at <=2, plain volley attackers name themselves,
+  lowest clock wears ACTS FIRST during intro.
+- d2c4949 pushed: THE spam-win fix — foeAtk never read e.pow, so enemy
+  offense was flat while player HP scaled ~5x. foeAtk/foeSpa now multiply
+  sqrt(e.pow): Lv5 fodder unchanged, Lv50 ~x2.5, Lv85 ~x3.2. Boss
+  heavies + clock moves + signatures all routed through. Smoke asserts
+  the lv5/50 gap.
+- 883b6be pushed: hidden levers read aloud — HOT rail on the release
+  meter marks the >450 u/s momentum zone, COMBO names its +N% (real ramp
+  incl. metronome/electric), PERFECT! names its +20% (suppressed on
+  quietOpener), first 1-clock a run fires the down-it-before-0 ribbon.
+- c2bd6f1 pushed: battle HUD declutter — turn cue is a NEXT-only cell
+  (was triple-redundant), one ULT prompt not four, per-attacker FOE TURN
+  banners gone, bench move-names + STRIKES AT 0 text cut, callouts cap
+  8->5 with BLOCKED/GUARDED/MISS/CD-1 muted on waves <2, intro foe-tag
+  flood skipped (pull-relevant tag stays).
+- 89f8414 pushed: menu declutter — coached-run draft cards go thin
+  (sprite/name/type/move; vets keep all 11 fields), dex detail folds
+  stats+bond+traits behind a STATS row, fresh CLIMB drops the zeroed
+  records plate, shop odds strip + RARE+ IN text gone (pips carry pity),
+  raid BOX COUNTERS row deleted, result findings cap at 6 + N MORE,
+  reward's duplicate stage line cut.
+- fd2b4a3 pushed: map quiet — legend only on early stops, field log drops
+  to its newest line; stop cards auto-dismiss after 3 viewings (pk_stops
+  counts the show, taps inside the 1.5s window still dismiss).
+- 1e9f6c2 pushed: mop-up — raid-door mon draw guarded, all-corrupt echo
+  reads as none, fractional 1-clocks still earn the warn tick.
+- Visual pass (playwright, seed 7): fresh title verified clean, thin
+  draft card verified, coach scrim + ghost pull + ally-route spotlight
+  verified live, NEXT cell + HOT rail verified mid-drag, vet title/draft
+  verified full. Dex fold unverifiable on an empty dex (ghost rows don't
+  open cards) — code-verified only.
