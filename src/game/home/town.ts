@@ -29,18 +29,25 @@ type Rect = { x: number; y: number; w: number; h: number };
 
 const LAB_SPRITE: TileRect = [397, 69, 90, 76];
 const HALL_SPRITE: TileRect = [684, 93, 90, 87];
-const TOWER_SPRITE: TileRect = [1440, 554, 90, 160];
+const TOWER_BODY_SPRITE: TileRect = [1440, 554, 90, 97];
+const TOWER_DOOR_SPRITE: TileRect = [1470, 670, 30, 32];
+const TOWER_BODY_H = TOWER_BODY_SPRITE[3] * TOWER_S;
+const TOWER_DOOR_W = TOWER_DOOR_SPRITE[2] * TOWER_S;
+const TOWER_DOOR_H = TOWER_DOOR_SPRITE[3] * TOWER_S;
+const TOWER_OVERLAP = 4;
+const TOWER_H = TOWER_BODY_H + TOWER_DOOR_H - TOWER_OVERLAP;
 const CAFE_ROOF: TileRect = [865, 327, 28, 28];
 const CAFE_CAP: TileRect = [863, 355, 32, 7];
 const CAFE_FRONT: TileRect = [863, 362, 110, 36];
 const LAB = { x: 80, y: 147, w: LAB_SPRITE[2] * S, h: LAB_SPRITE[3] * S };
 const HALL = { x: 314.5, y: 130.5, w: HALL_SPRITE[2] * S, h: HALL_SPRITE[3] * S };
 const BOARD = { x: 78, y: 474.5, w: CAFE_FRONT[2] * S, h: (CAFE_ROOF[3] + CAFE_CAP[3] + CAFE_FRONT[3]) * S };
-const TOWER = { x: 315, y: 381, w: TOWER_SPRITE[2] * TOWER_S, h: TOWER_SPRITE[3] * TOWER_S };
+const TOWER = { x: 315, y: 581 - TOWER_H, w: TOWER_BODY_SPRITE[2] * TOWER_S, h: TOWER_H };
+const TOWER_DOOR_X = TOWER.x + (TOWER_DOOR_SPRITE[0] + TOWER_DOOR_SPRITE[2] / 2 - TOWER_BODY_SPRITE[0]) * TOWER_S;
 const LAB_PLATE = { x: 55, y: 322, w: 120, h: 46 };
 const HALL_PLATE = { x: 322, y: 322, w: 120, h: 46 };
 const BOARD_PLATE = { x: 101, y: 641, w: 120, h: 46 };
-const TOWER_PLATE = { x: 311.25, y: 641, w: 120, h: 46 };
+const TOWER_PLATE = { x: TOWER_DOOR_X - 60, y: 641, w: 120, h: 46 };
 
 const union = (a: Rect, b: Rect): Rect => {
   const x = Math.min(a.x, b.x);
@@ -53,7 +60,7 @@ export const TOWN_DOORS = {
   lab: LAB.x + (420 - LAB_SPRITE[0]) * S,
   hall: HALL.x + (729 - HALL_SPRITE[0]) * S,
   jobBoard: BOARD.x + (918 - CAFE_FRONT[0]) * S,
-  trophies: TOWER.x + (1485 - TOWER_SPRITE[0]) * TOWER_S,
+  trophies: TOWER_DOOR_X,
 };
 export const TOWN_PLATES = {
   lab: LAB_PLATE,
@@ -208,12 +215,22 @@ function drawPathNetwork(ctx: CanvasRenderingContext2D) {
   }
 }
 
-function drawBuilding(ctx: CanvasRenderingContext2D, lot: Rect, sprite: TileRect) {
+function drawBuildingShadow(ctx: CanvasRenderingContext2D, lot: Rect) {
   ctx.fillStyle = 'rgba(32,48,28,0.24)';
   ctx.beginPath();
   ctx.ellipse(lot.x + lot.w / 2, lot.y + lot.h - 2, lot.w * 0.43, 7, 0, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function drawBuilding(ctx: CanvasRenderingContext2D, lot: Rect, sprite: TileRect) {
+  drawBuildingShadow(ctx, lot);
   drawTile(ctx, sprite, lot.x, lot.y, lot.w, lot.h);
+}
+
+function drawTower(ctx: CanvasRenderingContext2D) {
+  drawBuildingShadow(ctx, TOWER);
+  drawTile(ctx, TOWER_BODY_SPRITE, TOWER.x, TOWER.y, TOWER.w, TOWER_BODY_H);
+  drawTile(ctx, TOWER_DOOR_SPRITE, TOWER_DOOR_X - TOWER_DOOR_W / 2, TOWER.y + TOWER_BODY_H - TOWER_OVERLAP, TOWER_DOOR_W, TOWER_DOOR_H);
 }
 
 function drawCafe(ctx: CanvasRenderingContext2D) {
@@ -332,7 +349,7 @@ function bakeTown(): HTMLCanvasElement | null {
   drawBuilding(ctx, LAB, LAB_SPRITE);
   drawBuilding(ctx, HALL, HALL_SPRITE);
   drawCafe(ctx);
-  drawBuilding(ctx, TOWER, TOWER_SPRITE);
+  drawTower(ctx);
   drawYardProps(ctx);
   drawTile(ctx, SIGN, 459, 665, SIGN[2] * S, SIGN[3] * S);
   ctx.imageSmoothingEnabled = false;
