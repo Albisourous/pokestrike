@@ -1891,7 +1891,7 @@ export const PULL1_BTN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 198, w: 218
 export const PULL10_BTN = { x: HATCH_PANEL.x + 246, y: HATCH_PANEL.y + 198, w: 218, h: 64 };
 const PITY_WIN = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 272, w: HATCH_PANEL.w - 32, h: 44 };
 const RATE_BAND = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 320, w: HATCH_PANEL.w - 32, h: 48 };
-const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 406, w: HATCH_PANEL.w - 32, h: 394 };
+const SPARK_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + 406, w: HATCH_PANEL.w - 32, h: 388 };
 const SPARK_COLS = 4;
 const SPARK_CELL_W = SPARK_VIEW.w / SPARK_COLS;
 const SPARK_CELL_H = 132;
@@ -2089,7 +2089,7 @@ export function drawHatch(
   // price as a dark plaque inside the pill so it reads at thumb distance.
   // A daily free pull turns ×1 gold and rings it in breathing light
   pill(ctx, PULL1_BTN, {
-    c: info.free ? GOLD : INK,
+    c: info.free ? GOLD : PARCH,
     cd: info.free ? '#c8a44d' : '#aab0c8',
     tc: INK,
     label: '',
@@ -2356,7 +2356,7 @@ export function drawHatch(
   ctx.textAlign = 'center';
   ctx.font = fontB(10);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('pulled or sparked mons join the dex + future drafts · tap outside to close', W / 2, r.y + r.h - 14);
+  ctx.fillText('pulled or sparked mons join the dex + future drafts · tap outside to close', W / 2, r.y + r.h - 12);
   }
 
   // the pull show rides on top — dim the shop, modal carries the reveal
@@ -4246,8 +4246,8 @@ export function drawClearCard(ctx: CanvasRenderingContext2D, c: ClearCard, age: 
     ctx.textAlign = 'left';
     ctx.font = fontB(18);
     ctx.fillStyle = INK_SOFT;
-    ctx.fillText('RANK', cx - 6, ry - 48);
-    ctx.font = font(64);
+    ctx.fillText('RANK', cx - 6, ry - 54);
+    ctx.font = font(56);
     ctx.lineWidth = 6;
     ctx.strokeStyle = INK;
     ctx.strokeText(c.rank, cx - 10, ry + 46);
@@ -5057,7 +5057,7 @@ export type TasksHit = { kind: 'tab'; i: number } | { kind: 'claim'; i: number }
 
 const TASKS_TAB_H = 44;
 const TASKS_TAB_GAP = 8;
-const TASKS_BAND = { x: TASKS_PANEL.x + 4, y: TASKS_PANEL.y + 14 + TASKS_TAB_H + 10, w: TASKS_PANEL.w - 8, h: 44 };
+const TASKS_BAND = { x: TASKS_PANEL.x + 4, y: TASKS_PANEL.y + 22 + TASKS_TAB_H + 2, w: TASKS_PANEL.w - 8, h: 44 };
 const TASKS_ROWS_Y = TASKS_BAND.y + TASKS_BAND.h + 12;
 // the board splits in two: task cards share the upper room evenly (3 dailies
 // breathe as much as 4 weeklies), the bag shelf anchors the bottom
@@ -5073,7 +5073,7 @@ const TASKS_CLAIM_H = 48;
 // two equal pills across the panel top — the rail, squashed into a row
 export function tasksTabRect(i: number) {
   const w = (TASKS_PANEL.w - 28 - TASKS_TAB_GAP) / 2;
-  return { x: TASKS_PANEL.x + 14 + i * (w + TASKS_TAB_GAP), y: TASKS_PANEL.y + 14, w, h: TASKS_TAB_H };
+  return { x: TASKS_PANEL.x + 14 + i * (w + TASKS_TAB_GAP), y: TASKS_PANEL.y + 22, w, h: TASKS_TAB_H };
 }
 
 function taskRowRect(i: number, n: number) {

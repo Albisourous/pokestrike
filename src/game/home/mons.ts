@@ -464,13 +464,13 @@ export function drawDex(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.textAlign = 'center';
   if (dexN >= SHINY_CHARM_AT) {
     ctx.fillStyle = GOLD;
-    ctx.fillText('★ SHINY CHARM ON · x2 SHINIES', r.x + r.w / 2, r.y + r.h - 26);
+    ctx.fillText('★ SHINY CHARM ON · x2 SHINIES', r.x + r.w / 2, r.y + r.h - 32);
   } else {
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`${SHINY_CHARM_AT - dexN} TO SHINY CHARM · x2 SHINIES`, r.x + r.w / 2, r.y + r.h - 26);
+    ctx.fillText(`${SHINY_CHARM_AT - dexN} TO SHINY CHARM · x2 SHINIES`, r.x + r.w / 2, r.y + r.h - 32);
   }
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText('TAP A MON FOR ITS CARD · OUTSIDE CLOSES', r.x + r.w / 2, r.y + r.h - 14);
+  ctx.fillText('TAP A MON FOR ITS CARD · OUTSIDE CLOSES', r.x + r.w / 2, r.y + r.h - 18);
 }
 
 function tierColorFor(id: number) {

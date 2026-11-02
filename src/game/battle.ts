@@ -27,9 +27,9 @@ import type { PokeType, Weather } from './types';
 import { STAGE_GIMMICKS, BULLET_GIMMICKS, DRAIN_MOVE, DRAIN_PCT, isGentleRoom, bulletHints, type BulletGimmick, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
 import { startEvo } from './evolve';
-import { installField2, stepField2, drawField2, drawField2Floor, blockField2, labelField2, drawField2Hint, type Field2, type Field2Fx } from './gimmicks2';
+import { installField2, stepField2, drawField2, drawField2Floor, blockField2, labelField2, type Field2, type Field2Fx } from './gimmicks2';
 import { abilityNotice } from './abilities';
-import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, abilityLabel, weatherSpeed, resetAbilities } from './abilities';
+import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, abilityLabel, weatherSpeed, resetAbilities, countersGimmick } from './abilities';
 import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
@@ -61,7 +61,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, fitFontB, roundRect, button, wrap2, MAP_MENU, drawCounterHint, drawPauseCard } from './screens';
+import { font, fontB, fitFont, fitFontB, roundRect, button, wrap2, MAP_MENU, drawPauseCard } from './screens';
 
 export interface Rect {
   x: number;
@@ -7923,6 +7923,15 @@ export class Battle {
     this.drawWeather(ctx);
 
     this.lblN = 0;
+    // turn-clock digits claim their boxes first so foe tags push off them
+    for (const u of this.enemies) {
+      if (u.dead || this.lblN >= LABEL_SLOTS) continue;
+      const at = this.lblN++ * 4, cx = u.x + u.r - 2, cy = u.y - u.r + 7;
+      this.lblBox[at] = cx - 16;
+      this.lblBox[at + 1] = cy - 16;
+      this.lblBox[at + 2] = cx + 16;
+      this.lblBox[at + 3] = cy + 3;
+    }
     this.drawWallWarnings(ctx);
     this.treasure.draw(ctx, this.time);
     labelField2(this.field2, this.introAlpha(), (t, x, y, c, al) => this.fieldLabel(ctx, t, x, y, c, al));
@@ -9468,13 +9477,16 @@ export class Battle {
         ctx.fillStyle = TYPE_COLOR[n.ttype ?? 'normal'];
         ctx.fillText(ty, nx, ny - cell * 0.95 + 12);
         const gimmick = STAGE_GIMMICKS[TYPE_THEME[n.ttype ?? 'normal']];
-        const glabel = [gimmick.label, ...bulletHints(TYPE_THEME[n.ttype ?? 'normal'], n.ttype ?? 'normal')].join(' · ');
-        ctx.font = fontB(10);
-        ctx.strokeText(glabel, nx, ny - cell * 0.95 + 25);
-        ctx.fillStyle = TYPE_COLOR[gimmick.type];
-        ctx.fillText(glabel, nx, ny - cell * 0.95 + 25);
-        drawCounterHint(ctx, gimmick, this.players.filter((p) => !p.dead).map((p) => p.def), nx, ny - cell * 0.95 + 40, cell * 4.5);
-        drawField2Hint(ctx, TYPE_THEME[n.ttype ?? 'normal'], this.players.filter((p) => !p.dead).map((p) => p.def), nx, ny - cell * 0.95 + 68, cell * 4.5);
+        // three lines max (name · type · one hint) so nothing draws over the building:
+        // the team's counter mons if any, else the court gimmick
+        const counters = this.players.filter((p) => !p.dead && countersGimmick(p.def, gimmick));
+        const hint = counters.length
+          ? `${counters[0].def.name.toUpperCase()}${counters.length > 1 ? ` +${counters.length - 1}` : ''} HELPS`
+          : [gimmick.label, ...bulletHints(TYPE_THEME[n.ttype ?? 'normal'], n.ttype ?? 'normal')].join(' · ');
+        fitFontB(ctx, hint, 10, cell * 4.5);
+        ctx.strokeText(hint, nx, ny - cell * 0.95 + 25);
+        ctx.fillStyle = counters.length ? '#ffd84d' : TYPE_COLOR[gimmick.type];
+        ctx.fillText(hint, nx, ny - cell * 0.95 + 25);
       }
     });
     // the trainer draws last — she walks in front of the stops, and at
@@ -10467,7 +10479,7 @@ export class Battle {
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#101826';
         ctx.lineWidth = 3;
-        const reflectY = u.y + (u.minion ? u.r + 36 : u.r * 1.65);
+        const reflectY = this.place(u.x, u.y + (u.minion ? u.r + 36 : u.r * 1.65), ctx.measureText(`REFLECT ${u.shieldN}`).width, 9, 2, false);
         ctx.strokeText(`REFLECT ${u.shieldN}`, u.x, reflectY);
         ctx.fillStyle = TYPE_COLOR[u.def.type];
         ctx.fillText(`REFLECT ${u.shieldN}`, u.x, reflectY);
