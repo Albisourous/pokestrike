@@ -23,6 +23,8 @@ import {
   drawClearCard,
   draftCardRect,
   perkCardRect,
+  popPick,
+  drawPickPop,
   evoCardRect,
   EVO_KEEP,
   boxSlotRect,
@@ -489,6 +491,7 @@ const rewardPick = (i: number) => {
     return;
   }
   statOffer('perks', ids, battle.rewardOffers[i].id);
+  popPick(perkCardRect(i, battle.rewardOffers.length), t, { perk: battle.rewardOffers[i] });
   battle.pickPerk(i);
   inputLockT = t + 0.25; // reward → map: the route taps shouldn't catch this tap's twin
 };
@@ -533,6 +536,7 @@ const draftPick = (i: number) => {
   if (i >= offers.length) return;
   sfx('ui');
   statOffer('draft', offers.map((o) => draftPool[o].id), draftPool[offers[i]].id);
+  popPick(draftCardRect(i), t, { mon: draftDef(offers[i]) });
   draft.picked.push(offers[i]);
   offerCache = null;
   respinDraft(); // next round spins a fresh board
@@ -2426,6 +2430,7 @@ function render() {
       if (result) drawResult(ctx, result, resultExtra, share, t, t - sceneT0);
       break;
   }
+  drawPickPop(ctx, t);
   // the ? chip reads the same gate as the hit-test — dealt boards included;
   // the mute chip stays between-fights; the pager floats over any scene
   if (helpChipUp()) drawHelpChip(ctx);
