@@ -1,7 +1,7 @@
 import { mulberry32 } from '../core/rng';
 import { sfx } from '../core/audio';
 import { addDust } from './meta';
-import { ENEMY_DB, ELITES } from './data';
+import { ENEMY_DB, ELITES, ROOM_LAYOUTS, isGentleRoom } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { LV_CAP } from './stats';
 import { MOVE_ANIM, ring, spawnAnim } from './anim';
@@ -50,7 +50,7 @@ export class Flee {
   private ny = 0.3;
   private units = new Map<FleeUnit, FleeState>();
 
-  plan(seed: number, stage: number, battles: number, off: boolean): boolean {
+  plan(seed: number, stage: number, battles: number, off: boolean, gentle1 = false): boolean {
     this.at = 0;
     this.stage = stage;
     this.picked = null;
@@ -59,7 +59,7 @@ export class Flee {
     this.rng = mulberry32(seed);
     if (off || stage < FLEE_FROM) return false;
     for (let battle = 1; battle <= battles; battle++) {
-      if (this.rng() >= FLEE_RATE) continue;
+      if (this.rng() >= FLEE_RATE || (battle === 1 && gentle1)) continue;
       this.at = battle;
       const roll = this.rng() * 100;
       const id = roll < SPECIES[0].weight ? SPECIES[0].id : roll < SPECIES[0].weight + SPECIES[1].weight ? SPECIES[1].id : SPECIES[2].id;
@@ -71,6 +71,12 @@ export class Flee {
       return true;
     }
     return false;
+  }
+
+  room(battle: number, grid: string[]): string[] {
+    if (this.at !== battle || !isGentleRoom(grid)) return grid;
+    const pool = ROOM_LAYOUTS.slice(3);
+    return pool[Math.floor(this.rng() * pool.length)];
   }
 
   spawnAt(): WaveSpawn {
