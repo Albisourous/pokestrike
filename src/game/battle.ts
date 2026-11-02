@@ -179,6 +179,7 @@ interface Orb {
   color: string;
   hostile?: boolean; // boss orbs hunt players instead of enemies
   src?: Unit; // hostile orbs carry their caster so damage knobs still apply
+  flat?: boolean; // dmg already priced through the foe stack — damagePlayer skips it
   drain?: boolean; // the hit feeds the team — grass seed flares
   spd?: number; // override the 620 u/s cruise — aura lock-ons fly faster
 }
@@ -858,6 +859,7 @@ export class Battle {
   private pendingAttacks: Unit[] = [];
   private pendingBig: Unit[] = [];
   private pendingMoves: { e: Unit; c: Unit['clocks'][number] }[] = [];
+  private firstFoeU?: Unit; // lowest clock on the board — wears the ACTS FIRST tag during intro
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
   private shotCombo = 0; // pass-through links chained this shot
@@ -1648,7 +1650,13 @@ export class Battle {
       s.nx = a.nx;
       s.ny = a.ny;
     }
-    this.enemies = spawns.map((s) => this.makeEnemy(s, i));
+    // staggered first volley: fodder enters on a spread clock so the strike
+    // order reads; reloads stay synced (enemyReload) so the rhythm is learnable
+    this.enemies = spawns.map((s, si) => {
+      const e = this.makeEnemy(s, i);
+      if (!e.boss) e.timer += si % 3;
+      return e;
+    });
     this.battle = 1;
     resetAbilities(this);
     this.battles = 1;
@@ -3175,7 +3183,7 @@ export class Battle {
       // bubble trail
       if (dist(o, o.target) < o.target.r + 6) {
         if (o.hostile) {
-          this.damagePlayer(o.target, o.dmg, o.src);
+          this.damagePlayer(o.target, o.dmg, o.src, o.flat);
         } else {
           this.hurt(o.target, o.dmg, '#9df0ff');
           if (o.drain) this.tryHeal(this.players, () => Math.max(1, Math.round(o.dmg * 0.35)));
@@ -6811,9 +6819,11 @@ export class Battle {
     const room = this.swapCourt(this.flee.room(this.battle, this.pickNextRoom()));
     const anchors = [...room.anchors];
     const spawns = rollWave(this.rng, this.depth, this.theme).filter((s) => !s.boss).slice(0, ENEMY_MAX);
-    this.enemies = spawns.map((s) => {
+    this.enemies = spawns.map((s, si) => {
       const a = anchors.splice(Math.floor(this.rng() * anchors.length), 1)[0];
-      return this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
+      const e = this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
+      if (!e.boss) e.timer += si % 3; // same staggered opener as spawnWave
+      return e;
     });
     if (this.flee.at === this.battle && !isGentleRoom(this.roomGrid)) this.enemies.push(this.flee.spawn(this.flee.build(this as any, () => this.makeEnemy(this.flee.spawnAt(), this.waveIndex))));
     this.armWeakPoints();
@@ -7294,11 +7304,35 @@ export class Battle {
       * (!e.def.alpha && this.enemies.some((a) => !a.dead && a.def.alpha) ? 1.3 : 1);
   }
 
+  // The multiplier stack every enemy hit pays on the way in — foe/boss
+  // pressure, depth ramp, asc tax, anti-stall heat. damagePlayer applies
+  // it at land time; foeDmg prices the same stack up front so the leash
+  // tag and scout card show the number the hit will actually land for.
+  private foeHitMult(src?: Unit) {
+    const pressure = 1 + Math.max(0, this.waveShots - 10) * 0.12;
+    return (src?.side === 'enemy' ? foePow : 1) * (src?.boss ? bossPow : 1) * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08);
+  }
+
+  // Priced estimate of one incoming hit — same roll damagePlayer would
+  // make. Sash/guard trims, absorb and the MISS die stay out: it's a
+  // read, not a promise.
+  private foeDmg(e: Unit, target: Unit, pow = zapPower, spec = false) {
+    const raw = spec ? specDamage(e.def.stats.spa, target.def.stats.spd, 1, pow) : physDamage(this.foeAtk(e), target.def.stats.def, 1, pow);
+    return Math.max(1, Math.round(raw * this.foeHitMult(e)));
+  }
+
+  // The timer attack's power — each special carries its own multiplier
+  private zapPow(e: Unit) {
+    return e.def.fuse ? zapPower * 1.8 : e.def.melee ? zapPower * 1.3 : e.def.charge ? zapPower * 1.1 : e.def.beam ? zapPower * 1.2 : e.def.volley ? zapPower * 0.55 : zapPower;
+  }
+
   private foeZap(e: Unit, target: Unit) {
     sfx('zap');
+    this.pushText({ x: e.x, y: e.y - e.r - 10, text: `${e.def.name.toUpperCase()}!`, t: 0.8, color: '#ff6b6b', big: false });
     this.orbs.push({
       x: e.x, y: e.y, target,
-      dmg: Math.round(physDamage(this.foeAtk(e), target.def.stats.def, 1, zapPower)),
+      dmg: this.foeDmg(e, target),
+      flat: true, // priced at fire time — the shown number is the landed number
       t: 2.5, wob: e.uid * 1.7, color: '#ff6b6b', hostile: true, src: e,
     });
     if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
@@ -7488,6 +7522,7 @@ export class Battle {
         if (target) {
           // windup crouch first — fodder gets its tell like the bosses do
           e.sq = 0.7;
+          this.pushText({ x: e.x, y: e.y - e.r - 10, text: `${e.def.name.toUpperCase()}!`, t: 0.8, color: '#ff6b6b', big: false });
           sfx('launch');
           this.later(0.25, () => { if (!e.dead) e.lunging = 1.4; });
         }
@@ -7498,7 +7533,7 @@ export class Battle {
     }
   }
 
-  private damagePlayer(p: Unit, dmg: number, src?: Unit) {
+  private damagePlayer(p: Unit, dmg: number, src?: Unit, flat = false) {
     // a corpse takes nothing — hazards and stray orbs were re-firing the
     // whole KO beat (REVENGE stack, sash burn, revive spend, killer rewrite)
     if (p.dead) return;
@@ -7522,8 +7557,7 @@ export class Battle {
     // +15% base pressure, +8% per wave so wave 3 actually threatens.
     // rock trait shaves every hit; the waveShots ramp is the anti-stall —
     // after 10 unanswered shots a wave fights back harder each turn
-    const pressure = 1 + Math.max(0, this.waveShots - 10) * 0.12;
-    dmg = Math.max(1, Math.round(dmg * (src?.side === 'enemy' ? foePow : 1) * (src?.boss ? bossPow : 1) * this.takenMult * (1 - this.t('rock') * 0.07) * pressure * 1.15 * (1 + this.depth * 0.12 + this.waveIndex * 0.08 + this.asc * 0.08)));
+    dmg = Math.max(1, Math.round(dmg * (flat ? 1 : this.foeHitMult(src))));
     if (p.role === 'BULWARK' || p.role === 'WARDEN' || p.role === 'GUARDIAN') dmg = Math.max(1, Math.round(dmg * 0.75));
     // friend guard: a living carrier covers its teammates — the tag reads
     // at draft time, so protect the guard or the team folds soft
@@ -8308,6 +8342,11 @@ export class Battle {
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
 
+    // opening read: the lowest clock on the board wears the first-strike tag
+    const nextOf = (e: Unit) => Math.min(e.timer, ...e.clocks.map((c) => c.t));
+    this.firstFoeU = this.introLeft() > 0
+      ? this.enemies.filter((e) => !e.dead && !e.asleep).sort((a, b) => nextOf(a) - nextOf(b))[0]
+      : undefined;
     for (const e of this.enemies) {
       if (fall >= 1) this.drawUnit(ctx, e);
       else if (fall > 0 && !e.dead) {
@@ -9079,24 +9118,30 @@ export class Battle {
     ctx.font = fontB(10);
     if (foe) {
       ctx.fillStyle = e.timer <= 1 ? '#ff6b6b' : '#e8ecf8';
+      // the priced read: ~N is the hit its next strike lands for, priced
+      // through the same stack damagePlayer applies at land time
+      const tgt = this.nearestPlayer(e);
+      const zap = tgt ? ` ~${this.foeDmg(e, tgt, e.boss ? blastPower : this.zapPow(e), e.boss)}` : '';
+      const hits = tgt ? ` · HITS${zap}` : '';
+      const heavy = tgt && (e.boss || e.mid) ? ` ~${this.foeDmg(e, tgt, zapPower * BOSS_BIG_POW, true)}` : '';
       const tag = this.flee.is(e) ? 'FLEEING' : e.boss
-        ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)} · WEAK ×3`
+        ? `ATTACKS IN ${Math.ceil(e.timer)}${hits} · HEAVY IN ${Math.ceil(e.bigT)}${heavy} · WEAK ×3`
         : e.mid
-          ? `ATTACKS IN ${Math.ceil(e.timer)} · HEAVY IN ${Math.ceil(e.bigT)}`
+          ? `ATTACKS IN ${Math.ceil(e.timer)}${hits} · HEAVY IN ${Math.ceil(e.bigT)}${heavy}`
           : e.supp === 'medic'
-          ? `ATTACKS IN ${Math.ceil(e.timer)} · HEALS ALLIES`
+          ? `ATTACKS IN ${Math.ceil(e.timer)}${hits} · HEALS ALLIES`
           : e.supp === 'aegis'
-            ? `ATTACKS IN ${Math.ceil(e.timer)} · SHIELDS ALLIES`
+            ? `ATTACKS IN ${Math.ceil(e.timer)}${hits} · SHIELDS ALLIES`
             : e.volatile
-              ? `ATTACKS IN ${Math.ceil(e.timer)} · EXPLODES ON KO`
+              ? `ATTACKS IN ${Math.ceil(e.timer)}${hits} · EXPLODES ON KO`
               : e.link
-                ? `ATTACKS IN ${Math.ceil(e.timer)} · RISES UNLESS PAIRED`
-                : `ATTACKS IN ${Math.ceil(e.timer)}`;
+                ? `ATTACKS IN ${Math.ceil(e.timer)}${hits} · RISES UNLESS PAIRED`
+                : `ATTACKS IN ${Math.ceil(e.timer)}${hits}`;
       const weakTag = !e.boss && !e.def.shielded ? (e.wpHidden ? ' · WEAK HIDDEN' : ' · WEAK ×2') : '';
       const readTag = tag + weakTag;
       const tagPx = fitFontB(ctx, readTag, 10, w - 60);
       const readout = (e.boss || e.mid) && tagPx < 8
-        ? `ATK ${Math.ceil(e.timer)} · HEAVY ${Math.ceil(e.bigT)}${e.boss ? ' · WEAK ×3' : weakTag}`
+        ? `ATK ${Math.ceil(e.timer)}${zap} · HEAVY ${Math.ceil(e.bigT)}${heavy}${e.boss ? ' · WEAK ×3' : weakTag}`
         : readTag;
       if (readout !== readTag) fitFontB(ctx, readout, 10, w - 60);
       ctx.fillText(readout, cx + 50, cy + 58);
@@ -10295,6 +10340,16 @@ export class Battle {
     ctx.setLineDash([]);
     ctx.restore();
     drawTell(ctx, e.def.type, e.x, e.y, t.x, t.y, this.time);
+    // the priced hit rides the leash — same stack the landed orb pays
+    const dmg = `-${this.foeDmg(e, t, this.zapPow(e))}`;
+    ctx.font = fontB(10);
+    ctx.textAlign = 'center';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(dmg, t.x, t.y - t.r - 10);
+    ctx.fillStyle = '#ff6b6b';
+    ctx.fillText(dmg, t.x, t.y - t.r - 10);
   }
 
   // one tag per foe: what changes the next pull first; the full set only for the intro beat
@@ -10628,9 +10683,23 @@ export class Battle {
       const urgent = next <= 1 || u.enraged;
       ctx.font = font(next <= 1 ? 15 : 14);
       ctx.textAlign = 'center';
+      const tag = this.flee.is(u) ? '' : u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(next)}` : `${Math.ceil(next)}`;
+      if (next <= 2) {
+        // dark disc behind the last ticks — urgency readable at a glance;
+        // a type-colored rim means a move clock, not the plain zap, lands
+        ctx.fillStyle = 'rgba(8,10,20,0.85)';
+        ctx.beginPath();
+        ctx.arc(u.x + u.r - 2, u.y - u.r + 3, Math.max(9, ctx.measureText(tag).width / 2 + 4), 0, Math.PI * 2);
+        ctx.fill();
+        const clk = u.clocks.find((c) => c.t === next && c.t < u.timer);
+        if (clk) {
+          ctx.strokeStyle = TYPE_COLOR[clk.type ?? u.def.type];
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      const tag = this.flee.is(u) ? '' : u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(next)}` : `${Math.ceil(next)}`;
       ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
       ctx.fillStyle = urgent ? '#ff6b6b' : next <= 2 ? '#ffb84d' : '#fff';
       ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
@@ -10656,6 +10725,7 @@ export class Battle {
       const intro = this.introAlpha();
       const traitTag = intro > 0 ? this.foeTag(u, false) : this.phase === 'aim' ? this.foeTag(u, true) : undefined;
       if (traitTag) this.fieldLabel(ctx, traitTag, u.x, u.y + u.r + 22, FOE_TAG_COLOR[traitTag] ?? '#ff8aa8', intro > 0 ? intro : 1);
+      if (u === this.firstFoeU) this.fieldLabel(ctx, 'ACTS FIRST', u.x, u.y - u.r - 22, '#ff6b6b', intro, true);
       if (u.wpPopT !== undefined && !u.dead && this.time - u.wpPopT < WP_POP_T) this.fieldLabel(ctx, 'WEAK POINT!', u.x, u.y - u.r - 22, '#ffd84d', Math.min(1, (WP_POP_T - (this.time - u.wpPopT)) / 0.3), true);
       // a loaded thief wears its take — the loot floats at its shoulder so
       // you can see exactly what KOing it buys back
