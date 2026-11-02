@@ -5,6 +5,7 @@
 import { cry } from '../core/audio';
 import { drawMon, drawShiny, loadSprite, whiteSprite } from '../core/assets';
 import { speciesById } from './data';
+import { settings } from './meta';
 import { fontB, uiWindow, GOLD_HI } from './ui';
 
 const W = 540, H = 960;
@@ -150,7 +151,7 @@ export function drawEvo(ctx: CanvasRenderingContext2D) {
   ctx.fillText(t < EVO_FLASH ? 'TAP · SKIP' : 'TAP · CONTINUE', box.x + box.w - 16, box.y + box.h - 16);
 
   if (flash > 0) {
-    ctx.globalAlpha = flash;
+    ctx.globalAlpha = flash * (settings().flash ? 1 : 0.35);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, W, H);
   }

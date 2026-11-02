@@ -58,6 +58,7 @@ import {
   BAG_MAX,
   bagChipRect,
   bagRowItems,
+  bagScrollMax,
   drawHelp,
   drawBugCard,
   BUG_HIT,
@@ -337,6 +338,9 @@ let lastPhase = ''; // battle phase last frame — map-entry edges bank the run
 // box strip scroll: offset in px + an in-progress drag (tap = drag that never moved)
 let boxScroll = 0;
 let boxDrag: { x0: number; s0: number; moved: boolean } | null = null;
+// draft bag row scrolls the same way once a stocked bag overflows the band
+let bagScroll = 0;
+let bagDrag: { x0: number; s0: number; moved: boolean } | null = null;
 // pointer-id gating: the first finger down owns the gesture — a second
 // finger's events stay dead until the owner lifts (a mid-aim second tap
 // used to teleport the sling; whichever finger lifted first fired it)
@@ -484,7 +488,7 @@ function draftOffers(): number[] {
 }
 
 // --- reward-board actions shared by pointer and keys ---------------------
-// pickPerk/declineReward play their own sfx inside battle; the tools don't,
+// pickPerk plays its own sfx inside battle; the tools don't,
 // so the input layer owns their click.
 
 const rewardPick = (i: number) => {
@@ -633,7 +637,7 @@ document.addEventListener('visibilitychange', () => {
   // a hidden tab can drop the gesture's pointerup — a held id would lock
   // every later tap out, so dump all drag state like a pointercancel
   activeId = null;
-  helpDrag = dexDrag = boxDrag = settingsDrag = null;
+  helpDrag = dexDrag = boxDrag = bagDrag = settingsDrag = null;
   settingsSliderFlush(); // bank a mid-drag slider value the dropped up would have
   battle?.pointerCancel();
 });
@@ -726,6 +730,7 @@ function startDraft() {
   // friendlier once you've proven the climb
   const rerolls = 1 + (unlockedAch().has('triple') ? 1 : 0);
   draft = { order: draftOrder(runRng), picked: [], shiny: new Set(), lvls: new Map(), rerolls };
+  bagScroll = 0; // a new board re-centers its bag row
   for (let i = ROSTER.length; i < draftPool.length; i++) {
     draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
   }
@@ -1377,6 +1382,12 @@ canvas.addEventListener('pointerdown', (e) => {
     // bag chips ride in auto — a tap only answers "what does this one do?"
     if (inRect(p.x, p.y, BAG_ROW)) {
       const items = bagRowItems();
+      // an overflowing row scrolls like the box strip — the drag owns the
+      // band and a still finger stays a tap (resolved on pointerup)
+      if (items.length && bagScrollMax(items.length) > 0) {
+        bagDrag = { x0: p.x, s0: bagScroll, moved: false };
+        return;
+      }
       for (let i = 0; i < items.length; i++) {
         if (!inRect(p.x, p.y, bagChipRect(i, items.length))) continue;
         bagLast = items[i].id;
@@ -1599,7 +1610,7 @@ canvas.addEventListener('pointermove', (e) => {
   // claimed id locks every later tap out
   if (e.pointerType === 'mouse' && !e.buttons) {
     activeId = null;
-    helpDrag = dexDrag = boxDrag = settingsDrag = null;
+    helpDrag = dexDrag = boxDrag = bagDrag = settingsDrag = null;
     settingsSliderFlush();
     if (scene === 'battle') battle?.pointerCancel();
     return;
@@ -1640,6 +1651,14 @@ canvas.addEventListener('pointermove', (e) => {
         Math.max(boxDrag.s0 + boxDrag.x0 - p.x, 0),
         boxScrollMax(battle.box.length),
       );
+    return;
+  }
+  if (bagDrag) {
+    if (Math.abs(p.x - bagDrag.x0) > 10) bagDrag.moved = true;
+    bagScroll = Math.min(
+      Math.max(bagDrag.s0 + bagDrag.x0 - p.x, 0),
+      bagScrollMax(bagRowItems().length),
+    );
     return;
   }
   if (helpOpen) return; // a key-opened manual owns input without a drag
@@ -1754,6 +1773,23 @@ canvas.addEventListener('pointerup', (e) => {
           }
           break;
         }
+      }
+    }
+    return;
+  }
+  if (bagDrag) {
+    const { moved } = bagDrag;
+    bagDrag = null;
+    // a drag that never moved is a tap — same "what does this do" answer
+    // the non-scrolling row gives on pointerdown
+    if (!moved && scene === 'draft') {
+      const p = toLogical(e);
+      const items = bagRowItems();
+      for (let i = 0; i < items.length; i++) {
+        if (!inRect(p.x, p.y, bagChipRect(i, items.length, bagScroll))) continue;
+        bagLast = items[i].id;
+        sfx('ui');
+        break;
       }
     }
     return;
@@ -1904,6 +1940,7 @@ canvas.addEventListener('pointercancel', (e) => {
   helpDrag = null;
   dexDrag = null;
   boxDrag = null;
+  bagDrag = null;
   settingsDrag = null;
   settingsSliderFlush();
   // an interrupt isn't a release — drop the drag, don't fire the shot
@@ -1940,6 +1977,13 @@ canvas.addEventListener(
       // let a wheel flick zero the parked scroll position
       if (hatch.phase !== 'idle') return;
       hatch.sparkScroll = Math.min(Math.max(hatch.sparkScroll + e.deltaY, 0), hatchScrollMax(hatch));
+      return;
+    }
+    if (scene === 'draft') {
+      const max = bagScrollMax(bagRowItems().length);
+      if (max <= 0) return;
+      e.preventDefault();
+      bagScroll = Math.min(Math.max(bagScroll + e.deltaX + e.deltaY, 0), max);
       return;
     }
     if (scene !== 'battle' || !battle || !((battle.phase === 'map' || battle.phase === 'reward') && menuOpen)) return;
@@ -2353,7 +2397,7 @@ function render() {
         t,
         draft.rerolls,
         { age: t - draftT0, pool: draftPool, idx },
-        { sel: bagPick, last: bagLast },
+        { sel: bagPick, last: bagLast, scroll: bagScroll },
       );
       break;
     }

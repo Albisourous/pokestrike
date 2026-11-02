@@ -2131,14 +2131,14 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(b.wantMenu === true && b.phase === 'reward', 'stocked box — the roster seats before the item pick');
 }
 
-// --- reward flow: the pick (or decline) goes straight to the map -----------
+// --- reward flow: the pick (or the skip) goes straight to the map ----------
 {
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
   (b as any).spawnWave(0);
   (b as any).enterReward();
   ok(b.phase === 'reward', 'reward opens on the item pick');
-  b.declineReward();
-  ok(b.phase === 'map', 'decline exits straight to the map');
+  b.advanceReward();
+  ok(b.phase === 'map', 'skipping the board exits straight to the map');
   (b as any).enterReward();
   const n = b.rewardOffers.length;
   b.pickPerk(0);
@@ -2194,7 +2194,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
     (b as any).spawnWave(0);
     (b as any).enterReward();
     seen.push(...b.rewardOffers.map((p) => p.id));
-    b.declineReward(); // back to the map — the next wave pays a fresh board
+    b.advanceReward(); // back to the map — the next wave pays a fresh board
   }
   ok(seen.length > 0 && seen.every((id) => !ban.has(id)), `5 re-dealt boards honor the ban list (${seen.length} cards)`);
 
@@ -2902,7 +2902,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     } else if (b.phase === 'reward') {
       if (b.evoChoice) b.pickEvo(Math.floor(rng() * b.evoChoice.options.length)); // a split evo asks first
       else if (b.rewardOffers.length) b.pickPerk(Math.floor(rng() * b.rewardOffers.length));
-      else b.declineReward(); // empty board — take the score and go
+      else b.advanceReward(); // empty board — move on
     } else if (b.phase === 'aim') {
       const u = (b as any).active;
       if (!u || u.dead) { step(30); continue; }

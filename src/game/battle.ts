@@ -2138,7 +2138,9 @@ export class Battle {
       sfx('ui');
       return;
     }
-    if (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy' || this.phase === 'loot') {
+    // the coach scrim owns the court before the first pull — the chips
+    // can't eat taps under it (same gate the scout card got below)
+    if (!(this.coach && this.shots === 0) && (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy' || this.phase === 'loot')) {
       const c = this.pauseChip();
       if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
         this.paused = true;
@@ -4017,6 +4019,7 @@ export class Battle {
             this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
             this.burst(e.x, e.y, '#ffffff', 8, 300, 0.9);
             sfx('bounce', 0.6);
+            buzz(30);
             playJingle('fail'); // the wha-wha — broke free
           }
         }, e.def.id, e.r);
@@ -6289,16 +6292,6 @@ export class Battle {
     this.phase = 'map'; // pick the next stop on the region map
   }
 
-  // Declining pays score instead — StS reward skips keep dead offers honest.
-  declineReward() {
-    if (this.phase !== 'reward') return;
-    sfx('ui');
-    const ascPremium = this.asc >= 5 ? 0.3 : 0.2; // ASC 5 INFLATION — same deeper premium on skips
-    this.score += Math.round(150 * (1 + ascPremium * this.asc));
-    this.rewardOffers = [];
-    this.advanceReward();
-  }
-
   // REROLL spends a charge to re-deal the board at the same tier cap —
   // banished ids stay out of the fresh deal.
   rerollOffers(): boolean {
@@ -7774,6 +7767,7 @@ export class Battle {
     this.endT = 1.6; // the sting lands before the field report covers it
     this.screenFlash('#ff6b6b', 0.3);
     sfx('lose');
+    buzz([60, 80, 120]);
   }
 
   // sacred ash: a full team wipe consumes the charm instead — everyone
@@ -7813,7 +7807,8 @@ export class Battle {
   }
 
   // Oversized banners cache their fitted font before the draw pass.
-  private pushText(t: FloatText) {
+  // public so perk ticks can float their own proc callouts (perks.ts)
+  pushText(t: FloatText) {
     // a repeat callout near a live copy re-pops that copy with a ×N count
     // instead of stacking (RICOCHET!, WEAK POINT! on every bounce). Numbers
     // stay separate: two hits are two damage values, not one
@@ -9536,6 +9531,17 @@ export class Battle {
       ctx.arc(nx, ny, cell * (reachable ? 0.6 + Math.sin(this.time * 5) * 0.08 : 0.42), 0, Math.PI * 2);
       ctx.stroke();
       ctx.globalAlpha = 1;
+      // the coached first screen is the map — ring the picks with the
+      // same pulse the battle coach uses before the first shot lands
+      if (reachable && this.coach && this.shots === 0) {
+        ctx.globalAlpha = 0.55 + Math.sin(this.time * 5) * 0.3;
+        ctx.strokeStyle = '#ffd84d';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(nx, ny, cell * 0.9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
       if (cleared) {
         ctx.font = font(12);
         ctx.fillStyle = '#6fdc6f';
@@ -9672,8 +9678,18 @@ export class Battle {
     ctx.fillText(`STAGE ${this.pendingNext + 1} OF ${TOTAL_STAGES}`, 270, 88);
 
     ctx.font = fontB(10);
-    ctx.fillStyle = '#aab4d8';
-    ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
+    if (this.coach && this.shots === 0) {
+      ctx.globalAlpha = 0.55 + Math.sin(this.time * 4) * 0.3;
+      ctx.strokeStyle = 'rgba(10,13,24,0.85)';
+      ctx.lineWidth = 4;
+      ctx.strokeText('TAP A STOP · YOUR CLIMB STARTS', 270, oy + view * cell + 30);
+      ctx.fillStyle = '#ffe89d';
+      ctx.fillText('TAP A STOP · YOUR CLIMB STARTS', 270, oy + view * cell + 30);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.fillStyle = '#aab4d8';
+      ctx.fillText('choose your route: tap a linked stop', 270, oy + view * cell + 30);
+    }
     // the stop legend is onboarding text — the signs carry it after the
     // first couple of rows
     if (this.waveIndex < 2) {

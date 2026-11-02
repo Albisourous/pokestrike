@@ -100,11 +100,17 @@ const BAG_CHIP_W = 74;
 const BAG_CHIP_H = 46;
 const BAG_CHIP_GAP = 8;
 export const BAG_ROW = { x: 0, y: 178, w: W, h: 62 };
-export function bagChipRect(i: number, n: number) {
-  // a stocked-everything save can carry 7+ — shrink chips before bleeding off-screen
-  const cw = Math.min(BAG_CHIP_W, Math.floor((W - 24 - (n - 1) * BAG_CHIP_GAP) / n));
+const BAG_CHIP_MIN = 44; // thumb floor — a fully stocked bag scrolls before chips crush past it
+export function bagScrollMax(n: number) {
+  return Math.max(0, n * BAG_CHIP_MIN + (n - 1) * BAG_CHIP_GAP - (W - 24));
+}
+export function bagChipRect(i: number, n: number, scroll = 0) {
+  // a stocked-everything save can carry 7+ — chips shrink to the floor,
+  // then the row scrolls like the box strip instead of bleeding off-screen
+  const cw = Math.max(BAG_CHIP_MIN, Math.min(BAG_CHIP_W, Math.floor((W - 24 - (n - 1) * BAG_CHIP_GAP) / n)));
   const rowW = n * cw + (n - 1) * BAG_CHIP_GAP;
-  return { x: W / 2 - rowW / 2 + i * (cw + BAG_CHIP_GAP), y: BAG_ROW.y + 12, w: cw, h: BAG_CHIP_H };
+  const off = Math.max(0, (W - 24 - rowW) / 2); // centered while it fits, left-anchored past it
+  return { x: 12 + off + i * (cw + BAG_CHIP_GAP) - scroll, y: BAG_ROW.y + 12, w: cw, h: BAG_CHIP_H };
 }
 // stocked bag items in chip order — chip i ↔ items[i], so hit tests and the
 // draw both walk this one list
@@ -163,7 +169,7 @@ export const HELP_BTN = { x: W - 64, y: 22, w: 44, h: 44 };
 // the report link + build hash live under the nav in the dead strip at the
 // screen's very bottom — always visible, never competing with the board
 export const BUG_BTN = { x: 10, y: H - 22, w: 96, h: 16 };
-export const BUG_HIT = { x: 0, y: H - 34, w: 130, h: 34 };
+export const BUG_HIT = { x: 0, y: H - 44, w: 130, h: 44 };
 // the same ? badge shrunk for mid-run lookups — shown between fights
 // (map + reward), where a player actually wants the reference
 export const HELP_CHIP = { x: W - 58, y: 54, w: 40, h: 40 };
@@ -2744,7 +2750,7 @@ function drawRevealScene(
       ctx.fillStyle = fg;
       ctx.fillRect(cx - 250, cy - 250, 500, 500);
     }
-    const wa = FLASH_A[hype] * Math.max(0, 1 - ft / 0.18);
+    const wa = FLASH_A[hype] * Math.max(0, 1 - ft / 0.18) * (settings().flash ? 1 : 0.35);
     if (wa > 0.01) {
       ctx.fillStyle = `rgba(255,255,255,${wa})`;
       ctx.fillRect(0, 0, W, H);
@@ -2754,7 +2760,7 @@ function drawRevealScene(
   // shiny: a gold flash, then Star Pieces orbit the mon while the card holds
   if (res.shiny && ft >= 0) {
     if (ft < 0.35) {
-      ctx.fillStyle = `rgba(255,224,120,${0.55 * (1 - ft / 0.35)})`;
+      ctx.fillStyle = `rgba(255,224,120,${0.55 * (1 - ft / 0.35) * (settings().flash ? 1 : 0.35)})`;
       ctx.fillRect(0, 0, W, H);
     }
     const sp = itemSprite('star-piece');
@@ -3023,15 +3029,21 @@ function drawBagRow(
   ctx: CanvasRenderingContext2D,
   sel: ReadonlySet<string>,
   last: string | null,
+  scroll = 0,
 ) {
   // bagRowItems' filter inline so the stock read serves both the list and the ×n badges
   const stock = bagStock();
   const items = BAG_ITEMS.filter((it) => (stock[it.id] ?? 0) > 0);
   if (!items.length) return;
   ctx.textAlign = 'center';
+  // an overflowing row clips to the band — same trick as the box strip
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(4, BAG_ROW.y + 2, W - 8, BAG_ROW.h + 4);
+  ctx.clip();
   items.forEach((it, i) => {
     const on = sel.has(it.id);
-    const r = bagChipRect(i, items.length);
+    const r = bagChipRect(i, items.length, scroll);
     const cr = { x: r.x, y: r.y + (on ? -4 : 0), w: r.w, h: r.h };
     // pocket-size menu windows — gold inner rim when it's riding along
     uiWindow(ctx, cr, { rad: 8 });
@@ -3066,6 +3078,29 @@ function drawBagRow(
     ctx.fillStyle = on ? INK : PARCH; // the badge face is dark until picked
     ctx.fillText(n, cr.x + cr.w - bw / 2 - 5, cr.y + 14.5);
   });
+  ctx.restore();
+  const maxScroll = bagScrollMax(items.length);
+  if (maxScroll > 0) {
+    // scroll affordances tucked in the band — the box strip's ◀▶ markers
+    ctx.font = fontB(10);
+    const cy = BAG_ROW.y + BAG_ROW.h / 2;
+    if (scroll > 0) {
+      ctx.fillStyle = 'rgba(10,14,30,0.7)';
+      ctx.beginPath();
+      ctx.arc(16, cy, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#aab0c8';
+      ctx.fillText('◀', 16, cy + 5);
+    }
+    if (scroll < maxScroll) {
+      ctx.fillStyle = 'rgba(10,14,30,0.7)';
+      ctx.beginPath();
+      ctx.arc(W - 16, cy, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#aab0c8';
+      ctx.fillText('▶', W - 16, cy + 5);
+    }
+  }
   void last; // the desc answers on the subtitle line — see drawDraft
 }
 
@@ -3259,7 +3294,7 @@ export function drawDraft(
   _t: number,
   rerolls: number,
   spin: { age: number; pool: SpeciesDef[]; idx: number[] },
-  bag: { sel: ReadonlySet<string>; last: string | null },
+  bag: { sel: ReadonlySet<string>; last: string | null; scroll?: number },
 ) {
   choiceCourt(ctx, 'meadow', 0.35);
 
@@ -3287,7 +3322,7 @@ export function drawDraft(
   ctx.fillStyle = bagDesc ? INK_SOFT : INK;
   ctx.fillText(bagDesc ? line.toUpperCase() : line, W / 2, 155);
 
-  drawBagRow(ctx, bag.sel, bag.last);
+  drawBagRow(ctx, bag.sel, bag.last, bag.scroll);
 
   const dex = new Set(dexIds()); // kind chips read dex membership per card — parse once a frame
   offers.forEach((def, i) => {

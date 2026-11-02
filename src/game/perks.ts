@@ -1,6 +1,7 @@
 import type { Battle } from './battle';
 import type { PokeType } from './types';
 import { bumpCooldown } from './stats';
+import { sfx } from '../core/audio';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 
@@ -94,6 +95,10 @@ export const PERKS: Perk[] = [
       if (on === (st.direhit === 1)) return;
       st.direhit = on ? 1 : 0;
       b.critCh += on ? 0.5 : -0.5; // hands the borrowed crit back on the next shot
+      if (on) {
+        b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 26, text: 'DIRE HIT READY!', t: 0.9, color: '#ffd84d', big: false });
+        sfx('ready');
+      }
     },
   },
   {
@@ -320,6 +325,8 @@ export const PERKS: Perk[] = [
       if (st.luckyegg < 30) return;
       st.luckyegg -= 30;
       b.score += 25;
+      b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 16, text: '+25 ★', t: 0.9, color: '#c9a8ff', big: false });
+      sfx('tick');
     },
   },
   {
@@ -384,6 +391,8 @@ export const PERKS: Perk[] = [
       if (b.waveIndex - st.sash < 3) return;
       st.sash = b.waveIndex;
       b.players.forEach((p) => { p.sash = true; });
+      b.pushText({ x: b.arena.x + b.arena.w / 2, y: b.arena.y + b.arena.h / 2, text: 'SASHES RE-ARMED!', t: 1.2, color: '#ffd84d', big: true });
+      sfx('ready');
     },
   },
   {
@@ -429,6 +438,8 @@ export const PERKS: Perk[] = [
       if (st.ether < 25) return;
       st.ether -= 25;
       b.players.forEach((p) => { if (!p.dead) p.cd = Math.max(0, p.cd - 1); });
+      b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 26, text: 'ETHER!', t: 0.9, color: '#9df0ff', big: false });
+      sfx('ready');
     },
   },
   {
