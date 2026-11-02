@@ -277,3 +277,35 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-10-25 | `6258dd1` | timing | gold band breathes wider pull-to-pull: pace ±28%, window ±45%, center ±0.18 | `git revert 6258dd1` |
 | 2026-10-25 | `6258dd1` | text | FloatText y-clamped inside the frame; STRIKES/ULT tags clamp above the rim; coach line lifts off the low props; roster/lab/task/event descs ellipsize instead of spilling | `git revert 6258dd1` |
 | 2026-10-25 | `6258dd1` | reward | fresh catch lights the TEAM · ITEMS pill gold — SWAP THE NEW CATCH IN before the relic board | `git revert 6258dd1` |
+| 2026-11-01 | `5411862` | battle | `foeDrop()` keeps foes hidden through court scroll; `landFoes()` starts after landing (#10) | `git revert 5411862` |
+| 2026-11-01 | `3ded584` | boss | `ROOM_BOSS` gives each gym HP bar its own court; pillars and moat corners shape later phases (#11) | `git revert 3ded584` |
+| 2026-11-01 | `00ebde1` | arena | `BLOCK_TINT`/`BLOCK_FACE` brighten rock cover; `drawWall` caps treetops below HUD (#12) | `git revert 00ebde1` |
+| 2026-11-01 | `589d467` | battle | `BATTLE_SKIP` rolls 2 to 4 battles per plain stop; `ENEMY_MAX` caps each foe pack (#13) | `git revert 589d467` |
+| 2026-11-01 | `4746aa3` | hud | `PAR_PER_BATTLE`/`PAR_BOSS` set stop turn par; clears on par pay SPEED CLEAR (#14) | `git revert 4746aa3` |
+| 2026-11-01 | `60d6291` | hud | `N LEFT · TURN` combines battle counts; `pushText` coalesces callouts; pause holds extra stats (#15) | `git revert 60d6291` |
+| 2026-11-01 | `b660bb9` | battle | `foeClocks()` adds telegraphed type moves; boss move sets shift by HP bar (#16) | `git revert b660bb9` |
+| 2026-11-01 | `f2c0242` | arena | `floors` caches eleven tiled courts; wall frames and deterministic atlas motes replace floor scatter (#17) | `git revert f2c0242` |
+| 2026-11-02 | `45dfb47` | battle | Data-driven court gimmicks add typed damage walls, Reflect shields, gravity panels and Psychic wells (#18) | `git revert 45dfb47` |
+| 2026-11-02 | `bf61463` | rooms | Grounded Gracidea props; add 8 mid-pool and 2 hard-tail room layouts (#19) | `git revert bf61463` |
+| 2026-11-02 | `327514e` | hud | `ULT` becomes a shared 244×52 target with one-time teaching; keep wall callouts inside the court and clear of HUD (#20) | `git revert 327514e` |
+| 2026-11-02 | `5ff43bb` | physics | `shotDamp()` adds fourth-power time decay; `launchMult()` clamps the Speed curve (#21) | `git revert 5ff43bb` |
+| 2026-11-02 | `020a405` | telop | `Telops` queue adds priority and deduped battle banners with Pokémon art and tap-to-skip (#22) | `git revert 020a405` |
+| 2026-11-02 | `52d5382` | anim | `MOVE_ANIM`/`recipeFor()` map foe moves, supers and ULTs to capped Gen 3 sprite effects and telegraphs (#23) | `git revert 52d5382` |
+| 2026-11-02 | `ecb6525` | physics | `hitFloor()` keeps landed chip hits at 1; type immunity stays at zero; round-2 code.bin notes (#24) | `git revert ecb6525` |
+| 2026-11-02 | `a796694` | rooms | Rock Smash, Cut and Strength add 8 breakable/pushable rooms; keep spawn routes reachable (#25) | `git revert a796694` |
+| 2026-11-02 | `284321e` | boss | `bossBarBreak()` shifts weak points; final bar adds rage, a signature move and Reflect guards (#26) | `git revert 284321e` |
+| 2026-11-02 | `626e6de` | battle | Canonical abilities add hazard/wall counters and team hints; 14 abilities trigger combat rules (#27) | `git revert 626e6de` |
+| 2026-11-02 | `a99f824` | clear | `clearRank` adds S/A/B/C stop cards; `recordClear` saves per-stage bests and rank payouts (#28) | `git revert a99f824` |
+| 2026-11-02 | `ebc6d16` | anim | `finZoom()` adds last-KO slow-mo; `dmgNumSize()` and `comboPitch()` tune hit feedback (#29) | `git revert ebc6d16` |
+| 2026-11-02 | `5faa9fb` | battle | `BULLET_GIMMICKS` adds drain moves, Oran drops, PP Up, Chesto and Safeguard (#30) | `git revert 5faa9fb` |
+| 2026-11-02 | `3d7a959` | docs | `monster-strike-re.md` records round-3 turn loop, enemy countdown and damage-wall timing (#31) | `git revert 3d7a959` |
+| 2026-11-02 | `cae4e1f` | hud | `foeTag()` and `placeLabel()` trim field labels; first-use pickup tags and overlap nudging (#32) | `git revert cae4e1f` |
+| 2026-11-02 | `ea44320` | battle | `DAMAGE_WALL_PHASES` cycle walls by turn with arming fades and a NEXT TURN warning (#33) | `git revert ea44320` |
+| 2026-11-02 | `f4b41f4` | clear | `fitFont()` shrinks clear-card values to fit beside labels on narrow screens (#34) | `git revert f4b41f4` |
+| 2026-11-02 | `77ca25d` | audio | `cry()` plays legacy Pokémon cries at boss intros, KOs, ULTs and catches; cache capped at 48 (#35) | `git revert 77ca25d` |
+| 2026-11-02 | `5d3987c` | raid | `drawRaidLobby()` previews daily boss, weakness hints, loaners and boosted rewards; themed court and UTC refresh (#36) | `git revert 5d3987c` |
+| 2026-11-02 | `181e9ea` | shop | `drawShopScene()` builds prize counter; FREE PULL starts a pack, deal and ×10 stay one tap away (#37) | `git revert 181e9ea` |
+| 2026-11-02 | `abd1b94` | climb | `drawClimb()` adds stage-1 court, START/CONTINUE, ascension ladder and shop/raid side doors (#38) | `git revert abd1b94` |
+| 2026-11-02 | `f7f7208` | mons | `drawMonsBody()` centers party stage and EDIT TEAM; dex grid and detail move to home module (#39) | `git revert f7f7208` |
+| 2026-11-02 | `ab3d304` | town | `drawTownBody()` frames the Gen 3 village; sign plates, street villagers and larger nav icons (#40) | `git revert ab3d304` |
+| 2026-11-02 | `663c330` | roster | `drawRoster()` fits type chips on grounded team cards; `teamSlotRect` moves with the row (#41) | `git revert 663c330` |
