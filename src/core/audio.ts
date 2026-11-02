@@ -150,7 +150,7 @@ function noise(dur: number, freq: number, vol: number, delay = 0, slide = 0) {
 export type Sfx =
   | 'launch' | 'perfect' | 'hit' | 'ko' | 'caught' | 'hurt'
   | 'zap' | 'boom' | 'splash' | 'heal' | 'ui' | 'wave' | 'lose' | 'ready'
-  | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick' | 'bounce' | 'warn';
+  | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick' | 'bounce' | 'warn' | 'chime';
 
 export function sfx(name: Sfx, pitch = 1) {
   if (name === 'ui' && !settings().uiSfx) return;
@@ -164,6 +164,10 @@ export function sfx(name: Sfx, pitch = 1) {
       [660, 880, 1108, 1760].forEach((f, i) => tone(f * pitch, f * pitch, 0.14, 'square', 0.09, i * 0.045));
       tone(2217 * pitch, 2217 * pitch, 0.26, 'sine', 0.06, 0.2); // C#7 crowns the A-major run
       noise(0.3, 2600 * pitch, 0.08, 0.06, 2400 * pitch);
+      break;
+    case 'chime': // ALL CONNECT: rising C-major arpeggio, bell on top
+      [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.2, 'triangle', 0.09, i * 0.07));
+      tone(2093, 2093, 0.4, 'sine', 0.05, 0.28);
       break;
     case 'tick': // timing cue — the fill just crossed into the gold zone
       tone(1760 * pitch, 1760 * pitch, 0.035, 'square', 0.045);

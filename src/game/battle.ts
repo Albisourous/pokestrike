@@ -2,6 +2,7 @@ import { Vec, len, dist, norm, vec } from '../core/vec';
 import { mulberry32 } from '../core/rng';
 import { Treasure } from './loot';
 import { Missions } from './missions';
+import { Connect } from './connect';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
 import type { Sfx } from '../core/audio';
@@ -787,6 +788,7 @@ export class Battle {
   telop = new Telops(); // battle banners: start, boss, clears, ULT READY
   treasure = new Treasure(); // MS treasure drops + the stop-end reveal
   missions = new Missions(); // MS stop missions: 3 optional goals per battle stop
+  connect = new Connect(); // MS ALL CONNECT: link every ally in one shot, next shot ×1.25
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   private courtT = -9;
   private foesLanded = true; // the drop-in landing beat fired for this court
@@ -1443,6 +1445,7 @@ export class Battle {
     this.waveShots = 0;
     this.stopShots = 0;
     this.stopCombo = this.stopWeak = this.stopKos = this.stopTaken = this.stopFaints = 0;
+    this.connect.reset();
     this.missions.start(this.mapSeed, i + 1, this.players.map((p) => p.def.type), this.ultIn <= 6, this.time, this.raid || !!this.pendingEventWave);
     this.clearCard = null;
     this.waveFlawless = true;
@@ -2248,6 +2251,7 @@ export class Battle {
     u.sq = 1; // launch pop — the ball stretches off the sling
     this.bumpsThisShot.clear();
     this.bumpNoted.clear();
+    this.connect.launch();
     this.shotCombo = 0;
     this.shotHits = 0;
     this.shotDmg = 0;
@@ -2789,6 +2793,7 @@ export class Battle {
       for (const p of this.players) {
         // pass through teammates — each pass is a link-bump combo tick
         if (p.dead || p === u || dist(u, p) >= u.r + p.r || u.vx * u.vx + u.vy * u.vy <= 1600) continue;
+        if (u === this.active) this.connect.touch(p, u, this.players, this.telop);
         if (p.asleep) {
           // a hard nudge shakes the sleeper out of it — no super, but the
           // bump buys back its turn before the pack closes in
@@ -3612,6 +3617,7 @@ export class Battle {
       }
     }
     d = Math.round(d * this.dmgMult * (1 + this.t('fire') * 0.1) * (1 + e.armorN * 0.12)); // a cracked shell reads softer
+    d = Math.round(d * this.connect.mult());
     // aegis ward: a shielded foe eats the whole hit — crack the guardian
     // first, or the pack soaks your best lines for free
     if (e.shieldN > 0) {
@@ -5476,6 +5482,7 @@ export class Battle {
     const speedClear = this.stopShots <= this.par;
     if (speedClear) this.score += 100 + this.depth * 25;
     if (!this.raid) this.clearCard = this.stopSummary();
+    if (this.clearCard) this.clearCard.chain = { best: this.connect.best, alls: this.connect.alls };
     if (this.clearCard) this.clearCard.missions = this.missions.clear(this.waveIndex + 1, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints }, (n) => this.earnStars(n));
     this.treasure.endStop(this.time, this.arena.x + this.arena.w / 2, this.arena.y, (n) => this.earnStars(n));
     // pickup ability: scavengers root through the arena after the fight —
@@ -8722,6 +8729,7 @@ export class Battle {
     ctx.font = fontB(12);
     ctx.fillText(this.enemies.filter((e) => !e.dead).length + ' FOES LEFT', f.x + f.w / 2, f.y + 22);
     ctx.fillText(this.phase === 'enemy' ? 'FOES ATTACK' : this.phase === 'shot' ? 'IN FLIGHT' : 'TURN ' + (this.stopShots + 1) + '/' + this.par, f.x + f.w / 2, f.y + 42);
+    this.connect.draw(ctx, this.arena);
     this.missions.draw(ctx, this.time, this.arena, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints });
 
     if (this.ultHint && this.phase === 'aim') {
@@ -10166,6 +10174,7 @@ export class Battle {
     ctx.beginPath();
     ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 0.82, u.r * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
+    if (u === this.active) this.connect.glow(ctx, u, this.time);
     // READY aura — a charged super rings its mon in type color
     if (u.side === 'player' && u.cd <= 0) {
       ctx.save();

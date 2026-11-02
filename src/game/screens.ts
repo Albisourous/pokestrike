@@ -4217,13 +4217,14 @@ export function drawClearCard(ctx: CanvasRenderingContext2D, c: ClearCard, age: 
     ['WEAK HITS', `${c.weak}`, false],
     ['KOs', `${c.kos}`, false],
     ['DMG TAKEN', c.faints ? `${c.taken} · ${c.faints} DOWN` : `${c.taken}`, false],
+    ...(c.chain ? [['BEST CHAIN', c.chain.alls ? `ALL CONNECT ×${c.chain.alls}` : `${c.chain.best}`, false] as [string, string, boolean]] : []),
   ];
   const ix = panel.x + 28;
   const vx = panel.x + panel.w - 28;
   rows.forEach(([label, value, best], i) => {
     const a = clamp01((age - 0.3 - i * 0.12) / 0.16);
     if (a <= 0) return;
-    const y = panel.y + 180 + i * 56;
+    const y = panel.y + 180 + i * Math.min(56, 230 / (rows.length - 1));
     ctx.globalAlpha = pop * a;
     ctx.textAlign = 'left';
     ctx.font = fontB(22);

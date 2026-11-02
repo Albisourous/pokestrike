@@ -6,7 +6,7 @@ import { drawMon, itemSprite, loadItem } from '../core/assets';
 import { buzz, sfx, type Sfx } from '../core/audio';
 import { fontB, ufit, GOLD, GOLD_HI, PARCH, type Rect } from './ui';
 
-export type TelopKind = 'start' | 'boss' | 'phase' | 'weak' | 'shield' | 'combo' | 'speed' | 'clear' | 'over' | 'ult' | 'foe';
+export type TelopKind = 'start' | 'boss' | 'phase' | 'weak' | 'shield' | 'combo' | 'speed' | 'clear' | 'over' | 'ult' | 'foe' | 'connect';
 
 export interface Telop {
   kind: TelopKind;
@@ -14,6 +14,7 @@ export interface Telop {
   sub?: string;
   mon?: number; // front sprite on the left
   icon?: string; // item or `badges/<n>` on the right
+  mons?: number[]; // a row of fronts under the title (ALL CONNECT)
 }
 
 interface Spec {
@@ -36,6 +37,7 @@ export const TELOP_SPEC: Record<TelopKind, Spec> = {
   phase: { pri: 3, dur: 0.9, ttl: 9, color: GOLD_HI, buzz: [20, 30, 20] },
   speed: { pri: 3, dur: 0.9, ttl: 9, color: CYAN, sfx: 'perfect', buzz: [30, 40, 60] },
   ult: { pri: 2, dur: 0.9, ttl: 4, color: GOLD_HI },
+  connect: { pri: 2, dur: 1, ttl: 1, color: '#7cf29a', sfx: 'chime' },
   foe: { pri: 2, dur: 0.7, ttl: 0.3, minor: true, color: RED, buzz: [25, 25, 25] },
   weak: { pri: 1, dur: 0.7, ttl: 0.4, minor: true, color: '#ffd84d', buzz: 25 },
   shield: { pri: 1, dur: 0.7, ttl: 0.4, minor: true, color: CYAN, sfx: 'zap', buzz: 20 },
@@ -195,7 +197,7 @@ export class Telops {
     ufit(ctx, b.title, spec.minor ? 20 : 22, room); // font() scales 1.4×: 20 → 28px, 22 → 31px
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 6;
-    const ty = cy + (b.sub ? (spec.minor ? 2 : 4) : 12);
+    const ty = cy + (b.sub || b.mons ? (spec.minor ? 2 : 4) : 12);
     ctx.strokeText(b.title, mid, ty);
     ctx.fillStyle = b.kind === 'start' || b.kind === 'ult' || b.kind === 'clear' ? PARCH : color;
     ctx.fillText(b.title, mid, ty);
@@ -208,6 +210,11 @@ export class Telops {
       ctx.fillStyle = b.kind === 'start' || b.kind === 'ult' || b.kind === 'clear' ? color : PARCH;
       ctx.fillText(b.sub, mid, ty + (spec.minor ? 26 : 32));
     }
+    b.mons?.forEach((id, i, all) => {
+      try {
+        drawMon(ctx, id, mid + (i - (all.length - 1) / 2) * 52, cy + 28, 40);
+      } catch { /* sprite still loading */ }
+    });
     ctx.restore();
   }
 }
