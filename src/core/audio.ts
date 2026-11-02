@@ -10,6 +10,7 @@ let mGain: GainNode | null = null;
 let mFilter: BiquadFilterNode | null = null; // music-bus lowpass — softens square-wave edge
 let mWet: GainNode | null = null; // echo send level — per-track depth
 let gBus: WaveShaperNode | null = null; // guitar drive bus — tanh soft-clip dirt
+let kitGain: GainNode | null = null; // drum bus — aim-phase intensity ducks the kit, never the song
 // storage can be blocked outright (private mode, locked-down webviews) — an
 // unguarded getItem at module eval would sink the whole import graph
 let muted = (() => {
@@ -101,6 +102,12 @@ export function unlockAudio() {
     gBus.curve = curve;
     gBus.oversample = '2x';
     gBus.connect(mGain);
+    // the kit rides its own fader under the music bus so setIntensity can
+    // pull the drums back mid-song — armed at the parked level if a
+    // pre-gesture call already set it
+    kitGain = ac.createGain();
+    kitGain.gain.value = intensity === 'low' ? 0 : 1;
+    kitGain.connect(mGain);
     restart();
     weatherBed(bedWant); // a bed requested before the first gesture arms here
   } catch {
@@ -570,7 +577,7 @@ function noiseBuf() {
   }
   return nbuf;
 }
-function mnoise(t0: number, dur: number, freq: number, vol: number) {
+function mnoise(t0: number, dur: number, freq: number, vol: number, dest?: AudioNode) {
   if (!ac || !mGain) return;
   const s = ac.createBufferSource();
   s.buffer = noiseBuf();
@@ -580,7 +587,7 @@ function mnoise(t0: number, dur: number, freq: number, vol: number) {
   const g = ac.createGain();
   g.gain.setValueAtTime(vol, t0);
   g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  s.connect(f).connect(g).connect(mGain);
+  s.connect(f).connect(g).connect(dest ?? mGain);
   s.start(t0, Math.random());
   s.stop(t0 + dur + 0.02);
 }
@@ -1466,6 +1473,23 @@ let nextT = 0;
 let leadSel = 0; // alt-phrase rotation — flips each pass through the loop
 let pumpTimer: ReturnType<typeof setInterval> | null = null;
 
+// --- intensity layer (spec 2026-11-02): the aim-phase duck --------------
+// 'low' ramps the drum bus silent over ~150ms and halves the stab channel;
+// bass/lead/arp keep running, so the bar count never drifts and the kit's
+// return lands on beat. Default 'high' — orthogonal to music(), a level
+// change is a gain move, never a restart. Menus never call this.
+let intensity: 'low' | 'high' = 'high';
+export const curIntensity = () => intensity;
+export function setIntensity(level: 'low' | 'high') {
+  if (level === intensity) return; // called every frame — same level is free
+  intensity = level;
+  if (!ac || !kitGain) return; // pre-gesture: the node arms at the parked level
+  const t0 = ac.currentTime;
+  kitGain.gain.cancelScheduledValues(t0);
+  kitGain.gain.setValueAtTime(kitGain.gain.value, t0);
+  kitGain.gain.linearRampToValueAtTime(level === 'low' ? 0 : 1, t0 + 0.15);
+}
+
 export function music(name: TrackName | null) {
   if (name === curTrack) return;
   curTrack = name;
@@ -1517,14 +1541,16 @@ function pump() {
       mnote(M2F(bm), t0, stepDur * (tr.bassGate ?? 0.85), tr.bassWave ?? 'triangle', 0.13, tr.slap ? M2F(bm) * 0.55 : 0);
       if (tr.slap) mnoise(t0, 0.03, 3200, 0.06);
     }
-    // arcade brass: short bright chord stabs on their own channel
+    // arcade brass: short bright chord stabs on their own channel — low
+    // intensity halves them instantly (the ramp lives on the kit bus only)
     const st = tr.stab?.[i];
-    if (st) for (const m of st) if (m) mnote(M2F(m), t0, stepDur * 0.6, 'square', 0.032);
-    if (tr.kick[i] && tr.kick[i] !== '.') mnote(150, t0, 0.13, 'sine', 0.45, 45);
-    if (tr.snare[i] && tr.snare[i] !== '.') mnoise(t0, 0.14, 1900, 0.16);
+    if (st) for (const m of st) if (m) mnote(M2F(m), t0, stepDur * 0.6, 'square', intensity === 'low' ? 0.016 : 0.032);
+    // the kit still schedules at gain 0 — the loop stitch never drifts
+    if (tr.kick[i] && tr.kick[i] !== '.') mnote(150, t0, 0.13, 'sine', 0.45, 45, 0, kitGain ?? undefined);
+    if (tr.snare[i] && tr.snare[i] !== '.') mnoise(t0, 0.14, 1900, 0.16, kitGain ?? undefined);
     const hc = tr.hat[i];
-    if (hc === 'c') mnoise(t0, 0.4, 5500, 0.11); // crash — section accents
-    else if (hc && hc !== '.') mnoise(t0, 0.05, 7000, 0.038);
+    if (hc === 'c') mnoise(t0, 0.4, 5500, 0.11, kitGain ?? undefined); // crash — section accents
+    else if (hc && hc !== '.') mnoise(t0, 0.05, 7000, 0.038, kitGain ?? undefined);
     stepIdx++;
     nextT += stepDur;
     if (stepIdx >= tr.lead.length) {

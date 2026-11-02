@@ -5,7 +5,7 @@ import { Missions } from './missions';
 import { Connect } from './connect';
 import { Flee } from './flee';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
-import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry } from '../core/audio';
+import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB, cry, setIntensity } from '../core/audio';
 import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, TYPE_MOVE, EVO_LINES, LEADER_NPC, type FoeMoveKind } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
@@ -2486,6 +2486,9 @@ export class Battle {
     else if (this.phase !== 'won' && this.phase !== 'lost') {
       music(this.enemies.some((e) => e.boss) || this.inRival ? 'gym' : this.inTrainer ? TRAINER_TRACK[this.waveType ?? ''] ?? 'trainer' : BIOME_TRACK[this.theme] ?? 'battle');
     }
+    // the kit ducks while the player holds the sling and reads the board —
+    // a gain move on the drum bus, so the song never restarts or drifts
+    setIntensity(this.phase === 'aim' && this.dragging ? 'low' : 'high');
     // the weather bed rides the same phases the fight does — silence on the map
     weatherBed(
       this.phase !== 'map' && this.phase !== 'won' && this.phase !== 'lost'

@@ -102,8 +102,9 @@ Mood families for typed content (default call, adjust by ear):
 - [x] Draft/reward variant of the title loop so menus don't share one tune.
 - [x] Weather rain/sand noise bed — needs a looping noise source (the one
   allowed sequencer addition); weather already rolls per wave.
-- Intensity layers (kit drops during aim, returns on launch) — real
-  machinery, only with a written design.
+- [x] Intensity layers (kit drops during aim, returns on launch) —
+  `kitGain` drum bus + `setIntensity('low'|'high')`, wired to
+  `phase === 'aim' && dragging` in battle update; `__dbg.intensity` auditions.
 
 ## Verify + report
 

@@ -6,7 +6,7 @@ import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, ti
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { hideWpRate } from '../src/game/weakpoint';
-import { TRACKS, cry, cryIO, cryLive, cryReset, CRY_KO_CAP } from '../src/core/audio';
+import { TRACKS, cry, cryIO, cryLive, cryReset, CRY_KO_CAP, curIntensity, setIntensity } from '../src/core/audio';
 import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift, launchMult, hitFloor } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
@@ -5094,6 +5094,16 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     ok(!(t.loop === true && t.next !== undefined), `${name}: a loop never hands off to next`);
   }
   ok(true, `${Object.keys(TRACKS).length} tracks validated`);
+}
+
+// --- intensity layer (spec 2026-11-02): 'high' is the default, so every
+// track pumps the full kit unless a caller ducks it ----------------------
+{
+  ok(curIntensity() === 'high', 'the kit bus defaults to high — every track pumps full');
+  setIntensity('low');
+  ok(curIntensity() === 'low', 'setIntensity(low) parks the drum bus without an AudioContext');
+  setIntensity('high');
+  ok(curIntensity() === 'high', 'setIntensity(high) restores the drum bus');
 }
 
 // --- daily rule card (B32): one seeded mod per UTC day, same for all ------

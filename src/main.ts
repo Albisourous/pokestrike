@@ -1,6 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, music, toggleMute, syncVolumes, playJingle, buzz, cry, TRACKS, BIOME_TRACK } from './core/audio';
+import { unlockAudio, sfx, music, toggleMute, syncVolumes, playJingle, buzz, cry, TRACKS, BIOME_TRACK, setIntensity } from './core/audio';
 import type { TrackName } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
@@ -391,7 +391,7 @@ window.visualViewport?.addEventListener('resize', resize);
 resize();
 // ?dev also exposes the scene machine + coordinate transform for playtest probes
 if (new URLSearchParams(location.search).has('dev'))
-  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void; room: (theme: Theme, seed?: number) => { bg: number; fg: number; behavior: string }[][]; arenas: () => Record<string, unknown>[]; ui: () => Record<string, boolean | string> } }).__dbg = {
+  (window as unknown as { __dbg: { scene: () => Scene; battle: () => Battle | null; xy: (x: number, y: number) => { x: number; y: number }; stats: typeof statsDump; song: (name: string) => void; intensity: (level: string) => void; room: (theme: Theme, seed?: number) => { bg: number; fg: number; behavior: string }[][]; arenas: () => Record<string, unknown>[]; ui: () => Record<string, boolean | string> } }).__dbg = {
     scene: () => scene,
     battle: () => battle,
     ui: () => ({ homeTab, help: helpOpen, bug: bugOpen, menu: menuOpen, settings: settingsOpen, tasks: tasksOpen, dex: dexOpen, ach: achOpen, board: boardOpen, hatch: hatchOpen, lab: labOpen }),
@@ -430,6 +430,16 @@ if (new URLSearchParams(location.search).has('dev'))
       unlockAudio();
       music(name as TrackName);
       console.log(`♪ ${name}`);
+    },
+    // flip the aim-duck by hand — pair with song() to hear it per track
+    intensity: (level: string) => {
+      if (level !== 'low' && level !== 'high') {
+        console.log(`no intensity '${level}' · try: low, high`);
+        return;
+      }
+      unlockAudio();
+      setIntensity(level);
+      console.log(`intensity · ${level}`);
     },
   };
 
