@@ -3913,7 +3913,8 @@ export class Battle {
       if (lv && !lv.dead && lv.lvl < LV_CAP) {
         this.gainLevels(lv, Math.max(1, Math.round(e.lvl * KO_LV_RATE)) * (e.lvl > lv.lvl ? 2 : 1));
       }
-      for (const p of this.players) if (p !== lv && KO_LV_SHARE > 0) this.gainLevels(p, Math.max(1, Math.round(e.lvl * KO_LV_RATE * KO_LV_SHARE)));
+      const shared = this.players.filter((p) => p !== lv && KO_LV_SHARE > 0 && this.gainLevels(p, Math.max(1, Math.round(e.lvl * KO_LV_RATE * KO_LV_SHARE)), true));
+      if (shared.length && lv) this.pushText({ x: lv.x, y: lv.y - lv.r - 54, text: 'TEAM LV UP', t: 0.8, color: '#9df0ff', big: false });
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
         this.pushText({ x: e.x, y: e.y - e.r - 46, text: label, t: 1.1, color: '#ffd84d', big: true });
@@ -5703,17 +5704,20 @@ export class Battle {
     }
   }
 
-  gainLevels(p: Unit, n: number) {
-    if (p.dead || p.lvl >= LV_CAP) return;
+  // quiet: shared EXP levels the bench with no popup, burst or sfx
+  gainLevels(p: Unit, n: number, quiet = false) {
+    if (p.dead || p.lvl >= LV_CAP) return false;
     const l0 = p.lvl;
     p.lvl = Math.min(LV_CAP, p.lvl + n);
     p.pow *= lvlPow(offStat(p.def.stats, p.def.type), p.lvl) / lvlPow(offStat(p.def.stats, p.def.type), l0);
     const gain = Math.round(p.maxHp * (lvlHp(p.def.stats.hp, p.lvl) / lvlHp(p.def.stats.hp, l0) - 1));
     p.maxHp += gain;
     p.hp = Math.min(p.hp + gain, p.maxHp);
+    if (quiet) return true;
     this.pushText({ x: p.x, y: p.y - p.r - 36, text: `LV ${p.lvl}!`, t: 0.9, color: '#9df0ff', big: false });
     this.burst(p.x, p.y, '#9df0ff', 6, 240, 0.8);
     sfx('ready');
+    return true;
   }
 
   // A dupe capture doesn't fill a box slot — it feeds the copy you own:
