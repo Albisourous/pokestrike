@@ -8,6 +8,7 @@ import type { Battle, Unit } from './battle';
 import { MAP_W, MAP_H, T_GRASS, drawTile } from './map';
 import type { MapNode, RegionMap } from './map';
 import * as MT from './maptiles';
+import { font } from './ui';
 
 export const SECRET_ODDS: Partial<Record<ClearRank, number>> = { S: 0.35, A: 0.15 };
 export const SECRET_STARS = [40, 60] as const;
@@ -138,7 +139,6 @@ export interface SecretState {
   hpSnap: { hp: number; dead: boolean }[];
   rngSaved: () => number;
   had: boolean;
-  caught?: boolean;
 }
 
 const internals = (b: Battle) => b as unknown as SecretBattle;
@@ -205,12 +205,10 @@ export function secretWon(b: Battle) {
   const boss = x.enemies.find((e) => e.boss) ?? x.enemies[0];
   const rec = { ...s.def, lvl: x.catchLvl(boss?.lvl ?? 1) };
   x.rng = s.rngSaved;
-  if (!s.caught) {
-    if (s.had) x.absorbDupe(rec);
-    else if (!x.box.some((d) => d.id === rec.id) && !x.players.some((p) => p.def.id === rec.id)) {
-      x.boxAdd(rec);
-      recordCapture([rec.id]);
-    }
+  if (s.had) x.absorbDupe(rec);
+  else if (!x.box.some((d) => d.id === rec.id) && !x.players.some((p) => p.def.id === rec.id)) {
+    x.boxAdd(rec);
+    recordCapture([rec.id]);
   }
   const tier = s.row >= 3 ? 1 : 0;
   const pay = x.earnStars(SECRET_STARS[tier]);
@@ -252,7 +250,7 @@ export function drawSecretNode(ctx: CanvasRenderingContext2D, nx: number, ny: nu
   drawTile(ctx, MT.WALL_RUIN, nx - cell, ny - cell * 1.35, cell * 2, cell * 2);
   ctx.save();
   ctx.globalAlpha = 0.7 + Math.sin(time * 5) * 0.25;
-  ctx.font = `bold ${Math.max(14, Math.round(cell * 0.9))}px sans-serif`;
+  ctx.font = font(Math.max(14, Math.round(cell * 0.9)));
   ctx.fillStyle = '#ffd84d';
   ctx.fillText('?', nx - cell * 0.18, ny + cell * 0.2);
   ctx.globalAlpha = 0.75;
