@@ -12,12 +12,12 @@ import {
 } from '../meta';
 import {
   FX_PETAL,
-  TILE_MUSEUM,
+  FLOWER_PINK,
+  TILE_HALL,
   TILE_TOWER,
   TREE_PINE,
   TREE_ROUND,
   TREE_TEAL,
-  WALL_WOOD,
   type TileRect,
 } from '../maptiles';
 import { taskResetsIn } from '../tasks';
@@ -28,18 +28,19 @@ const H = 960;
 const S = 1.5;
 type Rect = { x: number; y: number; w: number; h: number };
 
-const HALL_SPRITE: TileRect = [851, 200, 78, 76];
+const LAB_SPRITE: TileRect = [397, 75, 90, 70];
+const HALL_SPRITE = TILE_HALL;
 const CAFE_ROOF: TileRect = [865, 327, 28, 28];
 const CAFE_CAP: TileRect = [863, 355, 32, 7];
 const CAFE_FRONT: TileRect = [863, 362, 110, 36];
-const LAB = { x: 65, y: 145, w: TILE_MUSEUM[2] * S, h: TILE_MUSEUM[3] * S };
-const HALL = { x: 352, y: 154, w: HALL_SPRITE[2] * S, h: HALL_SPRITE[3] * S };
-const BOARD = { x: 55, y: 413.5, w: CAFE_FRONT[2] * S, h: (CAFE_ROOF[3] + CAFE_CAP[3] + CAFE_FRONT[3]) * S };
-const TOWER = { x: 318, y: 373, w: TILE_TOWER[2] * S, h: TILE_TOWER[3] * S };
-const LAB_PLATE = { x: 128, y: 268, w: 130, h: 46 };
-const HALL_PLATE = { x: 261, y: 268, w: 130, h: 46 };
-const BOARD_PLATE = { x: 175, y: 520, w: 130, h: 46 };
-const TOWER_PLATE = { x: 408, y: 520, w: 130, h: 46 };
+const LAB = { x: 80, y: 155, w: LAB_SPRITE[2] * S, h: LAB_SPRITE[3] * S };
+const HALL = { x: 330, y: 147, w: HALL_SPRITE[2] * S, h: HALL_SPRITE[3] * S };
+const BOARD = { x: 78, y: 411.5, w: CAFE_FRONT[2] * S, h: (CAFE_ROOF[3] + CAFE_CAP[3] + CAFE_FRONT[3]) * S };
+const TOWER = { x: 315, y: 371, w: TILE_TOWER[2] * S, h: TILE_TOWER[3] * S };
+const LAB_PLATE = { x: 55, y: 322, w: 120, h: 46 };
+const HALL_PLATE = { x: 338, y: 322, w: 120, h: 46 };
+const BOARD_PLATE = { x: 101, y: 578, w: 120, h: 46 };
+const TOWER_PLATE = { x: 321, y: 578, w: 120, h: 46 };
 
 const union = (a: Rect, b: Rect): Rect => {
   const x = Math.min(a.x, b.x);
@@ -48,6 +49,18 @@ const union = (a: Rect, b: Rect): Rect => {
 };
 
 export const TOWN_LOTS: Rect[] = [LAB, HALL, BOARD, TOWER];
+export const TOWN_DOORS = {
+  lab: LAB.x + (420 - LAB_SPRITE[0]) * S,
+  hall: HALL.x + (892 - HALL_SPRITE[0]) * S,
+  jobBoard: BOARD.x + (918 - CAFE_FRONT[0]) * S,
+  trophies: TOWER.x + (1485 - TILE_TOWER[0]) * S,
+};
+export const TOWN_PLATES = {
+  lab: LAB_PLATE,
+  hall: HALL_PLATE,
+  jobBoard: BOARD_PLATE,
+  trophies: TOWER_PLATE,
+};
 export const LAB_BTN = union(LAB, LAB_PLATE);
 export const BOARD_BTN = union(HALL, HALL_PLATE);
 export const TASKS_BTN = union(BOARD, BOARD_PLATE);
@@ -69,10 +82,10 @@ export interface TownStroll {
 }
 
 export const TOWN_FOLK: TownStroll[] = [
-  { id: 'scientist', seed: 3.1, hx: 126, hy: 344, x0: 60, y0: 326, x1: 200, y1: 356, speed: 26, h: 30 },
-  { id: 'gentleman', seed: 5.3, hx: 404, hy: 344, x0: 330, y0: 326, x1: 480, y1: 356, speed: 20, h: 30 },
-  { id: 'lass', seed: 7.7, hx: 128, hy: 596, x0: 60, y0: 578, x1: 210, y1: 608, speed: 30, h: 30 },
-  { id: 'youngster', seed: 8.8, hx: 404, hy: 596, x0: 330, y0: 578, x1: 480, y1: 608, speed: 55, h: 30 },
+  { id: 'scientist', seed: 3.1, hx: 126, hy: 298, x0: 60, y0: 282, x1: 200, y1: 312, speed: 26, h: 30 },
+  { id: 'gentleman', seed: 5.3, hx: 404, hy: 298, x0: 330, y0: 282, x1: 480, y1: 312, speed: 20, h: 30 },
+  { id: 'lass', seed: 7.7, hx: 128, hy: 552, x0: 60, y0: 538, x1: 210, y1: 568, speed: 30, h: 30 },
+  { id: 'youngster', seed: 8.8, hx: 404, hy: 552, x0: 330, y0: 538, x1: 480, y1: 568, speed: 55, h: 30 },
   { id: 'shopkeeper_m', seed: 9.9, hx: 220, hy: 655, x0: 170, y0: 648, x1: 370, y1: 662, speed: 26, h: 30 },
   { id: 'norman', seed: 4.2, hx: 270, hy: 769, x0: 180, y0: 762, x1: 360, y1: 776, speed: 24, h: 30, noRight: true },
 ];
@@ -113,20 +126,17 @@ const PATH_INNER: TileRect = [82, 407, 36, 36];
 const SIGN: TileRect = [1657, 18, 17, 20];
 const FLOWER_BED: TileRect = [1655, 160, 64, 36];
 const FOUNTAIN: TileRect = [1984, 395, 49, 60];
-const FENCE_HALF: TileRect = [1768, 292, 24, 12];
 const TREE_TYPES = [TREE_ROUND, TREE_PINE, TREE_TEAL] as const;
 const RIBBONS: Rect[] = [
-  { x: 40, y: 318, w: 460, h: 44 },
-  { x: 40, y: 570, w: 460, h: 44 },
-  { x: 248, y: 318, w: 44, h: 382 },
-  { x: 82, y: 268, w: 44, h: 50 },
-  { x: 391, y: 268, w: 44, h: 50 },
-  { x: 129, y: 520, w: 44, h: 50 },
-  { x: 362, y: 520, w: 44, h: 50 },
-  { x: 160, y: 640, w: 220, h: 140 },
+  { x: 40, y: 276, w: 460, h: 42 },
+  { x: 40, y: 532, w: 460, h: 42 },
+  { x: 255, y: 318, w: 44, h: 214 },
+  { x: 255, y: 574, w: 44, h: 76 },
+  { x: 160, y: 650, w: 220, h: 130 },
 ];
 
 let townBake: HTMLCanvasElement | null = null;
+let keyedFountain: HTMLCanvasElement | null = null;
 
 function tileFill(ctx: CanvasRenderingContext2D, r: Rect, tile: TileRect, scale: number) {
   const size = tile[2] * scale;
@@ -187,6 +197,11 @@ function drawForest(ctx: CanvasRenderingContext2D) {
 
 function drawPathNetwork(ctx: CanvasRenderingContext2D) {
   for (const r of RIBBONS) drawRibbon(ctx, r);
+  for (const lot of [LAB, HALL, BOARD, TOWER]) {
+    const doorX = lot === LAB ? TOWN_DOORS.lab : lot === HALL ? TOWN_DOORS.hall : lot === BOARD ? TOWN_DOORS.jobBoard : TOWN_DOORS.trophies;
+    const streetY = lot === LAB || lot === HALL ? 276 : 532;
+    drawRibbon(ctx, { x: doorX - 21, y: lot.y + lot.h, w: 42, h: streetY - lot.y - lot.h });
+  }
   for (const r of RIBBONS) {
     const border = Math.min(20, r.w / 2, r.h / 2);
     tileFill(ctx, { x: r.x + border, y: r.y + border, w: r.w - border * 2, h: r.h - border * 2 }, PATH_INNER, 2);
@@ -227,13 +242,78 @@ function drawCafe(ctx: CanvasRenderingContext2D) {
   drawTile(ctx, CAFE_FRONT, BOARD.x, BOARD.y + (CAFE_ROOF[3] + CAFE_CAP[3]) * S, BOARD.w, CAFE_FRONT[3] * S);
 }
 
-function drawFencesAndFlowers(ctx: CanvasRenderingContext2D) {
-  drawTile(ctx, FENCE_HALF, 46, 300, FENCE_HALF[2] * S, FENCE_HALF[3] * S);
-  drawTile(ctx, WALL_WOOD, 438, 300, WALL_WOOD[2] * S, WALL_WOOD[3] * S);
-  drawTile(ctx, WALL_WOOD, 48, 552, WALL_WOOD[2] * S, WALL_WOOD[3] * S);
-  drawTile(ctx, WALL_WOOD, 288, 552, WALL_WOOD[2] * S, WALL_WOOD[3] * S);
+function drawYardProps(ctx: CanvasRenderingContext2D) {
+  const props = [
+    { tile: SIGN, x: 465, y: 225 },
+    { tile: FLOWER_PINK, x: 446, y: 438 },
+    { tile: SIGN, x: 52, y: 478 },
+  ];
+  for (const p of props) {
+    const w = p.tile[2] * S, h = p.tile[3] * S;
+    ctx.save();
+    ctx.shadowColor = 'rgba(20,28,24,0.35)';
+    ctx.shadowBlur = 4;
+    ctx.fillStyle = 'rgba(20,28,24,0.24)';
+    ctx.beginPath();
+    ctx.ellipse(p.x + w / 2, p.y + h - 1, w * 0.34, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    drawTile(ctx, p.tile, p.x, p.y, w, h);
+  }
   drawTile(ctx, FLOWER_BED, 58, 660, FLOWER_BED[2] * S, FLOWER_BED[3] * S);
   drawTile(ctx, FLOWER_BED, 386, 660, FLOWER_BED[2] * S, FLOWER_BED[3] * S);
+}
+
+function drawKeyedFountain(atlas: HTMLImageElement): HTMLCanvasElement {
+  if (keyedFountain) return keyedFountain;
+  const w = FOUNTAIN[2], h = FOUNTAIN[3];
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const g = canvas.getContext('2d', { willReadFrequently: true })!;
+  g.drawImage(atlas, FOUNTAIN[0], FOUNTAIN[1], w, h, 0, 0, w, h);
+  const image = g.getImageData(0, 0, w, h);
+  const d = image.data;
+  const paving = (i: number) => {
+    const r = d[i], green = d[i + 1], b = d[i + 2];
+    return d[i + 3] > 0 && r >= 160 && green >= 150 && b >= 125 &&
+      Math.max(r, green, b) - Math.min(r, green, b) < 100;
+  };
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], green = d[i + 1], b = d[i + 2];
+    if (r > 140 && b > 110 && green < 150 && r - green > 50 && b - green > 40) d[i + 3] = 0;
+  }
+  const palette: number[][] = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (x > 1 && y > 1 && x < w - 2 && y < h - 2) continue;
+    const i = (y * w + x) * 4;
+    if (paving(i)) palette.push([d[i], d[i + 1], d[i + 2]]);
+  }
+  const seen = new Uint8Array(w * h);
+  const queue = new Int32Array(w * h);
+  let head = 0, tail = 0;
+  const matchesPaving = (i: number) => paving(i) && palette.some(([r, green, b]) =>
+    (d[i] - r) ** 2 + (d[i + 1] - green) ** 2 + (d[i + 2] - b) ** 2 <= 3600);
+  const seed = (x: number, y: number) => {
+    const p = y * w + x, i = p * 4;
+    if (!seen[p] && matchesPaving(i)) {
+      seen[p] = 1;
+      queue[tail++] = p;
+    }
+  };
+  for (let x = 0; x < w; x++) { seed(x, 0); seed(x, h - 1); }
+  for (let y = 1; y < h - 1; y++) { seed(0, y); seed(w - 1, y); }
+  while (head < tail) {
+    const p = queue[head++], x = p % w, y = (p / w) | 0;
+    d[p * 4 + 3] = 0;
+    if (x) seed(x - 1, y);
+    if (x + 1 < w) seed(x + 1, y);
+    if (y) seed(x, y - 1);
+    if (y + 1 < h) seed(x, y + 1);
+  }
+  g.putImageData(image, 0, 0);
+  keyedFountain = canvas;
+  return canvas;
 }
 
 function bakeTown(): HTMLCanvasElement | null {
@@ -249,13 +329,14 @@ function bakeTown(): HTMLCanvasElement | null {
   drawForest(ctx);
   drawPathNetwork(ctx);
 
-  drawBuilding(ctx, LAB, TILE_MUSEUM);
+  drawBuilding(ctx, LAB, LAB_SPRITE);
   drawBuilding(ctx, HALL, HALL_SPRITE);
   drawCafe(ctx);
   drawBuilding(ctx, TOWER, TILE_TOWER);
-  drawFencesAndFlowers(ctx);
+  drawYardProps(ctx);
   drawTile(ctx, SIGN, 378, 718, SIGN[2] * S, SIGN[3] * S);
-  drawTile(ctx, FOUNTAIN, 270 - FOUNTAIN[2] * S / 2, 708 - FOUNTAIN[3] * S / 2, FOUNTAIN[2] * S, FOUNTAIN[3] * S);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(drawKeyedFountain(atlas), 270 - FOUNTAIN[2] * S / 2, 708 - FOUNTAIN[3] * S / 2, FOUNTAIN[2] * S, FOUNTAIN[3] * S);
   return canvas;
 }
 

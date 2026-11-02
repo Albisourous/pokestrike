@@ -14,7 +14,7 @@ import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
 import { dexIds, settings, setSetting, bagStock, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
-import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost } from './tasks';
+import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost, raidPick } from './tasks';
 import { drawRaidLobby } from './home/raid';
 import type { TaskView } from './tasks';
 import { drawClimb, CLIMB_SCENE } from './home/climb';
@@ -28,7 +28,7 @@ import { drawMonsBody } from './home/mons';
 export { DEX_BTN, SETS_BTN, PARTNERS_BTN, TEAM_BTN, EDIT_TEAM_BTN, partnersStripAt, teamStageAt } from './home/mons';
 export { DEX_DETAIL_R, dexBuyRect, dexRowAt, dexScrollMax, drawDex, drawDexDetail } from './home/mons';
 import { drawTownBody } from './home/town';
-export { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_FOLK, TOWN_LOTS, townStrollAt } from './home/town';
+export { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_DOORS, TOWN_FOLK, TOWN_LOTS, TOWN_PLATES, townStrollAt } from './home/town';
 export type { TownStroll } from './home/town';
 export { HOF_CLIMB, OVL_CLOSE, achScrollMax, drawAch, drawBoard, drawLab, drawPauseCard, labHit, labScrollMax } from './home/overlays';
 import { drawLoginDrop } from './home/overlays';
@@ -1012,30 +1012,21 @@ function drawTabBar(
   freeNow: boolean,
   taskN: number,
 ) {
-  // the bar is a dark command strip — the menu window inverted
   uiWindow(ctx, TAB_BAR, { dark: true, rad: 18 });
 
-  void loadItem('amulet-coin');
+  void loadItem('poke-ball');
   void loadItem('badges/1');
   void loadItem('master-ball');
+  void loadItem('town-map');
   void loadSprite(25);
+  const raidId = raidPick().id;
+  void loadSprite(raidId);
 
   for (const cell of TAB_CELLS) {
     const on = cell.tab === active;
     const cx = cell.x + cell.w / 2;
-    // every pill rests inside the bar — a still-raised CLIMB read as
-    // half-selected, so clicking off puts it all the way back in
-    const hero = cell.tab === 'climb';
-    const rest = { x: cell.x + 7, y: cell.y + 7, w: cell.w - 14, h: cell.h - 14 };
-    // the active tab DWARFS its cell — wider than the column and riding
-    // proud of the bar so the picked tab reads from across the room;
-    // CLIMB pops tallest as the hero
-    const big = hero
-      ? { x: cell.x - 1, y: cell.y - 20, w: cell.w + 2, h: cell.h + 14 }
-      : { x: cell.x - 2, y: cell.y - 16, w: cell.w + 4, h: cell.h + 10 };
-    // grow-in on switch: back-out ease overshoots the pill past `big` then
-    // settles — a spring pop, not an instant swap. The outgoing card shrinks
-    // back down over ~0.18s off the stamp main sets on the swap
+    const rest = { x: cell.x + 3, y: cell.y + 3, w: cell.w - 6, h: cell.h - 6 };
+    const big = { x: cell.x + 3, y: cell.y - 10, w: cell.w - 6, h: cell.h + 7 };
     const grow = on
       ? bo(clamp01((t - tabPressT) / 0.24))
       : cell.tab === swapFrom
@@ -1048,72 +1039,79 @@ function drawTabBar(
       w: rest.w + (big.w - rest.w) * grow,
       h: rest.h + (big.h - rest.h) * grow,
     };
-    // the drawn pill is the tap target — a popped card rides above the bar,
-    // so the bare cell would leave its visible crown a dead zone
     cell.hit.x = Math.min(cell.x, pr.x);
     cell.hit.y = Math.min(cell.y, pr.y);
     cell.hit.w = Math.max(cell.x + cell.w, pr.x + pr.w) - cell.hit.x;
     cell.hit.h = Math.max(cell.y + cell.h, pr.y + pr.h) - cell.hit.y;
     if (lit) {
-      // the picked tab pops a paper window out of the strip — same
-      // grow/spring `pr` math, the double-frame is the new crown
-      uiWindow(ctx, pr, { rad: 14 });
+      roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
+      ctx.fillStyle = GOLD;
+      ctx.fill();
+      ctx.save();
+      roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
+      ctx.clip();
+      const crown = ctx.createLinearGradient(0, pr.y, 0, pr.y + pr.h);
+      crown.addColorStop(0, GOLD_HI);
+      crown.addColorStop(0.2, GOLD);
+      crown.addColorStop(1, GOLD);
+      ctx.fillStyle = crown;
+      ctx.fillRect(pr.x, pr.y, pr.w, pr.h);
+      ctx.restore();
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
+      roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
+      ctx.stroke();
     } else {
       roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
-      ctx.fillStyle = 'rgba(248,248,240,0.07)';
+      ctx.fillStyle = '#343c62';
       ctx.fill();
+      ctx.strokeStyle = INK_SOFT;
+      ctx.lineWidth = 2;
+      roundRect(ctx, pr.x, pr.y, pr.w, pr.h, 14);
+      ctx.stroke();
     }
 
-    const icY = cell.y + 25;
-    const tint = lit ? INK : '#c8cce8';
-    // press-pop — the just-tapped pill squashes for ~0.16s (stamp set in main)
     const pop = on ? Math.max(0, 1 - (t - tabPressT) / 0.16) : 0;
-    // every tab icon is a real asset that says what the tab is: the amulet
-    // coin spends (SHOP), the badge climbs the gym ladder, the master ball is
-    // the day's big catch (RAID), a mon face owns the collection, a house is
-    // the town
-    const spr =
-      cell.tab === 'shop'
-        ? itemSprite('amulet-coin')
-        : cell.tab === 'climb'
-          ? itemSprite('badges/1')
-          : cell.tab === 'raid'
-            ? itemSprite('master-ball')
+    const iconY = pr.y + 27;
+    const iconSize = 38 + 8 * grow;
+    const spr = cell.tab === 'shop' ? itemSprite('poke-ball')
+      : cell.tab === 'climb' ? itemSprite('badges/1')
+        : cell.tab === 'raid' ? itemSprite('master-ball')
+          : cell.tab === 'town' ? itemSprite('town-map')
             : undefined;
     ctx.save();
-    ctx.globalAlpha = 0.9 + 0.1 * clamp01(grow);
-    const iscale = (1 + 0.22 * grow) * (1 - 0.1 * pop);
-    if (iscale !== 1) {
-      ctx.translate(cx, icY);
-      ctx.scale(iscale, iscale);
-      ctx.translate(-cx, -icY);
-    }
-    if (spr) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(spr, cx - 18, icY - 18, 36, 36);
-    } else if (cell.tab === 'town') drawTile(ctx, TILE_TOWN, cx - 18, icY - 20, 36, 36);
-    else if (cell.tab === 'mons') {
+    ctx.globalAlpha = 1;
+    ctx.translate(cx, iconY);
+    ctx.scale(1 - 0.1 * pop, 1 - 0.1 * pop);
+    if (cell.tab === 'mons') {
       try {
-        drawMon(ctx, 25, cx, icY, 38);
+        drawMon(ctx, 25, 0, 0, iconSize);
       } catch {
-        ballGlyph(ctx, cx, icY, 1, tint);
+        ballGlyph(ctx, 0, 0, 1, PAPER);
       }
-    } else if (cell.tab === 'climb') peakGlyph(ctx, cx, icY, 1, tint);
-    else {
-      ctx.fillStyle = tint;
-      fillStar(ctx, cx, icY, 11);
+    } else if (cell.tab === 'raid') {
+      try {
+        drawMon(ctx, raidId, 0, 0, iconSize);
+      } catch {
+        if (spr) {
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(spr, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+        }
+      }
+    } else if (spr) {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(spr, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
+    } else if (cell.tab === 'climb') {
+      peakGlyph(ctx, 0, 0, 1, PAPER);
     }
     ctx.restore();
 
-    ctx.font = fontB(12);
+    ctx.font = fontB(on ? 14 : 13);
     ctx.textAlign = 'center';
-    ctx.fillStyle = lit ? INK : '#c8cce8';
-    ctx.fillText(cell.tab.toUpperCase(), cx, cell.y + cell.h - 14);
+    ctx.fillStyle = on ? INK : PAPER;
+    ctx.fillText(cell.tab.toUpperCase(), cx, pr.y + pr.h - 10);
 
-    // badge dots — the notification pull. SHOP breathes gold while the
-    // daily free pull waits, MONS while a line-set bounty sits; TOWN carries
-    // the claimable-task count in red; RAID glows chroma till the boss falls.
-    const bx = cx + 20, by = cell.y + 14;
+    const bx = pr.x + pr.w - 9, by = pr.y + 9;
     if (cell.tab === 'raid' && !raidDoneToday()) {
       ctx.save();
       ctx.globalAlpha = 0.7 + Math.sin(t * 5) * 0.3;
@@ -1914,6 +1912,7 @@ export function balanceChip(
   r: { x: number; y: number; w: number; h: number },
   starN: number,
   dust?: number,
+  fontPx = 10,
 ) {
   chipStars = chase(chipStars, starN);
   if (dust != null) chipDust = chase(chipDust, dust);
@@ -1921,7 +1920,7 @@ export function balanceChip(
   uiWindow(ctx, r, { dark: true, rad: r.h / 2, shadow: false });
   void loadItem('star-piece');
   ctx.textAlign = 'left';
-  ctx.font = fontB(10);
+  ctx.font = fontB(fontPx);
   const starTxt = `${Math.round(chipStars)}`;
   const dustTxt = `${Math.round(chipDust)}`;
   // center the whole cluster — icon + counts — not just the first glyph
@@ -5121,11 +5120,11 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     const r = tasksTabRect(i);
     uiWindow(ctx, r, { dark: id === tab, rad: 14 });
   });
-  uiBand(ctx, TASKS_PANEL, 'TASKS', { sub: `NEW TASKS ${taskResetsIn(tab)}` });
+  overlayBandTitle(ctx, TASKS_PANEL, 'TASKS', { sub: `NEW TASKS ${taskResetsIn(tab)}` });
   TASKS_TABS.forEach((id, i) => {
     const r = tasksTabRect(i);
     const on = id === tab;
-    ctx.font = font(10);
+    fitFontB(ctx, id.toUpperCase(), 18, r.w - 12);
     ctx.textAlign = 'center';
     ctx.fillStyle = on ? PARCH : INK_SOFT;
     ctx.fillText(id.toUpperCase(), r.x + r.w / 2, r.y + r.h - 7);
@@ -5161,7 +5160,7 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     const textW = rx - 14 - tx; // label + bar share this width
 
     ctx.textAlign = 'left';
-    fitFontB(ctx, v.label, 10, textW - 52);
+    fitFontB(ctx, v.label, 18, textW - 52);
     ctx.fillStyle = v.claimed ? INK_FAINT : INK;
     ctx.fillText(v.label, tx, r.y + 22);
     ctx.font = fontB(10);
@@ -5169,12 +5168,13 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     let dsc = v.desc.toUpperCase();
     const dscW = rx - tx - 6; // the reward cell's column — never cross it
     while (dsc.length > 3 && ctx.measureText(dsc + '…').width > dscW) dsc = dsc.slice(0, -1);
-    ctx.fillText(dsc === v.desc.toUpperCase() ? dsc : dsc + '…', tx, r.y + 35);
+    ctx.fillText(dsc === v.desc.toUpperCase() ? dsc : dsc + '…', tx, r.y + 43);
     // the counter rides the label line — the claim slot is for the button
-    ctx.font = fontB(10);
+    const counter = `${v.have}/${v.n}`;
+    fitFontB(ctx, counter, 18, 48);
     ctx.textAlign = 'right';
     ctx.fillStyle = v.claimed ? INK_FAINT : ready ? INK : GOLD;
-    ctx.fillText(`${v.have}/${v.n}`, tx + textW, r.y + 22);
+    ctx.fillText(counter, tx + textW, r.y + 22);
     ctx.textAlign = 'left';
 
     // the progress track is the card's foot — a full-width groove with the
@@ -5227,7 +5227,7 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     ctx.textAlign = 'center';
     ctx.fillStyle = v.claimed ? INK_FAINT : ready ? GOLD : INK_SOFT;
     const rewardName = (BAG_ITEMS.find((it) => it.id === v.reward)?.name ?? v.reward).toUpperCase();
-    fitFontB(ctx, rewardName, 10, 82);
+    fitFontB(ctx, rewardName, 18, 82);
     ctx.fillText(rewardName, rx + 42, iconY + iconSz + 12);
     ctx.textAlign = 'left';
 
@@ -5237,17 +5237,23 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
       ctx.save();
       ctx.shadowColor = GOLD;
       ctx.shadowBlur = 6 + (Math.sin(t * 4) * 0.5 + 0.5) * 8;
-      pill(ctx, cr, { c: '#1b2140', cd: INK, tc: GOLD_HI, label: 'CLAIM' });
+      pill(ctx, cr, { c: '#1b2140', cd: INK, tc: GOLD_HI, label: '' });
+      fitFontB(ctx, 'CLAIM', 18, cr.w - 8);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = GOLD_HI;
+      ctx.fillText('CLAIM', cr.x + cr.w / 2, cr.y + cr.h / 2 - 1);
       ctx.restore();
     } else if (v.claimed) {
-      ctx.font = fontB(10);
+      ctx.font = fontB(18);
       const cw = ctx.measureText('CLAIMED').width + 14;
-      chip(ctx, cr.x + (cr.w - cw) / 2, cr.y + (cr.h - 16) / 2, 'CLAIMED', { bg: '#d0d0c8', fg: INK_FAINT });
+      chip(ctx, cr.x + (cr.w - cw) / 2, cr.y + (cr.h - 16) / 2, 'CLAIMED', { bg: '#d0d0c8', fg: INK_FAINT, fontPx: 18 });
     } else {
       // not done — the slot holds the dimmed target where a button would be
-      ctx.font = fontB(10);
+      ctx.font = fontB(13);
       ctx.textAlign = 'center';
       ctx.fillStyle = INK_FAINT;
+      fitFontB(ctx, 'IN THE FIELD', 13, cr.w - 8);
       ctx.fillText('IN THE FIELD', cr.x + cr.w / 2, cr.y + cr.h / 2 + 3);
     }
   });
