@@ -30,6 +30,7 @@ import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
 import { installField2, stepField2, laserPlan, icePlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
+import { drawRunCard, shareLink, type RunCard } from '../src/game/share';
 import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
 
 let fails = 0;
@@ -5797,6 +5798,32 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   };
   const gaugeDraws = pullDraws(gaugeDef), evolvedDraws = pullDraws(evolvedDef);
   ok(gaugeDraws === evolvedDraws && gaugeDraws === 3, `one pull keeps three rng draws (${gaugeDraws} vs ${evolvedDraws})`);
+}
+
+// share card: draws headless on a stub canvas, and the link carries the seed
+{
+  const g = globalThis as Record<string, unknown>;
+  const fake: any = new Proxy({}, {
+    get: (_, k) =>
+      k === 'measureText' ? () => ({ width: 40 })
+      : k === 'getImageData' ? (_x: number, _y: number, w: number, h: number) => ({ data: new Uint8ClampedArray(w * h * 4), width: w, height: h })
+      : k === 'createLinearGradient' || k === 'createRadialGradient' || k === 'createPattern' ? () => ({ addColorStop() {} })
+      : () => {},
+    set: () => true,
+  });
+  const doc0 = g.document;
+  g.document = { createElement: () => ({ width: 0, height: 0, getContext: () => fake }) };
+  const card: RunCard = { won: false, depth: 5, score: 12345, team: ROSTER.slice(0, 4), mvpIdx: 1, ranks: [undefined, undefined, 'S', 'A', undefined, 'B'], bestCombo: 7, loot: 3, asc: 2, seed: 424242, build: 'test', theme: 'grove', base: 'https://x.test/pokestrike/' };
+  let threw = '';
+  try {
+    drawRunCard(fake, card);
+    drawRunCard(fake, { ...card, won: true, team: [], ranks: [] });
+  } catch (e) {
+    threw = String(e);
+  }
+  g.document = doc0;
+  ok(!threw, `share card draws headless${threw ? ` (${threw})` : ''}`);
+  ok(shareLink(card.base, card.seed) === 'https://x.test/pokestrike/?seed=424242', 'share link carries the run seed');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
