@@ -30,6 +30,7 @@ import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
 import { installField2, stepField2, laserPlan, icePlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
+import { EVO_FLASH, EVO_T, evoActive, evoScene, skipEvo, startEvo, tickEvo } from '../src/game/evolve';
 import { drawRunCard, shareLink, type RunCard } from '../src/game/share';
 import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
 import { SECRET_IDS, rollSecret, maybeSecret, enterSecret, placeSecret, closeSecret } from '../src/game/secret';
@@ -1683,6 +1684,25 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(p.def.id === 130, `Magikarp evolved into ${p.def.name}`);
   const m = ROLE_MODS[roleOf(p.def.stats, p.def.healer)];
   ok(Math.abs(p.pow - m.pow * lvlPow(offStat(p.def.stats, p.def.type), 50)) < 0.001, `levels survive evolution (pow ${p.pow.toFixed(2)} vs base ${m.pow})`);
+}
+
+// --- evolve scene: plays out, lands on the evolved species, tap skips ------
+{
+  while (evoActive()) skipEvo(); // earlier blocks queued scenes of their own
+  const karp = ROSTER.find((r) => r.id === 129)!;
+  const b = new Battle(arena, [karp, ...team()], makeStage(3, 'T'), mulberry32(3));
+  const p = (b as any).players[0];
+  (b as any).absorbDupe(karp);
+  ok(evoActive() && evoScene()!.from === 129 && evoScene()!.to === 130, 'a fielded evolution opens the evolve scene');
+  let n = 0;
+  while (evoActive() && n++ < 100) tickEvo(1 / 30);
+  ok(!evoActive() && n <= Math.ceil(EVO_T * 30) + 1 && p.def.id === 130, `scene ends inside ${EVO_T}s on ${p.def.name} (${n} frames)`);
+  startEvo(4, 5);
+  tickEvo(0.4);
+  skipEvo();
+  ok(evoActive() && evoScene()!.t >= EVO_FLASH, 'first tap jumps the flicker to the flash');
+  skipEvo();
+  ok(!evoActive(), 'second tap ends the scene');
 }
 
 // --- split evolution defers to the player's pick on the reward screen ----

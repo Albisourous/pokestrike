@@ -25,6 +25,7 @@ import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
 import { STAGE_GIMMICKS, BULLET_GIMMICKS, DRAIN_MOVE, DRAIN_PCT, isGentleRoom, bulletHints, type BulletGimmick, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
+import { startEvo } from './evolve';
 import { installField2, stepField2, drawField2, drawField2Floor, blockField2, labelField2, drawField2Hint, type Field2, type Field2Fx } from './gimmicks2';
 import { abilityNotice } from './abilities';
 import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, abilityLabel, weatherSpeed, resetAbilities } from './abilities';
@@ -5719,6 +5720,7 @@ export class Battle {
       if (owned) this.evolveUnit(owned, next); // the flicker cinematic owns the payoff
       else this.box[bi] = this.evoMerge(this.box[bi], next, shiny); // markers survive a boxed evolution
       recordCapture([next.id]); // evo-only species only ever enter the dex here
+      if (!owned) startEvo(def.id, next.id, !!this.box[bi].shiny);
       const evoLine = `${def.name.toUpperCase()} evolved into ${next.name.toUpperCase()}!`;
       this.pushText({
         x: owned ? owned.x : this.arena.x + this.arena.w / 2,
@@ -5770,7 +5772,7 @@ export class Battle {
     if (c.unit) this.evolveUnit(c.unit, next);
     else if (c.boxDef) {
       const bi = this.box.indexOf(c.boxDef);
-      if (bi >= 0) this.box[bi] = this.evoMerge(c.boxDef, next);
+      if (bi >= 0) (this.box[bi] = this.evoMerge(c.boxDef, next)), startEvo(c.boxDef.id, next.id, !!c.boxDef.shiny);
       else {
         // it left the box mid-queue (swapped onto the team) — find the unit
         const u = this.players.find((p) => p.def === c.boxDef);
@@ -5824,7 +5826,7 @@ export class Battle {
     p.cdMax = Math.max(1, Math.round(bumpCooldown(nd.type) * this.cdMult) - p.cdMod);
     p.cd = Math.min(p.cd, p.cdMax);
     this.refreshTraits(); // evolving can change type — retally immediately
-    this.evoFx.push({ u: p, from: fromId, to: nd.id, t: 0, revealed: false });
+    startEvo(fromId, nd.id, p.shiny);
   }
 
   // Reseat a unit on a new species: role/stats recomputed, hp carried as a
