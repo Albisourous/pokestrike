@@ -133,3 +133,90 @@ Sitrus heals 30% max HP (MS: 50 → 100, so ×2). It shares the oran heal branch
   That's harmless here, but any future port of the 9000→50000 enemy curve should round once at spawn.
 - Open: the per-turn evolution routine itself wasn't located in `.text` yet (only the loader). Next step:
   xref `field_items` table global `DAT_0012b734` in Ghidra (`~/re/gproj/monst`).
+
+## code.bin findings (Ghidra 12.2, raw ARM v6 @ 0x100000)
+
+Method: headless import of the ExeFS `code.bin` as a raw binary, full
+auto-analysis, then RTTI name strings → typeinfo → vtables → per-class
+update method (vtable slot 5), decompiled and read by hand. The binary,
+the Ghidra project and every decompiled listing stay off-repo; what
+follows is our own description of the behaviour, with numbers read from
+literal pools. "Confirmed" means the constant sits in the named
+function's code path; "inferred" means the value exists in the binary
+but its role is our best reading.
+
+### Class map
+
+| Class | How found | Update method |
+|---|---|---|
+| `TaskCharBall` (player ball) | RTTI + vtable | slot 5, one big switch on a per-ball state byte |
+| `TaskDamageWall` | RTTI + vtable | slot 5, timer-driven fade/flash state machine |
+| `TaskEnemyCtrBase` / `TaskEnemyCtrBoss` | RTTI + vtable | slot 5 per enemy controller |
+| `TaskBulletCtr_HPSuction`, `_EnergyHeart`, `_SuperMoveAttack`, `_AttackCounterReset`, `_HeartBarrierTrigger`, `_StrikeShotCounterUp` | RTTI + vtables (all share `TaskBulletCtrBase`; heart-barrier and counter-up derive from `TaskBulletCtrTriggerBase`) | slot 5 each |
+| `TaskMine`, `TaskWarpZone`, `TaskBarrier` (+`TaskBarrierCtr_HeartBarrier`) | not C++ RTTI: registered in a custom type table of {parent, method table, name} triples | via that table |
+
+Battle effects are addressed by a numeric id into one `.arc` name table.
+The ids show which beats the game treats as distinct feedback: separate
+effects for weak-point hit, critical, wall reflect, three tiers of
+"combo just" (a timed friendship-combo variant), killer hit, five
+elemental damage-wall skins, warp zone, three barrier tiers, and the
+anti-damage-wall / anti-barrier ability popups.
+
+### Player ball movement (confirmed)
+
+The ball's velocity is not damped by a constant friction. Each 60 Hz
+frame it is multiplied by `1 − (t / T)^4`, where `t` is seconds since
+launch and `T` is the shot's travel time. Early in the shot the factor is
+≈1 (the ball glides at near-launch speed through bounces); as `t`
+approaches `T` it collapses and the ball stops abruptly. Speed is never
+"ticked down" by a fixed amount, so every shot lasts about `T` seconds
+regardless of launch power.
+
+| Item | Value |
+|---|---|
+| Per-frame velocity factor | `1 − (t/T)^4` |
+| "Slow" flag raised once | when speed² < 40 000 (speed < 200 units/s) |
+| Speed-down hit | `T` (and two sibling timers) scale by `pct × 0.01`; factor floored at 0.01, `T` floored at 0.1 s |
+| Hop/airborne sub-state | upward speed `clamp(k, 0.7, 1.2) × 800`, gravity 5 880 units/s² |
+| Second launch sub-state | `clamp((0.8 + 0.2k)·k, 0.7, 1.4) × 600` |
+| Speed-stat factor `k` | raw speed stat × 0.0005 (MS speed stats are in the hundreds–thousands) |
+| Tilt smoothing | low-pass `0.98 × old + 0.02 × new` per frame, wrapped at 360° |
+
+A separate branch maps a pull length to a 0..1 power as `(len − 1)/16`
+clamped, with 400 as the base and 1 600 as the power span; we read it as
+the aim/pull feedback curve, not the launch speed.
+
+### Damage wall (inferred timings)
+
+`TaskDamageWall` runs a frame-counted cycle with literals 18, 30, 45 and
+83 frames and alpha ramps of 0.2 / 0.5 / 0.8; we read this as
+appear → active → flash → fade. Damage itself is applied by the ball
+when it reflects off a wall flagged live, not by the wall task.
+
+### Enemy controller (inferred)
+
+The enemy update holds a shake/hit-react loop: 0x14 frames of jitter
+(±3 / −2 units on alternating frame pairs) and an alpha that climbs 0.05
+per frame to 1. A `1 − x · 2/3` falloff and thresholds 0.9 / 1.2 gate the
+damage-taken flash scale. 1.3333 and 0.6667 both exist as literals in the
+bullet-controller family, consistent with MS's public ×1.33 advantage /
+×0.66 disadvantage element rule; we did not trace them to the hit path.
+
+### Not located this pass
+
+Attack-vs-defense formula, weak-point and critical multipliers, the
+friendship-combo trigger, strike-shot turn counter (`StrikeShotCounterUp`
+vtable found but its add amount not traced), enemy turn countdown, and
+speed-clear counting. The per-stage numbers for those already come from
+the CSV tables above.
+
+### Ported (this PR)
+
+| MS behaviour | PokeStrike |
+|---|---|
+| Time-boxed shot, `v *= 1 − (t/T)^4` per frame | `shotDamp(t, h)` in `battle.ts` = `exp(−60·(t/SHOT_T)^4·h)`, used by live play and the aim ghost; slick/ice/friction mults scale it |
+| Speed curve `clamp((0.8 + 0.2k)k, 0.7, 1.4)` | `launchMult` in `stats.ts`, `k = Spe / 75` so Spe 75 = 1.0 |
+
+Kept on purpose: Pokémon type chart (×2/×0.5/×0) instead of MS ×1.33,
+existing weak-point/crit numbers (not confirmed in code), ult and combo
+rules.
