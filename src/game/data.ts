@@ -915,6 +915,9 @@ export const BOSS_POOL = ENEMY_DB.slice(-11);
 export const bst = (d: SpeciesDef) =>
   d.stats.hp + d.stats.atk + d.stats.def + d.stats.spa + d.stats.spd + d.stats.spe;
 export const tierOf = (d: SpeciesDef) => (bst(d) >= 560 ? 3 : bst(d) >= 460 ? 2 : bst(d) >= 360 ? 1 : 0);
+// gym 1 leaders cap at this BST; Mewtwo, Dragonite, Slaking and co wait for gym 2/3
+export const GYM1_BST = 500;
+const GYM1_POOL = BOSS_POOL.filter((d) => bst(d) <= GYM1_BST);
 
 // --- the hatcher ---------------------------------------------------------------
 // Every catchable species can drop — the dedup'd set screens.ts built as
@@ -1795,7 +1798,10 @@ function gymPack(
 // Same seed -> same stretch; Free Play rolls a fresh seed each run.
 export function makeStage(seed: number, name?: string): StageDef {
   const rng = mulberry32(seed);
-  const boss = BOSS_POOL[Math.floor(rng() * BOSS_POOL.length)];
+  // same single draw as before: a seed whose leader already fits keeps it
+  const r = rng();
+  const rolled = BOSS_POOL[Math.floor(r * BOSS_POOL.length)];
+  const boss = bst(rolled) <= GYM1_BST ? rolled : GYM1_POOL[Math.floor(r * GYM1_POOL.length)];
   const theme = THEMES[Math.floor(rng() * THEMES.length)];
   const slots = [...SLOTS];
   const slot = () => {

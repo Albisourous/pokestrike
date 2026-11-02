@@ -5909,7 +5909,7 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   globalThis.localStorage.removeItem('pk_secrets');
   const golden: Record<number, { mapSeed: number; nodes: string; waves: string[] }> = {
     42: { mapSeed: 1858592655, nodes: 'start,elite,wild,rest,mart,event,gym,elite,wild,chest,event,trainer,gym,wild,trainer,event,mart,rest,gym', waves: ['84:119,287:110,187:85', '288:322,287:319,19:179,420:258,505:263', '309:346,311:446,125:740'] },
-    7: { mapSeed: 1188257686, nodes: 'start,trainer,wild,mart,event,chest,gym,trainer,wild,rest,event,mart,gym,wild,elite,trainer,event,mart,gym', waves: ['314:115,287:160,291:111', '187:190,420:258,102:263,479:235', '358:517,202:1165,150:1316'] },
+    7: { mapSeed: 1188257686, nodes: 'start,trainer,wild,mart,event,chest,gym,trainer,wild,rest,event,mart,gym,wild,elite,trainer,event,mart,gym', waves: ['314:115,287:160,291:111', '187:190,420:258,102:263,479:235', '302:396,510:475,94:684'] },
   };
   for (const seed of [42, 7]) {
     const b: any = new Battle(arenaSecret, secretTeam(), makeStage(seed, 'T'), mulberry32(seed));

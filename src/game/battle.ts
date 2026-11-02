@@ -491,7 +491,7 @@ const BOSS_BARS = [0.3, 0.3, 0.4]; // MS stage data: boss HP split into bars, on
 const BATTLE_SKIP = [0, 0.5, 0.7];
 const ENEMY_MAX = 5; // MS enemy_max: live foes per extra battle
 // MS stages.bonus_turn: a per-stage turn par (10 to 24) for the SPEED CLEAR
-// bonus. Ours scales with the stop: 4 turns a battle, +10 for a boss
+// bonus. Ours scales with the stop: 6 turns a battle, +8 for a boss
 const PAR_PER_BATTLE = 6;
 const PAR_BOSS = 8;
 const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
