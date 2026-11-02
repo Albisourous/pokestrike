@@ -139,7 +139,8 @@ interface FloatText {
   size?: number; // scale multiplier — damage numbers grow with the hit
   life?: number; // stamped on first frame so easings know the full span
   tilt?: number; // radians of lean — damage numbers land off-axis for juice
-  w?: number; // text width at the pop=1 font — measured once at push
+  w?: number; // width at the last measured font
+  wf?: string;
   ff?: string; // fitted font — cached when the banner can't fit the court
   fw?: number; // width at the fitted font
   key?: string; // the callout before a ×N repeat count
@@ -612,8 +613,7 @@ let mapVig: CanvasGradient | null = null;
 // rides on globalAlpha instead of a rebuilt color stop
 let dangerG: CanvasGradient | null = null;
 
-// one shared context for text metrics — FloatTexts measure once at push,
-// not every frame; measureText only ever reads the font string
+// Shared context for initial text metrics; live widths refresh on font changes.
 const MCTX = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
 
 export class Battle {
@@ -7064,9 +7064,7 @@ export class Battle {
     this.punch = Math.min(this.punch + amt * settings().shake, 0.22); // shake 0 kills the zoom kick too
   }
 
-  // FloatTexts carry their measured width from birth — the string never
-  // changes, so the draw pass never re-measures the same glyphs. A banner
-  // too wide to ever fit the court caches its fitted font too.
+  // Oversized banners cache their fitted font before the draw pass.
   private pushText(t: FloatText) {
     // a repeat callout near a live copy re-pops that copy with a ×N count
     // instead of stacking (RICOCHET!, WEAK POINT! on every bounce). Numbers
@@ -7085,6 +7083,7 @@ export class Battle {
     if (MCTX) {
       MCTX.font = font(16 * (t.size ?? 1));
       t.w = MCTX.measureText(t.text).width;
+      t.wf = MCTX.font;
       if (t.w > W_CANVAS_FALLBACK - 16) {
         const s = fitFont(MCTX, t.text, 37 * (t.size ?? 1), W_CANVAS_FALLBACK - 16); // 37 ≥ the punch-in pop max
         t.ff = font(s);
@@ -7821,21 +7820,28 @@ export class Battle {
       ctx.save();
       // a wall-hugging mon's banner must not spill off-canvas — shrink
       // oversized callouts, then clamp the anchor inside the playfield.
-      // w is measured once at push (pop=1 font); it scales linearly with pop
-      let half = t.w !== undefined ? (t.w * pop) / 2 : ctx.measureText(t.text).width / 2;
+      // Rounded font sizes do not scale linearly; reserve room for camera motion.
+      if (t.wf !== ctx.font) {
+        t.w = ctx.measureText(t.text).width;
+        t.wf = ctx.font;
+      }
+      const cx = a.x + a.w / 2;
+      const inset = 12 + this.shake / 2 + Math.max(cx, W_CANVAS_FALLBACK - cx) * this.punch;
+      const textW = W_CANVAS_FALLBACK - inset * 2;
+      let half = t.w! / 2;
       let tx = t.x;
-      if (half * 2 > W_CANVAS_FALLBACK - 16) {
-        if (t.ff !== undefined) {
+      if (half * 2 > textW) {
+        if (t.ff !== undefined && t.fw! <= textW) {
           ctx.font = t.ff; // too wide to ever fit — the fitted font was cached at push
           half = t.fw! / 2;
         } else {
           // only overflows mid punch-in — rare enough to measure on the spot
-          fitFont(ctx, t.text, 16 * pop * (t.size ?? 1), W_CANVAS_FALLBACK - 16);
+          fitFont(ctx, t.text, 16 * pop * (t.size ?? 1), textW);
           half = ctx.measureText(t.text).width / 2;
         }
         tx = W_CANVAS_FALLBACK / 2;
       } else {
-        tx = Math.min(Math.max(t.x, half + 8), W_CANVAS_FALLBACK - half - 8);
+        tx = Math.min(Math.max(t.x, half + inset), W_CANVAS_FALLBACK - half - inset);
       }
       // rim-top banners ride up off-canvas — clamp the float inside the frame
       ctx.translate(tx, Math.min(Math.max(t.y - dy, 30), 930));
