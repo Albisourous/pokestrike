@@ -1912,7 +1912,6 @@ export function balanceChip(
   r: { x: number; y: number; w: number; h: number },
   starN: number,
   dust?: number,
-  fontPx = 10,
 ) {
   chipStars = chase(chipStars, starN);
   if (dust != null) chipDust = chase(chipDust, dust);
@@ -1920,7 +1919,7 @@ export function balanceChip(
   uiWindow(ctx, r, { dark: true, rad: r.h / 2, shadow: false });
   void loadItem('star-piece');
   ctx.textAlign = 'left';
-  ctx.font = fontB(fontPx);
+  ctx.font = fontB(10);
   const starTxt = `${Math.round(chipStars)}`;
   const dustTxt = `${Math.round(chipDust)}`;
   // center the whole cluster — icon + counts — not just the first glyph
