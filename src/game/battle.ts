@@ -2263,7 +2263,8 @@ export class Battle {
         return;
       }
       this.ultArmUid = -1; // a tap anywhere else stands the ult down
-      if (hit) {
+      // coached first pull: a stray tap can't bury the lesson under a card
+      if (hit && !(this.coach && this.shots === 0)) {
         this.inspect = { uid: hit.uid, t: 2.8 };
         sfx('ui');
       }
@@ -2417,6 +2418,9 @@ export class Battle {
   // you release where the band will be, not where it is. Each pull also
   // nudges the band a little, so the timing never becomes memorized.
   private sweetSpot() {
+    // coached first pull can't whiff — the whole meter is gold; the real
+    // band shows up from the second shot on
+    if (this.coach && this.shots === 0) return { c: 0.5, hw: 0.5 };
     const n = Math.min(this.active.def.stats.spe / 120, 1);
     const d = this.gaugeDifficulty();
     // the window itself breathes ±30% pull to pull — some releases are
@@ -8717,9 +8721,8 @@ export class Battle {
     // tapped-foe scout card — floats while aiming, a pull dismisses it
     if (this.inspect && this.phase === 'aim') this.drawInspect(ctx);
 
-    if (this.phase === 'aim' && !this.dragging && !this.active.dead && this.coach) this.drawCoach(ctx);
-
-    // the arrival tell — a gold ! pops at arena top as control lands
+    // the arrival tell — a gold ! pops at arena top as control lands. Drawn
+    // under the coach scrim so the guided beats can dim it with the court.
     const intro = this.time - this.waveIntroT;
     if (this.phase === 'aim' && intro < 0.6) {
       ctx.globalAlpha = Math.min(1, (0.6 - intro) * 5);
@@ -8729,6 +8732,8 @@ export class Battle {
       ctx.fillText('!', a.x + a.w / 2, a.y + 56);
       ctx.globalAlpha = 1;
     }
+
+    if (this.phase === 'aim' && !this.dragging && !this.active.dead && this.coach) this.drawCoach(ctx);
 
     this.telop.draw(ctx, a, W_CANVAS_FALLBACK);
     this.drawBossIntro(ctx);
@@ -9120,6 +9125,30 @@ export class Battle {
     ctx.restore();
   }
 
+  // Forced focus for the guided beats: dim the court, soft holes over the
+  // actors — everything else waits its turn. Evenodd clip + a feather ring
+  // instead of destination-out, which would erase the art under the scrim too.
+  private coachDim(ctx: CanvasRenderingContext2D, holes: [number, number, number][]) {
+    const SC = 'rgba(6,8,18,0.55)';
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, W_CANVAS_FALLBACK, 960);
+    for (const [x, y, r] of holes) ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
+    ctx.clip('evenodd');
+    ctx.fillStyle = SC;
+    ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 960);
+    ctx.restore();
+    for (const [x, y, r] of holes) {
+      const g = ctx.createRadialGradient(x, y, r * 0.9, x, y, r * 2.5);
+      g.addColorStop(0, 'rgba(6,8,18,0)');
+      g.addColorStop(1, SC);
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
   // First-run teaching — kinetic beats, each dismissed by doing the thing.
   // Beat 1 loops a ghost pull-back until the first launch; beat 2 routes a
   // shot through a teammate; beat 3 rings the foe whose counter sits at 0.
@@ -9154,6 +9183,7 @@ export class Battle {
         px = (u.x - tgt.x) / d;
         py = (u.y - tgt.y) / d;
       }
+      this.coachDim(ctx, tgt ? [[u.x, u.y, u.r], [tgt.x, tgt.y, tgt.r]] : [[u.x, u.y, u.r]]);
       const ph = this.time % 1.7;
       const ease = 1 - (1 - Math.min(ph / 0.9, 1)) ** 2;
       const fade = ph > 1.2 ? Math.max(0, 1 - (ph - 1.2) / 0.5) : 1;
@@ -9183,6 +9213,7 @@ export class Battle {
     } else if (this.shots === 1) {
       const ally = this.players.find((p) => p !== u && !p.dead);
       if (ally) {
+        this.coachDim(ctx, [[u.x, u.y, u.r], [ally.x, ally.y, ally.r]]);
         ctx.globalAlpha = 0.55 + Math.sin(this.time * 5) * 0.3;
         ctx.strokeStyle = '#ffd84d';
         ctx.lineWidth = 3;
