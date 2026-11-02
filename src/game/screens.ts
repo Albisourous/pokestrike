@@ -5,7 +5,7 @@ import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PU
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
-import { drawBackdrop } from './bg';
+import { drawBackdrop, type Theme } from './bg';
 import { drawTile } from './map';
 import { drawShopScene } from './home/shop';
 import { TILE_TOWN } from './maptiles';
@@ -3527,6 +3527,180 @@ function drawBagRow(
   void last; // the desc answers on the subtitle line — see drawDraft
 }
 
+// In-run pick boards stand on a themed court, Monster Strike style: cards
+// deal up from below staggered, the reel plays inside, and the tapped card
+// pops off the board for a beat after the pick (main.ts stamps popPick).
+type Rect = { x: number; y: number; w: number; h: number };
+const DEAL_T = 0.32, DEAL_GAP = 0.07, POP_T = 0.42;
+const dealIn = (age: number, i: number) => 1 - Math.pow(1 - clamp01((age - i * DEAL_GAP) / DEAL_T), 3);
+
+function choiceCourt(ctx: CanvasRenderingContext2D, theme: Theme | null, dim: number) {
+  if (theme) drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, theme);
+  // the vignette keeps the eye on the cards in the middle of the court
+  ctx.fillStyle = gradFor(ctx, `choiceVig${dim}`, (c) => {
+    const g = c.createRadialGradient(W / 2, H * 0.46, 140, W / 2, H * 0.46, H * 0.7);
+    g.addColorStop(0, `rgba(16,20,40,${dim * 0.45})`);
+    g.addColorStop(1, `rgba(16,20,40,${Math.min(0.9, dim + 0.25)})`);
+    return g;
+  });
+  ctx.fillRect(0, 0, W, H);
+}
+
+// a dealt card: its shadow lands on the court first, the card swings up into it
+function dealCard(ctx: CanvasRenderingContext2D, r: Rect, i: number, age: number, body: () => void) {
+  const k = dealIn(age, i);
+  ctx.save();
+  ctx.globalAlpha *= k;
+  ctx.fillStyle = 'rgba(8,16,8,0.42)';
+  ctx.beginPath();
+  ctx.ellipse(r.x + r.w / 2, r.y + r.h + 5, r.w * 0.46, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  if (k >= 1) return body();
+  ctx.save();
+  ctx.globalAlpha *= 0.35 + 0.65 * k;
+  ctx.translate(r.x + r.w / 2, r.y + r.h + (1 - k) * (H - r.y));
+  ctx.rotate((1 - k) * 0.16 * (i - 1));
+  ctx.translate(-(r.x + r.w / 2), -(r.y + r.h));
+  body();
+  ctx.restore();
+}
+
+type PickFace = { mon: SpeciesDef } | { perk: { name: string; item: string; desc: string; rarity: Rarity } };
+let pickPop: { r: Rect; t0: number; face: PickFace } | null = null;
+export function popPick(r: Rect, t: number, face: PickFace) {
+  pickPop = { r, t0: t, face };
+}
+// the chosen card lifts and swells off the board with a gold flare, then fades
+export function drawPickPop(ctx: CanvasRenderingContext2D, t: number) {
+  if (!pickPop) return;
+  const p = (t - pickPop.t0) / POP_T;
+  if (p < 0 || p >= 1) {
+    if (p >= 1) pickPop = null;
+    return;
+  }
+  const { r, face } = pickPop;
+  const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+  const s = 1 + 0.16 * (1 - Math.pow(1 - Math.min(1, p * 2.5), 3));
+  ctx.save();
+  ctx.globalAlpha = 1 - p * p;
+  ctx.fillStyle = gradFor(ctx, 'pickFlare', (c) => {
+    const g = c.createRadialGradient(0, 0, 10, 0, 0, 200);
+    g.addColorStop(0, 'rgba(255,216,72,0.6)');
+    g.addColorStop(1, 'rgba(255,216,72,0)');
+    return g;
+  });
+  ctx.translate(cx, cy - 18 * p);
+  ctx.fillRect(-200, -200, 400, 400);
+  ctx.scale(s, s);
+  ctx.translate(-cx, -cy);
+  if ('mon' in face) {
+    monCardChrome(ctx, r, face.mon);
+    drawMonCard(ctx, r, face.mon, new Set(dexIds()), 1);
+  } else drawPerkCard(ctx, r, face.perk);
+  rim(ctx, r, 10, GOLD_HI, 3);
+  ctx.restore();
+}
+
+function monCardChrome(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef) {
+  // menu-window chrome around a content face: uiWindow carries the
+  // frame/rim/shadow, cardFace paints the type-tinted paper inside the rim
+  uiWindow(ctx, r, { rad: 10 });
+  cardFace(ctx, { x: r.x + 6, y: r.y + 6, w: r.w - 12, h: r.h - 12 }, def.type);
+  if (def.shiny) rim(ctx, r, 10, GOLD, 2);
+}
+
+function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, dex: ReadonlySet<number>, pop: number) {
+  const band = { x: r.x + 7, y: r.y + 7, w: r.w - 14, h: 103 };
+
+  stripeBand(ctx, band, TYPE_COLOR[def.type]);
+  // type chip top-left: light pill, type ink darkened so pale types
+  // (electric, ice) still read on it
+  chip(ctx, r.x + 9, r.y + 9, def.type.toUpperCase(), {
+    bg: INK,
+    fg: mixHex(TYPE_COLOR[def.type], INK, 0.45),
+  });
+  // kind pill top-right — SHINY trumps the dex tag; a bonded offer shows
+  // its level so the pick can chase LV5 or spread to a fresh partner
+  const kind = `${def.shiny ? 'SHINY' : dex.has(def.id) ? 'OWNED' : 'NEW'}${bondLv(def.id) ? `·B${bondLv(def.id)}` : ''}`;
+  ctx.font = fontB(10);
+  chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, def.shiny
+    ? { bg: GOLD, fg: INK }
+    : { bg: 'rgba(42,36,64,0.8)', fg: INK });
+
+  // the sprite stands on the band with a ground shadow, drawn big
+  monShadow(ctx, band.x + band.w / 2, band.y + band.h / 2 - 8, 64);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 4;
+  (def.shiny ? drawShiny : drawMon)(ctx, def.id, band.x + band.w / 2, band.y + band.h / 2 + 2, 108 * pop);
+  ctx.restore();
+
+  // the mon's name leads the card body — sprite above it, stats below
+  ctx.textAlign = 'center';
+  fitFont(ctx, def.name, 14, r.w - 20);
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 139);
+  ctx.fillStyle = INK;
+  ctx.fillText(def.name, r.x + r.w / 2, r.y + 138);
+
+  ctx.font = fontB(10);
+  ctx.fillStyle = INK_FAINT;
+  ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 158);
+
+  ctx.font = fontB(10);
+  ctx.fillStyle = TYPE_COLOR[def.type];
+  ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 178);
+
+  // evolution hint + trait tag sit with the stats — Magikarp is secretly
+  // Gyarados; PIERCE/COPY hold the right edge of the same line
+  const tagW = def.pierce || def.copy
+    ? (() => { ctx.font = fontB(10); return ctx.measureText(def.pierce ? 'PIERCE' : 'COPY').width + 8; })()
+    : 0;
+  if (def.evolvesTo != null) {
+    const nx = Array.isArray(def.evolvesTo)
+      ? `${def.evolvesTo.length} FORMS`
+      : speciesById(def.evolvesTo)?.name.toUpperCase();
+    if (nx) {
+      ctx.textAlign = 'left';
+      ctx.font = fontB(10);
+      ctx.fillStyle = ACCENT;
+      fitFontB(ctx, `→ ${nx}`, 10, r.w - 22 - tagW);
+      ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 198);
+    }
+  }
+  if (def.pierce || def.copy) {
+    ctx.textAlign = 'right';
+    ctx.font = fontB(10);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 199);
+    ctx.fillStyle = GOLD;
+    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 198);
+  }
+
+  // the bump super this mon fires — a draft decision you can taste
+  ctx.textAlign = 'center';
+  ctx.font = fontB(11);
+  ctx.fillStyle = GOLD;
+  ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 222);
+  ctx.font = fontB(10);
+  ctx.fillStyle = INK_SOFT;
+  const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 20).slice(0, 2);
+  dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 240 + li * 16));
+
+  // the ability row — the flags that change how the pick actually plays
+  // sit above the fold: a draft is a bet, so the card shows its hand
+  const flags = [abilityLabel(def), abilityOf(def)?.hint].filter(Boolean).join(' · ');
+  if (flags) {
+    ctx.font = fontB(10);
+    ctx.fillStyle = ACCENT;
+    fitFontB(ctx, flags, 12, r.w - 16);
+    ctx.fillText(flags, r.x + r.w / 2, r.y + 116);
+  }
+
+}
+
 export function drawDraft(
   ctx: CanvasRenderingContext2D,
   offers: SpeciesDef[],
@@ -3537,11 +3711,12 @@ export function drawDraft(
   spin: { age: number; pool: SpeciesDef[]; idx: number[] },
   bag: { sel: ReadonlySet<string>; last: string | null },
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky');
+  choiceCourt(ctx, 'meadow', 0.35);
 
-  // the draft board is one big menu window — the INK band carries the
-  // title and the stage, everything below lives on the window's paper
-  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 652 }, `DRAFT: PICK ${picked.length + 1} OF 4`, { sub: stageName });
+  // a title plate up top; the cards stand on the court itself, and the team
+  // so far sits on a dark ledge below so the offer stays the focal pick
+  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 74 }, `DRAFT · PICK ${picked.length + 1} OF 4`, { sub: stageName });
+  uiWindow(ctx, { x: 30, y: 572, w: W - 60, h: 156 }, { rad: 12, dark: true });
 
   ctx.textAlign = 'center';
   ctx.font = fontB(10);
@@ -3560,186 +3735,99 @@ export function drawDraft(
         : 'your picks become the balls you sling';
   if (bagDesc) fitFontB(ctx, line.toUpperCase(), 10, W - 40);
   ctx.fillStyle = bagDesc ? INK_SOFT : INK;
-  ctx.fillText(bagDesc ? line.toUpperCase() : line, W / 2, 172);
+  ctx.fillText(bagDesc ? line.toUpperCase() : line, W / 2, 155);
 
   drawBagRow(ctx, bag.sel, bag.last);
 
   const dex = new Set(dexIds()); // kind chips read dex membership per card — parse once a frame
   offers.forEach((def, i) => {
     const r = draftCardRect(i);
-    // menu-window chrome around a content face: uiWindow carries the
-    // frame/rim/shadow, cardFace paints the type-tinted paper inside the rim
-    uiWindow(ctx, r, { rad: 10 });
-    cardFace(ctx, { x: r.x + 6, y: r.y + 6, w: r.w - 12, h: r.h - 12 }, def.type);
-    if (def.shiny) rim(ctx, r, 10, GOLD, 2);
+    dealCard(ctx, r, i, spin.age, () => {
+      monCardChrome(ctx, r, def);
 
-    // same anatomy as the relic cards: a type-tinted header band carries
-    // the sprite — the reel plays inside it. Inset past the window rim so
-    // the double-frame reads all the way around
-    const band = { x: r.x + 7, y: r.y + 7, w: r.w - 14, h: 103 };
+      // same anatomy as the relic cards: a type-tinted header band carries
+      // the sprite — the reel plays inside it. Inset past the window rim so
+      // the double-frame reads all the way around
+      const band = { x: r.x + 7, y: r.y + 7, w: r.w - 14, h: 103 };
 
-    // slot reel: pool faces scroll past until the reel brakes onto the offer
-    const stopAt = REEL_STOPS[i] ?? REEL_STOPS[REEL_STOPS.length - 1];
-    const spinP = Math.min(spin.age / stopAt, 1);
-    if (spinP < 1) {
-      ctx.save();
-      roundRect(ctx, band.x, band.y, band.w, band.h + 9, 9);
-      ctx.clip();
-      ctx.fillStyle = INK;
-      ctx.fillRect(band.x, band.y, band.w, band.h);
-      // quart ease-out, then a 10px overshoot in the last fifth — the reel
-      // brakes hard and the dealt face clicks back up like a real slot stop
-      const steps = 9 + i * 3;
-      const over = Math.sin(clamp01((spinP - 0.8) / 0.2) * Math.PI) * 10;
-      const pos = steps * (1 - Math.pow(1 - spinP, 4)) + over / 80;
-      // normalized reel speed: the quart's derivative, 1 at deal → 0 at stop
-      const spd = Math.pow(1 - spinP, 3);
-      const L = spin.pool.length;
-      const bcx = band.x + band.w / 2, bcy = band.y + band.h / 2;
-      for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
-        const d = spin.pool[(((spin.idx[i] + j - steps) % L) + L) % L];
-        const py = bcy + (j - pos) * 80;
-        // speed stretch — faces pull tall while the reel flies, settle square
+      // slot reel: pool faces scroll past until the reel brakes onto the offer
+      const stopAt = REEL_STOPS[i] ?? REEL_STOPS[REEL_STOPS.length - 1];
+      const spinP = Math.min(spin.age / stopAt, 1);
+      if (spinP < 1) {
         ctx.save();
-        ctx.translate(bcx, py);
-        ctx.scale(1 - spd * 0.14, 1 + spd * 0.32);
-        drawMon(ctx, d.id, 0, 0, 76);
-        ctx.restore();
-        // a ghost trails fast faces — cheap motion blur against the dark
-        if (spd > 0.2) {
+        roundRect(ctx, band.x, band.y, band.w, band.h + 9, 9);
+        ctx.clip();
+        ctx.fillStyle = INK;
+        ctx.fillRect(band.x, band.y, band.w, band.h);
+        // quart ease-out, then a 10px overshoot in the last fifth — the reel
+        // brakes hard and the dealt face clicks back up like a real slot stop
+        const steps = 9 + i * 3;
+        const over = Math.sin(clamp01((spinP - 0.8) / 0.2) * Math.PI) * 10;
+        const pos = steps * (1 - Math.pow(1 - spinP, 4)) + over / 80;
+        // normalized reel speed: the quart's derivative, 1 at deal → 0 at stop
+        const spd = Math.pow(1 - spinP, 3);
+        const L = spin.pool.length;
+        const bcx = band.x + band.w / 2, bcy = band.y + band.h / 2;
+        for (let j = Math.floor(pos) - 1; j <= Math.floor(pos) + 2; j++) {
+          const d = spin.pool[(((spin.idx[i] + j - steps) % L) + L) % L];
+          const py = bcy + (j - pos) * 80;
+          // speed stretch — faces pull tall while the reel flies, settle square
           ctx.save();
-          ctx.globalAlpha = spd * 0.3;
-          drawMon(ctx, d.id, bcx, py - spd * 24, 76);
+          ctx.translate(bcx, py);
+          ctx.scale(1 - spd * 0.14, 1 + spd * 0.32);
+          drawMon(ctx, d.id, 0, 0, 76);
           ctx.restore();
+          // a ghost trails fast faces — cheap motion blur against the dark
+          if (spd > 0.2) {
+            ctx.save();
+            ctx.globalAlpha = spd * 0.3;
+            drawMon(ctx, d.id, bcx, py - spd * 24, 76);
+            ctx.restore();
+          }
         }
+        // the payline — gold pips mark the row the reel stops on
+        ctx.fillStyle = GOLD;
+        ctx.globalAlpha = 0.9;
+        [-1, 1].forEach((s) => {
+          ctx.beginPath();
+          ctx.moveTo(band.x + (s < 0 ? 2 : band.w - 2), bcy);
+          ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy - 6);
+          ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy + 6);
+          ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+        // fade the band edges so faces slide out of the dark
+        const g = ctx.createLinearGradient(0, band.y, 0, band.y + band.h);
+        g.addColorStop(0, 'rgba(10,14,30,0.9)');
+        g.addColorStop(0.35, 'rgba(10,14,30,0)');
+        g.addColorStop(0.65, 'rgba(10,14,30,0)');
+        g.addColorStop(1, 'rgba(10,14,30,0.9)');
+        ctx.fillStyle = g;
+        ctx.fillRect(band.x, band.y, band.w, band.h);
+        ctx.restore();
+        // the body deals in as skeleton bars — a shimmer reads "rolling",
+        // not "broken": the paper half stays empty no longer
+        const shim = 0.14 + 0.09 * Math.sin(spin.age * 7 + i * 1.9);
+        ctx.fillStyle = `rgba(40,48,88,${shim})`;
+        const bars: [number, number][] = [
+          [r.y + 132, r.w - 56], // name
+          [r.y + 154, 92], // #id · level
+          [r.y + 174, 108], // type · role
+          [r.y + 194, 96], // evo hint
+          [r.y + 218, 110], // super line
+          [r.y + 236, r.w - 40], // desc
+        ];
+        bars.forEach(([by, bw]) => {
+          roundRect(ctx, r.x + r.w / 2 - bw / 2, by, bw, 10, 5);
+          ctx.fill();
+        });
+        return;
       }
-      // the payline — gold pips mark the row the reel stops on
-      ctx.fillStyle = GOLD;
-      ctx.globalAlpha = 0.9;
-      [-1, 1].forEach((s) => {
-        ctx.beginPath();
-        ctx.moveTo(band.x + (s < 0 ? 2 : band.w - 2), bcy);
-        ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy - 6);
-        ctx.lineTo(band.x + (s < 0 ? 9 : band.w - 9), bcy + 6);
-        ctx.fill();
-      });
-      ctx.globalAlpha = 1;
-      // fade the band edges so faces slide out of the dark
-      const g = ctx.createLinearGradient(0, band.y, 0, band.y + band.h);
-      g.addColorStop(0, 'rgba(10,14,30,0.9)');
-      g.addColorStop(0.35, 'rgba(10,14,30,0)');
-      g.addColorStop(0.65, 'rgba(10,14,30,0)');
-      g.addColorStop(1, 'rgba(10,14,30,0.9)');
-      ctx.fillStyle = g;
-      ctx.fillRect(band.x, band.y, band.w, band.h);
-      ctx.restore();
-      // the body deals in as skeleton bars — a shimmer reads "rolling",
-      // not "broken": the paper half stays empty no longer
-      const shim = 0.14 + 0.09 * Math.sin(spin.age * 7 + i * 1.9);
-      ctx.fillStyle = `rgba(40,48,88,${shim})`;
-      const bars: [number, number][] = [
-        [r.y + 132, r.w - 56], // name
-        [r.y + 154, 92], // #id · level
-        [r.y + 174, 108], // type · role
-        [r.y + 194, 96], // evo hint
-        [r.y + 218, 110], // super line
-        [r.y + 236, r.w - 40], // desc
-      ];
-      bars.forEach(([by, bw]) => {
-        roundRect(ctx, r.x + r.w / 2 - bw / 2, by, bw, 10, 5);
-        ctx.fill();
-      });
-      return;
-    }
-    // landing pop: the sprite overshoots for a beat as the reel stops
-    const pop = 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15);
-
-    stripeBand(ctx, band, TYPE_COLOR[def.type]);
-    // type chip top-left: light pill, type ink darkened so pale types
-    // (electric, ice) still read on it
-    chip(ctx, r.x + 9, r.y + 9, def.type.toUpperCase(), {
-      bg: INK,
-      fg: mixHex(TYPE_COLOR[def.type], INK, 0.45),
+      // landing pop: the sprite overshoots for a beat as the reel stops
+      const pop = 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15);
+      drawMonCard(ctx, r, def, dex, pop);
+      if (HAS_KEYS) keyHint(ctx, r, `[${i + 1}]`); // [1]/[2]/[3] — desktop keys pick cards
     });
-    // kind pill top-right — SHINY trumps the dex tag; a bonded offer shows
-    // its level so the pick can chase LV5 or spread to a fresh partner
-    const kind = `${def.shiny ? 'SHINY' : dex.has(def.id) ? 'OWNED' : 'NEW'}${bondLv(def.id) ? `·B${bondLv(def.id)}` : ''}`;
-    ctx.font = fontB(10);
-    chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, def.shiny
-      ? { bg: GOLD, fg: INK }
-      : { bg: 'rgba(42,36,64,0.8)', fg: INK });
-
-    // the sprite gets the band center with the same soft drop shadow
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.5)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 4;
-    (def.shiny ? drawShiny : drawMon)(ctx, def.id, band.x + band.w / 2, band.y + band.h / 2 + 2, 84 * pop);
-    ctx.restore();
-
-    // the mon's name leads the card body — sprite above it, stats below
-    ctx.textAlign = 'center';
-    fitFont(ctx, def.name, 14, r.w - 20);
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.name, r.x + r.w / 2 + 1, r.y + 139);
-    ctx.fillStyle = INK;
-    ctx.fillText(def.name, r.x + r.w / 2, r.y + 138);
-
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 158);
-
-    ctx.font = fontB(10);
-    ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 178);
-
-    // evolution hint + trait tag sit with the stats — Magikarp is secretly
-    // Gyarados; PIERCE/COPY hold the right edge of the same line
-    const tagW = def.pierce || def.copy
-      ? (() => { ctx.font = fontB(10); return ctx.measureText(def.pierce ? 'PIERCE' : 'COPY').width + 8; })()
-      : 0;
-    if (def.evolvesTo != null) {
-      const nx = Array.isArray(def.evolvesTo)
-        ? `${def.evolvesTo.length} FORMS`
-        : speciesById(def.evolvesTo)?.name.toUpperCase();
-      if (nx) {
-        ctx.textAlign = 'left';
-        ctx.font = fontB(10);
-        ctx.fillStyle = ACCENT;
-        fitFontB(ctx, `→ ${nx}`, 10, r.w - 22 - tagW);
-        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 198);
-      }
-    }
-    if (def.pierce || def.copy) {
-      ctx.textAlign = 'right';
-      ctx.font = fontB(10);
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 199);
-      ctx.fillStyle = GOLD;
-      ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 198);
-    }
-
-    // the bump super this mon fires — a draft decision you can taste
-    ctx.textAlign = 'center';
-    ctx.font = fontB(11);
-    ctx.fillStyle = GOLD;
-    ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 222);
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_SOFT;
-    const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 20).slice(0, 2);
-    dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 240 + li * 16));
-
-    // the ability row — the flags that change how the pick actually plays
-    // sit above the fold: a draft is a bet, so the card shows its hand
-    const flags = [abilityLabel(def), abilityOf(def)?.hint].filter(Boolean).join(' · ');
-    if (flags) {
-      ctx.font = fontB(10);
-      ctx.fillStyle = ACCENT;
-      fitFontB(ctx, flags, 12, r.w - 16);
-      ctx.fillText(flags, r.x + r.w / 2, r.y + 116);
-    }
-
-    if (HAS_KEYS) keyHint(ctx, r, `[${i + 1}]`); // [1]/[2]/[3] — desktop keys pick cards
   });
 
   // one board reshuffle per draft — spent charges gray out
@@ -3754,7 +3842,7 @@ export function drawDraft(
 
   // picked team strip
   ctx.font = fontB(10);
-  ctx.fillStyle = INK_SOFT;
+  ctx.fillStyle = PARCH;
   ctx.fillText('YOUR TEAM', W / 2, 586);
   for (let i = 0; i < 4; i++) {
     const sx = W / 2 - 4 * 44 + i * 88;
@@ -3807,6 +3895,17 @@ const ITEM_REEL = [...new Set(PERKS.map((p) => p.item))];
 export function drawPerkCard(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
+  perk: { name: string; item: string; desc: string; rarity: Rarity },
+  spin?: { age: number; i: number },
+  opts?: { owned?: boolean; idx?: number },
+) {
+  if (!spin) return perkCardBody(ctx, r, perk, spin, opts);
+  dealCard(ctx, r, spin.i, spin.age, () => perkCardBody(ctx, r, perk, spin, opts));
+}
+
+function perkCardBody(
+  ctx: CanvasRenderingContext2D,
+  r: Rect,
   perk: { name: string; item: string; desc: string; rarity: Rarity },
   spin?: { age: number; i: number },
   opts?: { owned?: boolean; idx?: number },
@@ -3903,7 +4002,7 @@ export function drawPerkCard(
     ctx.shadowColor = 'rgba(0,0,0,0.55)';
     ctx.shadowBlur = 6;
     ctx.shadowOffsetY = 3;
-    ctx.drawImage(img, band.x + band.w / 2 - 22 * pop, band.y + band.h / 2 - 22 * pop, 44 * pop, 44 * pop);
+    ctx.drawImage(img, band.x + band.w / 2 - 28 * pop, band.y + band.h / 2 - 28 * pop, 56 * pop, 56 * pop);
     ctx.restore();
   } else {
     ctx.font = font(16);
@@ -3949,7 +4048,8 @@ export function drawReward(
   perkIds?: string[], // the run's granted perks — repeat offers tag as DUPE
   ping = false, // a fresh catch waits in the box — the team pill glows gold
 ) {
-  scrim(ctx, 0.85);
+  // the cleared battle court stays visible under a dim vignette
+  choiceCourt(ctx, null, 0.55);
 
   ctx.textAlign = 'center';
   // a fresh catch gets the hero slot: a gold-rimmed window with a breathing
@@ -3959,7 +4059,9 @@ export function drawReward(
     uiWindow(ctx, r, { rad: 12 });
     rim(ctx, r, 12, GOLD, 2);
     const pulse = 1 + Math.sin(spin * 5) * 0.05;
-    drawMon(ctx, recruit.id, r.x + 52, r.y + r.h / 2, 56 * pulse);
+    drawBackdrop(ctx, { x: r.x + 12, y: r.y + 9, w: 80, h: r.h - 18 }, 8, 'meadow');
+    monShadow(ctx, r.x + 52, r.y + r.h / 2, 64);
+    (recruit.shiny ? drawShiny : drawMon)(ctx, recruit.id, r.x + 52, r.y + r.h / 2, 64 * pulse);
     ctx.textAlign = 'left';
     ctx.font = fontB(10);
     ctx.fillStyle = GOLD;
@@ -3973,25 +4075,24 @@ export function drawReward(
     ctx.textAlign = 'center';
   }
 
-  // the reward board is one menu window — band carries the title, the
-  // stage/score readouts and the offer cards all live on its paper
-  uiPanel(ctx, { x: 14, y: 262, w: W - 28, h: 608 }, 'CHOOSE AN ITEM');
+  // a title plate carries the readouts; the offer cards stand on the court
+  uiPanel(ctx, { x: 14, y: 262, w: W - 28, h: 108 }, 'CHOOSE AN ITEM');
 
   ctx.font = font(10);
   ctx.fillStyle = INK;
-  ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 356);
+  ctx.fillText(`SCORE ${score.toLocaleString('en-US')}`, W / 2, 334);
   if (spin < REEL_STOPS[REEL_STOPS.length - 1]) {
     ctx.font = fontB(10);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('reels rolling · tap to skip', W / 2, 372);
+    ctx.fillText('reels rolling · tap to skip', W / 2, 354);
   } else if (luck > 0) {
     ctx.font = fontB(10);
     ctx.fillStyle = '#6fdc6f';
-    ctx.fillText(`TEAM LUCK ${luck} · fusion dupes + bond feed the gym fountain`, W / 2, 372);
+    ctx.fillText(`TEAM LUCK ${luck} · fusion dupes + bond feed the gym fountain`, W / 2, 354);
   } else {
     ctx.font = fontB(10);
     ctx.fillStyle = INK_FAINT;
-    ctx.fillText('pick a relic · your box waits on the map', W / 2, 372);
+    ctx.fillText('pick a relic · your box waits on the map', W / 2, 354);
   }
   ctx.font = fontB(10);
   ctx.fillStyle = INK_FAINT;
@@ -4000,7 +4101,7 @@ export function drawReward(
       ? `stage ${next.stage} of ${TOTAL_STAGES}: a gym leader waits`
       : `stage ${next.stage} of ${TOTAL_STAGES}: the waves get meaner`,
     W / 2,
-    335,
+    314,
   );
 
   const four = offers.length >= 4; // the lab's FOURTH OPTION board goes 2×2
@@ -4014,6 +4115,7 @@ export function drawReward(
   if (heldItems.length) {
     const iw = 22, gap = 6, n = Math.min(heldItems.length, 14);
     let ix = W / 2 - (n * (iw + gap) - gap) / 2;
+    uiWindow(ctx, { x: ix - 8, y: (four ? 846 : 644) - 4, w: n * (iw + gap) - gap + 16, h: iw + 8 }, { rad: 8, dark: true, shadow: false });
     heldItems.slice(0, 14).forEach((item) => {
       const img = itemSprite(item);
       ctx.globalAlpha = 0.9;
@@ -4033,7 +4135,7 @@ export function drawReward(
       ctx.fillStyle = '#f85888';
       ctx.fillText('NEXT: GYM LEADER', W / 2, nextY);
     } else {
-      ctx.fillStyle = INK_FAINT;
+      ctx.fillStyle = PARCH;
       ctx.fillText('NEXT: PICK YOUR ROUTE', W / 2, nextY);
     }
   }
