@@ -18,7 +18,7 @@ import { THEMES } from '../src/game/bg';
 import type { Theme } from '../src/game/bg';
 import { ROOM_BOSS, STAGE_GIMMICKS, BULLET_GIMMICKS, bulletHints } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
-import { DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, dexBuyRect, partnersStripAt, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
+import { BOX_STRIP, DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, MENU_CLOSE, MENU_QUIT, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, TEAM_PANEL, boxSlotRect, dexBuyRect, partnersStripAt, teamSlotRect, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_LOTS } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
@@ -5397,6 +5397,20 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   ok(TOWN_FOLK.every((folk) => TOWN_LOTS.every((lot) =>
     folk.x1 <= lot.x || lot.x + lot.w <= folk.x0 || folk.y1 <= lot.y || lot.y + lot.h <= folk.y0)),
   'town villager beats stay clear of building sprites');
+}
+
+// --- home: mons (team menu) ---
+{
+  const team = [0, 1, 2, 3].map(teamSlotRect);
+  const inside = (r: { x: number; y: number; w: number; h: number }) =>
+    r.x >= TEAM_PANEL.x && r.y >= TEAM_PANEL.y &&
+    r.x + r.w <= TEAM_PANEL.x + TEAM_PANEL.w && r.y + r.h <= TEAM_PANEL.y + TEAM_PANEL.h;
+  const overlaps = (a: { x: number; y: number; w: number; h: number }, b: { x: number; y: number; w: number; h: number }) =>
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  ok(BOX_STRIP.y === 528 && team.every((r) => r.y === 618 && r.h === 100), 'team menu uses the updated box and party row positions');
+  ok(team.every((r) => r.h >= 44 && inside(r)), 'team slots are thumb-sized and inside the team panel');
+  ok(team.every((r) => [BOX_STRIP, MENU_CLOSE, MENU_QUIT].every((s) => !overlaps(r, s))), 'team slots do not overlap the box strip or menu buttons');
+  ok(inside(boxSlotRect(0, 1)), 'first box slot is inside the team panel');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
