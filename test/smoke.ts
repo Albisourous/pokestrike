@@ -1,6 +1,7 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
 import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T } from '../src/game/battle';
+import * as battleModule from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
@@ -35,6 +36,66 @@ const ok = (cond: boolean, msg: string) => {
 const arena = { x: 30, y: 160, w: 480, h: 620 };
 const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
 const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe });
+
+// --- finishing blows and hit feedback ------------------------------------
+{
+  const { comboPitch, dmgNumSize } = battleModule as any;
+  ok(typeof comboPitch === 'function' && comboPitch(0, 0) === 1, 'combo pitch starts neutral');
+  ok(typeof comboPitch === 'function' && comboPitch(3, 0) > comboPitch(0, 0), 'combo pitch rises with hits');
+  ok(typeof comboPitch === 'function' && comboPitch(100, 100) === 1.9, 'combo pitch caps at 1.9');
+  ok(typeof dmgNumSize === 'function' && dmgNumSize(10, 500, true) > dmgNumSize(10, 500, false), 'weak damage numbers are larger');
+  ok(typeof dmgNumSize === 'function' && dmgNumSize(20, 500, false) > dmgNumSize(10, 500, false), 'larger damage numbers are larger');
+  ok(typeof dmgNumSize === 'function' && dmgNumSize(1e6, 1, true) <= 1.7, 'damage numbers cap at 1.7');
+
+  const fresh = () => {
+    const b: any = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+    b.spawnWave(0);
+    b.courtT = -9;
+    b.phase = 'aim';
+    b.ultHintPending = false;
+    return b;
+  };
+  const koWave = (b: any, except?: any) => {
+    const wave = b.enemies;
+    for (let i = 0; i < wave.length; i++) {
+      const e = wave[i];
+      if (e === except) continue;
+      for (let n = 0; !e.dead && n < 10; n++) b.hurt(e, 1e6, '#fff');
+    }
+  };
+
+  const mid = fresh();
+  mid.battles = 2;
+  mid.battle = 1;
+  koWave(mid);
+  ok(mid.finishN === 0, 'mid-stop battle has no finishing blow');
+
+  const final = fresh();
+  final.battle = final.battles;
+  const last = final.enemies[final.enemies.length - 1];
+  koWave(final, last);
+  ok(final.finishN === 0, 'final battle waits for its last enemy');
+  koWave(final);
+  ok(final.finishN === 1 && (final.fin?.t ?? 0) > 0, 'final kill starts one finishing blow');
+  final.waveCleared();
+  ok(final.finishN === 1, 'repeated clear does not replay finishing blow');
+  for (let i = 0; i < 120 && (final.fin?.t ?? 0) > 0; i++) final.update(1 / 60);
+  ok(final.fin?.t === 0 && (final.finZoom?.() ?? 0) === 0, 'finishing slow-mo and zoom end');
+  ok(final.phase === 'reward' || final.phase === 'loot' || !final.rewardPending, 'reward transition is not held by finishing blow');
+
+  const skip = fresh();
+  skip.battle = skip.battles;
+  const skipLast = skip.enemies[skip.enemies.length - 1];
+  koWave(skip, skipLast);
+  koWave(skip);
+  skip.pointerDown({ x: 270, y: 500 });
+  ok(skip.fin?.t === 0, 'tap skips finishing blow');
+
+  const reward = fresh();
+  reward.fin.t = 0.2;
+  reward.enterReward();
+  ok(reward.fin.t === 0, 'reward entry clears finishing blow');
+}
 
 // --- Monster Strike shot decay and launch speed -------------------------
 {

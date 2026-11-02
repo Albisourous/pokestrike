@@ -339,6 +339,12 @@ export const UNIT_REST = 0.94; // meatier ricochets off bodies
 const MS_FRAME = 60; // MS multiplies velocity once per 60 Hz frame
 export const SHOT_T = 1.5; // s — MS time-boxed shot: v *= 1 - (t/T)^4 each frame
 export const shotDamp = (t: number, h: number, mult = 1) => Math.exp(-MS_FRAME * (t / SHOT_T) ** 4 * mult * h);
+export function dmgNumSize(d: number, maxHp: number, weak: boolean) {
+  return Math.min(1.7, 0.85 + d / 90 + Math.min(0.35, d / Math.max(1, maxHp)) + (weak ? 0.25 : 0));
+}
+export function comboPitch(hits: number, links: number) {
+  return Math.min(1.9, 1 + hits * 0.06 + links * 0.12);
+}
 const HIT_COOLDOWN = 0.12;
 const SMASH_HITS = 3;
 const CUT_HITS = 2;
@@ -351,6 +357,9 @@ const CONTACT_POW = 1.4; // direct hits are the bread and butter again
 const ENEMY_TURN_DELAY = 0.6;
 const ENEMY_BASE_TIMER = 3;
 const MELEE_TIMER = 2; // melee mons have to close in — they attack sooner
+const FINISH_T = 0.8;
+const FINISH_SLOW = 0.25;
+const FINISH_ZOOM = 0.14;
 const BOSS_BARS = [0.3, 0.3, 0.4]; // MS stage data: boss HP split into bars, one battle per bar
 // MS stage_phases: a plain wild stop runs extra battles after the first, each
 // skipped at its skip_rate, so the same stop plays 2 to 4 battles long
@@ -697,6 +706,7 @@ export class Battle {
   private bumpsThisShot = new Set<number>(); // allies whose super fired this shot
   private bumpNoted = new Set<number>(); // allies already told "recharging" this shot
   private shotCombo = 0; // pass-through links chained this shot
+  private shotHits = 0;
   private shotDmg = 0; // running damage tally this shot — read under the COMBO meter
   private shotLoot = 0; // pickups grabbed this shot — a loot run isn't a whiff
   private shotKOs = 0; // kills this shot — multi-KOs name themselves mid-flight
@@ -913,6 +923,12 @@ export class Battle {
   private fx: Fx[] = []; // sparks, streaks and stars from every impact
   private pops: { x: number; y: number; id: number; r: number; t: number; life: number }[] = []; // KO ghost-outs — the sprite flashes skyward
   private punch = 0; // camera zoom-kick — big hits lunge the screen
+  private fin = { x: 0, y: 0, t: 0 };
+  private finishN = 0;
+  private koX = 0;
+  private koY = 0;
+  private koSeen = false;
+  private hitWeak = false;
 
   constructor(
     public arena: Rect,
@@ -1266,6 +1282,8 @@ export class Battle {
   }
 
   private spawnWave(i: number, node?: MapNode) {
+    this.koSeen = false;
+    this.fin.t = 0;
     clearAnims();
     this.waveIndex = i;
     // trainer stops field a mono-type squad — the node's ttype picks it;
@@ -1902,6 +1920,7 @@ export class Battle {
 
   pointerDown(p: Vec) {
     this.telop.skip();
+    if (this.fin.t > 0) { this.fin.t = 0; return; }
     if (this.paused) { // any tap unfreezes
       if (p.x >= PAUSE_SPEED.x && p.x <= PAUSE_SPEED.x + PAUSE_SPEED.w && p.y >= PAUSE_SPEED.y && p.y <= PAUSE_SPEED.y + PAUSE_SPEED.h) {
         this.ff = Battle.ffPref = !this.ff;
@@ -2074,6 +2093,7 @@ export class Battle {
     this.bumpsThisShot.clear();
     this.bumpNoted.clear();
     this.shotCombo = 0;
+    this.shotHits = 0;
     this.shotDmg = 0;
     this.shotLoot = 0;
     this.shotKOs = 0;
@@ -2245,7 +2265,10 @@ export class Battle {
     // hit-stop: freeze-frame feel on big combos
     const hit = this.hitStop > 0;
     if (hit) this.hitStop -= dt0;
-    const dt = hit ? dt0 * 0.3 : dt0;
+    if (this.fin.t > 0) this.fin.t = Math.max(0, this.fin.t - dt0);
+    const k = this.fin.t > 0 ? 1 - this.fin.t / FINISH_T : 1;
+    const slow = FINISH_SLOW + (1 - FINISH_SLOW) * k * k;
+    const dt = dt0 * Math.min(hit ? 0.3 : 1, slow);
     this.time += dt;
     if (this.time - this.ultArmT >= 2) this.ultArmUid = -1;
     this.ultFill += (ULT_SHOTS - Math.max(0, this.ultIn) - this.ultFill) * Math.min(1, dt0 * 12);
@@ -2387,7 +2410,7 @@ export class Battle {
     if (this.phase === 'aim' && this.enemies.every((e) => e.dead)) this.waveCleared();
     // orbs and delayed supers can clear a wave while you're just aiming —
     // pay out on the spot instead of making the player shoot at nothing
-    if (this.rewardPending && this.phase === 'aim') {
+    if (this.rewardPending && this.phase === 'aim' && this.fin.t <= 0) {
       this.rewardPending = false;
       if (this.waveHadGym) this.enterLoot();
       else this.enterReward();
@@ -3398,6 +3421,7 @@ export class Battle {
         e.sumStage++;
         if (STAGE_GIMMICKS[this.theme].kind === 'barrier') e.shieldN = REFLECT_BOSS_HITS;
         this.barBreak = true;
+        buzz([40, 40, 70]);
       }
     }
     e.flashT = 0.12; // the sprite burns white for a beat — every hit confirms
@@ -3481,7 +3505,7 @@ export class Battle {
         color: immune ? '#8a90a8' : crit ? '#ffd84d' : color,
         big: crit || suffix === '!',
         // the number sells the hit — chunkier damage pops bigger
-        size: Math.min(1.7, 0.85 + d / 90),
+        size: dmgNumSize(d, e.maxHp, this.hitWeak),
         tilt: (Math.random() - 0.5) * 0.16,
       });
     // every landed hit reads on the sprite — orbs, dots and ults squash too
@@ -3517,6 +3541,9 @@ export class Battle {
         return;
       }
       e.dead = true;
+      this.koX = e.x;
+      this.koY = e.y;
+      this.koSeen = true;
       // destiny bond: a direct hit that finishes the carrier drags the
       // striker down with it — hazards, splashes, catches and bump supers
       // (no src) are the safe ways to close a bond foe
@@ -3540,7 +3567,9 @@ export class Battle {
       this.scar(e.x, e.y, e.boss ? 20 : 12); // a KO scorches the court
       // the KO pop is the game's biggest beat — flash frame, star shower,
       // shockwave and a camera lunge all at once
+      animBurst(recipeFor(e.def.type), e.x, e.y, e.boss);
       this.impact(e.x, e.y, TYPE_COLOR[e.def.type] ?? '#ffffff', e.boss ? 2.4 : 1.3);
+      this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.2, life: 0.2 });
       this.burst(e.x, e.y, '#ffffff', e.boss ? 26 : 14, e.boss ? 620 : 420, e.boss ? 1.6 : 1);
       this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 3.2, t: 0.35, life: 0.35, color: TYPE_COLOR[e.def.type] ?? '#ffffff', hits: new Set() });
       this.hitStop = Math.max(this.hitStop, e.boss ? 0.48 : 0.18);
@@ -3884,7 +3913,9 @@ export class Battle {
     } else if (e.def.absorb === at) {
       this.hurt(e, -Math.round(e.maxHp * 0.25), color);
     } else {
+      this.hitWeak = weak;
       this.hurt(e, dmg, color, mult > 1 ? '!' : '', shooter);
+      this.hitWeak = false;
       // counter: whatever lands comes back a third as strong — feed it a
       // crit and it feeds you one. Chip it open with the small shots
       if (e.def.counter && !e.dead && dmg > 0 && !shooter.dead) {
@@ -3979,7 +4010,7 @@ export class Battle {
     this.hitStop = Math.max(this.hitStop, mult > 1 ? 0.055 : 0.03);
     this.addPunch(mult > 1 ? 0.04 : 0.015);
     this.addShake(mult > 1 ? 8 : 3.5);
-    sfx('hit', 1 + this.shotCombo * 0.12);
+    sfx('hit', comboPitch(this.shotHits++, this.shotCombo));
     buzz(8);
     if (shooter.wallN >= 2)
       this.pushText({ x: e.x, y: e.y - e.r - 58, text: `BANKED ×${shooter.wallN}!`, t: 0.9, color: '#9df0ff', big: false });
@@ -5183,6 +5214,15 @@ export class Battle {
       this.taskPing('gyms', this.gymsBeaten, this.arena.x + this.arena.w / 2, this.arena.y + 54);
     }
     // last-kill slow-mo — the kill shot gets a beat to land
+    if (this.koSeen) {
+      const cx = this.arena.x + this.arena.w / 2, cy = this.arena.y + this.arena.h / 2;
+      this.fin.x = this.koX + (cx - this.koX) * 0.35;
+      this.fin.y = this.koY + (cy - this.koY) * 0.35;
+      this.fin.t = FINISH_T;
+      this.finishN++;
+      this.screenFlash('#ffffff', 0.22);
+      buzz([40, 30, 80]);
+    }
     this.hitStop = Math.max(this.hitStop, 0.5);
     this.addPunch(0.08);
     this.addShake(9);
@@ -5642,6 +5682,7 @@ export class Battle {
   }
 
   private enterReward() {
+    this.fin.t = 0;
     this.boxSel = -1;
     this.teamSel = -1;
     // hard stops pay out uncommon-or-better relics — the risk has a price;
@@ -5683,6 +5724,7 @@ export class Battle {
   // A fallen gym leader bursts into PokéCoins — a few-second victory lap
   // where you drag your lead mon through the fountain before it fades.
   private enterLoot() {
+    this.fin.t = 0;
     this.phase = 'loot';
     this.lootT = 6;
     this.lootDrag = false;
@@ -6421,6 +6463,8 @@ export class Battle {
   }
 
   private nextBattle() {
+    this.koSeen = false;
+    this.fin.t = 0;
     this.battleBreak = false;
     this.battle++;
     resetAbilities(this);
@@ -7416,6 +7460,12 @@ export class Battle {
       ctx.scale(1 + this.punch, 1 + this.punch);
       ctx.translate(-cx, -cy);
     }
+    const fz = this.finZoom();
+    if (fz > 0.004) {
+      ctx.translate(this.fin.x, this.fin.y);
+      ctx.scale(1 + fz, 1 + fz);
+      ctx.translate(-this.fin.x, -this.fin.y);
+    }
 
     // The tiled court scrolls underneath a fixed, grounded border.
     const scrollK = Math.min(1, (this.time - this.courtT) / COURT_SCROLL);
@@ -7840,8 +7890,14 @@ export class Battle {
       ctx.globalCompositeOperation = 'lighter';
       for (const p of this.pops) {
         const k = Math.max(p.t / p.life, 0);
+        const u = 1 - k;
+        const sq = Math.max(0, 1 - u / 0.3);
         ctx.globalAlpha = k;
-        drawMon(ctx, p.id, p.x, p.y - (1 - k) * 30, p.r * 2.6 * (1 + (1 - k) * 0.7));
+        ctx.save();
+        ctx.translate(p.x, p.y - u * 30);
+        ctx.scale(1 + 0.3 * sq, 1 - 0.25 * sq);
+        drawMon(ctx, p.id, 0, 0, p.r * 2.6 * (1 + u * 0.7));
+        ctx.restore();
       }
       ctx.restore();
       ctx.globalAlpha = 1;
@@ -8043,7 +8099,7 @@ export class Battle {
         t.wf = ctx.font;
       }
       const cx = a.x + a.w / 2;
-      const inset = 12 + this.shake / 2 + Math.max(cx, W_CANVAS_FALLBACK - cx) * this.punch;
+      const inset = 12 + this.shake / 2 + Math.max(cx, W_CANVAS_FALLBACK - cx) * (this.punch + 2 * this.finZoom());
       const textW = W_CANVAS_FALLBACK - inset * 2;
       let half = t.w! / 2;
       let tx = t.x;
@@ -8268,9 +8324,15 @@ export class Battle {
     }
   }
 
+  private finZoom() {
+    if (this.fin.t <= 0) return 0;
+    const k = 1 - this.fin.t / FINISH_T;
+    return FINISH_ZOOM * Math.max(0, Math.min(1, k / 0.2, (1 - k) / 0.4));
+  }
+
   private calloutY(y: number, ascent: number, descent: number, rotatedHalf = 0) {
     const a = this.arena;
-    const inset = 12 + this.shake / 2 + a.h / 2 * this.punch + rotatedHalf;
+    const inset = 12 + this.shake / 2 + a.h / 2 * (this.punch + 2 * this.finZoom()) + rotatedHalf;
     return Math.min(Math.max(y, a.y + ascent + inset), a.y + a.h - 64 - descent - inset);
   }
 
