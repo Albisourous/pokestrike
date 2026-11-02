@@ -158,7 +158,7 @@ export function drawShopScene(ctx: CanvasRenderingContext2D, r: Rect, t: number,
 // the pull theatre runs on it full-bleed and the featured strip as a header
 const rooms = new Map<string, HTMLCanvasElement>();
 function backRoom(w: number, h: number, wallH: number, props: boolean) {
-  const key = `${w}x${h}x${wallH}`;
+  const key = `${w}x${h}x${wallH}x${props ? 1 : 0}`; // same box can bake with or without the bush/flower set
   const hit = rooms.get(key);
   if (hit) return hit;
   const wall = slice(TILE_BRICK), floor = slice(TILE_DIAMOND);

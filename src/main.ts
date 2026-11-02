@@ -134,6 +134,7 @@ import {
   noteTabPress,
   noteTabSwap,
   takeClimbSeed,
+  pinClimbSeed,
   DEAL_BTN,
   PACK_PILL,
   SETS_BTN,
@@ -609,6 +610,7 @@ let restartConfirmT0 = -10;
 function newRun() {
   const forced = Number(new URLSearchParams(location.search).get('seed'));
   const hasForced = Number.isInteger(forced) && forced > 0;
+  if (hasForced) pinClimbSeed(forced); // the diorama previews the stage the ?seed= link replays
   runSeed = hasForced ? forced : takeClimbSeed(); // the title's arena diorama previewed this exact stage 1
   runIsDaily = false;
   runMod = null; // daily mode is gone — parked daily saves still resume below
@@ -641,6 +643,12 @@ document.addEventListener('visibilitychange', () => {
   helpDrag = dexDrag = boxDrag = bagDrag = settingsDrag = null;
   settingsSliderFlush(); // bank a mid-drag slider value the dropped up would have
   battle?.pointerCancel();
+  // armed two-tap windows can't survive a hidden stretch — game time froze
+  // but the 3s confirm was real-time in spirit; disarm everything
+  sparkArm = { id: -1, t: -10 };
+  restartConfirmT0 = -10;
+  packArmT = -9;
+  avatarArmT = -9;
 });
 
 // A saved climb skips the draft/charm entirely — same seed, same island
@@ -1348,7 +1356,9 @@ canvas.addEventListener('pointerdown', (e) => {
       sceneMusic();
       return;
     }
-    if (homeTab === 'climb' && inRect(p.x, p.y, FREE_BTN)) {
+    // the CONTINUE hero draws narrower than FREE_BTN (RESTART flanks it) —
+    // hit what was drawn, not the solo pill's full width
+    if (homeTab === 'climb' && inRect(p.x, p.y, titleSave ? { ...FREE_BTN, w: RESTART_BTN.x - 12 - FREE_BTN.x } : FREE_BTN)) {
       sfx('ui');
       if (titleSave) {
         const s = titleSave;
@@ -1742,9 +1752,19 @@ canvas.addEventListener('pointerup', (e) => {
           sfx('ui');
         } else {
           const pick = dexRowAt(p.x, p.y, dexScroll);
-          if (pick != null) dexPick = pick;
-          else dexOpen = false;
-          sfx('ui');
+          if (pick != null) {
+            dexPick = pick;
+            sfx('ui');
+            // dead space inside the panel is modal like the siblings — the
+            // drawn × chip or a tap past the edge dismisses, a ghost cell
+            // or the scroll rail does not
+          } else if (
+            inRect(p.x, p.y, { x: HATCH_PANEL.x + HATCH_PANEL.w - 48, y: HATCH_PANEL.y + 12, w: 40, h: 40 }) ||
+            !inRect(p.x, p.y, HATCH_PANEL)
+          ) {
+            dexOpen = false;
+            sfx('ui');
+          }
         }
       } else if (boardOpen) {
         // the empty ledger's one live cell — START A CLIMB leaves for the draft
@@ -1761,9 +1781,11 @@ canvas.addEventListener('pointerup', (e) => {
             scene = 'draft';
           }
           sceneMusic();
-        } else boardOpen = false;
-        sfx('ui');
-      } else {
+        } else if (inRect(p.x, p.y, OVL_CLOSE) || !inRect(p.x, p.y, HATCH_PANEL)) {
+          boardOpen = false; // inside dead space is modal — the chip or the outside closes
+          sfx('ui');
+        }
+      } else if (inRect(p.x, p.y, OVL_CLOSE) || !inRect(p.x, p.y, HATCH_PANEL)) {
         achOpen = false;
         sfx('ui'); // tap-to-close clicks like every sibling modal
       }
@@ -1902,7 +1924,7 @@ addEventListener('keydown', (e) => {
   }
   // ←/→ walk the bottom nav — the desk build's tab key; overlays keep their
   // scroll so the arrows only fire on a bare tab
-  if (scene === 'title' && !(dexOpen || achOpen || boardOpen || hatchOpen || labOpen)) {
+  if (scene === 'title' && !(dexOpen || dexPick != null || achOpen || boardOpen || hatchOpen || labOpen)) {
     const dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
     if (dir) {
       const i = TAB_CELLS.findIndex((c) => c.tab === homeTab);
@@ -1916,7 +1938,7 @@ addEventListener('keydown', (e) => {
   // Esc pops the topmost overlay first — lab paints over hatch over board
   // over ach over dex — and only reaches the manual once the screen is
   // bare; '?' still opens help over anything, same as tapping the chip
-  if (e.key === 'Escape' && (labOpen || hatchOpen || boardOpen || achOpen || dexOpen)) {
+  if (e.key === 'Escape' && (labOpen || hatchOpen || boardOpen || achOpen || dexOpen || dexPick != null)) {
     if (labOpen) labOpen = false;
     else if (hatchOpen) {
       // mid-theatre Esc advances the reveal like a tap — the pull's already

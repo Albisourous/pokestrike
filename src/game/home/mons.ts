@@ -120,7 +120,7 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   const hof = !run && !echo ? (board()[0]?.team ?? []).map((id) => ({ id, lvl: 0 })) : null;
   const squad = (runSave()?.team ?? echoIds() ?? hof)?.filter((m) => speciesById(m.id));
   const frame = TEAM_BTN;
-  uiPanel(ctx, frame, run ? 'YOUR CLIMB' : echo ? 'RIVAL ECHO' : 'LAST SQUAD', {
+  uiPanel(ctx, frame, run ? 'YOUR CLIMB' : echo ? 'RIVAL ECHO' : hof?.length ? 'LAST SQUAD' : 'YOUR SQUAD', {
     h: 26,
     ...(run ? { sub: `STAGE ${run.pendingNext + 1}/${TOTAL_STAGES}` } : echo ? { sub: 'IT HUNTS YOU' } : {}),
   });
@@ -131,6 +131,10 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   if (arena) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(arena, STAGE_R.x, STAGE_R.y);
+  } else {
+    // cold atlas — a flat meadow fill beats a bare slab (shop's fallback tone)
+    ctx.fillStyle = '#7a9a5e';
+    ctx.fillRect(STAGE_R.x, STAGE_R.y, STAGE_R.w, STAGE_R.h);
   }
   drawAmbient(ctx, STAGE_R, 'meadow', t, 0.6);
   ctx.restore();
@@ -138,7 +142,17 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   drawnStage = [];
   const mons = squad?.slice(0, 6) ?? [];
   if (!mons.length) {
-    [198, 270, 342].forEach((x) => ballGlyph(ctx, x, 265, 1.7, '#82966c'));
+    void loadItem('poke-ball');
+    const emptyBall = itemSprite('poke-ball');
+    [198, 270, 342].forEach((x) => {
+      if (emptyBall) {
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(emptyBall, x - 15, 250, 30, 30);
+        ctx.restore();
+      } else ballGlyph(ctx, x, 265, 1.7, '#82966c');
+    });
     ctx.font = fontB(13);
     ctx.textAlign = 'center';
     ctx.fillStyle = INK_SOFT;
@@ -156,8 +170,11 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
         const plate = { x: cx - 74, y: cy + 42, w: 148, h: 54 };
         drawnStage.push({ id: m.id, x: cx, y: cy, plate });
         monShadow(ctx, cx, cy + 4, 80);
+        // a run team entry's own shiny flag wins — the dex's species-level
+        // set would gold every member once any one of them is shiny
+        const isShiny = 'shiny' in m ? !!m.shiny : shinySet.has(m.id);
         try {
-          (('shiny' in m && m.shiny) || shinySet.has(m.id) ? drawShiny : drawMon)(ctx, m.id, cx, cy + bob, 80);
+          (isShiny ? drawShiny : drawMon)(ctx, m.id, cx, cy + bob, 80);
         } catch {
           void loadSprite(m.id).catch(() => {});
         }
@@ -180,7 +197,7 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
           drawTypeChip(ctx, type, tx, plate.y + 29, typeW, 18);
           tx += typeW + typeGap;
         });
-        if (shinySet.has(m.id)) {
+        if (isShiny) {
           ctx.fillStyle = GOLD;
           fillStar(ctx, cx + 34, cy - 28, 8);
         }
@@ -217,7 +234,14 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   const badgeSet = gymBadges();
   const dex = DEX_BTN;
   uiPanel(ctx, dex, 'POKÉDEX', { h: 26 });
-  ballGlyph(ctx, dex.x + 22, dex.y + 16, 1.1, '#e03c34');
+  void loadItem('poke-ball');
+  const headBall = itemSprite('poke-ball');
+  if (headBall) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(headBall, dex.x + 13, dex.y + 7, 18, 18);
+    ctx.restore();
+  } else ballGlyph(ctx, dex.x + 22, dex.y + 16, 1.1, '#e03c34');
   const shinyN = shinyIds().length;
   ctx.textAlign = 'left';
   ctx.font = font(16);
@@ -312,7 +336,17 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
     h: 26, ...(partners.length ? { sub: 'BOND PAYS DUST' } : {}),
   });
   if (!ids.length) {
-    [180, 270, 360].forEach((x) => ballGlyph(ctx, x, s.y + 70, 1.5, '#82966c'));
+    void loadItem('poke-ball');
+    const stripBall = itemSprite('poke-ball');
+    [180, 270, 360].forEach((x) => {
+      if (stripBall) {
+        ctx.save();
+        ctx.globalAlpha = 0.45;
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(stripBall, x - 12, s.y + 58, 24, 24);
+        ctx.restore();
+      } else ballGlyph(ctx, x, s.y + 70, 1.5, '#82966c');
+    });
     ctx.font = fontB(12);
     ctx.textAlign = 'center';
     ctx.fillStyle = INK_FAINT;

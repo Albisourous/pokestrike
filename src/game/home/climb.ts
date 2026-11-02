@@ -38,6 +38,11 @@ export function takeClimbSeed() {
   climbSeed = (Math.random() * 0x7fffffff) | 0 || 1;
   return s;
 }
+// a ?seed= link pins the diorama to the forced seed — the court previews the
+// stage the link replays instead of a random roll's
+export function pinClimbSeed(s: number) {
+  climbSeed = s;
+}
 
 let stgMemo: { seed: number; stg: StageDef } | null = null;
 const stageFor = (seed: number) => {
@@ -141,8 +146,10 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
   else drawBackdrop(ctx, S, 12, stg.theme);
   drawAmbient(ctx, { x: S.x, y: S.y - 40, w: S.w, h: S.h + 60 }, stg.theme, t, settings().quality === 'low' ? 0.25 : 0.55);
 
-  // the opener pack holds the middle band, evenly spread so three foes never fuse
-  const pack = stg.waves[0];
+  // the parked stage's own pack holds the middle band, evenly spread so
+  // three foes never fuse — stage.waves only ships the seeded 3, so a deeper
+  // save previews its last authored row (the gym pack)
+  const pack = stg.waves[Math.min(cont ? Math.max(1, cont.stage) - 1 : 0, stg.waves.length - 1)];
   pack.forEach((sp, i) => {
     const mx = S.x + S.w * (pack.length === 1 ? 0.5 : 0.24 + (0.52 * i) / (pack.length - 1));
     const my = S.y + 176;
@@ -173,7 +180,9 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
   drawMon(ctx, lead, S.x + 290, fy - 34 + Math.sin(t * 1.8) * 2, 84);
   ctx.restore();
 
-  plate(ctx, S.x + 12, S.y + 12, `STAGE ${cont ? Math.max(1, cont.stage) : 1} · ${stg.name.toUpperCase()}`);
+  // stages 1-3 are seeded — stg.name is their biome; deeper rows roll off
+  // runRng mid-run, so the seed can't name them and the plate stays honest
+  plate(ctx, S.x + 12, S.y + 12, `STAGE ${cont ? Math.max(1, cont.stage) : 1} · ${!cont || cont.stage <= stg.waves.length ? stg.name.toUpperCase() : 'IN PROGRESS'}`);
   plate(ctx, S.x + S.w - 12, S.y + 12, `${stg.waves.flat().length} FOES`, true);
   // records plate: the one-more-run hook (rank, best, ball tier, streak,
   // boost) — a fresh save has no records to hook, so the plate stays home

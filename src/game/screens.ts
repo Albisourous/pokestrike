@@ -18,7 +18,7 @@ import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost, ra
 import { drawRaidLobby } from './home/raid';
 import type { TaskView } from './tasks';
 import { drawClimb, CLIMB_SCENE } from './home/climb';
-export { FREE_BTN, RESTART_BTN, ASC_BTN, CLIMB_FREE, CLIMB_RAID, ascCellRect, hitAscCell, noteAscDeny, takeClimbSeed, echoMonAt, freshClimb } from './home/climb';
+export { FREE_BTN, RESTART_BTN, ASC_BTN, CLIMB_FREE, CLIMB_RAID, ascCellRect, hitAscCell, noteAscDeny, takeClimbSeed, pinClimbSeed, echoMonAt, freshClimb } from './home/climb';
 import type { Vec } from '../core/vec';
 import {
   INK, INK_SOFT, INK_FAINT, PAPER, PAPER_HI, PARCH, GOLD, GOLD_HI, ACCENT, DANGER,
