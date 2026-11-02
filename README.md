@@ -3,34 +3,39 @@
 **Monster Strike physics in a Pokémon skin, with a Slay the Spire climb.**
 Pull back, launch your Pokémon, and bounce it around the arena smashing wild
 mons. Draft a team of 4, climb 9 stages, and take down all three gym
-leaders to win the run — or hit **DAILY** for the one seed everyone's
-climbing today.
+leaders to win the run.
 
 **Play it:** https://albisourous.github.io/pokestrike/
 
-| Title | Draft | Battle |
+| Climb home | Shop | Mons |
 | --- | --- | --- |
-| ![title screen](docs/title.png) | ![draft round](docs/draft.png) | ![battle](docs/battle.png) |
+| ![CLIMB tab: hero court, CONTINUE pill, ascension ladder](docs/title.png) | ![SHOP tab: prize counter, free pull, daily deal](docs/shop.png) | ![MONS tab: party stage, EDIT TEAM, dex and line sets](docs/mons.png) |
 
-| Region map | Aiming | Reward |
+| Raid | Town | Climb map |
 | --- | --- | --- |
-| ![region map](docs/map.png) | ![aiming](docs/aim.png) | ![relic reward](docs/reward.png) |
+| ![RAID tab: themed boss lobby](docs/raid.png) | ![TOWN tab: Gen 3 village with lab, hall, board and trophies](docs/town.png) | ![seeded region map with linked stops](docs/map.png) |
 
-| Ult armed | Team ultimate | Help manual |
+| Battle banner | Boss bar 3 · rage | Damage walls + field blocks |
 | --- | --- | --- |
-| ![charged gauge, tap a teammate](docs/ult-ready.png) | ![FLARE RAIN team ultimate](docs/ult.png) | ![how to play manual](docs/help.png) |
+| ![GYM BATTLE telop over the court](docs/battle.png) | ![RAGE telop on the last boss bar, attack countdowns overhead](docs/boss-rage.png) | ![DMG WALL edge with Rock Smash, Cut and Strength cells](docs/walls.png) |
 
-| Charm pick | Trainer battle | ? Event |
+| Clear card | Move animation | Team ultimate |
 | --- | --- | --- |
-| ![starting charm](docs/charm.png) | ![trainer battle](docs/trainer.png) | ![event stop](docs/event.png) |
+| ![CLEAR card with S rank ball and run stats](docs/clear.png) | ![foe PSYBEAM cross beam mid-play](docs/anim.png) | ![ULTIMATE THUNDERBOLT across the court](docs/ult.png) |
 
-| Wave mutator | Mines | Boss weak point |
-| --- | --- | --- |
-| ![swarm wave](docs/mutator.png) | ![mine hazard](docs/mines.png) | ![gym weak point](docs/weakpoint.png) |
+## What's in it
 
-| Victory loot | Soul-linked pair | Power zone + auras |
-| --- | --- | --- |
-| ![coin shower after a gym](docs/loot.png) | ![zombie pair tether](docs/zombie.png) | ![power zone, gravity aura, skull mark](docs/powerzone.png) |
+- **Monster Strike shot physics** · time-boxed speed decay and the hit-damage floor, ported from the 3DS game's own code. Bank shots, ally bumps, combo chains.
+- **Attack clocks** · every foe shows a turn countdown over its head and fires a typed move when it hits zero. Kill it or move it.
+- **Boss bars** · gym bosses fight across 3 HP bars, each a fresh authored court with new adds. The weak spot moves every bar, and bar 3 is RAGE: faster clocks, Reflect guards.
+- **Stop structure** · wild stops run 2 to 4 battles with a turn par; finish under it for SPEED CLEAR.
+- **Stage gimmicks** · damage walls that fade in and cycle by turn, gravity wells, warp pairs, boost panels, barriers. The right **ability** counters each one, and the draft hints which mons do.
+- **Field-move blocks** · Rock Smash rocks (3 hits), Cut trees (2, or 1 from Grass), Strength boulders that shove one cell.
+- **Bullet pickups** · drain moves, berry drops, PP Up, Chesto, Safeguard, plus the Oran → Sitrus ripen.
+- **Clear ranks** · each stop ends on a CLEAR card: S/A/B/C rank ball, turns, max combo, weak hits, KOs, damage taken, per-stage bests.
+- **Telops and Gen 3 animations** · Monster Strike-style banners for battle start, boss, phase, clear and ULT, and move sprites from pokeemerald's battle anims.
+- **Real cries** · at boss intros, KOs, ultimates and catches.
+- **Home tabs** · SHOP prize counter, MONS party stage + dex, CLIMB court with the ascension ladder, RAID boss lobby, TOWN village with lab, board, hall and trophies.
 
 ## How to play
 
@@ -49,8 +54,7 @@ ghost pull that repeats until you've really slung one.
 
 1. Hit **START CLIMB** for a 9-stage climb (Slay the Spire style): random wild
    stages, a **gym leader** every 3rd stage, bigger and meaner packs as you
-   go, and a win only when the third gym falls. Or hit **DAILY** — the same
-   UTC-date seed for everyone, so today's climb is one shared mountain.
+   go, and a win only when the third gym falls.
    Every run is fully seeded (the island, the draft deals, every roll all
    reproduce): share cards carry a `?seed=` link that deals the exact same
    climb, and `?seed=NNN` by hand pins any seed for debugging. Enemy typing is hidden (`?`)
@@ -341,9 +345,13 @@ src/
   core/    vec.ts, loop.ts, assets.ts, rng.ts,  # engine plumbing
            audio.ts                             # chiptune music + synth sfx + haptics
   game/    types.ts, data.ts, stats.ts,         # rules + stat formulas
-           perks.ts, bg.ts, meta.ts,            # items, backdrops, persistence
-           map.ts, maptiles.ts,                  # seeded region map + atlas tiles
-           battle.ts, screens.ts                 # battle scene + title/draft/result
+           abilities.ts, perks.ts, traits.ts,   # abilities, items, type traits
+           bg.ts, meta.ts, tasks.ts,            # backdrops, persistence, daily board
+           map.ts, maptiles.ts, events.ts,      # seeded region map, atlas tiles, ? stops
+           battle.ts, telop.ts, anim.ts,        # battle scene, banners, move animations
+           screens.ts, ui.ts                    # overlays + draft/result, menu chrome
+  game/home/ shop.ts, mons.ts, climb.ts,        # home tab bodies
+             raid.ts, town.ts
   main.ts                                       # canvas fit + scene state
 public/  sprites/ (mons, items, gracidea, cries), manifest.webmanifest, sw.js, icons
 ```

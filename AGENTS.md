@@ -43,18 +43,30 @@ server, 540×960 letterboxed logical space, custom circle physics.
 ## Layout
 
 - `src/core/` — engine plumbing: `vec.ts` (vector math), `loop.ts` (rAF loop), `assets.ts` (sprite cache), `audio.ts` (synth SFX + haptics)
+- `src/core/rng.ts` — seeded `mulberry32` pseudo-random number generator.
 - `src/game/data.ts` — all content: roster/enemy species with canonical base stats, stage waves (normalized arena coords), seeded stage generator, `ROOM_LAYOUTS` 9×11 Archero room pool + `buildRoom` compiler
 - `src/game/stats.ts` — stat-to-mechanic formulas (Atk/Def = physical, SpA/SpD = special, Spe = movement)
+- `src/game/perks.ts` — perk and bag-item definitions, effect ticking, and reward rolls.
 - `src/game/types.ts` — Pokémon type chart + colors
+- `src/game/abilities.ts` — canonical ability data, hazard and gimmick counters, and battle ability effects.
 - `src/game/battle.ts` — battle scene: slingshot physics, turns, damage, bump combos, enemy AI, rendering + the region-map interstitial
+- `src/game/anim.ts` — capped Gen 3 battle-animation pool, move recipes, and matching danger tells.
+- `src/game/telop.ts` — queues and draws battle banners with priority, deduplication, and Pokémon art.
 - `src/game/map.ts` — seeded island generator for the climb map (value-noise terrain, decor); a fixed-lane StS tree: triplets of fork(2 battle doors) → fan(3 utility doors) → gym(1), edges deterministic by lane (door→own side+center, fan→gym, gym→both doors); tile draws key magenta from the gracidea tileset
 - `src/game/events.ts` — the `?`-stop event pool (heals, catches, ambush scripted waves, egg)
 - `src/game/traits.ts` — tiered type traits from fielded mons (shiny counts double)
 - `src/game/ui.ts` — the menu-window chrome kit: palette (INK/PAPER/PARCH/GOLD), fonts (`font`/`fontB`), `uiWindow`/`uiBand`/`uiPanel` (double-framed paper windows + INK title band), `uiRow` (list rows, `on`=ink slab, `hot`=gold slab + ▶), `cursorTri` (blinking ▶), `scrim`, `uiClose`. Every panel/overlay draws through these — design spec: `docs/superpowers/specs/2026-10-22-menu-ux-overhaul.md`
 - `src/game/maptiles.ts` — `TILE_*` source rects into `tileset.webp` for the map
+- `src/game/bg.ts` — cached themed arena tiles and scenery with wall, cover, moat, backdrop, and ambient passes.
 - `src/game/meta.ts` — localStorage persistence: dex catches, rank, rival echo, mid-run save (`pk_run` banked at map safe points, CONTINUE on title), decision telemetry (`pk_stats`), and the earned-progression stores — stars/dust wallets, pulls + pity, lab, board, login calendar, rookie ladder, dex-reward tiers, free pull, streaks, first-win, session grind, mon bond (`pk_bond` per-species career pts → dust). New stores are unversioned shape-checked blobs (`load` + field validation + `mem*` fallback); only a `pk_*` shape change in a versioned blob needs `SAVE_VER` + `migrateSaves()`
 - `src/game/tasks.ts` — daily/weekly task board + the UTC-seeded daily picks (`featuredPull` rate-up, `raidPick`/`raidTeam` chroma raid, `dealPick`/`dealCost` spark deal); seeded `do/while` picks are iteration-capped
-- `src/game/screens.ts` — all drawing + hit rects: title home menu (ambient wilds, TODAY card, currency bar), draft offers (from `draftOrder(rng)` in `data.ts`), result card, and the overlays — hatcher (pull theatre + spark shop), lab, tasks, dex, trophies, board, help deck
+- `src/game/daily.ts` — defines the shared UTC-seeded daily rule cards and selects the day's rule.
+- `src/game/home/climb.ts` — CLIMB court scene, lead roster, start/continue action, ascension ladder, and side doors.
+- `src/game/home/mons.ts` — MONS party stage, Pokédex register/detail cards, and party-stage hit tests.
+- `src/game/home/raid.ts` — daily raid lobby scene, boss weaknesses, counter hints, and reward preview.
+- `src/game/home/shop.ts` — cached prize-counter scene with live clerk, rate-up Pokémon, and shop props.
+- `src/game/home/town.ts` — framed village scene, building tap rectangles, and villager strolls.
+- `src/game/screens.ts` — all drawing + hit rects: title home menu (ambient wilds, TODAY card, currency bar; home tab bodies now live in `src/game/home/`), draft offers (from `draftOrder(rng)` in `data.ts`), result card, and the overlays — hatcher (pull theatre + spark shop), lab, tasks, dex, trophies, board, help deck
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/gracidea/` — scenery canon (see Direction): `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
 - `public/sprites/<id>.png` — 64×64 FRLG battle fronts by dex id, vendored from PokeAPI/sprites
