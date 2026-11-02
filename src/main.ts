@@ -1,6 +1,6 @@
 import './style.css';
 import { startLoop } from './core/loop';
-import { unlockAudio, sfx, music, toggleMute, syncVolumes, playJingle, buzz, TRACKS, BIOME_TRACK } from './core/audio';
+import { unlockAudio, sfx, music, toggleMute, syncVolumes, playJingle, buzz, cry, TRACKS, BIOME_TRACK } from './core/audio';
 import type { TrackName } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
@@ -791,6 +791,7 @@ const revealSfx = (res?: PullResult) => {
   if (res.shiny) sfx('perfect');
   else if (res.rarity >= 3) sfx('invade');
   else sfx('caught', res.rarity === 2 ? 1.25 : 1);
+  cry(res.id, 'catch');
 };
 const SPARK_ARM_T = 3; // two-tap confirm window on a dust buy
 
@@ -884,6 +885,12 @@ const sparkBuy = (def: SpeciesDef) => {
 const hatchTap = (p: { x: number; y: number }) => {
   if (t - hatchLockT < 0.15) return; // a tap meant for the phase that just auto-advanced would skip the new card
   if (hatch.phase === 'shake') {
+    if (hatch.results.length > 1 && inRect(p.x, p.y, slop(SKIP_PULL_BTN, 12))) {
+      hatch.phase = 'results';
+      hatch.t = 0;
+      sfx('ui');
+      return;
+    }
     hatch.phase = 'reveal'; // an impatient tap skips the rest of the shake
     hatch.t = 0;
     hatch.tMax = hatchLen(HATCH_REVEAL_T, hatch.results[hatch.i]);
