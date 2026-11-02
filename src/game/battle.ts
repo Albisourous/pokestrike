@@ -34,7 +34,7 @@ import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttac
 import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
-import { maybeSecret, enterSecret, secretWon, secretFled, drawSecretNode, secretSave, secretLoad, bossRooms, secretTheme, type SecretState } from './secret';
+import { maybeSecret, enterSecret, secretWon, secretFled, closeSecret, drawSecretNode, secretSave, secretLoad, bossRooms, secretTheme, type SecretState } from './secret';
 import { MID_SCALE, MID_HP, MID_SIG, midBossStop, evolveOnce, midBossPick, drawMidBar } from './midboss';
 
 import {
@@ -2284,11 +2284,13 @@ export class Battle {
     const charge = this.charge();
     const zone = this.sweetSpot();
     const gold = Math.abs(charge - zone.c) <= zone.hw;
+    const quiet = quietOpener(this.waveIndex, isGentleRoom(this.roomGrid));
     // hot streak: back-to-back perfects make each shot hit a bit harder —
-    // resets the moment a release misses the gold
-    this.streak = gold ? this.streak + 1 : 0;
+    // resets the moment a release misses the gold; the coached opener's
+    // fiat gold isn't a real release, so it doesn't touch the count
+    if (!quiet) this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
-    this.shotGold = gold && !quietOpener(this.waveIndex, isGentleRoom(this.roomGrid));
+    this.shotGold = gold && !quiet;
     if (this.shotGold && gaugeCounter(u.def)) this.gaugeOn(u);
     const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (u.paraT > 0 ? 0.65 : 1) * (0.4 + 0.6 * (gold ? 1 : charge)) * this.swiftMult(u);
     u.vx = dir.x * speed;
@@ -4446,7 +4448,7 @@ export class Battle {
       case 'HYPER BEAM': // the golden wall of light — fattest beam in the game
         lineBlast(far, '#ffd84d', 38, 2.6, 2.4);
         return true;
-      case 'SOLARBEAM': // same line, photosynthesis green
+      case 'SOLAR BEAM': // same line, photosynthesis green
         lineBlast(far, '#78c850', 32, 2.2, 1.8);
         return true;
       case 'HYDRO CANNON': // a water jet that punches through the pack
@@ -4546,7 +4548,7 @@ export class Battle {
         // the pool: the flashy half of this table — no METRONOME (no
         // recursion), no SPLASH (the wag deserves a real payoff)
         const pool = [
-          'HYPER BEAM', 'SOLARBEAM', 'HYDRO CANNON', 'ZAP CANNON',
+          'HYPER BEAM', 'SOLAR BEAM', 'HYDRO CANNON', 'ZAP CANNON',
           'PSYCHO BOOST', 'ERUPTION', 'EXPLOSION', 'BLAST BURN',
           'FRENZY PLANT', 'OUTRAGE', 'SHEER COLD', 'THUNDERBOLT',
           'ICE BEAM', 'FUTURE SIGHT',
@@ -6034,7 +6036,7 @@ export class Battle {
   }
 
   private enterReward() {
-    if (this.secret) return secretWon(this);
+    if (this.secret?.phase === 'fight') return secretWon(this);
     this.fin.t = 0;
     this.boxSel = -1;
     this.teamSel = -1;
@@ -6361,6 +6363,7 @@ export class Battle {
 
   private finishMapWalk(n: MapNode) {
     if (n.kind === 'secret') return enterSecret(this, n);
+    if (this.secret?.phase === 'open') closeSecret(this); // walking past an open lair seals it
     this.mapNode = this.region.nodes.indexOf(n);
     this.pendingNext = n.row;
     this.arriveAtNode(n);
@@ -6604,6 +6607,7 @@ export class Battle {
     // bank the flight path before the smear dies — next aim draws the echo
     this.lastPath = this.trail.length > 4 ? this.trail.map((p) => ({ x: p.x, y: p.y })) : [];
     this.trail = []; // smear dies with the shot
+    this.connect.live = false; // the boosted shot is spent — chip and glow stop promising it
     // supers recharge per shot taken; leftovers ticks a small heal
     if (this.healCd > 0) this.healCd--;
     for (const p of this.players) {

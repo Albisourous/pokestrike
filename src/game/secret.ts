@@ -156,6 +156,7 @@ export interface SecretState {
   row: number;
   rank: ClearRank;
   phase: 'open' | 'fight';
+  bossLvl: number; // the spawned legend's level — stashed at the door, enemies are culled by the payout
   added: number[];
   hpSnap: { hp: number; dead: boolean }[];
   rngSaved: () => number;
@@ -183,7 +184,7 @@ export function secretLoad(b: Battle, v: unknown) {
   if (gymIdx < 0 || !def) return;
   const node = placeSecret(x.regionMap, gymIdx);
   x.secret = {
-    node, gymIdx, def, row, rank, phase: 'open',
+    node, gymIdx, def, row, rank, phase: 'open', bossLvl: 1,
     added: secretRoutes.get(node) ?? [], hpSnap: [], rngSaved: x.rng, had: false,
   };
 }
@@ -211,7 +212,7 @@ export function maybeSecret(b: Battle) {
   const gymIdx = x.regionMap.nodes.findIndex((n) => n.row === x.waveIndex && n.kind === 'gym');
   if (gymIdx < 0) return;
   const node = placeSecret(x.regionMap, gymIdx);
-  x.secret = { node, gymIdx, def, row: x.waveIndex, rank: card.rank, phase: 'open', added: secretRoutes.get(node) ?? [], hpSnap: [], rngSaved: x.rng, had: false };
+  x.secret = { node, gymIdx, def, row: x.waveIndex, rank: card.rank, phase: 'open', bossLvl: 1, added: secretRoutes.get(node) ?? [], hpSnap: [], rngSaved: x.rng, had: false };
   x.telop.push({ kind: 'phase', title: 'SECRET LAIR', sub: 'A LEGEND STIRS · CHECK THE MAP', icon: 'poke-ball' });
 }
 
@@ -230,6 +231,7 @@ export function enterSecret(b: Battle, node: MapNode) {
   x.spawnWave(s.row, node);
   const boss = x.enemies.find((e) => e.boss);
   if (boss) {
+    s.bossLvl = boss.lvl;
     boss.maxHp = Math.round(boss.maxHp * SECRET_HP);
     boss.hp = boss.maxHp;
     boss.bars = [0.35, 0.65];
@@ -246,8 +248,7 @@ export function secretWon(b: Battle) {
   const x = internals(b);
   const s = x.secret;
   if (!s) return;
-  const boss = x.enemies.find((e) => e.boss) ?? x.enemies[0];
-  const rec = { ...s.def, lvl: x.catchLvl(boss?.lvl ?? 1) };
+  const rec = { ...s.def, lvl: x.catchLvl(s.bossLvl) };
   x.rng = s.rngSaved;
   if (s.had) x.absorbDupe(rec);
   else if (!x.box.some((d) => d.id === rec.id) && !x.players.some((p) => p.def.id === rec.id)) {

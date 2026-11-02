@@ -4513,8 +4513,10 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string | RegExp
   ok(c3.dismiss(0.2), 'the auto card still eats a tap inside its beat');
   const c4 = new Missions();
   c4.start(1, 1, types, true, 0);
-  c4.draw(fakeCtx, 1.6, arena, st0, sc);
-  ok(!c4.dismiss(1.7), 'the auto card drops itself after the beat');
+  c4.draw(fakeCtx, 1.6, arena, st0, sc); // first render lands past the old wave-start beat
+  ok((c4 as any).cardOn === true, 'the auto card clock starts at first render, not wave spawn');
+  c4.draw(fakeCtx, 3.2, arena, st0, sc);
+  ok(!c4.dismiss(3.3), 'the auto card drops itself after the beat');
   (globalThis as Record<string, unknown>).document = doc0;
 }
 
@@ -5918,7 +5920,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const starsBefore = b.starsRun;
   (b as any).waveCleared();
   ok(b.clearCard?.rank === 'S', 'a climb stop clear creates an S-rank card');
-  ok((b.clearCard?.pay ?? 0) >= RANK_PAY.S && b.starsRun === starsBefore + (b.clearCard?.pay ?? 0), 'clear-card pay matches credited run stars');
+  const missionStars = (b.clearCard?.missions ?? []).filter((m) => m.state === 'done' && m.pay.kind === 'stars').reduce((n, m) => n + m.pay.n, 0);
+  ok((b.clearCard?.pay ?? 0) >= RANK_PAY.S && b.starsRun === starsBefore + (b.clearCard?.pay ?? 0) + missionStars, 'clear-card and mission pay match credited run stars');
   ok(b.rankStreak === 1 && b.bestRankStreak === 1, 'an A-or-better clear starts the rank streak');
   (b as any).spawnWave(1);
   ok(b.clearCard === null, 'the next wave clears the prior stop card');
@@ -6225,11 +6228,12 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
     b.pointerMove({ x: u.x + 60, y: u.y });
     b.pointerUp();
   };
+  b.streak = 2;
   release();
-  const openerOff = b.shotGold === false;
+  const openerOff = b.shotGold === false && b.streak === 2; // the coached release never touches the count
   b.roomGrid = ROOM_LAYOUTS[3];
   release();
-  ok(openerOff && b.shotGold === true, 'gold release loses bonus only in the gentle opener');
+  ok(openerOff && b.shotGold === true && b.streak === 3, 'gold release loses bonus only in the gentle opener, which leaves the streak alone');
   const pullDraws = (def: (typeof ROSTER)[number]) => {
     let draws = 0;
     const rng = mulberry32(19);
@@ -6435,6 +6439,17 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   control.spawnWave(winState.row + 1);
   wb.spawnWave(winState.row + 1);
   ok(JSON.stringify(wb.enemies.map((e: any) => `${e.def.id}:${e.hp}`)) === JSON.stringify(control.enemies.map((e: any) => `${e.def.id}:${e.hp}`)), 'secret win preserves the next-row replay');
+
+  // an open lair isn't a standing invite — a normal clear pays the normal
+  // board, and walking any other door seals the lair for good
+  const walked = findOpen();
+  const wkb: any = walked.b;
+  wkb.phase = 'map';
+  wkb.pendingNext = wkb.secret.row + 1;
+  wkb.enterReward();
+  ok(wkb.secret?.phase === 'open' && wkb.phase === 'reward' && !wkb.box.some((d: any) => d.id === wkb.secret.def.id), 'a normal-wave clear leaves the open lair alone');
+  wkb.finishMapWalk(wkb.regionMap.nodes[wkb.secret.node.links[0]]);
+  ok(!wkb.secret && !wkb.regionMap.nodes.some((n: any) => n.kind === 'secret'), 'walking a normal door seals an open lair');
 
   const lose = findOpen();
   const lb: any = lose.b;

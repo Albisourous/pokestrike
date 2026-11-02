@@ -88,10 +88,10 @@ export interface Field2Fx {
 // Beam row + post columns: an open run of floor cells, mirror-symmetric,
 // that still leaves P a lane to the door and every anchor with the beam
 // treated as a wall. Rows mid-court first, wide fence first.
-export function laserPlan(grid: string[]): { row: number; col: number } | null {
+export function laserPlan(grid: string[], taken: Set<string> = new Set()): { row: number; col: number } | null {
   for (const row of [5, 6, 4, 3]) for (const col of [2, 3]) {
     const run = grid[row].slice(col, 9 - col);
-    if (![...run].every((ch) => ch === '0')) continue;
+    if (![...run].every((ch, i) => ch === '0' && !taken.has(`${col + i},${row}`))) continue;
     const walled = grid.map((line, r) => (r === row ? line.slice(0, col) + '2'.repeat(run.length) + line.slice(9 - col) : line));
     if (fieldRoomReachable(walled)) return { row, col };
   }
@@ -161,7 +161,7 @@ export function installField2(grid: string[] | null, theme: Theme, a: Rect, batt
   } else if (g.kind === 'wind') {
     f.wind = { x0: a.x, x1: a.x + a.w, y0: a.y + ch * 4, y1: a.y + ch * 6, dir: battle % 2 ? -1 : 1 };
   } else {
-    const plan = laserPlan(grid);
+    const plan = laserPlan(grid, taken);
     if (!plan) return null;
     const y = a.y + ch * (plan.row + 0.5);
     const post = (c: number): Post => ({ x: a.x + cw * (c + 0.5), y, hp: LASER_POST_HITS, t: -9 });
@@ -439,7 +439,8 @@ export function drawField2(ctx: CanvasRenderingContext2D, f: Field2 | null, time
     if (!ring || k < 0 || k >= 1) continue;
     ctx.globalAlpha = 1 - k;
     const rw = 12 + k * 36, rh = 56 + k * 16;
-    ctx.drawImage(ring, e.x - rw / 2, e.y - rh / 2, rw, rh);
+    const fr = Math.floor((time - e.t) * 12) % 2; // two stacked 16px frames — don't squash the sheet
+    ctx.drawImage(ring, 0, fr * 16, 16, 16, e.x - rw / 2, e.y - rh / 2, rw, rh);
   }
   const l = f.laser;
   if (l && !l.down) {

@@ -42,7 +42,7 @@ export const SUPER_DESC: Record<PokeType, string> = {
 // signatureMove switch in battle.ts.
 export const MOVE_DESC: Record<string, string> = {
   'HYPER BEAM': 'the fattest beam in the game, pierces to the far wall',
-  'SOLARBEAM': 'a green beam pierces through to the far wall',
+  'SOLAR BEAM': 'a green beam pierces through to the far wall',
   'HYDRO CANNON': 'a water jet punches through the whole pack',
   'ZAP CANNON': 'one huge thunderball hunts down the farthest enemy',
   'PSYCHO BOOST': 'detonates the biggest target in a huge burst',
@@ -213,7 +213,7 @@ export const MOVE_OF: Record<number, string> = {
   65: 'FUTURE SIGHT', 68: 'DYNAMICPUNCH', 76: 'EXPLOSION', 94: 'DREAM EATER',
   113: 'SOFTBOILED', 115: 'DIZZY PUNCH', 123: 'AERIAL ACE', 125: 'THUNDERPUNCH',
   131: 'SHEER COLD', 134: 'AURORA BEAM', 135: 'SHOCK WAVE', 136: 'OVERHEAT',
-  142: 'ANCIENT POWER', 143: 'BODY SLAM', 154: 'SOLARBEAM', 157: 'ERUPTION',
+  142: 'ANCIENT POWER', 143: 'BODY SLAM', 154: 'SOLAR BEAM', 157: 'ERUPTION',
   160: 'CRUNCH', 169: 'SLUDGE BOMB', 181: 'ZAP CANNON', 196: 'PSYBEAM',
   197: 'FEINT ATTACK', 212: 'METAL CLAW', 229: 'FIRE FANG', 257: 'BLAZE KICK',
   282: 'HYPNOSIS', 289: 'FOCUS PUNCH', 306: 'IRON TAIL', 350: 'ICE BEAM',

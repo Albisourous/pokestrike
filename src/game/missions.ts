@@ -55,7 +55,7 @@ const LABEL: Record<Exclude<MissionId, 'finish'>, string> = {
 // deterministic: same seed + stage + team → same three goals. The ULT goal
 // only shows when the charge can land inside the stop
 export function pickMissions(seed: number, stage: number, teamTypes: PokeType[], ultReady: boolean): Mission[] {
-  const rng = mulberry32((seed * 2654435761 + stage * 40503) >>> 0);
+  const rng = mulberry32((Math.imul(seed, 2654435761) + Math.imul(stage, 40503)) >>> 0);
   const pool: MissionId[] = ['par', 'multiko', 'weak3', 'nofaint', 'finish'];
   if (ultReady) pool.push('ult');
   const types = [...new Set(teamTypes)].sort();
@@ -87,6 +87,7 @@ export class Missions {
   private cardOn = false;
   private cardOut = -99;
   private cardDrawn = -99; // a card nobody has seen can't eat a tap (headless runs)
+  private cardT0 = -1; // first frame the card actually renders — the auto-drop clock's zero
   private cardAuto = false;
 
   start(seed: number, stage: number, teamTypes: PokeType[], ultReady: boolean, now: number, off = false) {
@@ -95,6 +96,7 @@ export class Missions {
     this.t0 = now;
     this.ultUsed = this.banked = false;
     this.cardOn = this.list.length > 0;
+    this.cardT0 = -1;
     // count the show, not the wave — after 3 cards it's ritual, so this one
     // flashes and drops itself (a tap inside the window still dismisses)
     this.cardAuto = this.cardOn && noteStopCard() > 3;
@@ -147,7 +149,7 @@ export class Missions {
   draw(ctx: CanvasRenderingContext2D, now: number, arena: { x: number; y: number; w: number; h: number }, s: StopStats, card?: StopCard) {
     if (!this.list.length) return;
     this.tick(s);
-    if (this.cardOn && this.cardAuto && now - this.t0 >= CARD_AUTO) {
+    if (this.cardOn && this.cardAuto && this.cardT0 >= 0 && now - this.cardT0 >= CARD_AUTO) {
       this.cardOn = false;
       this.cardOut = now;
     }
@@ -155,7 +157,10 @@ export class Missions {
     ctx.save();
     const a = this.cardOn ? Math.min(1, (now - this.t0) / CARD_FADE) : 1 - (now - this.cardOut) / CARD_FADE;
     if (card && a > 0) drawStopCard(ctx, card, this.list, arena, a, now, this.rare);
-    if (card && this.cardOn) this.cardDrawn = now;
+    if (card && this.cardOn) {
+      if (this.cardT0 < 0) this.cardT0 = now;
+      this.cardDrawn = now;
+    }
     const c = { x: arena.x + arena.w - 98, y: arena.y + 8, w: 90, h: 30 };
     ctx.globalAlpha = 0.92;
     uiWindow(ctx, c, { rad: 8, tint: PAPER });
