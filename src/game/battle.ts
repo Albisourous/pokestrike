@@ -57,7 +57,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, fitFontB, roundRect, button, pill, wrap2, MAP_MENU, drawCounterHint } from './screens';
+import { font, fontB, fitFont, fitFontB, roundRect, button, wrap2, MAP_MENU, drawCounterHint, drawPauseCard } from './screens';
 
 export interface Rect {
   x: number;
@@ -8635,29 +8635,8 @@ export class Battle {
     // the freeze frame — drawn dead last so nothing paints over it; a tap
     // anywhere thaws (pointerDown drops it before any other handling)
     if (this.paused) {
-      ctx.fillStyle = 'rgba(4,6,16,0.6)';
-      ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
-      ctx.textAlign = 'center';
-      ctx.font = font(24);
-      ctx.fillStyle = '#f0e6c8';
-      ctx.fillText('PAUSED', 270, 460);
-      ctx.font = font(10);
-      ctx.globalAlpha = 0.6 + Math.sin(this.time * 4) * 0.25;
-      ctx.fillStyle = '#8890b8';
-      ctx.fillText('tap anywhere to resume', 270, 492);
-      ctx.globalAlpha = 1;
-      // the secondary readouts the battle strip dropped: the court (not the
-      // stage, a fire trainer on a grove stage fights in Cinder Crag), heat,
-      // score
-      ctx.font = fontB(11);
-      ctx.fillStyle = '#aab4d8';
-      const info = [this.themeName.toUpperCase(), STAGE_GIMMICKS[this.theme].label, ...(this.asc > 0 ? [`ASC ${this.asc}`] : []), `SCORE ${this.score.toLocaleString('en-US')}`].join(' · ');
-      ctx.fillText(info, 270, 410);
-      // the way out — same pill idiom as the other modal buttons; main.ts
-      // hit-tests both rects before the freeze's any-tap thaw
-      pill(ctx, PAUSE_SPEED, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: this.ff ? 'SPEED ×2' : 'SPEED ×1' });
-      pill(ctx, PAUSE_SETTINGS, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'SETTINGS' });
-      pill(ctx, PAUSE_QUIT, { c: '#e8ecf8', cd: '#aab0c8', tc: '#2a2440', label: 'QUIT TO TITLE' });
+      const info = [STAGE_GIMMICKS[this.theme].label, ...(this.asc > 0 ? [`ASC ${this.asc}`] : []), `SCORE ${this.score.toLocaleString('en-US')}`].join(' · ');
+      drawPauseCard(ctx, this.themeName.toUpperCase(), info, this.ff, this.time, { settings: PAUSE_SETTINGS, quit: PAUSE_QUIT, speed: PAUSE_SPEED });
     }
   }
 

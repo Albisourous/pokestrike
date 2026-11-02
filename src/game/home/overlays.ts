@@ -481,3 +481,69 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   rail(ctx, P.x + P.w - 12, v.y, v.h, scroll, h);
   closeChip(ctx);
 }
+
+// --- the battle freeze: a paper card over the dimmed court. The rects live
+// in battle.ts (main.ts hit-tests them); this only paints.
+export function drawPauseCard(
+  ctx: CanvasRenderingContext2D,
+  court: string,
+  info: string,
+  ff: boolean,
+  t: number,
+  b: { settings: Rect; quit: Rect; speed: Rect },
+) {
+  ctx.fillStyle = 'rgba(4,6,16,0.6)';
+  ctx.fillRect(0, 0, W, 2000);
+  const r = { x: b.settings.x - 34, y: b.settings.y - 146, w: b.settings.w + 68, h: b.speed.y + b.speed.h + 26 - (b.settings.y - 146) };
+  uiWindow(ctx, r, { rad: 12 });
+  uiBand(ctx, r, 'PAUSED');
+  ctx.textAlign = 'center';
+  fitFont(ctx, court, 10, r.w - 32);
+  ctx.fillStyle = INK;
+  ctx.fillText(court, W / 2, r.y + 68);
+  ctx.font = fontB(10);
+  ctx.fillStyle = INK_SOFT;
+  ctx.fillText(clipText(ctx, info, r.w - 32), W / 2, r.y + 90);
+  ctx.globalAlpha = 0.6 + Math.sin(t * 4) * 0.25;
+  ctx.fillStyle = INK_FAINT;
+  ctx.fillText('tap anywhere to resume', W / 2, r.y + 120);
+  ctx.globalAlpha = 1;
+  const quiet = { c: '#e8e8e0', cd: INK, tc: INK };
+  pill(ctx, b.settings, { ...quiet, label: 'SETTINGS' });
+  pill(ctx, b.quit, { ...quiet, label: 'QUIT TO TITLE' });
+  pill(ctx, b.speed, ff ? { c: GOLD_HI, cd: GOLD, tc: INK, label: 'SPEED ×2' } : { ...quiet, label: 'SPEED ×1' });
+}
+
+// --- the day's login drop: a paper slip with the week strip, the 7th day
+// is the spike
+export function drawLoginDrop(ctx: CanvasRenderingContext2D, lt: { n: number; prize: number; back: number }, y: number, alpha: number) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const r = { x: W / 2 - 150, y, w: 300, h: lt.back > 0 ? 92 : 76 };
+  uiWindow(ctx, r, { rad: 10 });
+  rim(ctx, r, 10, GOLD, 2);
+  icon(ctx, 'star-piece', r.x + 30, r.y + 30, 30);
+  ctx.textAlign = 'left';
+  const msg = `DAY ${lt.n} LOGIN · +${lt.prize}★`;
+  fitFont(ctx, msg, 10, r.w - 70);
+  ctx.fillStyle = INK;
+  ctx.fillText(msg, r.x + 54, r.y + 30);
+  const wk = ((lt.n - 1) % 7) + 1;
+  for (let i = 1; i <= 7; i++) {
+    const cx = r.x + 62 + (i - 1) * 30;
+    const cy = r.y + 54;
+    ctx.beginPath();
+    ctx.arc(cx, cy, i === 7 ? 9 : 7, 0, Math.PI * 2);
+    ctx.fillStyle = i <= wk ? GOLD_HI : '#e2e2da';
+    ctx.fill();
+    ctx.strokeStyle = i === wk ? INK : i <= wk ? GOLD : '#b8bac4';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  if (lt.back > 0) {
+    ctx.font = fontB(10);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText(`WELCOME BACK · +${lt.back}★`, r.x + 54, r.y + 80);
+  }
+  ctx.restore();
+}
