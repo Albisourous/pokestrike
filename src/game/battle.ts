@@ -9909,9 +9909,10 @@ export class Battle {
         ctx.textAlign = 'center';
         ctx.strokeStyle = '#101826';
         ctx.lineWidth = 3;
-        ctx.strokeText(`REFLECT ${u.shieldN}`, u.x, u.y + u.r * 1.65);
+        const reflectY = u.y + (u.minion ? u.r + 36 : u.r * 1.65);
+        ctx.strokeText(`REFLECT ${u.shieldN}`, u.x, reflectY);
         ctx.fillStyle = TYPE_COLOR[u.def.type];
-        ctx.fillText(`REFLECT ${u.shieldN}`, u.x, u.y + u.r * 1.65);
+        ctx.fillText(`REFLECT ${u.shieldN}`, u.x, reflectY);
       }
       // support marks: clerics carry a green cross, guardians a cyan
       // diamond — target priority readable at a glance
