@@ -5499,6 +5499,7 @@ import * as S from '../src/game/screens';
 
 // --- home: raid ---
 import { raidWeaknesses, raidCounters, raidRefresh } from '../src/game/home/raid';
+import { ballFor, ballDrop, DROP_H, DROP_SETTLE } from '../src/game/home/shop';
 {
   const boss = { type: 'water' as const, type2: 'flying' as const };
   ok(raidWeaknesses(boss)[0].type === 'electric' && raidWeaknesses(boss)[0].mult === 4, 'raid hints respect dual-type weaknesses');
@@ -5605,6 +5606,24 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
     if (run(false) !== run(true)) same = false;
   }
   ok(same && hidden > 0, 'hidden weak points roll off a side stream: seeded spawns and run rng unchanged');
+}
+
+// pull theatre: the ball is the tier, and the drop always lands and settles
+{
+  ok(ballFor(1, false) === 'poke-ball' && ballFor(2, false) === 'great-ball' && ballFor(3, false) === 'ultra-ball', 'pull ball maps 1/2/3 stars to Poke/Great/Ultra');
+  ok(ballFor(1, true) === 'master-ball' && ballFor(3, true) === 'master-ball', 'shiny pulls ride the Master Ball');
+  ok(ballDrop(0).h === DROP_H && ballDrop(0).hit === -1, 'pull ball starts at the top of its drop');
+  let maxH = 0, prevHit = 0, hops = 0;
+  for (let t = 0.31; t < DROP_SETTLE; t += 0.005) {
+    const d = ballDrop(t);
+    maxH = Math.max(maxH, d.h);
+    if (d.hit < prevHit) hops++;
+    prevHit = d.hit;
+  }
+  ok(maxH > 0 && maxH < DROP_H * 0.5, `pull ball bounces lower than its drop (peak ${maxH.toFixed(0)})`);
+  ok(hops === 2, `pull ball hops three times before settling (${hops + 1})`);
+  ok(ballDrop(DROP_SETTLE + 0.01).h === 0 && ballDrop(5).h === 0, 'pull ball rests on the floor after the hops');
+  ok(DROP_SETTLE < 1.15, 'pull ball settles inside the shortest shake');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

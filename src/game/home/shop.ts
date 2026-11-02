@@ -153,3 +153,98 @@ export function drawShopScene(ctx: CanvasRenderingContext2D, r: Rect, t: number,
   rr(ctx, r.x + 5, r.y + 5, r.w - 10, r.h - 10, 8);
   ctx.stroke();
 }
+
+// --- the hatcher's back room: the same brick + mart floor at any size -------
+// the pull theatre runs on it full-bleed and the featured strip as a header
+const rooms = new Map<string, HTMLCanvasElement>();
+function backRoom(w: number, h: number, wallH: number, props: boolean) {
+  const key = `${w}x${h}x${wallH}`;
+  const hit = rooms.get(key);
+  if (hit) return hit;
+  const wall = slice(TILE_BRICK), floor = slice(TILE_DIAMOND);
+  const bush = slice(TILE_BUSH), flower = slice(FLOWER_PINK);
+  if (!wall || !floor || !bush || !flower) return null;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d')!;
+  g.imageSmoothingEnabled = false;
+  for (let y = 0; y < wallH; y += 64) for (let x = 0; x < w; x += 64) g.drawImage(wall, x, y, 64, 64);
+  g.fillStyle = 'rgba(20,24,48,0.38)';
+  g.fillRect(0, 0, w, wallH);
+  for (let y = wallH; y < h; y += 64) for (let x = 0; x < w; x += 64) g.drawImage(floor, x, y, 64, 64);
+  g.fillStyle = 'rgba(20,24,48,0.5)';
+  g.fillRect(0, wallH, w, 4);
+  if (props) {
+    const prop = (img: HTMLCanvasElement, x: number, y: number, k: number) => {
+      const pw = img.width * k, ph = img.height * k;
+      g.fillStyle = 'rgba(8,16,32,0.28)';
+      g.beginPath();
+      g.ellipse(x + pw / 2, y + ph - 3, pw * 0.48, 7, 0, 0, Math.PI * 2);
+      g.fill();
+      g.drawImage(img, x, y, pw, ph);
+    };
+    prop(bush, 18, wallH - 40, 1.5);
+    prop(bush, w - 18 - 75, wallH - 40, 1.5);
+    prop(flower, 40, wallH + 120, 1.5);
+    prop(flower, w - 82, wallH + 150, 1.5);
+  }
+  rooms.set(key, c);
+  return c;
+}
+
+// full-bleed theatre stage; falls back to a flat night fill on a cold atlas
+export function drawPullStage(ctx: CanvasRenderingContext2D, w: number, h: number, floorY: number) {
+  const bg = backRoom(w, h, floorY - 120, true);
+  if (bg) ctx.drawImage(bg, 0, 0);
+  else {
+    ctx.fillStyle = '#1b2140';
+    ctx.fillRect(0, 0, w, h);
+  }
+}
+
+// the featured rate-up's header strip inside the hatcher window
+export function drawCounterStrip(ctx: CanvasRenderingContext2D, r: Rect) {
+  const bg = backRoom(r.w, r.h, Math.round(r.h * 0.42), false);
+  ctx.save();
+  rr(ctx, r.x, r.y, r.w, r.h, 10);
+  ctx.clip();
+  if (bg) ctx.drawImage(bg, r.x, r.y);
+  else {
+    ctx.fillStyle = '#3a4468';
+    ctx.fillRect(r.x, r.y, r.w, r.h);
+  }
+  ctx.restore();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = 3;
+  rr(ctx, r.x + 1.5, r.y + 1.5, r.w - 3, r.h - 3, 9);
+  ctx.stroke();
+}
+
+// which ball a pull result rides in — the ball IS the star tier
+export const ballFor = (rarity: number, shiny: boolean) =>
+  shiny ? 'master-ball' : rarity >= 3 ? 'ultra-ball' : rarity === 2 ? 'great-ball' : 'poke-ball';
+
+// the ball's drop: a gravity fall onto the floor, then three damped hops.
+// h = px above the floor, hit = seconds since the last floor contact (-1 mid-fall)
+export const DROP_H = 380;
+const DROP_T = 0.3;
+const DROP_E = 0.4; // restitution per bounce
+export function ballDrop(t: number): { h: number; hit: number } {
+  if (t < DROP_T) return { h: DROP_H * (1 - (t / DROP_T) ** 2), hit: -1 };
+  const g = (2 * DROP_H) / (DROP_T * DROP_T);
+  let v = g * DROP_T * DROP_E;
+  let t0 = DROP_T;
+  for (let k = 0; k < 3; k++) {
+    const span = (2 * v) / g;
+    if (t < t0 + span) {
+      const u = t - t0;
+      return { h: Math.max(0, v * u - 0.5 * g * u * u), hit: u };
+    }
+    t0 += span;
+    v *= DROP_E;
+  }
+  return { h: 0, hit: t - t0 };
+}
+// when the hops end — the wobble starts here
+export const DROP_SETTLE = DROP_T * (1 + 2 * (DROP_E + DROP_E ** 2 + DROP_E ** 3));
