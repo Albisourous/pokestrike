@@ -16,7 +16,7 @@ import { drawStopScene } from './stops';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, best, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawAmbient, drawSlice, drawCover, drawMoat, THEMES, hash } from './bg';
 import { uiWindow, INK, PAPER, PARCH, GOLD_HI, SP } from './ui';
 import type { Theme } from './bg';
@@ -5527,7 +5527,14 @@ export class Battle {
       else this.battleBreak = true;
       return;
     }
-    if (this.coach) this.coachDone = true; // survived a wave — teaching's over
+    if (this.coach) {
+      this.coachDone = true; // survived a wave — teaching's over
+      // first-win milestone: one instant payout anchors the loop
+      if (best().runs === 0) {
+        const v = this.earnStars(20);
+        this.pushText({ x: this.arena.x + this.arena.w / 2, y: this.arena.y + this.arena.h / 2, text: `FIRST WIN! +${v}★`, t: 1.8, color: '#ffd84d', big: true });
+      }
+    }
     if (this.inRival) {
       this.echoCleared = true; // the echo is beaten — reclaim it
       this.award('rival');
