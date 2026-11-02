@@ -22,6 +22,7 @@ import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
 import { STAGE_GIMMICKS, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
+import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, weatherSpeed, resetAbilities } from './abilities';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 
 import {
@@ -49,7 +50,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, fitFontB, roundRect, button, pill, wrap2, MAP_MENU } from './screens';
+import { font, fontB, fitFont, fitFontB, roundRect, button, pill, wrap2, MAP_MENU, drawCounterHint } from './screens';
 
 export interface Rect {
   x: number;
@@ -634,6 +635,7 @@ export class Battle {
   activeIdx = 0;
   shots = 0;
   time = 0;
+  private abilityText = (text: string, u: { x: number; y: number; r: number }) => this.pushText({ x: u.x, y: u.y - u.r - 40, text, t: 1.1, color: '#ffd848', big: false });
   telop = new Telops(); // battle banners: start, boss, clears, ULT READY
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   private courtT = -9;
@@ -1430,6 +1432,7 @@ export class Battle {
     }
     this.enemies = spawns.map((s) => this.makeEnemy(s, i));
     this.battle = 1;
+    resetAbilities(this);
     this.battles = 1;
     this.battleBreak = false;
     if (i > 0 && !bossWave && !this.inTrainer && !this.inEvent && !this.inRival && !this.raid && !this.coach)
@@ -2073,6 +2076,7 @@ export class Battle {
     // sling — MS's namesake. Spends the cooldown, erupts immediately.
     if (u.cd <= 0) this.bumpAlly(u, u);
     this.phase = 'shot';
+    abilitySpeed(this, u, this.weather, this.abilityText);
     this.ultHint = false;
     this.shots++;
     if (this.ultIn > 0 && --this.ultIn === 0) {
@@ -2391,6 +2395,7 @@ export class Battle {
       for (const e of wave) {
         if (e.dead || !e.gravR) continue;
         if (Math.hypot(u.x - e.x, u.y - e.y) < e.gravR + u.r) {
+          if (abilityHazard(this, u, 'gravity', this.abilityText)) continue;
           const gd = Math.exp(-5 * h);
           u.vx *= gd;
           u.vy *= gd;
@@ -2438,6 +2443,7 @@ export class Battle {
         // a landlocked ball never enters the water — hitSolid banks it
         // off the surface, so its effects only touch swimmers
         if (isWater(hz) && !canSwim(u.def)) continue;
+        if (abilityHazard(this, u, hz.kind, this.abilityText)) continue;
         if (hz.kind === 'mine') {
           // MS mine: the ball's touch detonates it — the blast SHOVES the
           // pack around (enemies take no environment damage; the court is
@@ -3027,7 +3033,7 @@ export class Battle {
         wall ??= this.damageWallAt('bottom', (u.x - a.x) / a.w);
       }
     }
-    if (wall && u.side === 'player' && !this.slowImmune
+    if (wall && u.side === 'player' && !abilityWall(this, u, wall.type, this.abilityText) && !this.slowImmune
         && u.def.type !== wall.type && u.def.type2 !== wall.type
         && typeMult(wall.type, u.def) > 0
         && !(wall.type === 'grass' && (u.airborne || flies(u.def)))) {
@@ -3349,6 +3355,7 @@ export class Battle {
     // aegis ward: a shielded foe eats the whole hit — crack the guardian
     // first, or the pack soaks your best lines for free
     if (e.shieldN > 0) {
+      if (src) abilityReflect(this, src, e, this.abilityText);
       e.shieldN--;
       if (e.shieldN) this.pushText({ x: e.x, y: e.y - e.r - 30, text: `REFLECT ${e.shieldN}`, t: 0.9, color: TYPE_COLOR[e.def.type], big: false });
       else this.telop.push({ kind: 'shield', title: 'REFLECT BROKEN', sub: e.def.name.toUpperCase(), mon: e.def.id, icon: 'hard-stone' });
@@ -3804,6 +3811,7 @@ export class Battle {
         (shooter.burnT > 0 && !shooter.def.guts ? 0.7 : 1) * // a burned striker pulls its punches — guts burns it off
         (shooter.def.guts && (shooter.dotTicks > 0 || shooter.burnT > 0 || shooter.paraT > 0) ? 1.5 : 1) * // Guts: status feeds it
         (shooter.def.huge ? 2 : 1) * // Huge Power: canon attack doubling
+        abilityAttack(this, shooter, e.def, this.abilityText) *
         // intimidate: a living menace cowes the whole team — kill it first
         (this.enemies.some((m) => !m.dead && m.def.menace) ? 0.8 : 1) *
         (weak ? (e.boss ? 3 : 2) : 1) *
@@ -6399,6 +6407,7 @@ export class Battle {
   private nextBattle() {
     this.battleBreak = false;
     this.battle++;
+    resetAbilities(this);
     const room = this.swapCourt(this.pickNextRoom());
     const anchors = [...room.anchors];
     const spawns = rollWave(this.rng, this.depth, this.theme).filter((s) => !s.boss).slice(0, ENEMY_MAX);
@@ -6747,7 +6756,7 @@ export class Battle {
   // launches a touch faster — drafting into the weather pays twice
   private swiftMult(u: Unit) {
     const want = this.weather ? { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying', storm: 'electric' }[this.weather] : undefined;
-    return want && (u.def.type === want || u.def.type2 === want) ? 1.12 : 1;
+    return (want && (u.def.type === want || u.def.type2 === want) ? 1.12 : 1) * weatherSpeed(u.def.ability, this.weather);
   }
 
   private foeAtk(e: Unit) {
@@ -6756,6 +6765,7 @@ export class Battle {
       * (e.burnT > 0 ? 0.75 : 1) // a singed foe swings dulled — same burn rule the ball plays by
       // intimidate on your bench: a living menace mon cowes the whole pack
       * (this.players.some((m) => !m.dead && m.def.menace) ? 0.8 : 1)
+      * abilityIntimidate(this, this.players, this.abilityText)
       * (e.def.guts && (e.dotTicks > 0 || e.burnT > 0) ? 1.5 : 1)
       // pack alpha: a living leader rallies every packmate's hits — the
       // leader itself doesn't march under its own flag
@@ -6995,6 +7005,7 @@ export class Battle {
     // friend guard: a living carrier covers its teammates — the tag reads
     // at draft time, so protect the guard or the team folds soft
     if (this.players.some((q) => q !== p && !q.dead && q.def.friendGuard)) dmg = Math.max(1, Math.round(dmg * 0.75));
+    dmg = abilitySturdy(this, p, dmg, this.abilityText);
     if (p.sash && dmg >= p.hp) {
       // focus sash: hang on at 1 HP
       p.sash = false;
@@ -8924,6 +8935,7 @@ export class Battle {
         ctx.strokeText(gimmick.label, nx, ny - cell * 0.95 + 25);
         ctx.fillStyle = TYPE_COLOR[gimmick.type];
         ctx.fillText(gimmick.label, nx, ny - cell * 0.95 + 25);
+        drawCounterHint(ctx, gimmick, this.players.filter((p) => !p.dead).map((p) => p.def), nx, ny - cell * 0.95 + 40, cell * 4.5);
       }
     });
     // the trainer draws last — she walks in front of the stops, and at

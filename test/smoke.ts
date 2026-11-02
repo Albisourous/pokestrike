@@ -21,6 +21,7 @@ import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
+import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -4783,6 +4784,119 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   b2.raid = true;
   (b2 as any).waveCleared();
   ok(b2.clearCard === null, 'raid clears do not create a climb clear card');
+}
+
+||||||| parent of 3bd3e37 (Add canonical Pokemon abilities and stage-gimmick counters)
+// --- Pokémon ability counters: real species and scripted court contact ---
+{
+  ok(ALL_SPECIES.every((def) => typeof def.ability === 'string' && !!abilityOf(def)?.name), 'every roster and enemy species has a valid canonical ability');
+  ok(speciesById(25)!.ability === 'static' && speciesById(35)!.ability === 'cute-charm' && !ABILITIES['magic-guard'], 'Gen 3 mons do not acquire later-generation or hidden abilities');
+  ok(Object.values(ABILITIES).filter((a) => a.hint).length === 14, 'only fourteen abilities add new counter mechanics');
+  const court = (id: number) => {
+    const b: any = new Battle(arena, [speciesById(id)!, speciesById(4)!, speciesById(7)!, speciesById(1)!], makeStage(4, 'T'), mulberry32(18));
+    b.spawnWave(0);
+    b.enemies = []; b.blocks = []; b.damageWalls = []; b.hazards = []; b.pickups = [];
+    b.slowImmune = false; b.activeIdx = 0; b.phase = 'shot'; b.shotT = b.time;
+    b.pushText = (text: { text: string }) => b.notices.push(text.text);
+    b.notices = [];
+    const p = b.players[0];
+    p.x = arena.x + arena.w / 2; p.y = arena.y + arena.h / 2; p.vx = 200; p.vy = 0;
+    return { b, p };
+  };
+  for (const id of [92, 4]) {
+    const { b, p } = court(id), hp = p.hp;
+    b.hazards = [{ kind: 'mine', x: p.x, y: p.y, r: 24, spent: false }];
+    b.stepShot(1 / 60);
+    ok(id === 92 ? p.hp === hp && !b.hazards[0].spent : p.hp < hp && b.hazards[0].spent, `${p.def.name}: mine immunity changes real contact damage and detonation`);
+    if (id === 92) {
+      b.stepShot(1 / 60);
+      ok(b.notices.filter((t: string) => t === 'LEVITATE').length === 1, 'repeated hazard contact announces an ability once per battle');
+      b.nextBattle();
+      b.hazards = [{ kind: 'mine', x: p.x, y: p.y, r: 24 }]; b.enemies = []; b.blocks = [];
+      b.stepShot(1 / 60);
+      ok(b.notices.filter((t: string) => t === 'LEVITATE').length === 2, 'a new battle resets the first-trigger callout');
+    }
+  }
+  const pull = (id: number, gravity = false) => {
+    const { b, p } = court(id);
+    if (gravity) b.enemies = [{ dead: false, gravR: 160, x: p.x + 60, y: p.y, r: 20, def: speciesById(4)!, vx: 0, vy: 0 }];
+    else b.hazards = [{ kind: 'well', x: p.x + 60, y: p.y, r: 160 }];
+    b.stepShot(1 / 60);
+    return p.vx;
+  };
+  ok(pull(4) > pull(92) + 10, 'Levitate ignores a pull well while an ordinary mon curves toward it');
+  ok(pull(92, true) > pull(4, true) + 10, 'Levitate ignores the gravity carrier slowdown');
+  for (const id of [79, 4]) {
+    const { b, p } = court(id), y = p.y;
+    b.time = 2; b.shotT = b.time;
+    b.hazards = [{ kind: 'warp', x: p.x, y, r: 24, pair: 1 }, { kind: 'warp', x: p.x, y: y - 160, r: 24, pair: 1 }];
+    b.stepShot(1 / 60);
+    ok(id === 79 ? p.y === y : p.y < y - 100, `${p.def.name}: Own Tempo changes paired-warp teleport outcome`);
+  }
+  const bounce = (id: number, type: 'fire' | 'water' | 'electric') => {
+    const { b, p } = court(id);
+    b.damageWalls = [{ edge: 'left', start: 0, end: 1, type }];
+    p.hp = Math.floor(p.maxHp / 2);
+    const hp = p.hp;
+    p.x = arena.x + p.r - 1; p.vx = -200;
+    b.hitWalls(p);
+    return { b, p, hp };
+  };
+  for (const [id, type] of [[37, 'fire'], [134, 'water'], [170, 'electric'], [104, 'electric']] as const) {
+    const { p, hp } = bounce(id, type);
+    ok(p.hp > hp, `${p.def.name}: ${p.def.ability} turns a matching wall into a heal, including innate type immunity`);
+  }
+  const wrongWall = bounce(37, 'water'), plainWall = bounce(4, 'electric'), innateWall = bounce(4, 'fire');
+  ok(wrongWall.p.hp < wrongWall.hp && plainWall.p.hp < plainWall.hp && innateWall.p.hp === innateWall.hp, 'unmatched walls still hurt and existing same-type wall immunity stays intact');
+  for (const id of [95, 4]) {
+    const { b, p } = court(id);
+    b.damagePlayer(p, 100000);
+    ok(id === 95 ? p.hp === 1 && !p.dead : p.dead, `${p.def.name}: Sturdy changes the lethal-hit outcome`);
+    if (id === 95) {
+      b.damagePlayer(p, 100000);
+      ok(p.dead && b.notices.filter((t: string) => t === 'STURDY').length === 1, 'Sturdy cannot double-dip with the legacy sash');
+      p.dead = false; p.hp = p.maxHp;
+      b.nextBattle();
+      b.damagePlayer(p, 100000);
+      ok(p.hp === 1 && !p.dead, 'Sturdy rearms for the next battle');
+    }
+  }
+  for (const id of [183, 307, 4]) {
+    const { b, p } = court(id);
+    const enemy: any = b.makeEnemy({ def: speciesById(4)!, nx: 0.5, ny: 0.2 }, 0);
+    b.enemies = [enemy]; enemy.shieldN = 3;
+    b.hurt(enemy, 10, '#fff', '', p);
+    ok(enemy.shieldN === (id === 4 ? 2 : 1), `${p.def.name}: power abilities consume an extra Reflect layer`);
+  }
+  const rainy = court(116), sunny = court(43);
+  rainy.b.weather = 'sun'; const dry = rainy.b.swiftMult(rainy.p);
+  rainy.b.weather = 'rain'; sunny.b.weather = 'sun';
+  ok(rainy.b.swiftMult(rainy.p) > dry && sunny.b.swiftMult(sunny.p) > 1.4, 'Swift Swim and Chlorophyll change actual launch-speed multipliers');
+  ok(weatherSpeed('swift-swim', 'sun') === 1 && weatherSpeed('chlorophyll', 'rain') === 1, 'weather counters do not activate in the wrong weather');
+  const power = court(183), pure = court(307), guts = court(66), swarm = court(123);
+  ok(abilityAttack(power.b, power.p, speciesById(4)!, () => {}) * (power.p.def.huge ? 2 : 1) === 2
+    && abilityAttack(pure.b, pure.p, speciesById(4)!, () => {}) * (pure.p.def.huge ? 2 : 1) === 2, 'Huge/Pure Power attack gains do not double legacy flags');
+  guts.p.paraT = 2;
+  ok(abilityAttack(guts.b, guts.p, speciesById(4)!, () => {}) * (guts.p.def.guts ? 1.5 : 1) === 1.5, 'Guts attack gain does not double the existing status multiplier');
+  ok(killerMult(swarm.p.def.ability, speciesById(1)!) === 1.5 && killerMult(swarm.p.def.ability, speciesById(63)!) === 1.5
+    && killerMult(swarm.p.def.ability, speciesById(4)!) === 1, 'Swarm Killer checks the target type family');
+  const strike = (ability: string, id: number) => {
+    const { b, p } = court(123);
+    p.def = { ...p.def, ability };
+    const e = b.makeEnemy({ def: speciesById(id)!, nx: 0.5, ny: 0.2 }, 0);
+    e.hp = e.maxHp = 1000000; e.weakA = -Math.PI / 2; e.shieldN = 0;
+    b.enemies = [e]; b.critCh = 0;
+    b.strikeEnemy(p, e);
+    return e.maxHp - e.hp;
+  };
+  const killerRatio = strike('swarm', 1) / strike('overgrow', 1);
+  ok(killerRatio > 1.4 && killerRatio < 1.6 && strike('swarm', 4) === strike('overgrow', 4), 'Swarm changes real contact damage only against its target family');
+  const intimidate = court(23), foe = intimidate.b.makeEnemy({ def: speciesById(4)!, nx: 0.5, ny: 0.2 }, 0);
+  const cowed = intimidate.b.foeAtk(foe);
+  intimidate.p.dead = true;
+  ok(Math.abs(cowed / intimidate.b.foeAtk(foe) - 0.8) < 1e-9, 'a living Intimidate mon lowers foe attack exactly once');
+  ok(counterHint(STAGE_GIMMICKS.marsh) === 'MINES · LEVITATE HELPS' && countersGimmick(speciesById(92)!, STAGE_GIMMICKS.marsh)
+    && !countersGimmick(speciesById(4)!, STAGE_GIMMICKS.marsh), 'stop hints and roster counter flags match the real hazard rule');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

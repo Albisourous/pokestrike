@@ -1,6 +1,7 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay, makeStage, FLOATERS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, ASC_MODS, dustCost, AVATARS, EVO_LINES, setPay, makeStage, STAGE_GIMMICKS } from './data';
+import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
 import { drawBackdrop, hash } from './bg';
@@ -5031,21 +5032,12 @@ export function drawDraft(
 
     // the ability row — the flags that change how the pick actually plays
     // sit above the fold: a draft is a bet, so the card shows its hand
-    const flags = [
-      def.melee && 'MELEE', def.healer && 'HEALER', FLOATERS.has(def.id) && 'LEVITATE',
-      def.huge && 'HUGE', def.guts && 'GUTS', def.toxic && 'TOXIC',
-      def.shock && 'STATIC', def.flame && 'FLAME', def.charm && 'CHARM',
-      def.spore && 'SPORE', def.sync && 'SYNC', def.menace && 'MENACE',
-      def.grace && 'GRACE', def.damp && 'DAMP', def.taunt && 'BAIT',
-      def.sturdy && 'STURDY', def.sleepless && 'AWAKE', def.limber && 'LIMBER',
-      def.thickFat && 'THICK', def.pickup && 'PICKUP', def.pheal && 'P-HEAL',
-      def.tempo && 'TEMPO', def.breaker && 'BREAKER',
-    ].filter(Boolean).join('·');
+    const flags = [abilityLabel(def), abilityOf(def)?.hint].filter(Boolean).join(' · ');
     if (flags) {
       ctx.font = fontB(10);
       ctx.fillStyle = ACCENT;
-      fitFontB(ctx, flags.split('·').slice(0, 2).join(' · '), 10, r.w - 16);
-      ctx.fillText(flags.split('·').slice(0, 2).join(' · '), r.x + r.w / 2, r.y + 116);
+      fitFontB(ctx, flags, 12, r.w - 16);
+      ctx.fillText(flags, r.x + r.w / 2, r.y + 116);
     }
 
     if (HAS_KEYS) keyHint(ctx, r, `[${i + 1}]`); // [1]/[2]/[3] — desktop keys pick cards
@@ -5589,15 +5581,18 @@ function drawRoster(
     ctx.font = fontB(10);
     ctx.fillStyle = ko ? INK_FAINT : sel ? PARCH : INK;
     ctx.fillText(def.name.slice(0, 12), card.x + card.w / 2, card.y + 87);
-    // the role rides as a caption under the card — the 92px face is full
+    // the ability rides under the card; the 92px face is full
     ctx.font = fontB(10);
     ctx.fillStyle = ko ? '#464e6e' : INK_FAINT;
-    ctx.fillText(roleTag(def), card.x + card.w / 2, card.y + card.h + 10);
+    fitFontB(ctx, abilityLabel(def), 12, card.w + 4);
+    ctx.fillText(abilityLabel(def), card.x + card.w / 2, card.y + card.h + 12);
   });
   // the selected mon's super reads here — swapping is a move pick too
   const selDef = selBox >= 0 ? box[selBox] : selTeam >= 0 ? team[selTeam] : null;
   if (selDef) {
     const sbl = bondLv(selDef.id);
+    ctx.font = fontB(12); ctx.fillStyle = ACCENT;
+    ctx.fillText([abilityLabel(selDef), abilityOf(selDef)?.hint].filter(Boolean).join(' · '), W / 2, 728);
     ctx.font = fontB(10);
     ctx.fillStyle = GOLD;
     ctx.fillText(`★ ${moveOf(selDef.id, selDef.type)} · ${superDesc(selDef.id, selDef.type)}${sbl ? ` · BOND ${sbl}` : ''}`, W / 2, 748); // under the role captions
@@ -5619,6 +5614,25 @@ function drawRoster(
 // box/team management the reward break uses.
 export const MAP_MENU = { x: W / 2 - 120, y: 872, w: 240, h: 46 };
 export const TEAM_PANEL = { x: 24, y: 258, w: W - 48, h: 586 };
+
+export function drawCounterHint(ctx: CanvasRenderingContext2D, gimmick: typeof STAGE_GIMMICKS[keyof typeof STAGE_GIMMICKS], team: SpeciesDef[], x: number, y: number, width: number) {
+  const hint = counterHint(gimmick).split(' · ')[1];
+  if (!hint) return;
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = GOLD;
+  ctx.font = fontB(12);
+  ctx.strokeText(hint, x, y);
+  ctx.fillText(hint, x, y);
+  const matches = team.filter((def) => countersGimmick(def, gimmick));
+  if (matches.length) {
+    const label = matches[0].name.toUpperCase() + (matches.length > 1 ? ` +${matches.length - 1}` : '');
+    fitFontB(ctx, label, 12, width);
+    ctx.strokeText(label, x, y + 14);
+    ctx.fillText(label, x, y + 14);
+  }
+  ctx.restore();
+}
 // bottom row is a centered pair — CLOSE keeps its look, QUIT rides beside it
 export const MENU_CLOSE = { x: W / 2 - 184, y: 788, w: 180, h: 44 };
 export const MENU_QUIT = { x: W / 2 + 12, y: 788, w: 172, h: 44 };
