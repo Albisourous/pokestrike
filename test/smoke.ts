@@ -32,6 +32,7 @@ import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
 import { installField2, stepField2, laserPlan, icePlan, spinPlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, SPIN_KICK, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
+import { fameActive, fameDown, fameEnd, fameScene, fameUp, startFame, tickFame } from '../src/game/fame';
 import { EVO_FLASH, EVO_T, evoActive, evoScene, skipEvo, startEvo, tickEvo } from '../src/game/evolve';
 import { drawRunCard, shareLink, type RunCard } from '../src/game/share';
 import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
@@ -6418,6 +6419,37 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   ok(TAB_CELLS.length === 5 && TAB_CELLS.every((c, i) =>
     c.x === TAB_BAR.x + i * TAB_BAR.w / 5 && c.y === TAB_BAR.y && c.w === TAB_BAR.w / 5 && c.h === TAB_BAR.h),
   'tab cells preserve the shared bar geometry');
+}
+
+// hall of fame scene: plays out, taps advance, a double tap or hold skips,
+// and the run's board entry is written once (main.ts) — never by the scene
+{
+  const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(7));
+  const stamp = 1234567;
+  const n0 = board().length;
+  recordBoard({ s: 999999, st: TOTAL_STAGES, w: true, asc: 0, team: b.players.map((p) => p.def.id), when: stamp });
+  startFame(b);
+  const f = fameScene()!;
+  ok(fameActive() && f.team.length === b.players.length, `hall of fame opens on the team (${f.team.map((m) => m.name).join('/')})`);
+  const end = fameEnd(f);
+  let n = 0;
+  while (fameActive() && n++ < 400) tickFame(1 / 30);
+  ok(!fameActive() && end <= 6.01 && n <= Math.ceil(end * 30) + 1, `scene ends into the result card after ${end.toFixed(1)}s (${n} frames)`);
+  ok(board().length === Math.min(BOARD_MAX, n0 + 1) && board().filter((e) => e.when === stamp).length === 1, 'the won run sits on the board exactly once');
+  startFame(b);
+  fameDown();
+  fameUp();
+  ok(fameActive() && fameScene()!.t === fameScene()!.slot, 'a tap advances to the next mon');
+  tickFame(0.5);
+  fameDown();
+  fameUp();
+  ok(fameScene()!.t >= 2 * fameScene()!.slot, 'each tap steps one beat');
+  fameDown();
+  ok(!fameActive(), 'a second quick tap skips the scene');
+  startFame(b);
+  fameDown();
+  tickFame(0.6);
+  ok(!fameActive(), 'a held press skips the scene');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
