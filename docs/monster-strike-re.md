@@ -314,3 +314,110 @@ perk is a run upgrade); Pokémon Atk/Def mitigation (MS has no defense
 term, but stats are the Pokémon identity here); `ULT_SHOTS = 10` and the
 foe clock numbers (per-turn steps not located; MS values are per-unit
 data).
+
+## code.bin findings, round 3 (turn loop, countdowns, walls)
+
+Same Ghidra setup as rounds 1–2. Values read through the game's
+obfuscated-int getter/setter pair are described by meaning, not by field.
+
+### Turn advance (confirmed)
+
+One battle-manager routine runs between shots. In order:
+
+```
+for each of the 4 team slots with a live ball:
+    if battle has started: tick_turn_counter(ball)     # see below
+pick next shooter = next live slot, (i + 1) mod 4, skipping empties
+turn_number += 1
+for each live ball:  ball.on_turn()
+for each of up to 10 live enemies: enemy.on_turn()
+```
+
+`on_turn()` is a shared base method (balls, enemies and the boss use the
+same slot). It only counts down a turn-limited status (clearing its flag
+at 0) and applies an ability's per-turn effect. It does not touch attack
+countdowns or the strike-shot charge.
+
+### Per-ball turn counter (inferred: likely strike-shot charge)
+
+The first loop above calls a small per-ball routine on **every** team
+ball, not only the one that just shot:
+
+```
+tick_turn_counter(ball):
+    if quest flag "freeze" (0x400) is clear:
+        if counter > 0: counter -= 1
+        return counter == 0   # ready
+```
+
+So the counter steps by exactly 1 per team turn and floors at 0. It sits
+next to the strike-shot fields, but round 2 found the strike-shot charge
+counting *up* to `require_cnt`; whether this down-counter is the same
+charge seen from the other side or a different per-ball timer is not
+confirmed.
+
+### Enemy attack countdown (confirmed)
+
+```
+pick_attack(enemy):
+    single-clock enemy: choose the next attack by weighted random over the
+        enemy's attack table, then
+        countdown = (turn_number == 0) ? attack.first_count : attack.count
+    multi-clock enemy: each slot whose countdown hit 0 gets the same reset
+        from its own row
+
+tick_countdown(enemy):          # one step per turn
+    if countdown != 0:
+        countdown -= 1
+        if countdown == 0: fire_count += 1   # attack queued
+```
+
+Counts never go below 0; the attack fires on the step that reaches 0 and
+the next `pick_attack` re-arms it. Opening turn uses a separate
+first-turn count from the data, so a foe's first swing can come sooner
+or later than its repeat cycle. Multi-clock slots flagged as passive
+(bits 0x60) never tick. A separate routine adjusts the countdown by an
+argument (delay/advance effects); its exact rule was not decoded.
+
+### Damage wall timing (confirmed, corrects round 1)
+
+The 18/30/45 literals are not phase lengths. They are a per-variant
+value picked by wall subtype (45 default at init, 30 for the normal
+wall, 18 for subtype 0x100) fed to the wall's animation, most likely its
+playback rate. Actual phases are timed in seconds and turns:
+
+```
+appear:  t += dt
+         alpha = clamp(t - 0.2, 0, 1)      # 0.2 s delay, then 1 s fade-in
+         sound once when alpha first reaches 1
+         t >= 1.5 s  -> live
+live:    lifetime -= 1 each time turn_number changes
+         lifetime == 0 (or battle-end state) -> vanish
+vanish:  special variant: alpha = 255 - 1275 * t   # 0.2 s fade-out
+         others: removed after 0.2 s
+```
+
+83 multiplies the fade-in alpha into an integer used by a sub-effect
+(meaning not decoded). 0.5 is a scale picked for the special variant.
+0.8 was not seen in the wall update this pass.
+
+### Still unknown
+
+- Friendship combo: contact detection, once-per-shot/once-per-turn rule
+  and power scaling. A ball sub-state scans for an ally within 25 units
+  for 10 frames when an ability flag is set, but nothing ties it to the
+  combo.
+- Boss phase transition internals: nothing beyond round 2 (data-driven
+  via HP-bar splits and attack groups).
+- The exact meaning of 83 and whether 18/30/45 is a frame rate or a
+  frame count.
+
+### Ported (round 3)
+
+Nothing. PokeStrike already matches the confirmed rules: `ultIn` drops
+by 1 per launch and stops at 0, and foe `clocks` drop by 1 per turn,
+fire on reaching 0 and re-arm to `turn`, and `foeClocks()` already seeds
+each clock with a separate `first` count. Kept on purpose: team-wide
+per-ball ticking (would speed up per-ball super
+cooldowns, a balance change), and wall timings (hazard code belongs to
+another pass).
