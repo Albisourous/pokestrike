@@ -3971,7 +3971,6 @@ export class Battle {
         this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
       }
       if (caught) {
-        if (this.secret?.phase === 'fight' && e.boss) this.secret.caught = true;
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
           const cl = this.catchLvl(e.lvl); // it keeps its level — up to the team's pace
