@@ -472,6 +472,12 @@ export const PERKS: Perk[] = [
     rarity: 'rare',
     apply: (b) => { b.specMult *= 1.3; },
   },
+  {
+    id: 'ppup', name: 'PP Up', item: 'pp-up',
+    desc: 'your ult arms 3 shots sooner',
+    rarity: 'rare',
+    apply: (b) => { b.ultIn = Math.max(0, b.ultIn - 3); },
+  },
 
   // --- legendary: run-defining items ---
   {

@@ -280,8 +280,12 @@ export const ROSTER: SpeciesDef[] = [
   { id: 629, name: 'Vullaby', type: 'ghost', type2: 'flying', ability: 'big-pecks', stats: st(70, 55, 75, 45, 65, 60), evolvesTo: 630 },
   { id: 633, name: 'Deino', type: 'ghost', type2: 'flying', ability: 'hustle', stats: st(52, 65, 50, 45, 50, 38), evolvesTo: 634, melee: true },
   { id: 636, name: 'Larvesta', type: 'grass', type2: 'fire', ability: 'flame-body', stats: st(55, 85, 55, 50, 55, 60), evolvesTo: 637, flame: true },
-  // thin pool top-up — flying was the roster's scarcest primary type
+  // thin pool top-ups — the roster's scarcest primary types
   { id: 276, name: 'Taillow', type: 'flying', type2: 'normal', ability: 'guts', stats: st(40, 55, 30, 30, 30, 85), melee: true, evolvesTo: 277 },
+  { id: 29, name: 'Nidoran♀', type: 'poison', ability: 'poison-point', stats: st(55, 47, 52, 40, 40, 41), toxic: true, evolvesTo: 30 },
+  { id: 147, name: 'Dratini', type: 'flying', ability: 'shed-skin', stats: st(41, 64, 45, 50, 50, 50), shed: true, evolvesTo: 148 },
+  { id: 240, name: 'Magby', type: 'fire', ability: 'flame-body', stats: st(45, 75, 37, 70, 55, 83), flame: true, evolvesTo: 126 },
+  { id: 296, name: 'Makuhita', type: 'fighting', ability: 'guts', stats: st(72, 60, 30, 20, 30, 25), melee: true, guts: true, evolvesTo: 297 },
 
 ];
 
@@ -492,6 +496,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 631, name: 'Heatmor', type: 'fire', ability: 'flash-fire', stats: st(85, 97, 66, 105, 66, 65), taunt: true },
   { id: 632, name: 'Durant', type: 'grass', type2: 'rock', ability: 'swarm', stats: st(58, 109, 112, 48, 48, 109), truant: true },
   { id: 132, name: 'Ditto', type: 'normal', ability: 'limber', stats: st(48, 48, 48, 48, 48, 48), mirror: true },
+  { id: 101, name: 'Electrode', type: 'electric', ability: 'soundproof', stats: st(60, 50, 70, 80, 80, 150), fuse: true },
   { id: 150, name: 'Mewtwo', type: 'psychic', ability: 'pressure', stats: st(106, 110, 90, 154, 90, 130) },
   { id: 130, name: 'Gyarados', type: 'water', type2: 'flying', ability: 'intimidate', stats: st(95, 125, 79, 60, 100, 81), rage: true },
   { id: 149, name: 'Dragonite', type: 'flying', ability: 'inner-focus', stats: st(91, 134, 95, 100, 100, 80), scale: true },
@@ -1042,7 +1047,7 @@ export const ENEMY_THEME: Record<Theme, SpeciesDef[]> = {
   shore: [72, 278, 98, 118, 79, 170, 86, 90, 116, 138, 140, 222, 283, 318, 341, 366, 370, 320, 339, 340, 368, 422, 423, 457, 515, 550, 564, 594, 211, 124, 272, 400].map(foe),
   // Kanto Power Plant — every electric in the DB plus the man-made and
   // fume mons (the roster's Pikachu/Mareep live player-side, not enemy-side)
-  plant: [81, 100, 170, 309, 311, 312, 522, 125, 618, 137, 109, 88].map(foe),
+  plant: [81, 100, 101, 170, 309, 311, 312, 522, 125, 618, 137, 109, 88].map(foe),
   // Fuchsia marsh — Safari Zone bog: poison, weeds, and its safari canon
   marsh: [88, 109, 29, 46, 48, 69, 43, 167, 13, 10, 268, 269, 204, 401, 402, 412, 413, 316, 317, 434, 114, 455, 270, 283, 24, 211, 102, 111, 128, 147].map(foe),
   // Alph Ruins — psychics and ancient things; Unown is the resident
