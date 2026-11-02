@@ -1,10 +1,10 @@
 import { drawMon, drawShiny, gracidea, itemSprite, loadItem, loadSprite, whiteSprite } from '../../core/assets';
 import { abilityLabel, abilityOf } from '../abilities';
 import { DEX_ALL, EVO_LINES, INVADER_IDS, PULLABLE, PULL_PITY, TOTAL_STAGES, setPay, speciesById, tierOf } from '../data';
-import { drawAmbient } from '../bg';
+import { drawAmbient, drawBackdrop } from '../bg';
 import { drawTile } from '../map';
 import {
-  FLOWER_PINK, FLOWER_WILD, ROCK_SMALL, TILE_GRASSF, TREE_PINE, TREE_ROUND, TREE_TEAL,
+  FLOWER_PINK, FLOWER_WILD, ROCK_SMALL, TREE_PINE, TREE_ROUND, TREE_TEAL,
 } from '../maptiles';
 import {
   BADGES, BOND_LEVELS, SHINY_CHARM_AT, bondLv, bondOf, board, dexIds, dexRecent,
@@ -46,11 +46,7 @@ function arenaCanvas() {
   c.width = STAGE_R.w;
   c.height = STAGE_R.h;
   const g = c.getContext('2d')!;
-  roundRect(g, 0, 0, c.width, c.height, 12);
-  g.clip();
-  for (let y = 0; y < c.height; y += 44) {
-    for (let x = 0; x < c.width; x += 44) drawTile(g, TILE_GRASSF, x, y, 44, 44);
-  }
+  drawBackdrop(g, { x: 0, y: 0, w: c.width, h: c.height }, 12, 'meadow');
   const trees = [TREE_ROUND, TREE_PINE, TREE_TEAL, TREE_PINE, TREE_ROUND, TREE_TEAL, TREE_PINE, TREE_ROUND, TREE_TEAL];
   trees.forEach((tile, i) => drawTile(g, tile, i * 56 - 2, 1 + (i % 2) * 3, 40, 42));
   const accents = [[FLOWER_PINK, 12], [FLOWER_WILD, 58], [ROCK_SMALL, c.width - 48], [FLOWER_PINK, c.width - 83]] as const;
@@ -63,13 +59,11 @@ function detailPlatformCanvas() {
   if (detailPlatform || !gracidea()) return detailPlatform;
   const c = document.createElement('canvas');
   c.width = 210;
-  c.height = 64;
+  c.height = 48;
   const g = c.getContext('2d')!;
-  roundRect(g, 0, 0, c.width, c.height, 18);
-  g.clip();
-  for (let x = 0; x < c.width; x += 44) drawTile(g, TILE_GRASSF, x, 8, 44, 44);
-  drawTile(g, FLOWER_WILD, 12, 24, 28, 20);
-  drawTile(g, FLOWER_PINK, c.width - 42, 22, 28, 20);
+  drawBackdrop(g, { x: 0, y: 0, w: c.width, h: c.height }, 18, 'meadow');
+  drawTile(g, FLOWER_WILD, 12, 16, 28, 20);
+  drawTile(g, FLOWER_PINK, c.width - 42, 14, 28, 20);
   detailPlatform = c;
   return detailPlatform;
 }
@@ -520,7 +514,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
     ctx.drawImage(platform, cx - platform.width / 2, cy + 30);
     ctx.restore();
   }
-  monShadow(ctx, cx, cy + 44, 144);
+  monShadow(ctx, cx, cy + 12, 120);
   try {
     (shiny ? drawShiny : drawMon)(ctx, id, cx, cy, 160);
   } catch {
