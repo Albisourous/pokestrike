@@ -323,3 +323,8 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `fd2b4a3` | map/missions | map legend early-only, field log → newest line; stop cards auto-drop after 3 viewings (`pk_stops`); taps inside the window still dismiss | `git revert fd2b4a3` |
 | 2026-11-02 | `1e9f6c2` | mop-up | raid-door mon guarded; all-corrupt echo → none; `e.timer <= 1` warn covers fractional clocks | `git revert 1e9f6c2` |
 | 2026-11-02 | `e761750` | battle/retention | first-ever wave clear pays +20★ + `FIRST WIN!` float (gated on `best().runs === 0`) | `git revert e761750` |
+| 2026-11-02 | `0b9f49c` | content | Dratini/Nidoran♀/Magby/Makuhita top up thin types (cries vendored); Electrode fills plant pool; PP Up perk arms ult 3 sooner | `git revert 0b9f49c` |
+| 2026-11-02 | `1100b42` | feedback | wipe/catch haptics; evo+pull whiteouts honor REDUCE FLASHES; coached map rings stops + TAP A STOP; silent perk ticks signal; pause/ult chips sleep under scrim; bag row scrolls; dead declineReward gone | `git revert 1100b42` |
+| 2026-11-02 | `f0b0cff` | rooms | +4: lagoon (moat-sea), quarry plugs (boulder puzzle), jetstream (horizontal gust), thicket→hard tail (Cut lattice); ROOM_HARD 10→11 | `git revert f0b0cff` |
+| 2026-11-02 | `6544927` | content | breeder event (pick-1-of-3 catch); dojo visitor (+2 Lv fighting, comp-gated); BANK SHOT task kind; Town Map bag item | `git revert 6544927` |
+| 2026-11-02 | `961c0bd` | leftovers2 | live combo ping; Lum Berry perk (15s ailment wash, shed's cleanse); map trait chips gated; draft ‹ TITLE back-out | `git revert 961c0bd` |

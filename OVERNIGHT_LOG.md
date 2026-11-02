@@ -702,3 +702,26 @@ backlog; builders run one iteration each, I verify + commit + push.
   verified live, NEXT cell + HOT rail verified mid-drag, vet title/draft
   verified full. Dex fold unverifiable on an empty dex (ghost rows don't
   open cards) — code-verified only.
+
+- 0b9f49c pushed: roster top-ups — Dratini/Nidoran♀/Magby/Makuhita patch
+  the thin types (cries vendored ogg+m4a to match — cry() has no remote
+  fallback so a missing file = silent mon), Electrode fills the plant
+  pool (inserted BEFORE the boss block — slice(0,-11) trap), PP Up perk
+  arms the ult 3 shots sooner.
+- 1100b42 pushed: feedback pass — wipe/catch-breakout haptics, evo/pull
+  whiteouts honor REDUCE FLASHES (were full-strength bypasses), coached
+  map rings its stops + TAP A STOP line, silent perk ticks
+  (sash/ether/egg/dire hit) signal like Exp Share, pause/ult chips sleep
+  under coach scrim, BUG_HIT fits canvas, stocked bag row scrolls,
+  dead declineReward deleted.
+- f0b0cff pushed: room pool +4 — lagoon (first moat-SEA, islet anchors),
+  quarry plugs (first boulder puzzle: B plugs the only gaps in the slab),
+  jetstream (horizontal gust band squeezes to center), thicket joins the
+  hard tail (staggered Cut lattice over north anchors). ROOM_HARD 10→11.
+- 6544927 pushed: content — breeder event (pick-1-of-3 catch, seeded
+  rolls), dojo visitor (+2 Lv to fielded fighting mon, comp-gated),
+  BANK SHOT task kind on maxCombo, Town Map bag item buys a tools charge.
+
+- 961c0bd pushed: leftovers 2 — combo pings live on new highs, Lum Berry
+  perk washes the shed five every 15s (confusion self-consumes, stays),
+  map trait chips gated like the legend, draft gains a ‹ TITLE back-out.
