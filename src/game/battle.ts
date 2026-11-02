@@ -875,7 +875,7 @@ export class Battle {
   private lblBox = new Float32Array(LABEL_SLOTS * 4);
   private lblN = 0;
   private field2: Field2 | null = null;
-  private field2Fx: Field2Fx = { hurt: (u, n) => this.damagePlayer(u as Unit, n), burst: (x, y, c) => this.burst(x, y, c, 10, 320), notice: (u) => abilityNotice(this, u as Unit, this.abilityText), shake: (n) => this.addShake(n) };
+  private field2Fx: Field2Fx = { hurt: (u, n) => this.damagePlayer(u as Unit, n), burst: (x, y, c) => this.burst(x, y, c, 10, 320), notice: (u) => abilityNotice(this, u as Unit, this.abilityText), shake: (n) => this.addShake(n), live: (u) => this.counterOn(u as Unit) };
   private lblW = new Map<string, number>();
   private scars: Scar[] = []; // impact craters scarring the court
   private hazards: Hazard[] = []; // this wave's court gimmicks

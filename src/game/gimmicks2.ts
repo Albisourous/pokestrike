@@ -3,6 +3,8 @@
 // fence holds a Light Screen beam between two posts: it blocks and chips
 // the ball until one post takes LASER_POST_HITS (MS barrier). Ice Path
 // patches pause the MS shot-decay clock while the ball glides over them.
+// Rocket Hideout spinner tiles snap the ball to their arrow with a speed
+// kick (MS accel/redirect panels).
 // Battle owns one Field2 per room, built by installField2 and stepped once
 // per physics substep.
 import type { SpeciesDef } from './data';
@@ -12,7 +14,7 @@ import { TYPE_COLOR, type PokeType } from './types';
 import { drawMon } from '../core/assets';
 import { sfx } from '../core/audio';
 import { drawTile } from './map';
-import { FX_LEAF, ROCK_SMALL, TILE_ICE } from './maptiles';
+import { FX_LEAF, ROCK_SMALL, TILE_ICE, TILE_FLAGSTONE, TILE_STEEL_TRIM, type TileRect } from './maptiles';
 import { fontB } from './ui';
 import { fitFontB } from './screens';
 
@@ -24,10 +26,12 @@ export const LASER_POST_R = 15; // px post body radius
 export const LASER_BEAM_R = 4; // px beam half thickness
 export const ICE_PAUSE_MAX = 0.75; // s of shot-decay clock one shot can bank gliding on ice
 export const ICE_SKATE = 1.1; // speed kick for ice abilities entering a patch
+export const SPIN_KICK = 1.15; // speed kick when a spinner tile redirects the ball
 const POST_HIT_CD = 0.12; // s, one contact counts once across substeps
 const PIDGEOT = 18, MAGNEMITE = 81;
+const SPIN_ARROW: TileRect = [1350, 702, 18, 9]; // Gen 3 gym-panel chevron, points down
 
-export type Gimmick2Kind = 'wind' | 'laser' | 'ice';
+export type Gimmick2Kind = 'wind' | 'laser' | 'ice' | 'spin';
 export interface Gimmick2 { kind: Gimmick2Kind; label: string; type: PokeType; hint: string }
 export const STAGE_GIMMICKS2: Partial<Record<Theme, Gimmick2>> = {
   sky: { kind: 'wind', label: 'WIND', type: 'flying', hint: 'FLYING/LEVITATE HELPS' },
@@ -35,21 +39,28 @@ export const STAGE_GIMMICKS2: Partial<Record<Theme, Gimmick2>> = {
   plant: { kind: 'laser', label: 'LASER', type: 'electric', hint: 'ELECTRIC/VOLT ABSORB HELPS' },
   sanctum: { kind: 'laser', label: 'LASER', type: 'electric', hint: 'ELECTRIC/VOLT ABSORB HELPS' },
   cavern: { kind: 'ice', label: 'ICE PATH', type: 'water', hint: 'ICE ABILITIES SKATE · FIRE MELTS' },
+  dojo: { kind: 'spin', label: 'SPINNER', type: 'psychic', hint: 'PSYCHIC/OWN TEMPO IGNORES' },
+  tower: { kind: 'spin', label: 'SPINNER', type: 'psychic', hint: 'PSYCHIC/OWN TEMPO IGNORES' },
 };
 
 type Def = Pick<SpeciesDef, 'type' | 'type2' | 'ability'>;
-export const ignoresWind = (d: Def) => d.type === 'flying' || d.type2 === 'flying' || d.ability === 'levitate';
-export const passesLaser = (d: Def) => d.type === 'electric' || d.type2 === 'electric' || d.ability === 'volt-absorb';
+const typed = (d: Def, t: PokeType) => d.type === t || d.type2 === t;
+export const ignoresWind = (d: Def) => typed(d, 'flying') || d.ability === 'levitate';
+export const passesLaser = (d: Def) => typed(d, 'electric') || d.ability === 'volt-absorb';
+export const ignoresSpin = (d: Def) => typed(d, 'psychic') || d.ability === 'own-tempo';
 // the type chart has no Ice type, so the roster's ice-flavoured abilities skate
 const SKATERS = new Set(['snow-cloak', 'ice-body', 'thick-fat']);
 export const skatesIce = (d: Def) => SKATERS.has(d.ability);
 export const meltsIce = (d: Def) => d.type === 'fire' || d.type2 === 'fire';
-export const countersGimmick2 = (d: Def, g: Gimmick2) => (g.kind === 'wind' ? ignoresWind(d) : g.kind === 'laser' ? passesLaser(d) : skatesIce(d));
+export const countersGimmick2 = (d: Def, g: Gimmick2) =>
+  g.kind === 'wind' ? ignoresWind(d) : g.kind === 'laser' ? passesLaser(d) : g.kind === 'spin' ? ignoresSpin(d) : skatesIce(d);
 
 interface Rect { x: number; y: number; w: number; h: number }
 export interface Post { x: number; y: number; hp: number; t: number }
 export interface IcePatch extends Rect { melt: number; skated: number } // shot index of the last melt / skate kick
+export interface SpinTile extends Rect { dx: number; dy: number; used: number } // used = shot index of the last kick
 export interface Field2 {
+  spin: SpinTile[] | null;
   ice: IcePatch[] | null;
   icePause: number; // clock seconds banked this shot
   iceShot: number;
@@ -65,6 +76,7 @@ export interface Field2Fx {
   burst: (x: number, y: number, color: string) => void;
   notice: (u: Field2Ball) => void;
   shake: (amt: number) => void;
+  live?: (u: Field2Ball) => boolean; // gauge.ts gate: is this ball's ability counter on right now
 }
 
 // Beam row + post columns: an open run of floor cells, mirror-symmetric,
@@ -98,13 +110,31 @@ export function icePlan(grid: string[], taken: Set<string> = new Set()): { c0: n
   return out;
 }
 
+// Spinner tiles: one mirrored pair low (arrows up the court) and one high
+// (arrows turning inward), on open floor no room hazard sits on.
+export function spinPlan(grid: string[], taken: Set<string> = new Set()): { c: number; r: number; dx: number; dy: number }[] {
+  const out: { c: number; r: number; dx: number; dy: number }[] = [];
+  const open = (c: number, r: number) => grid[r][c] === '0' && !taken.has(`${c},${r}`);
+  for (const r of [7, 3]) {
+    const c = [1, 2, 3].find((k) => open(k, r) && open(8 - k, r));
+    if (c === undefined) continue;
+    if (r === 7) out.push({ c, r, dx: 0, dy: -1 }, { c: 8 - c, r, dx: 0, dy: -1 });
+    else out.push({ c, r, dx: 1, dy: 0 }, { c: 8 - c, r, dx: -1, dy: 0 });
+  }
+  return out;
+}
+
 export function installField2(grid: string[] | null, theme: Theme, a: Rect, battle: number, hazards: { nx: number; ny: number }[] = []): Field2 | null {
   const g = STAGE_GIMMICKS2[theme];
   if (!g || !grid || isGentleRoom(grid)) return null;
-  const f: Field2 = { ice: null, icePause: 0, iceShot: -1, wind: null, laser: null, inWind: false };
+  const f: Field2 = { spin: null, ice: null, icePause: 0, iceShot: -1, wind: null, laser: null, inWind: false };
   const cw = a.w / 9, ch = a.h / 11;
-  if (g.kind === 'ice') {
-    const taken = new Set(hazards.map((z) => `${Math.floor(z.nx * 9)},${Math.floor(z.ny * 11)}`));
+  const taken = new Set(hazards.map((z) => `${Math.floor(z.nx * 9)},${Math.floor(z.ny * 11)}`));
+  if (g.kind === 'spin') {
+    const sz = Math.min(cw, ch); // square tiles, centred in the cell
+    f.spin = spinPlan(grid, taken).map((p) => ({ x: a.x + cw * p.c + (cw - sz) / 2, y: a.y + ch * p.r + (ch - sz) / 2, w: sz, h: sz, dx: p.dx, dy: p.dy, used: -1 }));
+    if (!f.spin.length) return null;
+  } else if (g.kind === 'ice') {
     f.ice = icePlan(grid, taken).map((p) => ({ x: a.x + cw * p.c0, y: a.y + ch * p.r0, w: cw * (p.c1 - p.c0 + 1), h: ch * 2, melt: -1, skated: -1 }));
     if (!f.ice.length) return null;
   } else if (g.kind === 'wind') {
@@ -120,6 +150,9 @@ export function installField2(grid: string[] | null, theme: Theme, a: Rect, batt
 }
 
 const tell = (u: Field2Ball, ability: string, fx: Field2Fx) => u.def.ability === ability && fx.notice(u);
+// type immunity always holds; the ability half goes through the gauge gate
+const counters = (u: Field2Ball, fx: Field2Fx, type: PokeType, ability: string) =>
+  typed(u.def, type) || (u.def.ability === ability && (fx.live?.(u) ?? true));
 
 // Push the ball out along n (unit, pointing at the ball) and mirror its
 // velocity when it is moving into the surface.
@@ -148,7 +181,7 @@ function stepIce(f: Field2, u: Field2Ball, h: number, shot: number, fx: Field2Fx
     sfx('splash');
     return 0;
   }
-  if (skatesIce(u.def) && p.skated !== shot) {
+  if (skatesIce(u.def) && (fx.live?.(u) ?? true) && p.skated !== shot) {
     p.skated = shot;
     u.vx *= ICE_SKATE;
     u.vy *= ICE_SKATE;
@@ -162,10 +195,22 @@ function stepIce(f: Field2, u: Field2Ball, h: number, shot: number, fx: Field2Fx
 export function stepField2(f: Field2 | null, u: Field2Ball, h: number, time: number, fx: Field2Fx, shot = 0): number {
   if (!f || u.dead) return 0;
   const pause = stepIce(f, u, h, shot, fx);
+  const sp = f.spin?.find((q) => q.used !== shot && u.x >= q.x && u.x <= q.x + q.w && u.y >= q.y && u.y <= q.y + q.h);
+  if (sp) {
+    sp.used = shot;
+    if (counters(u, fx, 'psychic', 'own-tempo')) tell(u, 'own-tempo', fx);
+    else {
+      const v = Math.hypot(u.vx, u.vy) * SPIN_KICK;
+      u.vx = sp.dx * v;
+      u.vy = sp.dy * v;
+      fx.burst(u.x, u.y, TYPE_COLOR.psychic);
+      sfx('ui');
+    }
+  }
   const w = f.wind;
   if (w) {
     const inside = u.y >= w.y0 && u.y <= w.y1;
-    if (inside && ignoresWind(u.def)) tell(u, 'levitate', fx);
+    if (inside && counters(u, fx, 'flying', 'levitate')) tell(u, 'levitate', fx);
     else if (inside) {
       u.vx += w.dir * WIND_ACCEL * h;
       if (!f.inWind) sfx('gust');
@@ -198,7 +243,7 @@ export function stepField2(f: Field2 | null, u: Field2Ball, h: number, time: num
   const k = Math.max(0, Math.min(1, ((u.x - l.a.x) * sx + (u.y - l.a.y) * sy) / (sx * sx + sy * sy)));
   const dx = u.x - (l.a.x + sx * k), dy = u.y - (l.a.y + sy * k), d = Math.hypot(dx, dy);
   if (d >= u.r + LASER_BEAM_R) return pause;
-  if (passesLaser(u.def)) {
+  if (counters(u, fx, 'electric', 'volt-absorb')) {
     tell(u, 'volt-absorb', fx);
     return pause;
   }
@@ -231,10 +276,31 @@ export function blockField2(f: Field2 | null, e: { x: number; y: number; vx: num
 // floor layer, drawn under hazards and units: Gracidea ice tiles with a
 // frosted rim and a drop shadow on the near edge so the patch sits in the court
 export function drawField2Floor(ctx: CanvasRenderingContext2D, f: Field2 | null, time: number, shot = 0) {
-  if (!f?.ice) return;
+  if (!f) return;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
-  for (const p of f.ice) {
+  // spinner tiles: lavender gym floor in a steel rim, Gen 3 chevrons
+  // scrolling toward the arrow; a spent tile dims for the rest of the shot
+  for (const t of f.spin ?? []) {
+    const spent = t.used === shot, m = 5;
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(t.x + m, t.y + t.h - m, t.w - m * 2, 5);
+    ctx.globalAlpha = spent ? 0.5 : 1;
+    for (let k = 0; k < 4; k++) drawTile(ctx, TILE_STEEL_TRIM, t.x + m + (k % 2) * (t.w - m * 2 - 6), t.y + m + (k >> 1) * (t.h - m * 2 - 6), 6, 6);
+    drawTile(ctx, TILE_FLAGSTONE, t.x + m + 3, t.y + m + 3, t.w - m * 2 - 6, t.h - m * 2 - 6);
+    ctx.save();
+    ctx.translate(t.x + t.w / 2, t.y + t.h / 2);
+    ctx.rotate(Math.atan2(t.dy, t.dx) - Math.PI / 2);
+    const aw = (t.w - m * 2) * 0.82, ah = aw / 2, run = (t.h - m * 2) * 0.42;
+    for (let i = 0; i < 2; i++) {
+      const k = spent ? i * 0.5 : (time * 1.4 + i * 0.5) % 1;
+      ctx.globalAlpha = (spent ? 0.4 : 1) * Math.min(1, k * 4, (1 - k) * 4);
+      drawTile(ctx, SPIN_ARROW, -aw / 2, -run / 2 + k * run - ah / 2, aw, ah);
+    }
+    ctx.restore();
+  }
+  for (const p of f.ice ?? []) {
     const melted = p.melt === shot;
     ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#000';
@@ -347,6 +413,7 @@ export function drawField2(ctx: CanvasRenderingContext2D, f: Field2 | null, time
 // one short tag per gimmick while the court intro runs
 export function labelField2(f: Field2 | null, alpha: number, put: (text: string, x: number, y: number, color: string, alpha: number) => void) {
   if (!f || alpha <= 0) return;
+  if (f.spin) put('SPINNER', f.spin[0].x + f.spin[0].w / 2, f.spin[0].y - 6, TYPE_COLOR.psychic, alpha);
   if (f.ice) put('ICE PATH', f.ice[0].x + f.ice[0].w / 2, f.ice[0].y + f.ice[0].h / 2, '#bfe8ff', alpha);
   if (f.wind) put('WIND', (f.wind.x0 + f.wind.x1) / 2, (f.wind.y0 + f.wind.y1) / 2, TYPE_COLOR.flying, alpha);
   if (f.laser && !f.laser.down) put('LASER', (f.laser.a.x + f.laser.b.x) / 2, f.laser.a.y + 30, TYPE_COLOR.electric, alpha);
