@@ -729,9 +729,10 @@ const EVENTS: GameEvent[] = [
                 );
                 if (!pool.length) return { note: 'THE TRAINER HAD NOTHING TO TRADE.', skip: true };
                 const def = pool[Math.floor(bb.roll() * pool.length)];
+                const name = traded.def.name.toUpperCase();
                 bb.applyDef(traded, def, traded.lvl, traded.hp / traded.maxHp);
                 recordCapture([def.id]);
-                return { note: `${traded.def.name.toUpperCase()} CAME BACK FROM THE TRADE!`, art: { mon: def.id }, skip: true };
+                return { note: `${name} LEFT · ${def.name.toUpperCase()} ARRIVED!`, art: { mon: def.id }, skip: true };
               },
             })),
           { label: 'KEEP YOUR TEAM', run: () => ({ note: 'YOU KEPT YOUR TEAM TOGETHER.', skip: true }) },
