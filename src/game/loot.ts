@@ -11,6 +11,7 @@ import { INK, INK_SOFT, GOLD_HI, PARCH, font, fontB, scrim, uiWindow, uiBand } f
 export const BALL_TIERS = ['poke-ball', 'great-ball', 'ultra-ball', 'master-ball'] as const;
 export type BallTier = (typeof BALL_TIERS)[number];
 export const DROP_BASE = 0.35; // a plain KO's drop chance
+export const HIT_DROP = 0.35;
 export const DROP_CAP = 0.85;
 export const STOP_CAP = 12; // balls per stop, keeps the reveal short
 export const TIER_W = [70, 22, 7, 1]; // poke/great/ultra/master before performance
@@ -18,7 +19,7 @@ export const OPEN_T = 0.7; // seconds per ball in the reveal
 const OPEN_SHAKE = 0.42;
 const DROP_ARC = 0.5;
 
-export interface KoPerf { boss: boolean; weak: boolean; finisher: boolean; combo: number; speed: boolean }
+export interface KoPerf { boss: boolean; weak: boolean; finisher: boolean; combo: number; speed: boolean; rare?: boolean }
 export type LootKind = 'stars' | 'dust' | 'item';
 export interface LootReward { tier: BallTier; kind: LootKind; n: number; id?: string; got?: number }
 
@@ -49,6 +50,7 @@ const pickW = (rng: () => number, ws: number[]) => {
 };
 
 export function rollDrop(rng: () => number, p: KoPerf): BallTier | null {
+  if (p.rare) return 'ultra-ball';
   const o = dropOdds(p);
   return rng() < o.chance ? BALL_TIERS[pickW(rng, o.weights)] : null;
 }
@@ -89,13 +91,22 @@ export class Treasure {
   // one draw stream per foe, seeded off the run so `?seed=` replays never shift
   ko(e: { x: number; y: number; r: number }, seed: number, p: KoPerf & { off?: boolean }, now: number) {
     this.field = this.field.filter((b) => !b.banked);
-    if (p.off || this.field.length + this.stop.length >= STOP_CAP) return null;
+    if (!p.rare && (p.off || this.field.length + this.stop.length >= STOP_CAP)) return null;
     const rng = mulberry32(seed);
     const tier = rollDrop(rng, p);
     if (!tier) return null;
     const reward = rollReward(rng, tier);
     this.field.push({ tier, reward, x: e.x, y: e.y + e.r * 0.3, dx: (rng() - 0.5) * 60, t0: now });
     return tier;
+  }
+
+  hit(e: { x: number; y: number; r: number }, seed: number, now: number): BallTier | null {
+    this.field = this.field.filter((b) => !b.banked);
+    if (this.field.length + this.stop.length >= STOP_CAP) return null;
+    const rng = mulberry32(seed);
+    if (rng() >= HIT_DROP) return null;
+    this.field.push({ tier: 'poke-ball', reward: rollReward(rng, 'poke-ball'), x: e.x, y: e.y + e.r * 0.3, dx: (rng() - 0.5) * 60, t0: now });
+    return 'poke-ball';
   }
 
   // battle end: balls on court lift off and fly to the top edge
