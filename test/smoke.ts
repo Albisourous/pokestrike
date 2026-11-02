@@ -12,7 +12,7 @@ import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult, WEATHER_OF, TYPES } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll, clearRank, recordClear, clearBests, RANK_PAY, RANK_BALL } from '../src/game/meta';
+import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll, clearRank, recordClear, clearBests, RANK_PAY, RANK_BALL, secretIds, markSecret } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
@@ -32,6 +32,7 @@ import { installField2, stepField2, laserPlan, icePlan, blockField2, STAGE_GIMMI
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
 import { drawRunCard, shareLink, type RunCard } from '../src/game/share';
 import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
+import { SECRET_IDS, rollSecret, maybeSecret, enterSecret, placeSecret, closeSecret } from '../src/game/secret';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -5824,6 +5825,126 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   g.document = doc0;
   ok(!threw, `share card draws headless${threw ? ` (${threw})` : ''}`);
   ok(shareLink(card.base, card.seed) === 'https://x.test/pokestrike/?seed=424242', 'share link carries the run seed');
+}
+
+// --- secret lair ---
+ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
+{
+  const arenaSecret = { x: 30, y: 160, w: 480, h: 620 };
+  const secretTeam = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
+  globalThis.localStorage.setItem('pk_secrets', 'not-json');
+  ok(secretIds().length === 0, 'corrupt pk_secrets returns an empty list');
+  globalThis.localStorage.removeItem('pk_secrets');
+  const golden: Record<number, { mapSeed: number; nodes: string; waves: string[] }> = {
+    42: { mapSeed: 1858592655, nodes: 'start,elite,wild,rest,mart,event,gym,elite,wild,chest,event,trainer,gym,wild,trainer,event,mart,rest,gym', waves: ['84:119,287:110,187:85', '288:322,287:319,19:179,420:258,505:263', '309:346,311:446,125:740'] },
+    7: { mapSeed: 1188257686, nodes: 'start,trainer,wild,mart,event,chest,gym,trainer,wild,rest,event,mart,gym,wild,elite,trainer,event,mart,gym', waves: ['314:115,287:160,291:111', '187:190,420:258,102:263,479:235', '358:517,202:1165,150:1316'] },
+  };
+  for (const seed of [42, 7]) {
+    const b: any = new Battle(arenaSecret, secretTeam(), makeStage(seed, 'T'), mulberry32(seed));
+    const waves: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      b.spawnWave(i);
+      waves.push(b.enemies.map((e: any) => `${e.def.id}:${e.hp}`).join(','));
+    }
+    ok(b.mapSeed === golden[seed].mapSeed && b.regionMap.nodes.map((n: any) => n.kind).join(',') === golden[seed].nodes && JSON.stringify(waves) === JSON.stringify(golden[seed].waves), `normal climb replay unchanged (${seed})`);
+  }
+  let bOrC = true;
+  for (let seed = 0; seed < 2000; seed++) bOrC &&= !rollSecret(seed, 2, seed & 1 ? 'B' : 'C');
+  ok(bOrC, 'B/C never roll over 2,000 map seeds');
+  ok(!Array.from({ length: 2000 }, (_, seed) => rollSecret(seed, 8, 'S')).some(Boolean), 'row 8 never rolls');
+  ok(![0, 1, 3, 4].some((row) => Array.from({ length: 2000 }, (_, seed) => rollSecret(seed, row, 'S')).some(Boolean)), 'non-gym rows never roll');
+  const sRate = Array.from({ length: 2000 }, (_, seed) => rollSecret(seed, 2, 'S')).filter(Boolean).length / 2000;
+  const aRate = Array.from({ length: 2000 }, (_, seed) => rollSecret(seed, 5, 'A')).filter(Boolean).length / 2000;
+  ok(sRate >= 0.30 && sRate <= 0.40, `S lair odds stay in band (${sRate.toFixed(3)})`);
+  ok(aRate >= 0.11 && aRate <= 0.19, `A lair odds stay in band (${aRate.toFixed(3)})`);
+  const tier0 = new Set<number>(), tier1S = new Set<number>(), tier1A = new Set<number>();
+  for (let seed = 0; seed < 20000; seed++) {
+    const d0 = rollSecret(seed, 2, 'S'); if (d0) tier0.add(d0.id);
+    const ds = rollSecret(seed, 5, 'S'); if (ds) tier1S.add(ds.id);
+    const da = rollSecret(seed, 5, 'A'); if (da) tier1A.add(da.id);
+  }
+  ok(JSON.stringify([...tier0].sort()) === JSON.stringify([144, 145, 146]), 'row 2 yields birds only');
+  ok(JSON.stringify([...tier1S].sort()) === JSON.stringify([249, 250, 381]), 'tier-1 S pool is exact');
+  ok(JSON.stringify([...tier1A].sort()) === JSON.stringify([243, 244, 245]), 'tier-1 A pool is exact');
+
+  const findOpen = () => {
+    for (let seed = 1; seed < 1000; seed++) {
+      const b: any = new Battle(arenaSecret, secretTeam(), makeStage(seed, 'T'), mulberry32(seed));
+      if (!rollSecret(b.mapSeed, 2, 'S')) continue;
+      for (let i = 0; i < 3; i++) b.spawnWave(i);
+      const before = b.rng;
+      b.waveIndex = 2; b.waveHadGym = true; b.clearCard = { rank: 'S' };
+      maybeSecret(b);
+      if (b.secret) return { b, before, seed };
+    }
+    throw new Error('no deterministic secret seed');
+  };
+  const opened = findOpen();
+  ok(opened.b.rng === opened.before, 'secret discovery does not advance the main RNG');
+  const regionBefore = opened.b.regionMap.nodes.length;
+  const gymIdx = opened.b.secret.gymIdx;
+  const secretNode = opened.b.secret.node;
+  const routeToGym = routePath(opened.b.regionMap, opened.b.regionMap.nodes[gymIdx], secretNode).length > 1;
+  ok(routeToGym && opened.b.regionMap.nodes[opened.b.secret.gymIdx].links.includes(opened.b.regionMap.nodes.indexOf(secretNode)), 'gym reaches discovered lair');
+  closeSecret(opened.b);
+  ok(opened.b.regionMap.nodes.length === regionBefore - 1, 'closing a discovered lair restores the node list');
+
+  const win = findOpen();
+  const wb: any = win.b;
+  enterSecret(wb, wb.secret.node);
+  const winState = wb.secret;
+  const winBoss = wb.enemies.find((e: any) => e.boss);
+  for (const e of wb.enemies) e.dead = true;
+  const starsBefore = wb.starsRun;
+  const nodeCount = wb.regionMap.nodes.length;
+  wb.enterReward();
+  ok(wb.phase === 'map' && wb.pendingNext === winState.row + 1 && wb.mapNode === winState.gymIdx, 'secret win returns to the next map row');
+  ok(wb.regionMap.nodes.length === nodeCount - 1 && wb.box.some((d: any) => d.id === winState.def.id), 'secret win closes the node and banks the legendary');
+  ok(wb.starsRun >= starsBefore + 40 && secretIds().includes(winState.def.id), 'secret win awards stars and records the legendary');
+  const control: any = new Battle(arenaSecret, secretTeam(), makeStage(win.seed, 'T'), mulberry32(win.seed));
+  for (let i = 0; i < 3; i++) control.spawnWave(i);
+  control.spawnWave(winState.row + 1);
+  wb.spawnWave(winState.row + 1);
+  ok(JSON.stringify(wb.enemies.map((e: any) => `${e.def.id}:${e.hp}`)) === JSON.stringify(control.enemies.map((e: any) => `${e.def.id}:${e.hp}`)), 'secret win preserves the next-row replay');
+
+  const lose = findOpen();
+  const lb: any = lose.b;
+  enterSecret(lb, lb.secret.node);
+  const hpSnap = lb.players.map((p: any) => ({ hp: p.hp, dead: p.dead }));
+  for (const p of lb.players) { p.hp = 0; p.dead = true; }
+  lb.wipe();
+  ok(lb.phase === 'map' && lb.players.every((p: any, i: number) => p.hp === hpSnap[i].hp && p.dead === hpSnap[i].dead), 'secret lose restores the player state');
+  ok(lb.telop.texts().includes('IT FLED') && lb.regionMap.nodes.length === 19, 'secret lose seals the lair without ending the run');
+  for (let i = 0; i < 300; i++) lb.update(1 / 60);
+  ok(lb.phase === 'map', 'secret lose survives 300 map updates');
+
+  const bars: any = new Battle(arenaSecret, secretTeam(), makeStage(31, 'T'), mulberry32(11));
+  bars.spawnWave(2);
+  const barBoss = bars.enemies.find((e: any) => e.boss);
+  barBoss.bars = [0.35, 0.65];
+  barBoss.sash = false; barBoss.lastStand = false;
+  bars.hurt(barBoss, Math.ceil(barBoss.maxHp * 0.7), '#fff');
+  bars.endShot();
+  ok(barBoss.sumStage === 1 && !barBoss.dead, 'two-bar legendary breaks once');
+  for (const e of bars.enemies) if (!e.boss) e.dead = true;
+  bars.hurt(barBoss, barBoss.maxHp * 2, '#fff');
+  ok(barBoss.dead && !(bars as any).barBreak, 'two-bar legendary can KO after one break');
+
+  const placed: any = genRegion(17);
+  const gym = placed.nodes.findIndex((n: any) => n.kind === 'gym');
+  const oldNodes = placed.nodes.length;
+  const oldRoute = new Set(placed.route);
+  const node = placeSecret(placed, gym);
+  const forks = node.links.map((i: number) => placed.nodes[i]);
+  ok(placed.tiles[node.ty * MAP_W + node.tx] === T_GRASS, 'secret node sits on grass');
+  ok(routePath(placed, placed.nodes[gym], node).length > 1 && forks.every((fork: any) => routePath(placed, node, fork).length > 1), 'secret route reaches gym and every fork');
+  closeSecret({ regionMap: placed, secret: { node, gymIdx: gym, added: [] } } as any);
+  ok(placed.nodes.length === oldNodes && placed.nodes[gym].links.every((i: number) => i < oldNodes) && [...oldRoute].every((i) => placed.route.has(i)), 'placeSecret close restores its node, links and prior route');
+
+  const ls = globalThis.localStorage;
+  ls.setItem('pk_secrets', JSON.stringify({ ids: ['bad', 144, 144] }));
+  ok(secretIds().length === 1 && secretIds()[0] === 144 && !markSecret(144), 'corrupt secret persistence filters duplicates and invalid ids');
+  ls.removeItem('pk_secrets');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
