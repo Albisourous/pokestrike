@@ -805,3 +805,5 @@ Open for next session: real-touch feel pass (scrim hole size, 1.5s
 auto-card, HOT tag position); support foes still show ~N on heal turns
 (by-design read); sparkBuy doesn't tick pulls (pity semantics);
 visual pass on the 4 new rooms via ?debug=arena.
+- 4d48ba4 pushed: supp foes (medic/aegis/raider/summon/lay) drop HITS ~N —
+  a price on a heal turn lies; the verb carries the read.

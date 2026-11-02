@@ -338,3 +338,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `d99cf3c` | music | intensity layers — kitGain duck on drag, spec 2026-11-02 | `git revert d99cf3c` |
 | 2026-11-02 | `ef8c740` | review | zapPow precedence = fireEnemy; resumeRun restores coach; dimmed beats gate taps | `git revert ef8c740` |
 | 2026-11-02 | `d99cf3c`+docs | music | intensity-layer spec at docs/superpowers/specs/2026-11-02-music-intensity-layers.md | — |
+| 2026-11-02 | `4d48ba4` | battle | supp foes drop HITS ~N on support turns | `git revert 4d48ba4` |
