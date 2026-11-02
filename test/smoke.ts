@@ -5626,5 +5626,12 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   ok(DROP_SETTLE < 1.15, 'pull ball settles inside the shortest shake');
 }
 
+// --- help deck ---
+{
+  const cards = S.HELP_DECK.flatMap((p) => p.cards);
+  ok(S.HELP_PAGE_COUNT === S.HELP_DECK.length && S.HELP_DECK.every((p) => p.cards.length >= 1 && p.cards.length <= 7), 'every help page holds 1 to 7 cards');
+  ok(S.HELP_DECK[0].name === 'TL;DR' && cards.every(([, t]) => !t.includes('—')), 'TL;DR opens the deck and no card has an em dash');
+}
+
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
 process.exit(fails ? 1 : 0);
