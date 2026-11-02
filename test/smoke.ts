@@ -30,7 +30,7 @@ import { FLEE_DEF, FLEE_DUST, FLEE_FROM, FLEE_RATE, FLEE_SHINY, FLEE_STARS, FLEE
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
-import { installField2, stepField2, laserPlan, icePlan, spinPlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, SPIN_KICK, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
+import { installField2, stepField2, laserPlan, icePlan, spinPlan, warpPlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, SPIN_KICK, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
 import { fameActive, fameDown, fameEnd, fameScene, fameUp, startFame, tickFame } from '../src/game/fame';
 import { EVO_FLASH, EVO_T, evoActive, evoScene, skipEvo, startEvo, tickEvo } from '../src/game/evolve';
@@ -682,6 +682,49 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   stepField2(inf, seal, 1 / 120, 0, fx, 1);
   stepField2(inf, sealOff, 1 / 120, 0, off, 2);
   ok(Math.abs(seal.vx - 100 * ICE_SKATE) < 1e-9 && sealOff.vx === 100, 'gauge gate: ice skaters kick only while live');
+}
+
+// --- warp pads: cross-court pairs, velocity rides through, one warp per pair per shot
+{
+  const fx: Field2Fx = { hurt: () => {}, burst: () => {}, notice: () => {}, shake: () => {} };
+  const ball = (d: number, x: number, y: number, vx = 0, vy = 0): Field2Ball => ({ uid: d, def: speciesById(d)!, x, y, vx, vy, r: 22, maxHp: 100, dead: false });
+  const warped = (Object.keys(STAGE_GIMMICKS2) as Theme[]).filter((t) => STAGE_GIMMICKS2[t]!.kind === 'warp');
+  ok(JSON.stringify(warped) === '["marsh"]', `warp pads ride a court of their own (${warped.join(', ')})`);
+  ok([0, 1, 2].every((i) => !installField2(ROOM_LAYOUTS[i], 'marsh', arena, 1)), 'gentle openers carry no warp pads');
+  let rooms = 0, paired = true;
+  for (const grid of [...ROOM_LAYOUTS.slice(3), ...ROOM_BOSS]) {
+    const plan = warpPlan(grid);
+    if (!plan.length) continue;
+    rooms++;
+    paired &&= plan.length === 4 && plan.every((p) => {
+      const mate = plan.filter((q) => q.pair === p.pair && q !== p);
+      return grid[p.r][p.c] === '0' && mate.length === 1 && mate[0].c === 8 - p.c && mate[0].r !== p.r;
+    }) && fieldRoomReachable(grid);
+  }
+  ok(rooms >= 20 && paired, `warp pads pair cross-court on open floor (${rooms} rooms)`);
+  const grid = ROOM_LAYOUTS.slice(3).find((g) => warpPlan(g).length)!;
+  const p0 = warpPlan(grid)[0];
+  ok(warpPlan(grid, new Set([`${p0.c},${p0.r}`])).every((p) => !(p.c === p0.c && p.r === p0.r)), 'warp pads skip cells a room hazard holds');
+  const a = installField2(grid, 'marsh', arena, 1) as any, b = installField2(grid, 'marsh', arena, 2) as any;
+  ok(JSON.stringify(a.warp) === JSON.stringify(b.warp), 'warp layout is fixed by the room, no rolls');
+  const [pa, pb] = a.warp.filter((q: any) => q.pair === 0);
+  const mid = (q: any) => [q.x + q.w / 2, q.y + q.h / 2];
+  const u = ball(1, ...(mid(pa) as [number, number]), 300, -400);
+  stepField2(a, u, 1 / 120, 0, fx, 1);
+  ok(u.x === mid(pb)[0] && u.y === mid(pb)[1] && u.vx === 300 && u.vy === -400, 'a warp exits the partner pad with the same velocity');
+  const cell = grid[Math.floor((u.y - arena.y) / (arena.h / 11))][Math.floor((u.x - arena.x) / (arena.w / 9))];
+  ok(cell === '0', 'the exit pad sits on clear floor');
+  ok(a.warpFx.length === 2, 'the teleport ring plays at both pads');
+  stepField2(a, u, 1 / 120, 0.01, fx, 1);
+  ok(u.x === mid(pb)[0] && u.y === mid(pb)[1], 'the pair fires once per shot, no loop back');
+  stepField2(a, u, 1 / 120, 0.02, fx, 2);
+  ok(u.x === mid(pa)[0] && u.y === mid(pa)[1], 'warp pads rearm on the next shot');
+  const ghost = ball(92, ...(mid(pa) as [number, number]), 120, 0);
+  stepField2(a, ghost, 1 / 120, 0, fx, 3);
+  ok(ghost.x === mid(pa)[0] && ghost.vx === 120, 'Ghost types phase through warp pads');
+  const foe = { x: mid(pa)[0], y: mid(pa)[1], vx: 50, vy: 0, r: 22 };
+  blockField2(a, foe);
+  ok(foe.x === mid(pa)[0] && foe.y === mid(pa)[1] && foe.vx === 50, 'foes do not warp');
 }
 
 // --- bag items: pk_bag stock, constructor applies the run-start picks ------
