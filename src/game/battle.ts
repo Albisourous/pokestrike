@@ -2082,6 +2082,7 @@ export class Battle {
 
   pointerDown(p: Vec) {
     this.telop.skip();
+    if (this.missions.dismiss(this.time)) return;
     if (this.fin.t > 0) { this.fin.t = 0; return; }
     if (this.paused) { // any tap unfreezes
       if (p.x >= PAUSE_SPEED.x && p.x <= PAUSE_SPEED.x + PAUSE_SPEED.w && p.y >= PAUSE_SPEED.y && p.y <= PAUSE_SPEED.y + PAUSE_SPEED.h) {
@@ -8726,7 +8727,7 @@ export class Battle {
     ctx.fillText(this.enemies.filter((e) => !e.dead).length + ' FOES LEFT', f.x + f.w / 2, f.y + 22);
     ctx.fillText(this.phase === 'enemy' ? 'FOES ATTACK' : this.phase === 'shot' ? 'IN FLIGHT' : 'TURN ' + (this.stopShots + 1) + '/' + this.par, f.x + f.w / 2, f.y + 42);
     this.connect.draw(ctx, this.arena);
-    this.missions.draw(ctx, this.time, this.arena, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints });
+    this.missions.draw(ctx, this.time, this.arena, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints }, this.phase === 'aim' ? { theme: this.theme, name: this.themeName, sub: `STAGE ${this.waveIndex + 1}/${TOTAL_STAGES}`, foes: this.enemies.filter((e) => !e.dead).map((e) => e.def), team: this.players.filter((p) => !p.dead).map((p) => p.def) } : undefined);
 
     if (this.ultHint && this.phase === 'aim') {
       const h = { x: 76, y: this.arena.y + 60, w: 388, h: 64 };
