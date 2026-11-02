@@ -1120,6 +1120,7 @@ export interface RunSave {
   mapNote: string;
   eggIn?: number; // ?-pool egg: stops until it hatches (v3+)
   eggJustLaid?: boolean; // the laying arrival doesn't consume a tick
+  daycare?: { id: number; lvl: number; shiny?: boolean; luck?: number; hp: number; back: number };
   modId?: string; // the daily rule card applied to this run (v4+)
   team: { id: number; lvl: number; shiny?: boolean; hp: number; luck?: number; joined?: number; cdMod?: number; cd?: number; sash?: boolean }[];
   tagEchoDone?: boolean; // ASC 9's owed echo visit — a spent flag stays spent (v5+)
@@ -1221,6 +1222,8 @@ export function runSave(): RunSave | null {
     (s.tools == null ||
       (typeof s.tools === 'object' && Number.isFinite(s.tools.roll) && Number.isFinite(s.tools.ban))) &&
     (s.eggIn == null || Number.isFinite(s.eggIn)) &&
+    (s.daycare == null ||
+      (typeof s.daycare === 'object' && Number.isFinite(s.daycare.id) && Number.isFinite(s.daycare.back))) &&
     (s.starsRun == null || Number.isFinite(s.starsRun));
   return ok ? s : null;
 }
