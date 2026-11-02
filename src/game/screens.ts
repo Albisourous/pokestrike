@@ -74,6 +74,7 @@ export interface RunResult {
   bestCombo?: number; // longest pass-chain this run
   rankStreak?: number; // longest run of A-or-better stop clears
   loot?: number; // treasure balls opened this run
+  secrets?: { n: number; of: number; fresh: number };
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -4320,6 +4321,7 @@ export function drawResult(
   if (res.bestCombo) findings.push(['BEST COMBO', `×${res.bestCombo}`, INK]);
   if (res.rankStreak) findings.push(['RANK STREAK', `${res.rankStreak} · A OR BETTER`, INK]);
   if (res.loot) findings.push(['TREASURE', `${res.loot} BALL${res.loot > 1 ? 'S' : ''} OPENED`, GOLD]);
+  if (res.secrets?.n) findings.push(['SECRETS', `${res.secrets.n}/${res.secrets.of}${res.secrets.fresh ? ` · +${res.secrets.fresh} NEW` : ''}`, '#c9a8ff']);
   if (res.stars) findings.push(['STAR PIECES', `+${res.stars}`, GOLD]); // the wallet's payout — even a wipe banks
   if (res.starsBonus) findings.push(['FIRST WIN TODAY', `+${res.starsBonus}`, GOLD]);
   if (res.grind) findings.push([`RUN ${res.grind.n} TODAY`, `+${res.grind.pay}`, GOLD]);

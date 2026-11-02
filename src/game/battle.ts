@@ -31,6 +31,7 @@ import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttac
 import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
+import { maybeSecret, enterSecret, secretWon, secretFled, drawSecretNode, type SecretState } from './secret';
 
 import {
   playerHp,
@@ -66,7 +67,7 @@ export interface Rect {
   h: number;
 }
 
-interface Unit {
+export interface Unit {
   uid: number;
   def: SpeciesDef;
   side: 'player' | 'enemy';
@@ -88,6 +89,7 @@ interface Unit {
   wMul: number;
   lunging: number; // >0 while mid-lunge (melee attack in flight)
   boss: boolean;
+  bars?: readonly number[];
   bigT: number; // boss heavy-attack countdown (MS bosses run several clocks); 0 = none
   shiny: boolean; // rare alt-palette spawn — always caught when KO'd
   dead: boolean;
@@ -990,6 +992,8 @@ export class Battle {
   teamSel = -1; // team index picked — a swap starts from either side
   depth = 0; // rolled stages survived past the opening trio
   raid = false; // standalone one-boss fight — never touches 'reward'/'map' or the climb-clear ledger
+  secret: SecretState | null = null;
+  secretsRun = 0;
   raidMod = ''; // the day's seeded handicap — a RAID_MODS id, spent in spawnWave/makeEnemy
   rewardOffers: Perk[] = [];
   tools = { roll: 1, ban: 1 }; // offer-tool charges, per-run — REROLL re-deals, BANISH culls
@@ -3658,8 +3662,8 @@ export class Battle {
     if (e.asleep) d = Math.max(1, Math.round(d * 1.35));
     const hpBefore = e.hp;
     e.hp -= d;
-    if (e.boss && !e.dead && hpBefore > 0 && e.sumStage < BOSS_BARS.length - 1) {
-      const floor = 1 - BOSS_BARS.slice(0, e.sumStage + 1).reduce((sum, bar) => sum + bar, 0);
+    if (e.boss && !e.dead && hpBefore > 0 && e.sumStage < (e.bars ?? BOSS_BARS).length - 1) {
+      const floor = 1 - (e.bars ?? BOSS_BARS).slice(0, e.sumStage + 1).reduce((sum, bar) => sum + bar, 0);
       if (e.hp < Math.ceil(e.maxHp * floor)) {
         e.hp = Math.ceil(e.maxHp * floor);
         e.sumStage++;
@@ -3967,6 +3971,7 @@ export class Battle {
         this.pops.push({ x: e.x, y: e.y, id: e.def.id, r: e.r, t: 0.55, life: 0.55 });
       }
       if (caught) {
+        if (this.secret?.phase === 'fight' && e.boss) this.secret.caught = true;
         // a dupe feeds the copy you own instead of filling a box slot
         if (!this.absorbDupe(e.def, e.shiny)) {
           const cl = this.catchLvl(e.lvl); // it keeps its level — up to the team's pace
@@ -5498,8 +5503,9 @@ export class Battle {
     if (this.waveFlawless) this.score += 50 + this.depth * 15;
     const speedClear = this.stopShots <= this.par;
     if (speedClear) this.score += 100 + this.depth * 25;
-    if (!this.raid) this.clearCard = this.stopSummary();
+    if (!this.raid && !this.secret) this.clearCard = this.stopSummary();
     if (this.clearCard) this.clearCard.chain = { best: this.connect.best, alls: this.connect.alls };
+    if (this.waveHadGym && this.clearCard) maybeSecret(this);
     if (this.clearCard) this.clearCard.missions = this.missions.clear(this.waveIndex + 1, { shots: this.stopShots, par: this.par, weak: this.stopWeak, faints: this.stopFaints }, (n) => this.earnStars(n));
     this.treasure.endStop(this.time, this.arena.x + this.arena.w / 2, this.arena.y, (n) => this.earnStars(n));
     // pickup ability: scavengers root through the arena after the fight —
@@ -5948,6 +5954,7 @@ export class Battle {
   }
 
   private enterReward() {
+    if (this.secret) return secretWon(this);
     this.fin.t = 0;
     this.boxSel = -1;
     this.teamSel = -1;
@@ -6283,6 +6290,7 @@ export class Battle {
   }
 
   private finishMapWalk(n: MapNode) {
+    if (n.kind === 'secret') return enterSecret(this, n);
     this.mapNode = this.region.nodes.indexOf(n);
     this.pendingNext = n.row;
     this.arriveAtNode(n);
@@ -6784,7 +6792,7 @@ export class Battle {
     boss.clocks = foeClocks(boss.def.type, true, boss.sumStage).map(({ kind, move, turn, first }) => ({ kind, move,
       turn: Math.max(1, turn - (boss.phaseRage ? BOSS_RAGE_TURN_CUT : 0)), t: Math.max(1, first - (boss.phaseRage ? BOSS_RAGE_TURN_CUT : 0)) }));
     this.summonBossAdds(boss, room.anchors);
-    this.telop.push({ kind: 'phase', title: boss.phaseRage ? 'RAGE' : 'PHASE CLEAR', sub: `BATTLE ${boss.sumStage + 1}/${BOSS_BARS.length} · WEAK SPOT MOVED`, mon: boss.def.id, icon: this.bossIcon(boss), color: boss.phaseRage ? TYPE_COLOR[boss.def.type] : undefined });
+    this.telop.push({ kind: 'phase', title: boss.phaseRage ? 'RAGE' : 'PHASE CLEAR', sub: `BATTLE ${boss.sumStage + 1}/${(boss.bars ?? BOSS_BARS).length} · WEAK SPOT MOVED`, mon: boss.def.id, icon: this.bossIcon(boss), color: boss.phaseRage ? TYPE_COLOR[boss.def.type] : undefined });
     this.screenFlash('#ffd84d', 0.2);
     this.addShake(10);
     sfx('invade');
@@ -6792,7 +6800,7 @@ export class Battle {
   }
 
   private enrageBoss(e: Unit) {
-    if (e.sumStage !== BOSS_BARS.length - 1 || e.phaseRage) return;
+    if (e.sumStage !== (e.bars ?? BOSS_BARS).length - 1 || e.phaseRage) return;
     e.phaseRage = e.enraged = true;
     const st = e.def.stats;
     e.def = { ...e.def, stats: { ...st, atk: Math.round(st.atk * BOSS_RAGE_STAT), spa: Math.round(st.spa * BOSS_RAGE_STAT) } };
@@ -7625,6 +7633,7 @@ export class Battle {
   // the wipe lands the same wherever it's routed from — the red flash and
   // the sting are how a run says it's over
   private wipe() {
+    if (this.secret?.phase === 'fight') return secretFled(this);
     this.phase = 'lost';
     this.telop.push({ kind: 'over', title: 'GAME OVER', sub: 'YOUR TEAM FAINTED', mon: this.active.def.id });
     this.endT = 1.6; // the sting lands before the field report covers it
@@ -8565,7 +8574,7 @@ export class Battle {
     if (boss) {
       const bw = 240, bx = 270 - bw / 2, by = a.y + 40;
       const pct = Math.max(boss.hp / boss.maxHp, 0);
-      const title = `${boss.def.name.toUpperCase()} · x${BOSS_BARS.length - boss.sumStage}`;
+      const title = `${boss.def.name.toUpperCase()} · x${(boss.bars ?? BOSS_BARS).length - boss.sumStage}`;
       ctx.textAlign = 'center';
       ctx.font = fontB(10);
       ctx.strokeStyle = '#000';
@@ -8588,7 +8597,7 @@ export class Battle {
       ctx.strokeStyle = '#f0b02f';
       ctx.lineWidth = 1;
       let boundary = 1;
-      for (const bar of BOSS_BARS.slice(0, -1)) {
+      for (const bar of (boss.bars ?? BOSS_BARS).slice(0, -1)) {
         boundary -= bar;
         ctx.fillStyle = '#fff9';
         ctx.fillRect(bx + bw * boundary - 0.5, by + 3, 1, 11);
@@ -9300,7 +9309,7 @@ export class Battle {
       if (n.ty - cam < -2.4 || n.ty - cam > view + 1) return; // offscreen row
       const nx = ox + n.tx * cell + cell / 2;
       const ny = oy + (n.ty - cam) * cell + cell / 2;
-      const cleared = n.row < this.pendingNext;
+      const cleared = n.row < this.pendingNext && n.kind !== 'secret';
       const reachable = links.includes(i);
       const current = i === this.mapNode;
       if (n.kind === 'chest') {
@@ -9328,6 +9337,8 @@ export class Battle {
         ctx.fillStyle = '#2a3560';
         // diamond center is ny - 6; the '?' glyph rides ~0.9em over baseline
         ctx.fillText('?', nx + 3, ny + 8);
+      } else if (n.kind === 'secret') {
+        drawSecretNode(ctx, nx, ny, cell, this.time);
       } else {
         const icon = n.kind === 'gym' ? MT.TILE_GYM : MT.TILE_TOWN; // start + rest are towns
         // HOME's cottage backs onto the tile above the stop so the player
@@ -9361,7 +9372,7 @@ export class Battle {
     });
     // labels in a second pass so buildings can't paint over a neighbor's name
     this.region.nodes.forEach((n, i) => {
-      if (n.row < this.pendingNext || n.ty - cam < -2.4 || n.ty - cam > view + 1) return;
+      if ((n.row < this.pendingNext && n.kind !== 'secret') || n.ty - cam < -2.4 || n.ty - cam > view + 1) return;
       const nx = ox + n.tx * cell + cell / 2;
       const ny = oy + (n.ty - cam) * cell + cell / 2;
       const reachable = links.includes(i);
@@ -9378,13 +9389,14 @@ export class Battle {
         : n.kind === 'chest' ? 'CHEST'
         : n.kind === 'elite' ? 'ELITE'
         : n.kind === 'trainer' ? TRAINER_CLASS[n.ttype ?? 'normal'].title
+        : n.kind === 'secret' ? 'SECRET'
         : n.kind === 'start' ? 'HOME'
         : 'WILD';
-      ctx.strokeText(label, nx, ny - cell * 0.95);
+      ctx.strokeText(label, nx, ny - cell * (n.kind === 'secret' ? 1.75 : 0.95));
       ctx.fillStyle = reachable
         ? (n.kind === 'elite' ? '#c8b0ff' : n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d')
         : current ? '#6fdc6f' : '#8a94b8';
-      ctx.fillText(label, nx, ny - cell * 0.95);
+      ctx.fillText(label, nx, ny - cell * (n.kind === 'secret' ? 1.75 : 0.95));
       // trainer squads are mono-type — name it so routing around a bad
       // matchup is a choice, not a coin flip; gyms sign their leader's
       // type the same way

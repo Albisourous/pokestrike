@@ -142,6 +142,8 @@ import {
 } from './game/screens';
 import { runCard, shareRun } from './game/share';
 import type { RunResult, ShareGrid, SettingsCat, SettingsSliderKey, PullResult, HatchState, HomeTab } from './game/screens';
+import { SECRET_IDS } from './game/secret';
+import { secretIds } from './game/meta';
 import { taskViews, claimTask, taskTick, featuredPull, daySeed, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealCost, type TaskPeriod, type TaskView } from './game/tasks';
 import { dailyMod, DAILY_MODS, type DailyMod } from './game/daily';
 import type { PokeType } from './game/types';
@@ -2158,6 +2160,7 @@ function update(dt: number) {
         bestCombo: battle.maxCombo,
         loot: battle.treasure.opened, // treasure balls opened this run
         rankStreak: battle.bestRankStreak,
+        secrets: { n: secretIds().length, of: SECRET_IDS.length, fresh: battle.secretsRun },
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
       const trophy = (id: string) => {
