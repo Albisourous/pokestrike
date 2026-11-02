@@ -4522,6 +4522,42 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(u0.telop.queue.some((t) => t.kind === 'over') || u0.telop.cur?.kind === 'over', 'a wipe calls GAME OVER');
 }
 
+// --- Gen 3 battle-animation hooks ---------------------------------------
+{
+  for (const type of TYPES) {
+    const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+    b['spawnWave'](0);
+    b['courtT'] = -9;
+    const e = b.enemies[0];
+    e.def = { ...e.def, type };
+    clearAnims();
+    b['fireMove'](e, { ...TYPE_MOVE[type], turn: 5, t: 0 });
+    if (TYPE_MOVE[type].kind === 'meteor') b.update(0.01);
+    ok(animCount() > 0 && animCount() <= MAX_ANIMS, `${type} foe move spawns capped sprites`);
+    clearAnims();
+    e.dead = true;
+    b['fireMove'](e, { ...TYPE_MOVE[type], turn: 5, t: 0 });
+    ok(animCount() === 0, `${type} dead foe spawns no sprites`);
+  }
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  b['spawnWave'](0);
+  const powers: number[] = [];
+  clearAnims();
+  b['castSignature']('THUNDERBOLT', b.players[0], b.players[0], (_e, power) => { powers.push(power); return 1; });
+  ok(powers[0] === 2.2 && animCount() > 0, 'signature visuals preserve the damage callback power');
+  clearAnims();
+  for (const p of b.players) p.dead = true;
+  b['fireMove'](b.enemies[0], { kind: 'laser', move: 'HYPER BEAM', turn: 5, t: 0 });
+  ok(animCount() === 0, 'laser without a live target spawns no sprites');
+  for (const e of b.enemies) e.dead = true;
+  ok(!b['castSignature']('THUNDERBOLT', b.players[0], b.players[0], () => 1) && animCount() === 0,
+    'signature without live foes spawns no sprites');
+  b['spawnWave'](0);
+  burst(MOVE_ANIM.fire, 0, 0, false);
+  b['spawnWave'](0);
+  ok(animCount() === 0, 'wave reset clears sprites');
+}
+
 // --- Gen 3 battle-animation pool ----------------------------------------
 {
   clearAnims();
@@ -4549,6 +4585,10 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(!spawnAnim('spark', 0, 0, 0, 0, 2, 2, 1, 0, 0, 0, 20, false, 0, 0.3, false, false, true),
     'particles skip at the soft cap');
   ok(animCount() === SOFT_CAP && spawnAnim('impact', 0, 0), 'core impact still spawns above the soft cap');
+  clearAnims();
+  for (let i = 0; i < SOFT_CAP; i++) spawnAnim('spark', 0, 0);
+  beam(MOVE_ANIM.fire, 0, 0, 100, 100);
+  ok(animCount() === SOFT_CAP + 1, 'beam stream skips extra particles above the soft cap');
   const stub = {} as CanvasRenderingContext2D;
   drawAnims(stub); drawTell(stub, 'electric', 0, 0, 100, 100, 1); drawTellRing(stub, 'water', 0, 0, 80, 1);
   ok(true, 'headless unloaded sprite draws safely skip the canvas');

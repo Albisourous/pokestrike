@@ -1,7 +1,8 @@
 /* Gen 3 compositions, adapted to <=0.6s rather than full cartridge cutscenes.
  * Source: pret/pokeemerald data/battle_anim_scripts.s and
  * graphics/battle_anims/sprites; same vendored-art footing as FRLG fronts.
- * Thunderbolt: shock_3 (3 frames), spark_0 (8); bolts 7/7/9 ticks apart.
+ * Thunderbolt: spark_0 (8) segments, shock_3 (3) orbs; 7/7/9-tick bolts.
+ * Here lightning (5) stands in for the cartridge's assembled spark bolts.
  * Flamethrower: small_ember (5); 16-tick flights, emission every 2 ticks.
  * Surf: scrolling wave background, sound at tick 24; splash (1) substitute.
  * Solar Beam: orbs (3), 20-tick flights at 4-tick intervals after absorption.
@@ -29,7 +30,7 @@ function sheet(name: string, fw: number, fh: number, frames: number): Sheet {
 export const SHEETS = {
   ember: sheet('small_ember', 32, 32, 5), water: sheet('splash', 64, 64, 1),
   orb: sheet('orbs', 16, 16, 3), ring: sheet('gold_ring', 16, 16, 2),
-  bolt: sheet('shock_3', 32, 32, 3), spark: sheet('spark_0', 8, 8, 8),
+  bolt: sheet('lightning', 32, 32, 5), spark: sheet('spark_0', 8, 8, 8),
   rock: sheet('rocks', 32, 32, 6), poison: sheet('poison_bubble', 16, 16, 3),
   wind: sheet('gust', 32, 32, 2), fist: sheet('punch_impact', 32, 32, 1),
   impact: sheet('impact', 32, 32, 1), ghost: sheet('shadow_ball', 32, 32, 1),
@@ -139,14 +140,14 @@ function request(r: Recipe): void {
 export function beam(r: Recipe, x1: number, y1: number, x2: number, y2: number): void {
   request(r);
   if (r.style === 'bolt') {
-    for (let i = 0; i < 3; i++) spawnAnim(r.sheet, x2 + (i - 1) * 24, y2 - 80, 0, 320,
-      3, 2, 1, 0, 0, 0, 18, false, i * 0.07, 0.25);
+    for (let i = 0; i < 5; i++) spawnAnim(r.sheet, x1 + (x2 - x1) * (i + 1) / 6, y1 + (y2 - y1) * (i + 1) / 6 - 32, 0, 160,
+      3, 2, 1, 0.2, 0, 0, 20, true, i * 0.04, 0.25, false, false, i > 0);
     spawnAnim(r.hit, x2, y2, 0, 0, 3, 5, 1, 0, 0, 0, 24, true, 0.15, 0.3);
     return;
   }
   const dx = x2 - x1, dy = y2 - y1, angle = Math.atan2(dy, dx);
   for (let i = 0; i < 8; i++) spawnAnim(r.sheet, x1, y1, dx / 0.28, dy / 0.28,
-    2, 3, 0.9, 0.3, angle, 0, 22, true, i * 0.035, 0.28);
+    2, 3, 0.9, 0.3, angle, 0, 22, true, i * 0.035, 0.28, false, false, i > 0);
 }
 export function burst(r: Recipe, x: number, y: number, big: boolean): void {
   request(r);
