@@ -17,7 +17,7 @@ import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
 import type { Theme } from '../src/game/bg';
-import { ROOM_BOSS, STAGE_GIMMICKS, BULLET_GIMMICKS, bulletHints } from '../src/game/data';
+import { ROOM_BOSS, STAGE_GIMMICKS, BULLET_GIMMICKS, bulletHints, fieldRoomReachable } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { BOX_STRIP, DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, MENU_CLOSE, MENU_QUIT, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, TEAM_PANEL, boxSlotRect, dexBuyRect, partnersStripAt, teamSlotRect, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_LOTS } from '../src/game/screens';
@@ -25,6 +25,7 @@ import { ultHintSeen } from '../src/game/meta';
 import { BALL_TIERS, DROP_CAP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDrop, rollReward } from '../src/game/loot';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
+import { installField2, stepField2, laserPlan, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
 
 let fails = 0;
@@ -475,6 +476,76 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
     ok(fixtures, `${theme} signature fixture fits every authored room`);
     ok(rngStable, `${theme} guaranteed fixtures consume no extra RNG draws`);
   }
+}
+
+// --- wind + laser barrier: Pidgeot gust strip, Magnemite Light Screen fence
+{
+  const def = (id: number) => speciesById(id)!;
+  let hurts = 0;
+  const fx: Field2Fx = { hurt: () => { hurts++; }, burst: () => {}, notice: () => {}, shake: () => {} };
+  const ball = (d: number, x: number, y: number, vx: number, vy: number): Field2Ball => ({ uid: d, def: def(d), x, y, vx, vy, r: 22, maxHp: 100, dead: false });
+  const run = (f: any, u: Field2Ball, steps: number, t0 = 0) => {
+    for (let i = 0; i < steps; i++) {
+      stepField2(f, u, 1 / 120, t0 + i / 120, fx);
+      u.x += u.vx / 120;
+      u.y += u.vy / 120;
+    }
+  };
+  const windy = (Object.keys(STAGE_GIMMICKS2) as Theme[]).filter((t) => STAGE_GIMMICKS2[t]!.kind === 'wind');
+  const lasered = (Object.keys(STAGE_GIMMICKS2) as Theme[]).filter((t) => STAGE_GIMMICKS2[t]!.kind === 'laser');
+  ok(windy.length > 0 && lasered.length > 0, 'wind and laser each skin at least one theme');
+  ok([0, 1, 2].every((i) => !installField2(ROOM_LAYOUTS[i], windy[0], arena, 1) && !installField2(ROOM_LAYOUTS[i], lasered[0], arena, 1)), 'gentle openers carry no wind or laser');
+
+  const wf: any = installField2(ROOM_LAYOUTS[5], windy[0], arena, 1);
+  const midY = (wf.wind.y0 + wf.wind.y1) / 2;
+  const gusted = ball(25, 270, midY, 0, 0);
+  run(wf, gusted, 60);
+  ok(Math.abs(gusted.vx - wf.wind.dir * WIND_ACCEL * 0.5) < 1e-6 && (gusted.x - 270) * wf.wind.dir > 60, `wind pushes the ball downwind deterministically (vx ${gusted.vx.toFixed(1)})`);
+  const bird = ball(18, 270, midY, 0, 0), floater = ball(92, 270, midY, 0, 0);
+  run(wf, bird, 60);
+  run(wf, floater, 60);
+  ok(bird.vx === 0 && floater.vx === 0, 'Flying types and Levitate ride through the wind');
+  const outside = ball(25, 270, wf.wind.y1 + 40, 0, 0);
+  run(wf, outside, 60);
+  ok(outside.vx === 0, 'wind only blows inside its strip');
+
+  let planned = 0, reach = true;
+  for (const grid of ROOM_LAYOUTS.slice(3)) {
+    const plan = laserPlan(grid);
+    if (!plan) continue;
+    planned++;
+    const walled = grid.map((line, r) => (r === plan.row ? line.slice(0, plan.col) + '2'.repeat(9 - 2 * plan.col) + line.slice(9 - plan.col) : line));
+    reach &&= grid[plan.row].slice(plan.col, 9 - plan.col) === '0'.repeat(9 - 2 * plan.col) && fieldRoomReachable(walled);
+  }
+  ok(planned >= 10 && reach, `laser fences sit on open floor and keep P→E and anchors reachable (${planned} rooms)`);
+
+  const room = ROOM_LAYOUTS.slice(3).find((g) => laserPlan(g))!;
+  const lf: any = installField2(room, lasered[0], arena, 1);
+  const bx = (lf.laser.a.x + lf.laser.b.x) / 2, by = lf.laser.a.y;
+  const shot = ball(4, bx, by + 40, 0, -600);
+  run(lf, shot, 20);
+  ok(shot.vy > 0 && shot.y > by && hurts === 1, `laser beam blocks and chips once (vy ${shot.vy}, hurts ${hurts})`);
+  const volt = ball(135, bx, by + 40, 0, -600), pika = ball(25, bx, by + 40, 0, -600);
+  run(lf, volt, 20);
+  run(lf, pika, 20);
+  ok(volt.vy === -600 && pika.vy === -600 && volt.y < by && hurts === 1, 'Electric and Volt Absorb pass the beam unharmed');
+  const post = lf.laser.a;
+  for (let k = 0; k < LASER_POST_HITS; k++) {
+    const hit = ball(4, post.x, post.y + 40, 0, -600);
+    run(lf, hit, 20, 1 + k);
+    ok(hit.vy > 0, `post hit ${k + 1} bounces the ball`);
+  }
+  ok(post.hp === 0 && lf.laser.down, 'two post hits drop the barrier');
+  const after = ball(4, bx, by + 40, 0, -600);
+  run(lf, after, 20, 5);
+  ok(after.vy === -600 && after.y < by, 'broken barrier no longer blocks');
+
+  const bb: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  bb.theme = lasered[0];
+  bb.swapCourt(room);
+  ok(!!bb.field2?.laser, 'battle installs the laser fence on a non-gentle court');
+  bb.swapCourt(ROOM_LAYOUTS[0]);
+  ok(bb.field2 === null, 'gentle court clears the field gimmick');
 }
 
 // --- bag items: pk_bag stock, constructor applies the run-start picks ------
@@ -5240,8 +5311,8 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const comboBest = recordClear(4, 'A', 11, 8);
   ok(!comboBest.rank && !comboBest.turns && comboBest.combo, 'only a strictly higher combo flags');
   ok(JSON.stringify(clearBests()['4']) === JSON.stringify({ rank: 0, turns: 9, combo: 8 }), 'each stage best keeps the best value for each metric');
-  const firstClear = recordClear(7, 'S', 5, 5);
-  ok(!firstClear.rank && !firstClear.turns && !firstClear.combo && !!clearBests()['7'], 'a first clear creates a record without a best flag');
+  const firstClear = recordClear(99, 'S', 5, 5);
+  ok(!firstClear.rank && !firstClear.turns && !firstClear.combo && !!clearBests()['99'], 'a first clear creates a record without a best flag');
 
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
   (b as any).spawnWave(0);

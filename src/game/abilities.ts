@@ -225,6 +225,10 @@ export function abilityHazard(b: AbilityBattle, u: AbilityUnit, kind: HazardKind
   announce(b, u, notice);
   return true;
 }
+// field gimmicks outside HazardKind (gimmicks2.ts) reuse the once-per-battle callout
+export function abilityNotice(b: AbilityBattle, u: AbilityUnit, notice: Notice) {
+  announce(b, u, notice);
+}
 export function abilityWall(b: AbilityBattle, u: AbilityUnit, type: PokeType, notice: Notice): boolean {
   const heal = wallHeal(u.def.ability, type, u.hp, u.maxHp);
   if (heal === undefined) return false;
