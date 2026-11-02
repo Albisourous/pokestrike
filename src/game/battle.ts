@@ -22,6 +22,7 @@ import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
 import { STAGE_GIMMICKS, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
+import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 
 import {
   playerHp,
@@ -1244,6 +1245,7 @@ export class Battle {
   }
 
   private spawnWave(i: number, node?: MapNode) {
+    clearAnims();
     this.waveIndex = i;
     // trainer stops field a mono-type squad — the node's ttype picks it;
     // rolled rows still don't exist until the stop is chosen
@@ -2256,6 +2258,8 @@ export class Battle {
     for (const s of this.scars) s.t += dt;
     cull(this.scars, (s) => s.t < s.life);
     for (const bm of this.beams) bm.t -= dt;
+    stepAnims(dt);
+    { const fx = drainAnimRequests(); if (fx.duration) this.screenFlash(fx.color, fx.duration); }
     cull(this.beams, (bm) => bm.t > 0);
     for (const f of this.fx) {
       f.t -= dt;
@@ -3953,9 +3957,12 @@ export class Battle {
     if (!foes.length) return false;
     const far = farthest(foes, p);
     const fattest = foes.slice().sort((a, b) => b.maxHp - a.maxHp)[0];
+    const damage = bumpDmg;
+    bumpDmg = (e, power) => { animBurst(recipeFor(src.def.type, name), e.x, e.y, false); return damage(e, power); };
     // a piercing beam from the caster THROUGH the anchor enemy to the far
     // wall — every enemy within `halfW` of the ray eats it
     const lineBlast = (to: Unit, color: string, halfW: number, power: number, w: number, onHit?: (e: Unit) => void) => {
+      animBeam(recipeFor(src.def.type, name), p.x, p.y, to.x, to.y);
       const d = norm({ x: to.x - p.x, y: to.y - p.y });
       halfW *= 1.4; // hit corridor tracks the fatter drawn beam
       this.beams.push({ x1: p.x, y1: p.y, x2: p.x + d.x * 1400, y2: p.y + d.y * 1400, t: 0.6, life: 0.6, color, w });
@@ -4139,6 +4146,7 @@ export class Battle {
       }
       case 'THUNDERBOLT': { // the mascot bolt — one fat arc on the far
         // foe, then the discharge hops to the two nearest leftovers
+        animBeam(recipeFor(src.def.type, name), p.x, p.y, far.x, far.y);
         this.beams.push({ x1: p.x, y1: p.y, x2: far.x, y2: far.y, t: 0.32, life: 0.32, color: '#f8d030', w: 7 });
         this.impact(far.x, far.y, '#f8d030', 1.9);
         this.hurt(far, bumpDmg(far, 2.2), '#f8e88a');
@@ -4439,6 +4447,7 @@ export class Battle {
     });
     this.hitStop = Math.max(this.hitStop, 0.26);
     const color = TYPE_COLOR[src.def.type];
+    animBurst(recipeFor(src.def.type, moveOf(src.def.id, src.def.type)), p.x, p.y, false);
     this.impact(p.x, p.y, color, 1.6);
     this.burst(p.x, p.y, color, 22, 540);
     this.flavor(p.x, p.y, src.def.type);
@@ -4752,6 +4761,8 @@ export class Battle {
   // any teammate and ITS signature detonates across the whole court, one
   // staggered beam per enemy. Z-move energy: a flash, then everything pays.
   private fireUlt(u: Unit) {
+    const anim = recipeFor(u.def.type, moveOf(u.def.id, u.def.type));
+    animBurst(anim, u.x, u.y, true);
     this.ultIn = ULT_SHOTS;
     this.ultFill = 0;
     this.ultHint = false;
@@ -4799,6 +4810,7 @@ export class Battle {
           this.flavor(e.x, e.y, 'fire'); // embers rise off each marked foe
           this.later(0.2 + i * 0.09, () => {
             if (e.dead) return;
+            animRain(anim, e.x, e.y);
             this.scar(e.x, e.y, 22);
             e.dotTicks = Math.min(e.dotTicks + 2, 6);
             e.dotDmg = Math.max(e.dotDmg, Math.ceil(e.maxHp * 0.05));
@@ -4809,6 +4821,7 @@ export class Battle {
       case 'water': {
         // TIDAL WAVE — the front sweeps in off the left wall and shoves every
         // foe into a pile on the right; the next shot cashes the pileup
+        animRing(anim, u.x, u.y, a.w * 0.6);
         this.waves.push({
           x: a.x - 30, y: a.y + a.h / 2, r: 0, maxR: a.w + 160, t: 0.7, life: 0.7,
           color, hits: new Set(),
@@ -4829,6 +4842,7 @@ export class Battle {
         targets.forEach((e, i) => {
           this.later(0.08 + i * 0.08, () => {
             if (e.dead) return;
+            animBeam(anim, u.x, u.y, e.x, e.y);
             this.beams.push({ x1: e.x, y1: e.y - e.r - 10, x2: e.x, y2: Math.min(e.y + e.r + 30, a.y + a.h - 4), t: 0.45, life: 0.45, color, w: 7 });
             this.impact(e.x, e.y, color, 1.6);
             this.flavor(e.x, e.y, 'grass');
@@ -4858,6 +4872,7 @@ export class Battle {
           pw = Math.max(pw * 0.8, 0.4); // the far end of a pack still eats a real hit
           this.later(0.08 + i * 0.1, () => {
             if (e.dead) return;
+            animBeam(anim, u.x, u.y, e.x, e.y);
             this.beams.push({ x1: a0.x, y1: a0.y, x2: e.x, y2: e.y, t: 0.3, life: 0.3, color, w: 3 });
             this.impact(e.x, e.y, color, 1.9);
             this.flavor(e.x, e.y, 'electric');
@@ -4892,6 +4907,7 @@ export class Battle {
           });
         }
         this.later(0.62, () => {
+          for (const e of targets) if (!e.dead) animBeam(anim, u.x, u.y, e.x, e.y);
           this.impact(cx, cy, color, 3);
           this.burst(cx, cy, color, 26, 620, 1.4);
           this.screenFlash(color, 0.22);
@@ -4909,6 +4925,7 @@ export class Battle {
         targets.forEach((e, i) => {
           this.orbs.push({ x: e.x + (i % 2 ? 26 : -26), y: a.y - 40, target: e, dmg: dmgOf(e, 1.1), t: 3, wob: i * 1.3, color });
           this.later(0.55 + i * 0.1, () => {
+            animRain(anim, e.x, e.y);
             this.scar(e.x, e.y, 26);
             this.screenFlash(color, 0.12);
             this.flavor(e.x, e.y, 'rock');
@@ -4938,6 +4955,7 @@ export class Battle {
         venom(0, 0.5);
         venom(0.3, 0.35);
         for (const e of targets) this.flavor(e.x, e.y, 'poison');
+        for (const e of targets) animBeam(anim, u.x, u.y, e.x, e.y);
         break;
       }
       case 'flying': {
@@ -4951,6 +4969,7 @@ export class Battle {
           .forEach((e, i) => {
             this.later(0.08 + i * 0.11, () => {
               if (e.dead) return;
+              animBeam(anim, u.x, u.y, e.x, e.y);
               this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.26, life: 0.26, color, w: 5 });
               this.impact(e.x, e.y, '#e8f6ff', 1.6);
               this.flavor(e.x, e.y, 'flying');
@@ -4968,6 +4987,7 @@ export class Battle {
         order.forEach((e, i) => {
           this.later(0.1 + i * 0.3, () => {
             if (e.dead) return;
+            animBeam(anim, u.x, u.y, e.x, e.y);
             const last = i === order.length - 1;
             this.dashes.push({ u, e, done: false, dmg: dmgOf(e, last ? 1.9 : 0.7) });
             if (last) this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'FINISHER!', t: 1, color: '#f08030', big: true });
@@ -4981,6 +5001,7 @@ export class Battle {
         this.screenFlash('#201830', 0.3);
         targets.forEach((e, i) => {
           // two wisps per foe — the pack closing in is the scare
+          animBeam(anim, u.x, u.y, e.x, e.y);
           this.orbs.push({ x: u.x, y: u.y, target: e, dmg: dmgOf(e, e.hp > e.maxHp * 0.5 ? 1.4 : 0.7), t: 3, wob: i * 2.6 + 1.3, color });
           this.orbs.push({ x: u.x, y: u.y, target: e, dmg: Math.max(1, Math.round(dmgOf(e, 0.3))), t: 3, wob: i * 2.6 + 2.9, color: '#705898' });
           this.flavor(e.x, e.y, 'ghost');
@@ -5004,6 +5025,7 @@ export class Battle {
         // the landing quake — GIGA ROMP always does something, even if the
         // follow-up launch whiffs: every foe eats the stomp and staggers
         this.later(0.35, () => {
+          for (const e of targets) if (!e.dead) animBeam(anim, u.x, u.y, e.x, e.y);
           this.addShake(18);
           this.addPunch(0.15);
           for (const e of this.enemies.slice()) { // hurt can summon adds — don't hit them in this pass
@@ -5021,6 +5043,7 @@ export class Battle {
         targets.forEach((e, i) => {
           this.later(0.1 + i * 0.09, () => {
             if (e.dead) return;
+            animBeam(anim, u.x, u.y, e.x, e.y);
             this.beams.push({ x1: u.x, y1: u.y, x2: e.x, y2: e.y, t: 0.34, life: 0.34, color, w: 2 });
             this.impact(e.x, e.y, color, 1.9);
             this.screenFlash(color, 0.06);
@@ -6506,6 +6529,7 @@ export class Battle {
 
   private fireMove(e: Unit, c: Unit['clocks'][number]) {
     if (e.dead) return;
+    const anim = recipeFor(e.def.type, c.move);
     const color = TYPE_COLOR[e.def.type];
     this.pushText({ x: e.x, y: e.y - e.r - 20, text: c.move, t: 1, color, big: false });
     const pow = e.boss ? BOSS_MOVE_POW : FOE_MOVE_POW;
@@ -6524,8 +6548,12 @@ export class Battle {
       const dir = norm({ x: target.x - e.x, y: target.y - e.y });
       const x2 = e.x + dir.x * 1400;
       const y2 = e.y + dir.y * 1400;
-      this.beams.push({ x1: e.x, y1: e.y, x2, y2, t: 0.5, life: 0.5, color, w: 1.6 });
-      this.beams.push({ x1: e.x, y1: e.y, x2, y2, t: 0.35, life: 0.35, color: '#fff', w: 0.6 });
+      const a = this.arena;
+      const reach = Math.min(dir.x > 0 ? (a.x + a.w - e.x) / dir.x : dir.x < 0 ? (a.x - e.x) / dir.x : Infinity,
+        dir.y > 0 ? (a.y + a.h - e.y) / dir.y : dir.y < 0 ? (a.y - e.y) / dir.y : Infinity);
+      animBeam(anim, e.x, e.y, e.x + dir.x * reach, e.y + dir.y * reach);
+      this.beams.push({ x1: e.x, y1: e.y, x2, y2, t: 0.5, life: 0.5, color, w: 0.6 });
+      this.beams.push({ x1: e.x, y1: e.y, x2, y2, t: 0.35, life: 0.35, color: '#fff', w: 0.25 });
       for (const p of this.players) {
         if (p.dead) continue;
         const dx = p.x - e.x;
@@ -6540,6 +6568,8 @@ export class Battle {
       sfx('beam');
     } else if (c.kind === 'cross') {
       const a = this.arena;
+      animBeam(anim, a.x, e.y, a.x + a.w, e.y);
+      animBeam(anim, e.x, a.y, e.x, a.y + a.h);
       this.beams.push({ x1: a.x, y1: e.y, x2: a.x + a.w, y2: e.y, t: 0.5, life: 0.5, color, w: 1.6 });
       this.beams.push({ x1: e.x, y1: a.y, x2: e.x, y2: a.y + a.h, t: 0.5, life: 0.5, color, w: 1.6 });
       for (const p of this.players) {
@@ -6550,6 +6580,7 @@ export class Battle {
       this.hitStop = Math.max(this.hitStop, 0.12);
       sfx('beam');
     } else if (c.kind === 'quake') {
+      animRing(anim, e.x, e.y, QUAKE_R);
       this.waves.push({
         x: e.x, y: e.y, r: 0, maxR: QUAKE_R, t: 0.5, life: 0.5, color,
         hits: new Set(), hostile: true, onHit: (p) => hit(p),
@@ -6564,6 +6595,7 @@ export class Battle {
       sfx('boom');
       this.players.filter((p) => !p.dead).forEach((p, i) => this.later(i * 0.12, () => {
         if (p.dead) return;
+        animRain(anim, p.x, p.y);
         this.burst(p.x, p.y, color, 14, 380, 1);
         this.waves.push({ x: p.x, y: p.y, r: 0, maxR: 46, t: 0.3, life: 0.3, color, hits: new Set() });
         this.scar(p.x, p.y, 18);
@@ -7801,6 +7833,7 @@ export class Battle {
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    drawAnims(ctx);
 
     // particle fx — additive so stacked sparks bloom into real glow
     if (this.fx.length) {
@@ -9466,6 +9499,7 @@ export class Battle {
           ctx.moveTo(e.x, e.y);
           ctx.lineTo(targets[0].x, targets[0].y);
           ctx.stroke();
+          ctx.globalAlpha = 1; drawTell(ctx, e.def.type, e.x, e.y, targets[0].x, targets[0].y, this.time);
         }
         break;
       case 150: // hunting orbs — marks on the mons they'll chase
@@ -9476,6 +9510,8 @@ export class Battle {
           ctx.arc(p.x, p.y, p.r + 8, 0, Math.PI * 2);
           ctx.stroke();
         }
+        ctx.globalAlpha = 1;
+        for (let i = 0; i < Math.min(targets.length, e.def.id === 94 ? 3 : 2); i++) drawTellRing(ctx, e.def.type, targets[i].x, targets[i].y, targets[i].r + 8, this.time);
         break;
       default: { // ring/blast attacks — show the radius they'll sweep
         ctx.lineWidth = 3;
@@ -9483,6 +9519,7 @@ export class Battle {
         ctx.beginPath();
         ctx.arc(e.x, e.y, R, 0, Math.PI * 2);
         ctx.stroke();
+        ctx.globalAlpha = 1; drawTellRing(ctx, e.def.type, e.x, e.y, R, this.time);
       }
     }
     ctx.restore();
@@ -9503,6 +9540,7 @@ export class Battle {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
+    drawTell(ctx, e.def.type, e.x, e.y, t.x, t.y, this.time);
   }
 
   private drawUnit(ctx: CanvasRenderingContext2D, u: Unit) {
