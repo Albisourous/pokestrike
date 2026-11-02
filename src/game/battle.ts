@@ -2380,7 +2380,7 @@ export class Battle {
       }
     }
     if (gold) {
-      this.pushText({ x: u.x, y: u.y - u.r - 14, text: this.streak > 1 ? `PERFECT ×${this.streak}!` : 'PERFECT!', t: 1, color: '#ffd84d', big: true });
+      this.pushText({ x: u.x, y: u.y - u.r - 14, text: (this.streak > 1 ? `PERFECT ×${this.streak}!` : 'PERFECT!') + (this.shotGold ? ' +20%' : ''), t: 1, color: '#ffd84d', big: true });
       this.screenFlash('#ffd84d', 0.2);
       // gold shockwave + launch streak sell the full-power release
       this.waves.push({ x: u.x, y: u.y, r: 0, maxR: 130, t: 0.4, life: 0.4, color: '#ffd84d', hits: new Set() });
@@ -6744,6 +6744,9 @@ export class Battle {
         }
       } else if (e.timer === 1) {
         warned = true; // it swings after this shot — one soft warning tick
+        // the first live 1-clock a run: name the counter before it bites
+        if (!e.dead && this.telop.once('clock1'))
+          this.telop.push({ kind: 'foe', title: 'IT ATTACKS NEXT', sub: 'ITS NUMBER TICKS WHEN YOU SHOOT · DOWN IT BEFORE 0', mon: e.def.id });
       }
     }
     if (warned || bigWarned) sfx('warn');
@@ -8643,6 +8646,13 @@ export class Battle {
       }
       ctx.strokeText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y + 140);
       ctx.fillText(this.comboLabel, this.arena.x + this.arena.w / 2, this.arena.y + 140);
+      // the chain's payoff reads under it — +10% contact damage a link,
+      // same ramp the damage formula applies (metronome/electric included)
+      ctx.font = font(10);
+      ctx.lineWidth = 3;
+      const pay = `+${Math.round(this.shotCombo * (0.1 + this.comboDmg + this.t('electric') * 0.04) * 100)}% DMG`;
+      ctx.strokeText(pay, this.arena.x + this.arena.w / 2, this.arena.y + 160);
+      ctx.fillText(pay, this.arena.x + this.arena.w / 2, this.arena.y + 160);
     }
 
     // screen flashes render unshaken, on top — the accessibility toggle
@@ -10857,6 +10867,32 @@ export class Battle {
     // ruler notches — tenths along the track's bottom lip
     ctx.fillStyle = '#ffffff26';
     for (let i = 1; i < 10; i++) ctx.fillRect(bx + bw * i * 0.1, by + bh - 3, 1, 3);
+    // the hot rail — a release past this line launches over 450 u/s, the
+    // momentum bonus contact damage pays (spdMul). Thin strip on the
+    // track's top edge; the needle in it lights the tag. A gold release
+    // launches at frac 1, so it's hot even below the line.
+    {
+      const u0 = this.active;
+      const full =
+        BASE_SHOT_SPEED * POWER * launchMult(u0.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u0.launch * this.swiftMult(u0);
+      const hotAt = (450 / full - 0.4) / 0.6;
+      if (hotAt < 1) {
+        const inHot = lit || frac >= Math.max(hotAt, 0);
+        ctx.save();
+        ctx.globalAlpha = inHot ? 0.85 : 0.4;
+        ctx.fillStyle = '#ff8a5c';
+        ctx.fillRect(bx + bw * Math.max(hotAt, 0), by - 2, bw * (1 - Math.max(hotAt, 0)), 2);
+        ctx.globalAlpha = 1;
+        ctx.font = font(8);
+        ctx.textAlign = 'right';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 3;
+        ctx.strokeText('HOT', bx + bw + 1, by - 5);
+        ctx.fillStyle = inHot ? '#ff8a5c' : '#8a90a8';
+        ctx.fillText('HOT', bx + bw + 1, by - 5);
+        ctx.restore();
+      }
+    }
     // the gold zone — bracketed band, pulsing while the needle sits inside
     const pulse = lit ? 0.9 + 0.1 * Math.sin(this.time * 18) : 1;
     ctx.globalAlpha = (lit ? 0.34 : 0.2) * pulse;
