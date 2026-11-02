@@ -28,6 +28,7 @@ leaders to win the run.
 - **Monster Strike shot physics** · time-boxed speed decay and the hit-damage floor, ported from the 3DS game's own code. Bank shots, ally bumps, combo chains.
 - **Attack clocks** · every foe shows a turn countdown over its head and fires a typed move when it hits zero. Kill it or move it.
 - **Boss bars** · gym bosses fight across 3 HP bars, each a fresh authored court with new adds. The weak spot moves every bar, and bar 3 is RAGE: faster clocks, Reflect guards.
+- **Mid-boss** · from stop 4, a wild stop's last battle evolves its strongest foe one stage: 1.6× size, silver HP bar, one fixed weak point, a 3-turn signature and a guaranteed Great Ball or better.
 - **Stop structure** · wild stops run 2 to 4 battles with a turn par; finish under it for SPEED CLEAR.
 - **Stage gimmicks** · damage walls that fade in and cycle by turn, gravity wells, warp pairs, boost panels, barriers. The right **ability** counters each one, and the draft hints which mons do. Unevolved carriers are **gauge mons**: their counter only switches on for a gold-band release (quick-claw icon), and evolving makes it permanent.
 - **Court gimmicks** · Whirlwind strips push the ball sideways, Magnemite Light Screen fences block it until a post breaks, and Ice Path patches pause the shot clock so banks glide farther. Flying, Electric and ice abilities ride through; Fire melts the ice.

@@ -34,6 +34,7 @@ import { EVO_FLASH, EVO_T, evoActive, evoScene, skipEvo, startEvo, tickEvo } fro
 import { drawRunCard, shareLink, type RunCard } from '../src/game/share';
 import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
 import { SECRET_IDS, rollSecret, maybeSecret, enterSecret, placeSecret, closeSecret } from '../src/game/secret';
+import { evolveOnce, midBossPick, midBossStop } from '../src/game/midboss';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -5976,6 +5977,127 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   ls.setItem('pk_secrets', JSON.stringify({ ids: ['bad', 144, 144] }));
   ok(secretIds().length === 1 && secretIds()[0] === 144 && !markSecret(144), 'corrupt secret persistence filters duplicates and invalid ids');
   ls.removeItem('pk_secrets');
+}
+
+// --- mid-boss ---
+{
+  const eligible = { stop: 3, battle: 2, battles: 2, gym: false, trainer: false, event: false };
+  ok(midBossStop(eligible), 'stop 4 final battle qualifies for a mid-boss');
+  ok(!midBossStop({ ...eligible, stop: 2 }), 'stops before stop 4 stay regular');
+  ok(!midBossStop({ ...eligible, battle: 1 }), 'only the last battle qualifies');
+  ok(!midBossStop({ ...eligible, battle: 1, battles: 1 }), 'single-battle stops stay regular');
+  ok(!midBossStop({ ...eligible, gym: true }), 'gym stops stay regular');
+  ok(!midBossStop({ ...eligible, trainer: true }), 'trainer and elite stops stay regular');
+  ok(!midBossStop({ ...eligible, event: true }), '?-event ambushes stay regular');
+
+  const bulbasaur = speciesById(1)!;
+  const venusaur = speciesById(3)!;
+  ok(evolveOnce(bulbasaur).id === 2 && evolveOnce(venusaur).id === 3, 'mid-boss evolves once and leaves final forms unchanged');
+  const candidates = [
+    { def: bulbasaur, boss: false, dead: false },
+    { def: venusaur, boss: false, dead: false },
+    { def: speciesById(6)!, boss: true, dead: false },
+    { def: speciesById(9)!, boss: false, minion: true, dead: false },
+    { def: speciesById(150)!, boss: false, dead: true },
+  ];
+  ok(midBossPick(candidates) === 1 && midBossPick(candidates.slice(2)) === -1, 'mid-boss pick chooses strongest eligible foe and skips boss, minion, dead');
+  ok(midBossPick([{ def: bulbasaur, boss: false, dead: false }, { def: bulbasaur, boss: false, dead: false }]) === 0, 'mid-boss pick keeps earliest index on ties');
+
+  const b: any = new Battle(arena, team(), makeStage(42, 'T'), mulberry32(42));
+  b.spawnWave(3);
+  ok(b.battle === 1 && b.battles > 1 && !b.waveHadGym && !b.inTrainer && !b.inEvent && !b.inRival, 'wild stop state persists into its battles');
+  ok(!b.enemies.some((e: any) => e.mid), 'battle 1 has no mid-boss');
+  const applyMid = b.makeMidBoss;
+  let before: { def: any; r: number; maxHp: number; weakA: number } | undefined;
+  let flagsAtMid: boolean[] | undefined;
+  if (applyMid) b.makeMidBoss = function () {
+    flagsAtMid = [this.waveHadGym, this.inTrainer, this.inEvent];
+    const i = midBossPick(this.enemies);
+    if (i >= 0) {
+      const e = this.enemies[i];
+      before = { def: e.def, r: e.r, maxHp: e.maxHp, weakA: e.weakA };
+    }
+    applyMid.call(this);
+  };
+  while (b.battle < b.battles) {
+    b.phase = 'aim';
+    b.enemies.forEach((e: any) => { e.dead = true; });
+    b.enemies.length = 0;
+    b.waveCleared();
+  }
+  ok(!!flagsAtMid && flagsAtMid.every((flag) => !flag), 'wild-stop exclusion flags persist through the final battle transition');
+  const mid = b.enemies.find((e: any) => e.mid);
+  const count = b.enemies.filter((e: any) => e.mid).length;
+  const pickedBefore = before as { def: any; r: number; maxHp: number; weakA: number } | undefined;
+  ok(
+    count === 1 && !!mid && !!pickedBefore && mid.def.id === evolveOnce(pickedBefore.def).id
+      && mid.r === pickedBefore.r * 1.6 && mid.maxHp === Math.round(pickedBefore.maxHp * 3)
+      && mid.hp === mid.maxHp && mid.bigT === 3 && !mid.boss && mid.weakA === pickedBefore.weakA,
+    'final wild battle evolves strongest foe, scales it, and keeps fixed regular weak point',
+  );
+  if (mid) {
+    b.critCh = 0;
+    b.dmgMult = 1;
+    b.connect.mult = () => 1;
+    mid.hp = mid.maxHp;
+    b.hurt(mid, Math.floor(mid.maxHp * 0.45), '#fff');
+    ok(!b.enemies.some((e: any) => e.boss) && mid.sumStage === 0 && !b.barBreak && !mid.dead, 'mid-boss big hit stays on one regular HP bar');
+    mid.sash = false;
+    b.hurt(mid, mid.hp + 1, '#fff');
+    ok(mid.dead && b.treasure.field.some((drop: any) => drop.tier !== 'poke-ball'), 'mid-boss KO guarantees Great Ball or better');
+  } else {
+    ok(false, 'mid-boss big hit stays on one regular HP bar');
+    ok(false, 'mid-boss KO guarantees Great Ball or better');
+  }
+
+  const earlier: any = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(7));
+  earlier.spawnWave(2);
+  earlier.waveIndex = 2;
+  earlier.battle = earlier.battles = 2;
+  earlier.waveHadGym = false;
+  earlier.inTrainer = false;
+  earlier.inEvent = false;
+  earlier.makeMidBoss?.();
+  ok(!earlier.enemies.some((e: any) => e.mid), 'wave index 2 stays regular');
+  const gym: any = new Battle(arena, team(), makeStage(99, 'T'), mulberry32(99));
+  gym.spawnWave(3);
+  gym.battle = gym.battles = 2;
+  gym.waveHadGym = true;
+  gym.inTrainer = false;
+  gym.inEvent = false;
+  gym.makeMidBoss?.();
+  ok(!gym.enemies.some((e: any) => e.mid), 'gym state excludes mid-boss');
+
+  const floor = dropOdds({ boss: true, weak: false, finisher: false, speed: false, combo: 0 });
+  ok(floor.chance === 1 && floor.weights[0] === 0, 'boss-quality drop floor guarantees Great Ball or better');
+  let stable = true;
+  for (const seed of [42, 7, 99]) {
+    const spawn = (disable: boolean) => {
+      const rng = mulberry32(seed);
+      const bb: any = new Battle(arena, team(), makeStage(seed, 'T'), rng);
+      if (disable) bb.makeMidBoss = () => {};
+      bb.spawnWave(3);
+      bb.battles = 2;
+      bb.waveHadGym = false;
+      bb.inTrainer = false;
+      bb.inEvent = false;
+      bb.inRival = false;
+      bb.phase = 'aim';
+      bb.enemies.forEach((e: any) => { e.dead = true; });
+      bb.enemies.length = 0;
+      bb.waveCleared();
+      const promoted = bb.enemies.findIndex((e: any) => e.mid);
+      const omitted = promoted >= 0 ? promoted : midBossPick(bb.enemies);
+      return {
+        foes: bb.enemies.filter((_: any, i: number) => i !== omitted).map((e: any) => [e.def.id, e.x, e.y]),
+        next: rng(),
+        mids: bb.enemies.filter((e: any) => e.mid).length,
+      };
+    };
+    const live = spawn(false), stubbed = spawn(true);
+    if (live.mids !== 1 || live.next !== stubbed.next || JSON.stringify(live.foes) !== JSON.stringify(stubbed.foes)) stable = false;
+  }
+  ok(stable, 'mid-boss promotion keeps seeded non-mid spawns and run rng unchanged');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
