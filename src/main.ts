@@ -20,6 +20,7 @@ import {
   drawResult,
   drawHud,
   drawReward,
+  drawClearCard,
   draftCardRect,
   perkCardRect,
   evoCardRect,
@@ -1403,6 +1404,7 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
     }
+    if (battle?.phase === 'reward' && battle.clearCard) { battle.clearCard = null; rewardT0 = t; sfx('ui'); return; }
     // mid-run chips — the ? half of this gate moved up to helpChipUp() so the
     // dealt boards share it; the mute chip stays a between-fights control.
     // Neither answers under a modal (event card, evo pick) — that layer owns input
@@ -1994,7 +1996,7 @@ function update(dt: number) {
     wasReward = itemStep;
     // reward sequencing: the roster opens over the item board once — swap
     // first, then the pick. An evo card still outranks it on the frame.
-    if (battle.phase === 'reward' && battle.wantMenu && !menuOpen && !battle.evoChoice && !battle.mapModal) {
+    if (battle.phase === 'reward' && battle.wantMenu && !menuOpen && !battle.evoChoice && !battle.mapModal && !battle.clearCard) {
       battle.wantMenu = false;
       menuOpen = true;
       battle.boxSel = battle.teamSel = -1;
@@ -2132,6 +2134,8 @@ function update(dt: number) {
         bondDust: bond.dust, // bond level-ups — the report's dust row
         bondUps: bond.ups.length ? bond.ups : undefined, // who leveled — tagged on the squad attachment
         rookie: rookieCheck(), // run/stage/win steps clear when the run banks
+        bestCombo: battle.maxCombo,
+        rankStreak: battle.bestRankStreak,
       };
       // run-level trophies — battle awards its own (perfect, pinball, catches)
       const trophy = (id: string) => {
@@ -2363,6 +2367,7 @@ function render() {
             battle.phase === 'reward', // the reward break seats swaps first
           );
         }
+        if (battle.phase === 'reward' && battle.clearCard) drawClearCard(ctx, battle.clearCard, t - (battle.clearCard.t0 ??= t));
       }
       break;
     case 'result':
