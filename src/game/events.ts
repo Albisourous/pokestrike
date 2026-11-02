@@ -3,7 +3,7 @@
 // ambushes (alpha, thief) swap the row's wave for a scripted one that
 // still pays normal battle rewards.
 import type { Battle } from './battle';
-import { pickWild } from './data';
+import { INVADER_IDS, PULLABLE, pickWild, tierOf } from './data';
 import type { SpeciesDef, WaveSpawn } from './data';
 import { speciesById } from './data';
 import { rollPerks } from './perks';
@@ -77,6 +77,8 @@ const nextGym = (b: Battle) => {
   const row = nodes[b.mapNode]?.row ?? -1;
   return nodes.find((n) => n.kind === 'gym' && n.row > row);
 };
+
+const row = (b: Battle) => b.regionMap.nodes[b.mapNode]?.row ?? 0;
 
 const EVENTS: GameEvent[] = [
   {
@@ -603,7 +605,180 @@ const EVENTS: GameEvent[] = [
       },
     }),
   },
+  {
+    w: 2,
+    skip: (b) => row(b) < 1,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A BERRY TREE SAGS WITH FRUIT · PICK ONE.',
+        art: { item: 'sitrus-berry' },
+        options: [
+          {
+            label: 'ORAN · TEAM +25% HP',
+            icon: 'oran-berry',
+            run: (bb) => ({
+              note: healAll(bb, 0.25) ? 'THE TEAM ATE ORAN BERRIES · +25% HP.' : 'THE TEAM WAS ALREADY AT FULL HP.',
+              skip: true,
+            }),
+          },
+          {
+            label: 'SITRUS · WEAKEST TO FULL',
+            icon: 'sitrus-berry',
+            run: (bb) => {
+              const p = bb.players.filter((x) => !x.dead).sort((a, z) => a.hp / a.maxHp - z.hp / z.maxHp)[0];
+              if (!p || p.hp === p.maxHp) return { note: 'THE TEAM WAS ALREADY AT FULL HP.', skip: true };
+              p.hp = p.maxHp;
+              return { note: `${p.def.name.toUpperCase()} ATE A SITRUS BERRY · FULL HP!`, skip: true };
+            },
+          },
+          {
+            label: 'CHESTO · ULT +3',
+            icon: 'chesto-berry',
+            run: (bb) => {
+              bb.ultIn = Math.max(0, bb.ultIn - 3);
+              return { note: 'A CHESTO BERRY SHARPENED YOUR NEXT SHOT · ULT +3.', skip: true };
+            },
+          },
+        ],
+      },
+    }),
+  },
+  {
+    w: 2,
+    skip: (b) => row(b) < 1 || !b.players.some((p) => !p.dead),
+    run: (b) => ({
+      note: '',
+      choices: {
+        prompt: 'A MOVE TUTOR TEACHES ONE MON · ULT +4, STUDENT PAYS 30% HP.',
+        art: { npc: 'expert_f_down_0' },
+        options: [
+          ...b.players
+            .map((p, i) => ({ p, i }))
+            .filter(({ p }) => !p.dead)
+            .sort((a, z) => z.p.lvl - a.p.lvl)
+            .slice(0, 3)
+            .map(({ p, i }) => ({
+              label: `${p.def.name.toUpperCase()} · ULT +4 · -30% HP`,
+              run: (bb: Battle) => {
+                const student = bb.players[i];
+                student.hp = Math.max(1, student.hp - Math.round(student.maxHp * 0.3));
+                bb.ultIn = Math.max(0, bb.ultIn - 4);
+                return { note: `${student.def.name.toUpperCase()} LEARNED A NEW MOVE · ULT +4!`, skip: true };
+              },
+            })),
+          { label: 'PASS', run: () => ({ note: 'THE TUTOR WAVED YOU ON.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    w: 2,
+    skip: (b) =>
+      row(b) < 2 || row(b) > 6 || !!b.daycare || !b.box.length ||
+      b.players.filter((p) => !p.dead).length < 2,
+    run: (b) => ({
+      note: '',
+      choices: {
+        prompt: 'THE DAY CARE WILL RAISE ONE MON · BACK IN 2 STOPS, +2 LV.',
+        art: { npc: 'mom_down_0' },
+        options: [
+          ...b.players
+            .map((p, i) => ({ p, i }))
+            .filter(({ p }) => !p.dead)
+            .slice(0, 3)
+            .map(({ p, i }) => ({
+              label: `LEAVE ${p.def.name.toUpperCase()}`,
+              run: (bb: Battle) => {
+                const bi = bb.boxLvl.indexOf(Math.max(...bb.boxLvl));
+                const name = bb.players[i].def.name.toUpperCase();
+                bb.swapFromBox(bi, i);
+                bb.daycare = {
+                  def: bb.box.pop()!,
+                  hp: bb.boxHp.pop()!,
+                  lvl: bb.boxLvl.pop()!,
+                  back: row(bb) + 2,
+                };
+                return { note: `${name} WENT TO DAY CARE · BACK IN 2 STOPS.`, skip: true };
+              },
+            })),
+          { label: 'KEEP THE TEAM', run: () => ({ note: 'YOU KEPT THE TEAM TOGETHER.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    w: 2,
+    skip: (b) => row(b) < 2 || !b.players.some((p) => !p.dead),
+    run: (b) => ({
+      note: '',
+      choices: {
+        prompt: 'A LOST TRAINER WANTS A TRADE · ANY MON FOR ONE OF ITS TIER.',
+        art: { npc: 'youngster_down_0' },
+        options: [
+          ...b.players
+            .map((p, i) => ({ p, i }))
+            .filter(({ p }) => !p.dead)
+            .slice(0, 3)
+            .map(({ p, i }) => ({
+              label: `TRADE ${p.def.name.toUpperCase()}`,
+              run: (bb: Battle) => {
+                const traded = bb.players[i];
+                const pool = PULLABLE.filter(
+                  (d) => tierOf(d) === tierOf(traded.def) && d.id !== traded.def.id && !INVADER_IDS.has(d.id),
+                );
+                if (!pool.length) return { note: 'THE TRAINER HAD NOTHING TO TRADE.', skip: true };
+                const def = pool[Math.floor(bb.roll() * pool.length)];
+                bb.applyDef(traded, def, traded.lvl, traded.hp / traded.maxHp);
+                recordCapture([def.id]);
+                return { note: `${traded.def.name.toUpperCase()} CAME BACK FROM THE TRADE!`, art: { mon: def.id }, skip: true };
+              },
+            })),
+          { label: 'KEEP YOUR TEAM', run: () => ({ note: 'YOU KEPT YOUR TEAM TOGETHER.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
+    w: 2,
+    skip: (b) => row(b) < 3,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'THE TRICK MASTER HANDS YOU THE PRIZE · NOW BEAT HIS HOUSE.',
+        art: { npc: 'gentleman_down_0' },
+        options: [
+          {
+            label: 'TAKE IT · FIGHT THE HOUSE',
+            run: (bb) => {
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan, 1)[0];
+              if (p) bb.grantPerk(p);
+              const boss = pickWild(bb.roll, bb.depth + 2, true);
+              const escorts: WaveSpawn[] = [
+                { def: pickWild(bb.roll, bb.depth + 1, true), nx: 0.2, ny: 0.5 },
+                { def: pickWild(bb.roll, bb.depth + 1, true), nx: 0.5, ny: 0.55 },
+                { def: pickWild(bb.roll, bb.depth + 1, true), nx: 0.8, ny: 0.5 },
+              ];
+              return {
+                note: p ? `${p.name.toUpperCase()} IS YOURS · SURVIVE THE HOUSE!` : 'THE PRIZE WAS A TRICK · SURVIVE THE HOUSE!',
+                wave: [...escorts, { def: boss, nx: 0.5, ny: 0.3, boss: true }],
+              };
+            },
+          },
+          { label: 'WALK PAST', run: () => ({ note: 'YOU WALKED PAST THE TRICK HOUSE.', skip: true }) },
+        ],
+      },
+    }),
+  },
 ];
+
+export function tickDaycare(b: Battle): string | null {
+  if (!b.daycare || row(b) < b.daycare.back) return null;
+  const { def, hp, lvl } = b.daycare;
+  b.boxAdd({ ...def, lvl: Math.min(100, lvl + 2) }, hp, false);
+  b.daycare = null;
+  return `${def.name.toUpperCase()} IS BACK FROM DAY CARE · +2 LV · IN YOUR BOX`;
+}
 
 // Poké Mart: the ?-choice box doubles as a shop board — every buy re-prompts
 // the shelf until LEAVE, and score is the wallet so purchases tax the run's

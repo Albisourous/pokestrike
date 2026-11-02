@@ -10,7 +10,7 @@ import type { Sfx } from '../core/audio';
 import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, TYPE_MOVE, EVO_LINES, LEADER_NPC, type FoeMoveKind } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
-import { rollEvent, martStock } from './events';
+import { rollEvent, martStock, tickDaycare } from './events';
 import type { EventChoice, EventArt } from './events';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
@@ -1034,6 +1034,7 @@ export class Battle {
   private curSpawns: WaveSpawn[] = []; // the wave actually fielded (for the recruit roll)
   eggIn = 0; // stops until the egg hatches — the ? pool's slow payoff
   eggJustLaid = false; // the laying arrival doesn't consume a tick
+  daycare: { def: SpeciesDef; hp: number; lvl: number; back: number } | null = null;
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
   private stopShots = 0; // shots across every battle of this stop
   private par = 10; // this stop's SPEED CLEAR turn target
@@ -1277,6 +1278,16 @@ export class Battle {
       mapNote: this.mapNote,
       eggIn: this.eggIn,
       eggJustLaid: this.eggJustLaid,
+      daycare: this.daycare
+        ? {
+            id: this.daycare.def.id,
+            lvl: this.daycare.lvl,
+            shiny: this.daycare.def.shiny || undefined,
+            luck: this.daycare.def.luck,
+            hp: this.daycare.hp,
+            back: this.daycare.back,
+          }
+        : undefined,
       team: this.players.map((p) => ({
         id: p.def.id,
         lvl: p.lvl,
@@ -1348,6 +1359,16 @@ export class Battle {
     this.mapNote = s.mapNote;
     this.eggIn = s.eggIn ?? 0; // v2 saves predate the egg timer — no egg
     this.eggJustLaid = s.eggJustLaid ?? false;
+    const daycare = s.daycare;
+    const daycareDef = daycare && speciesById(daycare.id);
+    this.daycare = daycare && daycareDef
+      ? {
+          def: { ...daycareDef, shiny: daycare.shiny || undefined, luck: daycare.luck },
+          hp: daycare.hp,
+          lvl: daycare.lvl,
+          back: daycare.back,
+        }
+      : null;
     this.asc = s.asc;
     this.perkIds = [...s.perks];
     for (const id of s.perks) PERKS.find((p) => p.id === id)?.apply(this);
@@ -6305,6 +6326,7 @@ export class Battle {
     this.pendingNext = n.row;
     this.arriveAtNode(n);
     this.tickEgg();
+    const dc = tickDaycare(this); if (dc) { this.mapMsg = dc; this.mapMsgT = 3; this.log(dc); }
     if (this.eventChoice) return; // a ? is asking — resolve the row on the pick
     if (this.skipWave) {
       // the event resolved the stop — row clears with no fight, at the
