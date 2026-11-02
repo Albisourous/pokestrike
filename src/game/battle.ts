@@ -3,7 +3,7 @@ import { mulberry32 } from '../core/rng';
 import { drawMon, drawShiny, whiteSprite, itemSprite, drawNpc, loadItem } from '../core/assets';
 import { sfx, buzz, music, playJingle, weatherBed, BIOME_TRACK, TRAINER_TRACK, GYM_STAB } from '../core/audio';
 import type { Sfx } from '../core/audio';
-import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, LEADER_NPC, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, type FoeMoveKind } from './data';
+import { SpeciesDef, StageDef, WaveSpawn, rollWave, trainerWave, TRAINER_CLASS, TOTAL_STAGES, ROSTER, ELITES, EVOS, INVADERS, ENEMY_DB, BOSS_POOL, buildRoom, genRoom, rivalWave, ROOM_LAYOUTS, ROOM_BOSS, ROOM_HARD, pickWild, bst, FLOATERS, speciesById, RAID_MODS, TYPE_THEME, THEME_NAME, foeClocks, type FoeMoveKind } from './data';
 import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock } from './events';
@@ -21,6 +21,7 @@ import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
 import { STAGE_GIMMICKS, type DamageWall, type HazardKind } from './data';
+import { Telops } from './telop';
 
 import {
   playerHp,
@@ -627,7 +628,7 @@ export class Battle {
   activeIdx = 0;
   shots = 0;
   time = 0;
-  waveBanner = 0;
+  telop = new Telops(); // battle banners: start, boss, clears, ULT READY
   private waveIntroT = -9; // spawnWave timestamp — the ! beat plays while <0.6s
   private courtT = -9;
   private foesLanded = true; // the drop-in landing beat fired for this court
@@ -1017,6 +1018,7 @@ export class Battle {
     const modName = RAID_MODS.find((m) => m.id === this.raidMod)?.name;
     this.waveSpecial = modName ? `CHROMA RAID · ${modName}` : 'CHROMA RAID';
     this.log(this.waveSpecial);
+    this.waveTelop();
   }
 
   // ?debug=arenaN — jump the pinned court without the raid banner;
@@ -1659,7 +1661,6 @@ export class Battle {
         u.x = at.x;
         u.y = at.y;
       }
-    this.waveBanner = 1.4;
     // the classic "!" tell as control lands — a challenger spots you
     this.waveIntroT = this.time;
     this.courtT = this.time;
@@ -1675,6 +1676,40 @@ export class Battle {
       if (!this.waveSpecial) this.waveSpecial = `A SHINY ${shiny.def.name.toUpperCase()} APPEARED!`;
       sfx('perfect'); // the triple-note ping — rarer than any recharge cue
     }
+    this.waveTelop();
+  }
+
+  // the stop's opening banner, then the boss call if one is on the court
+  private waveTelop() {
+    const boss = this.enemies.find((e) => e.boss);
+    const label = this.waveSpecial?.replace(/!/g, '') ?? (boss && this.waveHadGym ? `GYM LEADER ${boss.def.name.toUpperCase()}` : `STAGE ${this.waveIndex + 1}/${TOTAL_STAGES}`);
+    this.telop.push({ kind: 'start', title: `BATTLE ${this.battle}/${this.battles}`, sub: [label, STAGE_GIMMICKS[this.theme].label, this.weather && WEATHER_LINE[this.weather].split(' · ')[1]].filter(Boolean).join(' · '), mon: this.active.def.id, icon: 'poke-ball' });
+    if (boss) this.telop.push({ kind: 'boss', title: 'BOSS INCOMING', sub: `${boss.def.name.toUpperCase()} · WEAK SPOT ×3`, mon: boss.def.id, icon: this.bossIcon(boss) });
+  }
+
+  private bossIcon(boss: Unit) {
+    const badge = this.waveHadGym ? BADGES.find((b) => b.boss === boss.def.id) : undefined;
+    return badge ? `badges/${badge.icon}` : 'ultra-ball';
+  }
+
+  private clearTelop(speed: boolean) {
+    const [title, ...sub] = (this.waveSpecial ?? '').replace(/!/g, '').replace('SWEEP x', 'SWEEP ×').split(' · ').filter((t) => t !== 'SPEED CLEAR');
+    this.telop.push({ kind: 'clear', title, sub: sub.join(' · '), mon: this.active.def.id, icon: 'poke-ball' });
+    if (speed) this.telop.push({ kind: 'speed', title: 'SPEED CLEAR', sub: `${this.stopShots}/${this.par} TURNS`, mon: this.active.def.id, icon: 'quick-claw' });
+  }
+
+  // first weak-point hit per foe gets the banner; repeats keep the float
+  private weakTelop(e: Unit) {
+    if (!this.telop.once(`weak${e.uid}`)) return false;
+    this.telop.push({ kind: 'weak', title: 'WEAK POINT', sub: `${e.def.name.toUpperCase()} · ${e.boss ? '×3' : '×2'}`, mon: e.def.id, icon: 'scope-lens' });
+    return true;
+  }
+
+  // foe clocks hit zero: name who swings and with what
+  private foeTelop() {
+    const m = this.pendingMoves[0];
+    const e = m?.e ?? this.pendingBig[0] ?? this.pendingAttacks[0];
+    if (e) this.telop.push({ kind: 'foe', title: 'FOE TURN', sub: `${e.def.name.toUpperCase()} · ${m ? m.c.move.toUpperCase() : this.pendingBig.length ? 'BIG ATTACK' : 'ATTACK'}`, mon: e.def.id });
   }
 
   // One enemy builder for everything the field can field: wave spawns,
@@ -1818,6 +1853,7 @@ export class Battle {
   }
 
   pointerDown(p: Vec) {
+    this.telop.skip();
     if (this.paused) { // any tap unfreezes
       if (p.x >= PAUSE_SPEED.x && p.x <= PAUSE_SPEED.x + PAUSE_SPEED.w && p.y >= PAUSE_SPEED.y && p.y <= PAUSE_SPEED.y + PAUSE_SPEED.h) {
         this.ff = Battle.ffPref = !this.ff;
@@ -2014,12 +2050,7 @@ export class Battle {
     if (this.ultIn > 0 && --this.ultIn === 0) {
       // the charge just armed — announce it, or the HUD's gold pulse reads
       // as decoration and the ult sits unfired
-      this.pushText({
-        x: this.arena.x + this.arena.w / 2,
-        y: this.arena.y + 58,
-        text: 'ULT READY',
-        t: 1.1, color: '#ffd84d', big: true,
-      });
+      this.telop.push({ kind: 'ult', title: 'ULT READY', sub: 'TAP ULT TO FIRE', mon: this.active.def.id, icon: 'master-ball' });
       this.screenFlash('#ffd84d', 0.15);
       sfx('ready');
       buzz([20, 30, 40]);
@@ -2241,7 +2272,7 @@ export class Battle {
     cull(this.pops, (p) => p.t > 0);
     this.shake *= Math.exp(-6 * dt);
     this.punch *= Math.exp(-9 * dt);
-    if (this.waveBanner > 0) this.waveBanner -= dt;
+    this.telop.update(dt);
     if (this.endT > 0) this.endT -= dt;
     if (this.mapMsgT > 0) this.mapMsgT -= dt;
     if (this.inspect) {
@@ -3245,7 +3276,8 @@ export class Battle {
     // first, or the pack soaks your best lines for free
     if (e.shieldN > 0) {
       e.shieldN--;
-      this.pushText({ x: e.x, y: e.y - e.r - 30, text: e.shieldN ? `REFLECT ${e.shieldN}` : 'SHIELD BROKE', t: 0.9, color: TYPE_COLOR[e.def.type], big: false });
+      if (e.shieldN) this.pushText({ x: e.x, y: e.y - e.r - 30, text: `REFLECT ${e.shieldN}`, t: 0.9, color: TYPE_COLOR[e.def.type], big: false });
+      else this.telop.push({ kind: 'shield', title: 'REFLECT BROKEN', sub: e.def.name.toUpperCase(), mon: e.def.id, icon: 'hard-stone' });
       this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2, t: 0.3, life: 0.3, color: '#9df0ff', hits: new Set() });
       sfx('bounce');
       return;
@@ -3712,14 +3744,14 @@ export class Battle {
     );
     if (weak) {
       if (e.boss) {
-        this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
+        if (!this.weakTelop(e)) this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
         this.hitStop = Math.max(this.hitStop, 0.16);
         this.impact(e.x, e.y, '#ffd84d', 1.7);
         this.addPunch(0.11);
         this.addShake(11);
         sfx('perfect');
       } else {
-        this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: false });
+        if (!this.weakTelop(e)) this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: false });
         this.hitStop = Math.max(this.hitStop, 0.1);
         this.impact(e.x, e.y, '#ffd84d', 1.3);
         this.addPunch(0.06);
@@ -4332,6 +4364,7 @@ export class Battle {
       }
     }
     this.shotCombo++;
+    this.telop.combo(this.shotCombo, this.active.def.id);
     this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
     if (this.maxCombo >= 8) this.award('pinball');
     // the bump feeds the launch: a momentum kick so every teammate passed
@@ -5057,7 +5090,7 @@ export class Battle {
         : ` · ${this.waveShots} SHOTS`) +
       (this.waveFlawless ? ' · FLAWLESS!' : '') +
       (speedClear ? ' · SPEED CLEAR!' : '');
-    this.waveBanner = 1.1;
+    this.clearTelop(speedClear);
     sfx('wave');
     // a raid is the whole fight — the win beat is short and never rolls the
     // climb's reward board, map or clear ledger
@@ -5065,6 +5098,7 @@ export class Battle {
       this.phase = 'won';
       this.endT = 1.2;
       this.waveSpecial = 'RAID CLEARED!';
+      this.clearTelop(false);
       this.log('RAID CLEARED!');
       this.screenFlash('#ffd84d', 0.35);
       this.addPunch(0.14);
@@ -5623,7 +5657,7 @@ export class Battle {
       });
     }
     this.waveSpecial = 'VICTORY LOOT!';
-    this.waveBanner = 1.6;
+    this.telop.push({ kind: 'clear', title: 'VICTORY LOOT', sub: 'SCOOP THE STARS', mon: this.active.def.id, icon: 'star-piece' });
     this.screenFlash('#ffd84d', 0.25);
     sfx('perfect');
   }
@@ -6208,6 +6242,7 @@ export class Battle {
     if (warned || bigWarned) sfx('warn');
     if (this.pendingAttacks.length > 0 || this.pendingBig.length > 0 || this.pendingMoves.length > 0) {
       this.phase = 'enemy';
+      this.foeTelop();
       this.enemyPhaseT = ENEMY_TURN_DELAY;
     } else {
       this.nextTurn();
@@ -6272,14 +6307,7 @@ export class Battle {
       return this.makeEnemy(a ? { ...s, nx: a.nx, ny: a.ny } : s, this.waveIndex);
     });
     this.waveShots = 0;
-    this.pushText({
-      x: this.arena.x + this.arena.w / 2,
-      y: this.arena.y + this.arena.h / 2,
-      text: `BATTLE ${this.battle}/${this.battles}`,
-      t: 1.5,
-      color: '#ffd84d',
-      big: true,
-    });
+    this.telop.push({ kind: 'start', title: `BATTLE ${this.battle}/${this.battles}`, sub: STAGE_GIMMICKS[this.theme].label, mon: this.active.def.id, icon: 'poke-ball' });
     sfx('invade');
   }
 
@@ -6324,14 +6352,7 @@ export class Battle {
       e.minion = true; // while any minion lives, the boss takes half hits
       this.enemies.push(e);
     }
-    this.pushText({
-      x: this.arena.x + this.arena.w / 2,
-      y: this.arena.y + this.arena.h / 2,
-      text: `BATTLE ${boss.sumStage + 1}/${BOSS_BARS.length}`,
-      t: 1.5,
-      color: '#ffd84d',
-      big: true,
-    });
+    this.telop.push({ kind: 'phase', title: 'PHASE CLEAR', sub: `${boss.def.name.toUpperCase()} · BATTLE ${boss.sumStage + 1}/${BOSS_BARS.length}`, mon: boss.def.id, icon: this.bossIcon(boss) });
     this.screenFlash('#ffd84d', 0.2);
     this.addShake(10);
     sfx('invade');
@@ -7051,6 +7072,7 @@ export class Battle {
   // the sting are how a run says it's over
   private wipe() {
     this.phase = 'lost';
+    this.telop.push({ kind: 'over', title: 'GAME OVER', sub: 'YOUR TEAM FAINTED', mon: this.active.def.id });
     this.endT = 1.6; // the sting lands before the field report covers it
     this.screenFlash('#ff6b6b', 0.3);
     sfx('lose');
@@ -8047,56 +8069,7 @@ export class Battle {
       ctx.globalAlpha = 1;
     }
 
-    if (this.waveBanner > 0) {
-      const pop = Math.min(this.waveBanner, 1);
-      const scaleIn = 1 + Math.max(0, this.waveBanner - 1.1) * 2.4;
-      const cy = a.y + a.h / 2;
-      const gym = this.enemies.find((e) => e.boss);
-      const label = this.waveSpecial ?? (gym
-        ? `GYM LEADER ${gym.def.name.toUpperCase()}`
-        : `STAGE ${this.waveIndex + 1} / ${TOTAL_STAGES}`);
-      ctx.globalAlpha = pop;
-      // hanging ribbon, conquest-style
-      ctx.fillStyle = '#101430ee';
-      ctx.fillRect(0, cy - 34, W_CANVAS_FALLBACK, 68);
-      ctx.strokeStyle = '#c8a44d';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, cy - 34);
-      ctx.lineTo(W_CANVAS_FALLBACK, cy - 34);
-      ctx.moveTo(0, cy + 34);
-      ctx.lineTo(W_CANVAS_FALLBACK, cy + 34);
-      ctx.stroke();
-      // shrink-to-fit: long specials would overflow the strip — size the
-      // fit against the popped scale too, or the pop clips at spawn.
-      // a gym label also leaves room for the leader portrait at each end
-      const npcMargin = gym && this.waveHadGym && !this.waveSpecial ? 170 : 0;
-      ctx.font = `bold 34px Georgia, serif`;
-      const fit = Math.min(1, (W_CANVAS_FALLBACK - 48 - npcMargin) / (ctx.measureText(label).width * scaleIn));
-      ctx.font = `bold ${Math.round(34 * scaleIn * fit)}px Georgia, serif`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#f0e6c8';
-      ctx.fillText(label, a.x + a.w / 2, cy + 12);
-      // the sky calls itself out in the ribbon — weather tilts the matchup
-      if (this.weather) {
-        ctx.font = fontB(10);
-        ctx.fillStyle = WEATHER_TINT[this.weather];
-        ctx.fillText(WEATHER_LINE[this.weather], a.x + a.w / 2, cy - 20);
-      }
-      if (gym) {
-        ctx.font = fontB(10);
-        ctx.fillStyle = '#ffd84d';
-        ctx.fillText('HIT WEAK SPOTS ×2 · LEADER ×3', a.x + a.w / 2, cy + 52);
-        // the leader's face flanks its name — only when the gym label is
-        // up (a shiny or special announcement keeps the whole ribbon)
-        if (this.waveHadGym && !this.waveSpecial) {
-          const npc = LEADER_NPC[gym.def.type];
-          drawNpc(ctx, npc, a.x + 44, cy + 34, 62);
-          drawNpc(ctx, npc, a.x + a.w - 44, cy + 34, 62);
-        }
-      }
-      ctx.globalAlpha = 1;
-    }
+    this.telop.draw(ctx, a, W_CANVAS_FALLBACK);
 
     // the freeze frame — drawn dead last so nothing paints over it; a tap
     // anywhere thaws (pointerDown drops it before any other handling)

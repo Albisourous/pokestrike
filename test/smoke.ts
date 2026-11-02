@@ -19,6 +19,7 @@ import { ROOM_BOSS, STAGE_GIMMICKS } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
+import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -137,7 +138,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(e.hp === ehp && e.shieldN === 1, 'Protect absorbs the first of two hits');
   f.hurt(e, 20, '#fff');
   ok(e.hp === ehp && e.shieldN === 0, 'Protect absorbs the last hit before breaking');
-  ok(f.texts.some((t: any) => t.text === 'SHIELD BROKE'), 'shield break uses the coalesced callout path');
+  ok(f.telop.texts().includes('REFLECT BROKEN'), 'shield break gets the REFLECT BROKEN banner');
   f.hurt(e, 20, '#fff');
   ok(e.hp < ehp, 'the hit after a broken shield damages HP');
 
@@ -2401,7 +2402,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(b.pickups.filter((p) => p.kind === 'oran-berry').length === stolenBefore + 1, 'fleeing thief returns its stolen pickup');
   ok(b.blocks !== blocksBefore && b.hazards !== hazardsBefore, 'bar break rebuilds the room');
   const blocksBar2 = b.blocks;
-  ok((b as any).texts.some((t: any) => t.text === 'BATTLE 2/3'), 'first break announces BATTLE 2/3');
+  ok(b.telop.texts().includes('PHASE CLEAR') && b.telop.texts().includes('BATTLE 2/3'), 'first break announces PHASE CLEAR · BATTLE 2/3');
   ok(boss.timer > 1 && (boss as any).bigT === 7 && !(b as any).barBreak, 'boss returns with both clocks reset');
 
   for (const m of firstEscorts) m.dead = true;
@@ -2412,7 +2413,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b as any).endShot();
   const secondEscorts = b.enemies.filter((e) => e.minion);
   ok(firstEscorts.every((e) => !b.enemies.includes(e)) && secondEscorts.length === 4, 'second break replaces escorts with 4');
-  ok((b as any).texts.some((t: any) => t.text === 'BATTLE 3/3'), 'second break announces BATTLE 3/3');
+  ok(b.telop.texts().includes('BATTLE 3/3'), 'second break announces BATTLE 3/3');
   if (!(b as any).gymFurnished) {
     const sig = (r: any[]) => JSON.stringify(r.map((k) => [Math.round(k.x), Math.round(k.y), Math.round(k.w), Math.round(k.h)]));
     ok(new Set([sig(blocksBefore), sig(blocksBar2), sig(b.blocks)]).size === 3, 'each boss bar gets its own authored court');
@@ -4456,6 +4457,68 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(badReads === 0, `fuzz: readers stayed sane under junk — ${badReads} bad reads`);
   // the suite's mem copies survived the fuzz — real state still reads back
   ok(Number.isFinite(stars()) && Array.isArray(dexIds()), 'memory copies cover a wiped store');
+}
+
+// --- MS telops: one battle banner at a time, priority queue, skippable ----------
+{
+  ok(Object.values(TELOP_SPEC).every((s) => s.dur <= 1), 'every banner sweeps in, holds and out inside 1s');
+  const q = new Telops();
+  q.push({ kind: 'weak', title: 'WEAK POINT' });
+  q.update(0.01);
+  ok(q.cur?.kind === 'weak', 'first push goes live on the next tick');
+  q.push({ kind: 'boss', title: 'BOSS INCOMING' });
+  q.update(0.2);
+  ok(q.cur?.kind === 'boss', 'a boss call cuts a minor banner short');
+  q.push({ kind: 'clear', title: 'WAVE CLEAR' });
+  q.update(0.05);
+  ok(q.cur?.kind === 'boss' && q.queue.length === 1, 'big beats never cut each other, they queue');
+  q.push({ kind: 'clear', title: 'STAGE CLEAR' });
+  ok(q.queue.length === 1 && q.queue[0].title === 'STAGE CLEAR', 'a repeat kind restyles the queued copy');
+  q.push({ kind: 'combo', title: 'NICE COMBO' });
+  q.update(1.2);
+  ok(q.cur?.kind === 'clear' && !q.texts().includes('NICE COMBO'), 'stale juice drops out of the queue');
+  ok(q.skip() && !q.skip(), 'a tap jumps to the sweep-out once');
+  q.update(0.2);
+  ok(!q.cur, 'a skipped banner clears inside its sweep-out');
+  q.push({ kind: 'start', title: 'BATTLE 1/3' });
+  q.push({ kind: 'speed', title: 'SPEED CLEAR' });
+  q.push({ kind: 'over', title: 'GAME OVER' });
+  q.update(0.01);
+  ok(q.cur?.kind === 'over' && !q.queue.length, 'GAME OVER clears the queue and plays first');
+  ok(q.once('weak7') && !q.once('weak7'), 'first-hit keys fire once');
+  ok(comboTier(3)?.[1] === 'NICE COMBO' && comboTier(5) && comboTier(8) && !comboTier(4), 'combo tiers at 3 · 5 · 8');
+
+  // battle wiring: start, boss, clears, ULT READY, game over
+  const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (b as any).spawnWave(1);
+  ok(/^BATTLE \d\/\d · .* · /.test(b.telop.texts()) && b.telop.texts().includes(STAGE_GIMMICKS[(b as any).theme].label), `stop opens on BATTLE n/m + gimmick (${b.telop.texts()})`);
+  (b as any).battles = 1;
+  (b as any).stopShots = (b as any).par;
+  (b as any).waveCleared();
+  ok(b.telop.texts().includes('SPEED CLEAR') && /(WAVE|STAGE) CLEAR/.test(b.telop.texts()), `clear + SPEED CLEAR banners queue (${b.telop.texts()})`);
+  const g = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (g as any).spawnWave(2);
+  ok(g.telop.texts().includes('BOSS INCOMING'), 'a gym court calls the boss in');
+  const boss = (g as any).enemies.find((e: any) => e.boss);
+  ok(boss && /^badges\//.test(g.telop.queue.find((t) => t.kind === 'boss')?.icon ?? ''), 'the gym boss banner carries its badge');
+  const u0 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  (u0 as any).spawnWave(0);
+  (u0 as any).courtT = -9;
+  u0.telop = new Telops();
+  let ults = 0;
+  const push0 = u0.telop.push.bind(u0.telop);
+  u0.telop.push = (t) => { if (t.kind === 'ult') ults++; push0(t); };
+  for (let i = 0; i < 2; i++) {
+    u0.phase = 'aim';
+    u0.ultIn = 1 - i;
+    const u = (u0 as any).active;
+    u0.pointerDown({ x: u.x, y: u.y });
+    u0.pointerMove({ x: u.x + 60, y: u.y + 40 });
+    u0.pointerUp();
+  }
+  ok(ults === 1, `ULT READY fires once when the meter fills (${ults})`);
+  (u0 as any).wipe();
+  ok(u0.telop.queue.some((t) => t.kind === 'over') || u0.telop.cur?.kind === 'over', 'a wipe calls GAME OVER');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
