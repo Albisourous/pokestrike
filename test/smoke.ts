@@ -6161,8 +6161,11 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   'town building targets do not overlap');
   ok(HALL_BTN === BOARD_BTN, 'hall hit target aliases the job-board route');
   ok(TOWN_FOLK.every((folk) => TOWN_LOTS.every((lot) =>
-    folk.x1 <= lot.x || lot.x + lot.w <= folk.x0 || folk.y1 <= lot.y || lot.y + lot.h <= folk.y0)),
+    folk.x1 <= lot.x || lot.x + lot.w <= folk.x0 || folk.y1 + folk.h <= lot.y || lot.y + lot.h <= folk.y0)),
   'town villager beats stay clear of building sprites');
+  ok(TOWN_FOLK.every((folk) => Object.values(TOWN_PLATES).every((p) =>
+    folk.x1 <= p.x || p.x + p.w <= folk.x0 || folk.y1 + folk.h <= p.y || p.y + p.h <= folk.y0)),
+  'town villager beats stay clear of plates');
   const plates = Object.values(TOWN_PLATES);
   const doors = Object.values(TOWN_DOORS);
   ok(plates.every((p, i) => p.x >= 52 && p.x + p.w <= 488 && Math.abs(p.x + p.w / 2 - doors[i]) <= 2),
