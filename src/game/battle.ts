@@ -1650,7 +1650,7 @@ export class Battle {
     this.battleBreak = false;
     if (i > 0 && !bossWave && !this.inTrainer && !this.inEvent && !this.inRival && !this.raid && !this.coach)
       for (const skip of BATTLE_SKIP) if (this.rng() >= skip) this.battles++;
-    this.missions.rare = this.flee.plan((Math.imul(this.mapSeed, 2654435761) + Math.imul(i, 40503) + 0xf1ee) >>> 0, i + 1, this.battles, bossWave || this.raid || this.inEvent || this.inTrainer || this.inRival || this.coach || !!this.pendingEventWave);
+    this.missions.rare = this.flee.plan((Math.imul(this.mapSeed, 2654435761) + Math.imul(i, 40503) + 0xf1ee) >>> 0, i + 1, this.battles, bossWave || this.raid || this.inEvent || this.inTrainer || this.inRival || this.coach || !!this.pendingEventWave, isGentleRoom(this.roomGrid));
     if (this.flee.at === this.battle && !isGentleRoom(this.roomGrid)) this.enemies.push(this.flee.spawn(this.flee.build(this as any, () => this.makeEnemy(this.flee.spawnAt(), this.waveIndex))));
     this.par = Math.min(24, Math.max(10, this.battles * PAR_PER_BATTLE + (bossWave ? PAR_BOSS : 0)));
     // rival echo fights at the levels it earned — the ghost of a stacked
@@ -6794,7 +6794,7 @@ export class Battle {
     this.battleBreak = false;
     this.battle++;
     resetAbilities(this);
-    const room = this.swapCourt(this.pickNextRoom());
+    const room = this.swapCourt(this.flee.room(this.battle, this.pickNextRoom()));
     const anchors = [...room.anchors];
     const spawns = rollWave(this.rng, this.depth, this.theme).filter((s) => !s.boss).slice(0, ENEMY_MAX);
     this.enemies = spawns.map((s) => {

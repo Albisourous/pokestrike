@@ -4317,6 +4317,29 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string | RegExp
   const rate = spawns / 6000;
   ok(rate >= 0.13 && rate <= 0.2, 'rare foe rate stays near one in six');
   ok(!flee.plan(42, 4, 1, true) && !flee.plan(42, FLEE_FROM - 1, 1, false), 'rare foe never plans for excluded stops');
+  let gentleSeed: number | undefined;
+  let skipsGentleBattle = true;
+  for (let seed = 0; seed < 6000; seed++) {
+    const candidate = new Flee();
+    candidate.plan(seed, 4, 2, false, true);
+    if (candidate.at === 1) skipsGentleBattle = false;
+    if (candidate.at === 2 && gentleSeed === undefined) gentleSeed = seed;
+  }
+  ok(skipsGentleBattle && gentleSeed !== undefined, 'gentle opener never receives the rare foe');
+  const gentleFlee = new Flee();
+  gentleFlee.plan(gentleSeed!, 4, 2, false, true);
+  const replacedRoom = gentleFlee.room(2, ROOM_LAYOUTS[1]);
+  ok(gentleFlee.at === 2 && replacedRoom !== ROOM_LAYOUTS[1] && ROOM_LAYOUTS.indexOf(replacedRoom) >= 3, 'planned foe swaps gentle room for non-gentle room');
+  ok(gentleFlee.room(1, ROOM_LAYOUTS[1]) === ROOM_LAYOUTS[1] && gentleFlee.room(2, ROOM_LAYOUTS[3]) === ROOM_LAYOUTS[3], 'room substitution leaves unplanned and non-gentle rooms alone');
+  const roomRngNext = (replace: boolean) => {
+    const rng = mulberry32(82);
+    const battle = new Battle(arena, team(), makeStage(82, 'T'), rng) as any;
+    battle.flee.plan(gentleSeed!, 4, 2, false, true);
+    battle.pickNextRoom();
+    if (replace) battle.flee.room(2, ROOM_LAYOUTS[1]);
+    return rng();
+  };
+  ok(roomRngNext(true) === roomRngNext(false), 'planned room substitution preserves the primary battle RNG');
   const planSeed = Array.from({ length: 6000 }, (_, seed) => seed).find((seed) => new Flee().plan(seed, 4, 1, false))!;
   const snapshot = (seed: number) => {
     const f = new Flee();
