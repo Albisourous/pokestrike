@@ -6,6 +6,7 @@ import { cry } from '../core/audio';
 import { drawMon, drawShiny, loadSprite, whiteSprite } from '../core/assets';
 import { speciesById } from './data';
 import { settings } from './meta';
+import { taskTick } from './tasks';
 import { fontB, uiWindow, GOLD_HI } from './ui';
 
 const W = 540, H = 960;
@@ -30,6 +31,7 @@ export function startEvo(from: number, to: number, shiny = false) {
   void loadSprite(from).catch(() => null);
   void loadSprite(to).catch(() => null);
   queue.push({ from, to, shiny, t: REDUCED ? EVO_FLASH : 0, cried: false });
+  taskTick({ evos: 1 }); // every evolution funnels through here — count at the door
 }
 
 export const evoActive = () => queue.length > 0;

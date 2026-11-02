@@ -933,7 +933,8 @@ export function bankBond(entries: { id: number; pts: number }[]): { ups: { id: n
 // no transform step exists; the bump just documents the shape
 // v6: team[] gains joined (bond's fielded-since stage) — same ?? default,
 // no transform
-const SAVE_VER = 6;
+// v7: RunSave gains doubleChest — same ?? default, no transform
+const SAVE_VER = 7;
 
 export function migrateSaves() {
   const v = load<number>('pk_ver') ?? 0;
@@ -1137,6 +1138,7 @@ export interface RunSave {
   eggIn?: number; // ?-pool egg: stops until it hatches (v3+)
   eggJustLaid?: boolean; // the laying arrival doesn't consume a tick
   daycare?: { id: number; lvl: number; shiny?: boolean; luck?: number; hp: number; back: number };
+  doubleChest?: boolean; // the old couple's ?-blessing — the next map chest rolls two relics (v7+)
   modId?: string; // the daily rule card applied to this run (v4+)
   team: { id: number; lvl: number; shiny?: boolean; hp: number; luck?: number; joined?: number; cdMod?: number; cd?: number; sash?: boolean }[];
   tagEchoDone?: boolean; // ASC 9's owed echo visit — a spent flag stays spent (v5+)

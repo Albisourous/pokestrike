@@ -865,6 +865,7 @@ const doPull = (n: number) => {
     statPull(def.id, dupe);
     results.push({ id: def.id, rarity: INVADER_IDS.has(def.id) || tier >= 3 ? 3 : tier === 2 ? 2 : 1, dupe, shiny, dust: dustPay });
   }
+  taskTick({ pulls: n }); // hatcher pulls bank on the chore board the moment they land
   hatch.results = results;
   hatch.dexPay = dexPay;
   hatch.rookiePay = rookieCheck().reduce((s, r) => s + r.pay, 0); // 'HATCH A MON' clears here

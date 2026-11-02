@@ -1047,6 +1047,7 @@ export class Battle {
   eggIn = 0; // stops until the egg hatches — the ? pool's slow payoff
   eggJustLaid = false; // the laying arrival doesn't consume a tick
   daycare: { def: SpeciesDef; hp: number; lvl: number; back: number } | null = null;
+  doubleChest = false; // the old couple's ?-blessing — the next map chest rolls two relics
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
   private stopShots = 0; // shots across every battle of this stop
   private par = 10; // this stop's SPEED CLEAR turn target
@@ -1301,6 +1302,7 @@ export class Battle {
             back: this.daycare.back,
           }
         : undefined,
+      doubleChest: this.doubleChest,
       team: this.players.map((p) => ({
         id: p.def.id,
         lvl: p.lvl,
@@ -1383,6 +1385,7 @@ export class Battle {
           back: daycare.back,
         }
       : null;
+    this.doubleChest = s.doubleChest ?? false;
     this.asc = s.asc;
     this.perkIds = [...s.perks];
     for (const id of s.perks) PERKS.find((p) => p.id === id)?.apply(this);
@@ -6525,11 +6528,11 @@ export class Battle {
       this.eventChoice = { ...martStock(this), node: n };
       this.cardT = 0;
     } else if (n.kind === 'chest') {
-      const p = rollPerks(this.rng, 1, this.rank, this.teamTypes(), this.perkBan, 1)[0];
-      if (p) {
-        this.grantPerk(p);
-        this.mapNote = `YOU FOUND ${p.name.toUpperCase()}!`;
-      }
+      // the old couple's blessing doubles the pull, then lapses
+      const ps = rollPerks(this.rng, 1, this.rank, this.teamTypes(), this.perkBan, this.doubleChest ? 2 : 1);
+      this.doubleChest = false;
+      for (const p of ps) this.grantPerk(p);
+      if (ps.length) this.mapNote = `YOU FOUND ${ps.map((p) => p.name.toUpperCase()).join(' + ')}!`;
       sfx('ready');
     }
   }

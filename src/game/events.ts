@@ -606,6 +606,29 @@ const EVENTS: GameEvent[] = [
     }),
   },
   {
+    // the old couple's blessing — a peek that pays later: the next map chest
+    // rolls two relics instead of one. Leaves the pool while one's armed.
+    w: 2,
+    skip: (b) => b.doubleChest,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'AN OLD COUPLE READS YOUR PALMS · THE NEXT CHEST HOLDS DOUBLE.',
+        art: { npc: 'elder_m_down_0' },
+        options: [
+          {
+            label: 'TAKE THE BLESSING',
+            run: (bb) => {
+              bb.doubleChest = true;
+              return { note: '"FORTUNE FOLLOWS YOU," THEY CROAK.', skip: true };
+            },
+          },
+          { label: 'WALK AWAY', run: () => ({ note: 'THEY SHUFFLED BACK INSIDE.', skip: true }) },
+        ],
+      },
+    }),
+  },
+  {
     w: 2,
     skip: (b) => row(b) < 1,
     run: () => ({

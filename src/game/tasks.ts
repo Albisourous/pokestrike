@@ -8,7 +8,7 @@ import { pullSpecies, tierOf, INVADER_IDS, dustCost, RAID_MODS, type SpeciesDef 
 // meta.ts. Readers never write: a stale period re-rolls in memory and the
 // next tick/claim is what banks it.
 
-export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage' | 'combo';
+export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage' | 'combo' | 'pulls' | 'evos';
 export type TaskPeriod = 'daily' | 'weekly';
 
 export interface TaskDef {
@@ -44,6 +44,8 @@ const kindDesc = (kind: TaskKind, n: number): string =>
     wins: `win ${n === 1 ? 'a climb' : `${n} climbs`}`,
     maxstage: `reach stage ${n}`,
     combo: `hit a ×${n} combo`,
+    pulls: `hatch ${n} mon${n === 1 ? '' : 's'}`,
+    evos: `evolve ${n} mon${n === 1 ? '' : 's'}`,
   })[kind];
 
 // --- the catalogue ----------------------------------------------------------
@@ -60,6 +62,7 @@ export const DAILY_POOL: TaskDef[] = [
   { id: 'd-gyms', label: 'GYM RAID', kind: 'gyms', n: 1, reward: 'friend-ball' },
   { id: 'd-maxstage', label: 'ROADWORK', kind: 'maxstage', n: 4, reward: 'quick-claw' },
   { id: 'd-combo', label: 'BANK SHOT', kind: 'combo', n: 5, reward: 'scope-lens' },
+  { id: 'd-pulls', label: 'EGG HUNT', kind: 'pulls', n: 2, reward: 'friend-ball' },
 ];
 
 export const WEEKLY_POOL: TaskDef[] = [
@@ -76,6 +79,7 @@ export const WEEKLY_POOL: TaskDef[] = [
   { id: 'w-stages', label: 'TRAILBLAZER', kind: 'stages', n: 15, reward: 'exp-share' },
   { id: 'w-win2', label: 'VICTORY ROAD', kind: 'wins', n: 1, reward: 'dusk-ball' },
   { id: 'w-runs2', label: 'BULK UP', kind: 'runs', n: 5, reward: 'protein' },
+  { id: 'w-evos', label: 'NEW FORM', kind: 'evos', n: 2, reward: 'exp-share' },
 ];
 
 const POOL: Record<TaskPeriod, TaskDef[]> = { daily: DAILY_POOL, weekly: WEEKLY_POOL };
