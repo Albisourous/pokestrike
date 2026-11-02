@@ -1,6 +1,7 @@
 // Tiny synthesized SFX — no audio assets, just WebAudio oscillators/noise.
 // Browsers require a user gesture first, so call unlock() from pointerdown.
 import { settings } from '../game/meta';
+import { ROSTER, BOSS_POOL } from '../game/data';
 
 let ac: AudioContext | null = null;
 let visBound = false;
@@ -388,6 +389,106 @@ export const GYM_STAB: Record<string, JingleKind> = {
 export function playJingle(kind: JingleKind) {
   if (!ac || ac.state !== 'running' || muted) return;
   for (const n of JINGLES[kind]) tone(M2F(n.m), M2F(n.m), n.d, n.w ?? 'square', n.v, n.t);
+}
+
+export type CryKind = 'boss' | 'ko' | 'ult' | 'catch';
+export const CRY_KO_CAP = 2;
+const CRY_VOL: Record<CryKind, number> = { boss: 0.8, ult: 0.6, catch: 0.6, ko: 0.4 };
+const cryCache = new Map<number, AudioBuffer | null | Promise<AudioBuffer | null>>();
+let cryFormat: 'ogg' | 'm4a' | null = null;
+let cryIds: Set<number> | null = null;
+let cryCount = 0;
+
+// test seam for the headless smoke.
+export const cryIO = {
+  ctx: (): AudioContext | null => ac,
+  out: (): AudioNode | null => master,
+  fetch: (url: string) => fetch(url),
+};
+
+export const cryLive = () => cryCount;
+
+export function cryReset() {
+  cryCache.clear();
+  cryCount = 0;
+}
+
+function loadCry(id: number, ctx: AudioContext, url: string) {
+  const pending = (async (): Promise<AudioBuffer | null> => {
+    try {
+      const res = await cryIO.fetch(url);
+      if (!res.ok) return null;
+      return await ctx.decodeAudioData(await res.arrayBuffer());
+    } catch {
+      return null;
+    }
+  })();
+  cryCache.set(id, pending);
+  void pending.then((buffer) => {
+    if (cryCache.get(id) === pending) cryCache.set(id, buffer);
+  });
+  return pending;
+}
+
+function playCry(ctx: AudioContext, buffer: AudioBuffer, kind: CryKind) {
+  if (kind === 'ko' && cryCount >= CRY_KO_CAP) return;
+  try {
+    const out = cryIO.out();
+    if (!out) return;
+    const src = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    const t0 = ctx.currentTime;
+    src.buffer = buffer;
+    src.playbackRate.value = kind === 'ko' ? 0.85 : 1;
+    gain.gain.setValueAtTime(CRY_VOL[kind] * settings().sfx, t0);
+    if (kind === 'ko') gain.gain.linearRampToValueAtTime(0.001, t0 + 0.45);
+    src.connect(gain).connect(out);
+    src.onended = () => { cryCount = Math.max(0, cryCount - 1); };
+    src.start(t0);
+    cryCount++;
+    if (kind === 'ko') src.stop(t0 + 0.5);
+  } catch {
+    // audio playback can fail in a backgrounded or closing context
+  }
+}
+
+export function cry(id: number, kind: CryKind): void {
+  const ctx = cryIO.ctx();
+  if (!ctx || ctx.state !== 'running' || muted || settings().sfx <= 0) return;
+  if (kind === 'ko' && cryCount >= CRY_KO_CAP) return;
+  if (!cryFormat) {
+    try {
+      cryFormat = typeof Audio !== 'undefined' && new Audio().canPlayType('audio/ogg; codecs="vorbis"') !== '' ? 'ogg' : 'm4a';
+    } catch {
+      cryFormat = 'm4a';
+    }
+  }
+  cryIds ??= new Set([...ROSTER, ...BOSS_POOL].map((species) => species.id));
+  const vendored = cryIds.has(id);
+  if (!vendored && cryFormat !== 'ogg') {
+    cryCache.set(id, null);
+    return;
+  }
+  const url = vendored
+    ? `cries/${id}.${cryFormat}`
+    : `https://raw.githubusercontent.com/PokeAPI/cries/main/cries/pokemon/legacy/${id}.ogg`;
+  const requestedAt = ctx.currentTime;
+  const cached = cryCache.get(id);
+  if (cached === null) return;
+  if (cached instanceof Promise) {
+    void cached.then((buffer) => {
+      if (buffer && ctx.currentTime - requestedAt <= 0.5) playCry(ctx, buffer, kind);
+    }).catch(() => {});
+    return;
+  }
+  if (cached) {
+    playCry(ctx, cached, kind);
+    return;
+  }
+  const pending = loadCry(id, ctx, url);
+  void pending.then((buffer) => {
+    if (buffer && ctx.currentTime - requestedAt <= 0.5) playCry(ctx, buffer, kind);
+  }).catch(() => {});
 }
 
 // --- chiptune sequencer: original loops, NES-flavored voices ---
@@ -1481,4 +1582,3 @@ export function buzz(pattern: number | number[]) {
   if (!settings().haptics) return;
   navigator.vibrate?.(pattern);
 }
-
