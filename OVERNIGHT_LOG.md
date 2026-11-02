@@ -751,3 +751,8 @@ backlog; builders run one iteration each, I verify + commit + push.
   after the last KO (lastKoType), secret opener picks by effective
   next-fire not turn, move-clock warns draw the firing recipe's sheet,
   HOT tag clamps clear of the missions chip.
+- pushed: home audit — modal dead space stops closing dex/trophies/hof,
+  CONTINUE previews the parked stage's own pack (rolled stages read IN
+  PROGRESS), per-individual shiny flags win over species set, ?seed=
+  pins climbSeed so links preview their real stage, confirm arms reset
+  on tab-hide, Esc closes the detail card, backRoom keys on props.
