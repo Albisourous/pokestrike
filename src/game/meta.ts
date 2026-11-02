@@ -1114,6 +1114,7 @@ export interface RunSave {
   asc: number;
   mapSeed: number;
   mapNode: number;
+  secret?: { row: number; id: number; rank: 'S' | 'A' }; // open lair regenerates from its seeded row
   waveIndex: number;
   depth: number;
   pendingNext: number;
