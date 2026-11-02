@@ -1120,6 +1120,7 @@ const SLOTS: [number, number][] = [
 //   0 floor · 2 rock slab (ball banks off) · 3 liquid moat · 4 mine
 //   5 spike strip (chips ball, walls grounded foes) · 6 gust lane (wind
 //   pushes to mid) · 7 grass drag patch · S enemy spawn · 1/E/P dressing
+//   R Rock Smash (3 hits) · T Cut (2 hits, Grass 1) · B Strength
 // Layouts [0..2] stay gentle — they're the stage-opener pool. Bosses
 // get ROOM_BOSS instead. Normalized arena coords as usual.
 export interface BlockDef {
@@ -1127,6 +1128,7 @@ export interface BlockDef {
   ny: number;
   nw: number;
   nh: number;
+  field?: 'smash' | 'cut' | 'strength';
 }
 export const ROOM_LAYOUTS: string[][] = [
   // open — the classic clear room; anchors clustered center-north keep
@@ -1440,6 +1442,118 @@ export const ROOM_LAYOUTS: string[][] = [
     '130S0S031',
     '133303331',
     '1S0S0S0S1',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // smash avenue · chip the paired rocks to open cross-court banks
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '10R000R01',
+    '1S00S00S1',
+    '10R000R01',
+    '100000001',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // cut gates · a tree screen opens into the northern pack
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '10T0T0T01',
+    '1S00000S1',
+    '102000201',
+    '100000001',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // strength lanes · move flank boulders without closing the middle
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '10B000B01',
+    '1000S0001',
+    '100000001',
+    '10B000B01',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // orchard · choose a soft tree lane or bank off the quarry shoulders
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '1R0T0T0R1',
+    '10S0S0S01',
+    '1000T0001',
+    '1R00000R1',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // quarry switches · movable stones sit below permanent bank faces
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '102000201',
+    '100000001',
+    '10B0S0B01',
+    '100000001',
+    '10R000R01',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // twin locks · Cut opens the front, Rock Smash opens the back
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '12R000R21',
+    '100S0S001',
+    '100000001',
+    '12T000T21',
+    '100000001',
+    '10S0S0S01',
+    '1000P0001',
+    '111111111',
+  ],
+  // woodland · trees screen the flanks while a lone stone shifts mid
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '10T000T01',
+    '1S00B00S1',
+    '100000001',
+    '10T000T01',
+    '100S0S001',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // crossstone · all three field moves, with a clear central approach
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '100000001',
+    '10R000R01',
+    '1S00000S1',
+    '10B000B01',
+    '100000001',
+    '10T0S0T01',
     '100000001',
     '1000P0001',
     '111111111',
@@ -1971,6 +2085,7 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number, battl
         run = -1;
       }
       const at = { nx: (c + 0.5) / 9, ny: (r + 0.5) / 11 };
+      if ('RTB'.includes(ch)) blocks.push({ nx: c / 9, ny: r / 11, nw: 1 / 9, nh: 1 / 11, field: ch === 'R' ? 'smash' : ch === 'T' ? 'cut' : 'strength' });
       if (ch === '3') hazards.push({ kind: MOAT_HAZARD[theme], ...at, r: 0.062, moat: true });
       else if (ch === '4') hazards.push({ kind: 'mine', ...at, r: 0.05 });
       else if (ch === '5') hazards.push({ kind: 'spikes', ...at, r: 0.062 });
@@ -2033,24 +2148,27 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number, battl
 // and every spawn anchor (liquids wall off anything that can't swim or
 // fly; mines don't block). Runs at module load — a bad room fails the
 // build, not the player.
-for (const grid of [...ROOM_LAYOUTS, ...ROOM_BOSS]) {
-  if (grid.length !== 11 || grid.some((row) => row.length !== 9)) throw new Error('room grid must be 9x11');
+export function fieldRoomReachable(grid: string[]): boolean {
   const seen = new Set<string>();
   const q = [[4, 9]];
   while (q.length) {
     const [c, r] = q.pop()!;
     const k = `${c},${r}`;
     if (seen.has(k) || c < 1 || c > 7 || r < 1 || r > 9) continue;
-    if (grid[r][c] !== '0' && grid[r][c] !== 'S' && grid[r][c] !== '4' && grid[r][c] !== 'P' && grid[r][c] !== '6' && grid[r][c] !== '7' && grid[r][c] !== '8') continue;
+    if (!'0S4P678RT'.includes(grid[r][c])) continue;
     seen.add(k);
     q.push([c + 1, r], [c - 1, r], [c, r + 1], [c, r - 1]);
   }
-  if (!seen.has('4,1')) throw new Error('room has no lane to the door');
+  if (!seen.has('4,1')) return false;
+  return grid.every((row, r) => [...row].every((ch, c) => ch !== 'S' || seen.has(`${c},${r}`)));
+}
+for (const grid of [...ROOM_LAYOUTS, ...ROOM_BOSS]) {
+  if (grid.length !== 11 || grid.some((row) => row.length !== 9)) throw new Error('room grid must be 9x11');
+  if (!fieldRoomReachable(grid)) throw new Error('room has no lane to the door or a spawn');
   for (let r = 1; r <= 9; r++)
     for (let c = 1; c <= 7; c++) {
       const ch = grid[r][c];
-      if (!'02345678SP'.includes(ch)) throw new Error(`bad room tile '${ch}'`);
-      if (ch === 'S' && !seen.has(`${c},${r}`)) throw new Error('room anchor is walled in');
+      if (!'02345678SPRTB'.includes(ch)) throw new Error(`bad room tile '${ch}'`);
     }
 }
 

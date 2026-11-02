@@ -2034,6 +2034,107 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(!!b.lastRecruit && b.box.length > box0, `gym pays its ace (${b.lastRecruit?.name})`);
 }
 
+// --- field-move walls: break counts, safe pushes and authored lanes -------
+{
+  const grid = (cells: [number, number, string][]) => {
+    const rows = ['1111E1111', ...Array(8).fill('100000001'), '1000P0001', '111111111'].map((r) => r.split(''));
+    for (const [c, r, ch] of cells) rows[r][c] = ch;
+    return rows.map((r) => r.join(''));
+  };
+  const battle = (g: string[]) => {
+    const b: any = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+    b.enemies = [];
+    for (const u of b.players) { u.x = arena.x + 30; u.y = arena.y + arena.h - 30; }
+    b.swapCourt(g);
+    b.hazards = [];
+    return b;
+  };
+  const hit = (b: any, block: any, side = 'left', speed = 400) => {
+    const u = b.active;
+    u.x = block.x + block.w / 2; u.y = block.y + block.h / 2;
+    u.vx = 0; u.vy = 0;
+    if (side === 'left') { u.x = block.x - u.r + 1; u.vx = speed; }
+    if (side === 'right') { u.x = block.x + block.w + u.r - 1; u.vx = -speed; }
+    if (side === 'top') { u.y = block.y - u.r + 1; u.vy = speed; }
+    if (side === 'bottom') { u.y = block.y + block.h + u.r - 1; u.vy = -speed; }
+    b.hitBlocks(u);
+  };
+  const b = battle(grid([[3, 4, 'R'], [4, 4, 'R'], [5, 4, 'T']]));
+  ok(b.blocks.length === 3, 'field tiles compile as separate solid cells, not merged slabs');
+  const rock = b.blocks.find((r: any) => r.field === 'smash');
+  if (rock) {
+    hit(b, rock, 'left', 0);
+    ok(rock.hp === 3, 'resting overlap does not damage Rock Smash rock');
+    hit(b, rock);
+    ok(rock.hp === 2 && b.active.vx < 0, 'first rock hit chips it and bounces normally');
+    b.hitBlocks(b.active);
+    ok(rock.hp === 2, 'separation does not count as a second impact');
+    hit(b, rock);
+    ok(rock.hp === 1 && b.blocks.includes(rock), 'second rock hit leaves cracked cover');
+    hit(b, rock);
+    ok(!b.blocks.includes(rock), 'third rock hit opens floor');
+    ok(b.blocks.length === 2, 'breaking one rock does not remove its neighbor');
+  } else ok(false, 'Rock Smash tile installs hit points');
+  for (const [id, hits] of [[1, 1], [123, 2], [212, 2], [7, 2], [46, 1], [585, 1]]) {
+    const cut = battle(grid([[4, 4, 'T']]));
+    cut.active.def = speciesById(id)!;
+    const tree = cut.blocks[0];
+    if (tree) {
+      hit(cut, tree);
+      ok(cut.blocks.includes(tree) === (hits === 2), `${cut.active.def.name} Cut first-hit rule`);
+      if (hits === 2) { hit(cut, tree); ok(!cut.blocks.includes(tree), 'ordinary ball cuts tree on second hit'); }
+    } else ok(false, 'Cut tree compiles as cover');
+  }
+  for (const [side, dx, dy] of [['left', 1, 0], ['right', -1, 0], ['top', 0, 1], ['bottom', 0, -1]] as const) {
+    const push = battle(grid([[4, 4, 'B']]));
+    const stone = push.blocks[0];
+    if (!stone) { ok(false, 'Strength boulder compiles as cover'); continue; }
+    const x = stone.x, y = stone.y;
+    hit(push, stone, side);
+    ok(Math.abs(stone.x - x - dx * arena.w / 9) < 0.001 && Math.abs(stone.y - y - dy * arena.h / 11) < 0.001, `Strength pushes exactly one cell from ${side}`);
+    ok(push.active.vx * dx + push.active.vy * dy < 0, 'pushing impact still banks the ball');
+  }
+  for (const ch of ['2', 'R', 'T', 'B', '3', '4', 'S', 'P']) {
+    const push = battle(grid([[3, 4, 'B'], [4, 4, ch]]));
+    const stone = push.blocks.find((r: any) => r.field === 'strength');
+    if (!stone) continue;
+    const x = stone.x;
+    hit(push, stone);
+    ok(stone.x === x, `Strength cannot push onto ${ch}`);
+  }
+  const edge = battle(grid([[7, 4, 'B']]));
+  if (edge.blocks[0]) { const x = edge.blocks[0].x; hit(edge, edge.blocks[0]); ok(edge.blocks[0].x === x, 'Strength stays inside the room'); }
+  const occupied = battle(grid([[3, 4, 'B']]));
+  if (occupied.blocks[0]) {
+    const stone = occupied.blocks[0], x = stone.x;
+    occupied.players[1].x = x + stone.w * 1.5;
+    occupied.players[1].y = stone.y + stone.h / 2;
+    hit(occupied, stone);
+    ok(stone.x === x, 'Strength never pushes onto a live unit');
+    occupied.players[1].x = arena.x + 30;
+    occupied.hazards = [{ kind: 'mine', x: x + stone.w * 1.5, y: stone.y + stone.h / 2, r: 15 }];
+    hit(occupied, stone);
+    ok(stone.x === x, 'Strength never pushes onto a live hazard');
+  }
+  const gate = battle(grid([[3, 4, 'B'], [3, 3, '2'], [4, 3, 'S'], [5, 3, '2'], [3, 2, '2'], [4, 2, '2'], [5, 2, '2'], [5, 4, '2']]));
+  if (gate.blocks.some((r: any) => r.field === 'strength')) {
+    const stone = gate.blocks.find((r: any) => r.field === 'strength'), x = stone.x;
+    hit(gate, stone);
+    ok(stone.x === x, 'Strength rejects a free cell that would wall in a spawn');
+  }
+  const layouts = ROOM_LAYOUTS.filter((g) => g.some((r) => /[RTB]/.test(r)));
+  ok(layouts.length >= 6 && layouts.length <= 10, 'six to ten authored rooms use field moves');
+  ok(ROOM_LAYOUTS.slice(0, 3).every((g) => g.every((r) => !/[RTB]/.test(r))), 'first three gentle rooms stay unchanged');
+  for (const g of layouts) {
+    ok(g.length === 11 && g.every((r) => r.length === 9 && r === r.split('').reverse().join('')), 'field room is 9x11 and mirror-symmetric');
+    const room = battle(g);
+    ok(room.blocks.every((r: any) => room.players.every((u: any) => u.x + u.r <= r.x || u.x - u.r >= r.x + r.w || u.y + u.r <= r.y || u.y - u.r >= r.y + r.h)), 'field room installs without trapping the team in cover');
+    for (const anchor of buildRoom(g, 'grove', () => 0.99).anchors)
+      ok(!room.blocks.some((r: any) => arena.x + anchor.nx * arena.w > r.x && arena.x + anchor.nx * arena.w < r.x + r.w && arena.y + anchor.ny * arena.h > r.y && arena.y + anchor.ny * arena.h < r.y + r.h), 'field room spawn anchors stay on floor');
+    ok(room.pickNextRoom() !== g, 'next-court selection never repeats the installed room');
+  }
+}
+
 // --- room blocks: furnished waves, open boss rooms, clean spawns --------
 {
   let furnished = 0,
