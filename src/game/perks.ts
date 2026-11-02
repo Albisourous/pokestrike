@@ -679,6 +679,14 @@ export const BAG_ITEMS: BagItem[] = [
     apply: (b) => { b.thorns += 15; },
     perTier: (b) => { b.thorns += 3; },
   },
+  {
+    id: 'town-map', name: 'Town Map', item: 'town-map',
+    desc: 'start with +1 reroll charge',
+    // tools.roll is live before bag items apply; on resume the re-applied
+    // +1 is stomped by the saved tools blob — no double-charge
+    apply: (b) => { b.tools.roll += 1; },
+    perTier: (b) => { b.tools.ban += 1; },
+  },
 ];
 
 // Roll a rarity tier, then pick within it — an empty tier trickles down to

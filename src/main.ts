@@ -2170,6 +2170,7 @@ function update(dt: number) {
         runs: 1,
         wins: won ? 1 : 0,
         maxstage: stageReached,
+        combo: battle.maxCombo,
       });
       // streaks bump once per finished run — a finished run counts the day,
       // win or lose (daily mode is gone; the chain rides any climb)

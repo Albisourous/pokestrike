@@ -8,7 +8,7 @@ import { pullSpecies, tierOf, INVADER_IDS, dustCost, RAID_MODS, type SpeciesDef 
 // meta.ts. Readers never write: a stale period re-rolls in memory and the
 // next tick/claim is what banks it.
 
-export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage';
+export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage' | 'combo';
 export type TaskPeriod = 'daily' | 'weekly';
 
 export interface TaskDef {
@@ -43,6 +43,7 @@ const kindDesc = (kind: TaskKind, n: number): string =>
     runs: `finish ${n} run${n === 1 ? '' : 's'}`,
     wins: `win ${n === 1 ? 'a climb' : `${n} climbs`}`,
     maxstage: `reach stage ${n}`,
+    combo: `hit a ×${n} combo`,
   })[kind];
 
 // --- the catalogue ----------------------------------------------------------
@@ -58,6 +59,7 @@ export const DAILY_POOL: TaskDef[] = [
   { id: 'd-perks', label: 'ITEMFINDER', kind: 'perks', n: 2, reward: 'scope-lens' },
   { id: 'd-gyms', label: 'GYM RAID', kind: 'gyms', n: 1, reward: 'friend-ball' },
   { id: 'd-maxstage', label: 'ROADWORK', kind: 'maxstage', n: 4, reward: 'quick-claw' },
+  { id: 'd-combo', label: 'BANK SHOT', kind: 'combo', n: 5, reward: 'scope-lens' },
 ];
 
 export const WEEKLY_POOL: TaskDef[] = [
@@ -279,8 +281,8 @@ export function taskTick(delta: Partial<Record<TaskKind, number>>, now = Date.no
       const v = delta[def.kind];
       if (v == null) continue;
       dirty = true;
-      // maxstage tracks the peak reached; everything else accumulates
-      live.prog[def.kind] = def.kind === 'maxstage' ? Math.max(live.prog[def.kind] ?? 0, v) : (live.prog[def.kind] ?? 0) + v;
+      // maxstage and combo track the peak reached; everything else accumulates
+      live.prog[def.kind] = def.kind === 'maxstage' || def.kind === 'combo' ? Math.max(live.prog[def.kind] ?? 0, v) : (live.prog[def.kind] ?? 0) + v;
     }
   }
   if (dirty) saveTaskState(s);

@@ -746,7 +746,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(JSON.parse(localStorage.getItem('pk_bag')!)['friend-ball'] === 0, 'spendBag persists the clamp in one write');
 
   // every catalog entry: unique ids, real sprites, terse one-line descs
-  ok(BAG_ITEMS.length === 13 && new Set(BAG_ITEMS.map((i) => i.id)).size === 13, 'thirteen bag items, unique ids');
+  ok(BAG_ITEMS.length === 14 && new Set(BAG_ITEMS.map((i) => i.id)).size === 14, 'fourteen bag items, unique ids');
   ok(BAG_ITEMS.every((i) => existsSync(`public/sprites/items/${i.item}.png`)), 'every bag item has a vendored sprite');
 
   // the constructor applies each pick's apply() with the team fielded

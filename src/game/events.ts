@@ -771,6 +771,56 @@ const EVENTS: GameEvent[] = [
       },
     }),
   },
+  {
+    // the breeder: pick-one-of-three catches — all three roll up front on
+    // the event stream so the card names what each option pays; the taken
+    // mon arrives healthy, like a day-care handoff
+    w: 2,
+    run: (b) => {
+      const picks: { def: SpeciesDef; lvl: number }[] = [];
+      for (let i = 0; i < 3; i++) {
+        let def = pickWild(b.roll, b.depth);
+        // capped re-roll like raidPick — a twin on the card reads as a bug
+        for (let n = 0; n < 9 && picks.some((p) => p.def.id === def.id); n++) def = pickWild(b.roll, b.depth);
+        picks.push({ def, lvl: Math.min(100, 5 + b.waveIndex * 10 + Math.floor(b.roll() * 5)) });
+      }
+      return {
+        note: '',
+        choices: {
+          prompt: 'A BREEDER SHOWS THREE MONS · PICK ONE',
+          art: { npc: 'aroma_down_0' },
+          options: [
+            ...picks.map(({ def, lvl }) => ({
+              label: `TAKE ${def.name.toUpperCase()}`,
+              run: (bb: Battle) => {
+                boxCatch(bb, def, lvl, 1);
+                return { note: `${def.name.toUpperCase()} JOINED YOUR BOX!`, art: { mon: def.id }, skip: true };
+              },
+            })),
+            { label: 'WALK AWAY', run: () => ({ note: 'THE BREEDER WAVED YOU ON.', skip: true }) },
+          ],
+        },
+      };
+    },
+  },
+  {
+    // composition gate: the bow only lands on a team that fields fighting —
+    // teamTypes reads the box too, so a benched fighter still draws him out
+    w: 2,
+    skip: (b) => !b.teamTypes().has('fighting'),
+    run: (b) => {
+      const p = b.players
+        .filter((x) => !x.dead && (x.def.type === 'fighting' || x.def.type2 === 'fighting'))
+        .sort((a, z) => z.lvl - a.lvl)[0];
+      if (!p) return { note: 'A BLACK BELT BOWED · NO FIGHTING MON STOOD TO ANSWER.', skip: true };
+      b.gainLevels(p, 2);
+      return {
+        note: `A BLACK BELT BOWS · ${p.def.name.toUpperCase()} GAINS +2 LV!`,
+        art: { npc: 'black_belt_down_0' },
+        skip: true,
+      };
+    },
+  },
 ];
 
 export function tickDaycare(b: Battle): string | null {
