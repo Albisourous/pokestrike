@@ -747,3 +747,7 @@ backlog; builders run one iteration each, I verify + commit + push.
   first render not wave spawn; pickMissions seed kept its low bits via
   Math.imul; SOLAR BEAM key fixed; warp slices one frame; laser plans
   honor hazard cells.
+- a-batch pushed: sweep leftovers — finish missions settle on a flee
+  after the last KO (lastKoType), secret opener picks by effective
+  next-fire not turn, move-clock warns draw the firing recipe's sheet,
+  HOT tag clamps clear of the missions chip.
