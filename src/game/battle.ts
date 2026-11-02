@@ -20,6 +20,7 @@ import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WAT
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
+import { STAGE_GIMMICKS, type DamageWall, type HazardKind } from './data';
 
 import {
   playerHp,
@@ -173,7 +174,7 @@ interface Wave {
 }
 // A themed hazard zone on the court — MS damage-wall/gimmick analog.
 interface Hazard {
-  kind: 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power' | 'ice';
+  kind: HazardKind;
   x: number;
   y: number;
   r: number; // px radius of the zone
@@ -181,6 +182,7 @@ interface Hazard {
   spent?: boolean; // mines fire once
   pair?: number; // warps: pads sharing an id teleport between each other
   moat?: boolean; // authored liquid cell, separate from roamer gimmicks
+  healShot?: number;
 }
 // Boss hyper beam: a bright line that fades fast after the shot lands.
 interface Beam {
@@ -290,7 +292,7 @@ const DECOR_MONS: Record<'tree' | 'rock' | 'flower', [number, number, number][]>
 const HZ_TINT: Record<Hazard['kind'], string> = {
   lava: '#c23a0e', grass: '#2f7a2a', gust: '#bfe6ff', spikes: '#241f30', static: '#4a2a78',
   mine: '#ff9a30', warp: '#c890ff', boost: '#2a5a30', well: '#101826', power: '#d83018',
-  ice: '#9adcff',
+  ice: '#9adcff', heal: '#6fdc6f', gravity: '#9aa7b8',
 };
 const HZ_PROP: Partial<Record<Hazard['kind'], MT.TileRect>> = {
   grass: [1715, 93, 78, 33], // tall-grass tufts
@@ -351,6 +353,11 @@ const BOSS_BIG_TIMER = 7; // MS long boss clocks are mostly 7 or 11 turns
 const LASER_HALF_W = 22;
 const QUAKE_R = 150;
 const FOE_MOVE_POW = 0.8;
+const DAMAGE_WALL_HP = 0.04;
+const REFLECT_HITS = 2;
+const REFLECT_BOSS_HITS = 3;
+const HEAL_PANEL_HP = 0.06;
+const GRAVITY_PANEL_DRAG = 7;
 const BOSS_MOVE_POW = 1;
 const COURT_SCROLL = 0.55; // s — the court slides in from above on each new battle
 const FOE_DROP = 0.32; // s — foes fall onto the court once it settles
@@ -694,6 +701,7 @@ export class Battle {
   private pickups: Pickup[] = []; // touch to collect while the ball flies
   private scars: Scar[] = []; // impact craters scarring the court
   private hazards: Hazard[] = []; // this wave's court gimmicks
+  private damageWalls: DamageWall[] = [];
   private powerHz: Hazard[] = []; // cached 'power' zones — rebuilt only when the hazards list swaps or grows
   private powerRef: Hazard[] | null = null;
   private powerLen = -1;
@@ -1428,7 +1436,7 @@ export class Battle {
         }
         break;
       case 'warded':
-        for (const e of this.enemies) e.shieldN = 1;
+        for (const e of this.enemies) e.shieldN = Math.max(e.shieldN, 1);
         break;
       case 'volatile':
         for (const e of this.enemies) e.volatile = true;
@@ -1549,7 +1557,7 @@ export class Battle {
           for (const e of this.enemies) e.repelR = 80;
           break;
         case 'warded': // every foe carries a one-hit ward — the aegis bubble soak
-          for (const e of this.enemies) e.shieldN = 1;
+          for (const e of this.enemies) e.shieldN = Math.max(e.shieldN, 1);
           break;
         case 'sky': // the pack takes wing — airborne creeps cross moats/boulders
           for (const e of this.enemies) e.airborne = true;
@@ -1749,7 +1757,7 @@ export class Battle {
       regenT: 0,
       asleep: !!s.def.sleepy && !s.def.sleepless,
       repelR: s.def.repel ? 90 : 0,
-      shieldN: 0,
+      shieldN: STAGE_GIMMICKS[this.theme].kind === 'barrier' ? (s.boss ? REFLECT_BOSS_HITS : REFLECT_HITS) : 0,
       revives: 0,
       gravR: 0,
       warpT: -9,
@@ -2403,6 +2411,24 @@ export class Battle {
           }
           continue;
         }
+        if (hz.kind === 'gravity') {
+          if (!this.slowImmune && !u.airborne && !flies(u.def)) {
+            const drag = Math.exp(-GRAVITY_PANEL_DRAG * h);
+            u.vx *= drag;
+            u.vy *= drag;
+          }
+          continue;
+        }
+        if (hz.kind === 'heal') {
+          if (hz.healShot !== this.stopShots && u.hp < u.maxHp) {
+            hz.healShot = this.stopShots;
+            const heal = Math.min(u.maxHp - u.hp, Math.max(1, Math.round(u.maxHp * HEAL_PANEL_HP)));
+            u.hp += heal;
+            this.pushText({ x: u.x, y: u.y - u.r - 8, text: `HEAL +${heal}`, t: 0.8, color: '#6fdc6f', big: false });
+            sfx('heal');
+          }
+          continue;
+        }
         if (hz.kind === 'well') {
           // gravity barrier: the ball curves toward the core while inside —
           // slings get slingshot paths through the pocket
@@ -2883,29 +2909,53 @@ export class Battle {
     // resting contact against the wall isn't a wall hit
     const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
     let bounced = false;
+    let wall: DamageWall | undefined;
     if (u.x - u.r < a.x) {
       u.x = a.x + u.r;
-      u.vx = -u.vx * WALL_REST;
-      bounced = true;
+      if (u.vx < 0) {
+        u.vx = -u.vx * WALL_REST;
+        bounced = true;
+        wall = this.damageWallAt('left', (u.y - a.y) / a.h);
+      }
     } else if (u.x + u.r > a.x + a.w) {
       u.x = a.x + a.w - u.r;
-      u.vx = -u.vx * WALL_REST;
-      bounced = true;
+      if (u.vx > 0) {
+        u.vx = -u.vx * WALL_REST;
+        bounced = true;
+        wall = this.damageWallAt('right', (u.y - a.y) / a.h);
+      }
     }
     if (u.y - u.r < a.y) {
       u.y = a.y + u.r;
-      u.vy = -u.vy * WALL_REST;
-      bounced = true;
+      if (u.vy < 0) {
+        u.vy = -u.vy * WALL_REST;
+        bounced = true;
+        wall ??= this.damageWallAt('top', (u.x - a.x) / a.w);
+      }
     } else if (u.y + u.r > a.y + a.h) {
       u.y = a.y + a.h - u.r;
-      u.vy = -u.vy * WALL_REST;
-      bounced = true;
+      if (u.vy > 0) {
+        u.vy = -u.vy * WALL_REST;
+        bounced = true;
+        wall ??= this.damageWallAt('bottom', (u.x - a.x) / a.w);
+      }
+    }
+    if (wall && u.side === 'player' && !this.slowImmune
+        && u.def.type !== wall.type && u.def.type2 !== wall.type
+        && typeMult(wall.type, u.def) > 0
+        && !(wall.type === 'grass' && (u.airborne || flies(u.def)))) {
+      this.damagePlayer(u, Math.max(1, Math.round(u.maxHp * DAMAGE_WALL_HP * (wall.type === 'fire' && u.def.thickFat ? 0.5 : 1))));
+      this.pushText({ x: u.x, y: u.y - u.r - 26, text: 'DMG WALL', t: 0.7, color: TYPE_COLOR[wall.type], big: false });
     }
     if (bounced && fast) {
       u.wallN++;
       if (u.side === 'player') this.onBounceFx(u);
       if (this.ricochet(-2) && !this.inStatic(u.x, u.y)) this.onRicochet(u.x, u.y);
     }
+  }
+
+  private damageWallAt(edge: DamageWall['edge'], at: number) {
+    return this.damageWalls.find((w) => w.edge === edge && at >= w.start && at <= w.end);
   }
 
   // Stone blocks bank the ball like walls — same restitution, same wall-
@@ -3170,7 +3220,7 @@ export class Battle {
     // first, or the pack soaks your best lines for free
     if (e.shieldN > 0) {
       e.shieldN--;
-      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'WARD BREAK!', t: 0.9, color: '#9df0ff', big: false });
+      this.pushText({ x: e.x, y: e.y - e.r - 30, text: e.shieldN ? `REFLECT ${e.shieldN}` : 'SHIELD BROKE', t: 0.9, color: TYPE_COLOR[e.def.type], big: false });
       this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2, t: 0.3, life: 0.3, color: '#9df0ff', hits: new Set() });
       sfx('bounce');
       return;
@@ -3192,6 +3242,7 @@ export class Battle {
       if (e.hp < Math.ceil(e.maxHp * floor)) {
         e.hp = Math.ceil(e.maxHp * floor);
         e.sumStage++;
+        if (STAGE_GIMMICKS[this.theme].kind === 'barrier') e.shieldN = REFLECT_BOSS_HITS;
         this.barBreak = true;
       }
     }
@@ -6137,6 +6188,11 @@ export class Battle {
   }
 
   private installRoom(room: ReturnType<typeof buildRoom>) {
+    this.damageWalls = room.damageWalls;
+    for (const z of room.hazards) {
+      if (z.kind === 'heal') void loadItem('oran-berry');
+      if (z.kind === 'gravity') void loadItem('hard-stone');
+    }
     this.blocks = room.blocks.map((b) => ({
       x: this.arena.x + this.arena.w * b.nx,
       y: this.arena.y + this.arena.h * b.ny,
@@ -6155,7 +6211,8 @@ export class Battle {
   // a fresh room scrolls in under the team: furniture, hazards, drop-in clock
   private swapCourt(grid: string[]) {
     this.roomGrid = grid;
-    const room = buildRoom(grid, this.theme, this.rng);
+    const phase = this.enemies.find((e) => e.boss && !e.dead)?.sumStage ?? this.battle - 1;
+    const room = buildRoom(grid, this.theme, this.rng, phase);
     this.installRoom(room);
     this.courtT = this.time;
     this.foesLanded = false;
@@ -7182,6 +7239,7 @@ export class Battle {
       ctx.restore();
     }
     drawWall(ctx, a, this.theme);
+    this.drawDamageWalls(ctx);
 
     drawAmbient(ctx, a, this.theme, this.time, QUALITY_FX[settings().quality]);
 
@@ -8746,6 +8804,11 @@ export class Battle {
         ctx.strokeText(ty, nx, ny - cell * 0.95 + 12);
         ctx.fillStyle = TYPE_COLOR[n.ttype ?? 'normal'];
         ctx.fillText(ty, nx, ny - cell * 0.95 + 12);
+        const gimmick = STAGE_GIMMICKS[TYPE_THEME[n.ttype ?? 'normal']];
+        ctx.font = fontB(10);
+        ctx.strokeText(gimmick.label, nx, ny - cell * 0.95 + 25);
+        ctx.fillStyle = TYPE_COLOR[gimmick.type];
+        ctx.fillText(gimmick.label, nx, ny - cell * 0.95 + 25);
       }
     });
     // the trainer draws last — she walks in front of the stops, and at
@@ -9150,6 +9213,58 @@ export class Battle {
   // the zone's footprint (vent, grass tufts, ponds, rocks, cave mouth)
   // with the animated cue that sells what it does. The tinted pad keeps
   // the radius readable while the atlas streams in. Mines are Voltorb.
+  private drawDamageWalls(ctx: CanvasRenderingContext2D) {
+    const a = this.arena;
+    for (const w of this.damageWalls) {
+      const vertical = w.edge === 'left' || w.edge === 'right';
+      const span = (vertical ? a.h : a.w) * (w.end - w.start);
+      const x = vertical ? (w.edge === 'left' ? a.x : a.x + a.w) : a.x + a.w * w.start;
+      const y = vertical ? a.y + a.h * w.start : (w.edge === 'top' ? a.y : a.y + a.h);
+      const tile = w.type === 'fire' ? MT.TILE_LAVA : w.type === 'grass' ? MT.TILE_HEDGE_TRIM : MT.TILE_FENCE;
+      ctx.save();
+      ctx.translate(x, y);
+      if (vertical) ctx.rotate(Math.PI / 2);
+      ctx.globalAlpha = 0.22 + Math.sin(this.time * 5) * 0.1;
+      ctx.fillStyle = TYPE_COLOR[w.type];
+      ctx.fillRect(0, -10, span, 20);
+      ctx.globalAlpha = 0.8 + Math.sin(this.time * 5) * 0.2;
+      for (let at = 0; at < span; at += 16) drawTile(ctx, tile, at, -6, Math.min(16, span - at), 12);
+      ctx.globalAlpha = 1;
+      ctx.font = fontB(10);
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#101826';
+      ctx.lineWidth = 3;
+      ctx.strokeText('DMG WALL', span / 2, -10);
+      ctx.fillStyle = TYPE_COLOR[w.type];
+      ctx.fillText('DMG WALL', span / 2, -10);
+      ctx.restore();
+    }
+  }
+
+  private drawFieldPanel(ctx: CanvasRenderingContext2D, hz: Hazard) {
+    const healing = hz.kind === 'heal';
+    const color = HZ_TINT[hz.kind];
+    ctx.save();
+    drawTile(ctx, MT.TILE_PATH, hz.x - hz.r, hz.y - hz.r * 0.6, hz.r * 2, hz.r * 1.2);
+    ctx.globalAlpha = healing && hz.healShot === this.stopShots ? 0.35 : 0.7 + Math.sin(this.time * 4) * 0.15;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(hz.x, hz.y, hz.r, hz.r * 0.6, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    const img = itemSprite(healing ? 'oran-berry' : 'hard-stone');
+    if (img) ctx.drawImage(img, hz.x - 14, hz.y - 18, 28, 28);
+    ctx.font = fontB(11);
+    ctx.textAlign = 'center';
+    ctx.strokeStyle = '#101826';
+    ctx.lineWidth = 3;
+    const label = healing ? 'HEAL' : 'GRAVITY';
+    ctx.strokeText(label, hz.x, hz.y + 19);
+    ctx.fillStyle = color;
+    ctx.fillText(label, hz.x, hz.y + 19);
+    ctx.restore();
+  }
+
   private drawHazard(ctx: CanvasRenderingContext2D, hz: Hazard) {
     if (hz.moat) {
       const w = this.arena.w / 9, h = this.arena.h / 11;
@@ -9159,6 +9274,10 @@ export class Battle {
         adjacent(hz.x, hz.y - h), adjacent(hz.x + w, hz.y),
         adjacent(hz.x, hz.y + h), adjacent(hz.x - w, hz.y),
       ]);
+      return;
+    }
+    if (hz.kind === 'heal' || hz.kind === 'gravity') {
+      this.drawFieldPanel(ctx, hz);
       return;
     }
     const TAU = Math.PI * 2;
@@ -9610,12 +9729,19 @@ export class Battle {
       // aegis ward: a cyan bubble eats the next hit entirely
       if (u.shieldN > 0) {
         ctx.globalAlpha = 0.35 + Math.sin(this.time * 5) * 0.1;
-        ctx.strokeStyle = '#9df0ff';
+        ctx.strokeStyle = TYPE_COLOR[u.def.type];
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(u.x, u.y, u.r * 1.3, 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
+        ctx.font = fontB(11);
+        ctx.textAlign = 'center';
+        ctx.strokeStyle = '#101826';
+        ctx.lineWidth = 3;
+        ctx.strokeText(`REFLECT ${u.shieldN}`, u.x, u.y + u.r * 1.65);
+        ctx.fillStyle = TYPE_COLOR[u.def.type];
+        ctx.fillText(`REFLECT ${u.shieldN}`, u.x, u.y + u.r * 1.65);
       }
       // support marks: clerics carry a green cross, guardians a cyan
       // diamond — target priority readable at a glance
@@ -10015,6 +10141,10 @@ export class Battle {
         for (const hz of this.hazards) {
           if (Math.hypot(sx - hz.x, sy - hz.y) >= hz.r + u.r) continue;
           if (hz.kind === 'gust') svx += (hz.dir ?? 1) * 480 * step;
+          else if (hz.kind === 'gravity' && !this.slowImmune && !u.airborne && !flies(u.def)) {
+            const drag = Math.exp(-GRAVITY_PANEL_DRAG * step);
+            svx *= drag; svy *= drag;
+          }
           else if (hz.kind === 'grass') { svx *= Math.exp(-8 * step); svy *= Math.exp(-8 * step); }
           else if (hz.kind === 'well' && !this.slowImmune) {
             const d = Math.max(50, Math.hypot(sx - hz.x, sy - hz.y));

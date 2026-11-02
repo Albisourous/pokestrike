@@ -15,6 +15,7 @@ import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
 import type { Theme } from '../src/game/bg';
+import { ROOM_BOSS, STAGE_GIMMICKS } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 
@@ -29,6 +30,125 @@ const ok = (cond: boolean, msg: string) => {
 
 const arena = { x: 30, y: 160, w: 480, h: 620 };
 const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
+
+// --- stage gimmicks: real bounce contacts, shields and field panels -----
+{
+  const b: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  b.spawnWave(0);
+  b.enemies = [];
+  b.blocks = [];
+  b.hazards = [];
+  const p = b.active;
+  p.def = speciesById(7)!;
+  b.damageWalls = [{ edge: 'left', start: 0.2, end: 0.6, type: 'fire' }];
+  p.x = arena.x + p.r - 1; p.y = arena.y + arena.h * 0.4;
+  p.vx = -400; p.vy = 0;
+  const hp = p.hp;
+  b.hitWalls(p);
+  const chipped = p.hp;
+  ok(chipped < hp && p.vx > 0, 'damage wall chips once on an outward bounce');
+  b.hitWalls(p);
+  ok(p.hp === chipped, 'damage wall does not repeat on a resolved contact');
+  p.x = arena.x + p.r - 1; p.vx = 400;
+  b.hitWalls(p);
+  ok(p.hp === chipped && p.vx > 0, 'inward overlap is corrected without damage or reversing velocity');
+  p.x = arena.x + p.r - 1; p.y = arena.y + arena.h * 0.8; p.vx = -400;
+  b.hitWalls(p);
+  ok(p.hp === chipped, 'unlit edge segment is safe');
+  p.x = arena.x + p.r - 1; p.y = arena.y + arena.h * 0.4; p.vx = -400;
+  b.hitWalls(p);
+  ok(p.hp < chipped, 'a second real bounce can chip again without a time cooldown');
+  p.def = speciesById(4)!;
+  const fireHp = p.hp;
+  p.x = arena.x + p.r - 1; p.vx = -400;
+  b.hitWalls(p);
+  ok(p.hp === fireHp, 'matching fire type counters the lava rim');
+  p.def = speciesById(7)!;
+  b.slowImmune = true;
+  p.x = arena.x + p.r - 1; p.vx = -400;
+  b.hitWalls(p);
+  ok(p.hp === fireHp, 'hazard immunity counters damage walls');
+  b.slowImmune = false;
+  b.damageWalls = [{ edge: 'left', start: 0, end: 1, type: 'fire' }, { edge: 'top', start: 0, end: 1, type: 'fire' }];
+  let wallHits = 0;
+  const damage = b.damagePlayer;
+  b.damagePlayer = () => { wallHits++; };
+  p.x = arena.x + p.r - 1; p.y = arena.y + p.r - 1; p.vx = p.vy = -400;
+  b.hitWalls(p);
+  ok(wallHits === 1 && p.vx > 0 && p.vy > 0, 'a corner bounce cannot double-charge damage');
+  b.damagePlayer = damage;
+
+  const f: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  f.spawnWave(0);
+  const e = f.enemies[0];
+  e.shieldN = 2;
+  const ehp = e.hp;
+  f.hurt(e, 20, '#fff');
+  ok(e.hp === ehp && e.shieldN === 1, 'Protect absorbs the first of two hits');
+  f.hurt(e, 20, '#fff');
+  ok(e.hp === ehp && e.shieldN === 0, 'Protect absorbs the last hit before breaking');
+  ok(f.texts.some((t: any) => t.text === 'SHIELD BROKE'), 'shield break uses the coalesced callout path');
+  f.hurt(e, 20, '#fff');
+  ok(e.hp < ehp, 'the hit after a broken shield damages HP');
+
+  b.slowImmune = false;
+  b.damageWalls = [];
+  p.x = 270; p.y = 470; p.vx = 600; p.vy = 0;
+  b.hazards = [{ kind: 'gravity', x: 270, y: 470, r: 80 }];
+  b.stepShot(1 / 60);
+  ok(p.vx < 550 && p.vx > 0, 'gravity panel slows a landlocked ball without bouncing it');
+  p.x = 270; p.y = 470; p.vx = 600; p.vy = 0; b.slowImmune = true;
+  b.stepShot(1 / 60);
+  ok(p.vx > 550, 'hazard immunity bypasses gravity panel drag');
+  b.slowImmune = false;
+  b.hazards = [{ kind: 'heal', x: 270, y: 470, r: 80 }];
+  p.x = 270; p.y = 470; p.vx = 100; p.vy = 0; p.hp = Math.round(p.maxHp * 0.5);
+  const hurtHp = p.hp;
+  b.stepShot(1 / 60);
+  const healedHp = p.hp;
+  b.stepShot(1 / 60);
+  ok(healedHp > hurtHp && p.hp === healedHp, 'healing panel mends once per shot, not per substep');
+  b.stopShots++;
+  b.stepShot(1 / 60);
+  ok(p.hp > healedHp && p.hp <= p.maxHp, 'healing panel rearms for the next shot');
+  p.hp = p.maxHp - 1; b.stopShots++;
+  b.stepShot(1 / 60);
+  ok(p.hp === p.maxHp, 'healing panel clamps to maximum HP');
+
+  const walls = buildRoom(ROOM_LAYOUTS[0], 'plant', mulberry32(1)).damageWalls;
+  ok(walls.length > 0 && walls.every((w) => w.type === 'electric'), 'plant room data arms electric edge segments');
+  const nextWalls = buildRoom(ROOM_LAYOUTS[0], 'plant', mulberry32(1), 1).damageWalls;
+  ok(nextWalls[0].edge !== walls[0].edge, 'successive battles change the authored damage-wall segment');
+  for (const [theme, kind] of [['cavern', 'gravity'], ['meadow', 'heal'], ['marsh', 'mine'], ['shore', 'warp'], ['sky', 'boost'], ['sanctum', 'power']] as const) {
+    const room = buildRoom(ROOM_LAYOUTS[0], theme, () => 0.99);
+    const panels = room.hazards.filter((h) => h.kind === (kind as string));
+    ok(panels.length >= (kind === 'warp' ? 2 : 1), `${theme} guarantees its stage fixture without a lucky roll`);
+    ok(panels.every((h) => ROOM_LAYOUTS[0][Math.floor(h.ny * 11)][Math.floor(h.nx * 9)] === '0'), `${theme} fixtures occupy authored floor cells`);
+  }
+  f.theme = 'dojo';
+  const protectedFoe = f.makeEnemy({ def: speciesById(7)!, nx: 0.5, ny: 0.3 }, 0);
+  ok(protectedFoe.shieldN >= 2, 'Reflect stage data gives foes a multi-hit shield');
+  const boss = f.makeEnemy({ def: speciesById(7)!, nx: 0.5, ny: 0.3, boss: true }, 0);
+  boss.shieldN = 0;
+  f.hurt(boss, boss.maxHp, '#fff');
+  ok(boss.sumStage === 1 && boss.shieldN === 3 && boss.hp > 0, 'Reflect boss rearms a three-hit shield on its next HP bar');
+
+  for (const theme of THEMES) {
+    const kind = STAGE_GIMMICKS[theme].kind;
+    if (kind === 'damage-wall' || kind === 'barrier') continue;
+    let fixtures = true, rngStable = true;
+    for (const grid of [...ROOM_LAYOUTS, ...ROOM_BOSS]) {
+      let draws = 0;
+      const room = buildRoom(grid, theme, () => { draws++; return 0.99; });
+      rngStable &&= draws === 1;
+      fixtures &&= kind === 'warp'
+        ? room.hazards.filter((h) => h.kind === 'warp' && h.pair === 2).length === 2
+        : room.hazards.some((h) => h.kind === kind && grid[Math.floor(h.ny * 11)][Math.floor(h.nx * 9)] === '0');
+    }
+    ok(fixtures, `${theme} signature fixture fits every authored room`);
+    ok(rngStable, `${theme} guaranteed fixtures consume no extra RNG draws`);
+  }
+}
 
 // --- bag items: pk_bag stock, constructor applies the run-start picks ------
 // NB: must run before any block that KOs a gym boss — a badge earn banks a
@@ -2092,6 +2212,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b as any).spawnWave(0);
   b.traits.clear();
   const e = b.enemies[0];
+  e.shieldN = 0;
   const hp0 = e.hp;
   (b as any).hurt(e, 50, '#fff');
   const d1 = hp0 - e.hp;
@@ -2406,6 +2527,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     const foe = run.enemies.find((e) => !e.boss && !e.def.shielded)!;
     for (const other of run.enemies) if (other !== foe) other.dead = true;
     foe.weakA = 0;
+    foe.shieldN = 0;
     const striker = run.players[0];
     striker.x = foe.x + Math.cos(angle) * (foe.r + striker.r + 4);
     striker.y = foe.y + Math.sin(angle) * (foe.r + striker.r + 4);
@@ -2490,7 +2612,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     dp.cd = 0;
     // line three foes up on the beam path: caster at left, targets east
     dp.x = 60; dp.y = 400;
-    bd.enemies.forEach((e, i) => { e.x = 200 + i * 60; e.y = 400; e.vx = e.vy = 0; });
+    bd.enemies.forEach((e, i) => { e.x = 200 + i * 60; e.y = 400; e.vx = e.vy = 0; e.shieldN = 0; });
     const hps = bd.enemies.map((e) => e.hp);
     (bd as any).bumpAlly(dp, dp);
     ok((bd as any).beams.length > 0 && (bd as any).beams[0].w! > 2, 'hyper beam fires the fat line');
@@ -2533,6 +2655,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b5 as any).spawnWave(0);
   const v1 = b5.enemies[0];
   const v2 = b5.enemies[1];
+  v1.shieldN = v2.shieldN = 0;
   v1.volatile = true;
   v2.x = v1.x + 30;
   v2.y = v1.y;
@@ -2664,6 +2787,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b9 as any).spawnWave(0);
   const g9 = b9.enemies[0];
   const w9 = b9.enemies[1];
+  b9.enemies.forEach((e) => { e.shieldN = 0; });
   g9.supp = 'aegis';
   w9.hp = Math.floor(w9.maxHp * 0.4); // weakest → the ward target
   (b9 as any).pendingAttacks = [g9];
@@ -2693,6 +2817,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   (b11 as any).spawnWave(0);
   const z1 = b11.enemies[0];
   const z2 = b11.enemies[1];
+  z1.shieldN = z2.shieldN = 0;
   z1.link = z2;
   z2.link = z1;
   z1.revives = z2.revives = 2;
@@ -2708,6 +2833,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const b12 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(7));
   (b12 as any).spawnWave(0);
   const sk = b12.enemies[0];
+  sk.shieldN = 0;
   sk.skull = true;
   const s0 = b12.score;
   b12.players[0].hp = 10;
@@ -3260,6 +3386,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
     (b as any).spawnWave(0);
     (b as any).hazards = []; // static fields silence casts
+    b.enemies.forEach((e) => { e.shieldN = 0; });
     const p = b.players[0];
     p.def = { ...p.def, id }; // masquerade — moveOf keys the dex id
     p.cd = 0;

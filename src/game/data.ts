@@ -1647,6 +1647,7 @@ export interface RoomDef {
   blocks: BlockDef[];
   hazards: HazardSpawn[];
   anchors: { nx: number; ny: number }[];
+  damageWalls: DamageWall[];
 }
 
 // Gym flavor: the boss's entourage shares its type — every leader runs a
@@ -1879,7 +1880,7 @@ export function rivalWave(defs: SpeciesDef[], rng: () => number): WaveSpawn[] {
 // Hazard zones: per-theme arena dangers laid out alongside a wave's spawns.
 // Same normalized coords as WaveSpawn; r is a fraction of arena width.
 // Zones stay out of the bottom 25% (player turf) and inside the side walls.
-export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power' | 'ice';
+export type HazardKind = 'lava' | 'grass' | 'gust' | 'spikes' | 'static' | 'mine' | 'warp' | 'boost' | 'well' | 'power' | 'ice' | 'heal' | 'gravity';
 export interface HazardSpawn {
   kind: HazardKind;
   nx: number;
@@ -1889,6 +1890,33 @@ export interface HazardSpawn {
   pair?: number; // warp only: pads sharing an id are linked
   moat?: boolean; // room liquid art; the theme still determines its effect
 }
+
+export interface DamageWall {
+  edge: 'left' | 'right' | 'top' | 'bottom';
+  start: number;
+  end: number;
+  type: PokeType;
+}
+
+export const STAGE_GIMMICKS: Record<Theme, { kind: HazardKind | 'damage-wall' | 'barrier'; label: string; type: PokeType }> = {
+  grove: { kind: 'damage-wall', label: 'DMG WALL', type: 'grass' },
+  cavern: { kind: 'gravity', label: 'GRAVITY', type: 'rock' },
+  volcano: { kind: 'damage-wall', label: 'DMG WALL', type: 'fire' },
+  sky: { kind: 'boost', label: 'SPEED UP', type: 'flying' },
+  meadow: { kind: 'heal', label: 'HEAL', type: 'grass' },
+  shore: { kind: 'warp', label: 'WARP', type: 'water' },
+  plant: { kind: 'damage-wall', label: 'DMG WALL', type: 'electric' },
+  marsh: { kind: 'mine', label: 'MINES', type: 'poison' },
+  sanctum: { kind: 'power', label: 'ATK UP', type: 'psychic' },
+  dojo: { kind: 'barrier', label: 'REFLECT', type: 'fighting' },
+  tower: { kind: 'warp', label: 'WARP', type: 'ghost' },
+};
+
+const DAMAGE_WALL_PHASES: Pick<DamageWall, 'edge' | 'start' | 'end'>[][] = [
+  [{ edge: 'left', start: 2 / 11, end: 7 / 11 }],
+  [{ edge: 'right', start: 3 / 11, end: 8 / 11 }],
+  [{ edge: 'top', start: 2 / 9, end: 7 / 9 }, { edge: 'left', start: 2 / 11, end: 5 / 11 }],
+];
 
 // Compile one room template into court furniture: '2' cells merge into
 // horizontal slabs, '3' themes into lava pools (volcano) or silence
@@ -1928,7 +1956,7 @@ export const GIMMICK: Record<Theme, 'warp' | 'boost' | 'well'> = {
   tower: 'warp', // the dead don't stay where you left them
 };
 
-export function buildRoom(grid: string[], theme: Theme, rng: () => number): RoomDef {
+export function buildRoom(grid: string[], theme: Theme, rng: () => number, battle = 0): RoomDef {
   const blocks: BlockDef[] = [];
   const hazards: HazardSpawn[] = [];
   const anchors: { nx: number; ny: number }[] = [];
@@ -1978,7 +2006,26 @@ export function buildRoom(grid: string[], theme: Theme, rng: () => number): Room
       hazards.push({ kind: 'well', nx: 0.3 + rng() * 0.4, ny: 0.2 + rng() * 0.35, r: 0.16 + rng() * 0.06 });
     }
   }
-  return { blocks, hazards, anchors };
+  const gimmick = STAGE_GIMMICKS[theme];
+  const damageWalls = gimmick.kind === 'damage-wall'
+    ? DAMAGE_WALL_PHASES[battle % DAMAGE_WALL_PHASES.length].map((w) => ({ ...w, type: gimmick.type }))
+    : [];
+  // Fixtures use existing floor cells, without consuming the wave's RNG.
+  if (gimmick.kind !== 'damage-wall' && gimmick.kind !== 'barrier') {
+    const floor: { nx: number; ny: number }[] = [];
+    for (let r = 2; r <= 6; r++) for (let c = 2; c <= 6; c++) {
+      if (grid[r][c] === '0') floor.push({ nx: (c + 0.5) / 9, ny: (r + 0.5) / 11 });
+    }
+    const a = floor[0], b = floor[floor.length - 1];
+    if (a && gimmick.kind === 'warp') {
+      if (b && Math.hypot(a.nx - b.nx, a.ny - b.ny) > 0.2) {
+        hazards.push({ kind: 'warp', ...a, r: 0.05, pair: 2 }, { kind: 'warp', ...b, r: 0.05, pair: 2 });
+      }
+    } else if (a) {
+      hazards.push({ kind: gimmick.kind, ...a, r: gimmick.kind === 'gravity' ? 0.14 : 0.055 });
+    }
+  }
+  return { blocks, hazards, anchors, damageWalls };
 }
 
 // Template guardrails — the rules Archero rooms live by: exact 9x11 dims,
