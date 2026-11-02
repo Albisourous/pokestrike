@@ -52,6 +52,21 @@ const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
   ok(!again.ultHint, 'later battles do not repeat ULT teaching');
 }
 
+// Wall-hit callouts stay on court, clear of fixed HUD even during camera kicks.
+{
+  const b: any = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  const cy = arena.y + arena.h / 2;
+  for (const [shake, punch] of [[0, 0], [24, 0.1]]) {
+    b.shake = shake;
+    b.punch = punch;
+    const ascent = 40, descent = 10;
+    const top = (b.calloutY(-100, ascent, descent) - cy) * (1 + punch) + cy;
+    const bottom = (b.calloutY(2000, ascent, descent) - cy) * (1 + punch) + cy;
+    ok(top - ascent * (1 + punch) - shake / 2 >= arena.y, 'top-wall callout glyphs clear the header');
+    ok(bottom + descent * (1 + punch) + shake / 2 <= arena.y + arena.h - 56, 'bottom-wall callout glyphs clear the turn cue');
+  }
+}
+
 // --- stage gimmicks: real bounce contacts, shields and field panels -----
 {
   const b: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
