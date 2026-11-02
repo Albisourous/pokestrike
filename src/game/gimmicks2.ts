@@ -4,7 +4,8 @@
 // the ball until one post takes LASER_POST_HITS (MS barrier). Ice Path
 // patches pause the MS shot-decay clock while the ball glides over them.
 // Rocket Hideout spinner tiles snap the ball to their arrow with a speed
-// kick (MS accel/redirect panels).
+// kick (MS accel/redirect panels). Saffron Gym warp pads come in cross-court
+// pairs: the ball steps on one and exits its partner (MS warp).
 // Battle owns one Field2 per room, built by installField2 and stepped once
 // per physics substep.
 import type { SpeciesDef } from './data';
@@ -27,11 +28,12 @@ export const LASER_BEAM_R = 4; // px beam half thickness
 export const ICE_PAUSE_MAX = 0.75; // s of shot-decay clock one shot can bank gliding on ice
 export const ICE_SKATE = 1.1; // speed kick for ice abilities entering a patch
 export const SPIN_KICK = 1.15; // speed kick when a spinner tile redirects the ball
+export const WARP_FLASH = 0.35; // s the Gen 3 teleport ring plays at both pads
 const POST_HIT_CD = 0.12; // s, one contact counts once across substeps
 const PIDGEOT = 18, MAGNEMITE = 81;
 const SPIN_ARROW: TileRect = [1350, 702, 18, 9]; // Gen 3 gym-panel chevron, points down
 
-export type Gimmick2Kind = 'wind' | 'laser' | 'ice' | 'spin';
+export type Gimmick2Kind = 'wind' | 'laser' | 'ice' | 'spin' | 'warp';
 export interface Gimmick2 { kind: Gimmick2Kind; label: string; type: PokeType; hint: string }
 export const STAGE_GIMMICKS2: Partial<Record<Theme, Gimmick2>> = {
   sky: { kind: 'wind', label: 'WIND', type: 'flying', hint: 'FLYING/LEVITATE HELPS' },
@@ -41,6 +43,7 @@ export const STAGE_GIMMICKS2: Partial<Record<Theme, Gimmick2>> = {
   cavern: { kind: 'ice', label: 'ICE PATH', type: 'water', hint: 'ICE ABILITIES SKATE · FIRE MELTS' },
   dojo: { kind: 'spin', label: 'SPINNER', type: 'psychic', hint: 'PSYCHIC/OWN TEMPO IGNORES' },
   tower: { kind: 'spin', label: 'SPINNER', type: 'psychic', hint: 'PSYCHIC/OWN TEMPO IGNORES' },
+  marsh: { kind: 'warp', label: 'WARP', type: 'ghost', hint: 'GHOST PHASES THROUGH' },
 };
 
 type Def = Pick<SpeciesDef, 'type' | 'type2' | 'ability'>;
@@ -53,13 +56,16 @@ const SKATERS = new Set(['snow-cloak', 'ice-body', 'thick-fat']);
 export const skatesIce = (d: Def) => SKATERS.has(d.ability);
 export const meltsIce = (d: Def) => d.type === 'fire' || d.type2 === 'fire';
 export const countersGimmick2 = (d: Def, g: Gimmick2) =>
-  g.kind === 'wind' ? ignoresWind(d) : g.kind === 'laser' ? passesLaser(d) : g.kind === 'spin' ? ignoresSpin(d) : skatesIce(d);
+  g.kind === 'wind' ? ignoresWind(d) : g.kind === 'laser' ? passesLaser(d) : g.kind === 'spin' ? ignoresSpin(d) : g.kind === 'warp' ? typed(d, 'ghost') : skatesIce(d);
 
 interface Rect { x: number; y: number; w: number; h: number }
 export interface Post { x: number; y: number; hp: number; t: number }
 export interface IcePatch extends Rect { melt: number; skated: number } // shot index of the last melt / skate kick
 export interface SpinTile extends Rect { dx: number; dy: number; used: number } // used = shot index of the last kick
+export interface WarpPad extends Rect { pair: number; used: number } // used = shot index the pair last fired
 export interface Field2 {
+  warp: WarpPad[] | null;
+  warpFx: { x: number; y: number; t: number }[];
   spin: SpinTile[] | null;
   ice: IcePatch[] | null;
   icePause: number; // clock seconds banked this shot
@@ -124,13 +130,28 @@ export function spinPlan(grid: string[], taken: Set<string> = new Set()): { c: n
   return out;
 }
 
+// Warp pads: four floor cells on two rows, mirror-symmetric; each pad's
+// partner sits across the court on the other row, so a warp always crosses.
+export function warpPlan(grid: string[], taken: Set<string> = new Set()): { c: number; r: number; pair: number }[] {
+  const open = (c: number, r: number) => grid[r][c] === '0' && !taken.has(`${c},${r}`);
+  for (const [lo, hi] of [[7, 3], [6, 4], [8, 2]]) {
+    const c = [1, 2, 3].find((k) => open(k, lo) && open(8 - k, lo) && open(k, hi) && open(8 - k, hi));
+    if (c !== undefined) return [{ c, r: lo, pair: 0 }, { c: 8 - c, r: hi, pair: 0 }, { c: 8 - c, r: lo, pair: 1 }, { c, r: hi, pair: 1 }];
+  }
+  return [];
+}
+
 export function installField2(grid: string[] | null, theme: Theme, a: Rect, battle: number, hazards: { nx: number; ny: number }[] = []): Field2 | null {
   const g = STAGE_GIMMICKS2[theme];
   if (!g || !grid || isGentleRoom(grid)) return null;
-  const f: Field2 = { spin: null, ice: null, icePause: 0, iceShot: -1, wind: null, laser: null, inWind: false };
+  const f: Field2 = { warp: null, warpFx: [], spin: null, ice: null, icePause: 0, iceShot: -1, wind: null, laser: null, inWind: false };
   const cw = a.w / 9, ch = a.h / 11;
   const taken = new Set(hazards.map((z) => `${Math.floor(z.nx * 9)},${Math.floor(z.ny * 11)}`));
-  if (g.kind === 'spin') {
+  if (g.kind === 'warp') {
+    const sz = Math.min(cw, ch);
+    f.warp = warpPlan(grid, taken).map((p) => ({ x: a.x + cw * p.c + (cw - sz) / 2, y: a.y + ch * p.r + (ch - sz) / 2, w: sz, h: sz, pair: p.pair, used: -1 }));
+    if (!f.warp.length) return null;
+  } else if (g.kind === 'spin') {
     const sz = Math.min(cw, ch); // square tiles, centred in the cell
     f.spin = spinPlan(grid, taken).map((p) => ({ x: a.x + cw * p.c + (cw - sz) / 2, y: a.y + ch * p.r + (ch - sz) / 2, w: sz, h: sz, dx: p.dx, dy: p.dy, used: -1 }));
     if (!f.spin.length) return null;
@@ -207,6 +228,19 @@ export function stepField2(f: Field2 | null, u: Field2Ball, h: number, time: num
       sfx('ui');
     }
   }
+  const wp = f.warp?.find((q) => q.used !== shot && u.x >= q.x && u.x <= q.x + q.w && u.y >= q.y && u.y <= q.y + q.h);
+  const twin = wp && !typed(u.def, 'ghost') && f.warp!.find((q) => q !== wp && q.pair === wp.pair);
+  if (wp && twin) {
+    // velocity rides through untouched; the pair stays spent this shot so it cannot loop
+    wp.used = twin.used = shot;
+    f.warpFx = f.warpFx.filter((e) => time - e.t < WARP_FLASH);
+    f.warpFx.push({ x: wp.x + wp.w / 2, y: wp.y + wp.h / 2, t: time }, { x: twin.x + twin.w / 2, y: twin.y + twin.h / 2, t: time });
+    fx.burst(u.x, u.y, TYPE_COLOR.ghost);
+    u.x = twin.x + twin.w / 2;
+    u.y = twin.y + twin.h / 2;
+    fx.burst(u.x, u.y, TYPE_COLOR.ghost);
+    sfx('gust');
+  }
   const w = f.wind;
   if (w) {
     const inside = u.y >= w.y0 && u.y <= w.y1;
@@ -279,6 +313,30 @@ export function drawField2Floor(ctx: CanvasRenderingContext2D, f: Field2 | null,
   if (!f) return;
   ctx.save();
   ctx.imageSmoothingEnabled = false;
+  // warp pads: Saffron floor panel in a steel rim with a Gen 3 vortex
+  // turning on it; partners share a rim colour, a spent pair dims
+  for (const t of f.warp ?? []) {
+    const spent = t.used === shot, m = 5;
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(t.x + m, t.y + t.h - m, t.w - m * 2, 5);
+    ctx.globalAlpha = spent ? 0.5 : 1;
+    drawTile(ctx, TILE_FLAGSTONE, t.x + m + 3, t.y + m + 3, t.w - m * 2 - 6, t.h - m * 2 - 6);
+    ctx.strokeStyle = WARP_RIM[t.pair % WARP_RIM.length];
+    ctx.lineWidth = 3;
+    ctx.strokeRect(t.x + m + 1.5, t.y + m + 1.5, t.w - m * 2 - 3, t.h - m * 2 - 3);
+    for (let k = 0; k < 4; k++) drawTile(ctx, TILE_STEEL_TRIM, t.x + m + (k % 2) * (t.w - m * 2 - 6), t.y + m + (k >> 1) * (t.h - m * 2 - 6), 6, 6);
+    const vortex = animSheet('shadow_ball');
+    if (vortex) {
+      const s = (t.w - m * 2) * 0.7;
+      ctx.save();
+      ctx.translate(t.x + t.w / 2, t.y + t.h / 2);
+      ctx.rotate((spent ? 0 : time * 3) * (t.pair ? -1 : 1));
+      ctx.globalAlpha = spent ? 0.3 : 0.9;
+      ctx.drawImage(vortex, -s / 2, -s / 2, s, s);
+      ctx.restore();
+    }
+  }
   // spinner tiles: lavender gym floor in a steel rim, Gen 3 chevrons
   // scrolling toward the arrow; a spent tile dims for the rest of the shot
   for (const t of f.spin ?? []) {
@@ -327,6 +385,7 @@ export function drawField2Floor(ctx: CanvasRenderingContext2D, f: Field2 | null,
   ctx.restore();
 }
 
+const WARP_RIM = ['#c890ff', '#f8d030'];
 const sheets = new Map<string, HTMLImageElement>();
 function animSheet(name: string): HTMLImageElement | undefined {
   if (typeof Image === 'undefined') return undefined;
@@ -373,6 +432,15 @@ export function drawField2(ctx: CanvasRenderingContext2D, f: Field2 | null, time
     drawMon(ctx, PIDGEOT, 0, 0, 44);
     ctx.restore();
   }
+  // Gen 3 teleport: a gold ring blinks open over the pad left and the pad reached
+  const ring = animSheet('gold_ring');
+  for (const e of f.warpFx) {
+    const k = (time - e.t) / WARP_FLASH;
+    if (!ring || k < 0 || k >= 1) continue;
+    ctx.globalAlpha = 1 - k;
+    const rw = 12 + k * 36, rh = 56 + k * 16;
+    ctx.drawImage(ring, e.x - rw / 2, e.y - rh / 2, rw, rh);
+  }
   const l = f.laser;
   if (l && !l.down) {
     const flick = 0.75 + Math.sin(time * 31) * 0.15;
@@ -413,6 +481,7 @@ export function drawField2(ctx: CanvasRenderingContext2D, f: Field2 | null, time
 // one short tag per gimmick while the court intro runs
 export function labelField2(f: Field2 | null, alpha: number, put: (text: string, x: number, y: number, color: string, alpha: number) => void) {
   if (!f || alpha <= 0) return;
+  if (f.warp) put('WARP', f.warp[0].x + f.warp[0].w / 2, f.warp[0].y - 6, TYPE_COLOR.ghost, alpha);
   if (f.spin) put('SPINNER', f.spin[0].x + f.spin[0].w / 2, f.spin[0].y - 6, TYPE_COLOR.psychic, alpha);
   if (f.ice) put('ICE PATH', f.ice[0].x + f.ice[0].w / 2, f.ice[0].y + f.ice[0].h / 2, '#bfe8ff', alpha);
   if (f.wind) put('WIND', (f.wind.x0 + f.wind.x1) / 2, (f.wind.y0 + f.wind.y1) / 2, TYPE_COLOR.flying, alpha);
