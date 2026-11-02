@@ -10740,12 +10740,16 @@ export class Battle {
       ctx.font = font(next <= 1 ? 15 : 14);
       ctx.textAlign = 'center';
       const tag = this.flee.is(u) ? '' : u.asleep ? 'zZ' : u.boss ? `★${Math.ceil(next)}` : `${Math.ceil(next)}`;
+      // the disc rides top-right of the sprite — clamped inside the court
+      // so a rim-hugging foe's clock doesn't tuck under the frame
+      const tagX = Math.max(this.arena.x + 14, Math.min(this.arena.x + this.arena.w - 14, u.x + u.r - 2));
+      const tagY = Math.max(this.arena.y + 17, u.y - u.r + 3);
       if (next <= 2) {
         // dark disc behind the last ticks — urgency readable at a glance;
         // a type-colored rim means a move clock, not the plain zap, lands
         ctx.fillStyle = 'rgba(8,10,20,0.85)';
         ctx.beginPath();
-        ctx.arc(u.x + u.r - 2, u.y - u.r + 3, Math.max(9, ctx.measureText(tag).width / 2 + 4), 0, Math.PI * 2);
+        ctx.arc(tagX, tagY, Math.max(9, ctx.measureText(tag).width / 2 + 4), 0, Math.PI * 2);
         ctx.fill();
         const clk = u.clocks.find((c) => c.t === next && c.t < u.timer);
         if (clk) {
@@ -10756,9 +10760,9 @@ export class Battle {
       }
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 3;
-      ctx.strokeText(tag, u.x + u.r - 2, u.y - u.r + 7);
+      ctx.strokeText(tag, tagX, tagY + 4);
       ctx.fillStyle = urgent ? '#ff6b6b' : next <= 2 ? '#ffb84d' : '#fff';
-      ctx.fillText(tag, u.x + u.r - 2, u.y - u.r + 7);
+      ctx.fillText(tag, tagX, tagY + 4);
       if (u.boss || u.mid) {
         const heavy = `${TYPE_MOVE[u.def.type].move} · ${Math.ceil(u.bigT)} · ALL`;
         ctx.font = fontB(13);
