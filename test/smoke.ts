@@ -4012,7 +4012,7 @@ function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
   const b = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
   (b as any).spawnWave(1);
   const par = (b as any).par;
-  ok(par >= 10 && par <= 24 && par === Math.max(10, (b as any).battles * 4), `stop par sits in MS's 10-24 range (${par})`);
+  ok(par >= 10 && par <= 24 && par === Math.max(10, (b as any).battles * 6), `stop par sits in MS's 10-24 range (${par})`);
   (b as any).battles = 1;
   (b as any).stopShots = par;
   const s0 = (b as any).score;
