@@ -1475,6 +1475,7 @@ export interface ClearCard {
   best: { rank: boolean; turns: boolean; combo: boolean }; // beat an existing record
   t0?: number; // main.ts stamps the first drawn frame
   missions?: import('./missions').Mission[]; // the stop's goals, settled at clear
+  chain?: { best: number; alls: number }; // most allies linked in one shot · ALL CONNECTs
 }
 let memClear: Record<string, StageBest> = {};
 export function clearBests(): Record<string, StageBest> {
