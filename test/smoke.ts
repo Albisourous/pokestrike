@@ -20,6 +20,7 @@ import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
+import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -4519,6 +4520,54 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(ults === 1, `ULT READY fires once when the meter fills (${ults})`);
   (u0 as any).wipe();
   ok(u0.telop.queue.some((t) => t.kind === 'over') || u0.telop.cur?.kind === 'over', 'a wipe calls GAME OVER');
+}
+
+// --- Gen 3 battle-animation pool ----------------------------------------
+{
+  clearAnims();
+  ok(animCount() === 0, 'animation pool starts empty');
+  for (const type of TYPES) {
+    ok(!!MOVE_ANIM[type], `${type} has a Gen 3 recipe`);
+    ok(recipeFor(type, TYPE_MOVE[type].move) === MOVE_ANIM[type], `${TYPE_MOVE[type].move} resolves its recipe`);
+    const r = MOVE_ANIM[type];
+    beam(r, 0, 0, 100, 100); burst(r, 100, 100, true); rain(r, 100, 100); ring(r, 100, 100, 80);
+    stepAnims(1);
+    ok(animCount() === 0, `${type} recipes finish within gameplay timings`);
+  }
+  ok(recipeFor('fire', 'ICE BEAM').sheet === 'ice', 'named move overrides the type recipe');
+  ok(recipeFor('fire', 'SHADOW BALL') === MOVE_ANIM.ghost, 'Shadow Ball overrides its type');
+  ok(recipeFor('normal', 'EARTHQUAKE').sheet === 'dirt', 'Earthquake uses dirt');
+  ok(recipeFor('fire', 'unknown') === MOVE_ANIM.fire && recipeFor('fire', 'toString') === MOVE_ANIM.fire,
+    'unknown move names fall back to the type');
+  for (const s of Object.values(SHEETS)) ok(existsSync(`public/${s.src}`), `${s.src} is vendored`);
+  clearAnims();
+  for (let i = 0; i < 100; i++) spawnAnim('impact', 0, 0);
+  ok(animCount() === MAX_ANIMS && !spawnAnim('impact', 0, 0), '100 effects stay within the 24-slot hard cap');
+  stepAnims(1);
+  ok(animCount() === 0, 'expired animations release every slot');
+  for (let i = 0; i < SOFT_CAP; i++) spawnAnim('spark', 0, 0);
+  ok(!spawnAnim('spark', 0, 0, 0, 0, 2, 2, 1, 0, 0, 0, 20, false, 0, 0.3, false, false, true),
+    'particles skip at the soft cap');
+  ok(animCount() === SOFT_CAP && spawnAnim('impact', 0, 0), 'core impact still spawns above the soft cap');
+  const stub = {} as CanvasRenderingContext2D;
+  drawAnims(stub); drawTell(stub, 'electric', 0, 0, 100, 100, 1); drawTellRing(stub, 'water', 0, 0, 80, 1);
+  ok(true, 'headless unloaded sprite draws safely skip the canvas');
+  clearAnims();
+  ok(!spawnAnim('impact', 0, 0, 0, 0, 2, 2, 1, 0, 0, 0, 20, false, 0, 0), 'zero-life spawns are rejected');
+  spawnAnim('impact', 0, 0, 0, 0, 2, 2, 1, 0, 0, 0, 20, false, 0.2, 0.3);
+  stepAnims(0.1); stepAnims(0);
+  ok(animCount() === 1, 'delay and zero dt preserve a queued effect');
+  stepAnims(0.5);
+  ok(animCount() === 0, 'a step crossing delay and lifetime drains the effect');
+  burst(MOVE_ANIM.electric, 0, 0, false);
+  const requests = drainAnimRequests();
+  ok(requests.shake === 7 && requests.color === MOVE_ANIM.electric.color && requests.duration > 0,
+    'recipes request shake and flash');
+  const again = drainAnimRequests();
+  ok(again === requests && again.shake === 0 && again.duration === 0, 'request drain reuses its object and consumes requests');
+  clearAnims();
+  ok(animCount() === 0 && drainAnimRequests().shake === 0, 'clear resets instances and requests');
+  drawAnims(stub);
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
