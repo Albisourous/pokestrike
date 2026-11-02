@@ -6947,7 +6947,7 @@ export class Battle {
     this.relocateBoss(e);
     for (const p of this.players) {
       if (!p.dead && dist(e, p) <= e.r + p.r + 40) {
-        this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, zapPower), e);
+        this.damagePlayer(p, specDamage(this.foeSpa(e), p.def.stats.spd, 1, zapPower), e);
         if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
       }
     }
@@ -7016,7 +7016,7 @@ export class Battle {
           const t = Math.max(0, Math.min(1, ((p.x - e.x) * dx + (p.y - e.y) * dy) / dl));
           const px = e.x + dx * t, py = e.y + dy * t;
           if (Math.hypot(p.x - px, p.y - py) < p.r + 26) {
-            hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
+            hit(p, specDamage(this.foeSpa(e), p.def.stats.spd, 1, blastPower));
           }
         }
         break;
@@ -7034,7 +7034,7 @@ export class Battle {
         this.waves.push({
           x: e.x, y: e.y, r: 0, maxR: R, t: 0.5, life: 0.5,
           color, hits: new Set(), hostile: true,
-          onHit: (p) => hit(p, specDamage(e.def.id === 112 ? e.def.stats.atk : e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+          onHit: (p) => hit(p, specDamage(e.def.id === 112 ? this.foeAtk(e) : this.foeSpa(e), p.def.stats.spd, 1, blastPower)),
         });
         if (scorched) this.scar(e.x, e.y, 38);
         break;
@@ -7049,7 +7049,7 @@ export class Battle {
           .forEach((p, i) => {
             this.orbs.push({
               x: e.x, y: e.y, target: p,
-              dmg: Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower)),
+              dmg: Math.round(specDamage(this.foeSpa(e), p.def.stats.spd, 1, blastPower)),
               t: 2.5, wob: i * 2.1, color, hostile: true, src: e,
             });
           });
@@ -7061,7 +7061,7 @@ export class Battle {
         for (const p of this.players) {
           if (!p.dead && dist(e, p) <= R + p.r) {
             this.scar(p.x, p.y, 14);
-            hit(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower));
+            hit(p, specDamage(this.foeSpa(e), p.def.stats.spd, 1, blastPower));
           }
         }
       }
@@ -7076,7 +7076,7 @@ export class Battle {
     const pow = e.boss ? BOSS_MOVE_POW : FOE_MOVE_POW;
     let thorns = false;
     const hit = (p: Unit) => {
-      const dmg = Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower) * pow * (c.kind === 'meteor' ? 0.6 : 1));
+      const dmg = Math.round(specDamage(this.foeSpa(e), p.def.stats.spd, 1, blastPower) * pow * (c.kind === 'meteor' ? 0.6 : 1));
       const hp0 = p.hp;
       this.damagePlayer(p, dmg, e);
       if (c.drain) this.drainHit(e, c.move, Math.max(0, hp0 - Math.max(0, p.hp)));
@@ -7271,7 +7271,7 @@ export class Battle {
       if (move.kind === 'meteor') animRain(anim, p.x, p.y);
       else if (move.kind === 'quake') animBurst(anim, p.x, p.y, true);
       else animBeam(anim, e.x, e.y, p.x, p.y);
-      this.damagePlayer(p, specDamage(e.def.stats.spa, p.def.stats.spd, 1, zapPower) * BOSS_BIG_POW, e);
+      this.damagePlayer(p, specDamage(this.foeSpa(e), p.def.stats.spd, 1, zapPower) * BOSS_BIG_POW, e);
     }
     if (this.thorns > 0) this.hurt(e, this.thorns, '#c8a44d');
     e.bigT = BOSS_BIG_TIMER;
@@ -7291,8 +7291,17 @@ export class Battle {
     return (want && (u.def.type === want || u.def.type2 === want) ? 1.12 : 1) * weatherSpeed(u.def.ability, this.weather);
   }
 
+  // The level tax every enemy hit pays — pow carries the Gen-3 growth
+  // curve that lvlHp always spent but raw atk never did. sqrt-damped so
+  // route-1 fodder (pow 1) is unchanged while a deep-climb ace finally
+  // bites: ~x2.5 at Lv50, ~x3.2 at Lv85.
+  private foeLvl(e: Unit) {
+    return Math.sqrt(e.pow);
+  }
+
   private foeAtk(e: Unit) {
     return e.def.stats.atk
+      * this.foeLvl(e)
       * e.atkMul // moxie: a fed predator swings that much harder
       * (e.burnT > 0 ? 0.75 : 1) // a singed foe swings dulled — same burn rule the ball plays by
       // intimidate on your bench: a living menace mon cowes the whole pack
@@ -7302,6 +7311,13 @@ export class Battle {
       // pack alpha: a living leader rallies every packmate's hits — the
       // leader itself doesn't march under its own flag
       * (!e.def.alpha && this.enemies.some((a) => !a.dead && a.def.alpha) ? 1.3 : 1);
+  }
+
+  // The special side of the same number — burn, intimidate and guts are
+  // physical-only levers, so boss blasts and clock moves pay the bare
+  // level tax and nothing else.
+  private foeSpa(e: Unit) {
+    return e.def.stats.spa * this.foeLvl(e);
   }
 
   // The multiplier stack every enemy hit pays on the way in — foe/boss
@@ -7317,7 +7333,7 @@ export class Battle {
   // make. Sash/guard trims, absorb and the MISS die stay out: it's a
   // read, not a promise.
   private foeDmg(e: Unit, target: Unit, pow = zapPower, spec = false) {
-    const raw = spec ? specDamage(e.def.stats.spa, target.def.stats.spd, 1, pow) : physDamage(this.foeAtk(e), target.def.stats.def, 1, pow);
+    const raw = spec ? specDamage(this.foeSpa(e), target.def.stats.spd, 1, pow) : physDamage(this.foeAtk(e), target.def.stats.def, 1, pow);
     return Math.max(1, Math.round(raw * this.foeHitMult(e)));
   }
 

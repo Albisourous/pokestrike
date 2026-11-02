@@ -6007,6 +6007,13 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const cowed = intimidate.b.foeAtk(foe);
   intimidate.p.dead = true;
   ok(Math.abs(cowed / intimidate.b.foeAtk(foe) - 0.8) < 1e-9, 'a living Intimidate mon lowers foe attack exactly once');
+  {
+    const { b } = court(4);
+    const lo = b.makeEnemy({ def: speciesById(4)!, nx: 0.5, ny: 0.2, lvl: 5 }, 0);
+    const hi = b.makeEnemy({ def: speciesById(4)!, nx: 0.5, ny: 0.2, lvl: 50 }, 0);
+    ok(b.foeAtk(hi) / b.foeAtk(lo) > 1.5, 'a deep-climb foe hits meaningfully harder than route-1 fodder');
+    ok(Math.abs(b.foeAtk(lo) / speciesById(4)!.stats.atk - 1) < 0.05, 'a Lv5 foe attack stays at its old flat value');
+  }
   ok(counterHint(STAGE_GIMMICKS.marsh) === 'MINES · LEVITATE HELPS' && countersGimmick(speciesById(92)!, STAGE_GIMMICKS.marsh)
     && !countersGimmick(speciesById(4)!, STAGE_GIMMICKS.marsh), 'stop hints and roster counter flags match the real hazard rule');
 }
