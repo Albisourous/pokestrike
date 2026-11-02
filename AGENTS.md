@@ -66,7 +66,8 @@ server, 540×960 letterboxed logical space, custom circle physics.
 - `src/game/home/raid.ts` — daily raid lobby scene, boss weaknesses, counter hints, and reward preview.
 - `src/game/home/shop.ts` — cached prize-counter scene with live clerk, rate-up Pokémon, and shop props.
 - `src/game/home/town.ts` — framed village scene, building tap rectangles, and villager strolls.
-- `src/game/screens.ts` — all drawing + hit rects: title home menu (ambient wilds, TODAY card, currency bar; home tab bodies now live in `src/game/home/`), draft offers (from `draftOrder(rng)` in `data.ts`), result card, and the overlays — hatcher (pull theatre + spark shop), lab, tasks, dex, trophies, board, help deck
+- `src/game/home/overlays.ts` — Town building overlays: PROF.'S LAB upgrade cards, TROPHIES badge case + list, HALL OF FAME ledger, and their hit rects.
+- `src/game/screens.ts` — all drawing + hit rects: title home menu (ambient wilds, TODAY card, currency bar; home tab bodies now live in `src/game/home/`), draft offers (from `draftOrder(rng)` in `data.ts`), result card, and the overlays — hatcher (pull theatre + spark shop), tasks, dex, help deck
 - `src/main.ts` — canvas sizing, scene state machine, pointer routing
 - `public/sprites/gracidea/` — scenery canon (see Direction): `tileset`, `npcs` WebP atlases + JSON frame indexes (16px frames, magenta key)
 - `public/sprites/<id>.png` — 64×64 FRLG battle fronts by dex id, vendored from PokeAPI/sprites

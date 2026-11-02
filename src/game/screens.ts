@@ -1,7 +1,7 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { drawMissionTicks } from './missions';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -12,7 +12,7 @@ import { TILE_TOWN, TILE_GYM, TILE_GRASS, TILE_ROCK, TILE_BUSH, TILE_LAVA, TILE_
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, best, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, labLevels, LAB_UPGRADES, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
+import { dexIds, settings, setSetting, bagStock, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
 import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import { drawRaidLobby } from './home/raid';
 import type { TaskView } from './tasks';
@@ -29,6 +29,7 @@ export { DEX_DETAIL_R, dexBuyRect, dexRowAt, dexScrollMax, drawDex, drawDexDetai
 import { drawTownBody } from './home/town';
 export { ACH_BTN, BOARD_BTN, HALL_BTN, LAB_BTN, TASKS_BTN, TOWN_FOLK, TOWN_LOTS, townStrollAt } from './home/town';
 export type { TownStroll } from './home/town';
+export { HOF_CLIMB, OVL_CLOSE, achScrollMax, drawAch, drawBoard, drawLab, labHit, labScrollMax } from './home/overlays';
 
 export const W = 540;
 export const H = 960;
@@ -699,18 +700,6 @@ export function keyHint(ctx: CanvasRenderingContext2D, r: { x: number; y: number
   ctx.font = fontB(10);
   const w = ctx.measureText(label).width + 14;
   chip(ctx, r.x + r.w - w - 8, r.y + r.h - 24, label, { bg: INK, fg: PAPER });
-}
-
-// Lv pips — `max` dashes spread across the rect, the first `lvl` lit gold.
-// The lab card's level row; same pip language as the battle HUD's hp pips.
-export function levelPips(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }, lvl: number, max: number) {
-  const gap = 5;
-  const w = Math.max(4, (r.w - (max - 1) * gap) / max);
-  const h = Math.min(5, r.h);
-  for (let i = 0; i < max; i++) {
-    ctx.fillStyle = i < lvl ? GOLD : '#d0d0c8';
-    ctx.fillRect(r.x + i * (w + gap), r.y + (r.h - h) / 2, w, h);
-  }
 }
 
 // GBA pill: flat face on a solid INK press edge — the lip under the bottom
@@ -1851,231 +1840,11 @@ export const UPGRADES_BTN = { x: 30, y: DEAL_BTN.y + DEAL_BTN.h + 12, w: W - 60,
 // the pack pill is the rack's right column — exported for main's two-tap
 // armed-buy routing
 export const PACK_PILL = { x: UPGRADES_BTN.x + UPGRADES_BTN.w - 158, y: UPGRADES_BTN.y + 50, w: 140, h: 74 };
-// the empty ledger's door — a dead hall still owes you the climb
-export const HOF_CLIMB = { x: W / 2 - 110, y: 68 + 820 / 2 + 88, w: 220, h: 52 };
 // RAID: one boss card — today's shiny fight + its loaner trio — then the
 // FIGHT pill the tab's tap target rides on
 export const RAID_CARD = { x: 30, y: 210, w: W - 60, h: 502 };
 export const RAID_FIGHT = { x: 30, y: RAID_CARD.y + RAID_CARD.h + 16, w: W - 60, h: 64 };
 const DEX_PANEL = { x: 30, y: 68, w: W - 60, h: H - 140 };
-// --- hall of fame: the top climbs this device has logged, score-ranked ---
-const BOARD_ROW = 74;
-const BOARD_HEAD = 84;
-
-export function drawBoard(ctx: CanvasRenderingContext2D) {
-  const r = DEX_PANEL;
-  scrim(ctx);
-  uiPanel(ctx, r, 'HALL OF FAME', { rad: 14 });
-  uiClose(ctx, { x: r.x + r.w - 48, y: r.y + 12, w: 40, h: 40 });
-
-  ctx.textAlign = 'center';
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('the top climbs logged on this device · score rules all', r.x + r.w / 2, r.y + 57);
-
-  const list = board();
-  if (!list.length) {
-    fitFont(ctx, 'NO RUNS YET · CLIMB AND CLAIM A SPOT', 10, r.w - 40);
-    ctx.fillStyle = INK_FAINT;
-    ctx.fillText('NO RUNS YET · CLIMB AND CLAIM A SPOT', r.x + r.w / 2, r.y + 192);
-    // an empty hall still teaches the climb — the rank ladder up the middle
-    const rt = tier();
-    ctx.font = fontB(10);
-    ctx.fillStyle = INK_SOFT;
-    ctx.fillText(`RANK LADDER · YOU'RE ${rt.name}`, r.x + r.w / 2, r.y + 240);
-    LADDER.forEach((t, i) => {
-      const ty = r.y + 264 + i * 44;
-      const cur = i === rt.i;
-      ctx.globalAlpha = cur ? 1 : 0.6;
-      ctx.fillStyle = t.color;
-      ctx.beginPath();
-      ctx.arc(r.x + 46, ty + 14, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = cur ? GOLD : '#3a4370';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      uiRow(ctx, { x: r.x + 66, y: ty, w: r.w - 96, h: 34 }, t.name, {
-        on: cur,
-        sub: `AT ${t.at} RATING${i === LADDER.length - 1 ? ' · TOP TIER' : ''}`,
-      });
-      ctx.globalAlpha = 1;
-    });
-    pill(ctx, HOF_CLIMB, { c: GOLD_HI, cd: GOLD, tc: INK, label: 'START A CLIMB' });
-  }
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(r.x + 8, r.y + BOARD_HEAD, r.w - 16, r.h - BOARD_HEAD - 36);
-  ctx.clip();
-  list.forEach((e, i) => {
-    const y = r.y + BOARD_HEAD + i * BOARD_ROW;
-    const rx = r.x + 14, rw = r.w - 28;
-    // the leader's row wears the gold slab — the medal stays content
-    const line = `${e.w ? 'CLEARED' : `STAGE ${e.st}/${TOTAL_STAGES}`}${e.asc ? ` · ASC ${e.asc}` : ''}`;
-    const d = new Date(e.when);
-    uiRow(
-      ctx,
-      { x: rx, y, w: rw, h: BOARD_ROW - 10 },
-      `#${i + 1}  ${e.s.toLocaleString('en-US')}`,
-      { hot: i === 0, sub: `${line} · ${d.getMonth() + 1}/${d.getDate()}` },
-    );
-    // the run's lineup marches the right edge — the plaque's face
-    e.team.slice(0, 4).forEach((id, ti) => {
-      try {
-        drawMon(ctx, id, rx + rw - 110 + ti * 28, y + BOARD_ROW / 2 - 6, 26);
-      } catch {
-        /* sprite not warmed */
-      }
-    });
-    if (i) { // the ledger rule under idle rows
-      ctx.strokeStyle = 'rgba(90,98,136,0.25)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(rx + 6, y + BOARD_ROW - 10);
-      ctx.lineTo(rx + rw - 6, y + BOARD_ROW - 10);
-      ctx.stroke();
-    }
-    ctx.textAlign = 'center';
-  });
-  ctx.restore();
-
-  // the lifetime ledger under the plaques — same muted small print
-  const bb = best();
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(
-    `BEST ${bb.score.toLocaleString('en-US')} · PEAK ${bb.stage} · RUNS ${bb.runs} · WINS ${bb.wins}`,
-    r.x + r.w / 2,
-    r.y + r.h - 28,
-  );
-  ctx.fillText('tap to close', r.x + r.w / 2, r.y + r.h - 14);
-}
-
-// --- trophy shelf: the badge case on top, the StS-style achievement list under ---
-const ACH_ROW = 58;
-const ACH_HEAD = 234; // the badge case owns the head — the trophy list scrolls below
-
-export function achScrollMax() {
-  return Math.max(0, ACHIEVEMENTS.length * ACH_ROW - (DEX_PANEL.h - ACH_HEAD - 36));
-}
-
-export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
-  const r = DEX_PANEL;
-  scrim(ctx);
-
-  const got = unlockedAch();
-  uiPanel(ctx, r, `TROPHIES ${got.size}/${ACHIEVEMENTS.length}`, { rad: 14 });
-  uiClose(ctx, { x: r.x + r.w - 48, y: r.y + 12, w: 40, h: 40 });
-
-  ctx.textAlign = 'center';
-
-  // the badge case: one canon badge per leader, mounted on a dark
-  // octagon socket — earned glyphs light in their badge color
-  const held = gymBadges();
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`BADGE CASE ${held.size}/${BADGES.length}`, r.x + r.w / 2, r.y + 62);
-  BADGES.forEach((b, i) => {
-    const rowN = Math.min(6, BADGES.length - Math.floor(i / 6) * 6); // center the short last row
-    const cx = r.x + r.w / 2 + ((i % 6) - (rowN - 1) / 2) * 66;
-    const cy = r.y + 96 + Math.floor(i / 6) * 64;
-    const has = held.has(b.boss);
-    ctx.beginPath();
-    for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
-      const px = cx + Math.cos(a) * 20, py = cy + Math.sin(a) * 20;
-      if (k) ctx.lineTo(px, py);
-      else ctx.moveTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fillStyle = '#e8e8e0';
-    ctx.fill();
-    ctx.strokeStyle = has ? GOLD : '#3a4370';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    const img = itemSprite(`badges/${b.icon}`);
-    ctx.globalAlpha = has ? 1 : 0.28; // unearned slots read as indentations
-    if (img) ctx.drawImage(img, cx - 15, cy - 15, 30, 30);
-    ctx.globalAlpha = 1;
-    ctx.font = fontB(10);
-    ctx.fillStyle = has ? INK : INK_FAINT;
-    ctx.fillText(b.name.replace(' BADGE', ''), cx, cy + 33);
-  });
-
-  // locked trophies get a live fraction — the goal-gradient on every open loop
-  const dexN = dexIds().length;
-  const progress: Record<string, [number, number] | undefined> = {
-    collector: [dexN, 50],
-    living: [dexN, CATCHABLE],
-    triple: [best().wins, 3],
-    league: [held.size, BADGES.length],
-    'hot-streak': [streakWins(), 3],
-    'daily-devotion': [streakDaily(), 7],
-  };
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(r.x + 8, r.y + ACH_HEAD, r.w - 16, r.h - ACH_HEAD - 36);
-  ctx.clip();
-  ACHIEVEMENTS.forEach((a, i) => {
-    const y = r.y + ACH_HEAD + 8 + i * ACH_ROW - scroll;
-    const has = got.has(a.id);
-    ctx.save();
-    if (!has) ctx.globalAlpha = 0.5; // locked trophies read as ghosted rows
-    // the medallion: lit star when earned, hollow ring when not
-    ctx.strokeStyle = has ? GOLD : '#3a4370';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(r.x + 34, y + ACH_ROW / 2 - 4, 13, 0, Math.PI * 2);
-    ctx.stroke();
-    if (has) {
-      const gym = a.id.startsWith('gym-') ? badgeOf(+a.id.slice(4)) : undefined;
-      const gymDef = gym && speciesById(gym.boss);
-      if (gymDef) {
-        drawNpc(ctx, LEADER_NPC[gymDef.type], r.x + 34, y + ACH_ROW / 2 + 9, 26);
-      } else {
-        ctx.fillStyle = GOLD;
-        fillStar(ctx, r.x + 34, y + ACH_ROW / 2 - 4, 8);
-      }
-    }
-    uiRow(ctx, { x: r.x + 50, y: y - 2, w: r.w - 70, h: ACH_ROW - 8 }, a.name, { sub: a.desc });
-    ctx.restore();
-    const prog = !has && progress[a.id];
-    if (prog) { // live fractions stay legible — the goal-gradient on open loops
-      ctx.textAlign = 'right';
-      ctx.font = fontB(10);
-      ctx.fillStyle = prog[0] >= prog[1] * 0.7 ? GOLD : INK_FAINT; // close loops read gold
-      ctx.fillText(`${Math.min(prog[0], prog[1])}/${prog[1]}`, r.x + r.w - 26, y + 36);
-      ctx.textAlign = 'left';
-    }
-    ctx.strokeStyle = 'rgba(90,98,136,0.25)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(r.x + 20, y + ACH_ROW - 8);
-    ctx.lineTo(r.x + r.w - 20, y + ACH_ROW - 8);
-    ctx.stroke();
-  });
-  ctx.restore();
-
-  // scroll thumb — same slim rail + gold thumb the dex shelf wears
-  const achView = r.h - ACH_HEAD - 36;
-  const achTotal = ACHIEVEMENTS.length * ACH_ROW + 8;
-  if (achTotal > achView) {
-    const rail = { x: r.x + r.w - 11, y: r.y + ACH_HEAD + 4, w: 4, h: achView - 8 };
-    ctx.fillStyle = 'rgba(12,16,32,0.4)';
-    roundRect(ctx, rail.x, rail.y, rail.w, rail.h, 2);
-    ctx.fill();
-    const th = Math.max(24, (achView / achTotal) * rail.h);
-    const ty = rail.y + (scroll / achScrollMax()) * (rail.h - th);
-    ctx.fillStyle = GOLD;
-    roundRect(ctx, rail.x, ty, rail.w, th, 2);
-    ctx.fill();
-  }
-
-  ctx.textAlign = 'center';
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('trophies persist across runs · tap to close', r.x + r.w / 2, r.y + r.h - 14);
-}
-
 // --- the hatcher + the lab: the star-piece economy's two fronts -------------
 // Both ride the DEX_PANEL overlay pattern (dim + framed panel + clipped
 // scroll view). main.ts owns the pull state machine — HatchState is what it
@@ -2125,7 +1894,7 @@ let chipDust = -1;
 const chase = (shown: number, target: number) =>
   shown < 0 || Math.abs(target - shown) < 0.6 ? target : shown + (target - shown) * 0.22;
 
-function balanceChip(
+export function balanceChip(
   ctx: CanvasRenderingContext2D,
   r: { x: number; y: number; w: number; h: number },
   starN: number,
@@ -3253,199 +3022,6 @@ function newTag(ctx: CanvasRenderingContext2D, x: number, y: number, px: number)
   ctx.fillStyle = '#fff5d6';
   ctx.textAlign = 'center';
   ctx.fillText('NEW', x - tw / 2, y + px * 1.4 + 1);
-}
-
-// --- the lab: the deterministic sink — every star buys a sure thing ---------
-const LAB_HEAD = 86;
-const LAB_COLS = 2;
-const LAB_CARD_W = 219;
-const LAB_CARD_H = 128;
-const LAB_GAP = 10;
-const LAB_VIEW = { x: HATCH_PANEL.x + 16, y: HATCH_PANEL.y + LAB_HEAD, w: HATCH_PANEL.w - 32, h: 0 };
-LAB_VIEW.h = HATCH_PANEL.y + HATCH_PANEL.h - 30 - LAB_VIEW.y;
-// section split by id — the rest of LAB_UPGRADES lands in RUN TEAM
-const LAB_TRAIN = new Set(['hp', 'dmg', 'spc', 'luck']);
-
-// the price pill's rect inside a card — labHit tests the same rect the draw
-// renders, so only a deliberate tap on the buy strip spends
-const labBuyRect = (r: { x: number; y: number; w: number; h: number }) => ({
-  x: r.x + 10,
-  y: r.y + r.h - 32,
-  w: r.w - 20,
-  h: 24,
-});
-
-// card rects + section heads in CONTENT coords (y=0 is the view top) —
-// drawLab and labHit share this so a tap always lands where a card drew.
-// It's a pure function of LAB_UPGRADES, so the rect map builds once.
-let labLayoutCache: ReturnType<typeof computeLabLayout> | null = null;
-function labLayout() {
-  return (labLayoutCache ??= computeLabLayout());
-}
-function computeLabLayout() {
-  const secs: [string, (typeof LAB_UPGRADES)[number][], boolean][] = [
-    ['TRAINING · EVERY RUN STARTS STRONGER', LAB_UPGRADES.filter((u) => LAB_TRAIN.has(u.id)), true],
-    ['RUN TEAM · PER-RUN TOOLS', LAB_UPGRADES.filter((u) => !LAB_TRAIN.has(u.id)), false],
-  ];
-  const heads: { text: string; y: number }[] = [];
-  const cards: { u: (typeof LAB_UPGRADES)[number]; train: boolean; r: { x: number; y: number; w: number; h: number } }[] = [];
-  let y = 0;
-  for (const [title, list, train] of secs) {
-    if (!list.length) continue;
-    heads.push({ text: title, y });
-    y += 26;
-    list.forEach((u, i) => {
-      cards.push({
-        u,
-        train,
-        r: {
-          x: LAB_VIEW.x + (i % LAB_COLS) * (LAB_CARD_W + LAB_GAP),
-          y: y + Math.floor(i / LAB_COLS) * (LAB_CARD_H + LAB_GAP),
-          w: LAB_CARD_W,
-          h: LAB_CARD_H,
-        },
-      });
-    });
-    y += Math.ceil(list.length / LAB_COLS) * (LAB_CARD_H + LAB_GAP) + 10;
-  }
-  return { heads, cards, h: y };
-}
-
-export function labScrollMax() {
-  return Math.max(0, labLayout().h - LAB_VIEW.h);
-}
-
-// pointer → lab upgrade id, or null — only the buy strip answers. The pill
-// draws 24px but the live target is a 44px slab inside the card's bottom —
-// a thumb shouldn't have to thread the drawn price strip to spend.
-export function labHit(scroll: number, x: number, y: number): string | null {
-  if (!inRect(x, y, LAB_VIEW)) return null;
-  for (const c of labLayout().cards) {
-    const cr = { ...c.r, y: c.r.y + LAB_VIEW.y - scroll };
-    const buy = labBuyRect(cr);
-    const hit = { x: buy.x, y: cr.y + cr.h - 44, w: buy.w, h: 44 };
-    if (inRect(x, y, hit)) return c.u.id;
-  }
-  return null;
-}
-
-// one pk_lab read a frame — labLevels() rides meta's load() cache, and its
-// memLab fallback covers a missing/corrupt save (private mode) the same way
-// the per-id getter did
-function labLevelMap(): Map<string, number> {
-  const lvls = labLevels();
-  return new Map(LAB_UPGRADES.map((u) => [u.id, lvls[u.id] ?? 0]));
-}
-
-function drawLabCard(
-  ctx: CanvasRenderingContext2D,
-  r: { x: number; y: number; w: number; h: number },
-  u: (typeof LAB_UPGRADES)[number],
-  train: boolean,
-  stars: number,
-  lvl: number,
-) {
-  const maxed = lvl >= u.max;
-  const cost = u.costs[lvl] ?? 0;
-  // each upgrade is a small window — the tinted header band stays content
-  uiWindow(ctx, r, { rim: false });
-
-  // the tinted header carries the item icon — training reads gold, tools blue
-  const band = { x: r.x + 3, y: r.y + 3, w: r.w - 6, h: 38 };
-  stripeBand(ctx, band, train ? GOLD : '#3a8cff');
-  void loadItem(u.icon);
-  const img = itemSprite(u.icon);
-  if (img) {
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.shadowColor = 'rgba(0,0,0,0.55)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetY = 2;
-    ctx.drawImage(img, band.x + 8, band.y + 4, 30, 30);
-    ctx.restore();
-  }
-  ctx.textAlign = 'left';
-  fitFontB(ctx, u.name.toUpperCase(), 10, band.w - 44 - 52);
-  ctx.fillStyle = INK;
-  ctx.fillText(u.name.toUpperCase(), band.x + 44, band.y + 24);
-  ctx.textAlign = 'right';
-  ctx.font = fontB(10);
-  ctx.fillText(`LV ${lvl}/${u.max}`, band.x + band.w - 8, band.y + 24);
-
-  ctx.textAlign = 'left';
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_SOFT;
-  let dsc = u.desc;
-  while (dsc.length > 3 && ctx.measureText(dsc + '…').width > r.w - 24) dsc = dsc.slice(0, -1);
-  ctx.fillText(dsc, r.x + 12, r.y + 56);
-  // the bought effect, summed — levels must show what they've already bought
-  if (lvl > 0) {
-    ctx.fillStyle = GOLD;
-    ctx.fillText(`NOW ${u.now(lvl).toUpperCase()}`, r.x + 12, r.y + 70);
-  }
-
-  levelPips(ctx, { x: r.x + 12, y: r.y + 78, w: r.w - 24, h: 7 }, lvl, u.max);
-
-  const buy = labBuyRect(r);
-  if (maxed) {
-    ctx.font = fontB(10);
-    const mw = ctx.measureText('MAXED').width + 16;
-    chip(ctx, buy.x + buy.w - mw, buy.y + 4, 'MAXED', { bg: '#d0d0c8', fg: INK_FAINT });
-  } else {
-    const afford = stars >= cost;
-    pill(ctx, buy, {
-      c: afford ? GOLD : '#e03c34',
-      cd: afford ? '#c8a44d' : '#a02a24',
-      tc: afford ? INK : '#fff',
-      label: `LV UP · ${cost}`,
-    });
-    void loadItem('star-piece');
-    const star = itemSprite('star-piece');
-    if (star) {
-      ctx.save();
-      ctx.imageSmoothingEnabled = false;
-      ctx.globalAlpha = afford ? 1 : 0.6;
-      ctx.drawImage(star, buy.x + 10, buy.y + buy.h / 2 - 7, 14, 14);
-      ctx.restore();
-    }
-  }
-}
-
-export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: number) {
-  const r = HATCH_PANEL;
-  void loadItem('star-piece');
-  scrim(ctx, 0.82);
-  uiPanel(ctx, r, "PROF.'S LAB");
-
-  // the strip between band and the card view — tagline left, wallet right
-  ctx.textAlign = 'left';
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_SOFT;
-  ctx.fillText('SPEND YOUR STAR PIECES', r.x + 16, r.y + 60);
-  balanceChip(ctx, { x: r.x + r.w - 176, y: r.y + 42, w: 160, h: 28 }, stars);
-
-  const { heads, cards } = labLayout();
-  const lvls = labLevelMap();
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(LAB_VIEW.x - 6, LAB_VIEW.y, LAB_VIEW.w + 12, LAB_VIEW.h);
-  ctx.clip();
-  for (const hd of heads) {
-    const hy = LAB_VIEW.y + hd.y - scroll;
-    // each section wears the same mini ink band the spark shelf does
-    uiBand(ctx, { x: LAB_VIEW.x - 4, y: hy, w: LAB_VIEW.w + 8, h: 16 }, hd.text, { h: 16, rad: 5 });
-  }
-  for (const c of cards) {
-    const cr = { ...c.r, y: c.r.y + LAB_VIEW.y - scroll };
-    if (cr.y + cr.h < LAB_VIEW.y || cr.y > LAB_VIEW.y + LAB_VIEW.h) continue;
-    drawLabCard(ctx, cr, c.u, c.train, stars, lvls.get(c.u.id) ?? 0);
-  }
-  ctx.restore();
-
-  ctx.textAlign = 'center';
-  ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText('lab levels persist across runs · every star buys a sure thing · tap outside to close', W / 2, r.y + r.h - 14);
 }
 
 // the BAG row — card-lite chips of stocked consumables; ≤2 ride into the
