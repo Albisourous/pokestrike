@@ -341,3 +341,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `4d48ba4` | battle | supp foes drop HITS ~N on support turns | `git revert 4d48ba4` |
 | 2026-11-02 | rescue | perks | dead-session debris: `rollPerks` `ban` arg restored (tree was left mid-removal, 6 stale callers, build red); uncommitted work in screens/meta/main/etc left for its session | — |
 | 2026-11-02 | `610caf0` | battle/legibility | countdown disc + tag clamp inside the court — rim-hugging foes' clocks no longer tuck under the frame (spotted in arena wave-11 shot) | `git revert 610caf0` |
+| 2026-11-02 | `f8ccc24` | debug | `?debug=arena` drops the stop card — bare court for review shots | `git revert f8ccc24` |
