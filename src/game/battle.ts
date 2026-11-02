@@ -11,7 +11,7 @@ import type { EventChoice, EventArt } from './events';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, type ClearCard, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawAmbient, drawSlice, drawCover, drawMoat, THEMES, hash } from './bg';
 import { uiWindow, INK, PAPER, PARCH, GOLD_HI, SP } from './ui';
 import type { Theme } from './bg';
@@ -864,6 +864,14 @@ export class Battle {
   private waveShots = 0; // shots taken this wave — the anti-stall pressure ramp
   private stopShots = 0; // shots across every battle of this stop
   private par = 10; // this stop's SPEED CLEAR turn target
+  private stopCombo = 0; // best pass-chain this stop — the clear card's MAX COMBO
+  private stopWeak = 0; // weak-point hits this stop
+  private stopKos = 0; // foes downed this stop
+  private stopTaken = 0; // damage the team took this stop
+  private stopFaints = 0; // team faints this stop — any faint costs a rank step
+  rankStreak = 0; // consecutive A-or-better stop clears
+  bestRankStreak = 0; // the run's longest such streak — the run report row
+  clearCard: ClearCard | null = null; // last stop's summary — drawn over the reward board until tapped
   private sweepStreak = 0; // consecutive one-shot clears — the streak pays
   private waveFlawless = true; // no hit taken this wave — the clear ribbon pays it out
   private splashing = false; // psychic trait re-entry guard
@@ -1262,6 +1270,8 @@ export class Battle {
     this.inEvent = false;
     this.waveShots = 0;
     this.stopShots = 0;
+    this.stopCombo = this.stopWeak = this.stopKos = this.stopTaken = this.stopFaints = 0;
+    this.clearCard = null;
     this.waveFlawless = true;
     // ultIn banks across the whole run — pips earned in one fight spend at the next
     this.boxGain = null;
@@ -1703,6 +1713,17 @@ export class Battle {
     const [title, ...sub] = (this.waveSpecial ?? '').replace(/!/g, '').replace('SWEEP x', 'SWEEP ×').split(' · ').filter((t) => t !== 'SPEED CLEAR');
     this.telop.push({ kind: 'clear', title, sub: sub.join(' · '), mon: this.active.def.id, icon: 'poke-ball' });
     if (speed) this.telop.push({ kind: 'speed', title: 'SPEED CLEAR', sub: `${this.stopShots}/${this.par} TURNS`, mon: this.active.def.id, icon: 'quick-claw' });
+  }
+
+  // the stop's MS-style result: rank off turns vs par + faints, bests banked, rank pays a few stars
+  private stopSummary(): ClearCard {
+    const rank = clearRank(this.stopShots, this.par, this.stopFaints);
+    this.rankStreak = rank === 'S' || rank === 'A' ? this.rankStreak + 1 : 0;
+    this.bestRankStreak = Math.max(this.bestRankStreak, this.rankStreak);
+    const stage = this.waveIndex + 1;
+    const best = recordClear(stage, rank, this.stopShots, this.stopCombo);
+    const pay = RANK_PAY[rank] ? this.earnStars(RANK_PAY[rank]) : 0;
+    return { stage, turns: this.stopShots, par: this.par, combo: this.stopCombo, weak: this.stopWeak, kos: this.stopKos, taken: Math.round(this.stopTaken), faints: this.stopFaints, rank, pay, best };
   }
 
   // first weak-point hit per foe gets the banner; repeats keep the float
@@ -3534,6 +3555,7 @@ export class Battle {
       // multi-KO callouts — chaining kills in one shot should feel huge
       this.kosThisShot++;
       this.totalKos++;
+      this.stopKos++;
       if (this.totalKos >= 40) this.award('rampage');
       this.taskPing('kos', this.totalKos, e.x, e.y - e.r - 90);
       if (this.totalKos % KO_BOUNTY.every === 0) {
@@ -3797,6 +3819,7 @@ export class Battle {
       mult,
     );
     if (weak) {
+      this.stopWeak++;
       if (e.boss) {
         if (!this.weakTelop(e)) this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
         this.hitStop = Math.max(this.hitStop, 0.16);
@@ -4424,6 +4447,7 @@ export class Battle {
     this.shotCombo++;
     this.telop.combo(this.shotCombo, this.active.def.id);
     this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
+    this.stopCombo = Math.max(this.stopCombo, this.shotCombo);
     if (this.maxCombo >= 8) this.award('pinball');
     // the bump feeds the launch: a momentum kick so every teammate passed
     // through literally speeds the ball up (damage ramps in strikeEnemy)
@@ -5147,6 +5171,7 @@ export class Battle {
     if (this.waveFlawless) this.score += 50 + this.depth * 15;
     const speedClear = this.stopShots <= this.par;
     if (speedClear) this.score += 100 + this.depth * 25;
+    if (!this.raid) this.clearCard = this.stopSummary();
     // pickup ability: scavengers root through the arena after the fight —
     // a living carrier may nose out a consumable for the run's bag
     for (const p of this.players) {
@@ -6976,8 +7001,9 @@ export class Battle {
       dmg = p.hp - 1;
       this.pushText({ x: p.x, y: p.y - p.r - 20, text: p.def.sturdy ? 'STURDY!' : 'FOCUS SASH!', t: 1.1, color: '#ffd84d', big: false });
     }
+    const hpBefore = p.hp;
     p.hp -= dmg;
-    if (dmg > 0) { p.flashT = 0.12; this.waveFlawless = false; }
+    if (dmg > 0) { p.flashT = 0.12; this.waveFlawless = false; this.stopTaken += Math.min(dmg, hpBefore); }
     // leech foes feed on the hit — the wound pays them back a sip of HP
     if (src?.def.leech && !src.dead && dmg > 0) {
       const sip = Math.max(1, Math.round(dmg * 0.5));
@@ -7075,6 +7101,7 @@ export class Battle {
       }
       p.hp = 0;
       p.dead = true;
+      this.stopFaints++;
       // grudge: a cursed mon's faint hexes the pack — every living foe's
       // next attack winds up a beat slower. Mirrors the foe-side curse
       // that taxes your supers on its KO.

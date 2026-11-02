@@ -1455,6 +1455,63 @@ export function bumpStreaks(won: boolean, isDaily: boolean, now = Date.now()): v
   store('pk_streak', s);
 }
 
+// --- stop clears: MS-style rank + per-stage personal bests ----------------
+// Unversioned pk_clear blob keyed by stage row (1-based). Entries merge over
+// the session copy one by one; a malformed entry is dropped, never NaN'd.
+export const RANKS = ['S', 'A', 'B', 'C'] as const;
+export type ClearRank = (typeof RANKS)[number];
+export const RANK_PAY: Record<ClearRank, number> = { S: 3, A: 2, B: 1, C: 0 }; // star pieces, before the AMULET COIN mult
+export const RANK_BALL: Record<ClearRank, string> = { S: 'master-ball', A: 'ultra-ball', B: 'great-ball', C: 'poke-ball' };
+// at or under par = fast; up to 1.5x par = a step down; any faint = one more step down
+export function clearRank(turns: number, par: number, faints: number): ClearRank {
+  const slow = turns <= par ? 0 : turns <= Math.ceil(par * 1.5) ? 1 : 2;
+  return RANKS[Math.min(3, slow + (faints > 0 ? 1 : 0))];
+}
+export interface StageBest { rank: number; turns: number; combo: number } // rank = RANKS index, 0 = S
+export interface ClearCard {
+  stage: number; turns: number; par: number; combo: number; weak: number; kos: number; taken: number; faints: number;
+  rank: ClearRank; pay: number; // pay = stars actually credited
+  best: { rank: boolean; turns: boolean; combo: boolean }; // beat an existing record
+  t0?: number; // main.ts stamps the first drawn frame
+}
+let memClear: Record<string, StageBest> = {};
+export function clearBests(): Record<string, StageBest> {
+  const bests = { ...memClear };
+  const raw = load<unknown>('pk_clear');
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return bests;
+  for (const [stage, value] of Object.entries(raw)) {
+    if (
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      Number.isInteger((value as StageBest).rank) &&
+      (value as StageBest).rank >= 0 &&
+      (value as StageBest).rank <= 3 &&
+      Number.isFinite((value as StageBest).turns) &&
+      (value as StageBest).turns >= 0 &&
+      Number.isFinite((value as StageBest).combo) &&
+      (value as StageBest).combo >= 0
+    ) Object.defineProperty(bests, stage, { value, enumerable: true, writable: true, configurable: true });
+  }
+  return bests;
+}
+export function recordClear(stage: number, rank: ClearRank, turns: number, combo: number): { rank: boolean; turns: boolean; combo: boolean } {
+  const all = clearBests();
+  const key = String(stage);
+  const old = all[key];
+  const nextRank = RANKS.indexOf(rank);
+  const next = old
+    ? { rank: Math.min(old.rank, nextRank), turns: Math.min(old.turns, turns), combo: Math.max(old.combo, combo) }
+    : { rank: nextRank, turns, combo };
+  const best = old
+    ? { rank: next.rank < old.rank, turns: next.turns < old.turns, combo: next.combo > old.combo }
+    : { rank: false, turns: false, combo: false };
+  all[key] = next;
+  memClear = all;
+  store('pk_clear', all);
+  return best;
+}
+
 // --- ?debug=1 god mode: the sandbox's one-time grant ----------------------
 // Fat wallets, the full register (shinies too), the badge case, every
 // achievement, a maxed lab, a stocked bag, and nine wins so the ascension

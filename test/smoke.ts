@@ -10,7 +10,7 @@ import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult, WEATHER_OF, TYPES } from '../src/game/types';
 import { rollEvent, martStock } from '../src/game/events';
-import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll } from '../src/game/meta';
+import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll, clearRank, recordClear, clearBests, RANK_PAY, RANK_BALL } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
@@ -4351,6 +4351,9 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   const sK = kb.starsRun;
   for (let w = 0; w < 3 && (kb as any).totalKos < 5; w++) {
     (kb as any).spawnWave(w);
+    // Keep clear rank at C so this assertion isolates the KO bounty.
+    (kb as any).stopShots = Math.ceil((kb as any).par * 1.5) + 1;
+    (kb as any).stopFaints = 1;
     for (const e of [...(kb as any).enemies]) {
       while (!e.dead && (kb as any).totalKos < 5) (kb as any).hurt(e, e.hp + 50, '#fff');
       if ((kb as any).totalKos >= 5) break;
@@ -4718,6 +4721,68 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(hitFloor(7.6, 2) === 8, 'hit floor rounds damage normally above 1');
   ok(hitFloor(5, 0) === 0, 'type immunity stays at 0');
   ok(hitFloor(1.4, 1) === 1, 'positive multiplier preserves rounded 1 damage');
+}
+
+// --- clear ranks: MS-style S/A/B/C, per-stage bests only go up ---
+{
+  ok(clearRank(10, 10, 0) === 'S' && clearRank(5, 10, 0) === 'S', 'on-par and faster clears rank S');
+  ok(clearRank(10, 10, 1) === 'A' && clearRank(15, 10, 0) === 'A', 'a faint or 1.5x par ranks A');
+  ok(clearRank(16, 10, 0) === 'B' && clearRank(15, 10, 1) === 'B', 'slow clear or faint plus 1.5x par ranks B');
+  ok(clearRank(16, 10, 1) === 'C' && clearRank(40, 10, 3) === 'C', 'slow clear with a faint ranks C');
+  ok(RANK_PAY.S > RANK_PAY.A && RANK_PAY.A > RANK_PAY.B && RANK_PAY.B > RANK_PAY.C && RANK_PAY.C === 0, 'clear-rank star pays descend S to C');
+  ok(Object.values(RANK_BALL).every((ball) => existsSync(`public/sprites/items/${ball}.png`)), 'every clear-rank ball sprite is vendored');
+
+  const beforeCorrupt = clearBests();
+  localStorage.setItem('pk_clear', '{corrupt');
+  let afterCorrupt: ReturnType<typeof clearBests> = {};
+  let corruptThrew = false;
+  try {
+    afterCorrupt = clearBests();
+  } catch {
+    corruptThrew = true;
+  }
+  ok(!corruptThrew && JSON.stringify(afterCorrupt) === JSON.stringify(beforeCorrupt), 'a corrupt clear blob falls back to valid session records');
+
+  const beforeShape = clearBests();
+  localStorage.setItem('pk_clear', JSON.stringify({
+    '3': { rank: 'x', turns: 1, combo: 1 },
+    '4': { rank: 1, turns: 12, combo: 5 },
+    '5': { rank: 9, turns: 1, combo: 1 },
+    '6': { rank: 0, turns: -1, combo: 2 },
+  }));
+  const shaped = clearBests();
+  ok(JSON.stringify(shaped['4']) === JSON.stringify({ rank: 1, turns: 12, combo: 5 }), 'clear store keeps valid raw bests');
+  ok(['3', '5', '6'].every((key) => JSON.stringify(shaped[key]) === JSON.stringify(beforeShape[key])), 'malformed raw entries do not replace session bests');
+
+  const noBest = recordClear(4, 'B', 20, 3);
+  ok(!noBest.rank && !noBest.turns && !noBest.combo, 'an existing record is not a first-clear best');
+  ok(JSON.stringify(clearBests()['4']) === JSON.stringify({ rank: 1, turns: 12, combo: 5 }), 'worse records never replace stage bests');
+  const allBest = recordClear(4, 'S', 9, 7);
+  ok(allBest.rank && allBest.turns && allBest.combo, 'strict rank, turn, and combo improvements flag separately');
+  ok(JSON.stringify(clearBests()['4']) === JSON.stringify({ rank: 0, turns: 9, combo: 7 }), 'improved records replace prior stage bests');
+  const comboBest = recordClear(4, 'A', 11, 8);
+  ok(!comboBest.rank && !comboBest.turns && comboBest.combo, 'only a strictly higher combo flags');
+  ok(JSON.stringify(clearBests()['4']) === JSON.stringify({ rank: 0, turns: 9, combo: 8 }), 'each stage best keeps the best value for each metric');
+  const firstClear = recordClear(7, 'S', 5, 5);
+  ok(!firstClear.rank && !firstClear.turns && !firstClear.combo && !!clearBests()['7'], 'a first clear creates a record without a best flag');
+
+  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b as any).spawnWave(0);
+  (b as any).stopShots = (b as any).par;
+  (b as any).stopFaints = 0;
+  (b as any).stopCombo = 4;
+  const starsBefore = b.starsRun;
+  (b as any).waveCleared();
+  ok(b.clearCard?.rank === 'S', 'a climb stop clear creates an S-rank card');
+  ok((b.clearCard?.pay ?? 0) >= RANK_PAY.S && b.starsRun === starsBefore + (b.clearCard?.pay ?? 0), 'clear-card pay matches credited run stars');
+  ok(b.rankStreak === 1 && b.bestRankStreak === 1, 'an A-or-better clear starts the rank streak');
+  (b as any).spawnWave(1);
+  ok(b.clearCard === null, 'the next wave clears the prior stop card');
+  const b2 = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
+  (b2 as any).spawnWave(0);
+  b2.raid = true;
+  (b2 as any).waveCleared();
+  ok(b2.clearCard === null, 'raid clears do not create a climb clear card');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

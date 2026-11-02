@@ -9,7 +9,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, 
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, type Settings } from './meta';
+import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, rankName, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, ascPick, ascCap, echoIds, labLevels, LAB_UPGRADES, stars, starBoost, boostLeft, raidDoneToday, pullCount, loginToday, nextDexReward, nextRookie, ROOKIE_STEPS, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
 import { tasksReady, taskResetsIn, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import type { TaskView } from './tasks';
 import type { Vec } from '../core/vec';
@@ -56,6 +56,8 @@ export interface RunResult {
   bondDust?: number; // dust the lineup's bond level-ups paid — its own findings row
   bondUps?: { id: number; lv: number }[]; // which squad members crossed a bond rung — tagged on the attachment row
   rookie?: { label: string; pay: number }[]; // rookie steps this run cleared — one row each
+  bestCombo?: number; // longest pass-chain this run
+  rankStreak?: number; // longest run of A-or-better stop clears
 }
 
 // --- draft layout: 3 offer cards, team strip at the bottom ---
@@ -5769,6 +5771,135 @@ function confetti(ctx: CanvasRenderingContext2D, t: number) {
   ctx.globalAlpha = 1;
 }
 
+// The stop's MS-style result: CLEAR, the stat rows file in, the rank ball
+// pops, then the rank's star bonus ticks up. Any tap closes it (main.ts).
+const RANK_INK: Record<ClearRank, string> = { S: '#c8900c', A: DANGER, B: ACCENT, C: INK_SOFT };
+const CLEAR_ROWS = 5;
+function clearIcon(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, s: number) {
+  void loadItem(name);
+  const img = itemSprite(name);
+  if (!img) return;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, x - s / 2, y - s / 2, s, s);
+  ctx.restore();
+}
+function bestTag(ctx: CanvasRenderingContext2D, x: number, y: number) {
+  ctx.font = fontB(13);
+  const w = ctx.measureText('NEW BEST').width + 14;
+  roundRect(ctx, x - w, y - 13, w, 20, 5);
+  ctx.fillStyle = GOLD_HI;
+  ctx.fill();
+  edge(ctx, { x: x - w, y: y - 13, w, h: 20 }, 5);
+  ctx.fillStyle = INK;
+  ctx.textAlign = 'center';
+  ctx.fillText('NEW BEST', x - w / 2, y + 2);
+}
+export function drawClearCard(ctx: CanvasRenderingContext2D, c: ClearCard, age: number) {
+  ctx.save();
+  scrim(ctx, 0.78);
+  const rankAt = 0.3 + CLEAR_ROWS * 0.12 + 0.15;
+  if (c.rank === 'S' && age > rankAt) confetti(ctx, age);
+  const panel = { x: 30, y: 140, w: W - 60, h: 630 };
+  const pop = clamp01(age / 0.22);
+  ctx.translate(W / 2, panel.y + panel.h / 2);
+  ctx.scale(0.9 + 0.1 * pop, 0.9 + 0.1 * pop);
+  ctx.translate(-W / 2, -(panel.y + panel.h / 2));
+  ctx.globalAlpha = pop;
+  uiWindow(ctx, panel, { rad: 10 });
+  uiBand(ctx, panel, `STAGE ${c.stage} · RESULT`, { h: 40 });
+  const cx = W / 2;
+  ctx.textAlign = 'center';
+  ctx.font = font(40);
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = INK;
+  ctx.strokeText('CLEAR!', cx, panel.y + 116);
+  ctx.fillStyle = GOLD_HI;
+  ctx.fillText('CLEAR!', cx, panel.y + 116);
+  const speed = c.turns <= c.par;
+  const rows: [label: string, value: string, best: boolean][] = [
+    ['TURNS', `${c.turns}/${c.par}`, c.best.turns],
+    ['MAX COMBO', `×${c.combo}`, c.best.combo],
+    ['WEAK HITS', `${c.weak}`, false],
+    ['KOs', `${c.kos}`, false],
+    ['DMG TAKEN', c.faints ? `${c.taken} · ${c.faints} DOWN` : `${c.taken}`, false],
+  ];
+  const ix = panel.x + 28;
+  const vx = panel.x + panel.w - 28;
+  rows.forEach(([label, value, best], i) => {
+    const a = clamp01((age - 0.3 - i * 0.12) / 0.16);
+    if (a <= 0) return;
+    const y = panel.y + 180 + i * 56;
+    ctx.globalAlpha = pop * a;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(22);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText(label, ix + (1 - a) * 24, y);
+    ctx.textAlign = 'right';
+    ctx.font = font(20);
+    ctx.fillStyle = i === 0 && speed ? '#2f9a3a' : INK;
+    ctx.fillText(value, vx, y);
+    const vw = ctx.measureText(value).width;
+    if (i === 0 && speed) {
+      clearIcon(ctx, 'quick-claw', vx - vw - 22, y - 8, 36);
+      ctx.font = fontB(14);
+      ctx.fillStyle = '#2f9a3a';
+      ctx.fillText('SPEED CLEAR', vx - vw - 44, y - 1);
+    } else if (best) bestTag(ctx, vx - vw - 12, y - 6);
+    ctx.fillStyle = 'rgba(40,48,88,0.12)';
+    ctx.fillRect(ix, y + 16, vx - ix, 2);
+  });
+  // the rank: its ball slams in big, the letter rides beside it
+  const ry = panel.y + 500;
+  const ra = clamp01((age - rankAt) / 0.25);
+  if (ra > 0) {
+    ctx.globalAlpha = pop;
+    const s = 1 + (1 - ra) * 0.8;
+    ctx.save();
+    ctx.translate(cx - 70, ry);
+    ctx.scale(s, s);
+    ctx.globalAlpha = pop * ra;
+    clearIcon(ctx, RANK_BALL[c.rank], 0, 0, 96);
+    ctx.restore();
+    ctx.globalAlpha = pop * ra;
+    ctx.textAlign = 'left';
+    ctx.font = fontB(18);
+    ctx.fillStyle = INK_SOFT;
+    ctx.fillText('RANK', cx - 6, ry - 48);
+    ctx.font = font(64);
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = INK;
+    ctx.strokeText(c.rank, cx - 10, ry + 46);
+    ctx.fillStyle = RANK_INK[c.rank];
+    ctx.fillText(c.rank, cx - 10, ry + 46);
+    if (c.best.rank) bestTag(ctx, vx, ry - 26);
+  }
+  // the payout ticks up once the rank lands
+  const pa = clamp01((age - rankAt - 0.3) / 0.4);
+  if (c.pay > 0 && pa > 0) {
+    ctx.globalAlpha = pop;
+    const n = Math.round(c.pay * pa);
+    const py = panel.y + panel.h - 44;
+    ctx.font = font(16);
+    const label = `+${n} STAR PIECE${c.pay > 1 ? 'S' : ''}`;
+    const w = ctx.measureText(label).width + 40;
+    clearIcon(ctx, 'star-piece', cx - w / 2 + 12, py - 6, 40);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#7a52c8';
+    ctx.fillText(label, cx - w / 2 + 38, py);
+  }
+  ctx.restore();
+  // blinks under the card — one tap moves on to the reward board
+  if (age > 0.6 && Math.floor(age * 2.2) % 2 === 0) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = fontB(18);
+    ctx.fillStyle = PARCH;
+    ctx.fillText('TAP TO CONTINUE', W / 2, panel.y + panel.h + 44);
+    ctx.restore();
+  }
+}
+
 // The run debrief, filed as a FIELD REPORT: a centred card carries the
 // banded header, a numbered FINDINGS list and the FIELD NOTE; the verdict
 // is rubber-stamped across its top edge and the squad rides below as the
@@ -5803,6 +5934,8 @@ export function drawResult(
     ['TIME', `${res.time.toFixed(1)}s`, INK],
     ['CAUGHT', `${res.caught}`, INK],
   ];
+  if (res.bestCombo) findings.push(['BEST COMBO', `×${res.bestCombo}`, INK]);
+  if (res.rankStreak) findings.push(['RANK STREAK', `${res.rankStreak} · A OR BETTER`, INK]);
   if (res.stars) findings.push(['STAR PIECES', `+${res.stars}`, GOLD]); // the wallet's payout — even a wipe banks
   if (res.starsBonus) findings.push(['FIRST WIN TODAY', `+${res.starsBonus}`, GOLD]);
   if (res.grind) findings.push([`RUN ${res.grind.n} TODAY`, `+${res.grind.pay}`, GOLD]);
