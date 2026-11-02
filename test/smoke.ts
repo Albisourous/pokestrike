@@ -18,7 +18,7 @@ import { THEMES } from '../src/game/bg';
 import type { Theme } from '../src/game/bg';
 import { ROOM_BOSS, STAGE_GIMMICKS, BULLET_GIMMICKS, bulletHints } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
-import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
+import { DEX_BTN, DEX_DETAIL_R, EDIT_TEAM_BTN, PARTNERS_BTN, SETS_BTN, TAB_BAR, TEAM_BTN, dexBuyRect, partnersStripAt, teamStageAt, TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
@@ -5356,7 +5356,7 @@ import { raidWeaknesses, raidCounters, raidRefresh } from '../src/game/home/raid
 }
 
 // --- home: climb ---
-import { FREE_BTN, RESTART_BTN, ASC_BTN, CLIMB_FREE, CLIMB_RAID, TAB_BAR, ascCellRect, hitAscCell } from '../src/game/screens';
+import { FREE_BTN, RESTART_BTN, ASC_BTN, CLIMB_FREE, CLIMB_RAID, ascCellRect, hitAscCell } from '../src/game/screens';
 import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
 {
   const overlap = (a: typeof FREE_BTN, b: typeof FREE_BTN) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -5370,6 +5370,18 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   ok(RESTART_BTN.x > FREE_BTN.x + 300 && RESTART_BTN.y === FREE_BTN.y, 'climb: restart flanks the hero row, CONTINUE keeps the wide side');
   const stack = [FREE_BTN, ASC_BTN, CLIMB_FREE, TAB_BAR];
   ok(stack.every((r, i) => i === 0 || !overlap(stack[i - 1], r)) && !overlap(CLIMB_FREE, CLIMB_RAID) && !overlap(CLIMB_RAID, TAB_BAR), 'climb: hero, ladder, doors and nav never overlap');
+}
+
+// --- home: mons ---
+{
+  const rects = [TEAM_BTN, EDIT_TEAM_BTN, DEX_BTN, SETS_BTN, PARTNERS_BTN];
+  ok(rects.every((r) => r.h >= 44 && r.x >= 0 && r.x + r.w <= 540 && r.y >= 66 && r.y + r.h <= TAB_BAR.y), 'MONS cards fit above the tab bar with touch-sized targets');
+  ok(rects.every((r, i) => rects.slice(i + 1).every((s) => r.x + r.w <= s.x || s.x + s.w <= r.x || r.y + r.h <= s.y || s.y + s.h <= r.y)), 'MONS cards do not overlap');
+  ok(teamStageAt(TEAM_BTN.x + 10, TEAM_BTN.y + 10) === null, 'MONS stage band is not a team tap target');
+  ok(partnersStripAt(PARTNERS_BTN.x + 4, PARTNERS_BTN.y + 10) === null, 'partners header is not a sprite tap target');
+  const pullable = PULLABLE.find((d) => !dexIds().includes(d.id));
+  const buy = pullable ? dexBuyRect(pullable.id) : null;
+  ok(!!buy && buy.x >= DEX_DETAIL_R.x && buy.x + buy.w <= DEX_DETAIL_R.x + DEX_DETAIL_R.w && buy.y >= DEX_DETAIL_R.y && buy.y + buy.h <= DEX_DETAIL_R.y + DEX_DETAIL_R.h, 'unowned pullable buy target fits inside the detail frame');
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

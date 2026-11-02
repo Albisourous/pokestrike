@@ -128,9 +128,11 @@ import {
   DEAL_BTN,
   PACK_PILL,
   SETS_BTN,
+  EDIT_TEAM_BTN,
   PARTNERS_BTN,
   partnersStripAt,
   TEAM_BTN,
+  teamStageAt,
   RAID_FIGHT,
   echoMonAt,
 } from './game/screens';
@@ -1233,15 +1235,42 @@ canvas.addEventListener('pointerdown', (e) => {
       dexPick = strip;
       return;
     }
-    if (homeTab === 'mons' && inRect(p.x, p.y, TEAM_BTN)) {
-      // the squad card is a door — a parked climb jumps to CLIMB's CONTINUE
-      if (runSave()) {
-        noteTabSwap(t, homeTab);
-        homeTab = 'climb';
-        noteTabPress(t);
+    if (homeTab === 'mons' && inRect(p.x, p.y, EDIT_TEAM_BTN)) {
+      if (titleSave) {
+        const s = titleSave;
+        titleSave = null;
+        resumeRun(s);
+        if (battle && battle.phase === 'map') {
+          menuOpen = true;
+          battle.boxPing = false;
+          battle.boxSel = battle.teamSel = -1;
+        }
+        sceneMusic();
       } else {
-        dexOpen = true;
+        newRun();
+        startDraft();
+        scene = 'draft';
+        sceneMusic();
+      }
+      sfx('ui');
+      return;
+    }
+    if (homeTab === 'mons' && inRect(p.x, p.y, TEAM_BTN)) {
+      const id = teamStageAt(p.x, p.y);
+      if (id != null) {
+        dexOpen = false;
         dexScroll = 0;
+        dexPick = id;
+      } else {
+        // the squad card's band stays a door to CLIMB or the full register
+        if (runSave()) {
+          noteTabSwap(t, homeTab);
+          homeTab = 'climb';
+          noteTabPress(t);
+        } else {
+          dexOpen = true;
+          dexScroll = 0;
+        }
       }
       sfx('ui');
       return;
