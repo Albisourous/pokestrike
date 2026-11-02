@@ -336,3 +336,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `31aa675` | home | modal dead-space gates, CONTINUE stage pack + label, per-mon shiny, pinClimbSeed, arm resets on tab-hide, Esc detail-close, backRoom props key | `git revert 31aa675` |
 | 2026-11-02 | `c49d6f8` | home | detail-card dead-space gate, N FOES honesty, raid counter tags | `git revert c49d6f8` |
 | 2026-11-02 | `d99cf3c` | music | intensity layers — kitGain duck on drag, spec 2026-11-02 | `git revert d99cf3c` |
+| 2026-11-02 | `ef8c740` | review | zapPow precedence = fireEnemy; resumeRun restores coach; dimmed beats gate taps | `git revert ef8c740` |

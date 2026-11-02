@@ -762,3 +762,9 @@ backlog; builders run one iteration each, I verify + commit + push.
 - pushed: intensity layers — kitGain ducks the drum bus on drag, stab
   halves at schedule time, default high leaves every track untouched;
   MUSIC.md's last Later item landed (spec doc + __dbg.intensity).
+- ef8c740 pushed: broad review's two FIX-FIRSTs — zapPow flag precedence
+  matched fireEnemy (melee sat ahead of charge/beam/volley so a
+  melee+charge foe's shown hit overstated the landed one ~18%), and
+  resumeRun never restored battle.coach so a quit mid-coached-run lost
+  the tutorial + flipped mission rules mid-run. Dimmed beats now gate
+  pause/ult/inspect taps alike (shots<=1).
