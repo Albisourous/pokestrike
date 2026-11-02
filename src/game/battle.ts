@@ -9601,11 +9601,16 @@ export class Battle {
         : n.kind === 'secret' ? 'SECRET'
         : n.kind === 'start' ? 'HOME'
         : 'WILD';
-      ctx.strokeText(label, nx, ny - cell * (n.kind === 'secret' ? 1.75 : 0.95));
+      // the sign stack hangs above the stop — top-edge doors would slice
+      // on the island clip, so those flip and hang below instead
+      const lift = n.kind === 'secret' ? 1.75 : 0.95;
+      const flip = ny - cell * lift - 12 < oy - over * cell - 6;
+      const sy = flip ? ny + cell * 0.78 : ny - cell * lift;
+      ctx.strokeText(label, nx, sy);
       ctx.fillStyle = reachable
         ? (n.kind === 'elite' ? '#c8b0ff' : n.kind === 'trainer' ? '#ff8a8a' : '#ffd84d')
         : current ? '#6fdc6f' : '#8a94b8';
-      ctx.fillText(label, nx, ny - cell * (n.kind === 'secret' ? 1.75 : 0.95));
+      ctx.fillText(label, nx, sy);
       // trainer squads are mono-type — name it so routing around a bad
       // matchup is a choice, not a coin flip; gyms sign their leader's
       // type the same way
@@ -9614,9 +9619,10 @@ export class Battle {
         ctx.font = fontB(10);
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText(ty, nx, ny - cell * 0.95 + 12);
+        const tyY = flip ? sy + 12 : ny - cell * 0.95 + 12;
+        ctx.strokeText(ty, nx, tyY);
         ctx.fillStyle = TYPE_COLOR[n.ttype ?? 'normal'];
-        ctx.fillText(ty, nx, ny - cell * 0.95 + 12);
+        ctx.fillText(ty, nx, tyY);
         const gimmick = STAGE_GIMMICKS[TYPE_THEME[n.ttype ?? 'normal']];
         // three lines max (name · type · one hint) so nothing draws over the building:
         // the team's counter mons if any, else the court gimmick
@@ -9625,9 +9631,10 @@ export class Battle {
           ? `${counters[0].def.name.toUpperCase()}${counters.length > 1 ? ` +${counters.length - 1}` : ''} HELPS`
           : [gimmick.label, ...bulletHints(TYPE_THEME[n.ttype ?? 'normal'], n.ttype ?? 'normal')].join(' · ');
         fitFontB(ctx, hint, 10, cell * 4.5);
-        ctx.strokeText(hint, nx, ny - cell * 0.95 + 25);
+        const hintY = flip ? sy + 25 : ny - cell * 0.95 + 25;
+        ctx.strokeText(hint, nx, hintY);
         ctx.fillStyle = counters.length ? '#ffd84d' : TYPE_COLOR[gimmick.type];
-        ctx.fillText(hint, nx, ny - cell * 0.95 + 25);
+        ctx.fillText(hint, nx, hintY);
       }
     });
     // the trainer draws last — she walks in front of the stops, and at
