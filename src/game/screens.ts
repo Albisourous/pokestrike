@@ -89,6 +89,8 @@ export function draftCardRect(i: number) {
   return { x: CARDS_X + i * (CARD_W + CARD_GAP), y: CARDS_Y, w: CARD_W, h: CARD_H };
 }
 export const DRAFT_REROLL = { x: W / 2 - 85, y: CARDS_Y + CARD_H + 12, w: 170, h: 40 };
+// the quiet door out — nothing banks mid-draft, so a back link costs a tap
+export const DRAFT_BACK = { x: 14, y: 30, w: 74, h: 26 };
 // slot-reel reveal: each offer card spins a strip of pool faces that brakes
 // onto the deal — staggered left to right. Spin age counts seconds.
 export const REEL_STOPS = [0.7, 1.0, 1.3];
@@ -3455,6 +3457,9 @@ export function drawDraft(
       ctx.fillText(ty.slice(0, 3).toUpperCase(), cx + 16, 710);
     });
   }
+
+  // the out — a quiet chip in the empty top strip, same dark tag as hints
+  chip(ctx, DRAFT_BACK.x, DRAFT_BACK.y + 3, '‹ TITLE', { bg: 'rgba(42,36,64,0.8)', fg: '#a8b0d0' });
 }
 
 export interface ShareGrid {

@@ -3578,7 +3578,7 @@ export class Battle {
         for (const p of this.players) {
           if (p.dead) continue;
           if (p.dotTicks > 0 || p.burnT > 0 || p.paraT > 0 || p.asleep) cured = true;
-          p.dotTicks = 0; p.dotDmg = 0; p.burnT = 0; p.paraT = 0; p.asleep = false;
+          this.cleanse(p);
         }
         this.pushText({
           x: pk.x, y: pk.y - 12,
@@ -4825,7 +4825,10 @@ export class Battle {
     }
     this.shotCombo++;
     this.telop.combo(this.shotCombo, this.active.def.id);
-    this.maxCombo = Math.max(this.maxCombo, this.shotCombo);
+    if (this.shotCombo > this.maxCombo) {
+      this.maxCombo = this.shotCombo;
+      this.taskPing('combo', this.maxCombo, p.x, p.y - p.r - 90); // a new peak pings live — taskTick only banks at run end
+    }
     this.stopCombo = Math.max(this.stopCombo, this.shotCombo);
     if (this.maxCombo >= 8) this.award('pinball');
     // the bump feeds the launch: a momentum kick so every teammate passed
@@ -6012,9 +6015,9 @@ export class Battle {
     for (const period of ['daily', 'weekly'] as const) {
       for (const v of taskViews(period)) {
         if (v.kind !== kind || v.done || this.taskDone.has(v.id)) continue;
-        // maxstage is a high-water mark, not a cumulative counter — adding
-        // banked have on top would ping "reach stage 8" at stage 5 forever
-        if ((v.kind === 'maxstage' ? now : v.have + now) < v.n) continue;
+        // maxstage/combo are high-water marks, not cumulative counters —
+        // adding banked have on top would ping "reach stage 8" at stage 5
+        if ((v.kind === 'maxstage' || v.kind === 'combo' ? now : v.have + now) < v.n) continue;
         this.taskDone.add(v.id);
         this.pushText({ x, y, text: `TASK: ${v.label} ✓`, t: 1.5, color: '#ffd84d', big: true });
         sfx('ui', 0.9);
@@ -6576,6 +6579,12 @@ export class Battle {
     }
   }
 
+  // one sponge bath — shed-skin procs and the lum perk share it so
+  // "cleansed" always means the same five fields
+  cleanse(u: Unit) {
+    u.dotTicks = 0; u.dotDmg = 0; u.burnT = 0; u.paraT = 0; u.asleep = false;
+  }
+
   private endShot() {
     const u = this.active;
     if (u.giant) {
@@ -6605,7 +6614,7 @@ export class Battle {
       }
       // shed skin: sloughs every ailment before the venom can tick
       if (e.def.shed && !e.dead && (e.dotTicks > 0 || e.burnT > 0 || e.paraT > 0 || e.asleep) && this.rng() < 0.3) {
-        e.dotTicks = 0; e.dotDmg = 0; e.burnT = 0; e.paraT = 0; e.asleep = false;
+        this.cleanse(e);
         this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'SHED!', t: 0.8, color: '#78c850', big: false });
       }
       if (e.dotTicks > 0) {
@@ -6625,7 +6634,7 @@ export class Battle {
       // natural cure / shed skin: the carrier sloughs its ailments before
       // they can tick — same rhythm as the foe version
       if (p.def.shed && !p.dead && (p.dotTicks > 0 || p.burnT > 0 || p.paraT > 0 || p.asleep) && this.rng() < 0.3) {
-        p.dotTicks = 0; p.dotDmg = 0; p.burnT = 0; p.paraT = 0; p.asleep = false;
+        this.cleanse(p);
         this.pushText({ x: p.x, y: p.y - p.r - 8, text: 'SHED!', t: 0.8, color: '#78c850', big: false });
       }
       if (p.dotTicks > 0 && !p.dead) {
@@ -9709,8 +9718,9 @@ export class Battle {
       ctx.fillText(this.mapMsg, 270, oy - 20);
       ctx.globalAlpha = 1;
     }
-    // active type traits sit above the map — the build the team is running
-    if (this.traits.size) {
+    // active type traits sit above the map — onboarding chrome like the
+    // legend lines: the first rows only, then the map stays clean
+    if (this.waveIndex < 2 && this.traits.size) {
       let tx = ox;
       ctx.font = font(10);
       ctx.textAlign = 'left';

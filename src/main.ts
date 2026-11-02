@@ -53,6 +53,7 @@ import {
   drawGearChip,
   MUTE_BTN,
   DRAFT_REROLL,
+  DRAFT_BACK,
   REEL_STOPS,
   BAG_ROW,
   BAG_MAX,
@@ -1378,6 +1379,16 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
   } else if (scene === 'draft') {
+    if (inRect(p.x, p.y, DRAFT_BACK)) {
+      // nothing banks mid-draft — the picks die with the board
+      sfx('ui');
+      draft = { order: [], picked: [], shiny: new Set(), lvls: new Map(), rerolls: 1 };
+      battle = null;
+      scene = 'title';
+      titleSave = runSave();
+      sceneMusic();
+      return;
+    }
     if (draft.picked.length >= DRAFT_ROUNDS) return;
     // bag chips ride in auto — a tap only answers "what does this one do?"
     if (inRect(p.x, p.y, BAG_ROW)) {

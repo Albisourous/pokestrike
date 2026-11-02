@@ -198,6 +198,30 @@ export const PERKS: Perk[] = [
     },
   },
   {
+    id: 'lum', name: 'Lum Berry', item: 'lum-berry',
+    desc: 'every 15s: washes team ailments',
+    rarity: 'uncommon',
+    apply: () => {},
+    tick: (b, dt) => {
+      const st = tSt(b);
+      st.lum = (st.lum || 0) + dt;
+      if (st.lum < 15) return;
+      // a clean team keeps the berry primed — the wash lands the moment
+      // something sticks, not a quarter-minute late
+      const dirty = b.players.filter((p) => !p.dead && (p.dotTicks > 0 || p.burnT > 0 || p.paraT > 0 || p.asleep));
+      if (!dirty.length) {
+        st.lum = 15;
+        return;
+      }
+      st.lum = 0;
+      for (const p of dirty) {
+        b.cleanse(p); // the same five fields shed skin sloughs
+        b.pushText({ x: p.x, y: p.y - p.r - 8, text: 'LUM!', t: 0.8, color: '#78c850', big: false });
+      }
+      sfx('heal');
+    },
+  },
+  {
     id: 'expshare', name: 'Exp. Share', item: 'exp-share',
     desc: 'team heals 8% on every KO; every 60s: weakest ally +1 level',
     rarity: 'uncommon',
