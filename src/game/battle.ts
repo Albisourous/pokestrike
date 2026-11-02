@@ -20,7 +20,7 @@ import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WAT
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
-import { STAGE_GIMMICKS, type DamageWall, type HazardKind } from './data';
+import { STAGE_GIMMICKS, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
 
@@ -338,6 +338,10 @@ const MS_FRAME = 60; // MS multiplies velocity once per 60 Hz frame
 export const SHOT_T = 1.5; // s — MS time-boxed shot: v *= 1 - (t/T)^4 each frame
 export const shotDamp = (t: number, h: number, mult = 1) => Math.exp(-MS_FRAME * (t / SHOT_T) ** 4 * mult * h);
 const HIT_COOLDOWN = 0.12;
+const SMASH_HITS = 3;
+const CUT_HITS = 2;
+const FIELD_HIT_SPEED = STOP_SPEED;
+const FIELD_UNIT_GAP = 4;
 const MAX_TEXTS = 8; // floating callouts on court at once — more reads as noise
 const HEAL_CD = 5; // in-battle mends share this cooldown — one heal per few shots
 const SUPER_POW = 0.7; // supers hit softer so clean lines carry the damage
@@ -623,7 +627,7 @@ const MCTX = typeof document === 'undefined' ? null : document.createElement('ca
 export class Battle {
   players: Unit[] = [];
   enemies: Unit[] = [];
-  blocks: Rect[] = []; // Archero-style stone clusters — bounceable cover
+  blocks: (Rect & { field?: BlockDef['field']; hp?: number })[] = []; // Archero-style stone clusters — bounceable cover
   private roomGrid: string[] | null = null;
   phase: Phase = 'aim';
   waveIndex = -1; // -1 = still at HOME — stages begin at the row-0 fork
@@ -2949,7 +2953,8 @@ export class Battle {
     cull(this.dashes, (d) => !d.done);
   }
 
-  private drawBlock(ctx: CanvasRenderingContext2D, b: Rect) {
+  private drawBlock(ctx: CanvasRenderingContext2D, b: typeof this.blocks[number]) {
+    if (b.field) { drawCover(ctx, b, this.theme, []); return; }
     const w = this.arena.w / 9;
     const occupied = (x: number, y: number) => this.blocks.some((r) =>
       x > r.x - 0.1 && x < r.x + r.w + 0.1 && y > r.y - 0.1 && y < r.y + r.h + 0.1);
@@ -3024,12 +3029,55 @@ export class Battle {
   private hitBlocks(u: Unit) {
     const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
     let bounced = false;
-    for (const b of this.blocks) bounced = resolveBlock(u, b) || bounced;
+    for (let i = 0; i < this.blocks.length; i++) {
+      const b = this.blocks[i];
+      const x = u.x, y = u.y, vx = u.vx, vy = u.vy;
+      if (!resolveBlock(u, b)) continue;
+      bounced = true;
+      if (!b.field || u.side !== 'player' || vx * vx + vy * vy < FIELD_HIT_SPEED ** 2
+          || vx * (u.x - x) + vy * (u.y - y) >= 0) continue;
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+      let broken = false;
+      if (b.field === 'strength') {
+        if (!this.pushBlock(b, Math.sign(x - u.x), Math.sign(y - u.y))) continue;
+      } else {
+        const cut = b.field === 'cut' && (u.def.type === 'grass' || u.def.type2 === 'grass');
+        b.hp = cut ? 0 : b.hp! - 1;
+        if (b.hp <= 0) { this.blocks.splice(i--, 1); broken = true; }
+      }
+      animBurst({ ...recipeFor('rock', 'EARTHQUAKE'), shake: broken ? 3 : 1 }, cx, cy, false);
+      this.addShake(broken ? 3 : 1);
+      sfx(broken ? 'ko' : 'bounce', 0.85);
+    }
     if (bounced && fast && u.side === 'player') {
       u.wallN++;
       this.onBounceFx(u);
       if (this.ricochet(-3) && !this.inStatic(u.x, u.y)) this.onRicochet(u.x, u.y);
     }
+  }
+
+  private pushBlock(b: typeof this.blocks[number], dc: number, dr: number): boolean {
+    if (!this.roomGrid || Math.abs(dc) + Math.abs(dr) !== 1) return false;
+    const a = this.arena, w = a.w / 9, h = a.h / 11;
+    const c = Math.round((b.x - a.x) / w) + dc, r = Math.round((b.y - a.y) / h) + dr;
+    if (c < 1 || c > 7 || r < 1 || r > 9 || !'0RTB'.includes(this.roomGrid[r][c])) return false;
+    const x = a.x + c * w, y = a.y + r * h;
+    if (this.blocks.some((other) => other !== b && x < other.x + other.w - 0.1 && x + w > other.x + 0.1
+        && y < other.y + other.h - 0.1 && y + h > other.y + 0.1)) return false;
+    const overlaps = (u: { x: number; y: number; r: number }, gap = 0) =>
+      u.x + u.r + gap > x && u.x - u.r - gap < x + w && u.y + u.r + gap > y && u.y - u.r - gap < y + h;
+    if ([...this.players, ...this.enemies].some((u) => !u.dead && overlaps(u, FIELD_UNIT_GAP))
+        || this.hazards.some((hz) => overlaps(hz))) return false;
+    const grid = this.roomGrid.map((row) => [...row].map((ch) => 'RTB'.includes(ch) ? '0' : ch));
+    for (const other of this.blocks) {
+      if (other === b || other.field === 'smash' || other.field === 'cut') continue;
+      const col = Math.round((other.x - a.x) / w), row = Math.round((other.y - a.y) / h);
+      for (let i = 0; i < Math.round(other.w / w); i++) grid[row][col + i] = '2';
+    }
+    grid[r][c] = '2';
+    if (!fieldRoomReachable(grid.map((row) => row.join('')))) return false;
+    b.x = x; b.y = y;
+    return true;
   }
 
   // Solid prop zones (ponds, spike boulders) are walls to bodies that
@@ -6286,6 +6334,8 @@ export class Battle {
       y: this.arena.y + this.arena.h * b.ny,
       w: this.arena.w * b.nw,
       h: this.arena.h * b.nh,
+      field: b.field,
+      hp: b.field === 'smash' ? SMASH_HITS : b.field === 'cut' ? CUT_HITS : undefined,
     }));
     for (const p of this.players) {
       if (!p.dead) {

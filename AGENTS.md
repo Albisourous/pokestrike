@@ -78,6 +78,11 @@ server, 540×960 letterboxed logical space, custom circle physics.
   (mirror-symmetric, anchors on floor, clear lanes — the loader validates
   dims and P→E/anchor reachability). First three entries stay gentle for
   stage openers; gyms use `ROOM_BOSS`.
+- Field-move room cells: `R` = Rock Smash (3 ball hits), `T` = Cut (2 hits,
+  or 1 from Grass, including secondary type), `B` = Strength
+  (one-cell push only onto clear floor, never onto units, hazards or spawn
+  anchors, and never closing a spawn route). Breakables count as passable
+  for reachability; Strength boulders do not. Keep these cells separate.
 - Physics tunables are named consts at the top of `battle.ts`.
 - Asset canon is FRLG/Gen-3 (see Direction). Mons and items are vendored PNGs from PokeAPI/sprites; new scenery/props get sliced or blitted from `sprites/gracidea/` atlases.
 - Scenery draws from the gracidea atlases (the prop pass landed) — new scenery still means slice or blit from the pack, never invented blobs.

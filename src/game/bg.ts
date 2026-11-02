@@ -176,7 +176,20 @@ function drawPatch(ctx: CanvasRenderingContext2D, b: Rect, tiles: readonly TileR
   ctx.restore();
 }
 
-export function drawCover(ctx: CanvasRenderingContext2D, b: Rect, theme: Theme, joins: readonly boolean[]) {
+export function drawCover(ctx: CanvasRenderingContext2D, b: Rect & { field?: 'smash' | 'cut' | 'strength'; hp?: number }, theme: Theme, joins: readonly boolean[]) {
+  if (b.field) {
+    const prop = b.field === 'cut' ? MT.FIELD_CUT : b.field === 'strength' ? MT.FIELD_STRENGTH
+      : (b.hp ?? 3) < 3 ? MT.FIELD_CHIPPED : MT.FIELD_SMASH;
+    const size = b.field === 'smash' && b.hp === 1 ? 0.8 : 1;
+    const w = b.w * size, h = b.h * size;
+    const x = b.x + (b.w - w) / 2, y = b.y + b.h - h;
+    ctx.save();
+    ctx.globalAlpha *= 0.24;
+    drawSlice(ctx, prop, x, y + 3, w, h, '#101820');
+    ctx.restore();
+    drawSlice(ctx, prop, x, y, w, h);
+    return;
+  }
   const prop = theme === 'shore' ? MT.WALL_BOULDER : theme === 'sanctum' ? MT.WALL_RUIN
     : theme === 'marsh' ? MT.WALL_REED : theme === 'dojo' ? MT.WALL_WOOD : theme === 'plant' ? MT.WALL_METAL
     : theme === 'grove' || theme === 'meadow' ? MT.WALL_BUSH : null;
