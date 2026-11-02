@@ -5355,5 +5355,22 @@ import { raidWeaknesses, raidCounters, raidRefresh } from '../src/game/home/raid
   ok(raidRefresh(Date.UTC(2026, 0, 1)) === '24H 00M' && raidRefresh(Date.UTC(2026, 0, 1, 23, 59, 59)) === '0H 01M', 'raid timer rolls at UTC midnight');
 }
 
+// --- home: climb ---
+import { FREE_BTN, RESTART_BTN, ASC_BTN, CLIMB_FREE, CLIMB_RAID, TAB_BAR, ascCellRect, hitAscCell } from '../src/game/screens';
+import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
+{
+  const overlap = (a: typeof FREE_BTN, b: typeof FREE_BTN) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  let rungs = true;
+  for (let i = 0; i <= CLIMB_ASC_MODS.length; i++) {
+    const r = ascCellRect(i);
+    if (r.w < 44 || r.h < 44 || hitAscCell(r.x + r.w / 2, r.y + r.h / 2) !== i) rungs = false;
+  }
+  ok(rungs, 'climb: every ascension rung is a >=44px cell that hits itself');
+  ok([FREE_BTN, RESTART_BTN, CLIMB_FREE, CLIMB_RAID].every((r) => r.h >= 44), 'climb: hero, restart and door taps are >=44px tall');
+  ok(RESTART_BTN.x > FREE_BTN.x + 300 && RESTART_BTN.y === FREE_BTN.y, 'climb: restart flanks the hero row, CONTINUE keeps the wide side');
+  const stack = [FREE_BTN, ASC_BTN, CLIMB_FREE, TAB_BAR];
+  ok(stack.every((r, i) => i === 0 || !overlap(stack[i - 1], r)) && !overlap(CLIMB_FREE, CLIMB_RAID) && !overlap(CLIMB_RAID, TAB_BAR), 'climb: hero, ladder, doors and nav never overlap');
+}
+
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');
 process.exit(fails ? 1 : 0);

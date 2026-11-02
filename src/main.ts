@@ -34,6 +34,8 @@ import {
   TITLE_BTN,
   FREE_BTN,
   RESTART_BTN,
+  CLIMB_FREE,
+  CLIMB_RAID,
   ASC_BTN,
   hitAscCell,
   noteAscDeny,
@@ -1298,20 +1300,6 @@ canvas.addEventListener('pointerdown', (e) => {
       }
       return;
     }
-    if (homeTab === 'climb' && inRect(p.x, p.y, FREE_BTN)) {
-      sfx('ui');
-      if (titleSave) {
-        const s = titleSave;
-        titleSave = null;
-        resumeRun(s);
-      } else {
-        newRun();
-        startDraft();
-        scene = 'draft';
-      }
-      sceneMusic();
-      return;
-    }
     if (homeTab === 'climb' && titleSave && inRect(p.x, p.y, RESTART_BTN)) {
       // burn the parked climb, deal a fresh seed — the old sliver link's
       // deed on a real pill now. Two-tap: first arms the warn face, the
@@ -1328,6 +1316,28 @@ canvas.addEventListener('pointerdown', (e) => {
       startDraft();
       scene = 'draft';
       sceneMusic();
+      return;
+    }
+    if (homeTab === 'climb' && inRect(p.x, p.y, FREE_BTN)) {
+      sfx('ui');
+      if (titleSave) {
+        const s = titleSave;
+        titleSave = null;
+        resumeRun(s);
+      } else {
+        newRun();
+        startDraft();
+        scene = 'draft';
+      }
+      sceneMusic();
+      return;
+    }
+    if (homeTab === 'climb' && (inRect(p.x, p.y, CLIMB_FREE) || inRect(p.x, p.y, CLIMB_RAID))) {
+      // side doors: free pull opens SHOP, today's raid opens RAID
+      noteTabSwap(t, homeTab);
+      homeTab = inRect(p.x, p.y, CLIMB_FREE) ? 'shop' : 'raid';
+      noteTabPress(t);
+      sfx('ui');
       return;
     }
     if (homeTab === 'raid' && inRect(p.x, p.y, RAID_FIGHT)) {
