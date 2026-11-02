@@ -8565,6 +8565,7 @@ export class Battle {
       w = ctx.measureText(text).width;
       this.lblW.set(text, w);
     }
+    x = Math.min(Math.max(x, this.arena.x + w / 2 + 6), this.arena.x + this.arena.w - w / 2 - 6);
     y = this.place(x, y, w, LABEL_PX * 0.75, LABEL_PX * 0.12, up);
     ctx.globalAlpha = alpha;
     ctx.strokeText(text, x, y);
