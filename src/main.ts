@@ -514,6 +514,7 @@ const charmPick = (i: number) => {
   const perk = startOffers[i];
   if (!perk) return;
   sfx('ui');
+  popPick(charmCardRect(i, startOffers.length), t, { perk });
   if (battle) {
     statOffer('perks', startOffers.map((p) => p.id), perk.id);
     battle.grantPerk(perk);

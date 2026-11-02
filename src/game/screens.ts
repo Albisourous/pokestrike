@@ -568,6 +568,26 @@ const roleTag = (def: SpeciesDef) => {
 
 // greedy word-wrap into at most two lines at the current font — descs are
 // short enough that a third line never earns its keep
+// greedy wrap into at most n lines, stepping the font down until all of it
+// fits: card blurbs never get cut or ellipsized
+function fitWrap(ctx: CanvasRenderingContext2D, text: string, maxW: number, px: number, n: number, minPx = 9) {
+  for (let size = px; ; size -= 0.5) {
+    ctx.font = fontB(size);
+    const lines: string[] = [];
+    let cur = '';
+    for (const wd of text.split(' ')) {
+      const t = cur ? `${cur} ${wd}` : wd;
+      if (!cur || measureW(ctx, t) <= maxW) cur = t;
+      else {
+        lines.push(cur);
+        cur = wd;
+      }
+    }
+    if (cur) lines.push(cur);
+    if (size <= minPx || (lines.length <= n && lines.every((l) => measureW(ctx, l) <= maxW))) return lines.slice(0, n);
+  }
+}
+
 export function wrap2(ctx: CanvasRenderingContext2D, text: string, maxW: number) {
   if (measureW(ctx, text) <= maxW) return [text];
   const words = text.split(' ');
@@ -3167,7 +3187,7 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
   stripeBand(ctx, band, TYPE_COLOR[def.type]);
   // type chip top-left: light pill, type ink darkened so pale types
   // (electric, ice) still read on it
-  chip(ctx, r.x + 9, r.y + 9, def.type.toUpperCase(), {
+  chip(ctx, r.x + 10, r.y + 10, def.type.toUpperCase(), {
     bg: INK,
     fg: mixHex(TYPE_COLOR[def.type], INK, 0.45),
   });
@@ -3175,9 +3195,9 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
   // its level so the pick can chase LV5 or spread to a fresh partner
   const kind = `${def.shiny ? 'SHINY' : dex.has(def.id) ? 'OWNED' : 'NEW'}${bondLv(def.id) ? `·B${bondLv(def.id)}` : ''}`;
   ctx.font = fontB(10);
-  chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, def.shiny
+  chip(ctx, r.x + r.w - 10 - ctx.measureText(kind).width - 14, r.y + 10, kind, def.shiny
     ? { bg: GOLD, fg: INK }
-    : { bg: 'rgba(42,36,64,0.8)', fg: INK });
+    : { bg: 'rgba(42,36,64,0.8)', fg: PARCH });
 
   // the sprite stands on the band with a ground shadow, drawn big
   monShadow(ctx, band.x + band.w / 2, band.y + band.h / 2 - 8, 64);
@@ -3198,11 +3218,11 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
 
   ctx.font = fontB(10);
   ctx.fillStyle = INK_FAINT;
-  ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 158);
+  ctx.fillText(`#${String(def.id).padStart(3, '0')} · Lv${def.lvl ?? 1}`, r.x + r.w / 2, r.y + 156);
 
   ctx.font = fontB(10);
   ctx.fillStyle = TYPE_COLOR[def.type];
-  ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 178);
+  ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 174);
 
   // evolution hint + trait tag sit with the stats — Magikarp is secretly
   // Gyarados; PIERCE/COPY hold the right edge of the same line
@@ -3218,27 +3238,27 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
       ctx.font = fontB(10);
       ctx.fillStyle = ACCENT;
       fitFontB(ctx, `→ ${nx}`, 10, r.w - 22 - tagW);
-      ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 198);
+      ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 192);
     }
   }
   if (def.pierce || def.copy) {
     ctx.textAlign = 'right';
     ctx.font = fontB(10);
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 199);
+    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 9, r.y + 193);
     ctx.fillStyle = GOLD;
-    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 198);
+    ctx.fillText(def.pierce ? 'PIERCE' : 'COPY', r.x + r.w - 10, r.y + 192);
   }
 
   // the bump super this mon fires — a draft decision you can taste
   ctx.textAlign = 'center';
   ctx.font = fontB(11);
   ctx.fillStyle = GOLD;
-  ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 222);
+  ctx.fillText(`★ ${moveOf(def.id, def.type)}`, r.x + r.w / 2, r.y + 212);
   ctx.font = fontB(10);
   ctx.fillStyle = INK_SOFT;
-  const dl = wrap2(ctx, superDesc(def.id, def.type), r.w - 20).slice(0, 2);
-  dl.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, r.y + 240 + li * 16));
+  fitWrap(ctx, superDesc(def.id, def.type), r.w - 20, 10, 3).forEach((line, li) =>
+    ctx.fillText(line, r.x + r.w / 2, r.y + 226 + li * 12));
 
   // the ability row — the flags that change how the pick actually plays
   // sit above the fold: a draft is a bet, so the card shows its hand
@@ -3538,12 +3558,12 @@ function perkCardBody(
   stripeBand(ctx, band, RARITY_COLOR[perk.rarity]);
   // rarity pill top-left, kind pill top-right — our perks re-apply/stack,
   // so a repeat is DUPE not UPGRADE
-  chip(ctx, r.x + 9, r.y + 9, perk.rarity.toUpperCase(), { bg: INK, fg: RARITY_COLOR[perk.rarity] });
+  chip(ctx, r.x + 10, r.y + 10, perk.rarity.toUpperCase(), { bg: INK, fg: RARITY_COLOR[perk.rarity] });
   const kind = opts?.owned ? 'DUPE' : 'NEW';
   ctx.font = fontB(10);
-  chip(ctx, r.x + r.w - 9 - ctx.measureText(kind).width - 14, r.y + 9, kind, {
+  chip(ctx, r.x + r.w - 10 - ctx.measureText(kind).width - 14, r.y + 10, kind, {
     bg: 'rgba(42,36,64,0.8)',
-    fg: INK,
+    fg: PARCH,
   });
 
   const img = itemSprite(perk.item);
@@ -3568,18 +3588,7 @@ function perkCardBody(
   ctx.fillStyle = INK_SOFT;
   // greedy wrap inside the card — the old midpoint split overflowed long descs
   // straight into the neighbour card
-  const dlines: string[] = [];
-  let cur = '';
-  for (const wd of perk.desc.split(' ')) {
-    const t = cur ? `${cur} ${wd}` : wd;
-    if (ctx.measureText(t).width <= r.w - 16) cur = t;
-    else {
-      dlines.push(cur);
-      cur = wd;
-    }
-  }
-  if (cur) dlines.push(cur);
-  dlines.slice(0, 3).forEach((l, i) => ctx.fillText(l, r.x + r.w / 2, r.y + 128 + i * 18));
+  fitWrap(ctx, perk.desc, r.w - 16, 10, 3).forEach((l, i) => ctx.fillText(l, r.x + r.w / 2, r.y + 126 + i * 16));
 
   // [1]/[2]/[3] — desktop keys pick cards off the board
   const idx = opts?.idx ?? spin?.i;
@@ -3697,34 +3706,44 @@ export function drawReward(
 
   // a split evolution blocks the reward pick until its form is chosen
   if (evo) {
-    scrim(ctx, 0.78);
+    choiceCourt(ctx, 'meadow', 0.45);
+    uiPanel(ctx, { x: 14, y: 300, w: W - 28, h: 70 }, 'EVOLUTION');
     ctx.textAlign = 'center';
-    ctx.fillStyle = GOLD;
-    fitFont(ctx, `${evo.from.name.toUpperCase()} IS EVOLVING · CHOOSE ITS FORM`, 13, W - 60);
-    ctx.fillText(`${evo.from.name.toUpperCase()} IS EVOLVING · CHOOSE ITS FORM`, W / 2, 372);
+    const head = `${evo.from.name} is evolving · pick a form`;
+    ctx.fillStyle = INK_SOFT;
+    fitFontB(ctx, head, 10, W - 60);
+    ctx.fillText(head, W / 2, 356);
     evo.options.forEach((opt, i) => {
       const r = evoCardRect(i, evo.options.length);
-      uiWindow(ctx, r, { rad: 10 });
-      rim(ctx, r, 10, GOLD, 2);
-      // split strip sells the dual-type at a glance
-      ctx.fillStyle = TYPE_COLOR[opt.type];
-      ctx.fillRect(r.x + 8, r.y + 8, opt.type2 ? (r.w - 16) / 2 : r.w - 16, 4);
-      if (opt.type2) {
-        ctx.fillStyle = TYPE_COLOR[opt.type2];
-        ctx.fillRect(r.x + 8 + (r.w - 16) / 2, r.y + 8, (r.w - 16) / 2, 4);
-      }
-      (opt.shiny ? drawShiny : drawMon)(ctx, opt.id, r.x + r.w / 2, r.y + 66, 76);
-      fitFontB(ctx, opt.name.toUpperCase(), 10, r.w - 12);
-      ctx.fillStyle = INK;
-      ctx.fillText(opt.name.toUpperCase(), r.x + r.w / 2, r.y + 128);
-      ctx.font = fontB(10);
-      ctx.fillStyle = INK_FAINT;
-      ctx.fillText(opt.type2 ? `${opt.type}/${opt.type2}` : opt.type, r.x + r.w / 2, r.y + 141);
-      ctx.fillStyle = GOLD;
-      ctx.fillText(`★ ${moveOf(opt.id, opt.type)}`, r.x + r.w / 2, r.y + 156);
-      ctx.fillStyle = INK_FAINT;
-      wrap2(ctx, superDesc(opt.id, opt.type), r.w - 14).forEach((l, li) =>
-        ctx.fillText(l, r.x + r.w / 2, r.y + 167 + li * 9));
+      const cx = r.x + r.w / 2;
+      dealCard(ctx, r, i, spin, () => {
+        uiWindow(ctx, r, { rad: 10 });
+        cardFace(ctx, { x: r.x + 6, y: r.y + 6, w: r.w - 12, h: r.h - 12 }, opt.type);
+        rim(ctx, r, 10, GOLD, 2);
+        const patch = { x: r.x + 8, y: r.y + 8, w: r.w - 16, h: 84 };
+        drawBackdrop(ctx, patch, 8, 'meadow');
+        // split strip along the patch foot sells the dual-type at a glance
+        const half = opt.type2 ? patch.w / 2 : patch.w;
+        ctx.fillStyle = TYPE_COLOR[opt.type];
+        ctx.fillRect(patch.x, patch.y + patch.h - 4, half, 4);
+        if (opt.type2) {
+          ctx.fillStyle = TYPE_COLOR[opt.type2];
+          ctx.fillRect(patch.x + half, patch.y + patch.h - 4, half, 4);
+        }
+        monShadow(ctx, cx, r.y + 46, 64);
+        (opt.shiny ? drawShiny : drawMon)(ctx, opt.id, cx, r.y + 50, 92);
+        ctx.fillStyle = INK;
+        fitFontB(ctx, opt.name.toUpperCase(), 12, r.w - 12);
+        ctx.fillText(opt.name.toUpperCase(), cx, r.y + 109);
+        ctx.font = fontB(10);
+        ctx.fillStyle = TYPE_COLOR[opt.type];
+        ctx.fillText((opt.type2 ? `${opt.type} · ${opt.type2}` : opt.type).toUpperCase(), cx, r.y + 123);
+        ctx.fillStyle = GOLD;
+        fitFontB(ctx, `★ ${moveOf(opt.id, opt.type)}`, 10, r.w - 12);
+        ctx.fillText(`★ ${moveOf(opt.id, opt.type)}`, cx, r.y + 138);
+        ctx.fillStyle = INK_SOFT;
+        fitWrap(ctx, superDesc(opt.id, opt.type), r.w - 14, 10, 3).forEach((l, li) => ctx.fillText(l, cx, r.y + 152 + li * 12));
+      });
     });
     // the quiet out — dark pill, no gold pull; staying put is a legal pick
     pill(ctx, EVO_KEEP, {
@@ -4088,16 +4107,20 @@ export function drawPerkPick(
   _t = 0,
   team: SpeciesDef[] = [],
 ) {
-  drawBackdrop(ctx, { x: 0, y: 0, w: W, h: H }, 0, 'sky');
+  choiceCourt(ctx, 'meadow', 0.35);
   ctx.textAlign = 'center';
   const four = offers.length >= 4; // the lab's FOURTH OPTION hits the charm board too
-  // the 2×2 board fills a tall window; the 3-offer row sits in a centered one
+  // same board as the draft: a title plate, cards standing on the court
   const py = four ? 84 : 232;
-  uiPanel(ctx, { x: 14, y: py, w: W - 28, h: four ? 856 : 496 }, title);
+  uiPanel(ctx, { x: 14, y: py, w: W - 28, h: 70 }, title);
   ctx.font = fontB(10);
-  ctx.fillStyle = INK_FAINT;
-  ctx.fillText(sub, W / 2, py + 72);
-  offers.forEach((p, i) => drawPerkCard(ctx, charmCardRect(i, offers.length), p, undefined, { idx: i }));
+  ctx.fillStyle = INK_SOFT;
+  fitFontB(ctx, sub, 10, W - 60);
+  ctx.fillText(sub, W / 2, py + 56);
+  offers.forEach((p, i) => {
+    const r = charmCardRect(i, offers.length);
+    dealCard(ctx, r, i, 9, () => drawPerkCard(ctx, r, p, undefined, { idx: i }));
+  });
   // declining pays score instead — a dead offer still has a price
   pill(ctx, charmSkipRect(offers.length), { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'SKIP +200 PTS' });
   // the drafted squad rides under the offers — pick the item for THESE mons
@@ -4105,14 +4128,16 @@ export function drawPerkPick(
     const labelY = four ? 780 : 584;
     const monY = four ? 798 : 632; // drawMon centers — half the sprite + pad
     const monS = four ? 48 : 62;
+    uiWindow(ctx, { x: 30, y: labelY - 18, w: W - 60, h: four ? 94 : 120 }, { rad: 12, dark: true });
     ctx.font = fontB(10);
-    ctx.fillStyle = INK_FAINT;
+    ctx.fillStyle = PARCH;
     ctx.fillText('YOUR TEAM', W / 2, labelY);
     team.forEach((def, i) => {
       const mx = W / 2 + (i - (team.length - 1) / 2) * (four ? 82 : 92);
+      monShadow(ctx, mx, monY, monS);
       (def.shiny ? drawShiny : drawMon)(ctx, def.id, mx, monY, monS);
       ctx.font = fontB(10);
-      ctx.fillStyle = INK;
+      ctx.fillStyle = PARCH;
       ctx.fillText(def.name.toUpperCase(), mx, monY + (four ? 36 : 34));
       ctx.font = fontB(10);
       ctx.fillStyle = TYPE_COLOR[def.type];
