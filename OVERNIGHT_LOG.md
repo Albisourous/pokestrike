@@ -738,3 +738,12 @@ backlog; builders run one iteration each, I verify + commit + push.
   Air Lock perk gates weather damage via this.sky (desc scoped to
   damage honestly — veil/swift/forecast still read weather), tint
   caches stop keying off the 1x1 404 placeholder.
+- a20a3d5 pushed: scout sweep on the unaudited files — secretWon fired
+  on any wave clear while a lair sat open (free legendary + map
+  teleport) → phase-gated + lairs seal when walked past; legends caught
+  at Lv1 (enemies culled first) → bossLvl stashed at enterSecret;
+  connect.live died with its shot; coached fiat-gold stopped touching
+  streak (earns nothing, breaks nothing); cardAuto clock starts at
+  first render not wave spawn; pickMissions seed kept its low bits via
+  Math.imul; SOLAR BEAM key fixed; warp slices one frame; laser plans
+  honor hazard cells.
