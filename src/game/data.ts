@@ -2011,6 +2011,8 @@ export interface DamageWall {
   start: number;
   end: number;
   type: PokeType;
+  on?: number; // turns lit per cycle; omit for always-on
+  off?: number; // turns dark per cycle, the last one warns
 }
 
 export const STAGE_GIMMICKS: Record<Theme, { kind: HazardKind | 'damage-wall' | 'barrier'; label: string; type: PokeType }> = {
@@ -2046,10 +2048,10 @@ export const bulletHints = (theme: Theme, type: PokeType) => [
   BULLET_GIMMICKS.safeguard.themes?.includes(theme) && BULLET_GIMMICKS.safeguard.label,
 ].filter((x): x is string => !!x);
 
-const DAMAGE_WALL_PHASES: Pick<DamageWall, 'edge' | 'start' | 'end'>[][] = [
+const DAMAGE_WALL_PHASES: Omit<DamageWall, 'type'>[][] = [
   [{ edge: 'left', start: 2 / 11, end: 7 / 11 }],
-  [{ edge: 'right', start: 3 / 11, end: 8 / 11 }],
-  [{ edge: 'top', start: 2 / 9, end: 7 / 9 }, { edge: 'left', start: 2 / 11, end: 5 / 11 }],
+  [{ edge: 'right', start: 3 / 11, end: 8 / 11, on: 2, off: 2 }],
+  [{ edge: 'top', start: 2 / 9, end: 7 / 9, on: 2, off: 2 }, { edge: 'left', start: 2 / 11, end: 5 / 11 }],
 ];
 
 // Compile one room template into court furniture: '2' cells merge into

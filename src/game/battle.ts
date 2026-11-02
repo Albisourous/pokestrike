@@ -489,6 +489,13 @@ const LASER_HALF_W = 22;
 const QUAKE_R = 150;
 const FOE_MOVE_POW = 0.8;
 const DAMAGE_WALL_HP = 0.04;
+type LiveWall = DamageWall & { t0?: number; outT?: number };
+const WALL_DELAY = 0.2; // s before a lit wall starts fading in (MS code.bin round 3)
+const WALL_FADE = 1; // s fade-in
+const WALL_LIVE = 1.5; // s after lighting the wall starts to hurt
+const WALL_OUT = 0.2; // s fade-out when a cycle turns it off
+const WALL_DASH = [6, 4];
+const NO_DASH: number[] = [];
 const REFLECT_HITS = 2;
 const REFLECT_BOSS_HITS = 3;
 const HEAL_PANEL_HP = 0.06;
@@ -848,7 +855,9 @@ export class Battle {
   private lblW = new Map<string, number>();
   private scars: Scar[] = []; // impact craters scarring the court
   private hazards: Hazard[] = []; // this wave's court gimmicks
-  private damageWalls: DamageWall[] = [];
+  private damageWalls: LiveWall[] = [];
+  private wallTurn = 0;
+  private wallShot0 = 0;
   private powerHz: Hazard[] = []; // cached 'power' zones — rebuilt only when the hazards list swaps or grows
   private powerRef: Hazard[] | null = null;
   private powerLen = -1;
@@ -3213,7 +3222,38 @@ export class Battle {
   }
 
   private damageWallAt(edge: DamageWall['edge'], at: number) {
-    return this.damageWalls.find((w) => w.edge === edge && at >= w.start && at <= w.end);
+    return this.damageWalls.find((w) => this.wallLive(w) && w.edge === edge && at >= w.start && at <= w.end);
+  }
+
+  private wallLit(w: LiveWall): boolean {
+    return !w.on || this.wallTurn % (w.on + (w.off ?? 0)) < w.on;
+  }
+
+  private wallWarn(w: LiveWall): boolean {
+    return !!w.on && this.wallTurn % (w.on + (w.off ?? 0)) === w.on + (w.off ?? 0) - 1;
+  }
+
+  private wallLive(w: LiveWall): boolean {
+    return this.wallLit(w) && this.time - (w.t0 ?? -9) >= WALL_LIVE;
+  }
+
+  private syncWalls(): void {
+    const turn = this.shots - this.wallShot0;
+    if (turn === this.wallTurn) return;
+    for (let i = 0; i < this.damageWalls.length; i++) {
+      const w = this.damageWalls[i];
+      if (!w.on) continue;
+      const period = w.on + (w.off ?? 0);
+      const wasLit = this.wallTurn % period < w.on;
+      const lit = turn % period < w.on;
+      if (!wasLit && lit) {
+        w.t0 = this.time;
+        w.outT = undefined;
+      } else if (wasLit && !lit) {
+        w.outT = this.time;
+      }
+    }
+    this.wallTurn = turn;
   }
 
   // Stone blocks bank the ball like walls — same restitution, same wall-
@@ -6567,7 +6607,9 @@ export class Battle {
   }
 
   private installRoom(room: ReturnType<typeof buildRoom>) {
-    this.damageWalls = room.damageWalls;
+    this.damageWalls = room.damageWalls.map((w) => ({ ...w, t0: this.time }));
+    this.wallShot0 = this.shots;
+    this.wallTurn = 0;
     for (const z of room.hazards) {
       if (z.kind === 'heal') void loadItem('oran-berry');
       if (z.kind === 'gravity') void loadItem('hard-stone');
@@ -7482,6 +7524,7 @@ export class Battle {
       {
         this.activeIdx = idx;
         this.phase = 'aim';
+        this.syncWalls();
         const a = this.players[idx];
         this.pushText({
           x: a.x, y: a.y - a.r - 8,
@@ -7733,6 +7776,7 @@ export class Battle {
     this.drawWeather(ctx);
 
     this.lblN = 0;
+    this.drawWallWarnings(ctx);
     // field pickups: the icon is the read; the effect tag shows once per
     // kind per battle
     for (const pk of this.pickups) {
@@ -8526,7 +8570,7 @@ export class Battle {
       // score
       ctx.font = fontB(11);
       ctx.fillStyle = '#aab4d8';
-      const info = [this.themeName.toUpperCase(), ...(this.asc > 0 ? [`ASC ${this.asc}`] : []), `SCORE ${this.score.toLocaleString('en-US')}`].join(' · ');
+      const info = [this.themeName.toUpperCase(), STAGE_GIMMICKS[this.theme].label, ...(this.asc > 0 ? [`ASC ${this.asc}`] : []), `SCORE ${this.score.toLocaleString('en-US')}`].join(' · ');
       ctx.fillText(info, 270, 410);
       // the way out — same pill idiom as the other modal buttons; main.ts
       // hit-tests both rects before the freeze's any-tap thaw
@@ -9700,16 +9744,45 @@ export class Battle {
       const x = vertical ? (w.edge === 'left' ? a.x : a.x + a.w) : a.x + a.w * w.start;
       const y = vertical ? a.y + a.h * w.start : (w.edge === 'top' ? a.y : a.y + a.h);
       const tile = w.type === 'fire' ? MT.TILE_LAVA : w.type === 'grass' ? MT.TILE_HEDGE_TRIM : MT.TILE_FENCE;
+      const age = this.time - (w.t0 ?? -9);
+      const lit = this.wallLit(w);
+      const live = this.wallLive(w);
       ctx.save();
       ctx.translate(x, y);
       if (vertical) ctx.rotate(Math.PI / 2);
-      ctx.globalAlpha = 0.22 + Math.sin(this.time * 5) * 0.1;
-      ctx.fillStyle = TYPE_COLOR[w.type];
-      ctx.fillRect(0, -10, span, 20);
-      ctx.globalAlpha = 0.8 + Math.sin(this.time * 5) * 0.2;
-      for (let at = 0; at < span; at += 16) drawTile(ctx, tile, at, -6, Math.min(16, span - at), 12);
-      ctx.globalAlpha = 1;
-      if (labelAlpha > 0) {
+      if (lit && !live) {
+        const k = Math.max(0, Math.min(1, (age - WALL_DELAY) / WALL_FADE));
+        ctx.globalAlpha = 0.45 * k;
+        for (let at = 0; at < span; at += 16) drawTile(ctx, tile, at, -6, Math.min(16, span - at), 12);
+        ctx.globalAlpha = 0.6;
+        ctx.strokeStyle = '#aab4d8';
+        ctx.lineWidth = 1;
+        ctx.setLineDash(WALL_DASH);
+        ctx.strokeRect(0, -10, span, 20);
+      } else if (live) {
+        ctx.globalAlpha = 0.22 + Math.sin(this.time * 5) * 0.1;
+        ctx.fillStyle = TYPE_COLOR[w.type];
+        ctx.fillRect(0, -10, span, 20);
+        ctx.globalAlpha = 0.8 + Math.sin(this.time * 5) * 0.2;
+        for (let at = 0; at < span; at += 16) drawTile(ctx, tile, at, -6, Math.min(16, span - at), 12);
+        ctx.globalAlpha = 1;
+      } else if (this.wallWarn(w)) {
+        ctx.globalAlpha = 0.35 + 0.45 * (Math.sin(this.time * 12) > 0 ? 1 : 0);
+        ctx.strokeStyle = TYPE_COLOR[w.type];
+        ctx.lineWidth = 2;
+        ctx.setLineDash(WALL_DASH);
+        ctx.strokeRect(0, -10, span, 20);
+      } else if (w.outT !== undefined && this.time - w.outT < WALL_OUT) {
+        ctx.globalAlpha = 1 - (this.time - w.outT) / WALL_OUT;
+        for (let at = 0; at < span; at += 16) drawTile(ctx, tile, at, -6, Math.min(16, span - at), 12);
+      } else {
+        ctx.globalAlpha = 0.2;
+        ctx.strokeStyle = '#aab4d8';
+        ctx.lineWidth = 1;
+        ctx.setLineDash(WALL_DASH);
+        ctx.strokeRect(0, -10, span, 20);
+      }
+      if (labelAlpha > 0 && live) {
         ctx.globalAlpha = labelAlpha;
         ctx.font = fontB(LABEL_PX);
         ctx.textAlign = 'center';
@@ -9719,7 +9792,20 @@ export class Battle {
         ctx.fillStyle = TYPE_COLOR[w.type];
         ctx.fillText('DMG WALL', span / 2, -10);
       }
+      ctx.setLineDash(NO_DASH);
       ctx.restore();
+    }
+  }
+
+  private drawWallWarnings(ctx: CanvasRenderingContext2D) {
+    const a = this.arena;
+    for (const w of this.damageWalls) {
+      if (this.wallLit(w) || !this.wallWarn(w)) continue;
+      const vertical = w.edge === 'left' || w.edge === 'right';
+      const lx = vertical ? (w.edge === 'left' ? a.x : a.x + a.w) : a.x + a.w * (w.start + w.end) / 2;
+      const ly = vertical ? a.y + a.h * (w.start + w.end) / 2 : w.edge === 'top' ? a.y + 24 : a.y + a.h - 12;
+      const alpha = 0.35 + 0.45 * (Math.sin(this.time * 12) > 0 ? 1 : 0);
+      this.fieldLabel(ctx, 'NEXT TURN', lx, ly, TYPE_COLOR[w.type], alpha);
     }
   }
 

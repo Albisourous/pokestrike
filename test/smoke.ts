@@ -192,6 +192,85 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(wallHits === 1 && p.vx > 0 && p.vy > 0, 'a corner bounce cannot double-charge damage');
   b.damagePlayer = damage;
 
+  const timed: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  timed.spawnWave(0);
+  timed.enemies = []; timed.blocks = []; timed.hazards = [];
+  const tp = timed.active;
+  tp.def = speciesById(7)!;
+  timed.time = 10;
+  timed.installRoom({ blocks: [], hazards: [], anchors: [], damageWalls: [{ edge: 'left', start: 0, end: 1, type: 'fire' }] });
+  const wallT0 = timed.time;
+  const timedBounce = () => {
+    tp.x = arena.x + tp.r - 1; tp.y = arena.y + arena.h * 0.5; tp.vx = -400; tp.vy = 0;
+    timed.hitWalls(tp);
+  };
+  const timedHp = tp.hp;
+  timed.time = wallT0 + 0.1; timedBounce();
+  timed.time = wallT0 + 1.4; timedBounce();
+  ok(tp.hp === timedHp, 'a fading damage wall does not hurt');
+  timed.introAlpha = () => 1;
+  const wallText: string[] = [];
+  const wallCtx = {
+    save() {}, restore() {}, translate() {}, rotate() {}, fillRect() {}, strokeRect() {}, setLineDash() {}, drawImage() {},
+    strokeText(text: string) { wallText.push(text); }, fillText(text: string) { wallText.push(text); },
+  } as any;
+  timed.drawDamageWalls(wallCtx);
+  ok(!wallText.includes('DMG WALL'), 'a fading damage wall has no live label');
+  timed.time = wallT0 + 1.5; timedBounce();
+  ok(tp.hp < timedHp, 'a damage wall hurts once fully live');
+
+  const cycled: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  cycled.spawnWave(0);
+  cycled.enemies = []; cycled.blocks = []; cycled.hazards = [];
+  const cp = cycled.active;
+  cp.def = speciesById(7)!;
+  cycled.time = 20;
+  cycled.installRoom({ blocks: [], hazards: [], anchors: [], damageWalls: [{ edge: 'left', start: 0, end: 1, type: 'fire', on: 2, off: 2 }] });
+  const cycledWall = cycled.damageWalls[0];
+  const cycleBase = cycled.time;
+  const litTurns: boolean[] = [], warningTurns: boolean[] = [];
+  const cycleBounce = () => {
+    cp.x = arena.x + cp.r - 1; cp.y = arena.y + arena.h * 0.5; cp.vx = -400; cp.vy = 0;
+    cycled.hitWalls(cp);
+  };
+  const cycleHp = cp.hp;
+  for (let n = 0; n <= 5; n++) {
+    cycled.shots = cycled.wallShot0 + n;
+    cycled.syncWalls();
+    litTurns.push(cycled.wallLit(cycledWall));
+    warningTurns.push(cycled.wallWarn(cycledWall));
+    if (n === 2) {
+      cycleBounce();
+      ok(cp.hp === cycleHp, 'an off-cycle damage wall does not hurt');
+    }
+    if (n === 3) {
+      const labels: string[] = [];
+      cycled.fieldLabel = (_ctx: any, text: string) => { labels.push(text); };
+      cycled.drawWallWarnings({} as any);
+      ok(labels.includes('NEXT TURN') && !labels.includes('DMG WALL'), 'warning text appears on the turn before lighting');
+    }
+    if (n === 4) {
+      cycleBounce();
+      ok(cp.hp === cycleHp, 'a re-lit damage wall fades in again');
+      wallText.length = 0;
+      cycled.introAlpha = () => 1;
+      cycled.drawDamageWalls(wallCtx);
+      ok(!wallText.includes('DMG WALL'), 'a re-lit fading wall has no live label');
+    }
+  }
+  ok(litTurns.join(',') === 'true,true,false,false,true,true' && warningTurns.join(',') === 'false,false,false,true,false,false', 'damage-wall cycle and warning follow turns');
+  cycled.time = cycleBase + 3.5;
+  cycleBounce();
+  ok(cp.hp < cycleHp, 'a re-lit damage wall hurts after fading in');
+  cp.def = speciesById(4)!;
+  const immuneHp = cp.hp;
+  cycleBounce();
+  ok(cp.hp === immuneHp, 'matching type still counters a live damage wall');
+  cp.def = speciesById(7)!;
+  cycled.slowImmune = true;
+  cycleBounce();
+  ok(cp.hp === immuneHp, 'hazard immunity still counters a live damage wall');
+
   const f: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
   f.spawnWave(0);
   const e = f.enemies[0];
@@ -253,6 +332,13 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(walls.length > 0 && walls.every((w) => w.type === 'electric'), 'plant room data arms electric edge segments');
   const nextWalls = buildRoom(ROOM_LAYOUTS[0], 'plant', mulberry32(1), 1).damageWalls;
   ok(nextWalls[0].edge !== walls[0].edge, 'successive battles change the authored damage-wall segment');
+  for (const theme of ['grove', 'volcano', 'plant'] as const) {
+    const phases = [0, 1, 2].map((phase) => buildRoom(ROOM_LAYOUTS[0], theme, mulberry32(1), phase).damageWalls);
+    ok(phases.every((phase) => phase.length > 0), `${theme} damage-wall phases are populated`);
+    ok(phases[0].every((wall) => !wall.on), `${theme} phase 0 walls stay always-on`);
+    ok(phases[2].filter((wall) => !wall.on).length === 1, `${theme} phase 2 keeps one always-on wall`);
+    ok(phases.flat().every((wall) => !wall.on || (wall.on >= 1 && (wall.off ?? 0) >= 2 && wall.on + (wall.off ?? 0) <= 4)), `${theme} cycled wall timing stays within four turns`);
+  }
   for (const [theme, kind] of [['cavern', 'gravity'], ['meadow', 'heal'], ['marsh', 'mine'], ['shore', 'warp'], ['sky', 'boost'], ['sanctum', 'power']] as const) {
     const room = buildRoom(ROOM_LAYOUTS[0], theme, () => 0.99);
     const panels = room.hazards.filter((h) => h.kind === (kind as string));
