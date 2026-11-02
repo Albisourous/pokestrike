@@ -12,6 +12,7 @@ import { Perk, rollPerks, PERKS, BAG_ITEMS, perkTick } from './perks';
 import type { Rarity } from './perks';
 import { rollEvent, martStock, tickDaycare } from './events';
 import type { EventChoice, EventArt } from './events';
+import { drawStopScene } from './stops';
 import { taskViews } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
@@ -9644,9 +9645,21 @@ export class Battle {
       this.drawEventCard(ctx, this.eventBox.art, this.eventBox.note, null);
     }
     if (this.eventChoice) {
-      ctx.fillStyle = 'rgba(4,6,16,0.55)';
-      ctx.fillRect(0, 0, 540, 960);
-      this.drawEventCard(ctx, this.eventChoice.art, this.eventChoice.prompt, this.eventChoice.options);
+      const k = this.eventChoice.node.kind;
+      if (k === 'rest' || k === 'mart') {
+        this.choiceHit = drawStopScene(ctx, {
+          kind: k,
+          t: this.time,
+          cardT: this.cardT,
+          prompt: this.eventChoice.prompt,
+          options: this.eventChoice.options,
+          score: this.score,
+        });
+      } else {
+        ctx.fillStyle = 'rgba(4,6,16,0.55)';
+        ctx.fillRect(0, 0, 540, 960);
+        this.drawEventCard(ctx, this.eventChoice.art, this.eventChoice.prompt, this.eventChoice.options);
+      }
     }
     this.drawCatchBalls(ctx); // map-phase catches rock on top of the card
   }

@@ -39,6 +39,7 @@ import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/g
 import { SECRET_IDS, rollSecret, maybeSecret, enterSecret, placeSecret, closeSecret } from '../src/game/secret';
 import * as secretExports from '../src/game/secret';
 import { evolveOnce, midBossPick, midBossStop } from '../src/game/midboss';
+import { stopRows } from '../src/game/stops';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -6579,6 +6580,19 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   const got = fameScene()!.badges;
   while (fameActive()) fameDown();
   ok(got.length === 1 && got[0] === badgeOf(130)!.icon, `hall of fame shows only this run's beaten leaders (${got})`);
+}
+
+// --- map stops ------------------------------------------------------------
+{
+  for (let n = 2; n <= 5; n++) {
+    const rows = stopRows(n);
+    ok(rows.length === n && rows.every((r) =>
+      r.w >= 44 && r.h >= 44 && r.x >= 0 && r.x + r.w <= 540 && r.y >= 96 && r.y + r.h <= 960 && r.y >= 412),
+    `map stop rows (${n}) fit inside the canvas below the art window`);
+    ok(rows.every((a, i) => rows.slice(i + 1).every((b) =>
+      a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y)),
+    `map stop rows (${n}) do not overlap`);
+  }
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

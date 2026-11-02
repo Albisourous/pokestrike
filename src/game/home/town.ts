@@ -145,7 +145,7 @@ const RIBBONS: Rect[] = [
 let townBake: HTMLCanvasElement | null = null;
 let keyedFountain: HTMLCanvasElement | null = null;
 
-function tileFill(ctx: CanvasRenderingContext2D, r: Rect, tile: TileRect, scale: number) {
+export function tileFill(ctx: CanvasRenderingContext2D, r: Rect, tile: TileRect, scale: number) {
   const size = tile[2] * scale;
   ctx.save();
   ctx.beginPath();
@@ -159,7 +159,7 @@ function tileFill(ctx: CanvasRenderingContext2D, r: Rect, tile: TileRect, scale:
   ctx.restore();
 }
 
-function drawRibbon(ctx: CanvasRenderingContext2D, r: Rect) {
+export function drawRibbon(ctx: CanvasRenderingContext2D, r: Rect) {
   const srcBorder = 10;
   const dstBorder = Math.min(srcBorder * 2, r.w / 2, r.h / 2);
   for (let row = 0; row < 3; row++) {
