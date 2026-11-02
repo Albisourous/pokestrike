@@ -1,6 +1,6 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, gracidea, whiteSprite } from '../core/assets';
 import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, dustCost, AVATARS, EVO_LINES, setPay, STAGE_GIMMICKS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, LEADER_NPC, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
 import type { Perk, Rarity, BagItem } from './perks';
@@ -11,7 +11,7 @@ import { TILE_GRASSF, TILE_PATH, TILE_SAND, TILE_WATER, TILE_ROCK, TILE_MUSEUM, 
 import { TYPE_COLOR, type PokeType } from './types';
 import { roleOf, moveOf, superDesc } from './stats';
 import { ULT_SHOTS } from './battle';
-import { dexIds, dexRecent, shinyIds, best, SHINY_CHARM_AT, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, echoIds, labLevels, LAB_UPGRADES, stars, raidDoneToday, pullCount, loginToday, nextDexReward, dust, freePullLeft, trainerPick, setProgress, setsReady, bondLv, bondOf, topBond, BOND_LEVELS, runSave, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
+import { dexIds, best, ACHIEVEMENTS, unlockedAch, BADGES, gymBadges, badgeOf, tier, LADDER, board, settings, setSetting, bagStock, streakDaily, streakWins, labLevels, LAB_UPGRADES, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, avatarOwned, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
 import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost } from './tasks';
 import { drawRaidLobby } from './home/raid';
 import type { TaskView } from './tasks';
