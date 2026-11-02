@@ -1,11 +1,11 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin } from '../src/game/battle';
+import { Battle, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T } from '../src/game/battle';
 import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { TRACKS } from '../src/core/audio';
-import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift } from '../src/game/stats';
+import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDrift, launchMult } from '../src/game/stats';
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult, WEATHER_OF, TYPES } from '../src/game/types';
@@ -31,6 +31,20 @@ const ok = (cond: boolean, msg: string) => {
 
 const arena = { x: 30, y: 160, w: 480, h: 620 };
 const team = () => [ROSTER[0], ROSTER[3], ROSTER[8], ROSTER[12]];
+const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe });
+
+// --- Monster Strike shot decay and launch speed -------------------------
+{
+  ok(shotDamp(0, 1 / 60) === 1, 'shot decay starts at zero');
+  ok(Math.abs(shotDamp(SHOT_T, 1 / 60) - Math.exp(-1)) < 1e-9, 'shot decay reaches e^-1 at SHOT_T');
+  let damp = 1;
+  for (let i = 0; i < 120; i++) damp *= shotDamp((i + 1) / 60, 1 / 60);
+  ok(damp < 1e-6, 'shot decay fully stops the ball by 2 × SHOT_T');
+  ok(launchMult(speedStats(75)) === 1, 'Spe 75 launch multiplier is 1');
+  ok(launchMult(speedStats(10)) === 0.7, 'low Spe launch multiplier clamps to 0.7');
+  ok(launchMult(speedStats(250)) === 1.4, 'high Spe launch multiplier clamps to 1.4');
+  ok(launchMult(speedStats(90)) > 1 && launchMult(speedStats(90)) < 1.4 && launchMult(speedStats(90)) > launchMult(speedStats(60)), 'launch multiplier rises with Spe inside the clamp');
+}
 
 // The first settled battle teaches ULT once, without changing charge or turns.
 {

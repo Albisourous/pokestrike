@@ -331,7 +331,9 @@ export const BASE_SHOT_SPEED = 285; // 1.5x launch — under exponential frictio
 export const POWER = 8;
 export const WALL_REST = 0.96; // pinball court — walls hand back nearly everything
 export const UNIT_REST = 0.94; // meatier ricochets off bodies
-export const FRICTION = 1.7;
+const MS_FRAME = 60; // MS multiplies velocity once per 60 Hz frame
+export const SHOT_T = 1.5; // s — MS time-boxed shot: v *= 1 - (t/T)^4 each frame
+export const shotDamp = (t: number, h: number, mult = 1) => Math.exp(-MS_FRAME * (t / SHOT_T) ** 4 * mult * h);
 const HIT_COOLDOWN = 0.12;
 const MAX_TEXTS = 8; // floating callouts on court at once — more reads as noise
 const HEAL_CD = 5; // in-battle mends share this cooldown — one heal per few shots
@@ -2320,7 +2322,7 @@ export class Battle {
     for (let i = 0; i < sub; i++) {
       const wave = this.enemies; // spawnWave swaps this array on wave clear
       const onIce = this.hazards.some((hz) => hz.kind === 'ice' && Math.hypot(u.x - hz.x, u.y - hz.y) < hz.r + u.r);
-      const damp = Math.exp(-FRICTION * this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * (onIce ? 0.1 : 1) * h);
+      const damp = shotDamp(this.time - this.shotT + i * h, h, this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * (onIce ? 0.1 : 1));
       u.vx *= damp;
       u.vy *= damp;
       // gravity auras: inside a carrier's bubble the ball crawls — aim
@@ -10154,7 +10156,7 @@ export class Battle {
         if (bounced) break;
         const step = 1 / 30;
         const onIce = this.hazards.some((hz) => hz.kind === 'ice' && Math.hypot(sx - hz.x, sy - hz.y) < hz.r + u.r);
-        const damp = Math.exp(-FRICTION * this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * (onIce ? 0.1 : 1) * step);
+        const damp = shotDamp((i + 1) * step, step, this.frictionMult * (this.curMod === 'slick' ? 0.6 : 1) * (onIce ? 0.1 : 1));
         svx *= damp;
         svy *= damp;
         // the same field forces live play applies — a ghost that ignores
