@@ -1571,6 +1571,7 @@ const HELP_SECTIONS: HelpSection[] = [
       ['black-belt', 'trainer squads pay better loot but can\'t be caught'],
       ['adamant-orb', 'ELITE doors fight deeper and pay rare+ relics'],
       ['moomoo-milk', '??? is a surprise · heal, haul, or ambush'],
+      [146, 'S or A gym clear may open a SECRET lair · win: the legend joins + star pieces · lose: it flees, the climb goes on'],
     ],
   },
   {
