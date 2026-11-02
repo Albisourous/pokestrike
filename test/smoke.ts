@@ -4786,7 +4786,6 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(b2.clearCard === null, 'raid clears do not create a climb clear card');
 }
 
-||||||| parent of 3bd3e37 (Add canonical Pokemon abilities and stage-gimmick counters)
 // --- Pokémon ability counters: real species and scripted court contact ---
 {
   ok(ALL_SPECIES.every((def) => typeof def.ability === 'string' && !!abilityOf(def)?.name), 'every roster and enemy species has a valid canonical ability');
