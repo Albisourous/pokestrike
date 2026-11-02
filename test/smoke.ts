@@ -810,6 +810,23 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   (b as any).healCd = 0;
   (b as any).grabPickup({ x: 100, y: 100, kind: 'sitrus-berry', t: 0, age: 0 });
   ok(p.hp === Math.min(p.maxHp, 1 + Math.round(p.maxHp * 0.3)), 'sitrus berry heals 30% max HP');
+
+  // MS rows 5→6 / 7→8: power and charge pickups ripen after three enemy turns
+  (b as any).pickups = [
+    { x: 100, y: 100, kind: 'protein', t: 0, age: 0 },
+    { x: 140, y: 100, kind: 'elixir', t: 0, age: 0 },
+  ];
+  for (let i = 0; i < 3; i++) (b as any).ripenPickups();
+  ok((b as any).pickups[0].kind === 'x-attack' && (b as any).pickups[1].kind === 'max-elixir', 'protein and elixir ripen in three enemy turns');
+
+  (b as any).shotPhys = 1;
+  (b as any).grabPickup({ x: 100, y: 100, kind: 'x-attack', t: 0, age: 0 });
+  ok((b as any).shotPhys === 2, 'x attack doubles contact damage for the shot');
+
+  (b as any).enemies = []; // no pressure foe eating charge ticks
+  p.cd = 4;
+  (b as any).grabPickup({ x: 140, y: 100, kind: 'max-elixir', t: 0, age: 0 });
+  ok(p.cd === 2, 'max elixir charges two pips');
 }
 
 // --- bullet gimmicks: drain, berry drop, PP Up, Chesto, Safeguard --------

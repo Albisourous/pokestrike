@@ -252,7 +252,7 @@ interface BallDrop {
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
-type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb' | 'pp-up' | 'chesto-berry';
+type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'x-attack' | 'elixir' | 'max-elixir' | 'lum-berry' | 'revival-herb' | 'pp-up' | 'chesto-berry';
 interface Pickup {
   x: number;
   y: number;
@@ -538,15 +538,20 @@ const PICKUP_META: Record<PickupKind, { name: string; label: string; color: stri
   'oran-berry': { name: 'ORAN BERRY', label: 'HEAL 15%', color: '#6fdc6f' },
   'sitrus-berry': { name: 'SITRUS BERRY', label: 'HEAL 30%', color: '#f8d030' },
   protein: { name: 'PROTEIN', label: 'ATK +50%', color: '#f08030' },
+  'x-attack': { name: 'X ATTACK', label: 'ATK +100%', color: '#e84818' },
   elixir: { name: 'ELIXIR', label: 'SUPER +1', color: '#9ecbff' },
+  'max-elixir': { name: 'MAX ELIXIR', label: 'SUPER +2', color: '#5e9fff' },
   'lum-berry': { name: 'LUM BERRY', label: 'CURE ALL', color: '#b8f8f8' },
   'revival-herb': { name: 'REVIVAL HERB', label: 'REVIVE', color: '#f8d030' },
   'pp-up': { name: 'PP UP', label: 'ULT +1', color: '#f8a8f8' },
   'chesto-berry': { name: 'CHESTO BERRY', label: 'CLOCK RESET', color: '#a890f0' },
 };
-// MS field items grow if left on the field.
+// MS field items grow if left on the field: heal ripens in 1 turn,
+// power and charge take 3 (field_items rows 5→6 and 7→8).
 const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }>> = {
   'oran-berry': { to: 'sitrus-berry', turns: 1 },
+  protein: { to: 'x-attack', turns: 3 },
+  elixir: { to: 'max-elixir', turns: 3 },
 };
 // EXP per KO: the launcher learns foe Lv × KO_LV_RATE (×2 punching up); the
 // rest of the living team learns KO_LV_SHARE of that, so the bench keeps pace
@@ -3528,9 +3533,10 @@ export class Battle {
         break;
       }
       case 'protein':
+      case 'x-attack':
         sfx('ui');
-        this.shotPhys *= 1.5;
-        this.pushText({ x: pk.x, y: pk.y - 12, text: 'ATK UP!', t: 0.9, color: '#f08030', big: true });
+        this.shotPhys *= pk.kind === 'x-attack' ? 2 : 1.5;
+        this.pushText({ x: pk.x, y: pk.y - 12, text: 'ATK UP!', t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
         break;
       case 'pp-up':
         sfx('ready');
@@ -3552,10 +3558,13 @@ export class Battle {
         if (this.telop.once('pk:chesto')) this.telop.push({ kind: 'combo', title: 'CHESTO BERRY', sub: 'FOE CLOCKS RESET', icon: 'chesto-berry' });
         break;
       case 'elixir':
+      case 'max-elixir': {
         sfx('ready');
-        for (const p of this.players) this.chargeUp(p);
-        this.pushText({ x: pk.x, y: pk.y - 12, text: 'CD -1!', t: 0.9, color: '#9ecbff', big: true });
+        const ticks = pk.kind === 'max-elixir' ? 2 : 1;
+        for (const p of this.players) for (let i = 0; i < ticks; i++) this.chargeUp(p);
+        this.pushText({ x: pk.x, y: pk.y - 12, text: `CD -${ticks}!`, t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
         break;
+      }
       case 'lum-berry': {
         sfx('ready');
         // canonical lum — every ailment on the team washes off at once

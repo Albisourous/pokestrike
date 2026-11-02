@@ -1524,7 +1524,7 @@ const HELP_SECTIONS: HelpSection[] = [
       ['stardust', 'each wave seeds a pickup · the colored ring and tag name it'],
       ['lum-berry', 'LUM BERRY cures the team · it only drops when someone is sick'],
       ['protein', 'berry heals the team, protein buffs the shot, elixir charges pips'],
-      ['sitrus-berry', 'ORAN BERRY ripens to SITRUS BERRY after one enemy turn'],
+      ['sitrus-berry', 'pickups ripen if ignored · ORAN → SITRUS, PROTEIN → X ATTACK, ELIXIR → MAX ELIXIR'],
       ['pp-up', 'PP UP adds one ULT charge · CHESTO BERRY winds every foe clock back'],
       ['oran-berry', 'some courts drop berries on KOs · DRAIN foes heal off their hits'],
       ['anims/ice_crystals_0', 'SAFEGUARD foes take no damage · grab a berry to break it'],
