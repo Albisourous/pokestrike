@@ -2027,6 +2027,25 @@ export const STAGE_GIMMICKS: Record<Theme, { kind: HazardKind | 'damage-wall' | 
   tower: { kind: 'warp', label: 'WARP', type: 'ghost' },
 };
 
+// Bullet-controller gimmicks in Pokémon dress: each rolls per battle at
+// `rate` and caps at `cap`. The three gentle opener rooms roll none.
+export type BulletGimmick = 'drain' | 'heart' | 'pp-up' | 'chesto' | 'safeguard';
+export const BULLET_GIMMICKS: Record<BulletGimmick, { rate: number; cap: number; label: string; themes?: Theme[] }> = {
+  drain: { rate: 0.35, cap: 2, label: 'DRAIN' }, // foe clock heals off its hit
+  heart: { rate: 0.3, cap: 2, label: 'BERRY DROP' }, // per foe KO
+  'pp-up': { rate: 0.25, cap: 1, label: 'ULT +1' },
+  chesto: { rate: 0.2, cap: 1, label: 'CLOCK RESET' },
+  safeguard: { rate: 0.35, cap: 1, label: 'SAFEGUARD', themes: ['meadow', 'sanctum', 'tower'] },
+};
+export const DRAIN_MOVE: Partial<Record<PokeType, string>> = { grass: 'GIGA DRAIN', poison: 'LEECH LIFE', fighting: 'DRAIN PUNCH', psychic: 'DREAM EATER', ghost: 'DREAM EATER' };
+export const DRAIN_PCT = 0.5;
+export const isGentleRoom = (grid: string[] | null) => !!grid && ROOM_LAYOUTS.indexOf(grid) >= 0 && ROOM_LAYOUTS.indexOf(grid) < 3;
+// stop-preview tags for the foe-side bullet gimmicks this stop can roll
+export const bulletHints = (theme: Theme, type: PokeType) => [
+  DRAIN_MOVE[type] && BULLET_GIMMICKS.drain.label,
+  BULLET_GIMMICKS.safeguard.themes?.includes(theme) && BULLET_GIMMICKS.safeguard.label,
+].filter((x): x is string => !!x);
+
 const DAMAGE_WALL_PHASES: Pick<DamageWall, 'edge' | 'start' | 'end'>[][] = [
   [{ edge: 'left', start: 2 / 11, end: 7 / 11 }],
   [{ edge: 'right', start: 3 / 11, end: 8 / 11 }],
