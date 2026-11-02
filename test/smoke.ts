@@ -28,7 +28,7 @@ import { BALL_TIERS, DROP_CAP, LOOT_TABLE, STOP_CAP, Treasure, dropOdds, rollDro
 import { Telops, TELOP_SPEC, comboTier } from '../src/game/telop';
 import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
-import { installField2, stepField2, laserPlan, icePlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
+import { installField2, stepField2, laserPlan, icePlan, spinPlan, blockField2, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, ICE_PAUSE_MAX, ICE_SKATE, SPIN_KICK, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
 import { EVO_FLASH, EVO_T, evoActive, evoScene, skipEvo, startEvo, tickEvo } from '../src/game/evolve';
 import { drawRunCard, shareLink, type RunCard } from '../src/game/share';
@@ -614,6 +614,70 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   const t0 = bb.shotT;
   bb.stepShot(1 / 60);
   ok(Math.abs(bb.shotT - t0 - 1 / 60) < 1e-9, 'battle shot clock holds while the ball is on ice');
+}
+
+// --- spinner tiles: snap to the arrow + kick once per tile per shot; gauge gate on field2 counters
+{
+  const fx: Field2Fx = { hurt: () => {}, burst: () => {}, notice: () => {}, shake: () => {} };
+  const off: Field2Fx = { ...fx, live: () => false };
+  const ball = (d: number, x: number, y: number, vx = 0, vy = 0): Field2Ball => ({ uid: d, def: speciesById(d)!, x, y, vx, vy, r: 22, maxHp: 100, dead: false });
+  const spun = (Object.keys(STAGE_GIMMICKS2) as Theme[]).filter((t) => STAGE_GIMMICKS2[t]!.kind === 'spin');
+  const kinds = new Set((Object.keys(STAGE_GIMMICKS2) as Theme[]).filter((t) => !spun.includes(t)));
+  ok(spun.length > 0 && spun.every((t) => !kinds.has(t)), `spinners ride their own courts (${spun.join(', ')})`);
+  ok([0, 1, 2].every((i) => !installField2(ROOM_LAYOUTS[i], spun[0], arena, 1)), 'gentle openers carry no spinners');
+  let rooms = 0, floor = true;
+  for (const grid of [...ROOM_LAYOUTS.slice(3), ...ROOM_BOSS]) {
+    const plan = spinPlan(grid);
+    if (plan.length) rooms++;
+    floor &&= plan.every((p) => grid[p.r][p.c] === '0' && plan.some((q) => q.r === p.r && q.c === 8 - p.c && q.dx === -p.dx && q.dy === p.dy)) && fieldRoomReachable(grid);
+  }
+  ok(rooms >= 20 && floor, `spinner tiles sit mirrored on open floor (${rooms} rooms)`);
+  const grid = ROOM_LAYOUTS.slice(3).find((g) => spinPlan(g).length === 4)!;
+  const a = installField2(grid, spun[0], arena, 1) as any, b = installField2(grid, spun[0], arena, 2) as any;
+  ok(JSON.stringify(a.spin) === JSON.stringify(b.spin), 'spinner layout is fixed by the room, no rolls');
+  const up = a.spin.find((t: any) => t.dy === -1), side = a.spin.find((t: any) => t.dx === 1);
+  const cx = up.x + up.w / 2, cy = up.y + up.h / 2;
+  const u = ball(1, cx, cy, 300, 400);
+  stepField2(a, u, 1 / 120, 0, fx, 1);
+  ok(Math.abs(u.vx) < 1e-9 && Math.abs(u.vy + 500 * SPIN_KICK) < 1e-6, `a spinner snaps the ball to its arrow with +15% (vy ${u.vy.toFixed(1)})`);
+  stepField2(a, u, 1 / 120, 0, fx, 1);
+  ok(Math.abs(u.vy + 500 * SPIN_KICK) < 1e-6, 'the same tile kicks once per shot');
+  const u2 = ball(1, side.x + side.w / 2, side.y + side.h / 2, 0, -200);
+  stepField2(a, u2, 1 / 120, 0, fx, 1);
+  ok(Math.abs(u2.vx - 200 * SPIN_KICK) < 1e-6 && Math.abs(u2.vy) < 1e-9, 'a different tile still turns the ball that shot');
+  const u3 = ball(1, cx, cy, 0, 300);
+  stepField2(a, u3, 1 / 120, 0, fx, 2);
+  ok(Math.abs(u3.vy + 300 * SPIN_KICK) < 1e-6, 'spinners rearm on the next shot');
+  const psy = ball(63, cx, cy, 120, 0), tempo = ball(327, cx, cy, 120, 0), tempoOff = ball(327, cx, cy, 120, 0);
+  stepField2(a, psy, 1 / 120, 0, fx, 3);
+  stepField2(a, tempo, 1 / 120, 0, fx, 4);
+  stepField2(a, tempoOff, 1 / 120, 0, off, 5);
+  ok(psy.vx === 120 && psy.vy === 0 && tempo.vx === 120, 'Psychic types and Own Tempo ignore spinners');
+  ok(tempoOff.vy < 0, 'a gated Own Tempo gets spun like anyone');
+
+  const windGrid = ROOM_LAYOUTS[3];
+  const wf: any = installField2(windGrid, 'sky', arena, 1);
+  const wy = (wf.wind.y0 + wf.wind.y1) / 2;
+  const lev = ball(92, arena.x + arena.w / 2, wy), levOff = ball(92, arena.x + arena.w / 2, wy), bird = ball(16, arena.x + arena.w / 2, wy);
+  stepField2(wf, lev, 0.5, 0, fx);
+  stepField2(wf, levOff, 0.5, 0, off);
+  stepField2(wf, bird, 0.5, 0, off);
+  ok(lev.vx === 0 && levOff.vx !== 0 && bird.vx === 0, 'gauge gate: Levitate rides wind only while live, Flying always');
+  const lgrid = ROOM_LAYOUTS.slice(3).find((g) => laserPlan(g))!;
+  const lf: any = installField2(lgrid, 'plant', arena, 1);
+  const volt = speciesById(1)!;
+  const vb = { ...ball(1, (lf.laser.a.x + lf.laser.b.x) / 2, lf.laser.a.y + 10, 0, -300), def: { ...volt, ability: 'volt-absorb' } };
+  const vbOff = { ...vb, def: vb.def };
+  stepField2(lf, vb, 1 / 120, 0, fx);
+  stepField2(lf, vbOff, 1 / 120, 1, off);
+  ok(vb.vy < 0 && vbOff.vy > 0, 'gauge gate: Volt Absorb passes the laser only while live');
+  const igrid = ROOM_LAYOUTS.slice(3).find((g) => icePlan(g).length)!;
+  const inf: any = installField2(igrid, 'cavern', arena, 1);
+  const ip = inf.ice[0];
+  const seal = ball(363, ip.x + ip.w / 2, ip.y + ip.h / 2, 100), sealOff = ball(363, ip.x + ip.w / 2, ip.y + ip.h / 2, 100);
+  stepField2(inf, seal, 1 / 120, 0, fx, 1);
+  stepField2(inf, sealOff, 1 / 120, 0, off, 2);
+  ok(Math.abs(seal.vx - 100 * ICE_SKATE) < 1e-9 && sealOff.vx === 100, 'gauge gate: ice skaters kick only while live');
 }
 
 // --- bag items: pk_bag stock, constructor applies the run-start picks ------
