@@ -845,6 +845,68 @@ const EVENTS: GameEvent[] = [
       };
     },
   },
+  {
+    // the channeler's sashes: p.sash is the focus-sash flag the hurt check
+    // already burns — one lethal hit hangs on at 1 HP, then it's spent.
+    // Sturdy-born and corpses don't take a tie.
+    w: 2,
+    run: (b) => {
+      let n = 0;
+      for (const p of b.players)
+        if (!p.dead && !p.sash) { p.sash = true; n++; }
+      if (n) sfx('ready');
+      return {
+        note: n
+          ? `A CHANNELER TIES FOCUS SASHES · ${n} MON${n > 1 ? 'S' : ''} CAN HANG ON ONCE!`
+          : 'THE TEAM ALREADY WEARS ITS SASHES.',
+        art: { item: 'focus-sash' },
+        skip: true,
+      };
+    },
+  },
+  {
+    // eevee den: the pup scatters and its elder forms stand guard — a
+    // water/fire/electric mix that reads nothing like the one-note swarm
+    w: 2,
+    run: (b) => ({
+      note: 'AN EEVEE DEN SCATTERS · ITS ELDERS STAND GUARD!',
+      art: { mon: 133 },
+      wave: gridWave(b, [133, 134, 135, 136]),
+    }),
+  },
+  {
+    // safari warden: the canon bait/rock call — bait lures a calm, healthy
+    // catch into the box for free; rock provokes the herd into a paying wave
+    w: 3,
+    run: () => ({
+      note: '',
+      choices: {
+        prompt: 'A WARDEN WHISPERS · SAFARI RULES · BAIT OR ROCK?',
+        art: { npc: 'ranger_m_down_0' },
+        options: [
+          {
+            label: 'TOSS BAIT · QUIET CATCH',
+            run: (bb) => {
+              const def = pickWild(bb.roll, bb.depth);
+              const lvl = Math.min(100, 5 + bb.waveIndex * 10 + Math.floor(bb.roll() * 5));
+              boxCatch(bb, def, lvl, 1);
+              return {
+                note: `${def.name.toUpperCase()} WANDERED OVER · IT JOINED YOUR BOX!`,
+                art: { mon: def.id },
+                skip: true,
+              };
+            },
+          },
+          {
+            // tauros, doduo, ponyta, rhyhorn — the plain's grazers
+            label: 'THROW A ROCK · HERD CHARGES',
+            run: (bb) => ({ note: 'THE HERD STAMPEDES!', wave: gridWave(bb, [128, 84, 77, 111]) }),
+          },
+          { label: 'BACK AWAY', run: () => ({ note: 'THE HERD GRAZED ON WITHOUT YOU.', skip: true }) },
+        ],
+      },
+    }),
+  },
 ];
 
 export function tickDaycare(b: Battle): string | null {
