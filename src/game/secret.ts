@@ -235,7 +235,8 @@ export function enterSecret(b: Battle, node: MapNode) {
     boss.maxHp = Math.round(boss.maxHp * SECRET_HP);
     boss.hp = boss.maxHp;
     boss.bars = [0.35, 0.65];
-    const clock = boss.clocks.slice().sort((a, b) => b.turn - a.turn)[0];
+    // the last-firing clock leads instead — a legend opens on its signature
+    const clock = boss.clocks.slice().sort((a, b) => b.t - a.t)[0];
     if (clock) { clock.turn = Math.max(2, clock.turn - 1); clock.t = 2; }
   }
   x.screenFlash('#ffd84d', 0.28);

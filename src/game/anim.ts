@@ -172,15 +172,15 @@ export function ring(r: Recipe, x: number, y: number, R: number): void {
       2, 3, 0.85, 0, a, 1, 20, true, i % 3 * 0.03, 0.45, false, false, i > 0);
   }
 }
-export function drawTell(ctx: CanvasRenderingContext2D, type: PokeType,
+export function drawTell(ctx: CanvasRenderingContext2D, r: Recipe,
   x1: number, y1: number, x2: number, y2: number, time: number): void {
-  const name = MOVE_ANIM[type].sheet, frame = Math.floor(Math.abs(time) * 10) % SHEETS[name].frames;
+  const name = r.sheet, frame = Math.floor(Math.abs(time) * 10) % SHEETS[name].frames;
   for (let i = 1; i <= 4; i++) drawFrame(ctx, name, frame,
     x1 + (x2 - x1) * i / 5, y1 + (y2 - y1) * i / 5, 2, 0.12 + 0.06 * Math.sin(time * 8 + i));
 }
-export function drawTellRing(ctx: CanvasRenderingContext2D, type: PokeType,
+export function drawTellRing(ctx: CanvasRenderingContext2D, r: Recipe,
   x: number, y: number, R: number, time: number): void {
-  const name = MOVE_ANIM[type].sheet, frame = Math.floor(Math.abs(time) * 10) % SHEETS[name].frames;
+  const name = r.sheet, frame = Math.floor(Math.abs(time) * 10) % SHEETS[name].frames;
   for (let i = 0; i < 6; i++) {
     const a = i * Math.PI / 3;
     drawFrame(ctx, name, frame, x + Math.cos(a) * R, y + Math.sin(a) * R,

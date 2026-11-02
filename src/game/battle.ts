@@ -32,7 +32,7 @@ import { installField2, stepField2, drawField2, drawField2Floor, blockField2, la
 import { abilityNotice } from './abilities';
 import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, abilityLabel, weatherSpeed, resetAbilities, countersGimmick } from './abilities';
 import { gaugeCounter, counterLive, quietOpener, GAUGE_ICON } from './gauge';
-import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
+import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims, type Recipe } from './anim';
 import { wpRng, hideWpRate, hideWeakPoints } from './weakpoint';
 import { maybeSecret, enterSecret, secretWon, secretFled, closeSecret, drawSecretNode, secretSave, secretLoad, bossRooms, secretTheme, type SecretState } from './secret';
 import { MID_SCALE, MID_HP, MID_SIG, midBossStop, evolveOnce, midBossPick, drawMidBar } from './midboss';
@@ -818,6 +818,7 @@ export class Battle {
   private battle = 1; // battle k of this stop's battles
   private battles = 1;
   private battleBreak = false; // the stop's next battle loads after this shot
+  private lastKoType?: PokeType | null; // last KO's shot type — settles FINISH if the rare foe just flees
 
   private dragging = false;
   private dragStart: Vec = vec();
@@ -1495,6 +1496,7 @@ export class Battle {
     this.stopShots = 0;
     this.stopCombo = this.stopWeak = this.stopKos = this.stopTaken = this.stopFaints = 0;
     this.connect.reset();
+    this.lastKoType = undefined;
     this.missions.start(this.mapSeed, i + 1, this.players.map((p) => p.def.type), this.ultIn <= 6, this.time, this.raid || this.coach || !!this.pendingEventWave);
     this.clearCard = null;
     this.waveFlawless = true;
@@ -3931,6 +3933,7 @@ export class Battle {
         this.pushText({ x: e.x, y: e.y - e.r - 70, text: `BOUNTY +${got} ★`, t: 1.2, color: '#c9a8ff', big: true });
       }
       this.maxKos = Math.max(this.maxKos, this.kosThisShot);
+      this.lastKoType = src?.def.type ?? null;
       this.missions.ko(this.kosThisShot, this.battle >= this.battles && this.enemies.every((x) => x.dead) ? src?.def.type ?? null : undefined);
       // EXP: the mon that launched this shot levels up — growth you can
       // watch mid-run. Bigger foes teach more, and punching up doubles it,
@@ -6731,6 +6734,8 @@ export class Battle {
     let warned = false;
     let bigWarned = false;
     this.flee.turn(this.enemies, this.telop);
+    // a fled rare still ends the stop — FINISH settles on the last real KO's type
+    if (this.battle >= this.battles && this.enemies.every((x) => x.dead)) this.missions.ko(0, this.lastKoType);
     for (const e of this.enemies) {
       if (!e.asleep) e.timer--; // a dozing foe's countdown never winds down
       if (!e.asleep && e.bigT > 0) {
@@ -10325,7 +10330,7 @@ export class Battle {
 
   // StS intent made spatial: the turn before a boss fires, ghost its
   // signature so the next shot can reposition out of the line.
-  private drawTelegraph(ctx: CanvasRenderingContext2D, e: Unit) {
+  private drawTelegraph(ctx: CanvasRenderingContext2D, e: Unit, anim: Recipe) {
     ctx.save();
     ctx.globalAlpha = 0.28 + Math.sin(this.time * 6) * 0.08;
     ctx.strokeStyle = '#ff6b6b';
@@ -10340,7 +10345,7 @@ export class Battle {
           ctx.moveTo(e.x, e.y);
           ctx.lineTo(targets[0].x, targets[0].y);
           ctx.stroke();
-          ctx.globalAlpha = 1; drawTell(ctx, e.def.type, e.x, e.y, targets[0].x, targets[0].y, this.time);
+          ctx.globalAlpha = 1; drawTell(ctx, anim, e.x, e.y, targets[0].x, targets[0].y, this.time);
         }
         break;
       case 150: // hunting orbs — marks on the mons they'll chase
@@ -10352,7 +10357,7 @@ export class Battle {
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
-        for (let i = 0; i < Math.min(targets.length, e.def.id === 94 ? 3 : 2); i++) drawTellRing(ctx, e.def.type, targets[i].x, targets[i].y, targets[i].r + 8, this.time);
+        for (let i = 0; i < Math.min(targets.length, e.def.id === 94 ? 3 : 2); i++) drawTellRing(ctx, anim, targets[i].x, targets[i].y, targets[i].r + 8, this.time);
         break;
       default: { // ring/blast attacks — show the radius they'll sweep
         ctx.lineWidth = 3;
@@ -10360,14 +10365,14 @@ export class Battle {
         ctx.beginPath();
         ctx.arc(e.x, e.y, R, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.globalAlpha = 1; drawTellRing(ctx, e.def.type, e.x, e.y, R, this.time);
+        ctx.globalAlpha = 1; drawTellRing(ctx, anim, e.x, e.y, R, this.time);
       }
     }
     ctx.restore();
   }
 
   // Non-boss "about to strike" tell: a dashed leash to the mon it'll hit.
-  private drawFoeTell(ctx: CanvasRenderingContext2D, e: Unit) {
+  private drawFoeTell(ctx: CanvasRenderingContext2D, e: Unit, anim: Recipe) {
     const t = this.nearestPlayer(e);
     if (!t) return;
     ctx.save();
@@ -10381,7 +10386,7 @@ export class Battle {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.restore();
-    drawTell(ctx, e.def.type, e.x, e.y, t.x, t.y, this.time);
+    drawTell(ctx, anim, e.x, e.y, t.x, t.y, this.time);
     // the priced hit rides the leash — same stack the landed orb pays
     const dmg = `-${this.foeDmg(e, t, this.zapPow(e))}`;
     ctx.font = fontB(10);
@@ -10418,8 +10423,12 @@ export class Battle {
     // boss telegraph: one turn out, the signature's footprint ghosts in;
     // fodder gets a dashed leash to its target so the zap isn't a surprise
     if (u.side === 'enemy' && u.timer <= 1) {
-      if (u.boss) this.drawTelegraph(ctx, u);
-      else this.drawFoeTell(ctx, u);
+      // a move clock on its last tick lands the same beat — the warn wears
+      // its own sheet (type2 rows, override moves), not the primary's
+      const clk = u.clocks.filter((c) => c.t <= 1).sort((a, b) => a.t - b.t)[0];
+      const anim = recipeFor(clk?.type ?? u.def.type, clk?.move);
+      if (u.boss) this.drawTelegraph(ctx, u, anim);
+      else this.drawFoeTell(ctx, u, anim);
     }
     // soft shadow grounds the sprite on the court
     ctx.fillStyle = 'rgba(8,10,20,0.3)';
@@ -10904,9 +10913,11 @@ export class Battle {
         ctx.textAlign = 'right';
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 3;
-        ctx.strokeText('HOT', bx + bw + 1, by - 5);
+        // tuck left of the missions chip — its left edge sits at arena right -98
+        const hx = Math.min(bx + bw + 1, a.x + a.w - 102);
+        ctx.strokeText('HOT', hx, by - 5);
         ctx.fillStyle = inHot ? '#ff8a5c' : '#8a90a8';
-        ctx.fillText('HOT', bx + bw + 1, by - 5);
+        ctx.fillText('HOT', hx, by - 5);
         ctx.restore();
       }
     }

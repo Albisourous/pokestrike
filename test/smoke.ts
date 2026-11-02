@@ -5840,7 +5840,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   beam(MOVE_ANIM.fire, 0, 0, 100, 100);
   ok(animCount() === SOFT_CAP + 1, 'beam stream skips extra particles above the soft cap');
   const stub = {} as CanvasRenderingContext2D;
-  drawAnims(stub); drawTell(stub, 'electric', 0, 0, 100, 100, 1); drawTellRing(stub, 'water', 0, 0, 80, 1);
+  drawAnims(stub); drawTell(stub, MOVE_ANIM.electric, 0, 0, 100, 100, 1); drawTellRing(stub, MOVE_ANIM.water, 0, 0, 80, 1);
   ok(true, 'headless unloaded sprite draws safely skip the canvas');
   clearAnims();
   ok(!spawnAnim('impact', 0, 0, 0, 0, 2, 2, 1, 0, 0, 0, 20, false, 0, 0), 'zero-life spawns are rejected');
