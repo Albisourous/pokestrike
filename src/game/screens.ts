@@ -1655,7 +1655,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'a foe strikes when its number hits 0 · each shot you take ticks one down',
       'at 1 the move shows its target · a dashed line or a ghosted footprint',
       'melee countdowns start low · thin them out first',
-      'gold stars mark weak spots · regular foes ×2, bosses ×3',
+      'gold stars mark weak spots · some hide till first contact · ×2, bosses ×3',
       'BOSSES fight in 3 bars · new court, new adds, the weak spot moves',
       'a boss ★ clock is its signature move · HEAVY hits the whole team',
       'bar 3 is RAGE · every boss clock starts a turn sooner',
