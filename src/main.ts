@@ -700,6 +700,9 @@ function resumeRun(s: RunSave) {
     .filter((e): e is { def: SpeciesDef; lvl: number } => !!e.def);
   battle.echo = echo?.length ? echo : null;
   battle.applySnapshot({ ...s, team: kept.map((x) => x.e) }); // pruned rows keep hp index-aligned
+  // a quit mid-coached-run resumes with the tutorial still armed — the
+  // banked snapshot says whether the teaching wave already cleared
+  battle.coach = !coachDone() && !s.coachDone;
   // restored gyms were banked the first time — only new wins feed pk_gyms
   lastGyms = battle.gymsBeaten;
   scene = 'battle';

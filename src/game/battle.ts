@@ -2145,7 +2145,7 @@ export class Battle {
     }
     // the coach scrim owns the court before the first pull — the chips
     // can't eat taps under it (same gate the scout card got below)
-    if (!(this.coach && this.shots === 0) && (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy' || this.phase === 'loot')) {
+    if (!(this.coach && this.shots <= 1) && (this.phase === 'aim' || this.phase === 'shot' || this.phase === 'enemy' || this.phase === 'loot')) {
       const c = this.pauseChip();
       if (p.x >= c.x && p.x <= c.x + c.w && p.y >= c.y && p.y <= c.y + c.h) {
         this.paused = true;
@@ -2272,7 +2272,7 @@ export class Battle {
       }
       this.ultArmUid = -1; // a tap anywhere else stands the ult down
       // coached first pull: a stray tap can't bury the lesson under a card
-      if (hit && !(this.coach && this.shots === 0)) {
+      if (hit && !(this.coach && this.shots <= 1)) {
         this.inspect = { uid: hit.uid, t: 2.8 };
         sfx('ui');
       }
@@ -7362,7 +7362,9 @@ export class Battle {
 
   // The timer attack's power — each special carries its own multiplier
   private zapPow(e: Unit) {
-    return e.def.fuse ? zapPower * 1.8 : e.def.melee ? zapPower * 1.3 : e.def.charge ? zapPower * 1.1 : e.def.beam ? zapPower * 1.2 : e.def.volley ? zapPower * 0.55 : zapPower;
+    // fireEnemy precedence: fuse → support → charge → beam → volley →
+    // melee → zap — the shown number prices the same branch that lands
+    return e.def.fuse ? zapPower * 1.8 : e.def.charge ? zapPower * 1.1 : e.def.beam ? zapPower * 1.2 : e.def.volley ? zapPower * 0.55 : e.def.melee ? zapPower * 1.3 : zapPower;
   }
 
   private foeZap(e: Unit, target: Unit) {
