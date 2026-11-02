@@ -11,7 +11,7 @@ import { roleOf, ROLE_MODS, moveOf, MOVE_NAME, LV_CAP, offStat, lvlPow, enemyDri
 import { genRegion, routePath, MAP_W, T_GRASS } from '../src/game/map';
 import { teamTraits, TRAIT_DESC } from '../src/game/traits';
 import { typeMult, strikeType, weatherMult, WEATHER_OF, TYPES } from '../src/game/types';
-import { rollEvent, martStock } from '../src/game/events';
+import { rollEvent, martStock, tickDaycare } from '../src/game/events';
 import { dexIds, dexRecent, shinyIds, unlockedAch, unlockAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, best, badgeOf, gymBadges, earnBadge, BADGES, applyRunRating, rating, tier, board, recordBoard, BOARD_MAX, migrateSaves, statOffer, statRunEnd, statsDump, settings, setSetting, bagStock, bankBag, spendBag, taskState, saveTaskState, streakDaily, streakWins, bumpStreaks, runSave, stars, addStars, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, labLevel, buyLab, LAB_UPGRADES, statPull, starterGrant, starBoost, boostLeft, grantBoost, raidDoneToday, markRaidDone, loginCheck, loginToday, streakRisky, firstWinBonus, grindBonus, recordCapture, DEX_REWARDS, claimDexRewards, nextDexReward, freePullLeft, useFreePull, rookieCheck, nextRookie, ROOKIE_STEPS, helpSeen, markHelpSeen, ascPick, trainerPick, setProgress, setsReady, claimSet, bankBond, bondOf, bondLv, topBond, BOND_PAY, avatarOwned, avatarUnlock, avatarRoll, AVATAR_ROLL_COST, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, itemTierRoll, clearRank, recordClear, clearBests, RANK_PAY, RANK_BALL, secretIds, markSecret } from '../src/game/meta';
 import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
@@ -3840,10 +3840,155 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   }
   ok(gated, 'drills stay out of the pool when nobody can train');
 }
-function rollEventChoices(b: InstanceType<typeof Battle>, label: string) {
+
+// --- gated route events: berries, tutors, daycare, trades, and the Trick House ---
+{
+  const eventBattle = (seed: number) => {
+    const bb = new Battle(arena, team(), makeStage(seed, 'T'), mulberry32(seed));
+    bb.mapNode = bb.regionMap.nodes.findIndex((n) => n.row >= 3);
+    return bb;
+  };
+  const checkState = (bb: InstanceType<typeof Battle>, name: string) => {
+    ok(
+      bb.players.every((p) => Number.isFinite(p.hp) && p.hp >= 0 && p.hp <= p.maxHp) &&
+        bb.box.length === bb.boxHp.length && bb.box.length === bb.boxLvl.length,
+      `${name} keeps hp and box state valid`,
+    );
+  };
+  const prompts = [
+    'A BERRY TREE SAGS WITH FRUIT · PICK ONE.',
+    'A MOVE TUTOR TEACHES ONE MON · ULT +4, STUDENT PAYS 30% HP.',
+    'THE DAY CARE WILL RAISE ONE MON · BACK IN 2 STOPS, +2 LV.',
+    'A LOST TRAINER WANTS A TRADE · ANY MON FOR ONE OF ITS TIER.',
+    'THE TRICK MASTER HANDS YOU THE PRIZE · NOW BEAT HIS HOUSE.',
+  ];
+  const rowZero = new Battle(arena, team(), makeStage(70, 'T'), mulberry32(70));
+  rowZero.mapNode = rowZero.regionMap.nodes.findIndex((n) => n.row === 0);
+  let surfaced = false;
+  for (let i = 0; i < 200; i++) {
+    if (prompts.includes(rollEvent(rowZero).choices?.prompt ?? '')) surfaced = true;
+  }
+  ok(!surfaced, 'row 0 never rolls the five gated choice events');
+
+  for (const [label, seed] of [
+    ['ORAN · TEAM +25% HP', 71],
+    ['SITRUS · WEAKEST TO FULL', 72],
+    ['CHESTO · ULT +3', 73],
+  ] as const) {
+    const bb = eventBattle(seed);
+    const option = rollEventChoices(bb, label);
+    ok(option !== null, `${label} option surfaces`);
+    if (option) {
+      if (label.startsWith('ORAN')) for (const p of bb.players) p.hp = Math.floor(p.maxHp / 2);
+      if (label.startsWith('SITRUS')) {
+        for (const p of bb.players) p.hp = p.maxHp;
+        bb.players[0].hp = Math.floor(bb.players[0].maxHp / 2);
+      }
+      if (label.startsWith('CHESTO')) bb.ultIn = 8;
+      const hp = bb.players.map((p) => p.hp);
+      const weakest = bb.players[0];
+      const ult = bb.ultIn;
+      option.run(bb);
+      if (label.startsWith('ORAN'))
+        ok(bb.players.every((p, i) => p.hp > hp[i]), 'Oran heals a hurt team');
+      if (label.startsWith('SITRUS'))
+        ok(weakest.hp === weakest.maxHp && bb.players.slice(1).every((p, i) => p.hp === hp[i + 1]), 'Sitrus fills only the weakest mon');
+      if (label.startsWith('CHESTO')) ok(bb.ultIn === ult - 3, 'Chesto reduces ult charge by 3');
+      checkState(bb, label);
+    }
+  }
+
+  const tutor = eventBattle(74);
+  const teach = rollEventChoices(
+    tutor,
+    / · ULT \+4 · -30% HP$/,
+    'A MOVE TUTOR TEACHES ONE MON · ULT +4, STUDENT PAYS 30% HP.',
+  );
+  ok(teach !== null, 'Move Tutor student option surfaces');
+  if (teach) {
+    for (const p of tutor.players) p.hp = p.maxHp;
+    const hp = tutor.players.map((p) => p.hp);
+    tutor.ultIn = 8;
+    teach.run(tutor);
+    ok(tutor.players.some((p, i) => p.hp < hp[i]) && tutor.ultIn === 4, 'Move Tutor trades 30% hp for 4 ult shots');
+    checkState(tutor, 'Move Tutor');
+  }
+
+  const daycare = eventBattle(75);
+  const boxed = ROSTER[6];
+  daycare.boxAdd({ ...boxed, lvl: 20 }, 1, false);
+  const leave = rollEventChoices(
+    daycare,
+    /^LEAVE /,
+    'THE DAY CARE WILL RAISE ONE MON · BACK IN 2 STOPS, +2 LV.',
+  );
+  ok(leave !== null, 'Day Care party option surfaces');
+  if (leave) {
+    daycare.box.length = 0;
+    daycare.boxHp.length = 0;
+    daycare.boxLvl.length = 0;
+    daycare.boxAdd({ ...boxed, lvl: 20 }, 1, false);
+    leave.run(daycare);
+    ok(daycare.players.some((p) => p.def.id === boxed.id) && !!daycare.daycare && daycare.box.length === 0,
+      'Day Care swaps in the boxed mon and holds the benched mon');
+    checkState(daycare, 'Day Care deposit');
+    const benched = daycare.daycare!.def;
+    const daycareLvl = daycare.daycare!.lvl;
+    const save = JSON.parse(JSON.stringify(daycare.snapshot()!));
+    const resumed = new Battle(arena, team(), makeStage(76, 'T'), mulberry32(76));
+    resumed.applySnapshot(save);
+    ok(
+      resumed.daycare?.def.id === benched.id && resumed.daycare.lvl === daycareLvl,
+      'run snapshot restores daycare state',
+    );
+    const back = resumed.daycare!.back;
+    resumed.mapNode = resumed.regionMap.nodes.findIndex((n) => n.row >= back);
+    const returned = tickDaycare(resumed);
+    ok(
+      !!returned && resumed.daycare === null &&
+        resumed.box.some((d, i) => d.id === benched.id && resumed.boxLvl[i] === Math.min(100, daycareLvl + 2)),
+      'Day Care returns the mon to the box at +2 levels',
+    );
+    checkState(resumed, 'Day Care return');
+  }
+
+  const trade = eventBattle(77);
+  const tradeOption = rollEventChoices(
+    trade,
+    /^TRADE /,
+    'A LOST TRAINER WANTS A TRADE · ANY MON FOR ONE OF ITS TIER.',
+  );
+  ok(tradeOption !== null, 'Lost Trainer trade option surfaces');
+  if (tradeOption) {
+    const traded = trade.players.find((p) => p.def.name.toUpperCase() === tradeOption.label.slice(6))!;
+    const oldId = traded.def.id;
+    const oldTier = tierOf(traded.def);
+    const oldLevel = traded.lvl;
+    tradeOption.run(trade);
+    ok(traded.def.id !== oldId && tierOf(traded.def) === oldTier && traded.lvl === oldLevel,
+      'Lost Trainer gives a different mon of the same tier and level');
+    checkState(trade, 'Lost Trainer');
+  }
+
+  const trick = eventBattle(78);
+  const perks = trick.perkIds.length;
+  const items = trick.heldItems.length;
+  const house = rollEventChoices(trick, 'TAKE IT · FIGHT THE HOUSE');
+  ok(house !== null, 'Trick House fight option surfaces');
+  if (house) {
+    const out = house.run(trick);
+    ok(out.wave?.length === 4 && out.wave.filter((s) => s.boss).length === 1, 'Trick House fields one boss and three escorts');
+    ok(trick.perkIds.length === perks + 1 && trick.heldItems.length === items + 1, 'Trick House grants one perk and held item');
+    checkState(trick, 'Trick House');
+  }
+}
+
+function rollEventChoices(b: InstanceType<typeof Battle>, label: string | RegExp, prompt?: string) {
   for (let i = 0; i < 200; i++) {
     const out = rollEvent(b);
-    const opt = out.choices?.options.find((o) => o.label === label);
+    const opt = out.choices?.prompt === prompt || prompt == null
+      ? out.choices?.options.find((o) => label instanceof RegExp ? label.test(o.label) : o.label === label)
+      : undefined;
     if (opt) return opt;
   }
   return null;
