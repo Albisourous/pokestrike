@@ -28,10 +28,19 @@ function loadImg(src: string, label: string): Promise<HTMLImageElement> {
 export function loadSprite(id: number): Promise<HTMLImageElement> {
   const hit = cache.get(id);
   if (hit) return Promise.resolve(hit);
-  return loadImg(`sprites/${id}.png`, `sprite ${id}`).then((img) => {
-    cache.set(id, img);
-    return img;
-  });
+  return loadImg(`sprites/${id}.png`, `sprite ${id}`)
+    .catch(() => {
+      // a 404 can't reject — the boot's Promise.all would deadlock the
+      // loading card. A cached 1×1 draws nothing instead of throwing
+      // every frame, which is how a blank sprite beats a dead boot.
+      const ph = document.createElement('canvas');
+      ph.width = ph.height = 1;
+      return ph as unknown as HTMLImageElement;
+    })
+    .then((img) => {
+      cache.set(id, img);
+      return img;
+    });
 }
 
 export function loadItem(name: string): Promise<HTMLImageElement> {

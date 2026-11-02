@@ -2192,6 +2192,7 @@ export class Battle {
       const cell = MAP_CELL, ox = MAP_OX, oy = MAP_OY;
       const cam = Math.round(this.mapCam * cell) / cell;
       const cur = this.region.nodes[this.mapNode];
+      if (!cur) return;
       const hit = cur.links
         .map((li) => this.region.nodes[li])
         .find(
@@ -9411,11 +9412,11 @@ export class Battle {
     }
     // stops: cleared rows dim out, linked stops pulse bright — those are
     // the actual choices; unreachable future stops sit dim on the island
-    const links = this.region.nodes[this.mapNode].links;
+    const links = this.region.nodes[this.mapNode]?.links ?? [];
     // waypoint dots march along each open link — the affordance that
     // says "these are the stops you can pick"
     const cur0 = this.region.nodes[this.mapNode];
-    if (this.pendingNext > this.waveIndex && !this.mapWalk) {
+    if (cur0 && this.pendingNext > this.waveIndex && !this.mapWalk) {
       for (const li of links) {
         const t = this.region.nodes[li];
         const mx = ox + ((cur0.tx + t.tx) / 2) * cell + cell / 2;

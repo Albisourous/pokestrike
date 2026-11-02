@@ -1018,9 +1018,9 @@ function drawTabBar(
   void loadItem('badges/1');
   void loadItem('master-ball');
   void loadItem('town-map');
-  void loadSprite(25);
+  void loadSprite(25).catch(() => {});
   const raidId = raidPick().id;
-  void loadSprite(raidId);
+  void loadSprite(raidId).catch(() => {});
 
   for (const cell of TAB_CELLS) {
     const on = cell.tab === active;
@@ -1252,7 +1252,7 @@ function drawShopBody(
   try {
     drawMon(ctx, deal.id, dcx, dcy + Math.sin(t * 2.4) * 2.5, 72);
   } catch {
-    void loadSprite(deal.id);
+    void loadSprite(deal.id).catch(() => {});
   }
   const tx2 = dr.x + 150;
   const chip = { x: dr.x + dr.w - 112, y: dc.y + 4, w: 96, h: 54 };

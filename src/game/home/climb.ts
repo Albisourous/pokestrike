@@ -2,7 +2,7 @@
 // rim, the opener pack, your trainer + lead), one hero START/CONTINUE pill,
 // the ascension ladder, and two side doors (free pull, today's raid).
 import { drawMon, drawNpc, itemSprite, loadItem, loadSprite } from '../../core/assets';
-import { ASC_MODS, makeStage, type StageDef } from '../data';
+import { ASC_MODS, makeStage, speciesById, type StageDef } from '../data';
 import { drawAmbient, drawBackdrop, drawWall, slice, type Theme } from '../bg';
 import * as MT from '../maptiles';
 import type { TileRect } from '../maptiles';
@@ -121,7 +121,8 @@ function leadId(t: number): number {
   const s = Math.floor(t);
   if (leadMemo.s !== s) {
     const top = Object.entries(bondPts()).sort((a, b) => b[1] - a[1])[0];
-    leadMemo = { s, id: runSave()?.team[0]?.id ?? (top ? +top[0] : 25) };
+    const cand = runSave()?.team[0]?.id ?? (top ? +top[0] : 25);
+    leadMemo = { s, id: speciesById(cand) ? cand : 25 }; // a corrupt save id never reaches the sprite cache
   }
   return leadMemo.id;
 }
@@ -146,7 +147,7 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
     const mx = S.x + S.w * (pack.length === 1 ? 0.5 : 0.24 + (0.52 * i) / (pack.length - 1));
     const my = S.y + 176;
     shadow(ctx, mx, my, 50);
-    void loadSprite(sp.def.id);
+    void loadSprite(sp.def.id).catch(() => {});
     drawMon(ctx, sp.def.id, mx, my - 21 + Math.sin(t * 2.2 + i * 1.7) * 2, 50);
   });
 
@@ -156,7 +157,7 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
     echo.forEach((e, i) => {
       const ex = S.x + ECHO_X[i];
       shadow(ctx, ex, ECHO_FOOT, 46);
-      void loadSprite(e.id);
+      void loadSprite(e.id).catch(() => {});
       drawMon(ctx, e.id, ex, ECHO_FOOT - 20 + Math.sin(t * 1.6 + i * 2.1) * 3, 46);
     });
     ctx.globalAlpha = 1;
@@ -168,7 +169,7 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
   shadow(ctx, S.x + 214, fy, 40);
   drawNpc(ctx, `${trainerPick()}_up_0`, S.x + 214, fy, 58);
   shadow(ctx, S.x + 290, fy, 84);
-  void loadSprite(lead);
+  void loadSprite(lead).catch(() => {});
   drawMon(ctx, lead, S.x + 290, fy - 34 + Math.sin(t * 1.8) * 2, 84);
   ctx.restore();
 

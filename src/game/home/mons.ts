@@ -118,7 +118,7 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   const run = runSave();
   const echo = run ? null : echoIds();
   const hof = !run && !echo ? (board()[0]?.team ?? []).map((id) => ({ id, lvl: 0 })) : null;
-  const squad = runSave()?.team ?? echoIds() ?? hof;
+  const squad = (runSave()?.team ?? echoIds() ?? hof)?.filter((m) => speciesById(m.id));
   const frame = TEAM_BTN;
   uiPanel(ctx, frame, run ? 'YOUR CLIMB' : echo ? 'RIVAL ECHO' : 'LAST SQUAD', {
     h: 26,
@@ -159,7 +159,7 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
         try {
           (('shiny' in m && m.shiny) || shinySet.has(m.id) ? drawShiny : drawMon)(ctx, m.id, cx, cy + bob, 80);
         } catch {
-          void loadSprite(m.id);
+          void loadSprite(m.id).catch(() => {});
         }
         uiWindow(ctx, plate, { rad: 6, shadow: false });
         ctx.textAlign = 'center';
@@ -333,7 +333,7 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
       try {
         drawMon(ctx, id, cx, cy + Math.sin(t * 2.2 + i * 1.7) * 2, 56);
       } catch {
-        void loadSprite(id);
+        void loadSprite(id).catch(() => {});
       }
       ctx.textAlign = 'center';
       ctx.font = fontB(12);

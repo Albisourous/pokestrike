@@ -1806,7 +1806,7 @@ export function makeStage(seed: number, name?: string): StageDef {
   const theme = THEMES[Math.floor(rng() * THEMES.length)];
   const slots = [...SLOTS];
   const slot = () => {
-    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
+    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0] ?? [0.5, 0.3]; // pool ran dry — park center-top
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
   const fodder = fodderPool(theme, 0); // the opening stretch is tier ≤1 only
@@ -1843,7 +1843,7 @@ export function rollWave(rng: () => number, depth: number, theme?: Theme, bossTy
   const fodder = fodderPool(theme, depth);
   const slots = [...SLOTS];
   const slot = () => {
-    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
+    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0] ?? [0.5, 0.3]; // pool ran dry — park center-top
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
   // ~12% of plain waves are a species pod — a Doduo flock, a Geodude den —
@@ -1895,7 +1895,7 @@ export function raidStage(seed: number, boss: SpeciesDef, theme: Theme, escorts:
   const rng = mulberry32(seed);
   const slots = [...SLOTS];
   const slot = () => {
-    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
+    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0] ?? [0.5, 0.3]; // pool ran dry — park center-top
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
   const pack = gymPack(boss, escorts, rng, slot, fodderPool(theme, 1), 1).map((s) => ({
@@ -1976,7 +1976,7 @@ export function trainerWave(rng: () => number, depth: number, type: PokeType): W
   const fodder = pool.length ? pool : ENEMY_POOL;
   const slots = [...SLOTS];
   const slot = () => {
-    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0];
+    const [nx, ny] = slots.splice(Math.floor(rng() * slots.length), 1)[0] ?? [0.5, 0.3]; // pool ran dry — park center-top
     return { nx: nx + (rng() - 0.5) * 0.1, ny: ny + (rng() - 0.5) * 0.08 };
   };
   const bst = (d: SpeciesDef) => d.stats.hp + d.stats.atk + d.stats.def + d.stats.spa + d.stats.spd + d.stats.spe;

@@ -347,7 +347,7 @@ export function echoIds(): { id: number; lvl: number }[] | null {
   return (
     arr
       ?.map((e) => (typeof e === 'number' ? { id: e, lvl: 1 } : e))
-      .filter((e): e is { id: number; lvl: number } => !!e && Number.isFinite(e.id) && Number.isFinite(e.lvl)) ?? null
+      .filter((e): e is { id: number; lvl: number } => !!e && Number.isFinite(e.id) && Number.isFinite(e.lvl) && !!speciesById(e.id)) ?? null
   );
 }
 

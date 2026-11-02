@@ -2469,6 +2469,9 @@ function render() {
     ctx.fillText(`${Math.round(fpsEma)} FPS`, W - 10, H + viewPad - 10);
   }
   ctx.restore();
+  // a full update+render that completes clean means whatever threw is over —
+  // shed the card; a still-throwing frame re-latches it via the listeners
+  crash = null;
 }
 
 // upgrade any legacy pk_* saves before the game reads them
