@@ -1623,6 +1623,7 @@ const HELP_SECTIONS: HelpSection[] = [
       'let go inside the gold band for a PERFECT full-power shot',
       'fast mons aim high and tight; stronger mons get a faster sweep',
       'the band drifts a little every pull · read it, don\'t memorize',
+      'speed dies fast after 1.5s · the early banks hit hardest',
     ],
     demo: demoAim,
   },
@@ -1652,9 +1653,12 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'ENEMIES',
     lines: [
       'a foe strikes when its number hits 0 · each shot you take ticks one down',
+      'at 1 the move shows its target · a dashed line or a ghosted footprint',
       'melee countdowns start low · thin them out first',
       'gold stars mark weak spots · regular foes ×2, bosses ×3',
-      'BOSSES fight in 3 bars · new adds each bar · HEAVY clock hits the whole team',
+      'BOSSES fight in 3 bars · new court, new adds, the weak spot moves',
+      'a boss ★ clock is its signature move · HEAVY hits the whole team',
+      'bar 3 is RAGE · every boss clock starts a turn sooner',
       'shelled foes glance hits off the plate · bank around the back for a FLANK',
       'spiked foes bite the ball on contact · hit them clean, don\'t graze',
       'regen foes mend over time · burst them down, don\'t whittle',
@@ -1730,6 +1734,9 @@ const HELP_SECTIONS: HelpSection[] = [
       'LUM BERRY cures the team · it only drops when someone is sick',
       'berry heals the team, protein buffs the shot, elixir charges pips',
       'ORAN BERRY ripens to SITRUS BERRY after one enemy turn',
+      'PP UP adds one ULT charge · CHESTO BERRY winds every foe clock back',
+      'some courts drop berries on KOs · DRAIN foes heal off their hits',
+      'SAFEGUARD foes take no damage · grab a berry to break it',
       'fly through the glowing item to collect on touch',
       'one spawns each wave, two when something big lurks',
     ],
@@ -1765,6 +1772,8 @@ const HELP_SECTIONS: HelpSection[] = [
       'after each fight: fix the lineup first, then take an item',
       'lose and your fallen team returns next run as the rival',
       'every run moves your ladder rating · wins climb, wipes drop',
+      'wild stops run 2 to 4 battles against a turn par',
+      'CLEAR card: S on par with no faints · S A B pay star pieces',
     ],
     demo: demoClimb,
   },
@@ -1785,12 +1794,23 @@ const HELP_SECTIONS: HelpSection[] = [
   },
   {
     title: 'STONE WALLS',
-    lines: ['boulder clusters wall off the lane: the ball banks right off them', 'boulder bounces count as wall hits: banking still pays damage'],
+    lines: [
+      'boulder clusters wall off the lane: the ball banks right off them',
+      'boulder bounces count as wall hits: banking still pays damage',
+      'ROCK SMASH rocks break in 3 hits · CUT trees in 2, or 1 from Grass',
+      'STRENGTH boulders shove one cell when you hit them hard',
+    ],
     demo: demoBump,
   },
   {
     title: 'FIELD GIMMICKS',
-    lines: ['red zones chip the ball, violet ones silence supers · foes ignore both', 'warp pads teleport, green pads boost, dark wells bend the path'],
+    lines: [
+      'red zones chip the ball, violet ones silence supers · foes ignore both',
+      'warp pads teleport, green pads boost, dark wells bend the path',
+      'DMG WALL edges fade in, then bite any mon that banks off them',
+      'walls switch by turn · NEXT TURN marks the edge about to light',
+      'DMG WALLs spare their own type · stop tags name the ABILITY that helps',
+    ],
     demo: demoHazards,
   },
   {
@@ -1848,10 +1868,10 @@ const HELP_PAGES: { name: string; secs: number[] }[] = [
   { name: 'SUPERS', secs: [1, 3] },
   { name: 'SUPER INDEX', secs: [16, 17] },
   { name: 'ULTIMATE', secs: [18, 12] },
-  { name: 'THE FIELD', secs: [7, 14] },
+  { name: 'THE FIELD', secs: [7, 13] },
   { name: 'GROWTH', secs: [8, 9] },
   { name: 'THE CLIMB', secs: [10, 11] },
-  { name: 'EXTRAS', secs: [13, 15] },
+  { name: 'GIMMICKS', secs: [14, 15] },
 ];
 export const HELP_PAGE_COUNT = HELP_PAGES.length;
 
@@ -1911,9 +1931,11 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
     s.demo(ctx, dx, dy, dw, 180);
     ctx.restore();
 
-    ctx.font = fontB(10);
     ctx.fillStyle = INK;
-    s.lines.forEach((line, li) => ctx.fillText(line, r.x + r.w / 2, dy + 212 + li * 15));
+    s.lines.forEach((line, li) => {
+      fitFontB(ctx, line, 10, r.w - 28);
+      ctx.fillText(line, r.x + r.w / 2, dy + 212 + li * 15);
+    });
     sy += 224 + s.lines.length * 15 + 8;
   });
 
