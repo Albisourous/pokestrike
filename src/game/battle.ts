@@ -20,7 +20,7 @@ import { genRegion, RegionMap, MapNode, MAP_W, MAP_H, drawTile, routePath, T_WAT
 import * as MT from './maptiles';
 import { gracidea } from '../core/assets';
 import type { PokeType, Weather } from './types';
-import { STAGE_GIMMICKS, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
+import { STAGE_GIMMICKS, BULLET_GIMMICKS, DRAIN_MOVE, DRAIN_PCT, isGentleRoom, bulletHints, type BulletGimmick, fieldRoomReachable, type BlockDef, type DamageWall, type HazardKind } from './data';
 import { Telops } from './telop';
 import { abilityHazard, abilityWall, abilitySturdy, abilityReflect, abilityAttack, abilitySpeed, abilityIntimidate, weatherSpeed, resetAbilities } from './abilities';
 import { recipeFor, beam as animBeam, burst as animBurst, rain as animRain, ring as animRing, stepAnims, drawAnims, drawTell, drawTellRing, drainAnimRequests, clearAnims } from './anim';
@@ -71,7 +71,8 @@ interface Unit {
   hp: number;
   maxHp: number;
   timer: number; // enemy countdown; attacks when it hits 0
-  clocks: { kind: FoeMoveKind; move: string; turn: number; t: number }[];
+  clocks: { kind: FoeMoveKind; move: string; turn: number; t: number; drain?: boolean }[];
+  safeguard?: boolean; // heart barrier: immune until a berry is grabbed
   drift: number; // enemy approach speed (u/s); players always 0
   // wander state — enemies jitter and occasionally dart
   wx: number;
@@ -234,7 +235,7 @@ interface BallDrop {
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
-type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb';
+type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'elixir' | 'lum-berry' | 'revival-herb' | 'pp-up' | 'chesto-berry';
 interface Pickup {
   x: number;
   y: number;
@@ -403,6 +404,8 @@ const PICKUP_META: Record<PickupKind, { name: string; label: string; color: stri
   elixir: { name: 'ELIXIR', label: 'SUPER +1', color: '#9ecbff' },
   'lum-berry': { name: 'LUM BERRY', label: 'CURE ALL', color: '#b8f8f8' },
   'revival-herb': { name: 'REVIVAL HERB', label: 'REVIVE', color: '#f8d030' },
+  'pp-up': { name: 'PP UP', label: 'ULT +1', color: '#f8a8f8' },
+  'chesto-berry': { name: 'CHESTO BERRY', label: 'CLOCK RESET', color: '#a890f0' },
 };
 // MS field items grow if left on the field.
 const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }>> = {
@@ -645,6 +648,8 @@ export class Battle {
   enemies: Unit[] = [];
   blocks: (Rect & { field?: BlockDef['field']; hp?: number })[] = []; // Archero-style stone clusters — bounceable cover
   private roomGrid: string[] | null = null;
+  private bulletN: Record<BulletGimmick, number> = { drain: 0, heart: 0, 'pp-up': 0, chesto: 0, safeguard: 0 };
+  private bulletRng = mulberry32(0); // side stream so bullet rolls never shift the run's seeded order
   phase: Phase = 'aim';
   waveIndex = -1; // -1 = still at HOME — stages begin at the row-0 fork
   activeIdx = 0;
@@ -1656,6 +1661,7 @@ export class Battle {
         age: 0,
       });
     }
+    this.armBullets();
     // the room's hazard cells land as zones — lava ponds, silence pools,
     // mines (normalized layout → arena px)
     this.hazards = room.hazards.map((z) => ({
@@ -3258,6 +3264,7 @@ export class Battle {
     switch (pk.kind) {
       case 'oran-berry':
       case 'sitrus-berry': {
+        this.breakSafeguard();
         const fraction = pk.kind === 'sitrus-berry' ? 0.3 : 0.15;
         const hp0 = this.players.reduce((a, p) => a + p.hp, 0);
         this.tryHeal(this.players, (p) => Math.max(1, Math.round(p.maxHp * fraction)));
@@ -3272,6 +3279,25 @@ export class Battle {
         sfx('ui');
         this.shotPhys *= 1.5;
         this.pushText({ x: pk.x, y: pk.y - 12, text: 'ATK UP!', t: 0.9, color: '#f08030', big: true });
+        break;
+      case 'pp-up':
+        sfx('ready');
+        this.pushText({ x: pk.x, y: pk.y - 12, text: 'ULT +1!', t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
+        if (this.telop.once('pk:pp-up')) this.telop.push({ kind: 'combo', title: 'PP UP', sub: 'ULT CHARGE +1', icon: 'pp-up' });
+        if (this.ultIn > 0 && --this.ultIn === 0) this.telop.push({ kind: 'ult', title: 'ULT READY', sub: 'TAP ULT TO FIRE', mon: this.active.def.id, icon: 'master-ball' });
+        break;
+      case 'chesto-berry':
+        sfx('ready');
+        // every live clock winds back to full; a clock already full stays put
+        for (const e of this.enemies) {
+          if (e.dead) continue;
+          const boosts = e.boostN;
+          e.timer = Math.max(e.timer, this.enemyReload(e));
+          e.boostN = boosts; // a reload peek, not a real reload
+          for (const c of e.clocks) c.t = Math.max(c.t, c.turn);
+        }
+        this.pushText({ x: pk.x, y: pk.y - 12, text: 'CLOCKS RESET!', t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
+        if (this.telop.once('pk:chesto')) this.telop.push({ kind: 'combo', title: 'CHESTO BERRY', sub: 'FOE CLOCKS RESET', icon: 'chesto-berry' });
         break;
       case 'elixir':
         sfx('ready');
@@ -3370,6 +3396,12 @@ export class Battle {
       e.hp = Math.min(e.maxHp, e.hp - dmg);
       this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'ABSORBED!', t: 0.9, color: '#6fdc6f', big: false });
       sfx('heal');
+      return;
+    }
+    if (e.safeguard) {
+      this.pushText({ x: e.x, y: e.y - e.r - 30, text: 'SAFEGUARD', t: 0.9, color: '#f8a8d8', big: false });
+      if (this.telop.once('safeguard')) this.telop.push({ kind: 'shield', title: 'SAFEGUARD', sub: 'GRAB A BERRY · BREAK IT', mon: e.def.id, icon: 'oran-berry' });
+      sfx('bounce');
       return;
     }
     let d = dmg;
@@ -3753,6 +3785,7 @@ export class Battle {
       // onto every neighbor, and volatile kills can chain
       // a dead thief coughs up the loot — KO it to take your berry back
       if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0, age: 0 });
+      this.heartDrop(e);
       if (e.volatile && !this.players.some((p) => !p.dead && p.def.damp)) {
         const BR = 110;
         this.waves.push({ x: e.x, y: e.y, r: 0, maxR: BR, t: 0.3, life: 0.3, color: '#ff9a30', hits: new Set() });
@@ -6703,7 +6736,9 @@ export class Battle {
     let thorns = false;
     const hit = (p: Unit) => {
       const dmg = Math.round(specDamage(e.def.stats.spa, p.def.stats.spd, 1, blastPower) * pow * (c.kind === 'meteor' ? 0.6 : 1));
+      const hp0 = p.hp;
       this.damagePlayer(p, dmg, e);
+      if (c.drain) this.drainHit(e, c.move, Math.max(0, hp0 - Math.max(0, p.hp)));
       if (!thorns && this.thorns > 0) {
         this.hurt(e, this.thorns, '#c8a44d');
         thorns = true;
@@ -6805,6 +6840,71 @@ export class Battle {
       pk.age = 0;
       this.burst(pk.x, pk.y, PICKUP_META[pk.kind].color, 8, 240, 0.8);
       this.pushText({ x: pk.x, y: pk.y - 12, text: 'RIPE', t: 0.9, color: PICKUP_META[pk.kind].color, big: false });
+    }
+    // a Safeguard always leaves a berry on court to break it
+    if (this.enemies.some((e) => e.safeguard && !e.dead) && !this.pickups.some((pk) => pk.kind === 'oran-berry' || pk.kind === 'sitrus-berry')) this.dropAt('oran-berry');
+  }
+
+  // per-battle rolls for the bullet gimmicks (BULLET_GIMMICKS); gentle
+  // opener rooms stay plain
+  private armBullets(rng = mulberry32((this.mapSeed * 31 + this.battle * 7 + this.waveIndex) >>> 0)) {
+    this.bulletRng = rng;
+    this.bulletN = { drain: 0, heart: 0, 'pp-up': 0, chesto: 0, safeguard: 0 };
+    if (isGentleRoom(this.roomGrid)) return;
+    const roll = (g: BulletGimmick) => rng() < BULLET_GIMMICKS[g].rate;
+    if (roll('drain')) {
+      for (const e of this.enemies) {
+        const move = DRAIN_MOVE[e.def.type];
+        if (!move || e.boss || !e.clocks[0] || this.bulletN.drain >= BULLET_GIMMICKS.drain.cap) continue;
+        e.clocks[0].move = move;
+        e.clocks[0].drain = true;
+        this.bulletN.drain++;
+      }
+    }
+    if (roll('pp-up')) { this.dropAt('pp-up'); this.bulletN['pp-up']++; }
+    if (roll('chesto')) { this.dropAt('chesto-berry'); this.bulletN.chesto++; }
+    const guard = this.enemies.filter((e) => !e.boss && !e.dead).sort((a, b) => b.maxHp - a.maxHp)[0];
+    if (guard && BULLET_GIMMICKS.safeguard.themes?.includes(this.theme) && roll('safeguard')) {
+      guard.safeguard = true;
+      this.bulletN.safeguard++;
+      this.dropAt('oran-berry');
+    }
+  }
+
+  private dropAt(kind: PickupKind) {
+    void loadItem(kind);
+    const at = this.unstick(
+      this.arena.x + this.arena.w * (0.15 + this.bulletRng() * 0.7),
+      this.arena.y + this.arena.h * (0.2 + this.bulletRng() * 0.45),
+      16,
+    );
+    this.pickups.push({ x: at.x, y: at.y, kind, t: this.bulletRng() * 6, age: 0 });
+  }
+
+  // a fainted foe can leave a berry where it fell
+  private heartDrop(e: Unit) {
+    const g = BULLET_GIMMICKS.heart;
+    if (isGentleRoom(this.roomGrid) || this.bulletN.heart >= g.cap || this.enemies.every((x) => x.dead) || this.bulletRng() >= g.rate) return;
+    this.bulletN.heart++;
+    this.pickups.push({ x: e.x, y: e.y, kind: 'oran-berry', t: 0, age: 0 });
+    this.pushText({ x: e.x, y: e.y - 24, text: 'BERRY DROP', t: 0.9, color: '#6fdc6f', big: false });
+    if (this.telop.once('pk:heart')) this.telop.push({ kind: 'combo', title: 'BERRY DROP', sub: 'GRAB IT · TEAM HEAL', icon: 'oran-berry' });
+  }
+
+  private drainHit(e: Unit, move: string, dealt: number) {
+    if (e.dead || dealt <= 0) return;
+    const sip = Math.max(1, Math.round(dealt * DRAIN_PCT));
+    e.hp = Math.min(e.maxHp, e.hp + sip);
+    this.pushText({ x: e.x, y: e.y - e.r - 8, text: `+${sip}`, t: 0.8, color: '#6fdc6f', big: false });
+    if (this.telop.once('drain')) this.telop.push({ kind: 'foe', title: move, sub: 'FOE HEALS OFF ITS HIT', mon: e.def.id, icon: 'big-root' });
+  }
+
+  private breakSafeguard() {
+    for (const e of this.enemies) {
+      if (!e.safeguard || e.dead) continue;
+      e.safeguard = false;
+      this.waves.push({ x: e.x, y: e.y, r: 0, maxR: e.r * 2.4, t: 0.3, life: 0.3, color: '#f8a8d8', hits: new Set() });
+      this.telop.push({ kind: 'shield', title: 'SAFEGUARD BROKEN', sub: e.def.name.toUpperCase(), mon: e.def.id, icon: 'oran-berry' });
     }
   }
 
@@ -8500,6 +8600,8 @@ export class Battle {
       e.def.fuse && 'detonates at zero · blast hits everything',
       e.def.hunter && 'hunts your weakest mon',
       e.def.leech && 'heals off every hit it lands',
+      e.clocks.some((c) => c.drain) && 'drain move · heals off its hit',
+      e.safeguard && 'safeguard · grab a berry to break it',
       e.def.drowsy && 'its hits can put a mon to sleep',
       e.def.venom && 'its sting leaves a bleeding wound',
       e.def.burn && 'its hits can burn · singes and softens',
@@ -9038,10 +9140,11 @@ export class Battle {
         ctx.fillStyle = TYPE_COLOR[n.ttype ?? 'normal'];
         ctx.fillText(ty, nx, ny - cell * 0.95 + 12);
         const gimmick = STAGE_GIMMICKS[TYPE_THEME[n.ttype ?? 'normal']];
+        const glabel = [gimmick.label, ...bulletHints(TYPE_THEME[n.ttype ?? 'normal'], n.ttype ?? 'normal')].join(' · ');
         ctx.font = fontB(10);
-        ctx.strokeText(gimmick.label, nx, ny - cell * 0.95 + 25);
+        ctx.strokeText(glabel, nx, ny - cell * 0.95 + 25);
         ctx.fillStyle = TYPE_COLOR[gimmick.type];
-        ctx.fillText(gimmick.label, nx, ny - cell * 0.95 + 25);
+        ctx.fillText(glabel, nx, ny - cell * 0.95 + 25);
         drawCounterHint(ctx, gimmick, this.players.filter((p) => !p.dead).map((p) => p.def), nx, ny - cell * 0.95 + 40, cell * 4.5);
       }
     });
@@ -9976,6 +10079,14 @@ export class Battle {
         ctx.fillStyle = TYPE_COLOR[u.def.type];
         ctx.fillText(`REFLECT ${u.shieldN}`, u.x, reflectY);
       }
+      if (u.safeguard) {
+        ctx.globalAlpha = 0.25 + Math.sin(this.time * 4) * 0.1;
+        ctx.fillStyle = '#f8a8d8';
+        ctx.beginPath();
+        ctx.arc(u.x, u.y, u.r * 1.35, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
       // support marks: clerics carry a green cross, guardians a cyan
       // diamond — target priority readable at a glance
       if (u.supp) {
@@ -10079,6 +10190,8 @@ export class Battle {
         u.def.fuse && 'FUSE',
         u.def.hunter && 'HUNTER',
         u.def.leech && 'LEECH',
+        u.safeguard && 'SAFEGUARD',
+        u.clocks.find((c) => c.drain)?.move,
         u.def.drowsy && 'SLEEP',
         u.def.venom && 'STING',
         u.def.burn && 'WISP',

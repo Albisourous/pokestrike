@@ -16,7 +16,7 @@ import { PERKS, rollPerks, BAG_ITEMS, perkTick } from '../src/game/perks';
 import { DAILY_POOL, WEEKLY_POOL, rollTasks, dayKey, weekKey, daySeed, weekSeed, taskTick, taskViews, claimTask, tasksReady, taskResetsIn, featuredPull, raidPick, raidTeam, raidMod, raidLvl, raidEscortN, dealPick, dealOff, dealCost } from '../src/game/tasks';
 import { THEMES } from '../src/game/bg';
 import type { Theme } from '../src/game/bg';
-import { ROOM_BOSS, STAGE_GIMMICKS } from '../src/game/data';
+import { ROOM_BOSS, STAGE_GIMMICKS, BULLET_GIMMICKS, bulletHints } from '../src/game/data';
 import { dailyMod, DAILY_MODS } from '../src/game/daily';
 import { TOWN_FOLK, townStrollAt } from '../src/game/screens';
 import { ultHintSeen } from '../src/game/meta';
@@ -366,6 +366,65 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   (b as any).healCd = 0;
   (b as any).grabPickup({ x: 100, y: 100, kind: 'sitrus-berry', t: 0, age: 0 });
   ok(p.hp === Math.min(p.maxHp, 1 + Math.round(p.maxHp * 0.3)), 'sitrus berry heals 30% max HP');
+}
+
+// --- bullet gimmicks: drain, berry drop, PP Up, Chesto, Safeguard --------
+{
+  const b: any = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(3));
+  b.spawnWave(0);
+  b.theme = 'meadow';
+  const foes = () => [0.25, 0.5, 0.75].map((nx) => b.makeEnemy({ def: speciesById(1)!, nx, ny: 0.3 }, 0));
+  const armed = () => b.enemies.some((e: any) => e.safeguard || e.clocks.some((c: any) => c.drain));
+  b.enemies = foes();
+  b.pickups = [];
+  b.roomGrid = ROOM_LAYOUTS[1];
+  b.armBullets(() => 0); // every roll lands
+  b.heartDrop(b.enemies[0]);
+  ok(Object.values(b.bulletN).every((n) => n === 0) && !b.pickups.length && !armed(), 'gentle opener rooms roll no bullet gimmicks or KO berries');
+
+  b.roomGrid = ROOM_LAYOUTS[3];
+  b.armBullets(() => 0);
+  const count = (k: string) => b.pickups.filter((pk: any) => pk.kind === k).length;
+  ok(count('pp-up') === BULLET_GIMMICKS['pp-up'].cap && count('chesto-berry') === BULLET_GIMMICKS.chesto.cap, 'PP Up and Chesto spawn capped per battle');
+  const drains = b.enemies.filter((e: any) => e.clocks[0]?.drain);
+  ok(drains.length === BULLET_GIMMICKS.drain.cap && drains[0].clocks[0].move === 'GIGA DRAIN', 'drain clocks cap per battle and take a Pokémon drain move');
+  const guards = b.enemies.filter((e: any) => e.safeguard);
+  ok(guards.length === BULLET_GIMMICKS.safeguard.cap && count('oran-berry') === 1, 'Safeguard caps per battle and leaves a berry to break it');
+
+  const d = drains[0];
+  d.hp = 1;
+  b.drainHit(d, 'GIGA DRAIN', 20);
+  ok(d.hp === 11, 'drain move heals the foe half the damage it dealt');
+
+  const g = guards[0];
+  const ghp = g.hp;
+  b.hurt(g, 50, '#fff');
+  ok(g.hp === ghp, 'Safeguard foe ignores hits');
+  b.grabPickup({ x: 100, y: 100, kind: 'oran-berry', t: 0, age: 0 });
+  b.hurt(g, 5, '#fff');
+  ok(!g.safeguard && g.hp < ghp, 'grabbing a berry breaks Safeguard');
+
+  b.ultIn = 5;
+  b.grabPickup({ x: 100, y: 100, kind: 'pp-up', t: 0, age: 0 });
+  ok(b.ultIn === 4, 'PP Up adds one ULT charge');
+  b.ultIn = 0;
+  b.grabPickup({ x: 100, y: 100, kind: 'pp-up', t: 0, age: 0 });
+  ok(b.ultIn === 0, 'PP Up never overfills a ready ULT');
+
+  for (const e of b.enemies) { e.timer = 0; for (const c of e.clocks) c.t = 0; }
+  const full = b.enemies[2].clocks[0].turn;
+  b.grabPickup({ x: 100, y: 100, kind: 'chesto-berry', t: 0, age: 0 });
+  ok(b.enemies.every((e: any) => e.timer > 0 && e.clocks.every((c: any) => c.t === c.turn)) && full > 0, 'Chesto Berry winds every foe clock back to full');
+
+  b.pickups = [];
+  for (const e of b.enemies) b.heartDrop(e);
+  ok(b.bulletN.heart === BULLET_GIMMICKS.heart.cap && count('oran-berry') === BULLET_GIMMICKS.heart.cap && b.pickups[0].x === b.enemies[0].x, 'KO berry drops cap per battle and land where the foe fell');
+  for (const e of b.enemies) e.dead = true;
+  b.bulletN.heart = 0;
+  b.heartDrop(b.enemies[0]);
+  ok(b.bulletN.heart === 0, 'the last KO of a wave drops no berry');
+
+  ok(bulletHints('meadow', 'grass').join(' · ') === 'DRAIN · SAFEGUARD' && !bulletHints('cavern', 'rock').length, 'stop preview tags the bullet gimmicks a stop can roll');
 }
 
 // --- ascension scales enemy bulk ----------------------------------------
