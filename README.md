@@ -29,7 +29,7 @@ leaders to win the run.
 - **Attack clocks** · every foe shows a turn countdown over its head and fires a typed move when it hits zero. Kill it or move it.
 - **Boss bars** · gym bosses fight across 3 HP bars, each a fresh authored court with new adds. The weak spot moves every bar, and bar 3 is RAGE: faster clocks, Reflect guards.
 - **Stop structure** · wild stops run 2 to 4 battles with a turn par; finish under it for SPEED CLEAR.
-- **Stage gimmicks** · damage walls that fade in and cycle by turn, gravity wells, warp pairs, boost panels, barriers. The right **ability** counters each one, and the draft hints which mons do.
+- **Stage gimmicks** · damage walls that fade in and cycle by turn, gravity wells, warp pairs, boost panels, barriers. The right **ability** counters each one, and the draft hints which mons do. Unevolved carriers are **gauge mons**: their counter only switches on for a gold-band release (quick-claw icon), and evolving makes it permanent.
 - **Field-move blocks** · Rock Smash rocks (3 hits), Cut trees (2, or 1 from Grass), Strength boulders that shove one cell.
 - **Bullet pickups** · drain moves, berry drops, PP Up, Chesto, Safeguard, plus the Oran → Sitrus ripen.
 - **Clear ranks** · each stop ends on a CLEAR card: S/A/B/C rank ball, turns, max combo, weak hits, KOs, damage taken, per-stage bests.

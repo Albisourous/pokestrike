@@ -2,7 +2,7 @@
 import './shims';
 import { Battle, HIDE_WP_RATE, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T, placeLabel, LABEL_INTRO } from '../src/game/battle';
 import * as battleModule from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks, gaugeMon } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { hideWpRate } from '../src/game/weakpoint';
@@ -30,6 +30,7 @@ import { CONNECT_MUL, Connect } from '../src/game/connect';
 import { MOVE_ANIM, SHEETS, MAX_ANIMS, SOFT_CAP, recipeFor, spawnAnim, beam, burst, rain, ring, stepAnims, drawAnims, drawTell, drawTellRing, animCount, clearAnims, drainAnimRequests } from '../src/game/anim';
 import { installField2, stepField2, laserPlan, STAGE_GIMMICKS2, WIND_ACCEL, LASER_POST_HITS, type Field2Ball, type Field2Fx } from '../src/game/gimmicks2';
 import { ABILITIES, abilityOf, abilityAttack, killerMult, weatherSpeed, counterHint, countersGimmick } from '../src/game/abilities';
+import { counterAbility, gaugeCounter, counterLive, quietOpener } from '../src/game/gauge';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -1719,6 +1720,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
 {
   const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(2));
   (b as any).spawnWave(0);
+  (b as any).roomGrid = ROOM_LAYOUTS[3];
   (b as any).courtT = -9; // court already settled
   b.phase = 'aim';
   const u = (b as any).active;
@@ -5418,7 +5420,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     const b: any = new Battle(arena, [speciesById(id)!, speciesById(4)!, speciesById(7)!, speciesById(1)!], makeStage(4, 'T'), mulberry32(18));
     b.spawnWave(0);
     b.enemies = []; b.blocks = []; b.damageWalls = []; b.hazards = []; b.pickups = [];
-    b.slowImmune = false; b.activeIdx = 0; b.phase = 'shot'; b.shotT = b.time;
+    b.slowImmune = false; b.activeIdx = 0; b.phase = 'shot'; b.shotGold = true; b.shotT = b.time;
     b.pushText = (text: { text: string }) => b.notices.push(text.text);
     b.notices = [];
     const p = b.players[0];
@@ -5668,6 +5670,72 @@ import { ASC_MODS as CLIMB_ASC_MODS } from '../src/game/data';
   const cards = S.HELP_DECK.flatMap((p) => p.cards);
   ok(S.HELP_PAGE_COUNT === S.HELP_DECK.length && S.HELP_DECK.every((p) => p.cards.length >= 1 && p.cards.length <= 7), 'every help page holds 1 to 7 cards');
   ok(S.HELP_DECK[0].name === 'TL;DR' && cards.every(([, t]) => !t.includes('—')), 'TL;DR opens the deck and no card has an em dash');
+}
+
+// --- gauge mons (MS gauge ability) ---
+{
+  const unevolved = ROSTER.find((def) => def.evolvesTo !== undefined)!;
+  ok(gaugeMon(unevolved) && !gaugeMon(speciesById(26)!), 'unevolved species carry gauge; final forms do not');
+  ok(quietOpener(0, true) && !quietOpener(0, false) && !quietOpener(1, true), 'only stop 1 gentle room is a quiet opener');
+  const gaugeNames = ROSTER.filter(gaugeCounter).map((def) => def.name);
+  const gaugeDef = ROSTER.find(gaugeCounter);
+  const evolvedDef = ROSTER.find((def) => counterAbility(def) && !gaugeMon(def));
+  ok(!!gaugeDef && !!evolvedDef, `gauge counters found (${gaugeNames.join(', ')}); evolved counter ${evolvedDef?.name ?? 'missing'}`);
+  if (gaugeDef && evolvedDef) {
+    ok(counterLive(evolvedDef, false) && counterLive(evolvedDef, true), 'non-gauge counters stay live on every shot');
+    ok(!counterLive(gaugeDef, false) && counterLive(gaugeDef, true), 'gauge counters need a gold shot');
+    const b: any = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(3));
+    b.spawnWave(0);
+    b.players[0].def = gaugeDef;
+    b.players[1].def = gaugeDef;
+    b.activeIdx = 0;
+    b.phase = 'shot';
+    const active = b.players[0], other = b.players[1];
+    b.shotGold = false;
+    const missOff = !b.counterOn(active);
+    b.shotGold = true;
+    const goldOn = b.counterOn(active);
+    const otherOff = !b.counterOn(other);
+    b.phase = 'aim';
+    const aimOff = !b.counterOn(active);
+    ok(missOff && goldOn && otherOff && aimOff, 'battle counters need the active mon in a gold shot');
+    b.waveIndex = 0;
+    b.roomGrid = ROOM_LAYOUTS[0];
+    b.courtT = -9;
+    b.sweetSpot = () => ({ c: b.charge(), hw: 1 });
+    const release = () => {
+      const u = b.players[0];
+      b.phase = 'aim';
+      b.activeIdx = 0;
+      b.dragging = false;
+      b.pointerDown({ x: u.x, y: u.y });
+      b.pointerMove({ x: u.x + 60, y: u.y });
+      b.pointerUp();
+    };
+    release();
+    const openerOff = b.shotGold === false;
+    b.roomGrid = ROOM_LAYOUTS[3];
+    release();
+    ok(openerOff && b.shotGold === true, 'gold release loses bonus only in the gentle opener');
+    const pullDraws = (def: (typeof ROSTER)[number]) => {
+      let draws = 0;
+      const rng = mulberry32(19);
+      const countedRng = () => { draws++; return rng(); };
+      const bb: any = new Battle(arena, [def, ...team().slice(1)], makeStage(4, 'T'), countedRng);
+      bb.spawnWave(0);
+      bb.phase = 'aim';
+      bb.courtT = -9;
+      bb.sweetSpot = () => ({ c: bb.charge(), hw: 1 });
+      const u = bb.players[0];
+      const before = draws;
+      bb.pointerDown({ x: u.x, y: u.y });
+      bb.pointerMove({ x: u.x + 60, y: u.y });
+      bb.pointerUp();
+      return draws - before;
+    };
+    const gaugeDraws = pullDraws(gaugeDef), evolvedDraws = pullDraws(evolvedDef);
+    ok(gaugeDraws === evolvedDraws && gaugeDraws === 3, `one pull keeps three rng draws (${gaugeDraws} vs ${evolvedDraws})`);
+  }
 }
 
 console.log(fails ? `\n${fails} FAILURES` : '\nALL CHECKS PASSED');

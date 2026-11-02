@@ -125,6 +125,9 @@ export interface SpeciesDef {
   evolvesTo?: number | number[]; // dex id(s) — an array asks the player to pick the branch
 }
 
+// MS gauge mons: unevolved forms carry the meter; evolving makes their counter ability always-on
+export const gaugeMon = (d: Pick<SpeciesDef, 'evolvesTo'>) => d.evolvesTo !== undefined;
+
 const st = (hp: number, atk: number, def: number, spa: number, spd: number, spe: number): Stats => ({
   hp, atk, def, spa, spd, spe,
 });
