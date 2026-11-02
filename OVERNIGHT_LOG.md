@@ -759,3 +759,6 @@ backlog; builders run one iteration each, I verify + commit + push.
 - c49d6f8 pushed: detail card dead-space gate + OUTSIDE CLOSES caption,
   N FOES plate hidden on rolled-stage parks, raid loaner cards tag
   counter multipliers (raidCounters finally drawn).
+- pushed: intensity layers — kitGain ducks the drum bus on drag, stab
+  halves at schedule time, default high leaves every track untouched;
+  MUSIC.md's last Later item landed (spec doc + __dbg.intensity).
