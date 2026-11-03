@@ -644,7 +644,6 @@ const COMBO_COLORS = ['#9df0ff', '#f8d030', '#f08030', '#f85888', '#ffd84d'];
 // every species a mon can evolve into must be resolvable here — includes
 // enemy/invader pools so catches like Magikarp→Gyarados actually work
 const SPECIES_DB: SpeciesDef[] = [...ROSTER, ...ELITES, ...EVOS, ...ENEMY_DB, ...INVADERS];
-const ELITE_IDS = new Set(ELITES.map((e) => e.id));
 
 // Circle-vs-rect resolution shared by the live physics and the aim
 // preview — pushes a ball out along the least-penetrating face and
