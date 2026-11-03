@@ -8,7 +8,7 @@ import { TOTAL_STAGES } from '../data';
 import {
   ACHIEVEMENTS, BADGES, BOARD_MAX, LAB_UPGRADES, LADDER, best, board, dexIds, gymBadges, labLevels, streakDaily, streakWins, tier, unlockedAch,
 } from '../meta';
-import { CATCHABLE, balanceChip, chip, fitFont, fitFontB, monShadow, pill, rim, roundRect } from '../screens';
+import { CATCHABLE, balanceChip, chip, fitCenter, fitFont, fitFontB, monShadow, pill, rim, roundRect } from '../screens';
 import { GOLD, GOLD_HI, INK, INK_FAINT, INK_SOFT, PAPER_HI, PARCH, font, fontB, scrim, uiBand, uiClose, uiWindow, type Rect } from '../ui';
 
 const W = 540;
@@ -332,7 +332,7 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
     ctx.textAlign = 'center';
     ctx.font = fontB(10);
     ctx.fillStyle = has ? PARCH : next ? '#a8b4e0' : '#6a7298';
-    ctx.fillText(b.name.replace(' BADGE', ''), cx, cy + 36);
+    fitCenter(ctx, b.name.replace(' BADGE', ''), cx, cy + 36, 64); // 70px slots — keep air between neighbors
   });
 
   // locked trophies with a count get a live bar: the goal gradient
@@ -351,7 +351,7 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.rect(v.x, v.y, v.w, v.h);
   ctx.clip();
   ACHIEVEMENTS.forEach((a, i) => {
-    const r = { x: v.x + 4, y: v.y + 4 + i * ACH_PITCH - scroll, w: v.w - 26, h: ACH_PITCH - 8 };
+    const r = { x: v.x + 4, y: v.y + 4 + i * ACH_PITCH - scroll, w: v.w - 18, h: ACH_PITCH - 8 };
     if (r.y + r.h < v.y || r.y > v.y + v.h) return;
     const has = got.has(a.id);
     uiWindow(ctx, r, { rad: 8, tint: has ? undefined : '#eeede4' });
@@ -386,7 +386,9 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
     if (prog) groove(ctx, { x: tx, y: r.y + r.h - 16, w: right - tx, h: 8 }, prog[0] / prog[1]);
   });
   ctx.restore();
-  rail(ctx, P.x + P.w - 11, v.y, v.h, scroll, ACHIEVEMENTS.length * ACH_PITCH + 4);
+  // rail hugs the list's right edge so rows + thumb read as one unit aligned
+  // to the badge case above — parked at the panel rim it floats off by itself
+  rail(ctx, v.x + v.w - 10, v.y, v.h, scroll, ACHIEVEMENTS.length * ACH_PITCH + 4);
   closeChip(ctx);
 }
 

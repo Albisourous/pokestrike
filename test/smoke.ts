@@ -837,6 +837,27 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   (b as any).pickups = [{ x: 100, y: 100, kind: 'great-ball', t: 0, age: 0 }];
   for (let i = 0; i < 3; i++) (b as any).ripenPickups();
   ok((b as any).pickups[0].kind === 'ultra-ball', 'a great ball ripens into ultra in three enemy turns');
+
+  // a thief's pocketed item re-drops as itself — the ripen clock never runs in the pocket
+  (b as any).enemies = [b.makeEnemy({ def: speciesById(1)!, nx: 0.5, ny: 0.3 }, 0)];
+  const thief = (b as any).enemies[0];
+  thief.stolen = 'sitrus-berry';
+  (b as any).pickups = [];
+  b.hurt(thief, thief.hp + 50, '#fff');
+  const re = (b as any).pickups.find((pk: any) => pk.kind === 'sitrus-berry');
+  ok(re && re.age === 0, 'a stolen sitrus re-drops fresh — no pocket ripening');
+
+  // a wiped turn never ripens the field — the KO'd team isn't there to benefit
+  (b as any).pickups = [{ x: 100, y: 100, kind: 'oran-berry', t: 0, age: 0 }];
+  (b as any).enemies.push(b.makeEnemy({ def: speciesById(1)!, nx: 0.6, ny: 0.3 }, 0));
+  for (const pl of (b as any).players) pl.dead = true;
+  (b as any).ashArmed = false;
+  (b as any).pendingAttacks = [(b as any).enemies[(b as any).enemies.length - 1]];
+  (b as any).phase = 'enemy';
+  (b as any).enemyPhaseT = 100;
+  (b as any).resolveEnemyTurn();
+  b.update(0.4);
+  ok((b as any).pickups[0].kind === 'oran-berry' && (b as any).phase === 'lost', 'a wiped turn never ripens the field');
 }
 
 // --- bullet gimmicks: drain, berry drop, PP Up, Chesto, Safeguard --------
@@ -894,6 +915,17 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   b.bulletN.heart = 0;
   b.heartDrop(b.enemies[0]);
   ok(b.bulletN.heart === 0, 'the last KO of a wave drops no berry');
+
+  // species drop tables (MS self_drop_rate): a carrier leaves its held item
+  const drops = (battleModule as any).SPECIES_DROPS as Record<number, { kind: string; rate: number }>;
+  const rate0 = drops[113].rate;
+  drops[113].rate = 1;
+  b.enemies = foes();
+  b.enemies[0].def = { ...b.enemies[0].def, id: 113 };
+  b.pickups = [];
+  b.hurt(b.enemies[0], b.enemies[0].hp + 50, '#fff');
+  drops[113].rate = rate0;
+  ok(b.pickups.some((pk: any) => pk.kind === 'sitrus-berry'), 'a KO\'d carrier drops its held item');
 
   ok(bulletHints('meadow', 'grass').join(' · ') === 'DRAIN · SAFEGUARD' && !bulletHints('cavern', 'rock').length, 'stop preview tags the bullet gimmicks a stop can roll');
 }

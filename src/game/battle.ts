@@ -558,6 +558,21 @@ const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }
   elixir: { to: 'max-elixir', turns: 3 },
   'great-ball': { to: 'ultra-ball', turns: 3 },
 };
+// MS self_drop_rate: a species can carry its canonical wild hold into the
+// fight and leaves it where it falls — data per species id, not a pool
+export const SPECIES_DROPS: Record<number, { kind: PickupKind; rate: number }> = {
+  25: { kind: 'oran-berry', rate: 0.25 },   // Pikachu — FRLG held oran
+  63: { kind: 'pp-up', rate: 0.3 },         // Abra — twisted spoon
+  83: { kind: 'x-attack', rate: 0.3 },      // Farfetch'd — leek
+  104: { kind: 'x-attack', rate: 0.3 },     // Cubone — thick club
+  113: { kind: 'sitrus-berry', rate: 0.4 }, // Chansey — lucky egg pays out
+  120: { kind: 'max-elixir', rate: 0.25 },  // Staryu — star piece
+  132: { kind: 'lum-berry', rate: 0.3 },    // Ditto — quick/metal powder
+  143: { kind: 'sitrus-berry', rate: 0.4 }, // Snorlax — leftovers
+  213: { kind: 'oran-berry', rate: 0.5 },   // Shuckle — berry juice
+  236: { kind: 'x-attack', rate: 0.3 },     // Tyrogue — black belt
+  241: { kind: 'sitrus-berry', rate: 0.4 }, // Miltank — moomoo milk
+};
 // a stocked ball is flat bonus odds on the next catch roll this wave —
 // thrown once and spent either way, like the real thing
 const BALL_CATCH: Partial<Record<PickupKind, number>> = { 'great-ball': 0.15, 'ultra-ball': 0.3 };
@@ -4134,6 +4149,12 @@ export class Battle {
       // onto every neighbor, and volatile kills can chain
       // a dead thief coughs up the loot — KO it to take your berry back
       if (e.stolen) this.pickups.push({ x: e.x, y: e.y, kind: e.stolen, t: 0, age: 0 });
+      // species drop table: the carrier's held item lands where it fell
+      const drop = SPECIES_DROPS[e.def.id];
+      if (drop && this.bulletRng() < drop.rate) {
+        this.pickups.push({ x: e.x, y: e.y, kind: drop.kind, t: 0, age: 0 });
+        this.pushText({ x: e.x, y: e.y - e.r - 40, text: 'ITEM DROP', t: 0.9, color: PICKUP_META[drop.kind].color, big: false });
+      }
       this.heartDrop(e);
       if (e.volatile && !this.players.some((p) => !p.dead && p.def.damp)) {
         const BR = 110;
