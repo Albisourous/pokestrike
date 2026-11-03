@@ -3964,6 +3964,7 @@ function drawRoster(
   selTeam: number,
   catchPct: number,
   masterArmed: boolean,
+  slots: number,
 ) {
   // captured box — tap a catch and a teammate, in either order, to swap
   ctx.font = fontB(10);
@@ -4062,7 +4063,6 @@ function drawRoster(
   ctx.font = fontB(11);
   ctx.fillStyle = INK_FAINT;
   ctx.fillText('YOUR TEAM', W / 2, 610);
-  const slots = teamSlots();
   for (let i = 0; i < TEAM_CAP; i++) {
     const def = team[i];
     const r = teamSlotRect(i);
@@ -4199,6 +4199,7 @@ export function drawTeamMenu(
   heldItems: string[],
   masterArmed: boolean,
   rewardStep = false, // the reward break seats this first — swap, THEN items
+  openSlots = teamSlots(), // the run's live cap — a mid-run unlock draws open
 ) {
   scrim(ctx, 0.82);
   // the roster drawer is a menu window — the INK band carries the title
@@ -4267,7 +4268,7 @@ export function drawTeamMenu(
     ctx.textAlign = 'center';
   });
 
-  drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct, masterArmed);
+  drawRoster(ctx, box, boxHp, boxLvl, boxScroll, selBox, team, teamHp, teamLvl, selTeam, catchPct, masterArmed, openSlots);
   pill(ctx, MENU_CLOSE, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: rewardStep ? 'DONE → ITEMS' : 'CLOSE' });
   // the quiet out — dark like evo KEEP; the parked pk_run is what CONTINUE resumes
   pill(ctx, MENU_QUIT, { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'QUIT TO TITLE' });

@@ -2523,6 +2523,7 @@ function render() {
             b.heldItems,
             b.masterArmed,
             b.phase === 'reward', // the reward break seats swaps first
+            b.teamCap, // a mid-run unlock draws the slot open, not LOCKED
           ));
         }
         if (battle.phase === 'reward' && battle.clearCard) drawClearCard(ctx, battle.clearCard, t - (battle.clearCard.t0 ??= t));

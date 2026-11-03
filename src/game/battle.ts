@@ -16,7 +16,7 @@ import { drawStopScene } from './stops';
 import { taskViews, taskTick } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, best, teamSlots, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, best, teamSlots, SLOT_STAGE, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawAmbient, drawSlice, drawCover, drawMoat, THEMES, hash } from './bg';
 import { uiWindow, INK, PAPER, PARCH, GOLD_HI, SP, overlayPop } from './ui';
 import type { Theme } from './bg';
@@ -4138,7 +4138,10 @@ export class Battle {
       // the KO shot's combo feeds the roll — a pinball kill tires the mon
       // out like a proper weaken-first. (Dots and orbs from this same shot
       // still read this shot's chain — the right value.)
-      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.catchOdds(e) + Math.min(0.12, this.shotCombo * 0.015) + this.ballOdds());
+      // the coached run's first KO always lands the catch — the collect
+      // loop gets shown, never left to the dice
+      const teachCatch = this.coach && this.totalKos === 1;
+      const caught = master || e.shiny || teachCatch || (!this.inTrainer && this.rng() < this.catchOdds(e) + Math.min(0.12, this.shotCombo * 0.015) + this.ballOdds());
       // a thrown ball is spent, catch or bust — master balls and shinies
       // skip the roll, so the pocket stays stocked for a real throw
       const flew = !master && !e.shiny && !this.inTrainer; // the roll ran — the pocket ball actually left your hand
@@ -5625,9 +5628,15 @@ export class Battle {
     sfx('caught');
   }
 
-  // how many field slots this save has earned — the locked back pair
-  // refuses joins until the career stage record opens them (teamSlots)
-  get teamCap() { return Math.min(TEAM_CAP, teamSlots()); }
+  // how many field slots this trainer has earned — the career record
+  // (teamSlots) opens them between runs; depth inside THIS climb opens
+  // them live, so clearing stage 3 or 6 unseals a slot at the break
+  get teamCap() {
+    const depth = this.waveIndex + 1;
+    const earned = Math.max(teamSlots(), 2 + SLOT_STAGE.filter((s) => depth >= s).length);
+    return Math.min(TEAM_CAP, earned);
+  }
+  private slotsSeen = -1; // baselines at the first reward — a mid-run unlock toasts, a veteran's head start doesn't
 
   // A lean draft leaves open slots — a boxed catch deploys outright instead
   // of benched-for-benched. Same rules as a swap: KO'd catches stay in the
@@ -5764,6 +5773,18 @@ export class Battle {
     }
     this.phase = 'reward';
     if (!this.waveHadGym) playJingle('clear'); // gyms already played their badge stab
+    // a slot opening mid-run calls itself out — the roster's LOCKED cell
+    // just unsealed
+    if (this.slotsSeen >= 0 && this.teamCap > this.slotsSeen) {
+      this.pushText({
+        x: this.arena.x + this.arena.w / 2,
+        y: this.arena.y + 100,
+        text: 'NEW TEAM SLOT OPEN!',
+        t: 1.8, color: '#ffd84d', big: true,
+      });
+      this.log('NEW TEAM SLOT OPEN');
+    }
+    this.slotsSeen = this.teamCap;
     // open slots pull from the box before the roster prompt — a catch
     // fields itself; KO'd catches stay boxed until they're healed
     while (this.players.length < this.teamCap) {
@@ -5779,6 +5800,12 @@ export class Battle {
       u.hp = Math.max(1, Math.round(u.maxHp * frac));
       this.players.push(u);
       this.refreshTraits();
+      this.pushText({
+        x: this.arena.x + this.arena.w / 2,
+        y: this.arena.y + 136,
+        text: `${def.name.toUpperCase()} JOINED THE TEAM`,
+        t: 1.4, color: '#9df0ff', big: true,
+      });
       this.log(`${def.name.toUpperCase()} JOINED THE TEAM`);
     }
     if (!this.box.length) this.boxPing = false; // nothing boxed means nothing to nag about
