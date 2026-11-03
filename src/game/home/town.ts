@@ -12,15 +12,20 @@ import {
   unlockedAch,
 } from '../meta';
 import {
-  FX_PETAL,
+  FLOWER_PK,
   FLOWER_PINK,
+  FLOWER_WILD,
+  FLOWER_YB,
+  FX_PETAL,
+  ROCK_SMALL,
+  TREE_OLIVE,
   TREE_PINE,
   TREE_ROUND,
   TREE_TEAL,
   type TileRect,
 } from '../maptiles';
 import { daySeed, taskResetsIn } from '../tasks';
-import { INK, INK_SOFT, PAPER, fontB, uiWindow } from '../ui';
+import { INK, INK_SOFT, PAPER, fontB, rr, uiWindow } from '../ui';
 
 const W = 540;
 const H = 960;
@@ -30,21 +35,19 @@ type Rect = { x: number; y: number; w: number; h: number };
 
 const LAB_SPRITE: TileRect = [397, 69, 90, 76];
 const HALL_SPRITE: TileRect = [684, 93, 90, 87];
-const TOWER_BODY_SPRITE: TileRect = [1440, 554, 90, 97];
-const TOWER_DOOR_SPRITE: TileRect = [1470, 670, 30, 32];
+const TOWER_BODY_SPRITE: TileRect = [1441, 556, 87, 98]; // full pillar base — dome cap at 556, base ends 654 (maptiles TILE_TOWER)
 const TOWER_BODY_H = TOWER_BODY_SPRITE[3] * TOWER_S;
-const TOWER_DOOR_W = TOWER_DOOR_SPRITE[2] * TOWER_S;
-const TOWER_DOOR_H = TOWER_DOOR_SPRITE[3] * TOWER_S;
-const TOWER_OVERLAP = 4;
-const TOWER_H = TOWER_BODY_H + TOWER_DOOR_H - TOWER_OVERLAP;
+// the arch between the base pillars is the entrance — no bolted-on door slab;
+// the walk-up stub runs from the pillar base down to the south road
+const TOWER_H = TOWER_BODY_H + 36;
 const CAFE_ROOF: TileRect = [865, 327, 28, 28];
 const CAFE_CAP: TileRect = [863, 355, 32, 7];
 const CAFE_FRONT: TileRect = [863, 362, 110, 36];
 const LAB = { x: 80, y: 147, w: LAB_SPRITE[2] * S, h: LAB_SPRITE[3] * S };
 const HALL = { x: 314.5, y: 130.5, w: HALL_SPRITE[2] * S, h: HALL_SPRITE[3] * S };
 const BOARD = { x: 78, y: 474.5, w: CAFE_FRONT[2] * S, h: (CAFE_ROOF[3] + CAFE_CAP[3] + CAFE_FRONT[3]) * S };
-const TOWER = { x: 315, y: 581 - TOWER_H, w: TOWER_BODY_SPRITE[2] * TOWER_S, h: TOWER_H };
-const TOWER_DOOR_X = TOWER.x + (TOWER_DOOR_SPRITE[0] + TOWER_DOOR_SPRITE[2] / 2 - TOWER_BODY_SPRITE[0]) * TOWER_S;
+const TOWER = { x: 315, y: 581 - TOWER_H, w: TOWER_BODY_SPRITE[2] * TOWER_S, h: TOWER_BODY_H };
+const TOWER_DOOR_X = TOWER.x + TOWER_BODY_SPRITE[2] * TOWER_S / 2;
 const LAB_PLATE = { x: 55, y: 322, w: 120, h: 46 };
 const HALL_PLATE = { x: 322, y: 322, w: 120, h: 46 };
 const BOARD_PLATE = { x: 101, y: 641, w: 120, h: 46 };
@@ -152,19 +155,20 @@ export function townStrollAt(w: TownStroll, t: number): { x: number; y: number; 
 }
 
 const GRASS: TileRect = [52, 417, 16, 16];
-const PATH: TileRect = [72, 397, 56, 56];
-const PATH_INNER: TileRect = [82, 407, 36, 36];
+const DIRT: TileRect = [82, 407, 36, 36]; // tan path interior — tiled flat, no pebble border
+const PAVE: TileRect = [251, 398, 32, 44]; // plaza's gray flagstone interior
+const SOIL: TileRect = [184, 392, 70, 55]; // ragged dirt bed under the flower rows
 const SIGN: TileRect = [1657, 18, 17, 20];
-const FLOWER_BED: TileRect = [1655, 160, 64, 36];
 const FOUNTAIN: TileRect = [1984, 395, 49, 60];
 const TREE_TYPES = [TREE_ROUND, TREE_PINE, TREE_TEAL] as const;
-const RIBBONS: Rect[] = [
-  { x: 40, y: 276, w: 460, h: 42 },
-  { x: 40, y: 595, w: 460, h: 42 },
-  { x: 255, y: 318, w: 44, h: 277 },
-  { x: 255, y: 637, w: 44, h: 38 },
-  { x: 160, y: 675, w: 240, h: 105 },
+// street stubs run off both ends under the tree columns, so roads read as
+// continuing into the woods instead of ending on lawn
+const STREETS: Rect[] = [
+  { x: 24, y: 276, w: 492, h: 42 },
+  { x: 24, y: 595, w: 492, h: 42 },
+  { x: 255, y: 276, w: 44, h: 399 }, // main street: north road → plaza gate, through the south road
 ];
+const PLAZA: Rect = { x: 160, y: 675, w: 240, h: 105 };
 
 let townBake: HTMLCanvasElement | null = null;
 let keyedFountain: HTMLCanvasElement | null = null;
@@ -183,22 +187,23 @@ export function tileFill(ctx: CanvasRenderingContext2D, r: Rect, tile: TileRect,
   ctx.restore();
 }
 
-export function drawRibbon(ctx: CanvasRenderingContext2D, r: Rect) {
-  const srcBorder = 10;
-  const dstBorder = Math.min(srcBorder * 2, r.w / 2, r.h / 2);
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) {
-      const sx = PATH[0] + (col === 0 ? 0 : col === 1 ? srcBorder : PATH[2] - srcBorder);
-      const sy = PATH[1] + (row === 0 ? 0 : row === 1 ? srcBorder : PATH[3] - srcBorder);
-      const sw = col === 1 ? PATH[2] - srcBorder * 2 : srcBorder;
-      const sh = row === 1 ? PATH[3] - srcBorder * 2 : srcBorder;
-      const dx = r.x + (col === 0 ? 0 : col === 1 ? dstBorder : r.w - dstBorder);
-      const dy = r.y + (row === 0 ? 0 : row === 1 ? dstBorder : r.h - dstBorder);
-      const dw = col === 1 ? r.w - dstBorder * 2 : dstBorder;
-      const dh = row === 1 ? r.h - dstBorder * 2 : dstBorder;
-      drawTile(ctx, [sx, sy, sw, sh], dx, dy, dw, dh);
-    }
+// flat dirt fill — town streets and the rest-stop path share the same
+// tan interior tile, no pebble border
+export function dirtFill(ctx: CanvasRenderingContext2D, r: Rect) {
+  tileFill(ctx, r, DIRT, 2);
+}
+
+// one clipped pass fills the whole street network: junctions share the
+// tile grid, so crossings stay seamless — no per-rect borders to double-draw
+function streetClip(ctx: CanvasRenderingContext2D) {
+  ctx.beginPath();
+  for (const r of STREETS) ctx.rect(r.x, r.y, r.w, r.h);
+  for (const lot of [LAB, HALL, BOARD, TOWER]) {
+    const doorX = lot === LAB ? TOWN_DOORS.lab : lot === HALL ? TOWN_DOORS.hall : lot === BOARD ? TOWN_DOORS.jobBoard : TOWN_DOORS.trophies;
+    const streetY = lot === LAB || lot === HALL ? 276 : 595;
+    ctx.rect(doorX - 21, lot.y + lot.h, 42, streetY - lot.y - lot.h);
   }
+  ctx.clip();
 }
 
 function drawForest(ctx: CanvasRenderingContext2D) {
@@ -227,16 +232,20 @@ function drawForest(ctx: CanvasRenderingContext2D) {
 }
 
 function drawPathNetwork(ctx: CanvasRenderingContext2D) {
-  for (const r of RIBBONS) drawRibbon(ctx, r);
-  for (const lot of [LAB, HALL, BOARD, TOWER]) {
-    const doorX = lot === LAB ? TOWN_DOORS.lab : lot === HALL ? TOWN_DOORS.hall : lot === BOARD ? TOWN_DOORS.jobBoard : TOWN_DOORS.trophies;
-    const streetY = lot === LAB || lot === HALL ? 276 : 595;
-    drawRibbon(ctx, { x: doorX - 21, y: lot.y + lot.h, w: 42, h: streetY - lot.y - lot.h });
-  }
-  for (const r of RIBBONS) {
-    const border = Math.min(20, r.w / 2, r.h / 2);
-    tileFill(ctx, { x: r.x + border, y: r.y + border, w: r.w - border * 2, h: r.h - border * 2 }, PATH_INNER, 2);
-  }
+  ctx.save();
+  streetClip(ctx);
+  dirtFill(ctx, { x: 0, y: 0, w: W, h: H });
+  ctx.restore();
+  ctx.save();
+  rr(ctx, PLAZA.x, PLAZA.y, PLAZA.w, PLAZA.h, 14);
+  ctx.clip();
+  tileFill(ctx, PLAZA, PAVE, 2);
+  ctx.restore();
+  // a thin stone rim keeps the flagstones from bleeding into the lawn
+  ctx.strokeStyle = 'rgba(52,56,76,0.55)';
+  ctx.lineWidth = 3;
+  rr(ctx, PLAZA.x + 1.5, PLAZA.y + 1.5, PLAZA.w - 3, PLAZA.h - 3, 13);
+  ctx.stroke();
 }
 
 function drawBuildingShadow(ctx: CanvasRenderingContext2D, lot: Rect) {
@@ -253,8 +262,7 @@ function drawBuilding(ctx: CanvasRenderingContext2D, lot: Rect, sprite: TileRect
 
 function drawTower(ctx: CanvasRenderingContext2D) {
   drawBuildingShadow(ctx, TOWER);
-  drawTile(ctx, TOWER_BODY_SPRITE, TOWER.x, TOWER.y, TOWER.w, TOWER_BODY_H);
-  drawTile(ctx, TOWER_DOOR_SPRITE, TOWER_DOOR_X - TOWER_DOOR_W / 2, TOWER.y + TOWER_BODY_H - TOWER_OVERLAP, TOWER_DOOR_W, TOWER_DOOR_H);
+  drawTile(ctx, TOWER_BODY_SPRITE, TOWER.x, TOWER.y, TOWER.w, TOWER.h);
 }
 
 function drawCafe(ctx: CanvasRenderingContext2D) {
@@ -283,26 +291,86 @@ function drawCafe(ctx: CanvasRenderingContext2D) {
   drawTile(ctx, CAFE_FRONT, BOARD.x, BOARD.y + (CAFE_ROOF[3] + CAFE_CAP[3]) * S, BOARD.w, CAFE_FRONT[3] * S);
 }
 
+// flower beds: a ragged soil patch, three dense rows of small tufts packed
+// tight so the rows overlap, a wild cluster in back, and a pink bush closing
+// the end that faces the plaza — both beds frame the fountain
+const GARDEN_Y = 695;
+const GARDEN_W = 110;
+const TUFT_S = 1.2;
+function drawGarden(ctx: CanvasRenderingContext2D, x: number, mirror: boolean) {
+  drawTile(ctx, SOIL, x, GARDEN_Y, GARDEN_W, 62);
+  drawTile(ctx, FLOWER_WILD, x + GARDEN_W / 2 - 30, GARDEN_Y - 2, FLOWER_WILD[2] * S, FLOWER_WILD[3] * S);
+  const tufts = [FLOWER_YB, FLOWER_PK];
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 5; col++) {
+      const t = tufts[(row + col + (mirror ? 1 : 0)) % tufts.length];
+      drawTile(ctx, t, x + 8 + col * 19, GARDEN_Y + 8 + row * 17, t[2] * TUFT_S, t[3] * TUFT_S);
+    }
+  }
+  drawTile(ctx, FLOWER_PINK, mirror ? x - 4 : x + GARDEN_W - 38, GARDEN_Y + 14, FLOWER_PINK[2] * S, FLOWER_PINK[3] * S);
+}
+
+// loose lawn dressing — hand-placed so nothing lands on a street, lot or
+// plate; signs keep their shadow ellipses, tufts sit flat on the grass
+const LAWN_FLOWERS: [TileRect, number, number][] = [
+  [FLOWER_WILD, 232, 195],
+  [FLOWER_PINK, 446, 438],
+  [FLOWER_PINK, 150, 408],
+  [FLOWER_YB, 58, 348],
+  [FLOWER_PK, 60, 545],
+  [FLOWER_YB, 228, 430],
+  [FLOWER_PK, 288, 548],
+  [FLOWER_YB, 355, 345],
+  [FLOWER_YB, 470, 555],
+  [FLOWER_PK, 480, 362],
+];
+// tufts hugging the street edges soften the razor-straight dirt lines —
+// placed off the junction spans so crossings stay clean
+const EDGE_TUFTS: [TileRect, number, number][] = [
+  [FLOWER_YB, 95, 267],
+  [FLOWER_PK, 190, 269],
+  [FLOWER_YB, 350, 267],
+  [FLOWER_PK, 440, 269],
+  [FLOWER_YB, 95, 586],
+  [FLOWER_PK, 185, 588],
+  [FLOWER_YB, 355, 586],
+  [FLOWER_PK, 450, 588],
+  [FLOWER_YB, 247, 345],
+  [FLOWER_PK, 247, 440],
+  [FLOWER_YB, 247, 535],
+  [FLOWER_PK, 299, 390],
+  [FLOWER_YB, 299, 565],
+  [FLOWER_YB, 60, 640],
+  [FLOWER_PK, 240, 641],
+  [FLOWER_YB, 478, 640],
+];
+const LAWN_SIGNS = [
+  { x: 465, y: 225 },
+  { x: 52, y: 478 },
+  { x: 459, y: 665 },
+];
+const LAWN_ROCKS = [
+  { x: 62, y: 505 },
+  { x: 455, y: 515 },
+];
+
 function drawYardProps(ctx: CanvasRenderingContext2D) {
-  const props = [
-    { tile: SIGN, x: 465, y: 225 },
-    { tile: FLOWER_PINK, x: 446, y: 438 },
-    { tile: SIGN, x: 52, y: 478 },
-  ];
-  for (const p of props) {
-    const w = p.tile[2] * S, h = p.tile[3] * S;
-    ctx.save();
-    ctx.shadowColor = 'rgba(20,28,24,0.35)';
-    ctx.shadowBlur = 4;
+  // standalone trees fill the gaps the forest band leaves inside the village
+  drawTile(ctx, TREE_OLIVE, 240, 148, TREE_OLIVE[2] * S, TREE_OLIVE[3] * S);
+  drawTile(ctx, TREE_ROUND, 56, 350, TREE_ROUND[2] * S, TREE_ROUND[3] * S);
+  for (const [t, x, y] of LAWN_FLOWERS) drawTile(ctx, t, x, y, t[2] * S, t[3] * S);
+  for (const [t, x, y] of EDGE_TUFTS) drawTile(ctx, t, x, y, t[2] * S, t[3] * S);
+  for (const r of LAWN_ROCKS) drawTile(ctx, ROCK_SMALL, r.x, r.y, ROCK_SMALL[2] * S, ROCK_SMALL[3] * S);
+  for (const p of LAWN_SIGNS) {
+    const w = SIGN[2] * S, h = SIGN[3] * S;
     ctx.fillStyle = 'rgba(20,28,24,0.24)';
     ctx.beginPath();
     ctx.ellipse(p.x + w / 2, p.y + h - 1, w * 0.34, 3, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
-    drawTile(ctx, p.tile, p.x, p.y, w, h);
+    drawTile(ctx, SIGN, p.x, p.y, w, h);
   }
-  drawTile(ctx, FLOWER_BED, 58, 700, FLOWER_BED[2] * S, FLOWER_BED[3] * S);
-  drawTile(ctx, FLOWER_BED, 410, 700, FLOWER_BED[2] * S, FLOWER_BED[3] * S);
+  drawGarden(ctx, 46, false);
+  drawGarden(ctx, 386, true);
 }
 
 function drawKeyedFountain(atlas: HTMLImageElement): HTMLCanvasElement {
@@ -367,17 +435,16 @@ function bakeTown(): HTMLCanvasElement | null {
   const ctx = canvas.getContext('2d')!;
   ctx.imageSmoothingEnabled = false;
   tileFill(ctx, { x: 0, y: 0, w: W, h: H }, GRASS, 2);
+  drawPathNetwork(ctx); // streets first — the forest band overhangs their ends
   drawForest(ctx);
-  drawPathNetwork(ctx);
 
   drawBuilding(ctx, LAB, LAB_SPRITE);
   drawBuilding(ctx, HALL, HALL_SPRITE);
   drawCafe(ctx);
   drawTower(ctx);
   drawYardProps(ctx);
-  drawTile(ctx, SIGN, 459, 665, SIGN[2] * S, SIGN[3] * S);
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(drawKeyedFountain(atlas), 270 - FOUNTAIN[2] * S / 2, 708 - FOUNTAIN[3] * S / 2, FOUNTAIN[2] * S, FOUNTAIN[3] * S);
+  ctx.drawImage(drawKeyedFountain(atlas), 270 - FOUNTAIN[2] * S / 2, 727 - FOUNTAIN[3] * S / 2, FOUNTAIN[2] * S, FOUNTAIN[3] * S);
   return canvas;
 }
 

@@ -9,7 +9,7 @@ import {
   ACHIEVEMENTS, BADGES, BOARD_MAX, LAB_UPGRADES, LADDER, best, board, dexIds, gymBadges, labLevels, streakDaily, streakWins, tier, unlockedAch,
 } from '../meta';
 import { CATCHABLE, balanceChip, chip, fitFont, fitFontB, monShadow, pill, rim, roundRect } from '../screens';
-import { GOLD, GOLD_HI, INK, INK_FAINT, INK_SOFT, PAPER_HI, PARCH, fontB, scrim, uiBand, uiClose, uiWindow, type Rect } from '../ui';
+import { GOLD, GOLD_HI, INK, INK_FAINT, INK_SOFT, PAPER_HI, PARCH, font, fontB, scrim, uiBand, uiClose, uiWindow, type Rect } from '../ui';
 
 const W = 540;
 const H = 960;
@@ -569,12 +569,16 @@ export function drawPauseCard(
 export function drawLoginDrop(ctx: CanvasRenderingContext2D, lt: { n: number; prize: number; back: number }, y: number, alpha: number) {
   ctx.save();
   ctx.globalAlpha = alpha;
-  const r = { x: W / 2 - 150, y, w: 300, h: lt.back > 0 ? 92 : 76 };
+  // the pixel face floors at 14px (PX_MIN), so fitFont can't shrink a long
+  // chain day under it — size the card to the measured line instead
+  const msg = `DAY ${lt.n} LOGIN · +${lt.prize}★`;
+  ctx.font = font(10);
+  const w = Math.max(300, Math.ceil(ctx.measureText(msg).width) + 84); // 54 icon pad + 30 margin
+  const r = { x: W / 2 - w / 2, y, w, h: lt.back > 0 ? 92 : 76 };
   uiWindow(ctx, r, { rad: 10 });
   rim(ctx, r, 10, GOLD, 2);
   icon(ctx, 'star-piece', r.x + 30, r.y + 30, 30);
   ctx.textAlign = 'left';
-  const msg = `DAY ${lt.n} LOGIN · +${lt.prize}★`;
   fitFont(ctx, msg, 10, r.w - 70);
   ctx.fillStyle = INK;
   ctx.fillText(msg, r.x + 54, r.y + 30);

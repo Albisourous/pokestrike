@@ -1,6 +1,6 @@
 import { drawMon, drawNpc, gracidea, itemSprite, loadItem, loadNpcs, loadSprite } from '../core/assets';
 import { drawCounterStrip } from './home/shop';
-import { drawRibbon, tileFill } from './home/town';
+import { dirtFill, tileFill } from './home/town';
 import { drawTile } from './map';
 import { FLOWER_PINK, type TileRect } from './maptiles';
 import { fitFontB } from './screens';
@@ -56,7 +56,7 @@ function restBackdrop(w: number, h: number) {
   g.beginPath();
   g.ellipse(doorX, centerY + centerH - 2, centerW * 0.42, 9, 0, 0, Math.PI * 2);
   g.fill();
-  drawRibbon(g, { x: doorX - 22, y: centerY + centerH - 4, w: 44, h: h - centerY - centerH + 4 });
+  dirtFill(g, { x: doorX - 22, y: centerY + centerH - 4, w: 44, h: h - centerY - centerH + 4 });
   drawTile(g, CENTER, centerX, centerY, centerW, centerH);
 
   const flowerW = FLOWER_PINK[2] * FLOWER_S;
