@@ -11,10 +11,11 @@ We don't port them line for line.
 
 ## Where the RE files live
 
-Everything stays off-repo, on Albin's Mac under `~/Documents/MonsterStrike/`. Reuse it instead of
-re-extracting or re-decompiling.
+Everything lives in the repo at `re/` (gitignored — local machine only, extracted game data never
+commits). Reuse it instead of re-extracting or re-decompiling. The CIA stays at
+`~/Documents/MonsterStrike/Monster Strike (Japan).cia`.
 
-| What | Path (under `~/Documents/MonsterStrike/re/`) |
+| What | Path (under `re/`) |
 |---|---|
 | ExeFS `code.bin` | `exefs/` |
 | RomFS (stage CSVs, `2d/bg/btl*.arc`, `2d/ui/battle*`) | `romfs/` |
@@ -443,3 +444,77 @@ each clock with a separate `first` count. Kept on purpose: team-wide
 per-ball ticking (would speed up per-ball super
 cooldowns, a balance change), and wall timings (hazard code belongs to
 another pass).
+
+## code.bin findings, round 4 (meta layer + the retention loop)
+
+Same setup. This pass mapped the scene/table inventory around the battle
+and pulled the retention mechanics into one picture. "Data" rows come
+from the RomFS CSVs, "code" from string/RTTI evidence.
+
+### Meta layer (code)
+
+| Surface | Evidence |
+|---|---|
+| Scene graph | `cSceneTitle / cSceneField / cSceneFieldMenu / cSceneQuestSelect / cSceneBattle / cSceneBattleResult / cSceneGacha / cSceneLuckMax / cSceneEvolutionComposition / cSceneReinForcedComposition / cSceneMonsterSell / cSceneNewCharcter / cSceneChapterTitle / cSceneStaffRoll` |
+| Script bindings | a C API for `.lbn` scripts: `Camera_*`, `CharBall_*`, `Deck_*`, `Dialog_*`, `EffectObj_*`, `Item_*`, `Npc_*`, `Party_*`, `Scene_*`, `StrikeCard_*`, `Mission_*` |
+| Field encounters | `encountSymbol*.lbn` + `Npc_GetEncountNpcBattleStage` — walking into a symbol on the overworld starts a battle on the spot |
+| Meta tables (patch layer, not in this CIA's RomFS) | `Table/Gacha/Gacha_000.dat`, `Table/Encount/{EncountStage,SpecialAdvent,EncountNpcSetting}_000.dat`, `Table/Mission/`, `Table/Trophy/`, `Table/Item/`, `Table/FieldMap/`, `Pack/Menu/*.dat`, `Pack/Menu/luck_max.dat` |
+
+### The retention engine (data)
+
+The slot machine is three layers deep:
+
+1. **Per-KO roll** — `stage_phase_enemies.self_drop_rate` + four
+   weighted `slot_N_drop_*` slots per enemy. Every kill is a pull.
+2. **Ambient drops** — `stages.rt_*` roll *during* the fight: coins,
+   evo mats (`rt_evo1..3`), rares, eggs (`rt_egg_id1..3`), medals,
+   tickets — each per-stage `incidence` + `max`.
+3. **End-chest fan** — `stages.bonus_0..5` are six independent chest
+   slots (item + count + rate each) plus `bonus_sp_*`. The clear screen
+   opens them one at a time.
+
+Wrapped around it: per-stage speed-clear par (`bonus_turn` 10–24),
+hidden weak points (`hide_wp_rate`), fleeing rare spawns
+(`escape_dmg`), advent intruders (`advent_phase_rates` — a rare boss
+can crash *any* phase: `0,50,100,100,100,100,65`), secret stages
+(`extra_stage_id/weight/cond` ×3), boss HP-bar phases (`boss_hp_bar`
+35/65, 30/30/40, 40/60), growing pickups (`field_items.evolution_*`),
+per-mon strike-shot charge (`require_cnt` 7–30), gauge-shot timing
+(`shot_gauge` zones 50/35/10/5 on ~20 chars), killers
+(`char_efficacious`, 2,179 rows), dupes→luck→more chests
+(`cSceneLuckMax`, `com_luck`, `dummy_luck_kiwami`), item-cost evolutions
+and multi-parent mutations (`char_evolutions`, `char_mutations` —
+`request_drop_rateN` gates recipes behind *drop luck*), and stamina
+(`stages.cost` 10–60 — F2P pacing, N/A offline).
+
+### Port status, refreshed
+
+Everything earlier rounds marked "candidate" has since landed:
+`weakpoint.ts` (hidden wp ×2/×3), `flee.ts` (rare fleeing spawn),
+`secret.ts` (rank-gated lairs), `INVADERS` (mid-wave legendaries),
+`loot.ts` (per-KO ball drops + staged reveal), `missions.ts`,
+`gimmicks2.ts` (wind/laser/ice/spin/warp), `connect.ts` (ALL CONNECT),
+`gauge.ts` (gold-band release), `enrageBoss` (~45% bar shift).
+
+True remaining gaps:
+
+1. **Ripen is one family** — MS ripens heal (1 turn) *and* power +
+   charge (3 turns each); Pokéstrike only ripens oran→sitrus.
+2. **Species-signature drops** — MS foes carry their own 4-slot drop
+   table, so quests have a farm identity; Pokéstrike's ball contents
+   share one table.
+3. **Luck-lite** — dupes feed a chest-odds scaler (`pk_bond` covers the
+   adjacent "dupes pay progression" slot already).
+4. Cosmetic depth: `cutin` boss splashes, `is_daytime` spawns,
+   `stage_phase_layouts.range` ring scatter.
+
+### Ported (round 4)
+
+| MS behaviour | PokeStrike |
+|---|---|
+| `field_items` rows 5→6 and 7→8: power and charge pickups ripen after **3** ignored turns | `PICKUP_RIPEN` gains `protein → x-attack` (ATK +50% → +100%) and `elixir → max-elixir` (SUPER +1 → +2); icons vendored from PokeAPI/sprites |
+
+Kept on purpose: ripen timers stay enemy-turn based (MS's
+`evolution_turn` ticks the same way), and ripened tiers never enter the
+spawn pool — they only exist if the player delays gratification, same
+as MS.
