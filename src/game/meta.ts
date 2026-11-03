@@ -366,7 +366,16 @@ export function echoIds(): { id: number; lvl: number }[] | null {
   const arr = Array.isArray(raw) ? raw : memEcho;
   const out = arr
     ?.map((e) => (typeof e === 'number' ? { id: e, lvl: 1 } : e))
-    .filter((e): e is { id: number; lvl: number } => !!e && Number.isFinite(e.id) && Number.isFinite(e.lvl) && !!speciesById(e.id));
+    .filter(
+      (e): e is { id: number; lvl: number } =>
+        !!e &&
+        Number.isFinite(e.id) &&
+        // an unbounded stored level makes the rival wave unkillable
+        Number.isFinite(e.lvl) &&
+        e.lvl >= 1 &&
+        e.lvl <= LV_CAP &&
+        !!speciesById(e.id),
+    );
   return out?.length ? out : null; // all-corrupt reads as no echo, not an empty stage header
 }
 
@@ -974,7 +983,9 @@ export function migrateSaves() {
       store('pk_run', s);
     }
   }
-  if (v !== SAVE_VER) store('pk_ver', SAVE_VER);
+  // only ever stamp upward — a stale cached build must not downgrade the
+  // mark and re-run the new build's steps
+  if (v < SAVE_VER) store('pk_ver', SAVE_VER);
   starterGrant(); // unversioned — a promo, not a shape; pk_grant self-gates
   loginCheck(); // same family — once-per-UTC-day self-gate
   rookieCheck(); // a returning player's old progress may already clear steps
@@ -1178,6 +1189,11 @@ export function runSave(): RunSave | null {
         'savedAt',
       ] as const
     ).every((k) => Number.isFinite(s[k])) &&
+    // asc tops at ASC_MODS's 9 tiers — a parked 99 would resume into foes
+    // at +1485% HP, a climb that can't clear
+    Number.isInteger(s.asc) &&
+    s.asc >= 0 &&
+    s.asc <= 9 &&
     Number.isInteger(s.mapNode) &&
     s.mapNode >= 0 && // index into region.nodes — applySnapshot clamps the top
     (s.waveIndex === -1 || row(s.waveIndex)) && // -1 = parked at HOME pre-row-0
@@ -1192,7 +1208,10 @@ export function runSave(): RunSave | null {
         e.hp <= 99999 &&
         (e.lvl == null || (Number.isFinite(e.lvl) && e.lvl >= 1 && e.lvl <= LV_CAP)) &&
         (e.luck == null || Number.isFinite(e.luck)) &&
-        (e.cdMod == null || Number.isFinite(e.cdMod)),
+        (e.cdMod == null || Number.isFinite(e.cdMod)) &&
+        // cd predates the validator — absent rides the fresh-spawn default,
+        // but a present NaN freezes the mon's super forever
+        (e.cd == null || Number.isFinite(e.cd)),
     ) &&
     Array.isArray(s.box) &&
     s.box.every((e) => !!e && Number.isFinite(e.id) && (e.lvl == null || (Number.isFinite(e.lvl) && e.lvl <= LV_CAP))) &&
@@ -1211,10 +1230,22 @@ export function runSave(): RunSave | null {
     Array.isArray(s.perks) &&
     Array.isArray(s.heldItems) &&
     (s.bag == null || Array.isArray(s.bag)) &&
-    (s.tools == null || (typeof s.tools === 'object' && Number.isFinite(s.tools.roll))) &&
-    (s.eggIn == null || Number.isFinite(s.eggIn)) &&
+    (s.tools == null ||
+      (typeof s.tools === 'object' && Number.isFinite(s.tools.roll) && s.tools.roll >= 0 && s.tools.roll <= 99)) &&
+    (s.eggIn == null || (Number.isFinite(s.eggIn) && s.eggIn >= 0 && s.eggIn <= 99)) &&
     (s.daycare == null ||
-      (typeof s.daycare === 'object' && Number.isFinite(s.daycare.id) && Number.isFinite(s.daycare.back))) &&
+      (typeof s.daycare === 'object' &&
+        Number.isFinite(s.daycare.id) &&
+        Number.isFinite(s.daycare.back) &&
+        // hp is a boxHp fraction — NaN or out-of-range poisons the return
+        Number.isFinite(s.daycare.hp) &&
+        s.daycare.hp >= 0 &&
+        s.daycare.hp <= 1 &&
+        Number.isFinite(s.daycare.lvl) &&
+        s.daycare.lvl >= 1 &&
+        s.daycare.lvl <= LV_CAP)) &&
+    (s.ultIn == null || (Number.isFinite(s.ultIn) && s.ultIn >= 0)) &&
+    (s.treasure == null || (Number.isFinite(s.treasure) && s.treasure >= 0)) &&
     (s.starsRun == null || Number.isFinite(s.starsRun));
   return ok ? s : null;
 }

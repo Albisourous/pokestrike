@@ -1309,7 +1309,7 @@ export class Battle {
   snapshot(): RunSave | null {
     const parked =
       this.phase === 'map' ||
-      ((this.phase === 'reward' || this.phase === 'loot') && !this.evoChoice);
+      ((this.phase === 'reward' || this.phase === 'loot') && !this.evoChoice && !this.evoPending.length);
     if (!parked || this.mapWalk || this.eventChoice) return null;
     return {
       seed: 0, // caller stamps the run seed — battle only knows mapSeed
@@ -1387,7 +1387,13 @@ export class Battle {
     this.region = genRegion(s.mapSeed);
     this.assignGymSigns(s.mapSeed);
     this.regionBase = null; // terrain canvas rebakes
-    this.mapNode = Math.min(s.mapNode, this.region.nodes.length - 1);
+    // a saved node past the tree's end can't just clamp to the last node —
+    // that leaf has no forward links and strands the run on the map; fall
+    // back to the row the player last fought (always a real node)
+    this.mapNode =
+      s.mapNode < this.region.nodes.length
+        ? s.mapNode
+        : Math.max(0, this.region.nodes.findIndex((n) => n.row === s.waveIndex));
     this.waveIndex = s.waveIndex;
     this.depth = s.depth;
     this.pendingNext = s.pendingNext;
