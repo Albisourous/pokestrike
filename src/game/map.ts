@@ -82,11 +82,42 @@ export function genRegion(seed: number): RegionMap {
       }
     }
   }
-  // sometimes a tiny islet offshore — pure charm, costs nothing
+  // one roll picks the island's signature: a big lake, a forest mass, a
+  // rock ridge, a flower field — or none. Terrain landmarks paint here so
+  // the beach ring sands their shores; decor landmarks wait for the
+  // routes so paths stay clear
+  const landmarkRoll = rng();
+  const landmark =
+    landmarkRoll < 0.18 ? 'lake'
+    : landmarkRoll < 0.38 ? 'forest'
+    : landmarkRoll < 0.55 ? 'ridge'
+    : landmarkRoll < 0.75 ? 'meadow'
+    : null;
+  if (landmark === 'lake') {
+    let lx = cx, ly = cy, tries = 0;
+    do {
+      lx = 3 + Math.floor(rng() * (MAP_W - 6));
+      ly = 5 + Math.floor(rng() * (MAP_H - 14));
+    } while (tiles[ly * MAP_W + lx] !== T_GRASS && ++tries < 30);
+    if (tries < 30) {
+      const lr = 3 + rng() * 1.2;
+      for (let y = 0; y < MAP_H; y++) {
+        for (let x = 0; x < MAP_W; x++) {
+          const i = y * MAP_W + x;
+          if (tiles[i] === T_GRASS && (x - lx) ** 2 + (y - ly) ** 2 < lr * lr) tiles[i] = T_WATER;
+        }
+      }
+    }
+  }
+  // sometimes a tiny islet offshore — a sand speck or a little cluster
   if (rng() < 0.5) {
     const ix = rng() < 0.5 ? 1 + Math.floor(rng() * 3) : MAP_W - 4 + Math.floor(rng() * 3);
     const iy = 2 + Math.floor(rng() * (MAP_H - 4));
-    if (iy >= 0 && iy < MAP_H && ix >= 0 && ix < MAP_W) tiles[iy * MAP_W + ix] = T_SAND;
+    const n = 1 + Math.floor(rng() * 3);
+    for (let t = 0; t < n; t++) {
+      const x = ix + Math.floor(rng() * 3) - 1, y = iy + Math.floor(rng() * 3) - 1;
+      if (x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && tiles[y * MAP_W + x] === T_WATER) tiles[y * MAP_W + x] = T_SAND;
+    }
   }
   // beach ring: any land touching the sea is sand
   for (let y = 0; y < MAP_H; y++) {
@@ -98,6 +129,18 @@ export function genRegion(seed: number): RegionMap {
         return nx < 0 || ny < 0 || nx >= MAP_W || ny >= MAP_H || tiles[ny * MAP_W + nx] === T_WATER;
       });
       if (sea) tiles[i] = T_SAND;
+    }
+  }
+  // dirt patches inland — dry clearings and worn ground away from the
+  // shore; painted after the beach ring so they can't widen it
+  for (let p = 0, n = Math.floor(rng() * 3); p < n; p++) {
+    const dx = 2 + Math.floor(rng() * (MAP_W - 4)), dy = 3 + Math.floor(rng() * (MAP_H - 6));
+    const dr = 0.9 + rng() * 1.1;
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const i = y * MAP_W + x;
+        if (tiles[i] === T_GRASS && (x - dx) ** 2 + (y - dy) ** 2 < dr * dr) tiles[i] = T_SAND;
+      }
     }
   }
   const land = (x: number, y: number) => x >= 0 && x < MAP_W && y >= 0 && y < MAP_H && tiles[y * MAP_W + x] === T_GRASS;
@@ -171,12 +214,25 @@ export function genRegion(seed: number): RegionMap {
     );
     if (pool.length) pool[Math.floor(rng() * pool.length)].kind = kind;
   };
+  // healing is precious, not routine — one rest across the whole climb.
+  // It plants first: its donors are picked climb-wide, so a rest placed
+  // late could eat a half's only mart; placed early it's a protected
+  // singleton in whichever half it lands in
+  convert(1, 7, 'rest');
   for (const [lo, hi] of [[1, 4], [5, 7]] as const) {
     convert(lo, hi, 'event');
     convert(lo, hi, 'mart');
   }
-  // healing is precious, not routine — one rest across the whole climb
-  convert(1, 7, 'rest');
+  // elites can't roll extinct — ~27% of islands had none. Promote a wild
+  // fork stop; the row's lane count doesn't move so the tree is untouched
+  if (!nodes.some((n) => n.kind === 'elite')) {
+    const wilds = nodes.filter((n) => n.kind === 'wild' && n.row % 3 === 0);
+    const w = wilds[Math.floor(rng() * wilds.length)];
+    if (w) {
+      w.kind = 'elite';
+      w.ttype = TRAINER_TYPES[Math.floor(rng() * TRAINER_TYPES.length)];
+    }
+  }
 
   // StS tree edges — lane order is fixed, so the graph is deterministic:
   // each battle door opens its own side of the fan + center (2→3), every
@@ -226,16 +282,65 @@ export function genRegion(seed: number): RegionMap {
         ? Math.abs(n.tx - x) <= 1 && y - n.ty >= -3 && y - n.ty <= 1 // the yard pad
         : Math.abs(n.tx - x) + Math.abs(n.ty - y) <= 1,
     );
+  // grass clearings — a couple of seeded glades stay open so the island
+  // isn't wall-to-wall dressing; routes may cross, decor keeps out
+  const clearings: { x: number; y: number; r: number }[] = [];
+  for (let c = 0, n = 1 + Math.floor(rng() * 2); c < n; c++) {
+    clearings.push({
+      x: 2 + Math.floor(rng() * (MAP_W - 4)),
+      y: 2 + Math.floor(rng() * (MAP_H - 4)),
+      r: 1.6 + rng() * 1.2,
+    });
+  }
+  const inClearing = (x: number, y: number) =>
+    clearings.some((c) => (x - c.x) ** 2 + (y - c.y) ** 2 < c.r * c.r);
   const free = (x: number, y: number) =>
-    land(x, y) && !route.has(y * MAP_W + x) && !nearNode(x, y) && !decor.has(y * MAP_W + x);
-  // tree clumps of 2-4 trees — reads as forest, not polka dots; the
-  // taller island gets a few more of everything
+    land(x, y) && !route.has(y * MAP_W + x) && !nearNode(x, y) && !decor.has(y * MAP_W + x) && !inClearing(x, y);
+  // the landmark's decor half — same roll as the terrain pass, so a seed
+  // always grows the same signature. Claims its space before the sprinkle
+  if (landmark && landmark !== 'lake') {
+    let mx = cx, my = cy, tries = 0;
+    do {
+      mx = 2 + Math.floor(rng() * (MAP_W - 4));
+      my = 3 + Math.floor(rng() * (MAP_H - 6));
+    } while (!land(mx, my) && ++tries < 30);
+    if (tries < 30) {
+      if (landmark === 'forest') {
+        const r = 2.6 + rng() * 1.2;
+        for (let y = 0; y < MAP_H; y++)
+          for (let x = 0; x < MAP_W; x++)
+            if ((x - mx) ** 2 + (y - my) ** 2 < r * r && free(x, y) && rng() < 0.65) decor.set(y * MAP_W + x, 'tree');
+      } else if (landmark === 'ridge') {
+        // a wobbly spine of outcrops — breaks around routes and stops
+        const [sx, sy] = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]][
+          Math.floor(rng() * 8)
+        ];
+        let rx = mx, ry = my;
+        for (let s = 0; s < 12; s++) {
+          if (free(rx, ry)) decor.set(ry * MAP_W + rx, 'rock');
+          if (rng() < 0.45 && free(rx - sy, ry + sx)) decor.set((ry + sx) * MAP_W + rx - sy, 'rock');
+          rx += sx;
+          ry += sy;
+          if (rx < 1 || rx > MAP_W - 2 || ry < 1 || ry > MAP_H - 2) break;
+        }
+      } else {
+        // meadow — a flower field worth walking around
+        const r = 2.4 + rng() * 1.2;
+        for (let y = 0; y < MAP_H; y++)
+          for (let x = 0; x < MAP_W; x++)
+            if ((x - mx) ** 2 + (y - my) ** 2 < r * r && free(x, y) && rng() < 0.55) decor.set(y * MAP_W + x, 'flower');
+      }
+    }
+  }
+  // tree clumps — mostly 2-4 trees, the odd grove of 5-8; reads as
+  // forest, not polka dots
   const clumps = 8 + Math.floor(rng() * 7);
   for (let c = 0; c < clumps; c++) {
     const tx = 1 + Math.floor(rng() * (MAP_W - 2)), ty = 1 + Math.floor(rng() * (MAP_H - 2));
-    const n = 2 + Math.floor(rng() * 3);
+    const n = rng() < 0.22 ? 5 + Math.floor(rng() * 4) : 2 + Math.floor(rng() * 3);
+    const reach = n > 4 ? 2 : 1;
     for (let t = 0; t < n; t++) {
-      const x = tx + Math.floor(rng() * 3) - 1, y = ty + Math.floor(rng() * 3) - 1;
+      const x = tx + Math.floor(rng() * (reach * 2 + 1)) - reach, y = ty + Math.floor(rng() * (reach * 2 + 1)) - reach;
       if (free(x, y)) decor.set(y * MAP_W + x, 'tree');
     }
   }
@@ -251,7 +356,7 @@ export function genRegion(seed: number): RegionMap {
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
       const i = y * MAP_W + x;
-      if (tiles[i] !== T_GRASS || route.has(i) || nearNode(x, y) || decor.has(i)) continue;
+      if (tiles[i] !== T_GRASS || route.has(i) || nearNode(x, y) || decor.has(i) || inClearing(x, y)) continue;
       const r = rng();
       if (r < 0.04) decor.set(i, 'tree');
       else if (r < 0.12) decor.set(i, 'flower');
