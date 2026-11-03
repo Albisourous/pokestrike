@@ -356,3 +356,6 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `cf91553` | celebrations | evo type-colored flash + silhouette lock; fame type spotlights + finale; share card type frame + MVP crown + badge shine | `git revert cf91553` |
 | 2026-11-02 | `1e23977` | home | seeded wild scouts/strays on climb/mons/town, raid boss patrol, shop sheen, trophies next-badge pulse, lab N READY | `git revert 1e23977` |
 | 2026-11-02 | `69becf9` | abilities | ~20 canon abilities wired — counters, pinch/loaf attack mods, weather speeds, launch cleanses | `git revert 69becf9` |
+| 2026-11-02 | `16a7196` | draft/help | dual-type strip + TYPE·TYPE2·ROLE spec on offer cards; help names FEVER | `git revert 16a7196` |
+| 2026-11-02 | `6f7c3ab` | traits | flying = team Tailwind: +5/10/15% launch per tier, canon move | `git revert 6f7c3ab` |
+| 2026-11-02 | `ba52f8d` | flee/connect/secret | wounded rares bolt early + warn, connect LINK n/m chip + progress ring, ~20% enraged lairs | `git revert ba52f8d` |
