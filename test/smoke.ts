@@ -3368,6 +3368,16 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   ok(earlyJust && !(lb as any).texts.some((t: any) => t.text === 'JUST!'),
     'early-flight bump pops JUST!, a late bump stays quiet');
 
+  // MS multi-circle hitboxes: a boss carries a second weak face off the first
+  const big = (spawned as any).makeEnemy({ def: speciesById(150)!, nx: 0.5, ny: 0.5, lvl: 30, boss: true }, 0);
+  ok(big.weakA2 !== undefined && Math.abs(big.weakA2 - big.weakA) > 0.5, 'a boss fields a second weak face');
+  big.x = 300; big.y = 300; big.r = 46;
+  const face = big.weakA2;
+  ok((spawned as any).weakHit(big, big.x + Math.cos(face) * 40, big.y + Math.sin(face) * 40),
+    'the second face pays weak too');
+  ok(!(spawned as any).weakHit(big, big.x + Math.cos(face + Math.PI) * 40, big.y + Math.sin(face + Math.PI) * 40),
+    'the far rim still reads armored');
+
   const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   (b as any).spawnWave(0);
   const foe = b.enemies.find((e) => !e.def.fuse)!;

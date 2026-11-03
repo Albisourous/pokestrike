@@ -311,6 +311,7 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `663c330` | roster | `drawRoster()` fits type chips on grounded team cards; `teamSlotRect` moves with the row (#41) | `git revert 663c330` |
 | 2026-11-02 | `89bec44` | battle | `FOE_CLOCK2` + `type2` arg: dual-type non-bosses tick a second typing move on the slower 7/6 clock (MS multi-attack rows); `fireMove` + scout tell honor the clock's own type (#42) | `git revert 89bec44` |
 | 2026-11-02 | `61be504` | battle | `JUST_WIN`: a bump inside the flight's first 0.8s pops JUST! + banks an extra combo tick (MS "combo just"); EXP bench share floors at +1; KO-bounty test resolves a latched barBreak, seed-7 golden refresh (#43) | `git revert 61be504` |
+| 2026-11-02 | `b005315` | battle | `SPECIES_DROPS`: canonical wild holds (MS `self_drop_rate`) — a KO'd carrier leaves its item where it fell; smoke covers stolen-item re-drop and wipe-turn ripen skip (#44) | `git revert b005315` |
 | 2026-11-02 | `3804c1f` | pickups | protein/elixir ripen to X ATTACK / MAX ELIXIR after 3 ignored turns — MS `field_items` rows 5→6, 7→8 (#81) | `git revert 3804c1f` |
 | 2026-11-02 | `64c790f` | docs | monster-strike-re round 4 — meta scene map, retention-loop synthesis, refreshed port status (#82) | `git revert 64c790f` |
 | 2026-11-02 | `5dd6481` | onboarding | first-boot diet: help deck stops auto-opening, coached run skips charm + stop card, fresh CLIMB sheds ladder + side doors behind `freshClimb()` | `git revert 5dd6481` |
