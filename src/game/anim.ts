@@ -17,8 +17,13 @@
  * Sludge Bomb: poison_bubble (3), ten shots every 3 ticks then splatter.
  * Ice Beam: ice_crystals_0 (1), outer/inner streams every tick, 11/20 flight.
  * Focus Punch: fist then impact at 10/18/26/34 ticks; punch_impact (1).
+ * Zap Cannon: shock_3 (3) expanding discharge orbs; the Thunderbolt hit orb.
+ * Swift: spark_0 star rays fan out; stands in for the cartridge's stars.
  * Generic hit: impact (1), brief expanding hitsplat. All ticks are 1/60s.
  * spark_0 and ice_crystals_0 bake their separate spark/ice_crystals palettes.
+ * The overrides table gives every move name in play its canon element read —
+ * off-type casts (METRONOME rolls, Milotic's ICE BEAM, every boss's
+ * ROCK SLIDE meteor) draw their own art instead of the caster's type.
  */
 import type { PokeType } from './types';
 import { TYPE_COLOR } from './types';
@@ -31,6 +36,7 @@ export const SHEETS = {
   ember: sheet('small_ember', 32, 32, 5), water: sheet('splash', 64, 64, 1),
   orb: sheet('orbs', 16, 16, 3), ring: sheet('gold_ring', 16, 16, 2),
   bolt: sheet('lightning', 32, 32, 5), spark: sheet('spark_0', 8, 8, 8),
+  shock: sheet('shock_3', 32, 32, 3),
   rock: sheet('rocks', 32, 32, 6), poison: sheet('poison_bubble', 16, 16, 3),
   wind: sheet('gust', 32, 32, 2), fist: sheet('punch_impact', 32, 32, 1),
   impact: sheet('impact', 32, 32, 1), ghost: sheet('shadow_ball', 32, 32, 1),
@@ -38,6 +44,7 @@ export const SHEETS = {
 };
 export type SheetName = keyof typeof SHEETS;
 export const MAX_ANIMS = 24, SOFT_CAP = 18;
+const BIG_FLARE = 8; // extra detonation ring on `big` bursts — boss KOs, quake big-moves, ULTs
 interface Instance {
   sheet: SheetName; x: number; y: number; vx: number; vy: number; ax: number; ay: number;
   scale0: number; scale1: number; alpha0: number; alpha1: number; rotation: number;
@@ -120,17 +127,99 @@ function recipe(sheet: SheetName, hit: SheetName, type: PokeType, shake = 4, sty
 export const MOVE_ANIM: Record<PokeType, Recipe> = {
   normal: recipe('orb', 'impact', 'normal'), fire: recipe('ember', 'ember', 'fire'),
   water: recipe('water', 'water', 'water'), grass: recipe('orb', 'orb', 'grass'),
-  electric: recipe('bolt', 'spark', 'electric', 7, 'bolt'), psychic: recipe('ring', 'ring', 'psychic'),
+  electric: recipe('bolt', 'shock', 'electric', 7, 'bolt'), psychic: recipe('ring', 'ring', 'psychic'),
   rock: recipe('rock', 'dirt', 'rock', 8), poison: recipe('poison', 'poison', 'poison'),
   flying: recipe('wind', 'wind', 'flying'), fighting: recipe('fist', 'impact', 'fighting', 7),
   ghost: recipe('ghost', 'ghost', 'ghost'),
 };
-const overrides: Record<string, Recipe | undefined> = {
-  'HYPER BEAM': MOVE_ANIM.normal, 'ICE BEAM': recipe('ice', 'ice', 'water'),
-  'SHADOW BALL': MOVE_ANIM.ghost, 'EARTHQUAKE': recipe('dirt', 'dirt', 'rock', 10),
-  'SOLAR BEAM': MOVE_ANIM.grass, 'PSYBEAM': MOVE_ANIM.psychic,
-  'SLUDGE BOMB': MOVE_ANIM.poison, 'FOCUS PUNCH': MOVE_ANIM.fighting,
-};
+// Canon element reads — a named move keeps its own art even when the caster's
+// type would draw the wrong thing (METRONOME rolls, type2 clocks, Milotic's
+// ICE BEAM, every last-bar boss's ROCK SLIDE meteor). TYPE_MOVE names resolve
+// to the type's own recipe object, so a same-type cast is unchanged.
+const byMove = (r: Recipe, moves: string[]): [string, Recipe][] => moves.map((m) => [m, r]);
+const overrides: Record<string, Recipe | undefined> = Object.fromEntries([
+  // type-canon moves — reference-equal to MOVE_ANIM so the type path is identical
+  ...byMove(MOVE_ANIM.normal, ['HYPER BEAM', 'PAY DAY', 'BODY SLAM', 'DOUBLE EDGE', 'THRASH', 'SKULL BASH', 'DIZZY PUNCH', 'TRANSFORM', 'METRONOME', 'SOFTBOILED', 'ENDEAVOR', 'RAPID SPIN', 'SPLASH']),
+  ...byMove(MOVE_ANIM.fire, ['FLAMETHROWER']),
+  ...byMove(MOVE_ANIM.water, ['SURF', 'BUBBLE', 'BUBBLEBEAM', 'WATER PULSE', 'WATERFALL', 'CRABHAMMER', 'RAZOR SHELL']),
+  ...byMove(MOVE_ANIM.grass, ['SOLAR BEAM', 'GIGA DRAIN', 'MEGA DRAIN', 'LEECH LIFE']),
+  ...byMove(MOVE_ANIM.electric, ['THUNDERBOLT']),
+  ...byMove(MOVE_ANIM.psychic, ['PSYBEAM', 'PSYCHIC', 'CONFUSION', 'EXTRASENSORY', 'HYPNOSIS', 'DREAM EATER', 'MIST BALL', 'LUSTER PURGE']),
+  ...byMove(MOVE_ANIM.rock, ['ROCK SLIDE', 'ROLLOUT']),
+  ...byMove(MOVE_ANIM.poison, ['SLUDGE WAVE', 'SLUDGE', 'SLUDGE BOMB', 'SMOG', 'TOXIC']),
+  ...byMove(MOVE_ANIM.flying, ['HURRICANE']),
+  ...byMove(MOVE_ANIM.fighting, ['FOCUS BLAST', 'FOCUS PUNCH', 'CLOSE COMBAT', 'KARATE CHOP', 'DYNAMICPUNCH', 'SUPERPOWER', 'FORCE PALM', 'BRICK BREAK', 'CROSS CHOP', 'ARM THRUST', 'DRAIN PUNCH', 'SACRED SWORD', 'MEGAHORN', 'GUILLOTINE', 'HORN DRILL']),
+  ...byMove(MOVE_ANIM.ghost, ['NIGHT SHADE', 'SHADOW BALL']),
+  // fire — cannons hit heavy, wheels and spins ride the wind, fangs bite
+  ...byMove(recipe('ember', 'impact', 'fire', 8), ['FIRE BLAST', 'BLUE FLARE']),
+  ...byMove(recipe('ember', 'impact', 'fire', 9), ['OVERHEAT', 'BLAST BURN', 'V-CREATE']),
+  ...byMove(recipe('ember', 'dirt', 'fire', 9), ['ERUPTION', 'MAGMA STORM']),
+  ...byMove(recipe('ember', 'wind', 'fire', 6), ['FIRE SPIN', 'FLAME WHEEL', 'FLAME CHARGE', 'FIERY DANCE']),
+  ...byMove(recipe('wind', 'ember', 'fire', 6), ['HEAT WAVE']),
+  ...byMove(recipe('ember', 'fist', 'fire', 7), ['FIRE FANG', 'BLAZE KICK']),
+  ...byMove(recipe('ember', 'ghost', 'ghost', 5), ['WILL-O-WISP']), // ghostly flames
+  ...byMove(recipe('ember', 'impact', 'fire', 7), ['DRAGON RAGE', 'DRAGONBREATH']), // dragon breath = fireball
+  // water — the cannons land heavier than a splash
+  ...byMove(recipe('water', 'impact', 'water', 8), ['HYDRO PUMP', 'HYDRO CANNON', 'WATER SPOUT']),
+  // ice — crystals with a gale behind them, or a freezing fist
+  ...byMove(recipe('ice', 'ice', 'water'), ['ICE BEAM', 'AURORA BEAM']),
+  ...byMove(recipe('ice', 'ice', 'water', 6), ['ICE BALL', 'GLACIATE']),
+  ...byMove(recipe('ice', 'wind', 'water', 8), ['BLIZZARD']),
+  ...byMove(recipe('ice', 'wind', 'water', 5), ['ICY WIND']),
+  ...byMove(recipe('ice', 'ice', 'water', 10), ['SHEER COLD']),
+  ...byMove(recipe('ice', 'fist', 'water', 6), ['ICE PUNCH']),
+  // electric — shock_3 is the cartridge's discharge orb; spark_0 for weak bolts
+  ...byMove(recipe('bolt', 'shock', 'electric', 9, 'bolt'), ['THUNDER']),
+  ...byMove(recipe('spark', 'shock', 'electric', 5, 'bolt'), ['THUNDERSHOCK', 'SPARK']),
+  ...byMove(recipe('ring', 'shock', 'electric', 6), ['SHOCK WAVE']), // expanding rings, canon
+  ...byMove(recipe('shock', 'shock', 'electric', 8), ['ZAP CANNON']), // the thunderball
+  ...byMove(recipe('spark', 'fist', 'electric', 7), ['THUNDERPUNCH']),
+  ...byMove(recipe('bolt', 'impact', 'electric', 9, 'bolt'), ['BOLT STRIKE']),
+  // grass — drains stay orbs, blades ride the wind, plants burst from dirt
+  ...byMove(recipe('orb', 'dirt', 'grass', 8), ['FRENZY PLANT']),
+  ...byMove(recipe('wind', 'orb', 'grass', 6), ['RAZOR LEAF', 'PETAL DANCE', 'MAGICAL LEAF']),
+  ...byMove(recipe('wind', 'orb', 'grass', 7), ['LEAF TORNADO']),
+  ...byMove(recipe('orb', 'impact', 'grass', 7), ['SEED BOMB', 'SEED FLARE']),
+  ...byMove(recipe('orb', 'fist', 'grass', 6), ['NEEDLE ARM']),
+  // psychic — rings for minds, heavier slams for nukes and time-twisters
+  ...byMove(recipe('ring', 'fist', 'psychic', 6), ['ZEN HEADBUTT']),
+  ...byMove(recipe('ring', 'impact', 'psychic', 8), ['FUTURE SIGHT']),
+  ...byMove(recipe('ring', 'impact', 'psychic', 9), ['PSYCHO BOOST', 'SPACIAL REND']),
+  ...byMove(recipe('ring', 'impact', 'psychic', 10), ['ROAR OF TIME']),
+  // rock & ground — meteors, quakes, thrown bones all drag dirt
+  ...byMove(recipe('rock', 'rock', 'rock', 9), ['ROCK TOMB']),
+  ...byMove(recipe('rock', 'impact', 'rock', 9), ['STONE EDGE']),
+  ...byMove(recipe('rock', 'orb', 'rock', 7), ['ANCIENT POWER']),
+  ...byMove(recipe('dirt', 'dirt', 'rock', 10), ['EARTHQUAKE']),
+  ...byMove(recipe('dirt', 'dirt', 'rock', 9), ['MAGNITUDE']),
+  ...byMove(recipe('dirt', 'rock', 'rock', 10), ['FISSURE']),
+  ...byMove(recipe('dirt', 'impact', 'rock', 6), ['MUD SHOT', 'BONEMERANG', 'BONE RUSH']),
+  // poison — fangs still bite
+  ...byMove(recipe('poison', 'fist', 'poison', 6), ['POISON FANG']),
+  // flying — twisters haul debris, wings land as strikes, bug-wind sparkles
+  ...byMove(recipe('wind', 'rock', 'flying', 8), ['TWISTER']), // canon leaf/rock spiral
+  ...byMove(recipe('wind', 'impact', 'flying', 6), ['WING ATTACK', 'AERIAL ACE', 'DRILL PECK', 'RAZOR WIND']),
+  ...byMove(recipe('wind', 'spark', 'flying', 6), ['SILVER WIND']),
+  // fighting — auras, speed punches and the seismic slam
+  ...byMove(recipe('orb', 'impact', 'fighting', 6), ['AURA SPHERE']),
+  ...byMove(recipe('fist', 'spark', 'fighting', 6), ['MACH PUNCH']),
+  ...byMove(recipe('fist', 'dirt', 'fighting', 8), ['SEISMIC TOSS']),
+  // ghost & dark — shadow fists for punches and bites
+  ...byMove(recipe('ghost', 'fist', 'ghost', 6), ['SHADOW PUNCH', 'SHADOW SNEAK']),
+  ...byMove(recipe('ghost', 'fist', 'ghost', 7), ['CRUNCH']),
+  ...byMove(recipe('ghost', 'impact', 'ghost', 5), ['ASTONISH', 'FEINT ATTACK', 'THIEF']),
+  ...byMove(recipe('ghost', 'ghost', 'ghost', 8), ['NIGHT DAZE', 'DARK VOID']),
+  // normal & steel — star rays, sound rings, blades and the big bang
+  ...byMove(recipe('spark', 'impact', 'normal', 6), ['SWIFT']), // star-shaped rays, canon
+  ...byMove(recipe('orb', 'spark', 'normal', 7), ['TRI ATTACK', 'TECHNO BLAST']),
+  ...byMove(recipe('orb', 'spark', 'normal', 8), ['JUDGMENT']),
+  ...byMove(recipe('ring', 'impact', 'normal', 7), ['HYPER VOICE', 'UPROAR']), // sound rings
+  ...byMove(recipe('impact', 'impact', 'normal', 8), ['EXTREMESPEED']), // blitz dash
+  ...byMove(recipe('impact', 'impact', 'normal', 10), ['EXPLOSION']),
+  ...byMove(recipe('fist', 'impact', 'normal', 6), ['SLASH', 'SPIKE CANNON', 'METAL CLAW', 'IRON TAIL']),
+  ...byMove(recipe('fist', 'impact', 'fighting', 7), ['DRAGON CLAW', 'OUTRAGE']), // rampage smashes
+  ...byMove(recipe('ring', 'spark', 'psychic', 5), ['SIGNAL BEAM']),
+]);
 export function recipeFor(type: PokeType, move?: string): Recipe {
   return (move && Object.hasOwn(overrides, move) && overrides[move]) || MOVE_ANIM[type];
 }
@@ -156,6 +245,11 @@ export function burst(r: Recipe, x: number, y: number, big: boolean): void {
     const a = i * Math.PI / 3;
     spawnAnim(r.sheet, x, y, Math.cos(a) * 110, Math.sin(a) * 110, 2, 1, 0.8, 0,
       a, 2, 20, true, 0.02, 0.36, false, false, true);
+  }
+  if (big) for (let i = 0; i < BIG_FLARE; i++) { // additive afterring — the finisher bloom
+    const a = (i + 0.5) * Math.PI * 2 / BIG_FLARE;
+    spawnAnim(r.hit, x, y, Math.cos(a) * 170, Math.sin(a) * 170, 1.5, 3, 0.85, 0,
+      a, 0, 20, false, 0.14, 0.34, false, true, true);
   }
 }
 export function rain(r: Recipe, x: number, y: number): void {
