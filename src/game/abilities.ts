@@ -1,5 +1,6 @@
 import type { SpeciesDef, HazardKind } from './data';
 import type { PokeType, Weather } from './types';
+import { typeMult, strikeType } from './types';
 
 const CANONICAL_ABILITIES = [
   'adaptability',
@@ -210,6 +211,61 @@ export function abilityLabel(def: SpeciesDef): string {
   return abilityOf(def)?.name ?? '';
 }
 
+// --- the ward family: canon immunities that stop the matching ailment
+// landing at all. The species flags carry the same traits, so both read
+// through these — a mon is limber whether it says so by flag or by name.
+export const poisonProof = (d: Pick<SpeciesDef, 'ability'>) => d.ability === 'immunity';
+export const sleepProof = (d: Pick<SpeciesDef, 'ability' | 'sleepless'>) =>
+  !!d.sleepless || d.ability === 'insomnia' || d.ability === 'vital-spirit';
+export const paraProof = (d: Pick<SpeciesDef, 'ability' | 'limber'>) => !!d.limber || d.ability === 'limber';
+export const burnProof = (d: Pick<SpeciesDef, 'ability'>) => d.ability === 'water-veil';
+// own tempo keeps its head; soundproof never hears the supersonic
+export const confuseProof = (d: Pick<SpeciesDef, 'ability' | 'tempo'>) =>
+  !!d.tempo || d.ability === 'own-tempo' || d.ability === 'soundproof';
+// oblivious can't be smitten — cute charm reads as a sleep, not a crush
+export const charmProof = (d: Pick<SpeciesDef, 'ability' | 'sleepless'>) => sleepProof(d) || d.ability === 'oblivious';
+// shield dust: the added effects of incoming hits never land on the carrier
+export const dustProof = (d: Pick<SpeciesDef, 'ability'>) => d.ability === 'shield-dust';
+// hyper cutter / clear body / white smoke: their attack can't be lowered —
+// intimidate and the menace aura read off, not cowed
+export const statWall = (d: Pick<SpeciesDef, 'ability'>) =>
+  d.ability === 'hyper-cutter' || d.ability === 'clear-body' || d.ability === 'white-smoke';
+// keen eye / compound eyes: canon accuracy — a mirage never costs them a hit
+export const pierceShroud = (d: Pick<SpeciesDef, 'ability'>) =>
+  d.ability === 'keen-eye' || d.ability === 'compound-eyes';
+// rough skin / iron barbs / spiky hide: contact bites back
+export const barbHide = (d: Pick<SpeciesDef, 'ability' | 'spiky'>) =>
+  !!d.spiky || d.ability === 'rough-skin' || d.ability === 'iron-barbs';
+// same chip the spiky flag pays — a melee mouthful costs a cut of max HP
+export const barbChip = (u: Pick<AbilityUnit, 'def' | 'maxHp'>) =>
+  barbHide(u.def) ? Math.max(1, Math.round(u.maxHp * 0.06)) : 0;
+// aftermath: a finished carrier blows back on what closed it
+export const aftermathKO = (d: Pick<SpeciesDef, 'ability'>) => d.ability === 'aftermath';
+// liquid ooze: whatever drains it swallows poison instead
+export const oozeBlood = (d: Pick<SpeciesDef, 'ability'>) => d.ability === 'liquid-ooze';
+// rock head: recoil can't crack the skull — counter and barb chips glance
+export const rockSkull = (d: Pick<SpeciesDef, 'ability'>) => d.ability === 'rock-head';
+// serene grace doubles the odds on contact riders — flag or canon name
+export const graceOdds = (d: Pick<SpeciesDef, 'ability' | 'grace'>) => (d.grace || d.ability === 'serene-grace' ? 2 : 1);
+// pickup: scavengers nose out loot after a wave — flag or canon name
+export const scavenger = (d: Pick<SpeciesDef, 'ability' | 'pickup'>) => !!d.pickup || d.ability === 'pickup';
+// the absorb family drinks its element — flag or canon name
+export function absorbType(d: Pick<SpeciesDef, 'ability' | 'absorb'>): PokeType | undefined {
+  return d.absorb ?? ({
+    'water-absorb': 'water',
+    'volt-absorb': 'electric',
+    'lightning-rod': 'electric',
+    'flash-fire': 'fire',
+    'motor-drive': 'electric',
+  } as Record<string, PokeType>)[d.ability];
+}
+// pressure: a living dread legend drags every foe clock while it stands
+export const clockDrag = <T extends { dead: boolean; def: Pick<SpeciesDef, 'ability'> }>(team: T[]): T | undefined =>
+  team.find((p) => !p.dead && p.def.ability === 'pressure');
+// bad dreams: the nightmare bleeds every dozing foe while it stands
+export const nightmare = <T extends { dead: boolean; def: Pick<SpeciesDef, 'ability'> }>(team: T[]): T | undefined =>
+  team.find((p) => !p.dead && p.def.ability === 'bad-dreams');
+
 interface AbilityUnit {
   uid: number;
   def: SpeciesDef;
@@ -226,7 +282,7 @@ interface AbilityUnit {
   paraT: number;
   asleep?: boolean;
 }
-interface AbilityBattle { weather?: Weather | null }
+interface AbilityBattle { weather?: Weather | null; players?: AbilityUnit[] }
 type Notice = (text: string, unit: AbilityUnit) => void;
 const battles = new WeakMap<AbilityBattle, { seen: Set<string>; sturdy: Set<number>; hits: Map<number, number>; shotN: number }>();
 export function resetAbilities(b: AbilityBattle) { battles.delete(b); }
@@ -260,7 +316,7 @@ export function abilityWall(b: AbilityBattle, u: AbilityUnit, type: PokeType, no
   announce(b, u, notice);
   return true;
 }
-export function abilitySturdy(b: AbilityBattle, u: AbilityUnit, damage: number, notice: Notice): number {
+export function abilitySturdy(b: AbilityBattle, u: AbilityUnit, damage: number, notice: Notice, src?: AbilityUnit): number {
   if (u.def.ability === 'sturdy') {
     const s = state(b), reduced = sturdyDamage(u.hp, damage, s.sturdy.has(u.uid));
     if (reduced !== damage) {
@@ -270,10 +326,12 @@ export function abilitySturdy(b: AbilityBattle, u: AbilityUnit, damage: number, 
     }
     return reduced;
   }
-  // soak family: marvel scale hardens while statused, sand veil only whiffs in its own sky
+  // soak family: marvel scale hardens while statused, sand veil only whiffs
+  // in its own sky, thick fat laughs a fire-type strike down to half heat
   const ailment = u.dotTicks > 0 || u.burnT > 0 || u.paraT > 0 || !!u.asleep;
   const soak = u.def.ability === 'marvel-scale' && ailment ? 0.67
-    : u.def.ability === 'sand-veil' && b.weather === 'sand' ? 0.8 : 1;
+    : u.def.ability === 'sand-veil' && b.weather === 'sand' ? 0.8
+    : src && (u.def.thickFat || u.def.ability === 'thick-fat') && (src.def.type === 'fire' || src.def.type2 === 'fire') ? 0.5 : 1;
   if (soak === 1) return damage;
   announce(b, u, notice);
   return Math.max(1, Math.round(damage * soak));
@@ -289,13 +347,26 @@ export function abilityAttack(b: AbilityBattle, u: AbilityUnit, target: SpeciesD
   s.hits.set(u.uid, n + 1);
   const attack = attackMult(u.def.ability, statused, u.hp / u.maxHp), killer = killerMult(u.def.ability, target);
   // swing tax/bonus riding the hit counter: slow start pays five half-strength
-  // rounds, truant loafs every other swing, download's first contact hits hot
+  // rounds, truant loafs every other swing, download's first contact hits
+  // hot, hustle swings hard but every fifth catches only the edge
   const swing = u.def.ability === 'slow-start' && n < 5 ? 0.5
     : u.def.ability === 'truant' && n % 2 === 1 ? 0.3
-    : u.def.ability === 'download' && n === 0 ? 1.5 : 1;
-  if (attack > 1 || killer > 1 || swing !== 1) announce(b, u, notice);
+    : u.def.ability === 'download' && n === 0 ? 1.5
+    : u.def.ability === 'hustle' ? (n % 5 === 4 ? 0.45 : 1.3) : 1;
+  // sand force rides the storm; plus/minus crackles while a partner of
+  // either pole stands; technician's craft makes a weak line bite
+  const mates = b.players ?? [];
+  const sky = u.def.ability === 'sand-force' && b.weather === 'sand' ? 1.3
+    : (u.def.ability === 'plus' || u.def.ability === 'minus')
+      && mates.some((q) => q !== u && !q.dead && (q.def.ability === 'plus' || q.def.ability === 'minus')) ? 1.5 : 1;
+  const tech = u.def.ability === 'technician' && typeMult(strikeType(u.def, target), target) <= 1 ? 1.5 : 1;
+  // flower gift: a blooming carrier puts the whole line in the sun — the
+  // boost rides any striker while the cherrim stands
+  const gifter = b.weather === 'sun' ? mates.find((q) => !q.dead && q.def.ability === 'flower-gift') : undefined;
+  if (attack > 1 || killer > 1 || swing !== 1 || sky > 1 || tech > 1) announce(b, u, notice);
+  if (gifter) announce(b, gifter, notice);
   const legacy = (u.def.huge && attack === 2) || (u.def.guts && u.def.ability === 'guts');
-  return (legacy ? 1 : attack) * killer * swing;
+  return (legacy ? 1 : attack) * killer * swing * sky * tech * (gifter ? 1.25 : 1);
 }
 // Ailment immunities wake at the sling: the ailment lands but the carrier
 // shakes it off on its next launch — the same fields Battle.cleanse wipes.
@@ -321,7 +392,13 @@ function launchCleanse(u: AbilityUnit, weather: Weather | null, shotN: number): 
 export function abilitySpeed(b: AbilityBattle, u: AbilityUnit, weather: Weather | null, notice: Notice): number {
   const s = state(b);
   const mult = weatherSpeed(u.def.ability, weather);
-  if (mult > 1 || launchCleanse(u, weather, ++s.shotN)) announce(b, u, notice);
+  // healer: the medic's launch is a house call — one ailing teammate
+  // washes clean each time the carrier takes the sling
+  const ally = u.def.ability === 'healer'
+    ? (b.players ?? []).find((q) => q !== u && !q.dead && (ailment(q) || q.asleep))
+    : undefined;
+  if (ally) { washOff(ally); ally.asleep = false; }
+  if (mult > 1 || launchCleanse(u, weather, ++s.shotN) || ally) announce(b, u, notice);
   return mult;
 }
 export function abilityIntimidate(b: AbilityBattle, team: AbilityUnit[], notice: Notice): number {

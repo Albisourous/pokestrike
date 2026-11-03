@@ -21,6 +21,8 @@
  * Swift: spark_0 star rays fan out; stands in for the cartridge's stars.
  * Generic hit: impact (1), brief expanding hitsplat. All ticks are 1/60s.
  * spark_0 and ice_crystals_0 bake their separate spark/ice_crystals palettes.
+ * razor_leaf/slash/bubble/spiral joined in the pixel-fx pass — leaf casts,
+ * cuts, bubbles and vortices stop faking it with orb/wind stand-ins.
  * The overrides table gives every move name in play its canon element read —
  * off-type casts (METRONOME rolls, Milotic's ICE BEAM, every boss's
  * ROCK SLIDE meteor) draw their own art instead of the caster's type.
@@ -41,9 +43,13 @@ export const SHEETS = {
   wind: sheet('gust', 32, 32, 2), fist: sheet('punch_impact', 32, 32, 1),
   impact: sheet('impact', 32, 32, 1), ghost: sheet('shadow_ball', 32, 32, 1),
   dirt: sheet('flying_dirt', 32, 32, 1), ice: sheet('ice_crystals_0', 16, 16, 1),
+  leaf: sheet('razor_leaf', 32, 16, 1), slash: sheet('slash', 32, 32, 4),
+  bubble: sheet('bubble', 16, 16, 3), swirl: sheet('spiral', 64, 64, 1),
 };
 export type SheetName = keyof typeof SHEETS;
-export const MAX_ANIMS = 24, SOFT_CAP = 18;
+// a 4-foe beam cast alone wants 32 slots (8/burst) — the pool holds the
+// biggest multi-target cast with headroom, particles still yield first
+export const MAX_ANIMS = 32, SOFT_CAP = 24;
 const BIG_FLARE = 8; // extra detonation ring on `big` bursts — boss KOs, quake big-moves, ULTs
 interface Instance {
   sheet: SheetName; x: number; y: number; vx: number; vy: number; ax: number; ay: number;
@@ -141,14 +147,15 @@ const overrides: Record<string, Recipe | undefined> = Object.fromEntries([
   // type-canon moves — reference-equal to MOVE_ANIM so the type path is identical
   ...byMove(MOVE_ANIM.normal, ['HYPER BEAM', 'PAY DAY', 'BODY SLAM', 'DOUBLE EDGE', 'THRASH', 'SKULL BASH', 'DIZZY PUNCH', 'TRANSFORM', 'METRONOME', 'SOFTBOILED', 'ENDEAVOR', 'RAPID SPIN', 'SPLASH']),
   ...byMove(MOVE_ANIM.fire, ['FLAMETHROWER']),
-  ...byMove(MOVE_ANIM.water, ['SURF', 'BUBBLE', 'BUBBLEBEAM', 'WATER PULSE', 'WATERFALL', 'CRABHAMMER', 'RAZOR SHELL']),
+  ...byMove(MOVE_ANIM.water, ['SURF', 'WATER PULSE', 'WATERFALL', 'CRABHAMMER', 'RAZOR SHELL']),
+  ...byMove(recipe('bubble', 'bubble', 'water'), ['BUBBLE', 'BUBBLEBEAM']), // real bubbles, not a 64px splash
   ...byMove(MOVE_ANIM.grass, ['SOLAR BEAM', 'GIGA DRAIN', 'MEGA DRAIN', 'LEECH LIFE']),
   ...byMove(MOVE_ANIM.electric, ['THUNDERBOLT']),
   ...byMove(MOVE_ANIM.psychic, ['PSYBEAM', 'PSYCHIC', 'CONFUSION', 'EXTRASENSORY', 'HYPNOSIS', 'DREAM EATER', 'MIST BALL', 'LUSTER PURGE']),
   ...byMove(MOVE_ANIM.rock, ['ROCK SLIDE', 'ROLLOUT']),
   ...byMove(MOVE_ANIM.poison, ['SLUDGE WAVE', 'SLUDGE', 'SLUDGE BOMB', 'SMOG', 'TOXIC']),
-  ...byMove(MOVE_ANIM.flying, ['HURRICANE']),
-  ...byMove(MOVE_ANIM.fighting, ['FOCUS BLAST', 'FOCUS PUNCH', 'CLOSE COMBAT', 'KARATE CHOP', 'DYNAMICPUNCH', 'SUPERPOWER', 'FORCE PALM', 'BRICK BREAK', 'CROSS CHOP', 'ARM THRUST', 'DRAIN PUNCH', 'SACRED SWORD', 'MEGAHORN', 'GUILLOTINE', 'HORN DRILL']),
+  ...byMove(recipe('wind', 'swirl', 'flying', 9), ['HURRICANE']), // a storm vortex, not a gust pop
+  ...byMove(MOVE_ANIM.fighting, ['FOCUS BLAST', 'FOCUS PUNCH', 'CLOSE COMBAT', 'KARATE CHOP', 'DYNAMICPUNCH', 'SUPERPOWER', 'FORCE PALM', 'BRICK BREAK', 'CROSS CHOP', 'ARM THRUST', 'DRAIN PUNCH', 'MEGAHORN', 'GUILLOTINE', 'HORN DRILL']),
   ...byMove(MOVE_ANIM.ghost, ['NIGHT SHADE', 'SHADOW BALL']),
   // fire — cannons hit heavy, wheels and spins ride the wind, fangs bite
   ...byMove(recipe('ember', 'impact', 'fire', 8), ['FIRE BLAST', 'BLUE FLARE']),
@@ -177,8 +184,8 @@ const overrides: Record<string, Recipe | undefined> = Object.fromEntries([
   ...byMove(recipe('bolt', 'impact', 'electric', 9, 'bolt'), ['BOLT STRIKE']),
   // grass — drains stay orbs, blades ride the wind, plants burst from dirt
   ...byMove(recipe('orb', 'dirt', 'grass', 8), ['FRENZY PLANT']),
-  ...byMove(recipe('wind', 'orb', 'grass', 6), ['RAZOR LEAF', 'PETAL DANCE', 'MAGICAL LEAF']),
-  ...byMove(recipe('wind', 'orb', 'grass', 7), ['LEAF TORNADO']),
+  ...byMove(recipe('leaf', 'leaf', 'grass', 6), ['RAZOR LEAF', 'PETAL DANCE', 'MAGICAL LEAF']), // canon leaf art
+  ...byMove(recipe('wind', 'leaf', 'grass', 7), ['LEAF TORNADO']), // a gale of leaves
   ...byMove(recipe('orb', 'impact', 'grass', 7), ['SEED BOMB', 'SEED FLARE']),
   ...byMove(recipe('orb', 'fist', 'grass', 6), ['NEEDLE ARM']),
   // psychic — rings for minds, heavier slams for nukes and time-twisters
@@ -197,8 +204,10 @@ const overrides: Record<string, Recipe | undefined> = Object.fromEntries([
   // poison — fangs still bite
   ...byMove(recipe('poison', 'fist', 'poison', 6), ['POISON FANG']),
   // flying — twisters haul debris, wings land as strikes, bug-wind sparkles
-  ...byMove(recipe('wind', 'rock', 'flying', 8), ['TWISTER']), // canon leaf/rock spiral
-  ...byMove(recipe('wind', 'impact', 'flying', 6), ['WING ATTACK', 'AERIAL ACE', 'DRILL PECK', 'RAZOR WIND']),
+  ...byMove(recipe('wind', 'swirl', 'flying', 8), ['TWISTER']), // the vortex sheet
+  ...byMove(recipe('wind', 'impact', 'flying', 6), ['WING ATTACK', 'DRILL PECK']),
+  ...byMove(recipe('wind', 'slash', 'flying', 6), ['RAZOR WIND']), // blades of air
+  ...byMove(recipe('slash', 'slash', 'flying', 6), ['AERIAL ACE']), // canon slash
   ...byMove(recipe('wind', 'spark', 'flying', 6), ['SILVER WIND']),
   // fighting — auras, speed punches and the seismic slam
   ...byMove(recipe('orb', 'impact', 'fighting', 6), ['AURA SPHERE']),
@@ -216,8 +225,10 @@ const overrides: Record<string, Recipe | undefined> = Object.fromEntries([
   ...byMove(recipe('ring', 'impact', 'normal', 7), ['HYPER VOICE', 'UPROAR']), // sound rings
   ...byMove(recipe('impact', 'impact', 'normal', 8), ['EXTREMESPEED']), // blitz dash
   ...byMove(recipe('impact', 'impact', 'normal', 10), ['EXPLOSION']),
-  ...byMove(recipe('fist', 'impact', 'normal', 6), ['SLASH', 'SPIKE CANNON', 'METAL CLAW', 'IRON TAIL']),
-  ...byMove(recipe('fist', 'impact', 'fighting', 7), ['DRAGON CLAW', 'OUTRAGE']), // rampage smashes
+  ...byMove(recipe('slash', 'slash', 'normal', 6), ['SLASH', 'METAL CLAW', 'IRON TAIL']), // canon cuts
+  ...byMove(recipe('fist', 'impact', 'normal', 6), ['SPIKE CANNON']), // a spike barrage jabs
+  ...byMove(recipe('slash', 'slash', 'fighting', 7), ['SACRED SWORD', 'DRAGON CLAW']), // blade cuts, not fists
+  ...byMove(recipe('fist', 'impact', 'fighting', 7), ['OUTRAGE']), // rampage smash
   ...byMove(recipe('ring', 'spark', 'psychic', 5), ['SIGNAL BEAM']),
 ]);
 export function recipeFor(type: PokeType, move?: string): Recipe {
@@ -280,4 +291,46 @@ export function drawTellRing(ctx: CanvasRenderingContext2D, r: Recipe,
     drawFrame(ctx, name, frame, x + Math.cos(a) * R, y + Math.sin(a) * R,
       2, 0.12 + 0.06 * Math.sin(time * 8 + i));
   }
+}
+// A corkscrew collapse: motes spawn on the ring with tangential velocity and
+// a constant pull to the point — a real spiral, not converging streaks.
+// Vortex gathers, twisters, warp sucks; `swirl` hits sell the eye.
+export function spiral(r: Recipe, x: number, y: number, R: number): void {
+  request(r);
+  const T = 0.42;
+  for (let i = 0; i < 10; i++) {
+    const a = i * Math.PI / 5, dx = Math.cos(a), dy = Math.sin(a);
+    spawnAnim(r.sheet, x + dx * R, y + dy * R, -dy * R * 3.4, dx * R * 3.4,
+      2, 1, 0.9, 0, a + Math.PI / 2, 3, 20, true, i * 0.02, T, false, false, true,
+      -dx * 2 * R / (T * T), -dy * 2 * R / (T * T));
+  }
+  spawnAnim(r.hit, x, y, 0, 0, 1, 2.6, 0.9, 0, 0, 5, 16, false, 0.16, 0.4, false, true);
+}
+// Dash breadcrumbs — frames laid along the flight line, angled with it and
+// fading where they drop; EXTREMESPEED blitzes and dash supers.
+export function trail(r: Recipe, x1: number, y1: number, x2: number, y2: number): void {
+  request(r);
+  const a = Math.atan2(y2 - y1, x2 - x1);
+  for (let i = 0; i < 6; i++) {
+    const k = i / 5;
+    spawnAnim(r.sheet, x1 + (x2 - x1) * k, y1 + (y2 - y1) * k, 0, 0,
+      1.8, 1.2, 0.65, 0, a, 0, 24, true, i * 0.02, 0.3, false, false, i > 0);
+  }
+}
+// A rising column at a point — eruptions, geysers, growth. Segments pop in
+// bottom-up and drift skyward, so the column assembles off the floor.
+export function pillar(r: Recipe, x: number, y: number, h = 72): void {
+  request(r);
+  const segs = 4, seg = h / segs;
+  for (let i = 0; i < segs; i++) {
+    spawnAnim(r.sheet, x, y - i * seg, 0, -40,
+      2, 2.3, 1, 0, 0, 0, 22, true, i * 0.05, 0.45, false, false, i > 0);
+  }
+  spawnAnim(r.hit, x, y, 0, 0, 2, 3.5, 0.9, 0, 0, 0, 20, false, 0.1, 0.3);
+}
+// One full-frame bloom, no debris — a screen-pop the sheet owns, for
+// shields, revives, teleports. Additive so it reads as light.
+export function flash(r: Recipe, x: number, y: number, big = false): void {
+  request(r);
+  spawnAnim(r.hit, x, y, 0, 0, big ? 3 : 2, big ? 6 : 4, 1, 0, 0, 0, 26, false, 0, 0.24, false, true);
 }

@@ -5,11 +5,11 @@ import type { TrackName } from './core/audio';
 import { loadAll, loadItem, loadGracidea, loadNpcs } from './core/assets';
 import { mulberry32 } from './core/rng';
 import { vec } from './core/vec';
-import { Battle, PAUSE_QUIT, PAUSE_SETTINGS, debugArena, WEATHER_FOR } from './game/battle';
+import { Battle, PAUSE_QUIT, PAUSE_SETTINGS, TEAM_CAP, debugArena, WEATHER_FOR } from './game/battle';
 import { GAUGE_ICON } from './game/gauge';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, ACE_POOL, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom, ENEMY_THEME, MOAT_HAZARD, GIMMICK, THEME_NAME } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom, ENEMY_THEME, MOAT_HAZARD, GIMMICK, THEME_NAME } from './game/data';
 import type { SpeciesDef } from './game/data';
 import { THEMES, type Theme } from './game/bg';
 import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, itemTierRoll, type RunSave } from './game/meta';
@@ -145,7 +145,9 @@ import {
   teamStageAt,
   RAID_FIGHT,
   echoMonAt,
+  noteHelpFlip,
 } from './game/screens';
+import { noteUiFrame, notePress, noteRelease, notePressCancel, pressDrift, overlayPop } from './game/ui';
 import { drawFame, fameActive, fameDown, fameUp, startFame, tickFame } from './game/fame';
 import { drawEvo, evoActive, skipEvo, tickEvo } from './game/evolve';
 import { runCard, shareRun } from './game/share';
@@ -320,8 +322,10 @@ let sparkArm = { id: -1, t: -10 };
 let hatchLockT = -10; // eats a tap that lands in the same instant the reel auto-advances
 let hatchFlash = { text: '', t: -10 }; // transient gold line under the pity bar — milestone payouts name themselves
 let taskFlash = { text: '', t: -10 }; // same flash, on the chores board
-let dexDrag: { y0: number; s0: number; moved: boolean; for?: 'hatch' | 'lab' | 'dex' | 'ach' | 'board' } | null = null;
+let dexDrag: { y0: number; s0: number; moved: boolean; for?: 'hatch' | 'lab' | 'dex' | 'ach' | 'board'; ly: number; lt: number; vy: number } | null = null;
 let helpDrag: { x0: number; y0: number; moved: boolean } | null = null;
+// a release's last flick keeps the list gliding — decays in update()
+let fling: { for: string; vy: number } | null = null;
 let result: RunResult | null = null;
 let startOffers: Perk[] = []; // starter charm pick between draft and battle
 let charmPicks = 1; // ASC 3+ veterans start the climb with two charms
@@ -336,10 +340,10 @@ let lastGyms = 0;
 let lastPhase = ''; // battle phase last frame — map-entry edges bank the run
 // box strip scroll: offset in px + an in-progress drag (tap = drag that never moved)
 let boxScroll = 0;
-let boxDrag: { x0: number; s0: number; moved: boolean } | null = null;
+let boxDrag: { x0: number; s0: number; moved: boolean; lx: number; lt: number; vy: number } | null = null;
 // draft bag row scrolls the same way once a stocked bag overflows the band
 let bagScroll = 0;
-let bagDrag: { x0: number; s0: number; moved: boolean } | null = null;
+let bagDrag: { x0: number; s0: number; moved: boolean; lx: number; lt: number; vy: number } | null = null;
 // pointer-id gating: the first finger down owns the gesture — a second
 // finger's events stay dead until the owner lifts (a mid-aim second tap
 // used to teleport the sling; whichever finger lifted first fired it)
@@ -478,10 +482,11 @@ let rewardLanded = 0;
 let wasReward = false;
 function draftOffers(): number[] {
   if (offerCache) return offerCache;
-  const offers = draft.order
-    .slice(draft.picked.length * 3)
-    .filter((i) => !draft.picked.includes(i))
-    .slice(0, 3);
+  const offers = [...new Set(
+    draft.order
+      .slice(draft.picked.length * 3)
+      .filter((i) => !draft.picked.includes(i)),
+  )].slice(0, 3);
   if (offers.length < 3) {
     const extra = draftPool.map((_, i) => i).filter(
       (i) => !draft.picked.includes(i) && !offers.includes(i),
@@ -637,6 +642,8 @@ document.addEventListener('visibilitychange', () => {
   // a hidden tab can drop the gesture's pointerup — a held id would lock
   // every later tap out, so dump all drag state like a pointercancel
   activeId = null;
+  notePressCancel();
+  fling = null;
   helpDrag = dexDrag = boxDrag = bagDrag = settingsDrag = null;
   settingsSliderFlush(); // bank a mid-drag slider value the dropped up would have
   battle?.pointerCancel();
@@ -723,42 +730,35 @@ function startRaid() {
 }
 
 function startDraft() {
-  // Catches feed the draft by tier: weak species join the general deal as
-  // new faces, but tier-2+ monsters only surface on the ace board — a caught
-  // Dragonite is a last-pick treat, not a round-one freebie.
-  const caught = dexIds()
+  // Your dex IS the draft pool — hatcher pulls and catches are what widen
+  // it, so collecting is the roster. A fresh save gets the starter trio so
+  // the board always has something to deal.
+  if (!dexIds().length) recordCapture([1, 4, 7]);
+  const owned = dexIds()
     .map(speciesById)
-    .filter((d): d is SpeciesDef => !!d && !ROSTER.some((r) => r.id === d.id));
-  draftPool = [...ROSTER, ...caught.filter((d) => tierOf(d) <= 1)];
-  const aceCandidates = [...ACE_POOL];
-  for (const d of caught) {
-    if (tierOf(d) >= 2 && !aceCandidates.some((a) => a.id === d.id)) aceCandidates.push(d);
+    .filter((d): d is SpeciesDef => !!d);
+  // the last pick is the ace board: your deepest-tier mons, distinct types
+  // first — a fat collection still surfaces its anchors
+  const aces: SpeciesDef[] = [];
+  const aceTypes = new Set<string>();
+  for (const d of [...owned].sort((a, b) => tierOf(b) - tierOf(a))) {
+    if (aces.length >= 3) break;
+    if (aceTypes.has(d.type)) continue;
+    aceTypes.add(d.type);
+    aces.push(d);
   }
+  for (const d of owned) {
+    if (aces.length >= 3) break;
+    if (!aces.includes(d)) aces.push(d);
+  }
+  const rest = owned.filter((d) => !aces.includes(d));
+  draftPool = [...rest, ...aces];
   // TRIPLE CROWN (3 wins) pays a second board reshuffle — the draft gets
   // friendlier once you've proven the climb
   const rerolls = 1 + (unlockedAch().has('triple') ? 1 : 0);
-  draft = { order: draftOrder(runRng), picked: [], shiny: new Set(), lvls: new Map(), rerolls };
+  draft = { order: draftOrder(runRng, rest), picked: [], shiny: new Set(), lvls: new Map(), rerolls };
   bagScroll = 0; // a new board re-centers its bag row
-  for (let i = ROSTER.length; i < draftPool.length; i++) {
-    draft.order.splice(Math.floor(runRng() * (draft.order.length + 1)), 0, i);
-  }
-  // ace round: the last pick always deals three veterans — three scrappy
-  // picks stay, but every team gets one anchor with an evo ceiling
-  const aceTypes = new Set<string>();
-  const aces: number[] = [];
-  // a thin candidate pool (fewer than 3 distinct types) would spin forever —
-  // cap the tries, then pad the spread deterministically from what's there
-  for (let i = 0; i < 200 && aces.length < 3; i++) {
-    const c = aceCandidates[Math.floor(runRng() * aceCandidates.length)];
-    if (!c || aceTypes.has(c.type)) continue;
-    aceTypes.add(c.type);
-    aces.push(draftPool.push(c) - 1);
-  }
-  for (const c of aceCandidates) {
-    if (aces.length >= 3) break;
-    aces.push(draftPool.push(c) - 1);
-  }
-  draft.order.splice((DRAFT_ROUNDS - 1) * 3, 3, ...aces);
+  draft.order.splice((DRAFT_ROUNDS - 1) * 3, 3, ...aces.map((_, k) => rest.length + k));
   // ~1/50 of draft cards roll shiny — a gold card is the run's first
   // high-roll; the Shiny Charm milestone doubles it
   const shinyOdds = 0.02 * (shinyCharm() ? 2 : 1);
@@ -1000,7 +1000,8 @@ const labTap = (p: { x: number; y: number }) => {
 // here would flip-flop and restart the song on every drag
 function sceneMusic() {
   if (scene === 'result' || scene === 'battle') return;
-  music(scene === 'draft' || scene === 'charm' ? 'draft_theme' : 'title');
+  // the shop hums its own polka, the raid lobby borrows the gym's menace
+  music(scene === 'draft' || scene === 'charm' ? 'draft_theme' : homeTab === 'shop' ? 'shop_theme' : homeTab === 'raid' ? 'gym' : 'title');
 }
 
 // the ? chip's one gate, read by both the hit-test and the draw: the dealt
@@ -1024,6 +1025,7 @@ function helpFlip(d: number) {
   const np = Math.min(Math.max(helpPage + d, 0), HELP_PAGE_COUNT - 1);
   if (np === helpPage) return;
   helpPage = np;
+  noteHelpFlip(d); // the deck slides to the flipped side, not a hard cut
   sfx('ui');
 }
 
@@ -1038,6 +1040,8 @@ canvas.addEventListener('pointerdown', (e) => {
   unlockAudio(); // first gesture spins up the synth
   sceneMusic();
   const p = toLogical(e);
+  notePress(p.x, p.y, t); // every down stamps the press registry — pills under it sink
+  fling = null; // a fresh touch owns the list — kill any glide still coasting
   // the help pager swallows all input while it's up — any scene
   if (helpOpen) {
     helpDrag = { x0: p.x, y0: p.y, moved: false };
@@ -1076,14 +1080,13 @@ canvas.addEventListener('pointerdown', (e) => {
       return;
     }
     if (hit?.kind === 'toggle') {
-      settingsToggleFlip(hit.key);
+      settingsToggleFlip(hit.key); // owns the snap — 'flip' up on, down off
       if (hit.key === 'battery') resize(); // the dpr cap applies now, not on next resize
       if (hit.key === 'haptics') buzz(30); // the toggle you feel — buzz() self-gates on the new setting
-      sfx('ui');
       return;
     }
     if (hit?.kind === 'seg') {
-      settingsSegSet(hit.key, hit.i);
+      settingsSegSet(hit.key, hit.i); // owns the click — 'flip' as the pill slides
       sfx('ui');
       return;
     }
@@ -1137,6 +1140,9 @@ canvas.addEventListener('pointerdown', (e) => {
         s0: hatchOpen ? hatch.sparkScroll : labOpen ? labScroll : dexOpen ? dexScroll : achScroll,
         moved: false,
         for: hatchOpen ? 'hatch' : labOpen ? 'lab' : dexOpen || dexPick != null ? 'dex' : achOpen ? 'ach' : 'board',
+        ly: p.y,
+        lt: t,
+        vy: 0,
       };
       return;
     }
@@ -1388,7 +1394,7 @@ canvas.addEventListener('pointerdown', (e) => {
       // an overflowing row scrolls like the box strip — the drag owns the
       // band and a still finger stays a tap (resolved on pointerup)
       if (items.length && bagScrollMax(items.length) > 0) {
-        bagDrag = { x0: p.x, s0: bagScroll, moved: false };
+        bagDrag = { x0: p.x, s0: bagScroll, moved: false, lx: p.x, lt: t, vy: 0 };
         return;
       }
       for (let i = 0; i < items.length; i++) {
@@ -1496,15 +1502,19 @@ canvas.addEventListener('pointerdown', (e) => {
         return;
       }
       if (battle.box.length > 0 && inRect(p.x, p.y, BOX_STRIP)) {
-        boxDrag = { x0: p.x, s0: boxScroll, moved: false };
+        boxDrag = { x0: p.x, s0: boxScroll, moved: false, lx: p.x, lt: t, vy: 0 };
         return;
       }
-      for (let i = 0; i < battle.players.length; i++) {
+      for (let i = 0; i < TEAM_CAP; i++) {
         if (!inRect(p.x, p.y, teamSlotRect(i))) continue;
-        if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
-        else if (battle.box.length > 0) {
-          battle.teamSel = battle.teamSel === i ? -1 : i;
-          sfx('ui');
+        if (i < battle.players.length) {
+          if (battle.boxSel >= 0) battle.swapFromBox(battle.boxSel, i);
+          else if (battle.box.length > 0) {
+            battle.teamSel = battle.teamSel === i ? -1 : i;
+            sfx('ui');
+          }
+        } else if (battle.boxSel >= 0) {
+          battle.joinFromBox(battle.boxSel); // open slot — the catch deploys outright
         }
         return;
       }
@@ -1613,6 +1623,7 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
   const p = toLogical(e);
+  pressDrift(p.x, p.y); // a finger that slid off the button isn't pressing it
   if (settingsDrag) {
     settingsSliderSet(settingsDrag.key, p.x); // write-through, no click spam
     syncVolumes(); // master/music are node params — poke them live
@@ -1625,6 +1636,10 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (dexDrag) {
     if (Math.abs(p.y - dexDrag.y0) > 10) dexDrag.moved = true;
+    // flick velocity — sampled per move so release can bank a glide
+    if (t > dexDrag.lt) dexDrag.vy = Math.max(-4000, Math.min(4000, -(p.y - dexDrag.ly) / (t - dexDrag.lt)));
+    dexDrag.ly = p.y;
+    dexDrag.lt = t;
     // the pull theatre eats drags — sparkScrollMax is 0 mid-show, so a drag
     // there would zero the shop's scroll for no reason
     if (dexDrag.for === 'hatch' && hatch.phase !== 'idle') return;
@@ -1643,6 +1658,9 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (boxDrag) {
     if (Math.abs(p.x - boxDrag.x0) > 10) boxDrag.moved = true;
+    if (t > boxDrag.lt) boxDrag.vy = Math.max(-4000, Math.min(4000, -(p.x - boxDrag.lx) / (t - boxDrag.lt)));
+    boxDrag.lx = p.x;
+    boxDrag.lt = t;
     if (battle)
       boxScroll = Math.min(
         Math.max(boxDrag.s0 + boxDrag.x0 - p.x, 0),
@@ -1652,6 +1670,9 @@ canvas.addEventListener('pointermove', (e) => {
   }
   if (bagDrag) {
     if (Math.abs(p.x - bagDrag.x0) > 10) bagDrag.moved = true;
+    if (t > bagDrag.lt) bagDrag.vy = Math.max(-4000, Math.min(4000, -(p.x - bagDrag.lx) / (t - bagDrag.lt)));
+    bagDrag.lx = p.x;
+    bagDrag.lt = t;
     bagScroll = Math.min(
       Math.max(bagDrag.s0 + bagDrag.x0 - p.x, 0),
       bagScrollMax(bagRowItems().length),
@@ -1666,6 +1687,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (e.pointerId !== activeId) return; // not the gesture's finger — its lift fires nothing
   activeId = null;
   fameUp();
+  noteRelease(t); // a held press banks its release-pop for the leaf draw
   if (settingsDrag) {
     settingsDrag = null;
     settingsSliderFlush(); // drag values are write-throttled — bank the last x
@@ -1703,6 +1725,8 @@ canvas.addEventListener('pointerup', (e) => {
   }
   if (dexDrag) {
     const { moved } = dexDrag;
+    if (moved && dexDrag.for !== 'board' && Math.abs(dexDrag.vy) > 250 && t - dexDrag.lt < 0.1)
+      fling = { for: dexDrag.for!, vy: dexDrag.vy }; // a fast flick coasts on
     dexDrag = null;
     if (!moved) {
       // a drag that never moved is a tap: hatch/lab route it to their own
@@ -1774,8 +1798,9 @@ canvas.addEventListener('pointerup', (e) => {
     return;
   }
   if (boxDrag) {
-    const { moved } = boxDrag;
+    const { moved, vy, lt } = boxDrag;
     boxDrag = null;
+    if (moved && Math.abs(vy) > 250 && t - lt < 0.1) fling = { for: 'box', vy };
     // a drag that never moved is a tap: pick a catch, then a teammate to swap into
     if (!moved && scene === 'battle' && battle && (battle.phase === 'map' || battle.phase === 'reward') && menuOpen) {
       const p = toLogical(e);
@@ -1794,8 +1819,9 @@ canvas.addEventListener('pointerup', (e) => {
     return;
   }
   if (bagDrag) {
-    const { moved } = bagDrag;
+    const { moved, vy, lt } = bagDrag;
     bagDrag = null;
+    if (moved && Math.abs(vy) > 250 && t - lt < 0.1) fling = { for: 'bag', vy };
     // a drag that never moved is a tap — same "what does this do" answer
     // the non-scrolling row gives on pointerdown
     if (!moved && scene === 'draft') {
@@ -1942,6 +1968,8 @@ addEventListener('keydown', (e) => {
 canvas.addEventListener('pointercancel', (e) => {
   if (e.pointerId !== activeId) return;
   activeId = null;
+  notePressCancel(); // an interrupt isn't a release — no pop either
+  fling = null;
   helpDrag = null;
   dexDrag = null;
   boxDrag = null;
@@ -2041,6 +2069,44 @@ function update(dt: number) {
   t += dt;
   if (dt > 0) fpsEma = fpsEma ? fpsEma + (1 / dt - fpsEma) * 0.08 : 1 / dt;
   syncWake();
+
+  // home-tab swap re-picks the theme — every assignment path lands here
+  if (homeTab !== lastHomeTab) {
+    lastHomeTab = homeTab;
+    if (scene === 'title') sceneMusic();
+  }
+
+  // scroll flings coast after release — they glide to the rail's edge and
+  // stop hard there (handheld lists don't rubber-band)
+  if (fling) {
+    const f = fling.for;
+    const max =
+      f === 'hatch' ? hatchScrollMax(hatch) :
+      f === 'lab' ? labScrollMax() :
+      f === 'dex' ? dexScrollMax() :
+      f === 'ach' ? achScrollMax() :
+      f === 'box' ? boxScrollMax(battle?.box.length ?? 0) :
+      bagScrollMax(bagRowItems().length);
+    const cur =
+      f === 'hatch' ? hatch.sparkScroll :
+      f === 'lab' ? labScroll :
+      f === 'dex' ? dexScroll :
+      f === 'ach' ? achScroll :
+      f === 'box' ? boxScroll : bagScroll;
+    let s = cur + fling.vy * dt;
+    if (s < 0 || s > max) {
+      s = Math.min(Math.max(s, 0), max);
+      fling.vy = 0;
+    }
+    if (f === 'hatch') hatch.sparkScroll = s;
+    else if (f === 'lab') labScroll = s;
+    else if (f === 'dex') dexScroll = s;
+    else if (f === 'ach') achScroll = s;
+    else if (f === 'box') boxScroll = s;
+    else bagScroll = s;
+    fling.vy *= Math.exp(-5 * dt);
+    if (Math.abs(fling.vy) < 8) fling = null;
+  }
 
   // the hatcher's phase clock always ticks — tMax carries each phase's
   // runway (sized to the pull's hype), the scenes read s.t for animation
@@ -2332,6 +2398,10 @@ function update(dt: number) {
 // scene-change fade — stamped on the first frame a new scene paints
 let lastSceneDrawn: Scene | null = null;
 let sceneT0 = -10;
+// overlay entrances share one stamp — any overlay opening restarts the clock
+let wasOvl = false;
+let ovlT0 = -10;
+let lastHomeTab: HomeTab | null = null; // tab edge → sceneMusic re-picks
 
 // per-frame scratch for the draw calls — map() per call was throwing away
 // 3-5 arrays a frame; these get refilled and never escape render()
@@ -2348,6 +2418,15 @@ function render() {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.restore();
 
+  noteUiFrame(t); // the shared clock leaf draws (pill, uiClose) ease against
+  const anyOvl = !!(dexOpen || dexPick != null || achOpen || boardOpen || hatchOpen || labOpen || tasksOpen || settingsOpen || helpOpen || bugOpen || menuOpen);
+  if (anyOvl && !wasOvl) {
+    ovlT0 = t;
+    sfx('whoosh', 0.9); // the window's paper rush rides every open path
+  }
+  wasOvl = anyOvl;
+  const ovw = (fn: () => void) => overlayPop(ctx, t - ovlT0, fn);
+
   ctx.save();
   switch (scene) {
     case 'loading':
@@ -2359,16 +2438,17 @@ function render() {
       ctx.fillText('loading…', W / 2, H / 2);
       break;
     case 'title':
-      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score, seed: titleSave.seed } : null, t - restartConfirmT0 < 3, homeTab, {
+      drawTitle(ctx, t, titleSave ? { stage: titleSave.pendingNext + 1, score: titleSave.score, seed: titleSave.seed } : null, t - restartConfirmT0, homeTab, {
         arm: t - packArmT < 3,
         flash: t - packFlashT < 4 ? packFlashId : null,
       });
-      if (dexOpen) drawDex(ctx, dexScroll);
-      if (dexPick != null) drawDexDetail(ctx, dexPick, t, sparkArm.id === dexPick && t - sparkArm.t < SPARK_ARM_T); // solo or stacked — its own scrim
-      if (achOpen) drawAch(ctx, achScroll);
-      if (boardOpen) drawBoard(ctx);
+      if (dexOpen) ovw(() => drawDex(ctx, dexScroll));
+      const pick = dexPick; // the guard narrows a local — the closure can't see it
+      if (pick != null) ovw(() => drawDexDetail(ctx, pick, t, sparkArm.id === pick && t - sparkArm.t < SPARK_ARM_T)); // solo or stacked — its own scrim
+      if (achOpen) ovw(() => drawAch(ctx, achScroll));
+      if (boardOpen) ovw(() => drawBoard(ctx));
       if (hatchOpen)
-        drawHatch(ctx, hatch, {
+        ovw(() => drawHatch(ctx, hatch, {
           stars: stars(),
           dust: dust(),
           pityIn: PULL_PITY - (pullCount() % PULL_PITY),
@@ -2379,8 +2459,8 @@ function render() {
           // 'TAP AGAIN' once the window lapsed, since the next tap re-arms
           armedId: sparkArm.id >= 0 && t - sparkArm.t < SPARK_ARM_T ? sparkArm.id : -1,
           armedFrac: sparkArm.id >= 0 ? Math.max(0, 1 - (t - sparkArm.t) / SPARK_ARM_T) : 0,
-        });
-      if (labOpen) drawLab(ctx, labScroll, stars());
+        }));
+      if (labOpen) ovw(() => drawLab(ctx, labScroll, stars()));
       break;
     case 'charm':
       pickDefs.length = draft.picked.length;
@@ -2441,29 +2521,30 @@ function render() {
           battle.drawBalls(ctx, 690, 830);
         }
         if (menuOpen && (battle.phase === 'map' || battle.phase === 'reward')) {
-          const ps = battle.players;
+          const b = battle; // the closure loses the non-null guard on a mutable
+          const ps = b.players;
           menuDefs.length = menuHps.length = menuLvls.length = ps.length;
           for (let i = 0; i < ps.length; i++) {
             menuDefs[i] = ps[i].def;
             menuHps[i] = ps[i].maxHp ? ps[i].hp / ps[i].maxHp : 0;
             menuLvls[i] = ps[i].lvl;
           }
-          drawTeamMenu(
+          ovw(() => drawTeamMenu(
             ctx,
-            battle.box,
-            battle.boxHp,
-            battle.boxLvl,
+            b.box,
+            b.boxHp,
+            b.boxLvl,
             menuDefs,
             menuHps,
             menuLvls,
-            battle.boxSel,
-            battle.teamSel,
+            b.boxSel,
+            b.teamSel,
             boxScroll,
-            battle.captureChance,
-            battle.heldItems,
-            battle.masterArmed,
-            battle.phase === 'reward', // the reward break seats swaps first
-          );
+            b.captureChance,
+            b.heldItems,
+            b.masterArmed,
+            b.phase === 'reward', // the reward break seats swaps first
+          ));
         }
         if (battle.phase === 'reward' && battle.clearCard) drawClearCard(ctx, battle.clearCard, t - (battle.clearCard.t0 ??= t));
         else if (battle.phase === 'reward') battle.treasure.drawReveal(ctx, t);
@@ -2496,10 +2577,10 @@ function render() {
     drawMuteChip(ctx);
     drawGearChip(ctx); // same gate as the hit-test — no dead or buried hotspots
   }
-  if (helpOpen) drawHelp(ctx, helpPage, (!!battle && battle.coach) || !coachDone(), helpWelcome);
-  if (bugOpen) drawBugCard(ctx, runSave()?.seed ?? titleSave?.seed ?? null);
-  if (settingsOpen) drawSettings(ctx, settingsCat, settings());
-  if (tasksOpen) drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined);
+  if (helpOpen) ovw(() => drawHelp(ctx, helpPage, (!!battle && battle.coach) || !coachDone(), helpWelcome));
+  if (bugOpen) ovw(() => drawBugCard(ctx, runSave()?.seed ?? titleSave?.seed ?? null));
+  if (settingsOpen) ovw(() => drawSettings(ctx, settingsCat, settings()));
+  if (tasksOpen) ovw(() => drawTasks(ctx, currentTaskViews(), tasksTab, t, t - taskFlash.t < 2.5 ? taskFlash.text : undefined));
   // playtester lifeline: you can't see their console — a crash paints
   // itself with the run's seed and build, so one screenshot is the report
   if (crash) drawFailCard(ctx, 'CRASHED · SCREENSHOT THIS', crash, false);

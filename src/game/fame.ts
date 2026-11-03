@@ -8,6 +8,7 @@ import { cry } from '../core/audio';
 import { drawMon, drawNpc, drawShiny, itemSprite, loadItem, loadSprite } from '../core/assets';
 import { badgeOf, settings, trainerPick } from './meta';
 import { TYPE_COLOR, type PokeType } from './types';
+import { TYPE_RAMP } from './vfx';
 import { font, fontB, uiWindow, GOLD_HI } from './ui';
 import type { Battle } from './battle';
 
@@ -176,6 +177,20 @@ export function drawFame(ctx: CanvasRenderingContext2D) {
     beam(ctx, W / 2, 130, 520, 90, 300, 1, TYPE_COLOR[m.type], TYPE_COLOR[m.type2 ?? m.type]);
     const dir = i % 2 ? -1 : 1; // entrances alternate off-screen sides
     const x = W / 2 + dir * (1 - ease(s / 0.45)) * (W / 2 + 160);
+    // a short type-ramped glint trail chases the slide-in, dying as it settles
+    if (!REDUCED && s < 0.7) {
+      const ramp = TYPE_RAMP[m.type];
+      const ta = 1 - ease((s - 0.45) / 0.25);
+      if (ta > 0) {
+        for (let k = 1; k <= 5; k++) {
+          const wob = Math.sin(t * 11 + k * 2.1);
+          ctx.globalAlpha = ta * (0.75 - k * 0.11);
+          ctx.fillStyle = k === 1 ? '#ffffff' : ramp[(k - 1) % ramp.length];
+          sparkle(ctx, x + dir * (k * 24 + wob * 6), 400 - 30 + k * 14 + wob * 10, 3 + (6 - k) * 1.4);
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
     mon(ctx, m, x, 400, 240);
     // a type-colored ripple spreads under the feet as the slide settles
     if (s > 0.45 && !REDUCED) {
@@ -250,10 +265,36 @@ export function drawFame(ctx: CanvasRenderingContext2D) {
       const band = { x: 24, y: 752, w: W - 48, h: 72 };
       uiWindow(ctx, band, { dark: true, rad: 10 });
       const bs = Math.min(44, (band.w - 24) / f.badges.length - 6);
+      const bx = (j: number) => W / 2 + (j - (f.badges.length - 1) / 2) * (bs + 6);
       f.badges.forEach((icon, j) => {
         const img = itemSprite(`badges/${icon}`);
-        if (img) ctx.drawImage(img, W / 2 + (j - (f.badges.length - 1) / 2) * (bs + 6) - bs / 2, band.y + (band.h - bs) / 2, bs, bs);
+        if (img) ctx.drawImage(img, bx(j) - bs / 2, band.y + (band.h - bs) / 2, bs, bs);
       });
+      // a gold shimmer sweeps the row once; each badge glints as the front passes
+      const sh = (t - fin - 0.7) / 0.8;
+      if (!REDUCED && sh > 0 && sh < 1) {
+        const front = band.x + band.w * sh;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(band.x + 4, band.y + 4, band.w - 8, band.h - 8);
+        ctx.clip();
+        const gg = ctx.createLinearGradient(front - 40, 0, front + 40, 0);
+        gg.addColorStop(0, 'rgba(255,236,160,0)');
+        gg.addColorStop(0.5, 'rgba(255,236,160,0.45)');
+        gg.addColorStop(1, 'rgba(255,236,160,0)');
+        ctx.fillStyle = gg;
+        ctx.fillRect(band.x, band.y, band.w, band.h);
+        ctx.restore();
+        f.badges.forEach((_, j) => {
+          const d = Math.abs(bx(j) - front);
+          if (d < 44) {
+            ctx.globalAlpha = (1 - d / 44) * 0.9;
+            ctx.fillStyle = '#ffffff';
+            sparkle(ctx, bx(j) + 8, band.y + 16, 4 + 6 * (1 - d / 44));
+            ctx.globalAlpha = 1;
+          }
+        });
+      }
     }
     ctx.globalAlpha = 1;
     // the team shot lands on a single combined flash

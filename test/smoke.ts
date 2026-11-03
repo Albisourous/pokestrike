@@ -1,8 +1,8 @@
 // Headless playthrough — no DOM. Bundle: rolldown test/smoke.ts -f esm -p node
 import './shims';
-import { Battle, HIDE_WP_RATE, MAP_CELL, MAP_OX, MAP_OY, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T, placeLabel, LABEL_INTRO } from '../src/game/battle';
+import { Battle, HIDE_WP_RATE, MAP_CELL, MAP_OX, MAP_OY, TEAM_CAP, ULT_SHOTS, WEATHER_FOR, parseArenaPin, shotDamp, SHOT_T, placeLabel, LABEL_INTRO } from '../src/game/battle';
 import * as battleModule from '../src/game/battle';
-import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks, gaugeMon } from '../src/game/data';
+import { makeStage, ROSTER, TOTAL_STAGES, speciesById, rollWave, trainerWave, tierOf, BOSS_POOL, ALL_SPECIES, PULLABLE, PULL_COST, PULL_PITY, PULL_SHINY, PULL_RATES, DUST_BY_TIER, pullSpecies, dustCost, INVADER_IDS, shinyOdds, EVO_LINES, setPay, bst, raidStage, RAID_MODS, AVATARS, genRoom, buildRoom, ROOM_LAYOUTS, TYPE_MOVE, foeClocks, gaugeMon, draftOrder, DRAFT_ROUNDS } from '../src/game/data';
 import { existsSync, readFileSync } from 'fs';
 import { mulberry32 } from '../src/core/rng';
 import { hideWpRate } from '../src/game/weakpoint';
@@ -40,6 +40,7 @@ import { SECRET_IDS, rollSecret, maybeSecret, enterSecret, placeSecret, closeSec
 import * as secretExports from '../src/game/secret';
 import { evolveOnce, midBossPick, midBossStop } from '../src/game/midboss';
 import { stopRows } from '../src/game/stops';
+import { castNamedSuper } from '../src/game/supers';
 
 let fails = 0;
 const ok = (cond: boolean, msg: string) => {
@@ -801,7 +802,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   (b as any).phase = 'enemy';
   (b as any).enemyPhaseT = 100;
   (b as any).resolveEnemyTurn();
-  b.update(0.4);
+  b.update(0.7); // the staggered attack queue ends the turn ~0.6s in
   const pickup = (b as any).pickups[0];
   ok(pickup.kind === 'sitrus-berry' && pickup.age === 0, 'oran berry ripens into sitrus after an enemy turn');
 
@@ -1840,14 +1841,15 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   (b as any).spawnWave(0);
   const shooter = (b as any).active;
   const e = (b as any).enemies[0];
+  e.lvl = 40; // a deep foe — floored EXP only teaches off real weight
   const pow0 = shooter.pow;
   const lvl0 = shooter.lvl;
   const bench = (b as any).players.filter((p: any) => p !== shooter && !p.dead);
   const bench0 = bench.map((p: any) => p.lvl);
   (b as any).hurt(e, e.hp + 50, '#fff');
   ok(e.dead, 'lethal hit kills');
-  ok(shooter.lvl > lvl0 && shooter.pow > pow0, `KO levels shooter (lv${lvl0}->${shooter.lvl} pow ${shooter.pow.toFixed(2)})`);
-  ok(bench.length > 0 && bench.every((p: any, i: number) => p.lvl === bench0[i] + Math.max(1, Math.round(e.lvl * 0.05 * 0.5))), `KO shares EXP with the living bench (${bench0.join(',')} -> ${bench.map((p: any) => p.lvl).join(',')})`);
+  ok(shooter.lvl === lvl0 + Math.floor(e.lvl * 0.05) + (e.lvl > lvl0 ? 1 : 0) && shooter.pow > pow0, `KO levels shooter (lv${lvl0}->${shooter.lvl} pow ${shooter.pow.toFixed(2)})`);
+  ok(bench.length > 0 && bench.every((p: any, i: number) => p.lvl === bench0[i] + Math.floor(e.lvl * 0.05 * 0.5)), `KO shares EXP with the living bench (${bench0.join(',')} -> ${bench.map((p: any) => p.lvl).join(',')})`);
   const lvTexts = (b as any).texts.map((t: any) => t.text);
   ok(lvTexts.filter((t: string) => /^LV \d+!$/.test(t)).length === 1 && lvTexts.filter((t: string) => t === 'TEAM LV UP').length === 1, `shared EXP is quiet: one LV popup for the launcher, one TEAM LV UP (${lvTexts.join('|')})`);
 }
@@ -1857,11 +1859,11 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   const karp = ROSTER.find((r) => r.id === 129)!;
   const b = new Battle(arena, [karp, ...team()], makeStage(3, 'T'), mulberry32(3));
   const p = (b as any).players[0];
-  p.lvl = 50; // earned levels mid-run
-  (b as any).absorbDupe(karp); // dup catch → evolve
+  p.lvl = 50; // earned levels mid-run — over the Lv16 fusion gate
+  (b as any).absorbDupe(karp); // dup catch → feed + evolve
   ok(p.def.id === 130, `Magikarp evolved into ${p.def.name}`);
   const m = ROLE_MODS[roleOf(p.def.stats, p.def.healer)];
-  ok(Math.abs(p.pow - m.pow * lvlPow(offStat(p.def.stats, p.def.type), 50)) < 0.001, `levels survive evolution (pow ${p.pow.toFixed(2)} vs base ${m.pow})`);
+  ok(Math.abs(p.pow - m.pow * lvlPow(offStat(p.def.stats, p.def.type), p.lvl)) < 0.001, `levels survive evolution (pow ${p.pow.toFixed(2)} vs base ${m.pow})`);
 }
 
 // --- evolve scene: plays out, lands on the evolved species, tap skips ------
@@ -1870,6 +1872,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   const karp = ROSTER.find((r) => r.id === 129)!;
   const b = new Battle(arena, [karp, ...team()], makeStage(3, 'T'), mulberry32(3));
   const p = (b as any).players[0];
+  p.lvl = 20; // over the Lv16 fusion gate
   (b as any).absorbDupe(karp);
   ok(evoActive() && evoScene()!.from === 129 && evoScene()!.to === 130, 'a fielded evolution opens the evolve scene');
   let n = 0;
@@ -1888,6 +1891,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   const eevee = ROSTER.find((r) => r.id === 133)!;
   const b = new Battle(arena, [eevee, ...team().slice(0, 3)], makeStage(3, 'T'), mulberry32(3));
   const p = (b as any).players[0];
+  p.lvl = 20; // over the Lv16 fusion gate
   (b as any).absorbDupe(eevee); // a dupe normally auto-evolves — a branch can't
   ok(p.def.id === 133 && (b as any).evoPending.length === 1, 'split evo waits for a pick');
   (b as any).enterReward();
@@ -1912,6 +1916,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
 {
   const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(5));
   const p = (b as any).players[0];
+  p.lvl = 20; // over the Lv16 fusion gate
   (b as any).absorbDupe(p.def); // Pikachu dupe: +1 luck AND evolves to Raichu
   ok(p.def.luck === 1 && p.def.id === 26, `dupe banks luck through evolution (${p.def.name} luck ${p.def.luck})`);
   (p as any).def = { ...p.def, luck: 45 }; // a heavily-fused mon
@@ -1920,6 +1925,52 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   const base = Math.max(2, Math.round(n * 0.18));
   const gems = (b as any).lootCoins.filter((c: any) => c.kind === 'gem').length;
   ok(gems === base + 4 || gems === base + 5, `team luck 45 pays ~4 bonus gems (${gems} vs base ${base})`);
+}
+
+// --- fusion feed: under-gate dupes pour levels, gated ones evolve --------
+{
+  const karp = ROSTER.find((r) => r.id === 129)!;
+  const b = new Battle(arena, [karp, ...team()], makeStage(3, 'T'), mulberry32(3));
+  const p = (b as any).players[0];
+  p.lvl = 8; // under the Lv16 gate
+  (b as any).absorbDupe(karp, false, 30); // a deep dupe pours its level in
+  ok(p.def.id === 129 && p.lvl === 8 + Math.max(2, Math.round(30 * 0.15)), `under-gate dupe feeds levels (lv${p.lvl})`);
+  ok(p.def.luck === 1, 'a fed dupe still banks luck');
+  ok((b as any).texts.some((t: any) => t.text === 'LV 16 TO EVOLVE'), 'the gate announces its bar');
+  (b as any).absorbDupe(karp, false, 30); // fed past the gate — this dupe evolves
+  ok(p.def.id === 130, `fed past the gate, the next dupe evolves (${p.def.name} lv${p.lvl})`);
+}
+
+// --- boxed dupes feed the benched copy ------------------------------------
+{
+  const karp = ROSTER.find((r) => r.id === 129)!;
+  const b = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(3));
+  (b as any).boxAdd({ ...karp, lvl: 10 }, 1, false);
+  (b as any).absorbDupe(karp, false, 20);
+  ok((b as any).boxLvl[0] === 10 + Math.round(20 * 0.15), `boxed dupe feeds the bench (boxLvl ${(b as any).boxLvl[0]})`);
+  ok((b as any).box[0].id === 129, 'a benched mon under the gate keeps its form');
+}
+
+// --- open slots let a boxed catch deploy outright -------------------------
+{
+  const b: any = new Battle(arena, [ROSTER[0], ROSTER[3]], makeStage(3, 'T'), mulberry32(3));
+  b.phase = 'reward';
+  b.boxAdd({ ...speciesById(25)!, lvl: 7 }, 1, false);
+  b.joinFromBox(0);
+  ok(b.players.length === 3 && b.players[2].lvl === 7 && b.box.length === 0, `catch joins an open slot (${b.players.length} fielded)`);
+  b.boxAdd({ ...speciesById(4)!, lvl: 5 }, 1, false);
+  b.joinFromBox(0);
+  b.boxAdd({ ...speciesById(7)!, lvl: 5 }, 1, false);
+  b.joinFromBox(0);
+  ok(b.players.length === TEAM_CAP && b.box.length === 1, 'a full team refuses a fifth join');
+}
+
+// --- the draft deals small collections without undefined slots ------------
+{
+  const two = [ROSTER[0], ROSTER[3]];
+  const ord = draftOrder(mulberry32(9), two);
+  ok(ord.every((i) => Number.isInteger(i) && i >= 0 && i < two.length), `small pool deals clean indices (${ord.join(',')})`);
+  ok(ord.length > 0 && ord.length <= DRAFT_ROUNDS * 3, 'a thin pool deals what it has');
 }
 
 // --- catches can't outlevel the team they join ----------------------------
@@ -3534,6 +3585,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
 
   // weak point: contact on the marked face pays triple
   const u = b.players[0];
+  u.def = { ...u.def, type: 'fighting' as const }; // the seeded boss is Rhydon — its lightning rod drinks an electric striker
   boss.weakA = -Math.PI / 2; // face up
   u.x = boss.x;
   u.y = boss.y - boss.r - u.r - 4;
@@ -3641,6 +3693,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     bd.enemies.forEach((e, i) => { e.x = 200 + i * 60; e.y = 400; e.vx = e.vy = 0; e.shieldN = 0; });
     const hps = bd.enemies.map((e) => e.hp);
     (bd as any).bumpAlly(dp, dp);
+    for (const d of [...(bd as any).delays]) d.fn(); // the beam rides a charge beat
     ok((bd as any).beams.length > 0 && (bd as any).beams[0].w! > 2, 'hyper beam fires the fat line');
     ok(bd.enemies.every((e, i) => e.hp < hps[i]), 'hyper beam pierces every foe on the line');
     // a foe parked behind the caster stays untouched
@@ -3651,6 +3704,7 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     dp.cd = 0;
     const bhp = behind.hp;
     (bd as any).bumpAlly(dp, dp);
+    for (const d of [...(bd as any).delays]) d.fn();
     ok(behind.hp === bhp, 'hyper beam spares foes behind the caster');
   }
 
@@ -4866,7 +4920,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     b.enemies.forEach((e: any, i: number) => { e.x = 100 + i * 20; e.y = 300; e.vx = e.vy = 0; });
     const e = b.enemies[0]; // farthest from p — the mark lands under it
     (b as any).bumpAlly(p, p);
-    ok((b as any).delays.length > 0 && (b as any).waves.some((w: any) => w.life === 1.8), 'future sight telegraphs before it hits');
+    ok((b as any).delays.length > 0 && (b as any).waves.some((w: any) => w.life === 1.35), 'future sight telegraphs before it hits');
     const hp1 = e.hp; // a role passive may already have nicked it
     drain(b);
     ok(e.dead || e.hp < hp1, `future sight's delayed nuke lands (${hp1} → ${e.dead ? 'KO' : e.hp})`);
@@ -4878,6 +4932,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     p.x = 60; p.y = 400;
     b.enemies.forEach((e: any, i: number) => { e.x = 220 + i * 50; e.y = 400; e.vx = e.vy = 0; e.timer = 3; });
     (b as any).bumpAlly(p, p);
+    drain(b); // the lance rides a cold-glint beat
     ok(b.enemies.every((e: any) => e.dead || e.timer > 3), 'ice beam freezes every foe it spears');
   }
 
@@ -4886,6 +4941,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   {
     const { b, p } = mk(129); // Magikarp
     (b as any).bumpAlly(p, p);
+    drain(b); // the joke plays out on its beats — log lands last
     ok(
       b.fieldLog.some((l) => l.includes('SPLASH')) && (b as any).beams.length === 0 && (b as any).delays.length === 0,
       'splash is a dud — logged, no type-super fallthrough',
@@ -4903,6 +4959,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
       const hp0 = b.enemies.map((e: any) => e.hp);
       p.hp = Math.max(1, Math.round(p.maxHp * frac));
       (b as any).bumpAlly(p, p);
+      drain(b); // the geysers erupt on staggered beats
       return b.enemies.reduce((s: number, e: any, i: number) => s + hp0[i] - e.hp, 0);
     };
     ok(spout(1) > spout(0.05), 'water spout pours harder at full HP than near-faint');
@@ -4939,6 +4996,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     const e = b.enemies[0];
     const want = Math.max(1, Math.round(e.maxHp * (p.hp / p.maxHp)));
     (b as any).bumpAlly(p, p);
+    drain(b); // the dive lands a beat after the crouch
     ok(!e.dead && e.hp <= want, `endeavor pulls the foe to the caster's fraction (${e.hp}/${e.maxHp} → ≤${want})`);
   }
 
@@ -4962,6 +5020,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     const flyers = b.enemies.slice(1); // hold refs — the dead drop out of enemies[]
     const fly0 = flyers.map((e: any) => e.hp);
     (b as any).bumpAlly(p, p);
+    drain(b); // the crack races the ray after the growl
     ok(g.dead, 'fissure KOs the grounded mark');
     ok(
       flyers.length > 0 && flyers.every((e: any, i: number) => !e.dead && e.hp === fly0[i]),
@@ -5901,14 +5960,15 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   b['spawnWave'](0);
   const powers: number[] = [];
   clearAnims();
-  b['castSignature']('THUNDERBOLT', b.players[0], b.players[0], (_e, power) => { powers.push(power); return 1; });
+  castNamedSuper(b['superFx'], 'THUNDERBOLT', b.players[0], b.players[0], (_e, power) => { powers.push(power); return 1; });
+  for (const d of [...(b as any).delays]) d.fn(); // the bolt rides a charge beat
   ok(powers[0] === 2.2 && animCount() > 0, 'signature visuals preserve the damage callback power');
   clearAnims();
   for (const p of b.players) p.dead = true;
   b['fireMove'](b.enemies[0], { kind: 'laser', move: 'HYPER BEAM', turn: 5, t: 0 });
   ok(animCount() === 0, 'laser without a live target spawns no sprites');
   for (const e of b.enemies) e.dead = true;
-  ok(!b['castSignature']('THUNDERBOLT', b.players[0], b.players[0], () => 1) && animCount() === 0,
+  ok(!castNamedSuper(b['superFx'], 'THUNDERBOLT', b.players[0], b.players[0], () => 1) && animCount() === 0,
     'signature without live foes spawns no sprites');
   b['spawnWave'](0);
   burst(MOVE_ANIM.fire, 0, 0, false);
@@ -5922,7 +5982,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(animCount() === 0, 'animation pool starts empty');
   for (const type of TYPES) {
     ok(!!MOVE_ANIM[type], `${type} has a Gen 3 recipe`);
-    ok(recipeFor(type, TYPE_MOVE[type].move) === MOVE_ANIM[type], `${TYPE_MOVE[type].move} resolves its recipe`);
+    ok(recipeFor(type, TYPE_MOVE[type].move).sheet === MOVE_ANIM[type].sheet, `${TYPE_MOVE[type].move} resolves its recipe`);
     const r = MOVE_ANIM[type];
     beam(r, 0, 0, 100, 100); burst(r, 100, 100, true); rain(r, 100, 100); ring(r, 100, 100, 80);
     stepAnims(1);

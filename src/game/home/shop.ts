@@ -5,6 +5,7 @@ import { drawMon, drawNpc, itemSprite, loadItem, loadSprite } from '../../core/a
 import { slice } from '../bg';
 import { TILE_BRICK, TILE_DIAMOND, TILE_BUSH, FLOWER_PINK, type TileRect } from '../maptiles';
 import { INK, PARCH, GOLD_HI, rr, ufit, fontB, uiWindow, type Rect } from '../ui';
+import { settings } from '../meta';
 import { TYPE_COLOR } from '../types';
 import type { SpeciesDef } from '../data';
 
@@ -97,7 +98,8 @@ export function drawShopScene(ctx: CanvasRenderingContext2D, r: Rect, t: number,
   ctx.beginPath();
   ctx.rect(r.x, r.y, r.w, top - r.y);
   ctx.clip();
-  drawNpc(ctx, t % 6 < 0.9 ? 'shopkeeper_f_left_0' : 'shopkeeper_f_down_0', sx + s.w * 0.8, top + 22, 66);
+  const bob = REDUCED || !settings().shake ? 0 : Math.sin(t * 2.1) * 1.5;
+  drawNpc(ctx, t % 6 < 0.9 ? 'shopkeeper_f_left_0' : 'shopkeeper_f_down_0', sx + s.w * 0.8, top + 22 + bob, 66);
   ctx.restore();
   // prizes on the counter top — each takes a turn catching the light
   ctx.imageSmoothingEnabled = false;
@@ -134,6 +136,17 @@ export function drawShopScene(ctx: CanvasRenderingContext2D, r: Rect, t: number,
     ctx.fillRect(-16, -46, 32, 92);
     ctx.restore();
   }
+
+  // a few dust motes hang in the back room's air — shake=0 parks them
+  const ft = settings().shake === 0 ? 0 : t;
+  for (let i = 0; i < 4; i++) {
+    const mx = r.x + ((i * 137 + ft * 9) % (r.w + 24)) - 12;
+    const my = r.y + 36 + ((i * 91) % (r.h - 80)) + Math.sin(ft * 0.8 + i * 2.1) * 7;
+    ctx.globalAlpha = 0.08 + 0.07 * (0.5 + 0.5 * Math.sin(ft * 1.6 + i * 2.9));
+    ctx.fillStyle = '#fff8d8';
+    ctx.fillRect(mx, my, 3, 3);
+  }
+  ctx.globalAlpha = 1;
 
   // the day's rate-up face, big on a type-glow pad
   const cx = r.x + 128, gy = r.y + r.h - 32;

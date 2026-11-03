@@ -171,6 +171,17 @@ export class Telops {
     ctx.fillStyle = b.tint;
     ctx.fillRect(0, cy - H / 2 + 7, W, 2);
     ctx.fillRect(0, cy + H / 2 - 9, W, 2);
+    // the mon's type bleeds in off both ribbon ends — a foe banner's element
+    // reads before the name does; no mon, the fallback gold ends
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = b.tint;
+    const glow = ctx.globalAlpha;
+    for (const [gx, gw, ga] of [[0, 36, 0.18], [36, 22, 0.07], [W - 36, 36, 0.18], [W - 58, 22, 0.07]] as const) {
+      ctx.globalAlpha = glow * ga;
+      ctx.fillRect(gx, cy - H / 2, gw, H);
+    }
+    ctx.restore();
     // speed streaks drift across the band while it holds — speed runs them hotter, GAME OVER holds them dead still
     const streak = b.kind === 'over' ? 0 : b.kind === 'speed' ? 1.6 : 1;
     if (streak) {
@@ -178,8 +189,9 @@ export class Telops {
       ctx.beginPath();
       ctx.rect(0, cy - H / 2 + 9, W, H - 18);
       ctx.clip();
+      const bandA = ctx.globalAlpha; // banner fade — the sparks scale off it
       ctx.fillStyle = color;
-      ctx.globalAlpha *= 0.12;
+      ctx.globalAlpha = bandA * 0.12;
       for (let i = 0; i < 4; i++) {
         const x = ((i * 157 + t * 520 * streak) % (W + 120)) - 60;
         ctx.beginPath();
@@ -188,6 +200,16 @@ export class Telops {
         ctx.lineTo(x + 70, cy - H / 2);
         ctx.lineTo(x + 44, cy - H / 2);
         ctx.fill();
+      }
+      // ult and boss bands carry a finer spark streak on top — type-tinted
+      // motes with a white mix; reduced motion parks them mid-flight
+      if (b.kind === 'ult' || b.kind === 'boss') {
+        const g = still ? 0.5 : t;
+        for (let i = 0; i < 6; i++) {
+          ctx.fillStyle = i % 2 ? b.tint : '#ffffff';
+          ctx.globalAlpha = bandA * (0.3 + 0.18 * Math.sin(i * 2.4 + g * 9));
+          ctx.fillRect(((i * 97 + g * 680) % (W + 40)) - 20, cy - H / 2 + 12 + ((i * 41) % (H - 24)), 3, 3);
+        }
       }
       ctx.restore();
     }
@@ -223,7 +245,9 @@ export class Telops {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 6;
     const ty = cy + (b.sub || b.mons ? (spec.minor ? 2 : 4) : 12);
-    const pop = !still && (b.kind === 'combo' || b.kind === 'connect' || b.kind === 'boss' || b.kind === 'ult') ? 1 + (1 - kIn) * 0.45 : 1;
+    // the scale kick climbs with the chain tier — NICE pops, EXCELLENT slams
+    const tier = b.kind === 'combo' ? Math.max(0, COMBO_TIERS.findIndex(([, l]) => l === b.title)) : 0;
+    const pop = !still && (b.kind === 'combo' || b.kind === 'connect' || b.kind === 'boss' || b.kind === 'ult') ? 1 + (1 - kIn) * (0.45 + tier * 0.18) : 1;
     ctx.fillStyle = b.kind === 'start' || b.kind === 'ult' || b.kind === 'clear' ? PARCH : color;
     ctx.save();
     ctx.translate(mid, ty);
@@ -235,10 +259,17 @@ export class Telops {
       let px = 13;
       ctx.font = fontB(px);
       while (px > 9 && ctx.measureText(b.sub).width > room) ctx.font = fontB(--px);
+      // the fontB floor can't shrink past 12 — a still-wide sub ellipsizes
+      // at the art's edge instead of inking over the mon
+      let sub = b.sub;
+      if (ctx.measureText(sub).width > room) {
+        while (sub.length > 3 && ctx.measureText(sub.trimEnd() + '…').width > room) sub = sub.slice(0, -1);
+        sub = sub.trimEnd() + '…';
+      }
       ctx.lineWidth = 4;
-      ctx.strokeText(b.sub, mid, ty + (spec.minor ? 26 : 32));
+      ctx.strokeText(sub, mid, ty + (spec.minor ? 26 : 32));
       ctx.fillStyle = b.kind === 'start' || b.kind === 'ult' || b.kind === 'clear' ? color : PARCH;
-      ctx.fillText(b.sub, mid, ty + (spec.minor ? 26 : 32));
+      ctx.fillText(sub, mid, ty + (spec.minor ? 26 : 32));
     }
     if (b.mons && b.mons.length > 1) {
       // ALL CONNECT: the chain literally links the fronts

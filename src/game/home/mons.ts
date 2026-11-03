@@ -16,7 +16,7 @@ import { moveOf, roleOf, superDesc } from '../stats';
 import { TYPE_COLOR } from '../types';
 import {
   ACCENT, GOLD, GOLD_HI, INK, INK_FAINT, INK_SOFT, font, fontB, scrim, uiClose,
-  uiPanel, uiRow, uiWindow,
+  uiPanel, uiRow, uiWindow, springK,
 } from '../ui';
 import { ballGlyph, fillStar, fitFontB, monShadow, pill, rim, roundRect } from '../screens';
 
@@ -648,7 +648,7 @@ export function drawDexDetail(ctx: CanvasRenderingContext2D, id: number, t = 0, 
   // the fold: one STATS row owns bond, trait flags and the stat block —
   // the default card stops at the super, the depth stays a tap away
   const open = statsFor === id;
-  uiRow(ctx, DEX_STATS, 'STATS · BOND · TRAITS', { on: open, right: open ? '▲' : '▼' });
+  uiRow(ctx, DEX_STATS, 'STATS · BOND · TRAITS', { on: open, right: open ? '▲' : '▼', onK: springK('dexstats', open ? 1 : 0, 0.14) });
 
   if (open) {
     void loadItem('friend-ball');

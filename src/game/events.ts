@@ -27,9 +27,14 @@ export interface EventArt {
   slot?: string[];
 }
 
+// the stop's theatre tag — battle.ts choreographs the beat at the stop's
+// anchor: heal motes, ambush red, a coin spray. Choices carry it per-option.
+export type EventFx = 'heal' | 'gold' | 'ambush' | 'egg' | 'mystic' | 'blood' | 'treasure';
+
 export interface EventOutcome {
   note: string; // flavor line — becomes the wave banner or a map toast
   art?: EventArt; // the card's stage picture
+  fx?: EventFx; // the moment the stop plays once it resolves
   wave?: WaveSpawn[]; // scripted fight replacing the row's wave
   skip?: boolean; // resolved peacefully — no battle this stop
   // the stop ASKS instead of resolving — the map holds until the player picks
@@ -88,7 +93,7 @@ const EVENTS: GameEvent[] = [
       const needed = b.players.some((p) => p.dead || p.hp < p.maxHp);
       for (const p of b.players) { p.dead = false; p.hp = p.maxHp; }
       if (needed) sfx('heal'); // the spring revives too — healAll can't reach dead mons
-      return { note: needed ? 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!' : 'A HIDDEN SPRING · NOBODY NEEDED IT.', art: { item: 'mystic-water' }, skip: true };
+      return { note: needed ? 'A HIDDEN SPRING FULLY RESTORED YOUR TEAM!' : 'A HIDDEN SPRING · NOBODY NEEDED IT.', art: { item: 'mystic-water' }, fx: needed ? 'heal' : undefined, skip: true };
     },
   },
   {
@@ -100,6 +105,7 @@ const EVENTS: GameEvent[] = [
           ? 'YOU FOUND A BERRY BUSH · THE TEAM RECOVERED 30%!'
           : 'A BERRY BUSH · THE TEAM WAS ALREADY AT FULL STRENGTH.',
         art: { item: b.roll() < 0.5 ? 'oran-berry' : 'sitrus-berry' },
+        fx: n ? 'heal' : undefined,
         skip: true,
       };
     },
@@ -108,7 +114,7 @@ const EVENTS: GameEvent[] = [
     w: 3,
     run: (b) => {
       for (const p of b.players) b.gainLevels(p, 2);
-      return { note: 'YOU DUG UP A RARE CANDY STASH · EVERYONE +2 LEVELS!', art: { item: 'hp-up' }, skip: true };
+      return { note: 'YOU DUG UP A RARE CANDY STASH · EVERYONE +2 LEVELS!', art: { item: 'hp-up' }, fx: 'gold', skip: true };
     },
   },
   {
@@ -122,6 +128,7 @@ const EVENTS: GameEvent[] = [
       return {
         note: `A WANDERING TUTOR DRILLED ${p.def.name.toUpperCase()} · SUPER -1 SHOT!`,
         art: { npc: 'expert_f_down_0' },
+        fx: 'mystic',
         skip: true,
       };
     },
@@ -145,7 +152,7 @@ const EVENTS: GameEvent[] = [
     run: (b) => {
       b.eggIn = 3;
       b.eggJustLaid = true;
-      return { note: 'YOU FOUND AN EGG! IT RUSTLES… (HATCHES IN 3 STOPS)', art: { item: 'lucky-egg' }, skip: true };
+      return { note: 'YOU FOUND AN EGG! IT RUSTLES… (HATCHES IN 3 STOPS)', art: { item: 'lucky-egg' }, fx: 'egg', skip: true };
     },
   },
   {
@@ -165,6 +172,7 @@ const EVENTS: GameEvent[] = [
       return {
         note: `${name} LEFT… AND ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED!`,
         art: { mon: def.id },
+        fx: 'mystic',
         skip: true,
       };
     },
@@ -181,6 +189,7 @@ const EVENTS: GameEvent[] = [
       ];
       return {
         note: `AN ALPHA ${boss.name.toUpperCase()} GUARDS A TREASURE!`,
+        fx: 'ambush',
         wave: [...escorts, { def: boss, nx: 0.5, ny: 0.35, boss: true }],
       };
     },
@@ -189,7 +198,7 @@ const EVENTS: GameEvent[] = [
     w: 3,
     run: (b) => {
       // dark pack ambush — Mightyena and its cronies
-      return { note: 'A WILD PACK AMBUSHES YOU!', wave: gridWave(b, [262, 198, 353, 261]) };
+      return { note: 'A WILD PACK AMBUSHES YOU!', fx: 'ambush', wave: gridWave(b, [262, 198, 353, 261]) };
     },
   },
   {
@@ -197,7 +206,7 @@ const EVENTS: GameEvent[] = [
     run: (b) => {
       // fake item ball — the roadside ball was a mimic all along
       // voltorb, electrode, foongus, amoonguss
-      return { note: 'IT WAS A MIMIC!', art: { item: 'master-ball' }, wave: gridWave(b, [100, 101, 590, 591]) };
+      return { note: 'IT WAS A MIMIC!', art: { item: 'master-ball' }, fx: 'ambush', wave: gridWave(b, [100, 101, 590, 591]) };
     },
   },
   {
@@ -219,7 +228,7 @@ const EVENTS: GameEvent[] = [
               const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
               if (!p) return { note: 'THE BOX WAS EMPTY. HE VANISHED.', skip: true };
               bb.grantPerk(p);
-              return { note: `THE BOX HELD ${p.name.toUpperCase()}!`, skip: true };
+              return { note: `THE BOX HELD ${p.name.toUpperCase()}!`, fx: 'gold', skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'YOU KEPT WALKING.', skip: true }) },
@@ -244,7 +253,7 @@ const EVENTS: GameEvent[] = [
                 p.hp = Math.max(1, Math.round(p.hp - p.maxHp * 0.15));
                 bb.gainLevels(p, 2);
               }
-              return { note: 'THE SHRINE DRANK DEEP · EVERYONE GREW +2 LEVELS.', skip: true };
+              return { note: 'THE SHRINE DRANK DEEP · EVERYONE GREW +2 LEVELS.', fx: 'blood', skip: true };
             },
           },
           { label: 'LEAVE IT', run: () => ({ note: 'THE HUM FADED BEHIND YOU.', skip: true }) },
@@ -261,6 +270,7 @@ const EVENTS: GameEvent[] = [
       return {
         note: n ? `A MYSTIC TUNED THE TEAM · ${n} SUPER${n > 1 ? 'S' : ''} CHARGED!` : 'THE MYSTIC FOUND NOTHING TO TUNE.',
         art: { item: 'metronome' },
+        fx: n ? 'mystic' : undefined,
         skip: true,
       };
     },
@@ -279,6 +289,7 @@ const EVENTS: GameEvent[] = [
             label: 'CLIMB DOWN · FIGHT',
             run: (bb) => ({
               note: 'SOMETHING MOVED IN THE DARK!',
+              fx: 'ambush',
               wave: [92, 353, 355, 198, 302].flatMap((id, i) => {
                 const nx = 0.2 + (i % 3) * 0.3 + (bb.roll() - 0.5) * 0.08;
                 const def = speciesById(id);
@@ -290,7 +301,7 @@ const EVENTS: GameEvent[] = [
             label: 'TOSS A COIN IN',
             run: (bb) => {
               bb.score += 100;
-              return { note: 'YOU WISHED FOR LUCK · +100 SCORE.', skip: true };
+              return { note: 'YOU WISHED FOR LUCK · +100 SCORE.', fx: 'gold', skip: true };
             },
           },
         ],
@@ -319,7 +330,7 @@ const EVENTS: GameEvent[] = [
               bb.applyDef(weak, { ...def, shiny: shiny || undefined }, Math.min(100, weak.lvl + 4), weak.hp / weak.maxHp);
               if (recordCapture([def.id])) taskTick({ dex: 1 }); // the stranger lands in the dex
               if (shiny) recordShiny(def.id); // a shiny arrival counts like a caught one
-              return { note: `${name} LEFT… ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED AT Lv${weak.lvl}!`, skip: true };
+              return { note: `${name} LEFT… ${shiny ? 'SHINY ' : ''}${def.name.toUpperCase()} ARRIVED AT Lv${weak.lvl}!`, fx: 'mystic', skip: true };
             },
           },
           { label: 'DECLINE', run: () => ({ note: 'THE COLLECTOR NODDED AND MOVED ON.', skip: true }) },
@@ -348,15 +359,15 @@ const EVENTS: GameEvent[] = [
               if (r < 0.5) return { note: 'NOT EVEN A CHERRY · THE HOUSE ATE 200.', skip: true };
               if (r < 0.9) {
                 bb.score += 400;
-                return { note: 'BARS LINE UP · THE SPIN PAID DOUBLE! +400 SCORE.', skip: true };
+                return { note: 'BARS LINE UP · THE SPIN PAID DOUBLE! +400 SCORE.', fx: 'gold', skip: true };
               }
               const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
               if (!p) {
                 bb.score += 600;
-                return { note: 'THE REELS JAMMED ON 777 · +600 SCORE.', skip: true };
+                return { note: 'THE REELS JAMMED ON 777 · +600 SCORE.', fx: 'gold', skip: true };
               }
               bb.grantPerk(p);
-              return { note: `777 · JACKPOT! THE MACHINE DROPPED ${p.name.toUpperCase()}!`, skip: true };
+              return { note: `777 · JACKPOT! THE MACHINE DROPPED ${p.name.toUpperCase()}!`, fx: 'gold', skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'THE REELS SPUN ON WITHOUT YOU.', skip: true }) },
@@ -379,7 +390,7 @@ const EVENTS: GameEvent[] = [
             run: (bb) => {
               if (bb.roll() < 0.3) {
                 // geodude, onix, aron, shuckle — it was a nest
-                return { note: 'THE ROCK FIGHTS BACK · IT WAS A NEST!', wave: gridWave(bb, [74, 95, 304, 213]) };
+                return { note: 'THE ROCK FIGHTS BACK · IT WAS A NEST!', fx: 'ambush', wave: gridWave(bb, [74, 95, 304, 213]) };
               }
               // helix/dome/root/claw/skull/armour fossils — old amber and the
               // living fossil ride the rare pull
@@ -392,6 +403,7 @@ const EVENTS: GameEvent[] = [
               return {
                 note: `${rare ? 'AN OLD AMBER' : 'A FOSSIL'} CRACKED OPEN · ${def.name.toUpperCase()} JOINED YOUR BOX!`,
                 art: { mon: def.id },
+                fx: 'egg', // the fossil cracks like a shell — same sparks
                 skip: true,
               };
             },
@@ -415,7 +427,7 @@ const EVENTS: GameEvent[] = [
             label: 'CAST A LINE',
             run: (bb) => {
               if (bb.roll() < 0.25)
-                return { note: 'SOMETHING HUGE BITES!', wave: gridWave(bb, [130, 129, 118, 90]) };
+                return { note: 'SOMETHING HUGE BITES!', fx: 'ambush', wave: gridWave(bb, [130, 129, 118, 90]) };
               // magikarp, poliwag, goldeen, shellder, remoraid, luvdisc
               const ids = [129, 60, 118, 90, 223, 370];
               const def = speciesById(ids[Math.floor(bb.roll() * ids.length)]);
@@ -449,7 +461,7 @@ const EVENTS: GameEvent[] = [
             run: (bb) => {
               // pineco, combee, aipom, heracross + weedle, venonat
               if (bb.roll() < 0.4)
-                return { note: 'THE SWARM IS FURIOUS!', wave: gridWave(bb, [204, 415, 190, 214, 13, 48]) };
+                return { note: 'THE SWARM IS FURIOUS!', fx: 'ambush', wave: gridWave(bb, [204, 415, 190, 214, 13, 48]) };
               const ids = [204, 415, 190, 214];
               const def = speciesById(ids[Math.floor(bb.roll() * ids.length)]);
               if (!def) return { note: 'ONLY LEAVES SHOOK LOOSE.', skip: true };
@@ -488,6 +500,7 @@ const EVENTS: GameEvent[] = [
               return {
                 note: `${ace.def.name.toUpperCase()} LED THE DRILLS · EVERYONE +1 LEVEL!`,
                 art: { item: 'macho-brace' },
+                fx: 'blood',
                 skip: true,
               };
             },
@@ -509,6 +522,7 @@ const EVENTS: GameEvent[] = [
       ];
       return {
         note: `A GOLDEN ${def.name.toUpperCase()} SPARKLES IN THE BRUSH!`,
+        fx: 'ambush',
         wave: [...escorts, { def: { ...def, shiny: true }, nx: 0.5, ny: 0.35 }],
       };
     },
@@ -525,7 +539,7 @@ const EVENTS: GameEvent[] = [
         nx: 0.15 + (i % 3) * 0.35 + (b.roll() - 0.5) * 0.08,
         ny: 0.15 + Math.floor(i / 3) * 0.3,
       }));
-      return { note: `A SWARM OF ${def.name.toUpperCase()} DESCENDS!`, wave };
+      return { note: `A SWARM OF ${def.name.toUpperCase()} DESCENDS!`, fx: 'ambush', wave };
     },
   },
   {
@@ -545,14 +559,14 @@ const EVENTS: GameEvent[] = [
               if (bb.score < 100) return { note: 'THE ELDER SHOOK HIS HEAD · "LUCK FOLLOWS COIN."', skip: true };
               bb.score -= 100;
               for (const p of bb.players) p.def = { ...p.def, luck: Math.min(99, (p.def.luck ?? 0) + 2) };
-              return { note: 'THE SHRINE GLIMMERS · EVERYONE +2 LUCK!', skip: true };
+              return { note: 'THE SHRINE GLIMMERS · EVERYONE +2 LUCK!', fx: 'gold', skip: true };
             },
           },
           {
             label: 'BOW AND PASS · +1 LUCK',
             run: (bb) => {
               for (const p of bb.players) p.def = { ...p.def, luck: Math.min(99, (p.def.luck ?? 0) + 1) };
-              return { note: 'A QUIET PRAYER · EVERYONE +1 LUCK.', skip: true };
+              return { note: 'A QUIET PRAYER · EVERYONE +1 LUCK.', fx: 'gold', skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'THE ELDER WAVED YOU ON.', skip: true }) },
@@ -575,6 +589,7 @@ const EVENTS: GameEvent[] = [
       return {
         note: `A DAY-CARE COUPLE HANDS YOU A TWIN OF ${ace.def.name.toUpperCase()}!`,
         art: { npc: 'mom_down_0' },
+        fx: 'gold',
         skip: true,
       };
     },
@@ -598,7 +613,7 @@ const EVENTS: GameEvent[] = [
               if (!g?.ttype) return { note: 'THE SEER SEES ONLY THE LEAGUE CROWN.', skip: true };
               if (bb.score < 50) return { note: '"COIN BUYS SIGHT," SHE MURMURS.', skip: true };
               bb.score -= 50;
-              return { note: `THE SEER WHISPERS · A ${g.ttype.toUpperCase()} GYM WAITS AHEAD.`, skip: true };
+              return { note: `THE SEER WHISPERS · A ${g.ttype.toUpperCase()} GYM WAITS AHEAD.`, fx: 'mystic', skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'THE CRYSTAL DIMMED.', skip: true }) },
@@ -621,7 +636,7 @@ const EVENTS: GameEvent[] = [
             label: 'TAKE THE BLESSING',
             run: (bb) => {
               bb.doubleChest = true;
-              return { note: '"FORTUNE FOLLOWS YOU," THEY CROAK.', skip: true };
+              return { note: '"FORTUNE FOLLOWS YOU," THEY CROAK.', fx: 'mystic', skip: true };
             },
           },
           { label: 'WALK AWAY', run: () => ({ note: 'THEY SHUFFLED BACK INSIDE.', skip: true }) },
@@ -641,10 +656,14 @@ const EVENTS: GameEvent[] = [
           {
             label: 'ORAN · TEAM +25% HP',
             icon: 'oran-berry',
-            run: (bb) => ({
-              note: healAll(bb, 0.25) ? 'THE TEAM ATE ORAN BERRIES · +25% HP.' : 'THE TEAM WAS ALREADY AT FULL HP.',
-              skip: true,
-            }),
+            run: (bb) => {
+              const n = healAll(bb, 0.25);
+              return {
+                note: n ? 'THE TEAM ATE ORAN BERRIES · +25% HP.' : 'THE TEAM WAS ALREADY AT FULL HP.',
+                fx: n ? 'heal' : undefined,
+                skip: true,
+              };
+            },
           },
           {
             label: 'SITRUS · WEAKEST TO FULL',
@@ -653,7 +672,7 @@ const EVENTS: GameEvent[] = [
               const p = bb.players.filter((x) => !x.dead).sort((a, z) => a.hp / a.maxHp - z.hp / z.maxHp)[0];
               if (!p || p.hp === p.maxHp) return { note: 'THE TEAM WAS ALREADY AT FULL HP.', skip: true };
               p.hp = p.maxHp;
-              return { note: `${p.def.name.toUpperCase()} ATE A SITRUS BERRY · FULL HP!`, skip: true };
+              return { note: `${p.def.name.toUpperCase()} ATE A SITRUS BERRY · FULL HP!`, fx: 'heal', skip: true };
             },
           },
           {
@@ -661,7 +680,7 @@ const EVENTS: GameEvent[] = [
             icon: 'chesto-berry',
             run: (bb) => {
               bb.ultIn = Math.max(0, bb.ultIn - 3);
-              return { note: 'A CHESTO BERRY SHARPENED YOUR NEXT SHOT · ULT +3.', skip: true };
+              return { note: 'A CHESTO BERRY SHARPENED YOUR NEXT SHOT · ULT +3.', fx: 'gold', skip: true };
             },
           },
         ],
@@ -684,11 +703,11 @@ const EVENTS: GameEvent[] = [
             .slice(0, 3)
             .map(({ p, i }) => ({
               label: `${p.def.name.toUpperCase()} · ULT +4 · -30% HP`,
-              run: (bb: Battle) => {
+              run: (bb: Battle): EventOutcome => {
                 const student = bb.players[i];
                 student.hp = Math.max(1, student.hp - Math.round(student.maxHp * 0.3));
                 bb.ultIn = Math.max(0, bb.ultIn - 4);
-                return { note: `${student.def.name.toUpperCase()} LEARNED A NEW MOVE · ULT +4!`, skip: true };
+                return { note: `${student.def.name.toUpperCase()} LEARNED A NEW MOVE · ULT +4!`, fx: 'blood', skip: true };
               },
             })),
           { label: 'PASS', run: () => ({ note: 'THE TUTOR WAVED YOU ON.', skip: true }) },
@@ -713,7 +732,7 @@ const EVENTS: GameEvent[] = [
             .slice(0, 3)
             .map(({ p, i }) => ({
               label: `LEAVE ${p.def.name.toUpperCase()}`,
-              run: (bb: Battle) => {
+              run: (bb: Battle): EventOutcome => {
                 const bi = bb.boxLvl.indexOf(Math.max(...bb.boxLvl));
                 const name = bb.players[i].def.name.toUpperCase();
                 bb.swapFromBox(bi, i);
@@ -723,7 +742,7 @@ const EVENTS: GameEvent[] = [
                   lvl: bb.boxLvl.pop()!,
                   back: row(bb) + 2,
                 };
-                return { note: `${name} WENT TO DAY CARE · BACK IN 2 STOPS.`, skip: true };
+                return { note: `${name} WENT TO DAY CARE · BACK IN 2 STOPS.`, fx: 'gold', skip: true };
               },
             })),
           { label: 'KEEP THE TEAM', run: () => ({ note: 'YOU KEPT THE TEAM TOGETHER.', skip: true }) },
@@ -746,7 +765,7 @@ const EVENTS: GameEvent[] = [
             .slice(0, 3)
             .map(({ p, i }) => ({
               label: `TRADE ${p.def.name.toUpperCase()}`,
-              run: (bb: Battle) => {
+              run: (bb: Battle): EventOutcome => {
                 const traded = bb.players[i];
                 const pool = PULLABLE.filter(
                   (d) => tierOf(d) === tierOf(traded.def) && d.id !== traded.def.id && !INVADER_IDS.has(d.id),
@@ -756,7 +775,7 @@ const EVENTS: GameEvent[] = [
                 const name = traded.def.name.toUpperCase();
                 bb.applyDef(traded, def, traded.lvl, traded.hp / traded.maxHp);
                 if (recordCapture([def.id])) taskTick({ dex: 1 });
-                return { note: `${name} LEFT · ${def.name.toUpperCase()} ARRIVED!`, art: { mon: def.id }, skip: true };
+                return { note: `${name} LEFT · ${def.name.toUpperCase()} ARRIVED!`, art: { mon: def.id }, fx: 'mystic', skip: true };
               },
             })),
           { label: 'KEEP YOUR TEAM', run: () => ({ note: 'YOU KEPT YOUR TEAM TOGETHER.', skip: true }) },
@@ -786,6 +805,7 @@ const EVENTS: GameEvent[] = [
               ];
               return {
                 note: p ? `${p.name.toUpperCase()} IS YOURS · SURVIVE THE HOUSE!` : 'THE PRIZE WAS A TRICK · SURVIVE THE HOUSE!',
+                fx: 'ambush',
                 wave: [...escorts, { def: boss, nx: 0.5, ny: 0.3, boss: true }],
               };
             },
@@ -841,6 +861,7 @@ const EVENTS: GameEvent[] = [
       return {
         note: `A BLACK BELT BOWS · ${p.def.name.toUpperCase()} GAINS +2 LV!`,
         art: { npc: 'black_belt_down_0' },
+        fx: 'gold',
         skip: true,
       };
     },
@@ -860,6 +881,7 @@ const EVENTS: GameEvent[] = [
           ? `A CHANNELER TIES FOCUS SASHES · ${n} MON${n > 1 ? 'S' : ''} CAN HANG ON ONCE!`
           : 'THE TEAM ALREADY WEARS ITS SASHES.',
         art: { item: 'focus-sash' },
+        fx: n ? 'mystic' : undefined,
         skip: true,
       };
     },
@@ -871,6 +893,7 @@ const EVENTS: GameEvent[] = [
     run: (b) => ({
       note: 'AN EEVEE DEN SCATTERS · ITS ELDERS STAND GUARD!',
       art: { mon: 133 },
+      fx: 'ambush',
       wave: gridWave(b, [133, 134, 135, 136]),
     }),
   },
@@ -900,12 +923,27 @@ const EVENTS: GameEvent[] = [
           {
             // tauros, doduo, ponyta, rhyhorn — the plain's grazers
             label: 'THROW A ROCK · HERD CHARGES',
-            run: (bb) => ({ note: 'THE HERD STAMPEDES!', wave: gridWave(bb, [128, 84, 77, 111]) }),
+            run: (bb) => ({ note: 'THE HERD STAMPEDES!', fx: 'ambush', wave: gridWave(bb, [128, 84, 77, 111]) }),
           },
           { label: 'BACK AWAY', run: () => ({ note: 'THE HERD GRAZED ON WITHOUT YOU.', skip: true }) },
         ],
       },
     }),
+  },
+  {
+    // the dig: a sure score find with a coin spray — no risk, no fight,
+    // the rare plain happy stop in a pool full of bargains and teeth
+    w: 2,
+    run: (b) => {
+      const gain = 120 + Math.floor(b.roll() * 180);
+      b.score += gain;
+      return {
+        note: `YOU DUG UP A STAR PIECE · +${gain} SCORE!`,
+        art: { item: 'star-piece' },
+        fx: 'treasure',
+        skip: true,
+      };
+    },
   },
 ];
 
@@ -923,11 +961,11 @@ export function tickDaycare(b: Battle): string | null {
 // one-of-each per visit — `sold` rides the re-prompt chain so a bought
 // item leaves the board.
 export function martStock(b: Battle, prompt = 'POKÉ MART · WHAT\'LL IT BE?', sold = new Set<string>()): { prompt: string; options: EventChoice[]; art?: EventArt } {
-  const reprompt = (bb: Battle, note: string): EventOutcome => ({ note, choices: martStock(bb, note, sold) });
+  const reprompt = (bb: Battle, note: string, fx?: EventFx): EventOutcome => ({ note, fx, choices: martStock(bb, note, sold) });
   // cost renders as a tag on the button's right edge — the label stays short
   // enough to read at full pixel size. martMult is the daily card's discount
   const price = (n: number) => Math.round(n * b.martMult);
-  const shelf = (key: string, cost: number, label: string, icon: string, buy: (bb: Battle) => string): EventChoice => ({
+  const shelf = (key: string, cost: number, label: string, icon: string, buy: (bb: Battle) => { s: string; fx?: EventFx }): EventChoice => ({
     label,
     cost: price(cost),
     icon,
@@ -935,15 +973,18 @@ export function martStock(b: Battle, prompt = 'POKÉ MART · WHAT\'LL IT BE?', s
       if (bb.score < price(cost)) return reprompt(bb, 'NOT ENOUGH SCORE.');
       bb.score -= price(cost);
       sold.add(key);
-      return reprompt(bb, buy(bb));
+      const r = buy(bb);
+      return reprompt(bb, r.s, r.fx);
     },
   });
   const stock: [string, EventChoice][] = [
-    ['potion', shelf('potion', 200, 'POTION · HEAL 40%', 'potion', (bb) =>
-      healAll(bb, 0.4) ? 'THE TEAM RECOVERED 40%!' : 'ALREADY AT FULL HP · THE SPRAY FIZZLED.')],
+    ['potion', shelf('potion', 200, 'POTION · HEAL 40%', 'potion', (bb) => {
+      const n = healAll(bb, 0.4);
+      return { s: n ? 'THE TEAM RECOVERED 40%!' : 'ALREADY AT FULL HP · THE SPRAY FIZZLED.', fx: n ? 'heal' : undefined };
+    })],
     ['candy', shelf('candy', 400, 'RARE CANDY · +1 LV', 'hp-up', (bb) => {
       for (const p of bb.players) if (!p.dead) bb.gainLevels(p, 1);
-      return 'EVERYONE GREW +1 LEVEL!';
+      return { s: 'EVERYONE GREW +1 LEVEL!', fx: 'gold' };
     })],
     ['mystery', {
       label: 'MYSTERY ITEM',
@@ -958,7 +999,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART · WHAT\'LL IT BE?', s
         bb.score -= price(300);
         sold.add('mystery');
         bb.grantPerk(p);
-        return reprompt(bb, `IT WAS ${p.name.toUpperCase()}!`);
+        return reprompt(bb, `IT WAS ${p.name.toUpperCase()}!`, 'gold');
       },
     }],
   ];
@@ -970,12 +1011,12 @@ export function martStock(b: Battle, prompt = 'POKÉ MART · WHAT\'LL IT BE?', s
         // mid-flow, hand the charge back instead of indexing an empty list
         bb.score += price(350);
         sold.delete('revive');
-        return 'NOBODY NEEDED REVIVING.';
+        return { s: 'NOBODY NEEDED REVIVING.' };
       }
       const p = dead[Math.floor(bb.roll() * dead.length)];
       p.dead = false;
       p.hp = Math.round(p.maxHp / 2);
-      return `${p.def.name.toUpperCase()} IS BACK ON ITS FEET!`;
+      return { s: `${p.def.name.toUpperCase()} IS BACK ON ITS FEET!`, fx: 'heal' };
     })]);
   const options = stock.filter(([key]) => !sold.has(key)).map(([, o]) => o);
   options.push({ label: 'LEAVE', run: () => ({ note: 'YOU HEADED BACK TO THE ROUTE.', skip: true }) });

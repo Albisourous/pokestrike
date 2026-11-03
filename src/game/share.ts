@@ -6,6 +6,7 @@ import { RANK_BALL, type ClearRank } from './meta';
 import { TOTAL_STAGES, type SpeciesDef } from './data';
 import { TYPE_COLOR } from './types';
 import { INK, PARCH, GOLD, GOLD_HI, INK_FAINT, PAPER_HI, font, fontB, rr, uiWindow } from './ui';
+import { TYPE_RAMP, starPath } from './vfx';
 import type { Battle } from './battle';
 import type { RunResult, ShareGrid } from './screens';
 
@@ -69,6 +70,21 @@ const rgba = (hex: string, a: number) => {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 };
 
+// a stable 0..1 hash — the card bakes once, so glint placement must not roll
+const hash = (n: number) => {
+  const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+// a baked four-point glint — same silhouette the live scenes twinkle with
+function glint(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, c: string, a = 0.9) {
+  ctx.globalAlpha = a;
+  ctx.fillStyle = c;
+  starPath(ctx, x, y, s, 0.28);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
 export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
   const W = CARD_W, H = CARD_H;
   ctx.save();
@@ -125,6 +141,15 @@ export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
     } catch {
       /* sprite still warming */
     }
+    // baked twinkles off each mon — the ramp's hot end, gold for shinies,
+    // placed by hash so the same run always prints the same card
+    const ramp = TYPE_RAMP[def.type];
+    for (let k = 0; k < 3; k++) {
+      const gx = x + (hash(def.id * 7 + i * 31 + k * 13) - 0.5) * sz * 1.2;
+      const gy = y - sz * 0.4 + hash(def.id * 17 + i * 41 + k * 23) * sz * 0.7;
+      const c = k === 2 ? '#ffffff' : def.shiny && k === 0 ? GOLD_HI : ramp[2 + (k % 2)];
+      glint(ctx, gx, gy, 3.5 + hash(def.id + i * 53 + k * 7) * 4.5, c, 0.45 + hash(def.id * 3 + k) * 0.45);
+    }
     ctx.font = fontB(12);
     const name = def.name.toUpperCase();
     const nw = ctx.measureText(name).width + 16;
@@ -163,6 +188,7 @@ export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
       ctx.beginPath();
       ctx.ellipse(x - 9, gy + 49, 13, 5, -0.55, 0, Math.PI * 2);
       ctx.fill();
+      glint(ctx, x + 16, gy + 42, r === 'S' ? 7 : 5, r === 'S' ? GOLD_HI : 'rgba(255,255,255,0.85)'); // an earned ball catches the light
     }
     ctx.font = font(16);
     ctx.fillStyle = r ? (r === 'S' ? GOLD_HI : PARCH) : INK_FAINT;

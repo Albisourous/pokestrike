@@ -6,7 +6,7 @@ import { ASC_MODS, makeStage, speciesById, type StageDef } from '../data';
 import { drawAmbient, drawBackdrop, drawWall, hash, slice, type Theme } from '../bg';
 import * as MT from '../maptiles';
 import type { TileRect } from '../maptiles';
-import { INK, INK_SOFT, INK_FAINT, PAPER, GOLD, GOLD_HI, DANGER, font, fontB, uiWindow, uiPanel, cursorTri } from '../ui';
+import { INK, INK_SOFT, INK_FAINT, PAPER, GOLD, GOLD_HI, DANGER, font, fontB, uiWindow, uiPanel, cursorTri, eo, clamp01, mixHex } from '../ui';
 import {
   ascCap, ascPick, best, bondPts, boostLeft, coachDone, echoIds, freePullLeft, nextRookie, raidDoneToday, rankName,
   ROOKIE_STEPS, runSave, settings, starBoost, streakWins, tier, trainerPick,
@@ -325,7 +325,7 @@ export function drawClimb(
   ctx: CanvasRenderingContext2D,
   t: number,
   cont: { stage: number; score: number; seed: number } | null,
-  restartArmed: boolean,
+  restartArmT: number,
   logoBig: (ctx: CanvasRenderingContext2D, text: string, cx: number, baseY: number, size: number, maxW: number) => void,
 ) {
   const logo = itemSprite('ui/pokemon-logo');
@@ -351,9 +351,15 @@ export function drawClimb(
   ctx.fillStyle = INK_SOFT;
   ctx.fillText(sub, hx, hero.y + 66);
   if (cont) {
-    pill(ctx, RESTART_BTN, restartArmed
-      ? { c: DANGER, cd: '#a02a24', tc: '#ffe8e8', label: 'DROP RUN?', sub: 'TAP AGAIN' }
+    const armed = restartArmT >= 0 && restartArmT < 3;
+    const armK = armed ? eo(clamp01(restartArmT / 0.18)) : 0; // the warn face melts in over ~180ms
+    pill(ctx, RESTART_BTN, armed
+      ? { c: mixHex('#e8e8e0', DANGER, armK), cd: mixHex('#aab0c8', '#a02a24', armK), tc: mixHex(INK, '#ffe8e8', armK), label: armK > 0.8 ? 'DROP RUN?' : 'RESTART', sub: armK > 0.8 ? 'TAP AGAIN' : 'NEW SEED' }
       : { c: '#e8e8e0', cd: '#aab0c8', tc: INK, label: 'RESTART', sub: 'NEW SEED' });
+    if (armed) { // the 3s arm drains as a strip under the label — the armed-buy idiom
+      ctx.fillStyle = '#fff9';
+      ctx.fillRect(RESTART_BTN.x + 18, RESTART_BTN.y + RESTART_BTN.h - 13, (RESTART_BTN.w - 36) * (1 - restartArmT / 3), 3);
+    }
   }
 
   if (freshClimb()) return; // logo, diorama, START — the rest earns its place after run one

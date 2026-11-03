@@ -1,7 +1,10 @@
 import type { Battle } from './battle';
 import type { PokeType } from './types';
+import { TYPE_COLOR, TYPES } from './types';
 import { bumpCooldown } from './stats';
 import { sfx } from '../core/audio';
+import { TYPE_RAMP } from './vfx';
+import { traitTier } from './traits';
 
 export type Rarity = 'common' | 'uncommon' | 'rare' | 'legendary';
 
@@ -25,8 +28,18 @@ export const RARITY_COLOR: Record<Rarity, string> = {
   legendary: '#c05df0',
 };
 
+// proc ramps — gold for neutral payoffs, green for mends; elemental procs
+// walk their TYPE_RAMP instead
+const GOLD = ['#8a6010', '#f8d030', '#ffe880', '#fff8d8'];
+const HEAL = ['#2f7a2a', '#6fdc6f', '#b8f088', '#eaffd0'];
+
 const heal = (frac: number) => (b: Battle) =>
   b.players.forEach((p) => { if (!p.dead) p.hp = Math.min(p.hp + p.maxHp * frac, p.maxHp); });
+
+// heal proc dressing — rising green motes on the mended (not the whole squad)
+const mendFx = (b: Battle, ps: Battle['players']) => {
+  for (const p of ps) b.field2Fx.motes(p.x, p.y, HEAL);
+};
 
 // Between-wave items — pick 1 of 3, real held-item flavor. Effects live as
 // multipliers/flags on Battle so they never touch the shared SpeciesDef table.
@@ -97,6 +110,7 @@ export const PERKS: Perk[] = [
       b.critCh += on ? 0.5 : -0.5; // hands the borrowed crit back on the next shot
       if (on) {
         b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 26, text: 'DIRE HIT READY!', t: 0.9, color: '#ffd84d', big: false });
+        b.field2Fx.glint(b.active.x, b.active.y - b.active.r, GOLD);
         sfx('ready');
       }
     },
@@ -149,6 +163,26 @@ export const PERKS: Perk[] = [
     rarity: 'common',
     apply: (b) => { b.frictionMult *= 0.65; },
   },
+  {
+    id: 'repel', name: 'Repel', item: 'repel',
+    desc: 'wild foes spawn with -12% HP',
+    rarity: 'common',
+    // foeHpBonus folds into hpScale on every future wave — the pack thins
+    // for the whole run, same door starpiece's greed tax walks through
+    apply: (b) => { b.foeHpBonus -= 0.12; },
+  },
+  {
+    id: 'honey', name: 'Honey', item: 'honey',
+    desc: 'waves creep in 15% slower',
+    rarity: 'common',
+    apply: () => {},
+    tick: (b) => {
+      const st = tSt(b);
+      if (st.honey === b.waveIndex) return; // one dab per wave — summons slip by
+      st.honey = b.waveIndex;
+      for (const e of b.enemies) e.drift *= 0.85;
+    },
+  },
 
   // --- uncommon: real held items, mid power ---
   {
@@ -194,7 +228,9 @@ export const PERKS: Perk[] = [
       st.leftovers = (st.leftovers || 0) + dt;
       if (st.leftovers < 18) return;
       st.leftovers -= 18;
+      const hurt = b.players.filter((p) => !p.dead && p.hp < p.maxHp);
       heal(0.04)(b);
+      mendFx(b, hurt);
     },
   },
   {
@@ -220,6 +256,7 @@ export const PERKS: Perk[] = [
         // (shed keeps the one-shot veer); the berry is the stronger medicine
         p.confuseT = 0;
         b.pushText({ x: p.x, y: p.y - p.r - 8, text: 'LUM!', t: 0.8, color: '#78c850', big: false });
+        b.field2Fx.motes(p.x, p.y, TYPE_RAMP.grass);
       }
       sfx('heal');
     },
@@ -359,6 +396,7 @@ export const PERKS: Perk[] = [
       st.luckyegg -= 30;
       b.score += 25;
       b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 16, text: '+25 ★', t: 0.9, color: '#c9a8ff', big: false });
+      b.field2Fx.glint(b.active.x, b.active.y, GOLD);
       sfx('tick');
     },
   },
@@ -377,6 +415,46 @@ export const PERKS: Perk[] = [
     apply: (b) => {
       b.physMult *= 1.35;
       b.frictionMult *= 1.45;
+    },
+  },
+  {
+    id: 'figy', name: 'Figy Berry', item: 'figy-berry',
+    desc: 'once a stage: an ally under 25% HP eats for +33%',
+    rarity: 'uncommon',
+    apply: () => {},
+    tick: (b) => {
+      const st = tSt(b);
+      if (st.figy === b.waveIndex) return; // already ate on this stage
+      let low: Battle['players'][number] | undefined;
+      for (const p of b.players) {
+        if (!p.dead && p.hp < p.maxHp * 0.25 && (!low || p.hp < low.hp)) low = p;
+      }
+      if (!low) return; // nobody hungry yet — the berry stays primed
+      st.figy = b.waveIndex;
+      low.hp = Math.min(low.maxHp, low.hp + Math.round(low.maxHp * 0.33));
+      b.pushText({ x: low.x, y: low.y - low.r - 8, text: 'FIGY!', t: 0.8, color: '#f88830', big: false });
+      mendFx(b, [low]);
+      sfx('heal');
+    },
+  },
+  {
+    id: 'dowser', name: 'Dowsing Machine', item: 'dowsing-machine',
+    desc: 'item boards offer +1 pick',
+    rarity: 'uncommon',
+    apply: (b) => { b.perkOfferN += 1; },
+  },
+  {
+    id: 'silph', name: 'Silph Scope', item: 'silph-scope',
+    desc: 'hidden weak points show up marked',
+    rarity: 'uncommon',
+    apply: () => {},
+    tick: (b) => {
+      // no stage clock — mid-wave summons get scoped as they land
+      for (const e of b.enemies) {
+        if (e.dead || !e.wpHidden) continue;
+        e.wpHidden = false;
+        b.field2Fx.glint(e.x, e.y - e.r, TYPE_RAMP.ghost);
+      }
     },
   },
   // type charms — +50% damage for one type; the drafting hook that makes
@@ -434,7 +512,10 @@ export const PERKS: Perk[] = [
       if (st.sash == null) { st.sash = b.waveIndex; return; } // learn the stage it armed on
       if (b.waveIndex - st.sash < 3) return;
       st.sash = b.waveIndex;
-      b.players.forEach((p) => { p.sash = true; });
+      b.players.forEach((p) => {
+        p.sash = true;
+        if (!p.dead) b.field2Fx.ring(p.x, p.y, GOLD, p.r + 12);
+      });
       b.pushText({ x: b.arena.x + b.arena.w / 2, y: b.arena.y + b.arena.h / 2, text: 'SASHES RE-ARMED!', t: 1.2, color: '#ffd84d', big: true });
       sfx('ready');
     },
@@ -483,6 +564,7 @@ export const PERKS: Perk[] = [
       st.ether -= 25;
       b.players.forEach((p) => { if (!p.dead) p.cd = Math.max(0, p.cd - 1); });
       b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 26, text: 'ETHER!', t: 0.9, color: '#9df0ff', big: false });
+      for (const p of b.players) if (!p.dead) b.field2Fx.motes(p.x, p.y, TYPE_RAMP.water);
       sfx('ready');
     },
   },
@@ -497,7 +579,9 @@ export const PERKS: Perk[] = [
       st.soothe = (st.soothe || 0) + dt;
       if (st.soothe < 4) return;
       st.soothe -= 4;
+      const hurt = b.players.filter((p) => !p.dead && p.hp < p.maxHp);
       heal(0.02)(b); // the bell's calm knits the team — a slow leftovers
+      mendFx(b, hurt);
     },
   },
   {
@@ -556,8 +640,32 @@ export const PERKS: Perk[] = [
       if (b.shots % 4 !== 3) return;
       b.connect.armed = true;
       b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 26, text: 'LINKED!', t: 0.9, color: '#7cf29a', big: false });
+      b.field2Fx.glint(b.active.x, b.active.y - b.active.r, TYPE_RAMP.grass);
       sfx('ready');
     },
+  },
+  {
+    id: 'avest', name: 'Assault Vest', item: 'assault-vest',
+    desc: 'team takes 20% less · supers recharge slower',
+    rarity: 'rare',
+    // same door as quick claw, pushed the other way — cdMult feeds
+    // construction, the fielded team retunes in place
+    apply: (b) => {
+      b.takenMult *= 0.8;
+      b.cdMult *= 1.2;
+      for (const p of b.players) {
+        p.cdMax = Math.max(1, Math.round(bumpCooldown(p.def.type) * b.cdMult) - p.cdMod);
+        p.cd = Math.min(p.cd, p.cdMax);
+      }
+    },
+  },
+  {
+    id: 'lightball', name: 'Light Ball', item: 'light-ball',
+    desc: '+70% electric-type damage, stacks',
+    rarity: 'rare',
+    // the premium charm — canon doubles the mouse's attack; gated to
+    // electric teams in RELIC_TYPE so it's never a dead offer
+    apply: (b) => { b.typePow.electric = (b.typePow.electric ?? 1) * 1.7; },
   },
 
   // --- legendary: run-defining items ---
@@ -603,6 +711,16 @@ export const PERKS: Perk[] = [
     apply: (b) => {
       b.specMult *= 1.3;
       b.players.forEach((p) => { p.rngMul *= 1.15; });
+    },
+  },
+  {
+    id: 'griseous', name: 'Griseous Orb', item: 'griseous-orb',
+    desc: '+35% ghost-type damage · +10% catch',
+    rarity: 'legendary',
+    // the third orb is spectral — gated to ghost teams in RELIC_TYPE
+    apply: (b) => {
+      b.typePow.ghost = (b.typePow.ghost ?? 1) * 1.35;
+      b.captureChance += 0.1;
     },
   },
   {
@@ -654,6 +772,34 @@ export function perkTick(b: Battle, dt: number) {
     perkSetCache.set(b, m);
   }
   for (const id of m.set) PERK_TICK.get(id)?.(b, dt);
+  traitPulse(b);
+}
+
+// Trait tier-ups dress the carriers in element — perkTick is the only
+// periodic seam the trait half gets (the trait math itself lives behind
+// battle's hurt/heal paths). The first pass just learns the baseline so
+// the opening pack doesn't re-announce tiers the run drafted with.
+function traitPulse(b: Battle) {
+  const st = tSt(b);
+  if (!st.trait0) {
+    st.trait0 = 1;
+    for (const ty of TYPES) st[`t:${ty}`] = traitTier(ty);
+    return;
+  }
+  for (const ty of TYPES) {
+    const k = `t:${ty}`, prev = st[k] ?? 0, tier = traitTier(ty);
+    if (tier === prev) continue;
+    st[k] = tier;
+    if (tier < prev) continue; // a faint dimmed the trait — quiet about it
+    for (const p of b.players) {
+      if (p.dead || (p.def.type !== ty && p.def.type2 !== ty)) continue;
+      b.field2Fx.motes(p.x, p.y, TYPE_RAMP[ty]);
+    }
+    b.pushText({
+      x: b.arena.x + b.arena.w / 2, y: b.arena.y + 60,
+      text: `${ty.toUpperCase()} ×${tier}`, t: 0.9, color: TYPE_COLOR[ty], big: false,
+    });
+  }
 }
 
 // --- bag items: persistent consumables -----------------------------------
@@ -817,6 +963,7 @@ const RELIC_TYPE: Record<string, PokeType> = {
   'miracle-seed': 'grass', 'hard-stone': 'rock', 'poison-barb': 'poison',
   'sharp-beak': 'flying', 'spell-tag': 'ghost', 'twisted-spoon': 'psychic',
   'black-belt': 'fighting', 'silk-scarf': 'normal',
+  lightball: 'electric', griseous: 'ghost', // typed premiums ride the same gate
 };
 export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>, count = 3): Perk[] {
   const pool = PERKS.filter(

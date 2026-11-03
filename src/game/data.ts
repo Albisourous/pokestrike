@@ -169,9 +169,9 @@ export const ROSTER: SpeciesDef[] = [
   { id: 183, name: 'Marill', type: 'water', type2: 'normal', ability: 'huge-power', stats: st(70, 20, 50, 20, 50, 40), healer: true, evolvesTo: 184 },
   { id: 194, name: 'Wooper', type: 'water', type2: 'rock', ability: 'water-absorb', stats: st(55, 45, 45, 25, 25, 15), damp: true, evolvesTo: 195 },
   { id: 280, name: 'Ralts', type: 'psychic', type2: 'normal', ability: 'synchronize', stats: st(28, 25, 25, 45, 35, 40), sync: true, evolvesTo: 281 },
-  { id: 285, name: 'Shroomish', type: 'grass', ability: 'effect-spore', stats: st(60, 40, 60, 40, 60, 35), evolvesTo: 286, pheal: true },
+  { id: 285, name: 'Shroomish', type: 'grass', ability: 'effect-spore', stats: st(60, 40, 60, 40, 60, 35), evolvesTo: 286, pheal: true, spore: true },
   { id: 293, name: 'Whismur', type: 'normal', ability: 'soundproof', stats: st(64, 51, 23, 51, 23, 28), evolvesTo: 294 },
-  { id: 304, name: 'Aron', type: 'rock', ability: 'sturdy', stats: st(50, 70, 100, 40, 40, 30), evolvesTo: 305 },
+  { id: 304, name: 'Aron', type: 'rock', ability: 'sturdy', stats: st(50, 70, 100, 40, 40, 30), sturdy: true, evolvesTo: 305 },
   { id: 328, name: 'Trapinch', type: 'rock', ability: 'hyper-cutter', stats: st(45, 100, 45, 45, 45, 10), evolvesTo: 329 },
   { id: 349, name: 'Feebas', type: 'water', ability: 'swift-swim', stats: st(20, 15, 20, 10, 55, 80), evolvesTo: 350 },
   { id: 361, name: 'Snorunt', type: 'water', ability: 'inner-focus', stats: st(50, 50, 50, 50, 50, 50), evolvesTo: [362, 478] },
@@ -216,7 +216,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 403, name: 'Shinx', type: 'electric', ability: 'intimidate', stats: st(45, 65, 34, 40, 34, 45), melee: true, guts: true, evolvesTo: 404 },
   { id: 406, name: 'Budew', type: 'grass', ability: 'natural-cure', stats: st(40, 30, 35, 50, 70, 55), evolvesTo: 315, toxic: true },
   { id: 408, name: 'Cranidos', type: 'rock', ability: 'mold-breaker', stats: st(67, 125, 40, 30, 30, 58), melee: true, breaker: true, evolvesTo: 409 },
-  { id: 410, name: 'Shieldon', type: 'rock', ability: 'sturdy', stats: st(30, 42, 118, 42, 88, 30), shielded: true, evolvesTo: 411 },
+  { id: 410, name: 'Shieldon', type: 'rock', ability: 'sturdy', stats: st(30, 42, 118, 42, 88, 30), sturdy: true, shielded: true, evolvesTo: 411 },
   { id: 417, name: 'Pachirisu', type: 'electric', ability: 'run-away', stats: st(60, 45, 70, 45, 90, 95), pierce: true, taunt: true },
   { id: 418, name: 'Buizel', type: 'water', ability: 'swift-swim', stats: st(55, 65, 35, 60, 30, 85), pierce: true, evolvesTo: 419 },
   { id: 425, name: 'Drifloon', type: 'ghost', ability: 'aftermath', stats: st(90, 50, 34, 60, 44, 70), cursed: true, evolvesTo: 426 },
@@ -230,7 +230,7 @@ export const ROSTER: SpeciesDef[] = [
   { id: 443, name: 'Gible', type: 'rock', ability: 'sand-veil', stats: st(58, 70, 45, 40, 45, 42), melee: true, evolvesTo: 444 },
   { id: 446, name: 'Munchlax', type: 'normal', ability: 'pickup', stats: st(135, 85, 40, 40, 85, 5), taunt: true, pickup: true, thickFat: true, evolvesTo: 143 },
   { id: 447, name: 'Riolu', type: 'fighting', ability: 'inner-focus', stats: st(40, 70, 40, 35, 40, 60), melee: true, evolvesTo: 448 },
-  { id: 451, name: 'Skorupi', type: 'poison', ability: 'battle-armor', stats: st(40, 50, 90, 30, 55, 65), melee: true, evolvesTo: 452 },
+  { id: 451, name: 'Skorupi', type: 'poison', ability: 'battle-armor', stats: st(40, 50, 90, 30, 55, 65), melee: true, armor: true, evolvesTo: 452 },
   { id: 453, name: 'Croagunk', type: 'poison', ability: 'anticipation', stats: st(48, 61, 40, 61, 40, 50), melee: true, evolvesTo: 454 },
   { id: 456, name: 'Finneon', type: 'water', ability: 'swift-swim', stats: st(49, 49, 56, 49, 61, 66), evolvesTo: 457 },
   { id: 458, name: 'Mantyke', type: 'water', ability: 'water-absorb', stats: st(45, 20, 50, 60, 120, 50), evolvesTo: 226 },
@@ -289,31 +289,31 @@ export const ROSTER: SpeciesDef[] = [
 
 ];
 
-export const DRAFT_ROUNDS = 4;
+export const DRAFT_ROUNDS = 2;
 const DRAFT_OFFERS = 3;
 
 // Each draft round offers 3 picks with distinct types — encourages a varied
-// team so no single type dominates a run. The roster is dealt without
-// replacement across rounds: every species is offered once before a repeat
-// can appear (roster >> 12 offer slots, so a full draft never repeats).
-export function draftOrder(rng: () => number): number[] {
+// team so no single type dominates a run. The pool is the player's dex
+// (collection-gated, see startDraft) and is dealt without replacement while
+// it lasts — small collections repeat species across rounds.
+export function draftOrder(rng: () => number, pool: SpeciesDef[]): number[] {
   const order: number[] = [];
-  let pool: number[] = [];
+  let bag: number[] = [];
   for (let r = 0; r < DRAFT_ROUNDS; r++) {
-    if (pool.length < DRAFT_OFFERS) {
-      const fresh = ROSTER.map((_, i) => i);
+    if (bag.length < DRAFT_OFFERS) {
+      const fresh = pool.map((_, i) => i);
       for (let i = fresh.length - 1; i > 0; i--) {
         const j = Math.floor(rng() * (i + 1));
         [fresh[i], fresh[j]] = [fresh[j], fresh[i]];
       }
-      pool.push(...fresh);
+      bag.push(...fresh);
     }
     const types = new Set<string>();
-    for (let k = 0; k < DRAFT_OFFERS; k++) {
-      let pick = pool.findIndex((i) => !types.has(ROSTER[i].type));
+    for (let k = 0; k < DRAFT_OFFERS && bag.length; k++) {
+      let pick = bag.findIndex((i) => !types.has(pool[i].type));
       if (pick === -1) pick = 0;
-      types.add(ROSTER[pool[pick]].type);
-      order.push(pool.splice(pick, 1)[0]);
+      types.add(pool[bag[pick]].type);
+      order.push(bag.splice(pick, 1)[0]);
     }
   }
   return order;
@@ -335,7 +335,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 66, name: 'Machop', type: 'fighting', ability: 'guts', stats: st(70, 80, 50, 35, 35, 35), melee: true, evolvesTo: 67 },
   { id: 21, name: 'Spearow', type: 'flying', type2: 'normal', ability: 'keen-eye', stats: st(40, 60, 30, 31, 31, 70), melee: true, evolvesTo: 22 },
   { id: 163, name: 'Hoothoot', type: 'flying', type2: 'normal', ability: 'insomnia', stats: st(60, 30, 30, 36, 56, 50), melee: true, evolvesTo: 164 },
-  { id: 46, name: 'Paras', type: 'grass', type2: 'poison', ability: 'effect-spore', stats: st(35, 70, 55, 45, 55, 25), melee: true, leech: true, evolvesTo: 47 },
+  { id: 46, name: 'Paras', type: 'grass', type2: 'poison', ability: 'effect-spore', stats: st(35, 70, 55, 45, 55, 25), melee: true, leech: true, spore: true, evolvesTo: 47 },
   { id: 48, name: 'Venonat', type: 'poison', ability: 'compound-eyes', stats: st(60, 55, 50, 40, 55, 45), evolvesTo: 49 },
   { id: 69, name: 'Bellsprout', type: 'grass', type2: 'poison', ability: 'chlorophyll', stats: st(50, 75, 35, 70, 30, 40), evolvesTo: 70 },
   { id: 102, name: 'Exeggcute', type: 'grass', type2: 'psychic', ability: 'chlorophyll', stats: st(60, 40, 80, 60, 45, 40), split: true, evolvesTo: 103 },
@@ -414,7 +414,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 345, name: 'Lileep', type: 'grass', type2: 'rock', ability: 'suction-cups', stats: st(66, 41, 77, 61, 87, 23), evolvesTo: 346 },
   { id: 347, name: 'Anorith', type: 'rock', ability: 'battle-armor', stats: st(45, 95, 50, 40, 50, 75), melee: true, evolvesTo: 348 },
   { id: 357, name: 'Tropius', type: 'grass', type2: 'flying', ability: 'chlorophyll', stats: st(99, 68, 83, 72, 87, 51) },
-  { id: 366, name: 'Clamperl', type: 'water', ability: 'shell-armor', stats: st(35, 64, 85, 74, 55, 32), evolvesTo: [367, 368] },
+  { id: 366, name: 'Clamperl', type: 'water', ability: 'shell-armor', stats: st(35, 64, 85, 74, 55, 32), armor: true, evolvesTo: [367, 368] },
   { id: 370, name: 'Luvdisc', type: 'water', ability: 'swift-swim', stats: st(43, 30, 55, 40, 65, 97), healer: true },
   { id: 24, name: 'Arbok', type: 'poison', ability: 'intimidate', stats: st(60, 95, 69, 65, 79, 80), venom: true },
   { id: 97, name: 'Hypno', type: 'psychic', ability: 'insomnia', stats: st(85, 73, 70, 73, 115, 67), sleepy: true },
@@ -490,7 +490,7 @@ export const ENEMY_DB: SpeciesDef[] = [
   { id: 594, name: 'Alomomola', type: 'water', ability: 'healer', stats: st(165, 75, 80, 40, 45, 65), healer: true, regen: true },
   { id: 597, name: 'Ferroseed', type: 'grass', type2: 'rock', ability: 'iron-barbs', stats: st(44, 50, 91, 24, 86, 10), spiky: true, shielded: true, evolvesTo: 598 },
   { id: 615, name: 'Cryogonal', type: 'water', ability: 'levitate', stats: st(80, 50, 50, 95, 135, 105), pierce: true },
-  { id: 618, name: 'Stunfisk', type: 'rock', type2: 'electric', ability: 'static', stats: st(109, 66, 84, 81, 99, 32), taunt: true },
+  { id: 618, name: 'Stunfisk', type: 'rock', type2: 'electric', ability: 'static', stats: st(109, 66, 84, 81, 99, 32), taunt: true, shock: true },
   { id: 621, name: 'Druddigon', type: 'flying', ability: 'rough-skin', stats: st(77, 120, 90, 60, 90, 48), melee: true },
   { id: 626, name: 'Bouffalant', type: 'normal', ability: 'reckless', stats: st(95, 110, 95, 40, 95, 55), melee: true, charge: true },
   { id: 631, name: 'Heatmor', type: 'fire', ability: 'flash-fire', stats: st(85, 97, 66, 105, 66, 65), taunt: true },
@@ -535,13 +535,13 @@ export const ELITES: SpeciesDef[] = [
   { id: 154, name: 'Meganium', type: 'grass', ability: 'overgrow', stats: st(80, 82, 100, 83, 100, 80), healer: true },
   { id: 157, name: 'Typhlosion', type: 'fire', ability: 'blaze', stats: st(78, 84, 78, 109, 85, 100) },
   { id: 160, name: 'Feraligatr', type: 'water', ability: 'torrent', stats: st(85, 105, 100, 79, 83, 78), melee: true },
-  { id: 181, name: 'Ampharos', type: 'electric', ability: 'static', stats: st(90, 75, 85, 115, 90, 55) },
+  { id: 181, name: 'Ampharos', type: 'electric', ability: 'static', stats: st(90, 75, 85, 115, 90, 55), shock: true },
   { id: 196, name: 'Espeon', type: 'psychic', ability: 'synchronize', stats: st(65, 65, 60, 130, 95, 110), pierce: true, sync: true },
-  { id: 197, name: 'Umbreon', type: 'ghost', ability: 'synchronize', stats: st(95, 65, 110, 60, 130, 65), taunt: true },
+  { id: 197, name: 'Umbreon', type: 'ghost', ability: 'synchronize', stats: st(95, 65, 110, 60, 130, 65), taunt: true, sync: true },
   { id: 212, name: 'Scizor', type: 'fighting', ability: 'swarm', stats: st(70, 130, 100, 55, 80, 65), pierce: true, melee: true },
   { id: 229, name: 'Houndoom', type: 'fire', type2: 'ghost', ability: 'flash-fire', stats: st(75, 90, 50, 110, 80, 95) },
   { id: 257, name: 'Blaziken', type: 'fire', type2: 'fighting', ability: 'blaze', stats: st(80, 120, 70, 110, 70, 80), melee: true, boost: true },
-  { id: 282, name: 'Gardevoir', type: 'psychic', type2: 'normal', ability: 'synchronize', stats: st(68, 65, 65, 125, 115, 80), healer: true },
+  { id: 282, name: 'Gardevoir', type: 'psychic', type2: 'normal', ability: 'synchronize', stats: st(68, 65, 65, 125, 115, 80), healer: true, sync: true },
   { id: 289, name: 'Slaking', type: 'normal', ability: 'truant', stats: st(150, 160, 100, 95, 65, 100), taunt: true, truant: true },
   { id: 306, name: 'Aggron', type: 'rock', ability: 'sturdy', stats: st(70, 110, 180, 60, 60, 50), melee: true, anchor: true, filter: true },
   { id: 350, name: 'Milotic', type: 'water', ability: 'marvel-scale', stats: st(95, 60, 79, 100, 125, 81), healer: true, charm: true },
@@ -607,7 +607,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 464, name: 'Rhyperior', type: 'rock', ability: 'lightning-rod', stats: st(115, 140, 130, 55, 55, 40), melee: true },
   { id: 465, name: 'Tangrowth', type: 'grass', ability: 'chlorophyll', stats: st(100, 100, 125, 110, 50, 50), regen: true },
   { id: 466, name: 'Electivire', type: 'electric', ability: 'motor-drive', stats: st(75, 123, 67, 95, 85, 95), melee: true },
-  { id: 467, name: 'Magmortar', type: 'fire', ability: 'flame-body', stats: st(75, 95, 67, 125, 95, 83), melee: true },
+  { id: 467, name: 'Magmortar', type: 'fire', ability: 'flame-body', stats: st(75, 95, 67, 125, 95, 83), melee: true, flame: true },
   { id: 468, name: 'Togekiss', type: 'flying', ability: 'hustle', stats: st(85, 50, 95, 120, 115, 80), healer: true },
   { id: 469, name: 'Yanmega', type: 'flying', ability: 'speed-boost', stats: st(86, 76, 86, 116, 56, 95), pierce: true },
   { id: 470, name: 'Leafeon', type: 'grass', ability: 'leaf-guard', stats: st(65, 110, 130, 60, 65, 95) },
@@ -658,7 +658,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 584, name: 'Vanilluxe', type: 'water', ability: 'ice-body', stats: st(71, 95, 85, 110, 95, 79) },
   { id: 586, name: 'Sawsbuck', type: 'normal', type2: 'grass', ability: 'chlorophyll', stats: st(80, 100, 70, 60, 70, 95), melee: true, healer: true },
   { id: 589, name: 'Escavalier', type: 'grass', type2: 'rock', ability: 'swarm', stats: st(70, 135, 105, 60, 105, 20), melee: true },
-  { id: 591, name: 'Amoonguss', type: 'grass', type2: 'poison', ability: 'effect-spore', stats: st(114, 85, 70, 85, 80, 30), healer: true },
+  { id: 591, name: 'Amoonguss', type: 'grass', type2: 'poison', ability: 'effect-spore', stats: st(114, 85, 70, 85, 80, 30), healer: true, spore: true },
   { id: 593, name: 'Jellicent', type: 'water', type2: 'ghost', ability: 'water-absorb', stats: st(100, 60, 70, 85, 105, 60), cursed: true },
   { id: 596, name: 'Galvantula', type: 'grass', type2: 'electric', ability: 'compound-eyes', stats: st(70, 77, 60, 97, 60, 108), pierce: true },
   { id: 598, name: 'Ferrothorn', type: 'grass', type2: 'rock', ability: 'iron-barbs', stats: st(74, 94, 131, 54, 116, 20), taunt: true },
@@ -675,7 +675,7 @@ export const ELITES: SpeciesDef[] = [
   { id: 628, name: 'Braviary', type: 'normal', type2: 'flying', ability: 'keen-eye', stats: st(100, 123, 75, 57, 75, 80), melee: true },
   { id: 630, name: 'Mandibuzz', type: 'ghost', type2: 'flying', ability: 'big-pecks', stats: st(110, 65, 105, 55, 95, 80), taunt: true },
   { id: 635, name: 'Hydreigon', type: 'ghost', type2: 'flying', ability: 'levitate', stats: st(92, 105, 90, 125, 90, 98), melee: true },
-  { id: 637, name: 'Volcarona', type: 'grass', type2: 'fire', ability: 'flame-body', stats: st(85, 60, 65, 135, 105, 100) },
+  { id: 637, name: 'Volcarona', type: 'grass', type2: 'fire', ability: 'flame-body', stats: st(85, 60, 65, 135, 105, 100), flame: true },
 
 ];
 
@@ -743,15 +743,15 @@ export const EVOS: SpeciesDef[] = [
   { id: 18, name: 'Pidgeot', type: 'flying', type2: 'normal', ability: 'keen-eye', stats: st(83, 80, 75, 70, 70, 101), melee: true },
   { id: 20, name: 'Raticate', type: 'normal', ability: 'guts', stats: st(55, 81, 60, 50, 70, 97), melee: true, raider: true },
   { id: 22, name: 'Fearow', type: 'flying', ability: 'keen-eye', stats: st(65, 90, 65, 61, 61, 100), melee: true },
-  { id: 26, name: 'Raichu', type: 'electric', ability: 'static', stats: st(60, 90, 55, 90, 80, 110), pierce: true },
-  { id: 33, name: 'Nidorino', type: 'poison', ability: 'poison-point', stats: st(61, 72, 57, 55, 55, 65), melee: true, evolvesTo: 34 },
-  { id: 36, name: 'Clefable', type: 'normal', ability: 'cute-charm', stats: st(95, 70, 73, 95, 90, 60), healer: true },
+  { id: 26, name: 'Raichu', type: 'electric', ability: 'static', stats: st(60, 90, 55, 90, 80, 110), pierce: true, shock: true },
+  { id: 33, name: 'Nidorino', type: 'poison', ability: 'poison-point', stats: st(61, 72, 57, 55, 55, 65), melee: true, toxic: true, evolvesTo: 34 },
+  { id: 36, name: 'Clefable', type: 'normal', ability: 'cute-charm', stats: st(95, 70, 73, 95, 90, 60), healer: true, charm: true },
   { id: 38, name: 'Ninetales', type: 'fire', ability: 'flash-fire', stats: st(73, 76, 75, 81, 100, 100), burn: true, skyFor: 'sun' },
-  { id: 40, name: 'Wigglytuff', type: 'normal', ability: 'cute-charm', stats: st(140, 70, 45, 85, 50, 45), healer: true },
+  { id: 40, name: 'Wigglytuff', type: 'normal', ability: 'cute-charm', stats: st(140, 70, 45, 85, 50, 45), healer: true, charm: true },
   { id: 42, name: 'Golbat', type: 'poison', type2: 'flying', ability: 'inner-focus', stats: st(75, 80, 70, 65, 75, 90), melee: true, evolvesTo: 169 },
   { id: 44, name: 'Gloom', type: 'grass', type2: 'poison', ability: 'chlorophyll', stats: st(60, 65, 70, 85, 75, 40), evolvesTo: [45, 182] },
   { id: 45, name: 'Vileplume', type: 'grass', type2: 'poison', ability: 'chlorophyll', stats: st(75, 80, 85, 110, 90, 50), regen: true, spore: true },
-  { id: 47, name: 'Parasect', type: 'grass', type2: 'poison', ability: 'effect-spore', stats: st(60, 95, 80, 60, 80, 30), melee: true, leech: true },
+  { id: 47, name: 'Parasect', type: 'grass', type2: 'poison', ability: 'effect-spore', stats: st(60, 95, 80, 60, 80, 30), melee: true, leech: true, spore: true },
   { id: 49, name: 'Venomoth', type: 'poison', ability: 'shield-dust', stats: st(70, 65, 60, 90, 75, 90) },
   { id: 51, name: 'Dugtrio', type: 'rock', ability: 'sand-veil', stats: st(35, 100, 50, 50, 70, 120), melee: true, trap: true },
   { id: 53, name: 'Persian', type: 'normal', ability: 'limber', stats: st(65, 70, 60, 65, 65, 115), pierce: true, raider: true },
@@ -787,8 +787,8 @@ export const EVOS: SpeciesDef[] = [
   { id: 139, name: 'Omastar', type: 'water', type2: 'rock', ability: 'swift-swim', stats: st(70, 60, 125, 115, 70, 55) },
   { id: 141, name: 'Kabutops', type: 'rock', type2: 'water', ability: 'swift-swim', stats: st(60, 115, 105, 65, 70, 80), melee: true },
   { id: 148, name: 'Dragonair', type: 'flying', ability: 'shed-skin', stats: st(61, 84, 65, 70, 70, 70), evolvesTo: 149, shed: true },
-  { id: 178, name: 'Xatu', type: 'flying', type2: 'psychic', ability: 'synchronize', stats: st(65, 75, 70, 95, 70, 95), blink: true },
-  { id: 180, name: 'Flaaffy', type: 'electric', ability: 'static', stats: st(70, 55, 55, 80, 60, 45), evolvesTo: 181 },
+  { id: 178, name: 'Xatu', type: 'flying', type2: 'psychic', ability: 'synchronize', stats: st(65, 75, 70, 95, 70, 95), blink: true, sync: true },
+  { id: 180, name: 'Flaaffy', type: 'electric', ability: 'static', stats: st(70, 55, 55, 80, 60, 45), shock: true, evolvesTo: 181 },
   { id: 184, name: 'Azumarill', type: 'water', type2: 'normal', ability: 'huge-power', stats: st(100, 50, 80, 60, 80, 50), healer: true, huge: true },
   { id: 195, name: 'Quagsire', type: 'water', type2: 'rock', ability: 'water-absorb', stats: st(95, 85, 85, 65, 65, 35), unaware: true },
   { id: 217, name: 'Ursaring', type: 'normal', ability: 'guts', stats: st(90, 130, 75, 75, 75, 55), melee: true, rage: true, guts: true },
@@ -816,8 +816,8 @@ export const EVOS: SpeciesDef[] = [
   { id: 14, name: 'Kakuna', type: 'poison', ability: 'shed-skin', stats: st(45, 25, 50, 25, 25, 35), shielded: true, evolvesTo: 15 },
   { id: 15, name: 'Beedrill', type: 'poison', ability: 'swarm', stats: st(65, 90, 40, 45, 80, 75), melee: true, venom: true },
   { id: 28, name: 'Sandslash', type: 'rock', ability: 'sand-veil', stats: st(75, 100, 110, 45, 55, 65), melee: true, spiky: true, veil: 'sand' },
-  { id: 30, name: 'Nidorina', type: 'poison', ability: 'poison-point', stats: st(70, 62, 67, 55, 55, 56), evolvesTo: 31 },
-  { id: 31, name: 'Nidoqueen', type: 'poison', type2: 'rock', ability: 'poison-point', stats: st(90, 92, 87, 75, 85, 76), melee: true },
+  { id: 30, name: 'Nidorina', type: 'poison', ability: 'poison-point', stats: st(70, 62, 67, 55, 55, 56), toxic: true, evolvesTo: 31 },
+  { id: 31, name: 'Nidoqueen', type: 'poison', type2: 'rock', ability: 'poison-point', stats: st(90, 92, 87, 75, 85, 76), melee: true, toxic: true },
   { id: 87, name: 'Dewgong', type: 'water', ability: 'thick-fat', stats: st(90, 70, 80, 70, 95, 70) },
   { id: 91, name: 'Cloyster', type: 'water', ability: 'shell-armor', stats: st(50, 95, 180, 85, 45, 70), shielded: true },
   { id: 106, name: 'Hitmonlee', type: 'fighting', ability: 'limber', stats: st(50, 120, 53, 35, 110, 87), melee: true, counter: true },
@@ -838,7 +838,7 @@ export const EVOS: SpeciesDef[] = [
   { id: 326, name: 'Grumpig', type: 'psychic', ability: 'own-tempo', stats: st(80, 45, 65, 90, 110, 80) },
   { id: 344, name: 'Claydol', type: 'psychic', type2: 'rock', ability: 'levitate', stats: st(60, 70, 105, 70, 120, 75) },
   { id: 346, name: 'Cradily', type: 'grass', type2: 'rock', ability: 'suction-cups', stats: st(86, 81, 97, 81, 107, 43) },
-  { id: 348, name: 'Armaldo', type: 'rock', ability: 'battle-armor', stats: st(75, 125, 100, 70, 80, 45), melee: true },
+  { id: 348, name: 'Armaldo', type: 'rock', ability: 'battle-armor', stats: st(75, 125, 100, 70, 80, 45), melee: true, armor: true },
   { id: 367, name: 'Huntail', type: 'water', ability: 'swift-swim', stats: st(55, 104, 105, 94, 75, 52) },
   { id: 372, name: 'Shelgon', type: 'flying', ability: 'rock-head', stats: st(65, 95, 100, 60, 50, 50), evolvesTo: 373 },
   { id: 375, name: 'Metang', type: 'psychic', ability: 'clear-body', stats: st(60, 75, 100, 55, 80, 50), evolvesTo: 376 },

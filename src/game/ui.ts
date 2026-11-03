@@ -90,7 +90,7 @@ export function ufit(ctx: CanvasRenderingContext2D, label: string, px: number, m
 // dim the world behind an overlay window — INK at `a`, default 62%
 export function scrim(ctx: CanvasRenderingContext2D, a = 0.62) {
   ctx.save();
-  ctx.globalAlpha = a;
+  ctx.globalAlpha = a * ovlA; // rides the overlay entrance fade when one is live
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, ctx.canvas.width * 4, ctx.canvas.height * 4);
   ctx.restore();
@@ -152,12 +152,15 @@ export function uiBand(
   // metrics report ascent=full-em, so baseline math lands titles ~4px low
   // and short bands (h<20) clip the glyph bottoms
   ctx.textBaseline = 'middle';
+  // the sub's real width comes off the title's fit budget — a wide sub
+  // (PIPS = TIER · MAX 5) no longer overlaps a long centered title
+  ctx.font = fontB(7);
+  const subW = o.sub ? meas(ctx, o.sub) + 14 : 0;
   ctx.fillStyle = PARCH;
-  ufit(ctx, title, 12, r.w - 40);
+  ufit(ctx, title, 12, r.w - 40 - subW);
   ctx.fillText(title, r.x + r.w / 2, r.y + 3 + h / 2 + 1);
   if (o.sub) {
     ctx.textAlign = 'right';
-    ctx.font = fontB(7);
     ctx.fillStyle = '#a8b0d0';
     ctx.fillText(o.sub, r.x + r.w - 12, r.y + 3 + h / 2);
   }
@@ -198,13 +201,23 @@ export function uiRow(
   ctx: CanvasRenderingContext2D,
   r: Rect,
   label: string,
-  o: { on?: boolean; hot?: boolean; t?: number; right?: string; sub?: string; px?: number; align?: 'left' | 'center' } = {},
+  o: { on?: boolean; hot?: boolean; t?: number; right?: string; sub?: string; px?: number; align?: 'left' | 'center'; onK?: number } = {},
 ) {
   const cur = o.on || o.hot;
   if (cur) {
+    // onK sweeps the slab in from the left edge on a fresh selection —
+    // callers that never stamp stay at 1 and draw full
+    const k = o.onK ?? 1;
+    ctx.save();
+    if (k < 1) {
+      ctx.beginPath();
+      ctx.rect(r.x, r.y, r.w * k, r.h);
+      ctx.clip();
+    }
     rr(ctx, r.x, r.y, r.w, r.h, 5);
     ctx.fillStyle = o.hot ? GOLD : INK;
     ctx.fill();
+    ctx.restore();
   }
   const fg = o.on ? PARCH : INK;
   const pa = ctx.textAlign;
@@ -233,6 +246,14 @@ export function uiRow(
 // the × chip at a window's top-right — INK square, PARCH mark. Tap target
 // stays wherever the caller's CLOSE rect already is; this is only the look.
 export function uiClose(ctx: CanvasRenderingContext2D, r: Rect) {
+  const pk = pressK(r), pop = popK(r);
+  const s = (1 - 0.1 * pk) * (pop < 0 ? 1 : 0.94 + 0.06 * pop);
+  ctx.save();
+  if (s !== 1) {
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+    ctx.scale(s, s);
+    ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2));
+  }
   ctx.fillStyle = INK;
   rr(ctx, r.x, r.y, r.w, r.h, 6);
   ctx.fill();
@@ -244,4 +265,100 @@ export function uiClose(ctx: CanvasRenderingContext2D, r: Rect) {
   ctx.fillStyle = PARCH;
   ctx.font = font(8);
   ctx.fillText('X', r.x + r.w / 2 + 1, r.y + r.h / 2 + 4);
+  ctx.restore();
 }
+
+// --- motion kit: easings + shared stamps -----------------------------------
+// the primitives every draw reads for state-change motion — an idle stamp
+// returns k=1 so nothing snaps when the clock is stale
+export const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
+export const eo = (v: number) => 1 - (1 - v) * (1 - v); // ease-out quad
+export const bo = (v: number) => { // back-out — overshoots ~1.1 then settles at 1
+  const c = 1.70158, u = v - 1;
+  return 1 + (c + 1) * u * u * u + c * u * u;
+};
+
+// lerp two #rrggbb colors — t=0 keeps `a`, t=1 lands on `b`
+export const mixHex = (a: string, b: string, t: number) => {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  let out = '#';
+  for (const s of [16, 8, 0]) {
+    const ca = (pa >> s) & 255;
+    out += Math.round(ca + (((pb >> s) & 255) - ca) * t)
+      .toString(16)
+      .padStart(2, '0');
+  }
+  return out;
+};
+
+// id-keyed chased value for state flips (toggles, segments, selection slabs)
+// — a mid-flight reverse captures the in-flight value instead of snapping.
+// First sight of an id inits at target: overlays never animate from cold.
+const springs = new Map<string, { v: number; t0: number; from: number; to: number }>();
+export const springK = (id: string, to: number, dur = 0.2) => {
+  let s = springs.get(id);
+  if (!s) {
+    s = { v: to, t0: uiNow, from: to, to };
+    springs.set(id, s);
+  } else if (s.to !== to) {
+    s.from = s.v;
+    s.to = to;
+    s.t0 = uiNow;
+  }
+  s.v = s.from + (s.to - s.from) * eo(clamp01((uiNow - s.t0) / dur));
+  return s.v;
+};
+
+// the frame clock leaf draws share — stamped once per render so pill/uiClose
+// can ease without `t` params threading through every caller
+let uiNow = 0;
+export const noteUiFrame = (t: number) => { uiNow = t; };
+// draws that never took a `t` param read the shared clock through here
+export const uiTime = () => uiNow;
+
+// overlay entrances — scrim fades over 180ms while the window rises 10px in
+// 220ms with a back-out settle. ovlA feeds scrim's alpha so the world's dim
+// and the card land on the same beat; exits stay instant — handheld windows
+// close hard.
+let ovlA = 1;
+export function overlayPop(ctx: CanvasRenderingContext2D, age: number, fn: () => void) {
+  const prev = ovlA;
+  ovlA = eo(clamp01(age / 0.18));
+  ctx.save();
+  ctx.translate(0, (1 - bo(clamp01(age / 0.22))) * 10);
+  ctx.globalAlpha *= ovlA;
+  fn();
+  ctx.restore();
+  ovlA = prev;
+}
+
+// press registry — pointerdown stamps the point, pointermove cancels past a
+// 10px drift, pointerup banks a release-pop at the held point. Leaf draws ask
+// pressK/popK with their own rect; no caller threads a flag.
+let pressPt: { x: number; y: number; t0: number } | null = null;
+let pressRel: { x: number; y: number; t0: number } | null = null;
+export const notePress = (x: number, y: number, t: number) => { pressPt = { x, y, t0: t }; };
+export const noteRelease = (t: number) => {
+  if (pressPt) pressRel = { x: pressPt.x, y: pressPt.y, t0: t };
+  pressPt = null;
+};
+export const notePressCancel = () => { pressPt = null; };
+export const pressDrift = (x: number, y: number) => {
+  if (pressPt && (Math.abs(x - pressPt.x) > 10 || Math.abs(y - pressPt.y) > 10)) pressPt = null;
+};
+const inR = (x: number, y: number, r: Rect) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+// eased 0→1 sink over 60ms while a finger holds this rect
+export const pressK = (r: Rect) =>
+  pressPt && inR(pressPt.x, pressPt.y, r) ? clamp01((uiNow - pressPt.t0) / 0.06) : 0;
+// release overshoot: 0→~1.1→1 over 180ms after a held press lifts off this
+// rect; -1 while idle so callers can skip the transform entirely
+export const popK = (r: Rect) => {
+  if (!pressRel || !inR(pressRel.x, pressRel.y, r)) return -1;
+  const k = (uiNow - pressRel.t0) / 0.18;
+  if (k >= 1) {
+    pressRel = null;
+    return -1;
+  }
+  return bo(clamp01(k));
+};

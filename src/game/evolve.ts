@@ -4,11 +4,13 @@
 // second ends it; reduced motion starts at the flash.
 import { cry } from '../core/audio';
 import { drawMon, drawShiny, loadSprite, whiteSprite } from '../core/assets';
+import { mulberry32 } from '../core/rng';
 import { speciesById } from './data';
 import { settings } from './meta';
 import { taskTick } from './tasks';
 import { TYPE_COLOR } from './types';
 import { fontB, uiWindow, GOLD_HI } from './ui';
+import { TYPE_RAMP, burst, chargeMotes, drawFx, impactRing, pickRamp, stepFx, type Fx } from './vfx';
 
 const W = 540, H = 960;
 
@@ -25,13 +27,20 @@ interface Evo {
   shiny: boolean;
   t: number;
   cried: boolean;
+  mote: number; // gather-mote spawn accumulator
 }
 const queue: Evo[] = [];
+// the scene's own fx pool — gather motes charge the flicker, the reveal
+// spends them in a type-ramped ring and settling stardust
+const fx: Fx[] = [];
+let fxTime = 0;
+let fxRng = mulberry32(1);
 
 export function startEvo(from: number, to: number, shiny = false) {
   void loadSprite(from).catch(() => null);
   void loadSprite(to).catch(() => null);
-  queue.push({ from, to, shiny, t: REDUCED ? EVO_FLASH : 0, cried: false });
+  fxRng = mulberry32((from * 7919 + to * 131 + (shiny ? 7 : 0)) >>> 0); // same pair, same dressing
+  queue.push({ from, to, shiny, t: REDUCED ? EVO_FLASH : 0, cried: false, mote: 0 });
   taskTick({ evos: 1 }); // every evolution funnels through here — count at the door
 }
 
@@ -41,12 +50,41 @@ export const evoScene = (): Readonly<Evo> | undefined => queue[0];
 function reveal(e: Evo) {
   e.cried = true;
   cry(e.to, 'catch');
+  // the swap's payoff, keyed to the new typing: a ramped shockwave, hot
+  // shrapnel off the center, then stardust settling over the pop-in
+  const ramp = TYPE_RAMP[speciesById(e.to)?.type ?? 'normal'];
+  const cx = W / 2, cy = 400;
+  impactRing(fx, fxRng, cx, cy, ramp, { radius: 150, width: 6, life: 0.5, motes: 8 });
+  burst(fx, fxRng, cx, cy, ramp[2], 14, 420, 1.2, ramp);
+  for (let i = 0; i < 14; i++) {
+    fx.push({
+      x: cx + (fxRng() - 0.5) * 320,
+      y: cy - 170 + (fxRng() - 0.5) * 110,
+      vx: (fxRng() - 0.5) * 26,
+      vy: 24 + fxRng() * 46,
+      t: 0.45 + fxRng() * 0.45,
+      life: 0.9,
+      size: 1.6 + fxRng() * 2.6,
+      color: fxRng() < 0.35 ? '#ffffff' : pickRamp(ramp, fxRng),
+      shape: 'sparkle',
+      spin: (fxRng() - 0.5) * 7,
+      grav: 70,
+    });
+  }
 }
 
 export function tickEvo(dt: number) {
+  fxTime += dt;
+  stepFx(fx, dt, fxTime); // runs even between queued evos so strays die off
   const e = queue[0];
   if (!e) return;
   e.t += dt;
+  // aura motes stream into the mon through the pulse and the flicker —
+  // the white-out steals the frame just as they converge
+  if (e.t < EVO_FLASH && (e.mote += dt) >= 0.16) {
+    e.mote = 0;
+    chargeMotes(fx, fxRng, W / 2, 400, TYPE_RAMP[speciesById(e.to)?.type ?? 'normal'], { r: 160, n: 6, life: 0.4 });
+  }
   if (!e.cried && e.t >= EVO_FLASH) reveal(e);
   if (e.t >= EVO_T) queue.shift();
 }
@@ -104,6 +142,7 @@ export function drawEvo(ctx: CanvasRenderingContext2D) {
   const t = e.t;
   const cx = W / 2, cy = 400, S = 256;
   const col = TYPE_COLOR[speciesById(e.to)?.type ?? 'normal']; // the payoff color: the NEW form's typing
+  const ramp = TYPE_RAMP[speciesById(e.to)?.type ?? 'normal'];
   ctx.save();
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = 'rgba(4,6,14,0.84)';
@@ -156,6 +195,7 @@ export function drawEvo(ctx: CanvasRenderingContext2D) {
     ctx.globalAlpha = 1;
     flash = 1 - rp;
   }
+  drawFx(ctx, fx); // additive motes/ring/stardust — the flash whites over them, they bloom back out
 
   const box = { x: 20, y: 740, w: W - 40, h: 120 };
   uiWindow(ctx, box, { dark: true, rad: 10 });
@@ -174,7 +214,7 @@ export function drawEvo(ctx: CanvasRenderingContext2D) {
 
   if (flash > 0) {
     ctx.globalAlpha = flash * (settings().flash ? 1 : 0.35);
-    ctx.fillStyle = t < EVO_FLASH ? '#ffffff' : col; // white charge-up, type-colored burst
+    ctx.fillStyle = t < EVO_FLASH ? '#ffffff' : ramp[3]; // white charge-up, then the ramp's hot end
     ctx.fillRect(0, 0, W, H);
   }
   ctx.restore();

@@ -157,10 +157,12 @@ function noise(dur: number, freq: number, vol: number, delay = 0, slide = 0) {
 export type Sfx =
   | 'launch' | 'perfect' | 'hit' | 'ko' | 'caught' | 'hurt'
   | 'zap' | 'boom' | 'splash' | 'heal' | 'ui' | 'wave' | 'lose' | 'ready'
-  | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick' | 'bounce' | 'warn' | 'chime';
+  | 'sizzle' | 'gust' | 'invade' | 'beam' | 'tick' | 'bounce' | 'warn' | 'chime'
+  | 'whoosh' | 'flip' | 'crack';
 
 export function sfx(name: Sfx, pitch = 1) {
-  if (name === 'ui' && !settings().uiSfx) return;
+  // menu sounds respect the MENU SOUNDS toggle — battle sounds don't
+  if ((name === 'ui' || name === 'whoosh' || name === 'flip') && !settings().uiSfx) return;
   switch (name) {
     case 'launch':
       noise(0.18, 900, 0.25, 0, -600);
@@ -171,6 +173,18 @@ export function sfx(name: Sfx, pitch = 1) {
       [660, 880, 1108, 1760].forEach((f, i) => tone(f * pitch, f * pitch, 0.14, 'square', 0.09, i * 0.045));
       tone(2217 * pitch, 2217 * pitch, 0.26, 'sine', 0.06, 0.2); // C#7 crowns the A-major run
       noise(0.3, 2600 * pitch, 0.08, 0.06, 2400 * pitch);
+      break;
+    case 'whoosh': // an overlay window slides in — a paper rush, not a beep
+      noise(0.16, 700 * pitch, 0.10, 0, 1600 * pitch);
+      tone(300 * pitch, 520 * pitch, 0.1, 'sine', 0.05);
+      break;
+    case 'flip': // a switch snaps — small click pair
+      tone(1900 * pitch, 1400 * pitch, 0.04, 'square', 0.06);
+      noise(0.03, 3600 * pitch, 0.05, 0.01);
+      break;
+    case 'crack': // the ball bites a damage wall — a sharp stone split
+      noise(0.12, 1400 * pitch, 0.24, 0, -900 * pitch);
+      tone(240, 90, 0.09, 'triangle', 0.12);
       break;
     case 'chime': // ALL CONNECT: rising C-major arpeggio, bell on top
       [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.2, 'triangle', 0.09, i * 0.07));
@@ -545,7 +559,7 @@ export interface Track {
 export type TrackName = 'title' | 'battle' | 'map' | 'trainer' | 'gym' | 'win'
   | 'battle_grove' | 'battle_cavern' | 'battle_volcano' | 'battle_sky'
   | 'trainer_forge' | 'trainer_shade' | 'trainer_earth' | 'trainer_gale'
-  | 'draft_theme' | 'reward_theme';
+  | 'draft_theme' | 'reward_theme' | 'shop_theme';
 
 function mnote(f: number, t0: number, dur: number, type: OscillatorType, vol: number, f1 = 0, vib = 0, dest?: AudioNode) {
   if (!ac || !mGain) return;
@@ -943,6 +957,44 @@ export const TRACKS: Partial<Record<TrackName, Track>> = {
     kick: 'k.......'.repeat(7) + 'k.......',
     snare: '.'.repeat(64), // no snare in the menu theme — rests, not a short string
     hat: '..h...h.'.repeat(8),
+    loop: true,
+  },
+  shop_theme: {
+    // the prize counter — a jaunty mart polka: clipped triangle lead,
+    // oom-pah root/fifth bass, kick on the beats, snare answering off them
+    bpm: 118,
+    leadWave: 'triangle',
+    vib: 2,
+    leadGate: 0.7, // staccato — mart brass reads bouncy, not legato
+    lead: [
+      72, 0, 76, 0, 79, 0, 76, 0, // C
+      74, 0, 77, 0, 81, 0, 77, 0, // G
+      72, 0, 76, 0, 77, 0, 76, 0, // F
+      71, 0, 74, 0, 77, 0, 74, 0, // G7
+      72, 0, 76, 0, 79, 0, 84, 0, // C
+      76, 0, 79, 0, 81, 0, 79, 0, // Am
+      77, 0, 81, 0, 83, 0, 81, 0, // F
+      79, 0, 77, 0, 76, 0, 72, 0, // G → C home
+    ],
+    arp: [
+      ...rep([60, 64, 67, 72], 2), ...rep([55, 59, 62, 67], 2),
+      ...rep([53, 57, 60, 65], 2), ...rep([55, 59, 62, 65], 2),
+      ...rep([60, 64, 67, 72], 2), ...rep([57, 60, 64, 69], 2),
+      ...rep([53, 57, 60, 65], 2), ...rep([55, 59, 62, 67], 2),
+    ],
+    bass: [
+      36, 0, 43, 0, 36, 0, 43, 0, // C
+      31, 0, 38, 0, 31, 0, 38, 0, // G
+      29, 0, 36, 0, 29, 0, 36, 0, // F
+      31, 0, 38, 0, 31, 0, 38, 0, // G7
+      36, 0, 43, 0, 36, 0, 43, 0, // C
+      33, 0, 40, 0, 33, 0, 40, 0, // Am
+      29, 0, 36, 0, 29, 0, 36, 0, // F
+      31, 0, 38, 0, 36, 0, 43, 0, // G → C
+    ],
+    kick: 'k...k...'.repeat(8),
+    snare: '..s...s.'.repeat(8),
+    hat: 'h.h.h.h.'.repeat(8),
     loop: true,
   },
   draft_theme: {

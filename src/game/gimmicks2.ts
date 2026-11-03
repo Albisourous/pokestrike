@@ -18,6 +18,7 @@ import { drawTile } from './map';
 import { FX_LEAF, ROCK_SMALL, TILE_ICE, TILE_FLAGSTONE, TILE_STEEL_TRIM, type TileRect } from './maptiles';
 import { fontB } from './ui';
 import { fitFontB } from './screens';
+import { TYPE_RAMP, type FxRamp } from './vfx';
 
 export const WIND_ACCEL = 520; // px/s² sideways push while the ball sits in the strip
 export const LASER_CHIP = 0.03; // share of max HP the beam takes per contact
@@ -79,10 +80,15 @@ export interface Field2Ball {
 }
 export interface Field2Fx {
   hurt: (u: Field2Ball, dmg: number) => void;
-  burst: (x: number, y: number, color: string) => void;
+  burst: (x: number, y: number, color: string, ramp?: string[]) => void;
   notice: (u: Field2Ball) => void;
   shake: (amt: number) => void;
   live?: (u: Field2Ball) => boolean; // gauge.ts gate: is this ball's ability counter on right now
+  // proc dressing — perks.ts reaches these through b.field2Fx; every beat
+  // lands under 0.4s so constant procs never read as lingering
+  motes: (x: number, y: number, ramp: FxRamp) => void; // rising motes — heals & washes
+  ring: (x: number, y: number, ramp: FxRamp, r?: number) => void; // shell ring — shields & re-arms
+  glint: (x: number, y: number, ramp: FxRamp) => void; // sharp glint — riders & ready pings
 }
 
 // Beam row + post columns: an open run of floor cells, mirror-symmetric,
@@ -198,7 +204,7 @@ function stepIce(f: Field2, u: Field2Ball, h: number, shot: number, fx: Field2Fx
   if (!p || p.melt === shot) return 0;
   if (meltsIce(u.def)) {
     p.melt = shot;
-    fx.burst(u.x, u.y, '#bfe8ff');
+    fx.burst(u.x, u.y, '#bfe8ff', TYPE_RAMP.water);
     sfx('splash');
     return 0;
   }
@@ -224,7 +230,7 @@ export function stepField2(f: Field2 | null, u: Field2Ball, h: number, time: num
       const v = Math.hypot(u.vx, u.vy) * SPIN_KICK;
       u.vx = sp.dx * v;
       u.vy = sp.dy * v;
-      fx.burst(u.x, u.y, TYPE_COLOR.psychic);
+      fx.burst(u.x, u.y, TYPE_COLOR.psychic, TYPE_RAMP.psychic);
       sfx('ui');
     }
   }
@@ -235,10 +241,10 @@ export function stepField2(f: Field2 | null, u: Field2Ball, h: number, time: num
     wp.used = twin.used = shot;
     f.warpFx = f.warpFx.filter((e) => time - e.t < WARP_FLASH);
     f.warpFx.push({ x: wp.x + wp.w / 2, y: wp.y + wp.h / 2, t: time }, { x: twin.x + twin.w / 2, y: twin.y + twin.h / 2, t: time });
-    fx.burst(u.x, u.y, TYPE_COLOR.ghost);
+    fx.burst(u.x, u.y, TYPE_COLOR.ghost, TYPE_RAMP.ghost);
     u.x = twin.x + twin.w / 2;
     u.y = twin.y + twin.h / 2;
-    fx.burst(u.x, u.y, TYPE_COLOR.ghost);
+    fx.burst(u.x, u.y, TYPE_COLOR.ghost, TYPE_RAMP.ghost);
     sfx('gust');
   }
   const w = f.wind;
@@ -261,13 +267,13 @@ export function stepField2(f: Field2 | null, u: Field2Ball, h: number, time: num
     p.t = time;
     p.hp--;
     fx.shake(6);
-    fx.burst(p.x, p.y, TYPE_COLOR.electric);
+    fx.burst(p.x, p.y, TYPE_COLOR.electric, TYPE_RAMP.electric);
     sfx('hit');
     if (p.hp <= 0) {
       l.down = true;
       fx.shake(12);
-      fx.burst(l.a.x, l.a.y, '#fff6a0');
-      fx.burst(l.b.x, l.b.y, '#fff6a0');
+      fx.burst(l.a.x, l.a.y, '#fff6a0', TYPE_RAMP.electric);
+      fx.burst(l.b.x, l.b.y, '#fff6a0', TYPE_RAMP.electric);
       sfx('boom');
     }
     return pause;
@@ -287,7 +293,7 @@ export function stepField2(f: Field2 | null, u: Field2Ball, h: number, time: num
   if (time - l.hurtT < LASER_HURT_CD) return pause;
   l.hurtT = time;
   fx.hurt(u, Math.max(1, Math.round(u.maxHp * LASER_CHIP)));
-  fx.burst(u.x - nx * u.r, u.y - ny * u.r, TYPE_COLOR.electric);
+  fx.burst(u.x - nx * u.r, u.y - ny * u.r, TYPE_COLOR.electric, TYPE_RAMP.electric);
   sfx('zap');
   return pause;
 }

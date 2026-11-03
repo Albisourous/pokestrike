@@ -500,6 +500,18 @@ export function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: nu
     ctx.globalAlpha = 0.4 + 0.4 * (0.5 + 0.5 * Math.sin(t * 2.2));
     drawTile(ctx, FX_PETAL, 265, 676, FX_PETAL[2] * S, FX_PETAL[3] * S);
     ctx.restore();
+    // the lab keeps a fire lit — thin smoke wisps climb off the roof's
+    // right end; shake=0 holds them mid-air
+    const ft = settings().shake === 0 ? 0 : t;
+    for (let i = 0; i < 4; i++) {
+      const u = (ft * 0.16 + i * 0.27) % 1;
+      ctx.globalAlpha = 0.2 * (1 - u) * Math.min(1, u * 4);
+      ctx.fillStyle = '#c8ccd8';
+      ctx.beginPath();
+      ctx.arc(LAB.x + LAB.w * 0.78 + Math.sin(i * 2.4 + ft * 0.9) * (2 + u * 8), LAB.y + 12 - u * 44, 2 + u * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // villagers and the day's strays share one y-sorted pass — whoever is

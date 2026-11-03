@@ -1,7 +1,7 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, loadNpcs, gracidea, whiteSprite } from '../core/assets';
 import { drawMissionTicks } from './missions';
-import { isMuted } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
+import { isMuted, sfx } from '../core/audio';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, DRAFT_ROUNDS, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { gaugeCounter } from './gauge';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
@@ -11,8 +11,9 @@ import { drawTile } from './map';
 import { drawShopScene, drawPullStage, drawCounterStrip, ballFor, ballDrop, DROP_H, DROP_SETTLE } from './home/shop';
 import { TILE_GYM, TILE_GRASS, TILE_ROCK, TILE_BUSH, TILE_LAVA, TILE_BRICK, type TileRect } from './maptiles';
 import { TYPE_COLOR, type PokeType } from './types';
+import { TYPE_RAMP, starPath } from './vfx';
 import { roleOf, moveOf, superDesc } from './stats';
-import { ULT_SHOTS } from './battle';
+import { TEAM_CAP, ULT_SHOTS } from './battle';
 import { dexIds, settings, setSetting, bagStock, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, coachDone, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
 import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost, raidPick } from './tasks';
 import { drawRaidLobby } from './home/raid';
@@ -23,6 +24,7 @@ import type { Vec } from '../core/vec';
 import {
   INK, INK_SOFT, INK_FAINT, PAPER, PAPER_HI, PARCH, GOLD, GOLD_HI, ACCENT, DANGER,
   font, fontB, uiWindow, uiBand, uiPanel, uiRow, uiClose, cursorTri, scrim,
+  clamp01, eo, bo, pressK, popK, mixHex, springK, uiTime,
 } from './ui';
 import { drawMonsBody } from './home/mons';
 export { DEX_BTN, SETS_BTN, PARTNERS_BTN, TEAM_BTN, EDIT_TEAM_BTN, partnersStripAt, teamStageAt } from './home/mons';
@@ -198,21 +200,37 @@ function cornerBadge(
   }
 }
 
+// corner chips share the pill's press language — the finger sinks them, the
+// release bounces them back
+const chipPress = (ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }) => {
+  const pk = pressK(r), pop = popK(r);
+  const s = (1 - 0.14 * pk) * (pop < 0 ? 1 : 0.9 + 0.1 * pop);
+  ctx.save();
+  if (s !== 1) {
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+    ctx.scale(s, s);
+    ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2));
+  }
+};
 export function drawHelpChip(ctx: CanvasRenderingContext2D) {
   const cx = HELP_CHIP.x + HELP_CHIP.w / 2;
   const cy = HELP_CHIP.y + HELP_CHIP.h / 2;
+  chipPress(ctx, HELP_CHIP);
   cornerBadge(ctx, HELP_CHIP, { bg: '#283058cc', lw: 1.5 });
   ctx.font = font(12);
   ctx.fillStyle = PARCH;
   inkCenter(ctx, '?', cx, cy);
+  ctx.restore();
 }
 export const MUTE_CHIP = { x: W - 100, y: 54, w: 40, h: 40 };
 export const MUTE_CHIP_HIT = { x: MUTE_CHIP.x - 2, y: MUTE_CHIP.y - 2, w: 44, h: 44 };
 export function drawMuteChip(ctx: CanvasRenderingContext2D) {
   const cx = MUTE_CHIP.x + MUTE_CHIP.w / 2;
   const cy = MUTE_CHIP.y + MUTE_CHIP.h / 2;
+  chipPress(ctx, MUTE_CHIP);
   cornerBadge(ctx, MUTE_CHIP, { bg: '#283058cc', lw: 1.5 });
   speakerGlyph(ctx, cx, cy, 0.72);
+  ctx.restore();
 }
 // settings cog, mid-run size — the next 42px slot left of MUTE_CHIP's grid
 export const MAP_GEAR = { x: W - 142, y: 54, w: 40, h: 40 };
@@ -220,8 +238,10 @@ export const MAP_GEAR_HIT = { x: MAP_GEAR.x - 2, y: MAP_GEAR.y - 2, w: 44, h: 44
 export function drawGearChip(ctx: CanvasRenderingContext2D) {
   const cx = MAP_GEAR.x + MAP_GEAR.w / 2;
   const cy = MAP_GEAR.y + MAP_GEAR.h / 2;
+  chipPress(ctx, MAP_GEAR);
   cornerBadge(ctx, MAP_GEAR, { bg: '#283058cc', lw: 1.5 });
   gearGlyph(ctx, cx, cy, 1.3, PARCH);
+  ctx.restore();
 }
 export const MUTE_BTN = { x: 20, y: 22, w: 44, h: 44 };
 // gear badge, left of the ? — the settings modal
@@ -674,20 +694,6 @@ export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number;
   }
 }
 
-// lerp two #rrggbb colors — t=0 keeps `a`, t=1 lands on `b`
-const mixHex = (a: string, b: string, t: number) => {
-  const pa = parseInt(a.slice(1), 16);
-  const pb = parseInt(b.slice(1), 16);
-  let out = '#';
-  for (const s of [16, 8, 0]) {
-    const ca = (pa >> s) & 255;
-    out += Math.round(ca + (((pb >> s) & 255) - ca) * t)
-      .toString(16)
-      .padStart(2, '0');
-  }
-  return out;
-};
-
 // candy stripes — the pokebonk texture: -45° white bands, 10 on / 10 off.
 // expects a clip already on the context; covers the rect's rotated bounds.
 function stripes(ctx: CanvasRenderingContext2D, r: { x: number; y: number; w: number; h: number }) {
@@ -767,9 +773,20 @@ export function pill(
     disabled?: boolean;
   },
 ) {
+  // a held finger sinks the face (60ms ease via the press registry); the
+  // release plays a 6% dip-and-settle scale pop about the pill's center
+  const pop = o.disabled ? -1 : popK(r);
+  ctx.save();
+  if (pop >= 0) {
+    const s = 0.94 + 0.06 * pop;
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+    ctx.scale(s, s);
+    ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2));
+  }
+  const pk = o.disabled ? 0 : Math.max(pressK(r), o.pressed ? 1 : 0);
   const c = o.disabled ? '#d8d8d0' : o.c;
   const tc = o.disabled ? INK_FAINT : o.tc;
-  const rimH = o.pressed ? 1 : 4;
+  const rimH = 4 - 3 * pk;
   // the press edge is a whole INK pill — the face sits on it and covers all
   // but the bottom lip
   roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
@@ -788,7 +805,7 @@ export function pill(
     ctx.font = fontB(10);
     bw = ctx.measureText(o.badge).width + 10;
   }
-  const cy = r.y + (r.h - rimH) / 2 + (o.pressed ? 2 : 0);
+  const cy = r.y + (r.h - rimH) / 2 + 2 * pk;
   const pa = ctx.textAlign;
   ctx.textAlign = 'center';
   ctx.fillStyle = tc;
@@ -811,6 +828,7 @@ export function pill(
     ctx.fillText(o.badge, bx + 5, cy + 4.5);
   }
   ctx.textAlign = pa;
+  ctx.restore();
 }
 
 // --- title screen: mottled grass pitch, stadium ring of mons, arched wordmark ---
@@ -938,7 +956,7 @@ export function drawTitle(
   ctx: CanvasRenderingContext2D,
   t: number,
   cont: { stage: number; score: number; seed: number } | null = null,
-  restartArmed = false, // RESTART's own two-tap — warn-red face while it's lit
+  restartArmT = -10, // seconds since RESTART armed — <3 means the warn face is lit
   tab: HomeTab,
   pack: { arm: boolean; flash: string | null } = { arm: false, flash: null },
 ) {
@@ -967,7 +985,7 @@ export function drawTitle(
   const rise = swapFrom ? (1 - clamp01((t - swapT) / 0.22)) * 12 : 0;
   ctx.save();
   if (rise > 0.05) ctx.translate(0, rise);
-  if (tab === 'climb') drawClimbBody(ctx, t, cont, restartArmed);
+  if (tab === 'climb') drawClimbBody(ctx, t, cont, restartArmT);
   else if (tab === 'shop') drawShopBody(ctx, t, freeNow, pack.arm, pack.flash);
   else if (tab === 'mons') drawMonsBody(ctx, t);
   else if (tab === 'raid') drawRaidBody(ctx, t);
@@ -1002,9 +1020,9 @@ function drawClimbBody(
   ctx: CanvasRenderingContext2D,
   t: number,
   cont: { stage: number; score: number; seed: number } | null,
-  restartArmed: boolean,
+  restartArmT: number,
 ) {
-  drawClimb(ctx, t, cont, restartArmed, logoBig);
+  drawClimb(ctx, t, cont, restartArmT, logoBig);
 
   // the day's login drop — a gold banner over the pitch top for the first
   // seconds on title, so the calendar reads as a reward, not a ledger line
@@ -1781,6 +1799,14 @@ function drawHelpIcon(ctx: CanvasRenderingContext2D, icon: HelpIcon, cx: number,
   ctx.restore();
 }
 
+// page-flip slide — main.ts's helpFlip stamps the direction, the deck glides
+let helpSlideT = -9;
+let helpDir = 1;
+export const noteHelpFlip = (d: number) => {
+  helpDir = d;
+  helpSlideT = uiTime();
+};
+
 export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed = false, welcome = false) {
   const r = HELP_PANEL;
   const pg = HELP_DECK[page];
@@ -1801,6 +1827,12 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
   fitFontB(ctx, tut, HELP_TEXT_MIN, HELP_TUT.w - 12);
   ctx.fillStyle = coachArmed ? '#9fe89f' : PARCH;
   ctx.fillText(tut, HELP_TUT.x + HELP_TUT.w / 2, HELP_TUT.y + 27);
+
+  // the deck slides to the flipped direction — a page turn, not a cut
+  const hk = eo(clamp01((uiTime() - helpSlideT) / 0.18));
+  ctx.save();
+  ctx.globalAlpha *= hk;
+  ctx.translate((1 - hk) * helpDir * 60, 0);
 
   fitFont(ctx, pg.name, 14, r.w - 40);
   ctx.fillStyle = INK;
@@ -1828,6 +1860,7 @@ export function drawHelp(ctx: CanvasRenderingContext2D, page: number, coachArmed
       ctx.fillText(l, tx, top + li * lh);
     });
   });
+  ctx.restore(); // end the page-flip slide — footer nav and arrows stay put
 
   if (welcome && page === 0) {
     const y = HELP_CARD_Y + pg.cards.length * (HELP_CARD_H + HELP_CARD_GAP) + 30;
@@ -1920,6 +1953,8 @@ export const SKIP_PULL_BTN = { x: W - 128, y: 26, w: 108, h: 38 };
 // snap reads as a refresh. One shared pair: every chip draws the same wallet
 let chipStars = -1;
 let chipDust = -1;
+// last-seen targets + bump stamp for the wallet's payout swell
+const walPop = { s: -1, d: -1, t: -9 };
 const chase = (shown: number, target: number) =>
   shown < 0 || Math.abs(target - shown) < 0.6 ? target : shown + (target - shown) * 0.22;
 
@@ -1929,6 +1964,17 @@ export function balanceChip(
   starN: number,
   dust?: number,
 ) {
+  // a payout bumps the chip — scale swell settles before the count finishes
+  if (walPop.s >= 0 && (starN > walPop.s || (dust != null && dust > walPop.d))) walPop.t = uiTime();
+  walPop.s = starN;
+  if (dust != null) walPop.d = dust;
+  const bump = 1 + 0.12 * (1 - eo(clamp01((uiTime() - walPop.t) / 0.18)));
+  ctx.save();
+  if (bump > 1.001) {
+    ctx.translate(r.x + r.w / 2, r.y + r.h / 2);
+    ctx.scale(bump, bump);
+    ctx.translate(-(r.x + r.w / 2), -(r.y + r.h / 2));
+  }
   chipStars = chase(chipStars, starN);
   if (dust != null) chipDust = chase(chipDust, dust);
   // the wallet is a small dark window-chip — same frame language as the panel
@@ -1967,6 +2013,7 @@ export function balanceChip(
     ctx.fillStyle = PAPER;
     ctx.fillText(`${Math.round(chipDust)}`, tx + 12, r.y + r.h / 2 + 3.5);
   }
+  ctx.restore();
 }
 
 // the price INSIDE a pull pill — a dark plaque: star icon + count, or the
@@ -2067,9 +2114,22 @@ export function drawHatch(
     ctx.fill();
     monShadow(ctx, scx, scy + 2, 96);
     try {
-      drawMon(ctx, f.id, scx, scy + Math.sin(s.t * 2.4) * 2.5, 96);
+      drawMon(ctx, f.id, scx, scy + (settings().shake ? Math.sin(s.t * 2.4) * 2.5 : 0), 96);
     } catch {
       /* sprite still warming */
+    }
+    // the rate-up keeps a few live glints — blink-in-place, same policy as
+    // the shelf twinkles: they run even when motion is settled
+    const fr = TYPE_RAMP[f.type];
+    for (let k = 0; k < 3; k++) {
+      const tw = Math.sin(s.t * (2.1 + k * 0.8) + k * 2.4);
+      if (tw <= 0.4) continue;
+      ctx.save();
+      ctx.globalAlpha = (tw - 0.4) / 0.6;
+      ctx.fillStyle = k % 2 ? '#ffffff' : fr[2];
+      starPath(ctx, scx - 50 + rnd(f.id * 13 + k * 7) * 100, scy - 44 + rnd(f.id * 29 + k * 11) * 62, 3.5 + k, 0.28);
+      ctx.fill();
+      ctx.restore();
     }
     const tx = FEAT_BAND.x + 140;
     uiWindow(ctx, { x: tx - 12, y: FEAT_BAND.y + 18, w: FEAT_BAND.x + FEAT_BAND.w - 92 - (tx - 12), h: 78 }, { dark: true, rad: 8, rim: false, shadow: false });
@@ -2388,6 +2448,8 @@ const LB_H = 88; // letterbox bar height once fully closed
 const LB_SLAM = 0.4; // seconds for the bars to slam shut
 const FLASH_T = 0.34; // the silhouette→color beat inside the reveal
 const PRISM = ['#ff6b6b', GOLD, '#7dff8a', '#6bb6ff', '#c05df0'];
+// the shiny palette — a gold walk so the rarest pull reads rarest, not just rainbow
+const GOLD_RAMP = ['#7a4c08', '#c8900c', '#ffe89d', '#fffde8'];
 const FLOOR_Y = SHOW_CY + 56; // the counter floor the ball bounces on and the mon lands on
 const BALL_S = 96;
 // the glow each ball casts — the ball is the star tier, the glow says it again
@@ -2418,7 +2480,7 @@ function drawPullShow(ctx: CanvasRenderingContext2D, s: HatchState) {
   const cx = W / 2;
   const cy = SHOW_CY;
   // the flash beat kicks the screen — a damped rattle for its first 0.4s
-  const kick = s.phase === 'reveal' ? KICK[hype] * Math.max(0, 1 - s.t / 0.4) : 0;
+  const kick = s.phase === 'reveal' && settings().shake ? KICK[hype] * Math.max(0, 1 - s.t / 0.4) : 0;
   ctx.save();
   if (kick) ctx.translate(Math.sin(s.t * 97) * kick, Math.cos(s.t * 83) * kick);
   if (s.phase === 'shake') drawShakeScene(ctx, s, res, hype, cx, cy);
@@ -2456,12 +2518,7 @@ const rnd = (n: number) => {
   const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
 };
-const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
-const eo = (v: number) => 1 - (1 - v) * (1 - v); // ease-out quad
-const bo = (v: number) => { // back-out — overshoots ~1.1 then settles at 1
-  const c = 1.70158, u = v - 1;
-  return 1 + (c + 1) * u * u * u + c * u * u;
-};
+// clamp01/eo/bo/mixHex live in ui.ts now — the motion kit every draw shares
 // '#rrggbb' + alpha → '#rrggbbaa' — the palette stays hex, alpha rides along
 const withA = (c: string, a: number) =>
   c +
@@ -2547,23 +2604,28 @@ function drawShakeScene(
           : '#c0c8e0';
 
   // inbound spark lanes — seeded per pull so the charge reads identical
-  // every frame (and every replay)
+  // every frame (and every replay); shake=0 slows the drift, never kills it
+  const mt = settings().shake === 0 ? s.t * 0.35 : s.t;
   const n = 16 + hype * 10;
   for (let k = 0; k < n; k++) {
     const seed = (res?.id ?? 1) * 131 + k * 17;
     const a = rnd(seed) * Math.PI * 2;
-    const q = (s.t * (0.5 + rnd(seed + 1) * 0.7) * (1 + p) + rnd(seed + 2)) % 1;
+    const q = (mt * (0.5 + rnd(seed + 1) * 0.7) * (1 + p) + rnd(seed + 2)) % 1;
     const rr = 26 + (1 - q) * 220;
     const sz = 1.5 + rnd(seed + 3) * 3;
     ctx.globalAlpha = q * 0.85;
     ctx.fillStyle = k % 3 ? tellC : '#ffffff';
-    ctx.fillRect(cx + Math.cos(a) * rr - sz / 2, cy + Math.sin(a) * rr - sz / 2, sz, sz);
+    if (k % 4 === 0) {
+      // every fourth mote is a four-point glint — the charge sparkles in
+      starPath(ctx, cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, sz * 1.7, 0.28);
+      ctx.fill();
+    } else ctx.fillRect(cx + Math.cos(a) * rr - sz / 2, cy + Math.sin(a) * rr - sz / 2, sz, sz);
   }
   ctx.globalAlpha = 1;
 
   // rings collapse onto the ball — faster and tighter as the charge builds
   for (let k = 0; k < 3; k++) {
-    const q = (s.t * (0.9 + p * 2.2) + k / 3) % 1;
+    const q = (mt * (0.9 + p * 2.2) + k / 3) % 1;
     ctx.globalAlpha = q * 0.55;
     ctx.strokeStyle = tellC;
     ctx.lineWidth = 1.5 + q * 3;
@@ -2594,7 +2656,7 @@ function drawShakeScene(
   ctx.fill();
   ctx.save();
   ctx.translate(cx, FLOOR_Y - d.h);
-  if (d.h === 0 && s.t > DROP_SETTLE) ctx.rotate(Math.sin(s.t * (11 + w * 26)) * (0.1 + w * 0.32));
+  if (d.h === 0 && s.t > DROP_SETTLE && settings().shake) ctx.rotate(Math.sin(s.t * (11 + w * 26)) * (0.1 + w * 0.32));
   ctx.scale(1 + squash, 1 - squash);
   ctx.imageSmoothingEnabled = false;
   if (ball) ctx.drawImage(ball, -BALL_S / 2, -BALL_S, BALL_S, BALL_S);
@@ -2651,9 +2713,12 @@ function drawRevealScene(
   const T = Math.max(s.tMax, 0.01);
   const fade = clamp01(s.t / 0.3) * clamp01((T - s.t) / 0.35); // in/out gate
   const typeC = TYPE_COLOR[def.type];
-  const main = hype === 2 ? (res.shiny ? GOLD : '#c05df0') : hype === 1 ? GOLD : '#c0c8e0';
   const prism = hype === 2;
-  const pick = (k: number) => (prism ? PRISM[k % PRISM.length] : main);
+  // the reveal dresses in the pull's own palette: a shiny walks a gold ramp,
+  // an epic keeps the rainbow prism, and every other pull bursts in its mon's
+  // type ramp — the pop reads as the mon before the name lands
+  const pal = res.shiny ? GOLD_RAMP : prism ? PRISM : TYPE_RAMP[def.type];
+  const pick = (k: number) => pal[k % pal.length];
   const ft = s.t - FLASH_T; // seconds past the color beat
 
   // the pillar — a light column squeezed out of a radial gradient
@@ -2699,7 +2764,7 @@ function drawRevealScene(
       ctx.rotate((ring ? -1 : 1) * s.t * (0.7 + ring * 0.35));
       const rr = 98 + ring * 28;
       for (let k = 0; k < 12; k++) {
-        ctx.strokeStyle = PRISM[(k + ring * 2) % PRISM.length];
+        ctx.strokeStyle = pal[(k + ring * 2) % pal.length];
         ctx.globalAlpha = 0.6 * fade;
         ctx.lineWidth = 8 - ring * 3;
         ctx.beginPath();
@@ -2817,13 +2882,16 @@ function drawRevealScene(
       const sz = (2 + rnd(seed + k * 7 + 4) * 4) * (1 - q);
       ctx.globalAlpha = 1 - q;
       ctx.fillStyle = k % 4 ? pick(k) : '#ffffff';
-      if (k % 6 === 0) fillStar(ctx, px, py, Math.max(1.5, sz * 1.7));
-      else ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+      if (k % 6 === 0) {
+        starPath(ctx, px, py, Math.max(2, sz * 1.9), 0.28);
+        ctx.fill();
+      } else ctx.fillRect(px - sz / 2, py - sz / 2, sz, sz);
     }
     ctx.globalAlpha = 1;
   }
 
-  // the shower — sparks sift down through the bars while the card holds
+  // the shower — glints sift down through the bars while the card holds; a
+  // shiny pull rains a full star shower
   const span = H - LB_H * 2;
   for (let k = 0; k < 10 + hype * 8; k++) {
     const sx = cx - 190 + rnd(seed + 900 + k * 3) * 380 + Math.sin(s.t * 2 + k) * 14;
@@ -2832,7 +2900,10 @@ function drawRevealScene(
     const ss = 1.5 + rnd(seed + 904 + k) * 2.5;
     ctx.globalAlpha = tw * 0.45 * fade;
     ctx.fillStyle = k % 4 ? pick(k) : '#ffffff';
-    ctx.fillRect(sx, sy, ss, ss);
+    if (res.shiny || k % 3 === 0) {
+      starPath(ctx, sx + ss / 2, sy + ss / 2, ss * 1.5, 0.28);
+      ctx.fill();
+    } else ctx.fillRect(sx, sy, ss, ss);
   }
   ctx.globalAlpha = 1;
 
@@ -3011,9 +3082,9 @@ function drawPullSummary(ctx: CanvasRenderingContext2D, s: HatchState) {
       }
       ctx.textAlign = 'center';
       const nm = def ? def.name.toUpperCase() : '';
-      fitFontB(ctx, nm, 10, cell.w - 8);
+      ctx.font = fontB(10);
       ctx.fillStyle = INK;
-      ctx.fillText(nm, mx, cell.y + 138);
+      fitCenter(ctx, nm, mx, cell.y + 138, cell.w - 8);
       ctx.font = fontB(10);
       ctx.fillStyle = res.dupe ? '#3a78d0' : res.shiny ? '#b08020' : INK_SOFT;
       ctx.fillText(res.dupe ? `+${res.dust} DUST` : res.shiny ? 'SHINY' : 'CAUGHT', mx, cell.y + 156);
@@ -3089,8 +3160,7 @@ function drawBagRow(
       ctx.font = fontB(10);
       ctx.fillStyle = on ? INK : INK_SOFT;
       ctx.textAlign = 'center';
-      fitFontB(ctx, it.name.toUpperCase(), 10, cr.w - 6);
-      ctx.fillText(it.name.toUpperCase(), cr.x + cr.w / 2, cr.y + 37);
+      fitCenter(ctx, it.name.toUpperCase(), cr.x + cr.w / 2, cr.y + 37, cr.w - 6);
     }
     // ×n stock badge top-right — gold-lit when the chip is picked
     const n = `×${stock[it.id] ?? 0}`;
@@ -3183,6 +3253,25 @@ export function drawPickPop(ctx: CanvasRenderingContext2D, t: number) {
   const { r, face } = pickPop;
   const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
   const s = 1 + 0.16 * (1 - Math.pow(1 - Math.min(1, p * 2.5), 3));
+  // the pick lands with a burst — seeded sparks in the face's own palette
+  // (the mon's type ramp; a perk keeps its rarity ink)
+  if (p < 0.6) {
+    const pal = 'mon' in face ? TYPE_RAMP[face.mon.type] : [GOLD_HI, RARITY_COLOR[face.perk.rarity]];
+    const seed = ('mon' in face ? face.mon.id : face.perk.name.length * 13) * 7.13;
+    for (let k = 0; k < 14; k++) {
+      const a = rnd(seed + k * 5.3) * Math.PI * 2;
+      const v = 60 + rnd(seed + k * 7.7) * 200;
+      const px = cx + Math.cos(a) * v * p;
+      const py = cy + Math.sin(a) * v * p * 0.85;
+      ctx.globalAlpha = (1 - p / 0.6) * 0.9;
+      ctx.fillStyle = k % 4 ? pal[k % pal.length] : '#ffffff';
+      if (k % 3 === 0) {
+        starPath(ctx, px, py, Math.max(1, 4.2 * (1 - p)), 0.28);
+        ctx.fill();
+      } else ctx.fillRect(px - 1.5, py - 1.5, Math.max(1, 3.5 * (1 - p) + 1), Math.max(1, 3.5 * (1 - p) + 1));
+    }
+    ctx.globalAlpha = 1;
+  }
   ctx.save();
   ctx.globalAlpha = 1 - p * p;
   ctx.fillStyle = gradFor(ctx, 'pickFlare', (c) => {
@@ -3199,7 +3288,7 @@ export function drawPickPop(ctx: CanvasRenderingContext2D, t: number) {
     monCardChrome(ctx, r, face.mon);
     drawMonCard(ctx, r, face.mon, new Set(dexIds()), 1);
   } else drawPerkCard(ctx, r, face.perk);
-  rim(ctx, r, 10, GOLD_HI, 3);
+  rim(ctx, r, 10, 'mon' in face ? TYPE_COLOR[face.mon.type] : GOLD_HI, 3);
   ctx.restore();
 }
 
@@ -3266,8 +3355,11 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
 
     ctx.font = fontB(10);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    const spec = `${(def.type2 ? `${def.type} · ${def.type2}` : def.type).toUpperCase()} · ${roleTag(def)}`;
-    fitFontB(ctx, spec, 10, r.w - 20);
+    // the fontB floor can't shrink a long spec — say less: the type chip
+    // top-left already carries type1, so it drops first, the role last
+    let spec = `${(def.type2 ? `${def.type} · ${def.type2}` : def.type).toUpperCase()} · ${roleTag(def)}`;
+    if (measureW(ctx, spec) > r.w - 20) spec = `${(def.type2 ?? def.type).toUpperCase()} · ${roleTag(def)}`;
+    if (measureW(ctx, spec) > r.w - 20) spec = roleTag(def);
     ctx.fillText(spec, r.x + r.w / 2, r.y + 174);
 
     // evolution hint + trait tag sit with the stats — Magikarp is secretly
@@ -3283,8 +3375,14 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
         ctx.textAlign = 'left';
         ctx.font = fontB(10);
         ctx.fillStyle = ACCENT;
-        fitFontB(ctx, `→ ${nx}`, 10, r.w - 22 - tagW);
-        ctx.fillText(`→ ${nx}`, r.x + 10, r.y + 192);
+        // the floor can't shrink a long evo name past the tag's claim —
+        // ellipsize into what's left
+        let ev = `→ ${nx}`;
+        if (measureW(ctx, ev) > r.w - 22 - tagW) {
+          while (ev.length > 4 && measureW(ctx, ev.trimEnd() + '…') > r.w - 22 - tagW) ev = ev.slice(0, -1);
+          ev = ev.trimEnd() + '…';
+        }
+        ctx.fillText(ev, r.x + 10, r.y + 192);
       }
     }
     if (def.pierce || def.copy) {
@@ -3297,13 +3395,19 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
     }
 
     // the ability row — the flags that change how the pick actually plays
-    // sit above the fold: a draft is a bet, so the card shows its hand
-    const flags = [abilityLabel(def), abilityOf(def)?.hint].filter(Boolean).join(' · ');
+    // sit above the fold: a draft is a bet, so the card shows its hand.
+    // the fontB floor can't shrink a long pair — the name keeps its slot,
+    // the hint drops first, an '…' closes what still won't fit
+    let flags = [abilityLabel(def), abilityOf(def)?.hint].filter(Boolean).join(' · ');
     if (flags) {
       ctx.textAlign = 'center';
       ctx.font = fontB(10);
       ctx.fillStyle = ACCENT;
-      fitFontB(ctx, flags, 12, r.w - 16);
+      if (measureW(ctx, flags) > r.w - 16) flags = abilityLabel(def);
+      if (measureW(ctx, flags) > r.w - 16) {
+        while (flags.length > 3 && measureW(ctx, flags.trimEnd() + '…') > r.w - 16) flags = flags.slice(0, -1);
+        flags = flags.trimEnd() + '…';
+      }
       ctx.fillText(flags, r.x + r.w / 2, r.y + 116);
     }
   }
@@ -3336,7 +3440,7 @@ export function drawDraft(
 
   // a title plate up top; the cards stand on the court itself, and the team
   // so far sits on a dark ledge below so the offer stays the focal pick
-  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 74 }, `DRAFT · PICK ${picked.length + 1} OF 4`, { sub: stageName });
+  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 74 }, `DRAFT · PICK ${picked.length + 1} OF ${DRAFT_ROUNDS}`, { sub: stageName });
   uiWindow(ctx, { x: 30, y: 572, w: W - 60, h: 156 }, { rad: 12, dark: true });
 
   ctx.textAlign = 'center';
@@ -3351,7 +3455,7 @@ export function drawDraft(
     ? `${lastIt!.name.toUpperCase()} · ${bagDesc}`
     : spinning
       ? 'reels rolling · tap to skip'
-      : picked.length === 3
+      : picked.length === DRAFT_ROUNDS - 1
         ? 'ace round · a veteran anchors the team'
         : 'your picks become the balls you sling';
   if (bagDesc) fitFontB(ctx, line.toUpperCase(), 10, W - 40);
@@ -3447,6 +3551,28 @@ export function drawDraft(
       // landing pop: the sprite overshoots for a beat as the reel stops
       const pop = 1 + 0.12 * Math.max(0, 1 - (spin.age - stopAt) / 0.15);
       drawMonCard(ctx, r, def, dex, pop);
+      // the land: a type-tinted rim flare plus seeded glints off the band —
+      // the card's element announces itself before the eye reads the name
+      const land = 1 - clamp01((spin.age - stopAt) / 0.5);
+      if (land > 0) {
+        const ramp = TYPE_RAMP[def.type];
+        const bcx = band.x + band.w / 2, bcy = band.y + band.h / 2;
+        ctx.save();
+        ctx.globalAlpha = land * 0.8;
+        rim(ctx, r, 10, ramp[Math.min(2, ramp.length - 1)], 2.5);
+        for (let k = 0; k < 9; k++) {
+          const a = rnd(def.id * 3.7 + i * 11.3 + k * 5.1) * Math.PI * 2;
+          const d = 14 + (1 - land) * (46 + rnd(def.id + k * 9.7) * 42);
+          ctx.globalAlpha = land * (0.45 + rnd(k * 3.1 + i) * 0.55);
+          ctx.fillStyle = k % 3 ? ramp[k % ramp.length] : '#ffffff';
+          const px = bcx + Math.cos(a) * d, py = bcy + Math.sin(a) * d * 0.8;
+          if (k % 4 === 0) {
+            starPath(ctx, px, py, 3.4, 0.28);
+            ctx.fill();
+          } else ctx.fillRect(px - 1.5, py - 1.5, 3, 3);
+        }
+        ctx.restore();
+      }
       if (HAS_KEYS) keyHint(ctx, r, `[${i + 1}]`); // [1]/[2]/[3] — desktop keys pick cards
     });
   });
@@ -3868,7 +3994,7 @@ function drawRoster(
     const def = box[i];
     const r = boxSlotRect(i, box.length, boxScroll);
     const sel = i === selBox;
-    const dy = sel ? -3 : 0; // the pick lifts its card off the strip
+    const dy = -3 * springK(`boxlift:${i}`, sel ? 1 : 0, 0.12); // the pick lifts its card off the strip — eased, not snapped
     const card = { x: r.x, y: r.y + dy, w: r.w, h: r.h };
     // window cells: the picked catch goes dark (the menu's on-look), and
     // while a teammate is armed the whole box turns gold — hot swap targets
@@ -3927,10 +4053,20 @@ function drawRoster(
   ctx.font = fontB(11);
   ctx.fillStyle = INK_FAINT;
   ctx.fillText('YOUR TEAM', W / 2, 610);
-  team.forEach((def, i) => {
+  for (let i = 0; i < TEAM_CAP; i++) {
+    const def = team[i];
     const r = teamSlotRect(i);
+    if (!def) {
+      // open slot — the lean draft leaves these; an armed catch deploys here
+      const card = { x: r.x, y: r.y, w: r.w, h: r.h };
+      uiWindow(ctx, card, { rad: 10, tint: selBox >= 0 ? GOLD_HI : undefined });
+      ctx.font = fontB(11);
+      ctx.fillStyle = selBox >= 0 ? GOLD : INK_FAINT;
+      ctx.fillText(selBox >= 0 ? 'JOIN' : 'EMPTY', card.x + card.w / 2, card.y + card.h / 2 + 4);
+      continue;
+    }
     const sel = i === selTeam;
-    const dy = sel ? -3 : 0; // same lift as the box strip — the armed card raises
+    const dy = -3 * springK(`teamcard:${i}`, sel ? 1 : 0, 0.12); // same lift as the box strip — eased
     const card = { x: r.x, y: r.y + dy, w: r.w, h: r.h };
     // window cells: armed pick goes INK-dark + ▶; while a catch waits in
     // the box every teammate tints gold — the row of hot swap targets
@@ -3979,7 +4115,7 @@ function drawRoster(
     ctx.fillStyle = ko ? '#464e6e' : INK_FAINT;
     fitFontB(ctx, abilityLabel(def), 12, card.w - 8);
     fitCenter(ctx, abilityLabel(def), cx, card.y + card.h + 12, card.w - 8);
-  });
+  }
   // the selected mon's super reads here — swapping is a move pick too
   const selDef = selBox >= 0 ? box[selBox] : selTeam >= 0 ? team[selTeam] : null;
   if (selDef) {
@@ -4172,18 +4308,37 @@ export function drawPerkPick(
 // Win confetti — little type-colored paper squares drifting down forever.
 // Positions/velocities are derived from the index, so it needs no state.
 const CONFETTI = [GOLD, '#f08030', '#6890f0', '#78c850', '#f85888'];
-function confetti(ctx: CanvasRenderingContext2D, t: number) {
+// win rain — colored strips plus four-point glints; shake=0 parks the drift
+// so the report lands settled (bg.ts slows ambient the same way)
+function confetti(ctx: CanvasRenderingContext2D, t: number, pal: readonly string[] = CONFETTI) {
+  const ft = settings().shake === 0 ? 0 : t;
   for (let i = 0; i < 42; i++) {
     const speed = 60 + (i % 5) * 22;
-    const x = (i * 73 + Math.sin(t * 1.4 + i) * 14 + 40) % W;
-    const y = (i * 149 + t * speed) % (H + 40) - 20;
+    const x = (i * 73 + Math.sin(ft * 1.4 + i) * 14 + 40) % W;
+    const y = (i * 149 + ft * speed) % (H + 40) - 20;
     ctx.save();
     ctx.translate(x, y);
-    ctx.rotate(t * (2 + (i % 3)) + i);
-    ctx.fillStyle = CONFETTI[i % CONFETTI.length];
+    ctx.rotate(ft * (2 + (i % 3)) + i);
+    ctx.fillStyle = pal[i % pal.length];
     ctx.globalAlpha = 0.85;
-    ctx.fillRect(-3, -2, 6, 4);
+    if (i % 4 === 0) {
+      starPath(ctx, 0, 0, 4.5, 0.28);
+      ctx.fill();
+    } else ctx.fillRect(-3, -2, 6, 4);
     ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// a wipe gets no rain — a thin gray ash sifts down instead, slow + dim
+function ashDrift(ctx: CanvasRenderingContext2D, t: number) {
+  const ft = settings().shake === 0 ? 0 : t;
+  for (let i = 0; i < 16; i++) {
+    const x = (i * 137 + Math.sin(ft * 0.5 + i * 2.1) * 18 + 60) % W;
+    const y = (i * 211 + ft * (14 + (i % 4) * 7)) % (H + 30) - 15;
+    ctx.globalAlpha = 0.12 + 0.1 * Math.sin(ft * 0.9 + i * 3.3) ** 2;
+    ctx.fillStyle = i % 3 ? '#a8a8b0' : '#6a6a78';
+    ctx.fillRect(x, y, 3, 3);
   }
   ctx.globalAlpha = 1;
 }
@@ -4334,7 +4489,9 @@ export function drawResult(
   age = 99, // seconds since the report opened — rows file in staggered
 ) {
   scrim(ctx, 0.87);
-  if (res.won) confetti(ctx, t);
+  // the win rains in the squad's own types; the loss only drifts ash
+  if (res.won) confetti(ctx, t, res.team.length ? res.team.map((d) => TYPE_COLOR[d.type]) : CONFETTI);
+  else ashDrift(ctx, t);
 
   // badge chips wrap four to a row — counted up front, they size the card
   const badgeRows: { name: string; rarity: Rarity }[][] = [[]];
@@ -4601,6 +4758,22 @@ export function drawResult(
   }
   ctx.restore(); // the card-floor clip ends — attachments draw uncapped
 
+  // the win lands with a sparkle pop off the card — one seeded ring of
+  // glints fans out over the first second, then the confetti takes over
+  if (res.won && settings().shake && age < 1) {
+    const q = age; // 0→1 across the entry second
+    const pal = res.team.length ? res.team.map((d) => TYPE_COLOR[d.type]) : CONFETTI;
+    for (let k = 0; k < 18; k++) {
+      const a = rnd(res.seed * 0.71 + k * 5.9) * Math.PI * 2;
+      const d = 24 + (150 + rnd(res.seed + k * 3.3) * 170) * eo(q);
+      ctx.globalAlpha = (1 - q) * (0.45 + rnd(k * 1.7 + res.seed) * 0.55);
+      ctx.fillStyle = k % 4 ? pal[k % pal.length] : '#ffffff';
+      starPath(ctx, W / 2 + Math.cos(a) * d, panel.y + panel.h / 2 + Math.sin(a) * d * 0.75, Math.max(1.5, 7 - q * 4), 0.28);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
   // the attachment — squad + wave grid ride below the report itself
   const ay = panel.y + panel.h;
   ctx.textAlign = 'center';
@@ -4862,11 +5035,13 @@ export function settingsSliderFlush() {
 
 export function settingsToggleFlip(key: SettingsToggleKey) {
   setSetting(key, !settings()[key]);
+  sfx('flip', settings()[key] ? 1.15 : 0.85); // on snaps up, off snaps down
 }
 
 export function settingsSegSet(key: SettingsSegKey, i: number) {
   const opts = SETTINGS_SEG_OPTIONS[key];
   setSetting(key, opts[Math.min(opts.length - 1, Math.max(0, i))] as Settings[typeof key]);
+  sfx('flip', 1.3); // the seg lands a click as the pill slides over
 }
 
 export function drawSettings(
@@ -5001,17 +5176,19 @@ export function drawSettings(
     } else if (row.kind === 'toggle') {
       const on = row.invert ? !vals[row.key] : vals[row.key];
       const tr = { x: r.x + r.w - 70, y: r.y + r.h / 2 - 15, w: 60, h: 30 };
+      // the thumb travels instead of teleporting; the track crossfades behind it
+      const k = springK(`tog:${row.key}`, on ? 1 : 0, 0.2);
       roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 15);
-      ctx.fillStyle = on ? GOLD : '#d0d0c8';
+      ctx.fillStyle = mixHex('#d0d0c8', GOLD, k);
       ctx.fill();
       roundRect(ctx, tr.x, tr.y, tr.w, tr.h, 15);
       ctx.strokeStyle = '#0a0d18';
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      const kx = on ? tr.x + tr.w - 16 : tr.x + 16;
+      const kx = tr.x + 16 + (tr.w - 32) * k;
       ctx.beginPath();
       ctx.arc(kx, tr.y + 15, 12, 0, Math.PI * 2);
-      ctx.fillStyle = on ? PAPER : INK_FAINT;
+      ctx.fillStyle = mixHex(INK_FAINT, PAPER, k);
       ctx.fill();
       ctx.strokeStyle = '#0a0d18';
       ctx.lineWidth = 2;
@@ -5025,7 +5202,8 @@ export function drawSettings(
       roundRect(ctx, tr.x, tr.y, tr.w, tr.h, tr.h / 2);
       ctx.fillStyle = '#0a0d18';
       ctx.fill();
-      const pr = { x: tr.x + 2 + sel * sw, y: tr.y + 2, w: sw - 4, h: tr.h - 4 };
+      const selF = springK(`seg:${row.key}`, sel, 0.22); // the gold pill slides to the pick
+      const pr = { x: tr.x + 2 + selF * sw, y: tr.y + 2, w: sw - 4, h: tr.h - 4 };
       roundRect(ctx, pr.x, pr.y, pr.w, pr.h, pr.h / 2);
       ctx.fillStyle = GOLD;
       ctx.fill();
@@ -5039,7 +5217,7 @@ export function drawSettings(
       ctx.textAlign = 'center';
       opts.forEach((o, oi) => {
         ctx.font = fontB(10);
-        ctx.fillStyle = oi === sel ? INK : INK_FAINT;
+        ctx.fillStyle = oi === Math.round(selF) ? INK : INK_FAINT;
         ctx.fillText(o.toUpperCase(), tr.x + sw * (oi + 0.5), tr.y + tr.h / 2 + 4);
       });
     }
