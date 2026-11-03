@@ -13,7 +13,7 @@ import { addDust, noteStopCard, recordMissions } from './meta';
 import type { PokeType } from './types';
 import { GOLD, INK, INK_FAINT, INK_SOFT, PAPER, PARCH, font, fontB, uiPanel, uiWindow } from './ui';
 
-export type MissionId = 'par' | 'multiko' | 'weak3' | 'nofaint' | 'ult' | 'finish';
+export type MissionId = 'par' | 'multiko' | 'weak3' | 'nofaint' | 'ult' | 'finish' | 'multiko3' | 'halfpar' | 'clutch';
 export type MissionState = 'live' | 'done' | 'fail';
 export interface Mission { id: MissionId; label: string; state: MissionState; pay: { kind: 'stars' | 'dust'; n: number }; type?: PokeType }
 export interface StopStats { shots: number; par: number; weak: number; faints: number }
@@ -43,6 +43,9 @@ export const MISSION_PAY: Record<MissionId, Mission['pay']> = {
   nofaint: { kind: 'stars', n: 2 },
   ult: { kind: 'dust', n: 3 },
   finish: { kind: 'stars', n: 1 },
+  multiko3: { kind: 'stars', n: 2 },
+  halfpar: { kind: 'dust', n: 6 },
+  clutch: { kind: 'dust', n: 4 },
 };
 const LABEL: Record<Exclude<MissionId, 'finish'>, string> = {
   par: 'SPEED CLEAR',
@@ -50,19 +53,29 @@ const LABEL: Record<Exclude<MissionId, 'finish'>, string> = {
   weak3: 'HIT 3 WEAK POINTS',
   nofaint: 'NO MON FAINTS',
   ult: 'USE A ULT',
+  multiko3: 'KO 3 IN ONE SHOT',
+  halfpar: 'CLEAR IN HALF PAR',
+  clutch: 'CLEAR AFTER A FAINT',
 };
 
 // deterministic: same seed + stage + team → same three goals. The ULT goal
 // only shows when the charge can land inside the stop
 export function pickMissions(seed: number, stage: number, teamTypes: PokeType[], ultReady: boolean): Mission[] {
   const rng = mulberry32((Math.imul(seed, 2654435761) + Math.imul(stage, 40503)) >>> 0);
-  const pool: MissionId[] = ['par', 'multiko', 'weak3', 'nofaint', 'finish'];
+  const pool: MissionId[] = ['par', 'multiko', 'multiko3', 'weak3', 'nofaint', 'clutch', 'halfpar', 'finish'];
   if (ultReady) pool.push('ult');
   const types = [...new Set(teamTypes)].sort();
   if (!types.length) pool.splice(pool.indexOf('finish'), 1);
+  // goal pairs that can't both pay — a card never asks for and against a faint
+  const clash: Partial<Record<MissionId, MissionId>> = { nofaint: 'clutch', clutch: 'nofaint' };
   const out: Mission[] = [];
   while (out.length < MISSION_N && pool.length) {
     const id = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+    const vs = clash[id];
+    if (vs) {
+      const vi = pool.indexOf(vs);
+      if (vi >= 0) pool.splice(vi, 1);
+    }
     const type = id === 'finish' ? types[Math.floor(rng() * types.length)] : undefined;
     out.push({ id, type, label: type ? `FINISH WITH ${type.toUpperCase()}` : LABEL[id as keyof typeof LABEL], state: 'live', pay: MISSION_PAY[id] });
   }
@@ -117,6 +130,7 @@ export class Missions {
     for (const m of this.list) {
       if (m.state !== 'live') continue;
       if (m.id === 'multiko' && kosThisShot >= 2) m.state = 'done';
+      if (m.id === 'multiko3' && kosThisShot >= 3) m.state = 'done';
       if (m.id === 'finish' && finishType !== undefined) m.state = finishType === m.type ? 'done' : 'fail';
     }
   }
@@ -127,7 +141,10 @@ export class Missions {
       if (!s) continue;
       if (m.id === 'weak3' && s.weak >= 3) m.state = 'done';
       if (m.id === 'par' && s.shots > s.par) m.state = 'fail';
+      if (m.id === 'halfpar' && s.shots > Math.floor(s.par / 2)) m.state = 'fail';
       if (m.id === 'nofaint' && s.faints > 0) m.state = 'fail';
+      // a faint banks it early — pay still waits on the CLEAR card
+      if (m.id === 'clutch' && s.faints > 0) m.state = 'done';
     }
   }
   // stop end: settle every goal and pay the done ones exactly once
@@ -136,7 +153,7 @@ export class Missions {
     if (this.banked) return this.list;
     this.banked = true;
     for (const m of this.list) {
-      if (m.state === 'live') m.state = m.id === 'par' || m.id === 'nofaint' ? 'done' : 'fail';
+      if (m.state === 'live') m.state = m.id === 'par' || m.id === 'nofaint' || m.id === 'halfpar' ? 'done' : 'fail';
       if (m.state !== 'done') continue;
       if (m.pay.kind === 'stars') m.pay = { ...m.pay, n: earnStars(m.pay.n) };
       else addDust(m.pay.n);

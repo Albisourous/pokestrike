@@ -8,7 +8,7 @@ import { pullSpecies, tierOf, INVADER_IDS, dustCost, RAID_MODS, type SpeciesDef 
 // meta.ts. Readers never write: a stale period re-rolls in memory and the
 // next tick/claim is what banks it.
 
-export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage' | 'combo' | 'pulls' | 'evos' | 'dex';
+export type TaskKind = 'kos' | 'catches' | 'stages' | 'gyms' | 'perks' | 'score' | 'shinies' | 'runs' | 'wins' | 'maxstage' | 'combo' | 'pulls' | 'evos' | 'dex' | 'scorerun' | 'gymrun' | 'catchrun';
 export type TaskPeriod = 'daily' | 'weekly';
 
 export interface TaskDef {
@@ -47,6 +47,9 @@ const kindDesc = (kind: TaskKind, n: number): string =>
     pulls: `hatch ${n} mon${n === 1 ? '' : 's'}`,
     evos: `evolve ${n} mon${n === 1 ? '' : 's'}`,
     dex: `catch ${n} new species`,
+    scorerun: `bank ${n} score in a climb`,
+    gymrun: `beat ${n} gym${n === 1 ? '' : 's'} in a climb`,
+    catchrun: `catch ${n} mon${n === 1 ? '' : 's'} in a climb`,
   })[kind];
 
 // --- the catalogue ----------------------------------------------------------
@@ -65,6 +68,9 @@ export const DAILY_POOL: TaskDef[] = [
   { id: 'd-combo', label: 'BANK SHOT', kind: 'combo', n: 5, reward: 'scope-lens' },
   { id: 'd-pulls', label: 'EGG HUNT', kind: 'pulls', n: 2, reward: 'friend-ball' },
   { id: 'd-dex', label: 'FIELD NOTES', kind: 'dex', n: 1, reward: 'friend-ball' },
+  { id: 'd-peak', label: 'RECORD BOOK', kind: 'scorerun', n: 600, reward: 'macho-brace' },
+  { id: 'd-gymrun', label: 'BADGE RUSH', kind: 'gymrun', n: 2, reward: 'quick-claw' },
+  { id: 'd-catchrun', label: 'ROUND UP', kind: 'catchrun', n: 3, reward: 'friend-ball' },
 ];
 
 export const WEEKLY_POOL: TaskDef[] = [
@@ -82,6 +88,9 @@ export const WEEKLY_POOL: TaskDef[] = [
   { id: 'w-win2', label: 'VICTORY ROAD', kind: 'wins', n: 1, reward: 'dusk-ball' },
   { id: 'w-runs2', label: 'BULK UP', kind: 'runs', n: 5, reward: 'protein' },
   { id: 'w-evos', label: 'NEW FORM', kind: 'evos', n: 2, reward: 'exp-share' },
+  { id: 'w-peak', label: 'HIGH VOLTAGE', kind: 'scorerun', n: 3000, reward: 'protein' },
+  { id: 'w-gymrun', label: 'BADGE CASE', kind: 'gymrun', n: 3, reward: 'dusk-ball' },
+  { id: 'w-catchrun', label: 'SAFARI BALL', kind: 'catchrun', n: 4, reward: 'scope-lens' },
 ];
 
 const POOL: Record<TaskPeriod, TaskDef[]> = { daily: DAILY_POOL, weekly: WEEKLY_POOL };
@@ -274,6 +283,11 @@ const livePeriod = (s: TaskState, period: TaskPeriod, now: number): LivePeriod =
 // Every fn takes an optional `now` so tests can pin the clock; prod callers
 // leave it at Date.now().
 
+// Run-peak kinds are never named in a delta — the run-end beat reports the
+// climb's totals under the source kind's key, and these keep the best single
+// climb off it, settled like maxstage/combo.
+const RUN_PEAK: Partial<Record<TaskKind, TaskKind>> = { scorerun: 'score', gymrun: 'gyms', catchrun: 'catches' };
+
 // One call per stat beat — a KO, a catch, a stage clear, run end. The delta
 // lands on both periods' boards, but only on kinds those boards asked for:
 // unoffered kinds don't accrue, which keeps the blob tiny.
@@ -284,11 +298,12 @@ export function taskTick(delta: Partial<Record<TaskKind, number>>, now = Date.no
     const live = livePeriod(s, period, now);
     dirty ||= live.rolled;
     for (const def of live.defs) {
-      const v = delta[def.kind];
+      const peak = RUN_PEAK[def.kind];
+      const v = delta[peak ?? def.kind];
       if (v == null) continue;
       dirty = true;
-      // maxstage and combo track the peak reached; everything else accumulates
-      live.prog[def.kind] = def.kind === 'maxstage' || def.kind === 'combo' ? Math.max(live.prog[def.kind] ?? 0, v) : (live.prog[def.kind] ?? 0) + v;
+      // maxstage, combo and the run-peak kinds track the peak reached; everything else accumulates
+      live.prog[def.kind] = def.kind === 'maxstage' || def.kind === 'combo' || peak ? Math.max(live.prog[def.kind] ?? 0, v) : (live.prog[def.kind] ?? 0) + v;
     }
   }
   if (dirty) saveTaskState(s);
