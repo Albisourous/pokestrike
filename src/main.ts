@@ -599,8 +599,8 @@ const draftPick = (i: number) => {
 };
 
 // A run's offer board is every starter plus everything the dex has caught
-// — collecting mons is how the board widens (the Clash Royale loop). One
-// pick opens the climb; the rest of the team's open slots get caught.
+// — collecting mons is how the board widens (the Clash Royale loop). Two
+// picks open the climb; the earned slots beyond that get caught.
 // one run setup shared by START CLIMB, RESTART and REMATCH — ?seed=NNN
 // always wins (debug/sharing), else a fresh roll
 let titleSave: RunSave | null = null; // pk_run peek for the title's CONTINUE button
@@ -729,9 +729,9 @@ function startRaid() {
 }
 
 function startDraft() {
-  // The climb opens on a single pick: every starter plus whatever the dex
-  // has caught — collecting is what widens the board. The rest of the team
-  // (TEAM_CAP slots) gets caught mid-run and joined from the box.
+  // The climb opens on two picks: every starter plus whatever the dex
+  // has caught — collecting is what widens the board. Slots past the pair
+  // stay locked until the career record opens them (teamSlots).
   const pool = new Map<number, SpeciesDef>();
   for (const d of STARTERS) pool.set(d.id, d);
   for (const id of dexIds()) {
@@ -1492,7 +1492,7 @@ canvas.addEventListener('pointerdown', (e) => {
             battle.teamSel = battle.teamSel === i ? -1 : i;
             sfx('ui');
           }
-        } else if (battle.boxSel >= 0) {
+        } else if (battle.boxSel >= 0 && i < battle.teamCap) {
           battle.joinFromBox(battle.boxSel); // open slot — the catch deploys outright
         }
         return;

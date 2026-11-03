@@ -289,7 +289,7 @@ export const ROSTER: SpeciesDef[] = [
 
 ];
 
-export const DRAFT_ROUNDS = 1; // one starter pick opens the climb — catches fill the rest of the team
+export const DRAFT_ROUNDS = 2; // two starter picks open the climb — catches fill the unlocked slots
 const DRAFT_OFFERS = 3;
 
 // Each draft round offers 3 picks with distinct types — encourages a varied

@@ -415,6 +415,12 @@ export function best(): Best {
   return b;
 }
 
+// The back two field slots unlock with career depth — reach stage 3 and
+// stage 6 once, ever. A fresh trainer fields a pair; the bench opens as
+// the climb record grows. Reads pk_best — no new save fields.
+export const SLOT_STAGE = [3, 6]; // career stage needed for slots 3 and 4
+export const teamSlots = () => 2 + SLOT_STAGE.filter((s) => best().stage >= s).length;
+
 // Call once when a run ends.
 export function recordRun(score: number, stage: number, won: boolean) {
   const b = best();

@@ -16,7 +16,7 @@ import { drawStopScene } from './stops';
 import { taskViews, taskTick } from './tasks';
 import type { TaskKind } from './tasks';
 import { teamTraits } from './traits';
-import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, best, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
+import { recordCapture, recordShiny, unlockAch, ACHIEVEMENTS, earnBadge, gymBadges, BADGES, settings, bankBag, addStars, starBoost, labLevel, trainerPick, bondLv, itemTier, ultHintSeen, markUltHintSeen, clearRank, recordClear, RANK_PAY, best, teamSlots, type ClearCard, type ClearRank, type RunSave, type Settings } from './meta';
 import { drawBackdrop, drawWall, drawAmbient, drawSlice, drawCover, drawMoat, THEMES, hash } from './bg';
 import { uiWindow, INK, PAPER, PARCH, GOLD_HI, SP, overlayPop } from './ui';
 import type { Theme } from './bg';
@@ -579,7 +579,7 @@ const FEED_MIN = 2;
 const EVO_LV1 = 16;
 const EVO_LV2 = 32;
 const evoGate = (from: SpeciesDef) => (EVOS.some((e) => e.id === from.id) ? EVO_LV2 : EVO_LV1);
-export const TEAM_CAP = 4; // field slots — a lean draft leaves open ones for catches to fill
+export const TEAM_CAP = 4; // field slots ever — the back two stay locked until the career record deepens (teamSlots)
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
 // JUST frame: a bump inside the flight's opening beat pays a timed-combo
 // bonus — the window is early enough that banking off a wall first still counts
@@ -5626,12 +5626,16 @@ export class Battle {
     sfx('caught');
   }
 
+  // how many field slots this save has earned — the locked back pair
+  // refuses joins until the career stage record opens them (teamSlots)
+  get teamCap() { return Math.min(TEAM_CAP, teamSlots()); }
+
   // A lean draft leaves open slots — a boxed catch deploys outright instead
   // of benched-for-benched. Same rules as a swap: KO'd catches stay in the
   // box, joined species start their bond clock now.
   joinFromBox(bi: number) {
     if (this.phase !== 'map' && this.phase !== 'reward') return;
-    if (this.players.length >= TEAM_CAP) return;
+    if (this.players.length >= this.teamCap) return;
     const def = this.box[bi];
     if (!def || (this.boxHp[bi] ?? 1) <= 0) return;
     const lvl = this.boxLvl[bi] ?? 1;
@@ -5639,7 +5643,7 @@ export class Battle {
     this.box.splice(bi, 1);
     this.boxHp.splice(bi, 1);
     this.boxLvl.splice(bi, 1);
-    const u = this.makeUnit({ ...def, joined: this.waveIndex }, lvl, this.players.length, TEAM_CAP);
+    const u = this.makeUnit({ ...def, joined: this.waveIndex }, lvl, this.players.length, this.teamCap);
     u.hp = Math.max(1, Math.round(u.maxHp * frac));
     this.players.push(u);
     this.refreshTraits();
@@ -5763,7 +5767,7 @@ export class Battle {
     if (!this.waveHadGym) playJingle('clear'); // gyms already played their badge stab
     // open slots pull from the box before the roster prompt — a catch
     // fields itself; KO'd catches stay boxed until they're healed
-    while (this.players.length < TEAM_CAP) {
+    while (this.players.length < this.teamCap) {
       const bi = this.boxHp.findIndex((hp) => hp > 0);
       if (bi < 0) break;
       const def = this.box[bi];
@@ -5772,7 +5776,7 @@ export class Battle {
       this.box.splice(bi, 1);
       this.boxHp.splice(bi, 1);
       this.boxLvl.splice(bi, 1);
-      const u = this.makeUnit({ ...def, joined: this.waveIndex }, lvl, this.players.length, TEAM_CAP);
+      const u = this.makeUnit({ ...def, joined: this.waveIndex }, lvl, this.players.length, this.teamCap);
       u.hp = Math.max(1, Math.round(u.maxHp * frac));
       this.players.push(u);
       this.refreshTraits();

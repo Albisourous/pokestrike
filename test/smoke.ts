@@ -1953,6 +1953,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
 
 // --- open slots let a boxed catch deploy outright -------------------------
 {
+  localStorage.setItem('pk_best', JSON.stringify({ stage: TOTAL_STAGES })); // the career record opens every field slot
   const b: any = new Battle(arena, [ROSTER[0], ROSTER[3]], makeStage(3, 'T'), mulberry32(3));
   b.phase = 'reward';
   b.boxAdd({ ...speciesById(25)!, lvl: 7 }, 1, false);
@@ -1963,6 +1964,12 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   b.boxAdd({ ...speciesById(7)!, lvl: 5 }, 1, false);
   b.joinFromBox(0);
   ok(b.players.length === TEAM_CAP && b.box.length === 1, 'a full team refuses a fifth join');
+  localStorage.removeItem('pk_best'); // back to a fresh trainer — the back pair stays shut
+  const c: any = new Battle(arena, [ROSTER[0], ROSTER[3]], makeStage(3, 'T'), mulberry32(3));
+  c.phase = 'reward';
+  c.boxAdd({ ...speciesById(25)!, lvl: 7 }, 1, false);
+  c.joinFromBox(0);
+  ok(c.players.length === 2 && c.box.length === 1, 'locked slots refuse joins until the record opens them');
 }
 
 // --- the draft deals small collections without undefined slots ------------

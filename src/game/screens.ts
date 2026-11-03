@@ -14,7 +14,7 @@ import { TYPE_COLOR, type PokeType } from './types';
 import { TYPE_RAMP, starPath } from './vfx';
 import { roleOf, moveOf, superDesc } from './stats';
 import { TEAM_CAP, ULT_SHOTS } from './battle';
-import { dexIds, settings, setSetting, bagStock, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, coachDone, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, type Settings, type ClearCard, type ClearRank } from './meta';
+import { dexIds, settings, setSetting, bagStock, stars, raidDoneToday, pullCount, loginToday, dust, freePullLeft, trainerPick, setsReady, bondLv, coachDone, itemTier, ITEM_TIER_CAP, ITEM_PACK_COST, RANK_BALL, teamSlots, SLOT_STAGE, type Settings, type ClearCard, type ClearRank } from './meta';
 import { tasksReady, taskResetsIn, featuredPull, dealPick, dealOff, dealCost, raidPick } from './tasks';
 import { drawRaidLobby } from './home/raid';
 import type { TaskView } from './tasks';
@@ -3440,7 +3440,7 @@ export function drawDraft(
 
   // a title plate up top; the cards stand on the court itself, and the team
   // so far sits on a dark ledge below so the offer stays the focal pick
-  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 74 }, 'PICK A STARTER');
+  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 74 }, 'PICK 2 STARTERS');
   uiWindow(ctx, { x: 30, y: 572, w: W - 60, h: 156 }, { rad: 12, dark: true });
 
   ctx.textAlign = 'center';
@@ -3455,7 +3455,7 @@ export function drawDraft(
     ? `${lastIt!.name.toUpperCase()} · ${bagDesc}`
     : spinning
       ? 'reels rolling · tap to skip'
-      : 'pick one · catches fill the rest of the team';
+      : 'pick two · catches fill the open slots';
   if (bagDesc) fitFontB(ctx, line.toUpperCase(), 10, W - 40);
   ctx.fillStyle = bagDesc ? INK_SOFT : INK;
   ctx.fillText(bagDesc ? line.toUpperCase() : line, W / 2, 155);
@@ -3589,11 +3589,22 @@ export function drawDraft(
   ctx.font = fontB(10);
   ctx.fillStyle = PARCH;
   ctx.fillText('YOUR TEAM', W / 2, 586);
+  const slots = teamSlots();
   for (let i = 0; i < 4; i++) {
     const sx = W / 2 - 4 * 44 + i * 88;
     const sr = { x: sx, y: 596, w: 76, h: 90 };
-    uiWindow(ctx, sr, { rad: 10 });
     const def = picked[i];
+    // the back pair stays shut until the career stage record opens it —
+    // a dark cell that names its own price
+    if (!def && i >= slots) {
+      uiWindow(ctx, sr, { rad: 10, dark: true });
+      ctx.font = fontB(9);
+      ctx.fillStyle = '#aab0c8';
+      ctx.fillText('LOCKED', sx + 38, 634);
+      ctx.fillText(`STG ${SLOT_STAGE[i - 2]}`, sx + 38, 650);
+      continue;
+    }
+    uiWindow(ctx, sr, { rad: 10 });
     if (def) {
       (def.shiny ? drawShiny : drawMon)(ctx, def.id, sx + 38, 628, 48);
       ctx.font = fontB(10);
@@ -4051,16 +4062,23 @@ function drawRoster(
   ctx.font = fontB(11);
   ctx.fillStyle = INK_FAINT;
   ctx.fillText('YOUR TEAM', W / 2, 610);
+  const slots = teamSlots();
   for (let i = 0; i < TEAM_CAP; i++) {
     const def = team[i];
     const r = teamSlotRect(i);
     if (!def) {
-      // open slot — the lean draft leaves these; an armed catch deploys here
+      // locked slot — the back pair opens with the career stage record;
+      // open slot — an armed catch deploys here
       const card = { x: r.x, y: r.y, w: r.w, h: r.h };
-      uiWindow(ctx, card, { rad: 10, tint: selBox >= 0 ? GOLD_HI : undefined });
+      const locked = i >= slots;
+      uiWindow(ctx, card, { rad: 10, dark: locked, tint: !locked && selBox >= 0 ? GOLD_HI : undefined });
       ctx.font = fontB(11);
-      ctx.fillStyle = selBox >= 0 ? GOLD : INK_FAINT;
-      ctx.fillText(selBox >= 0 ? 'JOIN' : 'EMPTY', card.x + card.w / 2, card.y + card.h / 2 + 4);
+      ctx.fillStyle = !locked && selBox >= 0 ? GOLD : INK_FAINT;
+      ctx.fillText(locked ? 'LOCKED' : selBox >= 0 ? 'JOIN' : 'EMPTY', card.x + card.w / 2, card.y + card.h / 2 - 3);
+      if (locked) {
+        ctx.font = fontB(9);
+        ctx.fillText(`STG ${SLOT_STAGE[i - 2]}`, card.x + card.w / 2, card.y + card.h / 2 + 12);
+      }
       continue;
     }
     const sel = i === selTeam;
