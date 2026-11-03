@@ -815,3 +815,58 @@ visual pass on the 4 new rooms via ?debug=arena.
   decorative/diagnostic exempt. Verify typecheck+smoke, screenshot pass.
   On return: verify diff (git status), run build+smoke, commit+push,
   then continue the overnight loop (scouts → builders → verify → commit).
+
+## Session 2026-11-02 late — parallel loop resume (R7 scouts)
+
+Tree state at open: a co-loop session mid-flight (banish cut + font
+floors landing as cebe339; their committed smoke specs covered features
+not yet implemented → baseline red). Waited for their writes to settle,
+verified their commit train green, then worked the backlog.
+
+- 61be504 (theirs, my hunks inside): JUST! just-frame bump — committed
+  test spec'd a JUST! popup + timed-combo tick on early-flight bumps
+  with zero implementation; added JUST_WIN 0.8 + shotCombo tick in
+  bumpAlly. Same spec gap on bench EXP: the KO-share had no floor, so
+  early foes paid the bench nothing (the exact "Lv 1-5 at gym 1" the
+  feature exists to kill) — floored share at +1 per the test.
+- c936981 pushed: save-fuzz batch — runSave bounds asc (0-9, a parked 99
+  = +1485% foe HP), daycare hp/lvl (NaN → immortal box mon), team cd
+  (NaN → dead super forever), ultIn/treasure/eggIn/tools.roll, echo lvl
+  cap, pk_ver only stamps upward; resume mapNode falls back to
+  last-fought row (leaf-clamp stranded the run); loot-phase park refuses
+  while evoPending is queued (dropped the pick forever). Verified:
+  depth has ridden the save since 7c82cf52 — no migration needed.
+
+R7 scout haul (filed as issues #84-#92, label overnight):
+- [ ] #84 save: reward/loot park skips bankStage — row stars + pings
+  lost (bankStage move, idempotent guard)
+- [ ] #85 perf HIGH: bake static room geometry (blocks+moats+wall) into
+  an offscreen layer at wave spawn — ~400-900 canvas ops/frame today
+- [ ] #86 perf: damage-wall tile strip cached per (tile, span)
+- [ ] #87 perf: bake static gimmick-pad tiles in installField2
+- [ ] #88 perf: tile cache keyed by rect identity, not string joins
+- [ ] #89 perf: StopCard once per mission start; meta readers +
+  runSave memo'd on raw identity
+- [ ] #90 save design: mid-fight meta writes (recordCapture/bankBag)
+  persist across park rollback — farmable; decide if consumables too
+- [ ] #91 content: ~95 roster + 10 invader MOVE_OF signature rows
+- [ ] #92 content: room char-combo gaps (R/T/B×hazards, boss/lair
+  variants); plant/dojo pools <15; eevee evolvesTo +197/470/471
+- [ ] save LOW: box[].lvl missing ≥1 lower bound vs boxLvl twin;
+  labLevel() doesn't cap at u.max (corrupt pk_lab → god mults);
+  team/box array length caps; mapNote type-check
+- [ ] content: bag items for untouched knobs (leftovers→regen,
+  eviolite→takenMult, kings-rock→stagger, shell-bell→leech,
+  heavy-ball→bossCatch, float-stone→frictionMult, grip-claw→wallRamp,
+  bright-powder→foeCdMult, air-balloon→slowImmune, metronome→comboDmg,
+  focus-sash→p.sash, power-herb→p.cdMod); task rows for unrewarded
+  items; new kinds stars/secrets/shots/treasure
+- [ ] content: Magikarp salesman event; family-lair gridWaves
+  (clefairy/zubat/diglett/pikachu/gastly/magnemite/dojo); POKÉGEAR
+  +1 REROLL event; link-cable trade-evo event
+- 974edd8 pushed: #84 — reward/loot park banks the row payday into the
+  save (was: parked-at-board lost STAR_ROW + 3 task pings). First try
+  moved bankStage into waveCleared — green logic, wrong boundary: the
+  KO-bounty/clear-card asserts price stars at clear time exactly.
+  Park-time bank + per-row idempotent guard instead; live path
+  unchanged, 2 new asserts pin both sides.
