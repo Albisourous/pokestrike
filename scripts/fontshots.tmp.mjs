@@ -16,8 +16,8 @@ await page.waitForTimeout(3500);
 
 const shot = (name) => page.screenshot({ path: `${OUT}${name}.png` });
 const tap = (x, y) => page.mouse.click(x, y);
-const phase = () => page.evaluate(() => window.__battle?.phase ?? 'none');
-const ui = () => page.evaluate(() => window.__dbg?.ui() ?? {});
+const phase = async () => { try { return await page.evaluate(() => window.__battle?.phase ?? 'none'); } catch { return 'nav'; } };
+const ui = async () => { try { return await page.evaluate(() => window.__dbg?.ui() ?? {}); } catch { return {}; } };
 const sleep = (ms) => page.waitForTimeout(ms);
 
 // first run auto-opens the help overlay — capture it before dismissing
@@ -70,6 +70,7 @@ let aimDone = false;
 for (let iter = 0; iter < 400; iter++) {
   const ph = await phase();
   if (ph === 'won' || ph === 'lost') break;
+  if (ph === 'nav') { await sleep(1500); continue; }
   if (ph === 'map') {
     const hit = await page.evaluate(() => {
       const b = window.__battle;
@@ -121,7 +122,7 @@ for (let iter = 0; iter < 400; iter++) {
       const b = window.__battle;
       for (const e of b.enemies) if (!e.dead) b.hurt(e, e.hp + 1, '#fff');
       if (b.phase === 'aim') b.endShot();
-    });
+    }).catch(() => {});
     await sleep(800);
   } else if (ph === 'reward') {
     if (!rewardShot) { await shot('reward'); rewardShot = true; }
