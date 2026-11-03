@@ -361,3 +361,4 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `ba52f8d` | flee/connect/secret | wounded rares bolt early + warn, connect LINK n/m chip + progress ring, ~20% enraged lairs | `git revert ba52f8d` |
 | 2026-11-02 | `7e2a8dd` | town/login | streets lose the 9-slice capsule for seamless flat dirt, plaza goes flagstone+rim, beds get soil+tuft rows, tower drops its door slab (pillar arch is the door); login slip measures the line and grows the card | `git revert 7e2a8dd` |
 | 2026-11-02 | `74d9290` | battle | ECHO WALLS affix + great/ultra-ball pickup pocket (+15/+30% catch, ripens, spends); tab icon = trainer pick | `git revert 74d9290` |
+| 2026-11-02 | `b20c863` | repo | `re/` store — MS RE artifacts moved into the repo, gitignored except README (#83) | `git revert b20c863` |

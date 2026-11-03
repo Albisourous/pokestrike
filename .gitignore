@@ -10,3 +10,7 @@ graphify-out/
 .scratch/
 .shots/
 .gstack/
+
+# Monster Strike RE artifacts — extracted game data stays local, never commits
+re/*
+!re/README.md
