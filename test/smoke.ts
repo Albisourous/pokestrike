@@ -827,6 +827,16 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   p.cd = 4;
   (b as any).grabPickup({ x: 140, y: 100, kind: 'max-elixir', t: 0, age: 0 });
   ok(p.cd === 2, 'max elixir charges two pips');
+
+  // ball pickups: the pocket stocks the next catch roll — great ripens to ultra
+  (b as any).stockedBall = null;
+  (b as any).grabPickup({ x: 100, y: 100, kind: 'great-ball', t: 0, age: 0 });
+  ok((b as any).stockedBall === 'great-ball' && Math.abs((b as any).ballOdds() - 0.15) < 1e-9, 'a great ball stocks +15% on the next catch');
+  (b as any).grabPickup({ x: 140, y: 100, kind: 'ultra-ball', t: 0, age: 0 });
+  ok((b as any).stockedBall === 'ultra-ball' && Math.abs((b as any).ballOdds() - 0.3) < 1e-9, 'an ultra ball upgrades the pocket to +30%');
+  (b as any).pickups = [{ x: 100, y: 100, kind: 'great-ball', t: 0, age: 0 }];
+  for (let i = 0; i < 3; i++) (b as any).ripenPickups();
+  ok((b as any).pickups[0].kind === 'ultra-ball', 'a great ball ripens into ultra in three enemy turns');
 }
 
 // --- bullet gimmicks: drain, berry drop, PP Up, Chesto, Safeguard --------
@@ -3653,10 +3663,10 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
     (bm as any).spawnWave(1);
     const banner = (bm as any).waveSpecial ?? '';
     if (/SWARM|HASTY|VOLATILE|BIG ONE|SHINY|CLERIC|GUARDIAN|STAY DOWN/.test(banner)) mods++;
-    if (/WARDED|TAKE WING|SKITTER|HEXED|TAILWIND/.test(banner)) newMods++;
+    if (/WARDED|TAKE WING|SKITTER|HEXED|TAILWIND|ECHO/.test(banner)) newMods++;
   }
   ok(mods > 3, `${mods}/60 seeds rolled a wave mutator`);
-  ok(newMods > 0, `${newMods}/60 seeds rolled a new affix (warded/sky/skitter/hexed/tailwind)`);
+  ok(newMods > 0, `${newMods}/60 seeds rolled a new affix (warded/sky/skitter/hexed/tailwind/echo)`);
 
   // warp: riding one pad spits the ball out its twin, velocity kept
   const b6 = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
@@ -3685,6 +3695,23 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   u7.vy = 0;
   (b7 as any).stepShot(1 / 60);
   ok(u7.vx > 550, `boost pad re-launches the ball (${Math.round(u7.vx)})`);
+
+  // echo: the walls answer — a bank comes back hotter than it left
+  const bEcho = new Battle(arena, team(), makeStage(9, 'T'), mulberry32(5));
+  (bEcho as any).spawnWave(0);
+  (bEcho as any).curMod = 'echo';
+  const uEcho = (bEcho as any).active;
+  uEcho.x = arena.x + uEcho.r - 1;
+  uEcho.y = arena.y + arena.h / 2;
+  uEcho.vx = -500;
+  uEcho.vy = 0;
+  (bEcho as any).hitWalls(uEcho);
+  ok(uEcho.vx > 500, `echo walls pay interest on a bank (${Math.round(uEcho.vx)})`);
+  (bEcho as any).curMod = null;
+  uEcho.x = arena.x + uEcho.r - 1;
+  uEcho.vx = -500;
+  (bEcho as any).hitWalls(uEcho);
+  ok(Math.abs(uEcho.vx - 480) < 1, 'plain courts keep the pinball restitution');
 
   // well: a swimmer's ball gains velocity toward the core while inside —
   // landlocked balls bank off the surface instead

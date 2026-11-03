@@ -253,7 +253,7 @@ interface BallDrop {
 }
 // Field pickups — the MS heart/sword/hourglass channel. The ball collects
 // one by touching it mid-shot.
-type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'x-attack' | 'elixir' | 'max-elixir' | 'lum-berry' | 'revival-herb' | 'pp-up' | 'chesto-berry';
+type PickupKind = 'oran-berry' | 'sitrus-berry' | 'protein' | 'x-attack' | 'elixir' | 'max-elixir' | 'lum-berry' | 'revival-herb' | 'pp-up' | 'chesto-berry' | 'great-ball' | 'ultra-ball';
 interface Pickup {
   x: number;
   y: number;
@@ -356,6 +356,7 @@ export const BASE_SHOT_SPEED = 285; // 1.5x launch — under exponential frictio
 export const POWER = 8;
 export const WALL_REST = 0.96; // pinball court — walls hand back nearly everything
 export const UNIT_REST = 0.94; // meatier ricochets off bodies
+const ECHO_REST = 1.12; // ECHO WALLS affix: a bank comes back hotter than it left
 const MS_FRAME = 60; // MS multiplies velocity once per 60 Hz frame
 export const SHOT_T = 1.5; // s — MS time-boxed shot: v *= 1 - (t/T)^4 each frame
 export const shotDamp = (t: number, h: number, mult = 1) => Math.exp(-MS_FRAME * (t / SHOT_T) ** 4 * mult * h);
@@ -546,6 +547,8 @@ const PICKUP_META: Record<PickupKind, { name: string; label: string; color: stri
   'revival-herb': { name: 'REVIVAL HERB', label: 'REVIVE', color: '#f8d030' },
   'pp-up': { name: 'PP UP', label: 'ULT +1', color: '#f8a8f8' },
   'chesto-berry': { name: 'CHESTO BERRY', label: 'CLOCK RESET', color: '#a890f0' },
+  'great-ball': { name: 'GREAT BALL', label: 'CATCH +15%', color: '#4a90e2' },
+  'ultra-ball': { name: 'ULTRA BALL', label: 'CATCH +30%', color: '#f8c830' },
 };
 // MS field items grow if left on the field: heal ripens in 1 turn,
 // power and charge take 3 (field_items rows 5→6 and 7→8).
@@ -553,7 +556,11 @@ const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }
   'oran-berry': { to: 'sitrus-berry', turns: 1 },
   protein: { to: 'x-attack', turns: 3 },
   elixir: { to: 'max-elixir', turns: 3 },
+  'great-ball': { to: 'ultra-ball', turns: 3 },
 };
+// a stocked ball is flat bonus odds on the next catch roll this wave —
+// thrown once and spent either way, like the real thing
+const BALL_CATCH: Partial<Record<PickupKind, number>> = { 'great-ball': 0.15, 'ultra-ball': 0.3 };
 // EXP per KO: the launcher learns foe Lv × KO_LV_RATE (×2 punching up); the
 // rest of the living team learns KO_LV_SHARE of that, so the bench keeps pace
 const KO_LV_RATE = 0.05;
@@ -893,6 +900,7 @@ export class Battle {
   private flashes: ScreenFlash[] = [];
   private balls: BallDrop[] = []; // live capture rituals — ball drops, rocks, clicks or bursts
   private pickups: Pickup[] = []; // touch to collect while the ball flies
+  private stockedBall: 'great-ball' | 'ultra-ball' | null = null; // pocket ball — flies at the next catch roll, then it's gone
   private pickupSeen = new Set<PickupKind>();
   private lblBox = new Float32Array(LABEL_SLOTS * 4);
   private lblN = 0;
@@ -1736,7 +1744,7 @@ export class Battle {
     let stormSpawn = false; // 'storm' lays two converging gust lanes
     let thornSpawn = false; // 'thorns' seeds a spike field mid-court
     if (i > 0 && !bossWave && !ttype && !this.inEvent && !this.inRival && this.rng() < (this.allAffix ? 1 : 0.35)) {
-      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind', 'headwind', 'slick', 'storm', 'thorns', 'armored', 'slumber', 'polarized'];
+      const MODS = ['swarm', 'swarm', 'swarm', 'hasty', 'hasty', 'volatile', 'volatile', 'big', 'big', 'gold', 'cleric', 'aegis', 'zombie', 'zombie', 'skull', 'grav', 'power', 'warded', 'sky', 'skitter', 'hexed', 'tailwind', 'headwind', 'slick', 'storm', 'thorns', 'armored', 'slumber', 'polarized', 'echo'];
       const mod = MODS[Math.floor(this.rng() * MODS.length)];
       switch (mod) {
         case 'swarm': // two extra fodder pour in, each softened up
@@ -1839,14 +1847,16 @@ export class Battle {
         case 'tailwind': // +15% launch speed this wave — rides curMod on the sling
         case 'headwind': // -15% launch speed — banks need a longer pull
         case 'slick': // 40% less friction — the ball carries farther, settle comes late
+        case 'echo': // the walls answer — banks return with interest
           break;
       }
       this.curMod = mod;
-      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE · BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!', armored: 'THE PACK IS PLATED!', slumber: 'THE PACK IS NAPPING…', polarized: 'POLARIZED FIELD!' }[mod] ?? 'MUTATED!';
+      const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE · BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!', armored: 'THE PACK IS PLATED!', slumber: 'THE PACK IS NAPPING…', polarized: 'POLARIZED FIELD!', echo: 'ECHO WALLS!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
     // MS-style field pickups: one per wave, two where a boss or elite lurks
     this.pickups = [];
+    this.stockedBall = null; // the pocket empties with the wave that stocked it
     this.scars = [];
     const npk = this.enemies.some((e) => e.boss || ELITE_IDS.has(e.def.id)) ? 2 : 1;
     // a lum cure only rolls when the pack carries a status threat — it
@@ -1857,20 +1867,27 @@ export class Battle {
     // carry over between waves, so the drop appears the wave after a loss;
     // corpse-free waves skip the extra draw and keep the seeded stream
     const deadMate = this.players.some((p) => p.dead);
+    // a pocket ball only pays where a catch can land — trainer mons are owned
+    const catchLive = !this.inTrainer;
     for (let k = 0; k < npk; k++) {
       const at = this.unstick(
         this.arena.x + this.arena.w * (0.15 + this.rng() * 0.7),
         this.arena.y + this.arena.h * (0.2 + this.rng() * 0.45),
         16,
       );
-      this.pickups.push({
-        x: at.x,
-        y: at.y,
-        kind: deadMate && this.rng() < 0.4
+      const kind: PickupKind =
+        deadMate && this.rng() < 0.4
           ? 'revival-herb'
           : ailThreat && this.rng() < 0.35
             ? 'lum-berry'
-            : PICKUP_KINDS[Math.floor(this.rng() * 3)],
+            : catchLive && this.rng() < 0.25
+              ? 'great-ball'
+              : PICKUP_KINDS[Math.floor(this.rng() * PICKUP_KINDS.length)];
+      void loadItem(kind);
+      this.pickups.push({
+        x: at.x,
+        y: at.y,
+        kind,
         t: this.rng() * 6,
         age: 0,
       });
@@ -3309,6 +3326,9 @@ export class Battle {
 
   private hitWalls(u: Unit) {
     const a = this.arena;
+    // ECHO WALLS: an echo court pays interest on every bank — stones and
+    // zones stay honest, only the walls answer
+    const rest = this.curMod === 'echo' ? ECHO_REST : WALL_REST;
     // a bounce only counts when it actually reverses a moving ball —
     // resting contact against the wall isn't a wall hit
     const fast = u.vx * u.vx + u.vy * u.vy > 150 * 150;
@@ -3317,14 +3337,14 @@ export class Battle {
     if (u.x - u.r < a.x) {
       u.x = a.x + u.r;
       if (u.vx < 0) {
-        u.vx = -u.vx * WALL_REST;
+        u.vx = -u.vx * rest;
         bounced = true;
         wall = this.damageWallAt('left', (u.y - a.y) / a.h);
       }
     } else if (u.x + u.r > a.x + a.w) {
       u.x = a.x + a.w - u.r;
       if (u.vx > 0) {
-        u.vx = -u.vx * WALL_REST;
+        u.vx = -u.vx * rest;
         bounced = true;
         wall = this.damageWallAt('right', (u.y - a.y) / a.h);
       }
@@ -3332,14 +3352,14 @@ export class Battle {
     if (u.y - u.r < a.y) {
       u.y = a.y + u.r;
       if (u.vy < 0) {
-        u.vy = -u.vy * WALL_REST;
+        u.vy = -u.vy * rest;
         bounced = true;
         wall ??= this.damageWallAt('top', (u.x - a.x) / a.w);
       }
     } else if (u.y + u.r > a.y + a.h) {
       u.y = a.y + a.h - u.r;
       if (u.vy > 0) {
-        u.vy = -u.vy * WALL_REST;
+        u.vy = -u.vy * rest;
         bounced = true;
         wall ??= this.damageWallAt('bottom', (u.x - a.x) / a.w);
       }
@@ -3596,6 +3616,14 @@ export class Battle {
         }
         this.pushText({ x: pk.x, y: pk.y - 12, text: 'CLOCKS RESET!', t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
         if (this.telop.once('pk:chesto')) this.telop.push({ kind: 'combo', title: 'CHESTO BERRY', sub: 'FOE CLOCKS RESET', icon: 'chesto-berry' });
+        break;
+      case 'great-ball':
+      case 'ultra-ball':
+        sfx('ready');
+        // the pocket keeps the better ball — grabbing great over ultra loses nothing
+        if (this.stockedBall !== 'ultra-ball') this.stockedBall = pk.kind;
+        this.pushText({ x: pk.x, y: pk.y - 12, text: 'BALL READY!', t: 0.9, color: PICKUP_META[pk.kind].color, big: true });
+        if (this.telop.once('pk:ball')) this.telop.push({ kind: 'combo', title: PICKUP_META[pk.kind].name, sub: `NEXT CATCH +${Math.round(this.ballOdds() * 100)}%`, icon: pk.kind });
         break;
       case 'elixir':
       case 'max-elixir': {
@@ -3980,11 +4008,16 @@ export class Battle {
       // an armed master ball never fails — first KO catches, guaranteed.
       // Trainer mons stay with their owner — the ball never comes out.
       const master = this.masterArmed && !this.inTrainer;
+      const thrown = this.stockedBall ?? 'poke-ball'; // the pocket's ball is the one that flies
       // shinies never break out — KO'ing one always lands it in the box
       // the KO shot's combo feeds the roll — a pinball kill tires the mon
       // out like a proper weaken-first. (Dots and orbs from this same shot
       // still read this shot's chain — the right value.)
-      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.catchOdds(e) + Math.min(0.12, this.shotCombo * 0.015));
+      const caught = master || e.shiny || (!this.inTrainer && this.rng() < this.catchOdds(e) + Math.min(0.12, this.shotCombo * 0.015) + this.ballOdds());
+      // a thrown ball is spent, catch or bust — master balls and shinies
+      // skip the roll, so the pocket stays stocked for a real throw
+      const flew = !master && !e.shiny && !this.inTrainer; // the roll ran — the pocket ball actually left your hand
+      if (flew) this.stockedBall = null;
       if (master) {
         this.masterArmed = false;
         this.pushText({ x: e.x, y: e.y - e.r - 58, text: '★ MASTER BALL!', t: 1.5, color: '#c96bff', big: true });
@@ -4036,7 +4069,7 @@ export class Battle {
       // the ball comes out whenever a capture was rolled — trainer mons
       // stay with their owner, so their KOs still faint on the spot
       if (caught || !this.inTrainer) {
-        this.catchSeq(e.x, e.y, caught, master ? 'master-ball' : 'poke-ball', () => {
+        this.catchSeq(e.x, e.y, caught, master ? 'master-ball' : flew ? thrown : 'poke-ball', () => {
           this.pushText(verdict);
           if (caught) {
             // click shut: the gotcha flash then the same payoff as always
@@ -5716,6 +5749,11 @@ export class Battle {
     const over = e.lvl - best;
     const lvlOdds = over <= -5 ? 3 : over <= 0 ? 2 : over <= 3 ? 0.7 : over <= 6 ? 0.25 : 0.05;
     return this.captureChance * lvlOdds + (e.boss ? this.bossCatch : 0);
+  }
+
+  // the pocket ball's flat bonus on the next catch roll — 0 when empty
+  private ballOdds() {
+    return this.stockedBall ? (BALL_CATCH[this.stockedBall] ?? 0) : 0;
   }
 
   // Queue the capture ritual: ball drops in, rocks `rocks` times over the
@@ -8080,6 +8118,7 @@ export class Battle {
         ctx.globalAlpha = 1;
       }
       const img = itemSprite(pk.kind);
+      if (!img) void loadItem(pk.kind); // a kind that rolled in late warms the cache on sight
       if (img) ctx.drawImage(img, pk.x - 13, pk.y - 13 + bob, 26, 26);
       if ((pk.tag ?? 0) > 0)
         this.fieldLabel(ctx, meta.label, pk.x, pk.y + 32, meta.color, Math.min(1, (pk.tag ?? 0) / 0.3));
@@ -10000,7 +10039,7 @@ export class Battle {
     const mod = this.curMod;
     // court-state mutators get the same ambient read — a slick floor
     // should look slick, a hexed court should feel cursed
-    const modWash = mod === 'slick' || mod === 'hexed' || mod === 'tailwind' || mod === 'headwind';
+    const modWash = mod === 'slick' || mod === 'hexed' || mod === 'tailwind' || mod === 'headwind' || mod === 'echo';
     if (!w && !modWash) return;
     const a = this.arena;
     const TAU = Math.PI * 2;
@@ -10014,7 +10053,7 @@ export class Battle {
       ctx.fillRect(a.x, a.y, a.w, a.h);
     }
     if (modWash) {
-      ctx.fillStyle = mod === 'hexed' ? '#a040a0' : mod === 'slick' ? '#9dd8f0' : '#b8e8c0';
+      ctx.fillStyle = mod === 'hexed' ? '#a040a0' : mod === 'slick' ? '#9dd8f0' : mod === 'echo' ? '#b8c8ff' : '#b8e8c0';
       ctx.globalAlpha = mod === 'hexed' ? 0.07 : 0.045;
       ctx.fillRect(a.x, a.y, a.w, a.h);
       const t2 = this.time;
@@ -10029,6 +10068,18 @@ export class Battle {
           ctx.beginPath();
           ctx.arc(x, y, 1.8 + h3 * 1.4, 0, TAU);
           ctx.fill();
+        } else if (mod === 'echo') {
+          // rim glints ride the walls — the court edge itself is the gimmick
+          const rim = 2 * (a.w + a.h);
+          const s = (h1 * rim + t2 * 170 + i * 137) % rim;
+          let gx = a.x, gy = a.y, horiz = true;
+          if (s < a.w) { gx = a.x + s; }
+          else if (s < a.w + a.h) { gx = a.x + a.w; gy = a.y + s - a.w; horiz = false; }
+          else if (s < 2 * a.w + a.h) { gx = a.x + a.w - (s - a.w - a.h); gy = a.y + a.h; }
+          else { gy = a.y + a.h - (s - 2 * a.w - a.h); horiz = false; }
+          ctx.globalAlpha = 0.14 + h3 * 0.14;
+          ctx.fillStyle = '#cfe0ff';
+          ctx.fillRect(gx - (horiz ? 5 : 1.5), gy - (horiz ? 1.5 : 5), horiz ? 10 : 3, horiz ? 3 : 10);
         } else if (mod === 'slick') {
           // gloss streaks slide downcourt
           const x = a.x + ((h1 * a.w + t2 * 30 + i * 53) % a.w);
@@ -11104,6 +11155,7 @@ export class Battle {
       let warpT = -1;
       const cache = this.aimCache;
       const sb: Ball = { x: 0, y: 0, r: u.r, vx: 0, vy: 0 };
+      const rest = this.curMod === 'echo' ? ECHO_REST : WALL_REST; // the ghost must promise the same echo
       sim: for (let i = 0; i < 60; i++) {
         if (bounced) break;
         const step = 1 / 30;
@@ -11141,10 +11193,10 @@ export class Battle {
         sx += svx * step;
         sy += svy * step;
         if (len({ x: svx, y: svy }) < 90) break;
-        if (sx - u.r < a.x) { sx = a.x + u.r; svx = -svx * WALL_REST; bounced = true; }
-        else if (sx + u.r > a.x + a.w) { sx = a.x + a.w - u.r; svx = -svx * WALL_REST; bounced = true; }
-        if (sy - u.r < a.y) { sy = a.y + u.r; svy = -svy * WALL_REST; bounced = true; }
-        else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * WALL_REST; bounced = true; }
+        if (sx - u.r < a.x) { sx = a.x + u.r; svx = -svx * rest; bounced = true; }
+        else if (sx + u.r > a.x + a.w) { sx = a.x + a.w - u.r; svx = -svx * rest; bounced = true; }
+        if (sy - u.r < a.y) { sy = a.y + u.r; svy = -svy * rest; bounced = true; }
+        else if (sy + u.r > a.y + a.h) { sy = a.y + a.h - u.r; svy = -svy * rest; bounced = true; }
         // the stones bank the ball too — same shared resolver as live play
         for (const b of this.blocks) {
           sb.x = sx; sb.y = sy; sb.vx = svx; sb.vy = svy;

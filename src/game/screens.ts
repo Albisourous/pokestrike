@@ -1106,7 +1106,7 @@ function drawTabBar(
         }
       }
     } else if (cell.tab === 'climb') {
-      if (!drawNpc(ctx, 'hiker_down_0', 0, iconSize / 2, iconSize)) peakGlyph(ctx, 0, 0, 1, PAPER);
+      if (!drawNpc(ctx, `${trainerPick()}_down_0`, 0, iconSize / 2, iconSize)) peakGlyph(ctx, 0, 0, 1, PAPER);
     } else if (spr) {
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(spr, -iconSize / 2, -iconSize / 2, iconSize, iconSize);
