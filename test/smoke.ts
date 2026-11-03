@@ -2238,6 +2238,19 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(b.phase === 'map', 'the pick exits straight to the map');
 }
 
+// --- a reward-phase park banks the row payday into the save ----------------
+{
+  // the board never reopens on resume — pay it at park time, once
+  const p = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(7));
+  (p as any).spawnWave(0);
+  (p as any).enterReward();
+  const before = p.starsRun;
+  const s = p.snapshot()!;
+  ok(s !== null && s.starsRun === before + 3 && p.starsRun === before + 3, `reward-phase park pays the row (+${p.starsRun - before})`);
+  p.advanceReward();
+  ok(p.starsRun === before + 3, 'board advance never re-pays a parked row');
+}
+
 // --- offer tools: REROLL re-deals the board ---------------------------------
 {
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));

@@ -1311,6 +1311,9 @@ export class Battle {
       this.phase === 'map' ||
       ((this.phase === 'reward' || this.phase === 'loot') && !this.evoChoice && !this.evoPending.length);
     if (!parked || this.mapWalk || this.eventChoice) return null;
+    // a reward/loot park never reopens the board, so the cleared row's
+    // payday would die with advanceReward — pay it into the save now
+    if (this.phase !== 'map') this.bankStage(this.waveIndex);
     return {
       seed: 0, // caller stamps the run seed — battle only knows mapSeed
       daily: false,
@@ -6117,7 +6120,10 @@ export class Battle {
 
   // a cleared map row pays 2 + stage# (stage 1 = row 0 pays 3) — utility
   // stops pay too; progress is progress
+  private bankedRow = -1;
   private bankStage(row: number) {
+    if (this.bankedRow === row) return; // a row pays once — park-bank, walk-bank and board-advance all reach here
+    this.bankedRow = row;
     this.earnStars(STAR_ROW + row + 1);
     const cx = this.arena.x + this.arena.w / 2;
     this.taskPing('score', this.score, cx, this.arena.y + 54);
