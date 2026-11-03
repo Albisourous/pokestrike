@@ -4030,7 +4030,7 @@ export function drawCounterHint(ctx: CanvasRenderingContext2D, gimmick: typeof S
 // QUIT is the wide half — 'QUIT TO TITLE' measures ~182px at the pixel font's
 // 14px floor, so a narrower pill would always spill
 export const MENU_CLOSE = { x: W / 2 - 216, y: 788, w: 200, h: 44 };
-export const MENU_QUIT = { x: W / 2 + 16, y: 788, w: 216, h: 44 };
+export const MENU_QUIT = { x: W / 2, y: 788, w: 216, h: 44 };
 
 export function drawTeamMenu(
   ctx: CanvasRenderingContext2D,
