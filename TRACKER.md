@@ -348,3 +348,7 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `ada60b5` | rooms | +3: tide locks (moat lanes), the boards (ice-rail wall speed), toll gates (battlement ports, hard tail 11→12) | `git revert ada60b5` |
 | 2026-11-02 | `e644d96` | battle/juice | PERFECT streak ≥3 arms FEVER: gold rim+corner ticks, pitch-climbing 'fever' jingle, ×1.5 score on the fevered shot; miss/wave disarms | `git revert e644d96` |
 | 2026-11-02 | `13e5813` | anim | ~120 move→recipe overrides — off-type casts draw their own element; shock_3 hit; BIG_FLARE finisher ring on big bursts | `git revert 13e5813` |
+| 2026-11-02 | `adb4f73` | telop | type-tinted hairlines, boss hazard-tape band + bursting portrait, connect stagger, still GAME OVER band — settled under reduced motion | `git revert adb4f73` |
+| 2026-11-02 | `c2ed6a5` | missions/tasks | multiko3/halfpar/clutch goal kinds; scorerun/gymrun/catchrun run-peak task kinds | `git revert c2ed6a5` |
+| 2026-11-02 | `4f29696` | map | seeded landmarks + clearings/groves/islets/dirt, elite guarantee; rest-before-converts mart fix; goldens regen | `git revert 4f29696` |
+| 2026-11-02 | `8617c96` | bg | ambient pass: seeded parallax drift + glints + foot fringe per theme; TILE_SOD/BLOOM rects; reduced-motion honors OS probe | `git revert 8617c96` |
