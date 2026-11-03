@@ -530,7 +530,7 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
     drawLabCard(ctx, cr, c.u, c.train, stars, lvls[c.u.id] ?? 0);
   }
   ctx.restore();
-  rail(ctx, P.x + P.w - 11, v.y, v.h, scroll, h);
+  rail(ctx, v.x + v.w - 10, v.y, v.h, scroll, h);
   closeChip(ctx);
 }
 
