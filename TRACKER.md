@@ -342,3 +342,9 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | rescue | perks | dead-session debris: `rollPerks` `ban` arg restored (tree was left mid-removal, 6 stale callers, build red); uncommitted work in screens/meta/main/etc left for its session | — |
 | 2026-11-02 | `610caf0` | battle/legibility | countdown disc + tag clamp inside the court — rim-hugging foes' clocks no longer tuck under the frame (spotted in arena wave-11 shot) | `git revert 610caf0` |
 | 2026-11-02 | `f8ccc24` | debug | `?debug=arena` drops the stop card — bare court for review shots | `git revert f8ccc24` |
+| 2026-11-02 | `1b5567a` | map/legibility | top-edge door signs flip below the stop — the island clip no longer slices glyphs mid-word | `git revert 1b5567a` |
+| 2026-11-02 | `0b5c2a9` | rescue | dead session's declutter batch committed after verify (open wardrobe, pity label, HOF ghosts, lab grid, hiker tab icon) | — |
+| 2026-11-02 | `58e74c3` | events | +3 ?-stops: focus-sash channeler, Eevee-den ambush wave, safari warden bait/rock choice | `git revert 58e74c3` |
+| 2026-11-02 | `ada60b5` | rooms | +3: tide locks (moat lanes), the boards (ice-rail wall speed), toll gates (battlement ports, hard tail 11→12) | `git revert ada60b5` |
+| 2026-11-02 | `e644d96` | battle/juice | PERFECT streak ≥3 arms FEVER: gold rim+corner ticks, pitch-climbing 'fever' jingle, ×1.5 score on the fevered shot; miss/wave disarms | `git revert e644d96` |
+| 2026-11-02 | `13e5813` | anim | ~120 move→recipe overrides — off-type casts draw their own element; shock_3 hit; BIG_FLARE finisher ring on big bursts | `git revert 13e5813` |
