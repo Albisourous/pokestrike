@@ -368,6 +368,17 @@ export const PERKS: Perk[] = [
     rarity: 'uncommon',
     apply: (b) => { b.volleyNth = 3; },
   },
+  {
+    id: 'ironball', name: 'Iron Ball', item: 'iron',
+    desc: '+35% hit damage, ball settles a third sooner',
+    rarity: 'uncommon',
+    // drag ∝ frictionMult — ×1.45 ends the slide ~30% early: more turns per
+    // stop but fewer bounces, the anti-float-stone rico builds refuse
+    apply: (b) => {
+      b.physMult *= 1.35;
+      b.frictionMult *= 1.45;
+    },
+  },
   // type charms — +50% damage for one type; the drafting hook that makes
   // "all-in on water" or "spread coverage" a real build call
   ...(Object.entries({
@@ -522,6 +533,32 @@ export const PERKS: Perk[] = [
     rarity: 'rare',
     apply: (b) => { b.ultIn = Math.max(0, b.ultIn - 3); },
   },
+  {
+    id: 'starpiece', name: 'Star Piece', item: 'star-piece',
+    desc: '+50% star earnings, foes +10% HP',
+    rarity: 'rare',
+    // greed tax: foeHpBonus folds into hpScale on every future wave, so the
+    // payout compounds exactly as long as the handicap does
+    apply: (b) => {
+      b.starMult += 0.5;
+      b.foeHpBonus += 0.1;
+    },
+  },
+  {
+    id: 'linkcable', name: 'Link Cable', item: 'exp-share',
+    desc: 'every 4th shot fires LINKED ×1.25',
+    rarity: 'rare',
+    apply: () => {}, // the cable arms connect off the shot count — tick does it all
+    tick: (b) => {
+      if (b.connect.armed || b.connect.live) return;
+      // perkTick only runs mid-shot/enemy phase, so arming while a 3rd, 7th,
+      // 11th… shot is in flight means the next launch carries the ×1.25
+      if (b.shots % 4 !== 3) return;
+      b.connect.armed = true;
+      b.pushText({ x: b.active.x, y: b.active.y - b.active.r - 26, text: 'LINKED!', t: 0.9, color: '#7cf29a', big: false });
+      sfx('ready');
+    },
+  },
 
   // --- legendary: run-defining items ---
   {
@@ -577,6 +614,15 @@ export const PERKS: Perk[] = [
       b.dmgMult *= 1.3;
       b.lifeDrain += 0.04;
     },
+  },
+  {
+    id: 'shinycharm', name: 'Shiny Charm', item: 'shiny-charm',
+    desc: 'foes spawn shiny ×4 as often',
+    rarity: 'legendary',
+    // 1/48 → ~1/12 per non-boss spawn; a shiny KO is an automatic catch
+    // (+250 score, trait counts double), so it's a catch-build engine —
+    // dead weight on a team that never boxes
+    apply: (b) => { b.shinyRate *= 4; },
   },
 ];
 
