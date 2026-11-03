@@ -5549,8 +5549,12 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
     (kb as any).stopShots = Math.ceil((kb as any).par * 1.5) + 1;
     (kb as any).stopFaints = 1;
     for (const e of [...(kb as any).enemies]) {
-      while (!e.dead && (kb as any).totalKos < 5) {
+      let guard = 0;
+      while (!e.dead && (kb as any).totalKos < 5 && guard++ < 60) {
         (kb as any).hurt(e, e.hp + 50, '#fff');
+        // a boss mid bar-break is unkillable until the room reloads — run
+        // the same resolve the live turn loop runs, or this loop spins
+        if ((kb as any).barBreak) (kb as any).bossBarBreak();
         taskPing ||= (kb as any).texts.some((tx: any) => tx.text === 'TASK: BATTLE TESTED ✓');
       }
       if ((kb as any).totalKos >= 5) break;
@@ -6338,7 +6342,7 @@ ok(SECRET_IDS.length === 9, 'secret lair exposes the nine legendary ids');
   globalThis.localStorage.removeItem('pk_secrets');
   const golden: Record<number, { mapSeed: number; nodes: string; waves: string[] }> = {
     42: { mapSeed: 1858592655, nodes: 'start,elite,wild,event,rest,mart,gym,wild,trainer,chest,event,mart,gym,trainer,wild,mart,wild,event,gym', waves: ['84:119,287:110,187:85', '288:322,287:319,19:179,420:258,505:263', '311:446,312:446,125:740'] },
-    7: { mapSeed: 1188257686, nodes: 'start,wild,elite,event,rest,chest,gym,wild,trainer,mart,chest,event,gym,wild,elite,mart,event,trainer,gym', waves: ['314:115,287:160,291:111', '187:190,420:258,102:263,479:235', '358:517,202:1165,150:1316'] },
+    7: { mapSeed: 1188257686, nodes: 'start,wild,elite,event,rest,chest,gym,wild,trainer,mart,chest,event,gym,wild,elite,mart,event,trainer,gym', waves: ['314:115,287:160,291:111', '187:190,420:258,102:319,479:235', '358:588,202:1165,150:1316'] },
   };
   for (const seed of [42, 7]) {
     const b: any = new Battle(arenaSecret, secretTeam(), makeStage(seed, 'T'), mulberry32(seed));

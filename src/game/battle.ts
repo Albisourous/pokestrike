@@ -566,6 +566,9 @@ const BALL_CATCH: Partial<Record<PickupKind, number>> = { 'great-ball': 0.15, 'u
 const KO_LV_RATE = 0.05;
 const KO_LV_SHARE = 0.5;
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
+// JUST frame: a bump inside the flight's opening beat pays a timed-combo
+// bonus — the window is early enough that banking off a wall first still counts
+const JUST_WIN = 0.8;
 // FEVER: a deep perfect-release streak arms a fevered NEXT shot — gold
 // court glow, a climbing jingle pitch, and a score premium on its hits
 const FEVER_AT = 3; // perfect-streak length that arms FEVER
@@ -3988,10 +3991,10 @@ export class Battle {
       if (lv && !lv.dead && lv.lvl < LV_CAP) {
         this.gainLevels(lv, Math.max(1, Math.round(e.lvl * KO_LV_RATE)) + (e.lvl > lv.lvl ? 1 : 0));
       }
-      // bench learns at the share rate with no +1 floor — it ticks roughly
-      // every other KO, so the bench trails the launcher instead of pacing it
-      const share = Math.round(e.lvl * KO_LV_RATE * KO_LV_SHARE);
-      const shared = share > 0 ? this.players.filter((p) => p !== lv && this.gainLevels(p, share, true)) : [];
+      // bench learns at the floored share rate — +1 every KO keeps pace
+      // early, then trails once foe levels outgrow the KO_LV_SHARE taper
+      const share = Math.max(1, Math.round(e.lvl * KO_LV_RATE * KO_LV_SHARE));
+      const shared = this.players.filter((p) => p !== lv && this.gainLevels(p, share, true));
       if (shared.length && lv) this.pushText({ x: lv.x, y: lv.y - lv.r - 54, text: 'TEAM LV UP', t: 0.8, color: '#9df0ff', big: false });
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
@@ -4889,6 +4892,11 @@ export class Battle {
         this.pushText({ x: u.x, y: u.y - u.r - 30, text: 'VOLLEY!', t: 1, color: '#f8d030', big: true });
         sfx('ready');
       }
+    }
+    // just-frame bump: an early pass pays an extra combo tick
+    if (this.time - this.shotT < JUST_WIN) {
+      this.shotCombo++;
+      this.pushText({ x: p.x, y: p.y - p.r - 56, text: 'JUST!', t: 0.9, color: '#ffd84d', big: true });
     }
     this.shotCombo++;
     this.telop.combo(this.shotCombo, this.active.def.id);
