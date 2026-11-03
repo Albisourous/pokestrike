@@ -62,7 +62,7 @@ import {
   lvlHp,
 } from './stats';
 import type { Role } from './stats';
-import { font, fontB, fitFont, fitFontB, roundRect, button, wrap2, MAP_MENU, drawPauseCard } from './screens';
+import { font, fontB, fitFont, fitFontB, fitCenter, roundRect, button, wrap2, MAP_MENU, drawPauseCard } from './screens';
 
 export interface Rect {
   x: number;
@@ -561,7 +561,7 @@ const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }
 // a stocked ball is flat bonus odds on the next catch roll this wave —
 // thrown once and spent either way, like the real thing
 const BALL_CATCH: Partial<Record<PickupKind, number>> = { 'great-ball': 0.15, 'ultra-ball': 0.3 };
-// EXP per KO: the launcher learns foe Lv × KO_LV_RATE (×2 punching up); the
+// EXP per KO: the launcher learns foe Lv × KO_LV_RATE (+1 punching up); the
 // rest of the living team learns KO_LV_SHARE of that, so the bench keeps pace
 const KO_LV_RATE = 0.05;
 const KO_LV_SHARE = 0.5;
@@ -1031,7 +1031,7 @@ export class Battle {
   secretsRun = 0;
   raidMod = ''; // the day's seeded handicap — a RAID_MODS id, spent in spawnWave/makeEnemy
   rewardOffers: Perk[] = [];
-  tools = { roll: 1, ban: 1 }; // offer-tool charges, per-run — REROLL re-deals, BANISH culls
+  tools = { roll: 1 }; // offer-tool charges, per-run — REROLL re-deals the board
   perkOfferN = 3; // perk cards per board — lab 'fourth' deals a fourth
   // lab multis — read once at construction (the shop lives on the title,
   // a mid-run buy can't happen); perks re-apply on top in applySnapshot
@@ -1042,8 +1042,6 @@ export class Battle {
   starsRun = 0; // star pieces banked this run — the result screen's +N row
   reviveToken = false; // 'revive': the first KO each run stands back up
   reviveUsed = false; // spent flag — persisted like ashArmed
-  perkBan = new Set<string>(); // perk ids banished this run — filtered out of future boards
-  banArmed = false; // armed: the next card tap banishes instead of picks
   private rewardCap = 3; // tier cap the board was dealt at — reroll re-deals the same quality
   mapNode = 0; // index into region.nodes — the stop the team stands on
   hardWave = false; // the wave just cleared was a hard stop — bigger payout (trainers)
@@ -1134,7 +1132,7 @@ export class Battle {
     this.labSpcMult = 1 + LAB_SPC_LV * labLevel('spc');
     this.labLuck = LAB_LUCK_LV * labLevel('luck');
     this.starMult = 1 + LAB_EARN_LV * labLevel('earnings');
-    this.tools = { roll: 1 + labLevel('reroll'), ban: 1 + labLevel('ban') };
+    this.tools = { roll: 1 + labLevel('reroll') };
     this.perkOfferN = 3 + (labLevel('fourth') ? 1 : 0);
     this.reviveToken = !!labLevel('revive');
     // bought levels announce themselves — the field log names what the lab
@@ -1339,7 +1337,6 @@ export class Battle {
       perks: [...this.perkIds],
       heldItems: [...this.heldItems],
       tools: { ...this.tools },
-      perkBan: [...this.perkBan],
       // durable items' effects already live in team[].lvl — re-applying on
       // resume would double them; the rest replay like perks
       bag: this.bagIds.filter((id) => !BAG_ITEMS.find((i) => i.id === id)?.durable),
@@ -1450,8 +1447,7 @@ export class Battle {
     this.boxLvl = boxed.map((x) => x.lvl);
     this.heldItems = [...s.heldItems];
     // v1 run saves predate offer tools — default them rather than coerce
-    this.tools = { ...(s.tools ?? { roll: 1, ban: 1 }) };
-    this.perkBan = new Set(s.perkBan ?? []);
+    this.tools = { roll: s.tools?.roll ?? 1 };
     this.score = s.score;
     this.perksTaken = s.perksTaken;
     this.gymsBeaten = s.gymsBeaten;
@@ -3986,13 +3982,16 @@ export class Battle {
       this.lastKoType = src?.def.type ?? null;
       this.missions.ko(this.kosThisShot, this.battle >= this.battles && this.enemies.every((x) => x.dead) ? src?.def.type ?? null : undefined);
       // EXP: the mon that launched this shot levels up — growth you can
-      // watch mid-run. Bigger foes teach more, and punching up doubles it,
-      // like real XP. Cap keeps the multiplier sane.
+      // watch mid-run. Bigger foes teach more, and punching up pays a
+      // bonus level, like real XP. Cap keeps the multiplier sane.
       const lv = this.active;
       if (lv && !lv.dead && lv.lvl < LV_CAP) {
-        this.gainLevels(lv, Math.max(1, Math.round(e.lvl * KO_LV_RATE)) * (e.lvl > lv.lvl ? 2 : 1));
+        this.gainLevels(lv, Math.max(1, Math.round(e.lvl * KO_LV_RATE)) + (e.lvl > lv.lvl ? 1 : 0));
       }
-      const shared = this.players.filter((p) => p !== lv && KO_LV_SHARE > 0 && this.gainLevels(p, Math.max(1, Math.round(e.lvl * KO_LV_RATE * KO_LV_SHARE)), true));
+      // bench learns at the share rate with no +1 floor — it ticks roughly
+      // every other KO, so the bench trails the launcher instead of pacing it
+      const share = Math.round(e.lvl * KO_LV_RATE * KO_LV_SHARE);
+      const shared = share > 0 ? this.players.filter((p) => p !== lv && this.gainLevels(p, share, true)) : [];
       if (shared.length && lv) this.pushText({ x: lv.x, y: lv.y - lv.r - 54, text: 'TEAM LV UP', t: 0.8, color: '#9df0ff', big: false });
       if (this.kosThisShot >= 2) {
         const label = this.kosThisShot === 2 ? 'DOUBLE KO!' : this.kosThisShot === 3 ? 'TRIPLE KO!' : 'MEGA KO!';
@@ -6106,8 +6105,7 @@ export class Battle {
     // hard stops pay out uncommon-or-better relics — the risk has a price;
     // elites go further: rare-or-better only
     this.rewardCap = this.eliteWave ? 1 : this.hardWave ? 2 : 3;
-    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan, this.perkOfferN);
-    this.banArmed = false; // a fresh board can't inherit a leftover armed tap
+    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkOfferN);
     this.hardWave = false;
     this.eliteWave = false;
     // trainer mons stay with their owner; only a fallen gym pays its ace —
@@ -6368,34 +6366,12 @@ export class Battle {
     this.phase = 'map'; // pick the next stop on the region map
   }
 
-  // REROLL spends a charge to re-deal the board at the same tier cap —
-  // banished ids stay out of the fresh deal.
+  // REROLL spends a charge to re-deal the board at the same tier cap.
   rerollOffers(): boolean {
     if (this.phase !== 'reward' || this.tools.roll <= 0) return false;
-    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkBan, this.perkOfferN);
+    this.rewardOffers = rollPerks(this.rng, this.rewardCap, this.rank, this.teamTypes(), this.perkOfferN);
     this.tools.roll--;
     return true;
-  }
-
-  // BANISH arms instead of firing — the next card tap culls that perk from
-  // the run's pool. Tap again to stand down. Returns the armed state.
-  toggleBanish(): boolean {
-    if (this.phase !== 'reward' || this.tools.ban <= 0) return false;
-    this.banArmed = !this.banArmed;
-    return this.banArmed;
-  }
-
-  // The armed tap: charge paid, the card leaves the board and its id is
-  // gone for the run. Returns the banished id for telemetry.
-  banishPerk(i: number): string | null {
-    const perk = this.rewardOffers[i];
-    if (!perk || this.phase !== 'reward' || !this.banArmed || this.tools.ban <= 0) return null;
-    this.perkBan.add(perk.id);
-    this.rewardOffers.splice(i, 1);
-    this.tools.ban--;
-    this.banArmed = false;
-    if (!this.rewardOffers.length) this.advanceReward(); // emptied the board — they leave empty-handed
-    return perk.id;
   }
 
   // Map camera: the viewport trails the walker's tile row — while you're
@@ -6600,7 +6576,7 @@ export class Battle {
       this.cardT = 0;
     } else if (n.kind === 'chest') {
       // the old couple's blessing doubles the pull, then lapses
-      const ps = rollPerks(this.rng, 1, this.rank, this.teamTypes(), this.perkBan, this.doubleChest ? 2 : 1);
+      const ps = rollPerks(this.rng, 1, this.rank, this.teamTypes(), this.doubleChest ? 2 : 1);
       this.doubleChest = false;
       for (const p of ps) this.grantPerk(p);
       if (ps.length) this.mapNote = `YOU FOUND ${ps.map((p) => p.name.toUpperCase()).join(' + ')}!`;
@@ -9295,7 +9271,12 @@ export class Battle {
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, W_CANVAS_FALLBACK, 960);
-    for (const [x, y, r] of holes) ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
+    for (const [x, y, r] of holes) {
+      // moveTo starts each arc as its own subpath — without it the clip path
+      // chords hole-to-hole and evenodd carves a wedge corridor between them
+      ctx.moveTo(x + r * 2.5, y);
+      ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
+    }
     ctx.clip('evenodd');
     ctx.fillStyle = SC;
     ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 960);
@@ -9594,9 +9575,26 @@ export class Battle {
       const cleared = n.row < this.pendingNext && n.kind !== 'secret';
       const reachable = links.includes(i);
       const current = i === this.mapNode;
-      if (n.kind === 'chest') {
-        const ball = itemSprite('poke-ball');
-        if (ball) ctx.drawImage(ball, nx - 15, ny - 24, 30, 30);
+      if (n.kind === 'chest' || n.kind === 'event' || n.kind === 'wild') {
+        // pickups stand on the stop like the trainers do — shadow first
+        ctx.fillStyle = 'rgba(8,14,24,0.35)';
+        ctx.beginPath();
+        ctx.ellipse(nx, ny + cell * 0.4, cell * 0.5, cell * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        if (n.kind === 'chest') {
+          // an item ball on the ground is the canon "loot here" read
+          const ball = itemSprite('poke-ball');
+          if (ball) ctx.drawImage(ball, nx - 13, ny - 18, 26, 26);
+          else void loadItem('poke-ball');
+        } else if (n.kind === 'event') {
+          // a signpost = the ? stop — the real Gen 3 prop, not a drawn diamond
+          const sign = itemSprite('sign');
+          if (sign) ctx.drawImage(sign, nx - 14, ny - 30, 28, 30);
+          else void loadItem('sign');
+        } else {
+          // a bush clump = tall grass — something wild is rustling there
+          drawTile(ctx, MT.WALL_BUSH, nx - cell * 0.75, ny - cell * 0.65, cell * 1.5, cell * 1.5 * 26 / 48);
+        }
       } else if (n.kind === 'trainer' || n.kind === 'elite') {
         // the class's overworld sprite stands on the stop — elites get the
         // ace trainer, the colored ring is still the squad's type
@@ -9604,21 +9602,6 @@ export class Battle {
         // stop-guardians read as figures on the path — a person looms wrong
         // when they're taller than the buildings beside them
         drawNpc(ctx, frame, nx, ny + cell * 0.5, cell * 1.15);
-      } else if (n.kind === 'wild') {
-        // a flower patch = tall grass — something wild is rustling there
-        drawTile(ctx, MT.TILE_FLOWER, nx - cell * 0.6, ny - cell * 0.6, cell * 1.2, cell * 1.2);
-      } else if (n.kind === 'event') {
-        // the ? stop — a glinting diamond since the tileset has no sign tile
-        ctx.save();
-        ctx.translate(nx, ny - 6);
-        ctx.rotate(Math.PI / 4);
-        ctx.fillStyle = '#ffd84d';
-        ctx.fillRect(-9, -9, 18, 18);
-        ctx.restore();
-        ctx.font = font(16);
-        ctx.fillStyle = '#2a3560';
-        // diamond center is ny - 6; the '?' glyph rides ~0.9em over baseline
-        ctx.fillText('?', nx + 3, ny + 8);
       } else if (n.kind === 'secret') {
         drawSecretNode(ctx, nx, ny, cell, this.time);
       } else {
@@ -9634,7 +9617,7 @@ export class Battle {
         drawTile(ctx, icon, nx - cell, ny - cell * (up ? 2.5 : 1.35), cell * 2, cell * 2);
         if (n.kind === 'rest' || n.kind === 'mart') {
           const potion = itemSprite(n.kind === 'rest' ? 'max-potion' : 'potion');
-          if (potion) ctx.drawImage(potion, nx - 10, ny - cell * 2, 20, 20);
+          if (potion) ctx.drawImage(potion, nx + cell * 0.5, ny - 4, 20, 20);
         }
       }
       ctx.globalAlpha = cleared ? 0.35 : reachable ? 1 : 0.5;
@@ -9817,8 +9800,8 @@ export class Battle {
     if (this.waveIndex < 2) {
       ctx.font = fontB(10);
       ctx.fillStyle = '#8890b8';
-      ctx.fillText('WILD catchable fight · TRAINER mono-type squad · no catches, better loot', 270, oy + view * cell + 48);
-      ctx.fillText('CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64);
+      fitCenter(ctx, 'WILD catchable fight · TRAINER mono-type squad · no catches, better loot', 270, oy + view * cell + 48, 516);
+      fitCenter(ctx, 'CHEST item, then a fight · REST heal+revive · ??? surprise · ELITE rare loot · GYM boss', 270, oy + view * cell + 64, 516);
     }
     // resolved events and egg ticks surface as a toast over the island
     if (this.mapMsgT > 0 && this.mapMsg) {
