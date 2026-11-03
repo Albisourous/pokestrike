@@ -764,7 +764,7 @@ export const BAG_ITEMS: BagItem[] = [
     // tools.roll is live before bag items apply; on resume the re-applied
     // +1 is stomped by the saved tools blob — no double-charge
     apply: (b) => { b.tools.roll += 1; },
-    perTier: (b) => { b.tools.ban += 1; },
+    perTier: (b) => { b.tools.roll += 1; },
   },
   {
     id: 'x-attack', name: 'X Attack', item: 'x-attack',
@@ -818,13 +818,12 @@ const RELIC_TYPE: Record<string, PokeType> = {
   'sharp-beak': 'flying', 'spell-tag': 'ghost', 'twisted-spoon': 'psychic',
   'black-belt': 'fighting', 'silk-scarf': 'normal',
 };
-export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>, ban?: Set<string>, count = 3): Perk[] {
+export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<string>, count = 3): Perk[] {
   const pool = PERKS.filter(
     (p) =>
       (p.minRank == null || p.minRank <= rank) &&
       (!p.id.startsWith('type-') || !types || types.has(p.id.slice(5))) &&
-      (!(p.id in RELIC_TYPE) || !types || types.has(RELIC_TYPE[p.id])) &&
-      !ban?.has(p.id), // banished ids stay out of every board for the rest of the run
+      (!(p.id in RELIC_TYPE) || !types || types.has(RELIC_TYPE[p.id])),
   );
   const out: Perk[] = [];
   for (let i = 0; i < count && pool.length; i++) {
@@ -835,8 +834,8 @@ export function rollPerks(rng: () => number, cap = 3, rank = 0, types?: Set<stri
       cands = pool.filter((p) => p.rarity === TIERS[tier]);
       if (cands.length) break;
     }
-    // every surviving perk can sit above the rolled tier after heavy
-    // banishing — an empty trickle would push undefined and eat pool's tail
+    // every surviving perk can sit above the rolled tier late in a drained
+    // pool — an empty trickle would push undefined and eat pool's tail
     if (!cands.length) break;
     const pick = cands[Math.floor(rng() * cands.length)];
     out.push(pick);

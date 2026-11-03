@@ -35,14 +35,16 @@ export const LINE_B = 11; // fontB(9) line rhythm; stat lines step ~20
 // public/fonts; Roboto Condensed and monospace are the failure fallbacks.
 const PIXEL_FONT = 'ps2p, rc, monospace';
 const FONT_SCALE = 1.4;
-// legibility floor: 14 logical px ≈ 10 physical px on a 390px-wide phone
-// (scale 0.72) — just under iOS's 11pt secondary-text bar. fitFont/fitFontB
+// legibility floor, verified on real phones: 10 logical px ≈ 7pt and
+// 12 ≈ 8.5pt on a 390pt-wide screen (scale 0.72) — the pixel face can't
+// absorb more without wrecking chrome, the dense face can. fitFont/fitFontB
 // still return the raw fit size, so their <=6 "can't fit" sentinels keep
-// working even though the drawn font never dips below this.
+// working even though the drawn font never dips below these.
 const PX_MIN = 10;
+const PX_MIN_B = 12;
 export const font = (px: number) => `400 ${Math.round(Math.max(px, PX_MIN) * FONT_SCALE)}px ${PIXEL_FONT}`;
 // dense small print stays in the narrow face — the pixel font runs ~1.7x wider
-export const fontB = (px: number) => `700 ${Math.round(Math.max(px, PX_MIN) * FONT_SCALE)}px rc, monospace`;
+export const fontB = (px: number) => `700 ${Math.round(Math.max(px, PX_MIN_B) * FONT_SCALE)}px rc, monospace`;
 
 // --- internals ------------------------------------------------------------
 export interface Rect {
@@ -212,11 +214,11 @@ export function uiRow(
   ctx.font = fontB(8);
   const rightW = o.right ? meas(ctx, o.right) + 10 : 0;
   ufit(ctx, label, o.px ?? 9, r.w - (cur ? 26 : 16) - rightW);
-  ctx.fillText(label, cx, r.y + r.h / 2 + (o.sub ? -1 : 4));
+  ctx.fillText(label, cx, r.y + r.h / 2 + (o.sub ? -3 : 4));
   if (o.sub) {
     ctx.font = fontB(6.5);
     ctx.fillStyle = o.on ? '#a8b0d0' : o.hot ? INK_SOFT : INK_FAINT;
-    ctx.fillText(o.sub, cx, r.y + r.h / 2 + 12);
+    ctx.fillText(o.sub, cx, r.y + r.h / 2 + 13);
   }
   if (o.right) {
     ctx.textAlign = 'right';

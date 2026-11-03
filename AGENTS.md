@@ -90,6 +90,7 @@ server, 540×960 letterboxed logical space, custom circle physics.
   squad or swapping stops being a choice.
 - Arena geometry is normalized (`nx`/`ny` 0..1) so stages are resolution-free.
 - Two UI faces: `font()` = Press Start 2P pixel display (vendored `public/fonts/PressStart2P-Regular.ttf`), `fontB()` = Roboto Condensed for dense stat/small print — pixel type runs ~1.7x wider, so cramped readouts use `fontB` and long labels `fitFont()`.
+- Text never spills its chrome: `font()`/`fontB()` floor at `PX_MIN×FONT_SCALE`, so `fitFont`/`fitFontB` can "fit" while still overflowing — finish with `fitCenter` (squeeze), an ellipsize (`trimEnd` before `…`), or a wider rect. Verify UI changes with a real 540×960 playwright screenshot, not by eyeballing the numbers.
 - New battle rooms are data: author a 9×11 char grid in `ROOM_LAYOUTS`
   (mirror-symmetric, anchors on floor, clear lanes — the loader validates
   dims and P→E/anchor reachability). First three entries stay gentle for

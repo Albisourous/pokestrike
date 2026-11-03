@@ -216,7 +216,7 @@ const EVENTS: GameEvent[] = [
             run: (bb) => {
               if (bb.score < 300) return { note: 'HE SCOWLED · "COME BACK RICHER."', skip: true };
               bb.score -= 300;
-              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
               if (!p) return { note: 'THE BOX WAS EMPTY. HE VANISHED.', skip: true };
               bb.grantPerk(p);
               return { note: `THE BOX HELD ${p.name.toUpperCase()}!`, skip: true };
@@ -350,7 +350,7 @@ const EVENTS: GameEvent[] = [
                 bb.score += 400;
                 return { note: 'BARS LINE UP · THE SPIN PAID DOUBLE! +400 SCORE.', skip: true };
               }
-              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
               if (!p) {
                 bb.score += 600;
                 return { note: 'THE REELS JAMMED ON 777 · +600 SCORE.', skip: true };
@@ -776,7 +776,7 @@ const EVENTS: GameEvent[] = [
           {
             label: 'TAKE IT · FIGHT THE HOUSE',
             run: (bb) => {
-              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan, 1)[0];
+              const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), 1)[0];
               if (p) bb.grantPerk(p);
               const boss = pickWild(bb.roll, bb.depth + 2, true);
               const escorts: WaveSpawn[] = [
@@ -952,7 +952,7 @@ export function martStock(b: Battle, prompt = 'POKÉ MART · WHAT\'LL IT BE?', s
       run: (bb) => {
         // roll the goods before charging — a blind shelf shouldn't take
         // score when there's nothing in the bag
-        const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes(), bb.perkBan)[0];
+        const p = rollPerks(bb.roll, 1, bb.rank, bb.teamTypes())[0];
         if (!p) return reprompt(bb, 'SOLD OUT. THE CLERK SHRUGGED.');
         if (bb.score < price(300)) return reprompt(bb, 'NOT ENOUGH SCORE.');
         bb.score -= price(300);

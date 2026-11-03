@@ -295,7 +295,8 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   ctx.font = fontB(13);
   ctx.fillStyle = INK_SOFT;
   ctx.fillText(`/${DEX_ALL.length}`, dex.x + 20 + digitsW, dex.y + 72);
-  const bx = dex.x + 14, by = dex.y + 82, bw = dex.w - 28, bh = 12;
+  // 16px bar: the fontB floor's 12px caps sit inside the fill, not over it
+  const bx = dex.x + 14, by = dex.y + 80, bw = dex.w - 28, bh = 16;
   roundRect(ctx, bx, by, bw, bh, 6);
   ctx.fillStyle = '#e8e8e0';
   ctx.fill();
@@ -308,7 +309,7 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
   ctx.font = fontB(9);
   ctx.textAlign = 'right';
   ctx.fillStyle = INK;
-  ctx.fillText(`${Math.round(dexN / DEX_ALL.length * 100)}%`, bx + bw - 5, by + 10);
+  ctx.fillText(`${Math.round(dexN / DEX_ALL.length * 100)}%`, bx + bw - 5, by + 13);
   ctx.textAlign = 'left';
   ctx.font = fontB(12);
   ctx.fillStyle = INK;

@@ -2205,67 +2205,29 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(b.phase === 'map', 'the pick exits straight to the map');
 }
 
-// --- offer tools: REROLL re-deals the board, BANISH culls the run -----------
+// --- offer tools: REROLL re-deals the board ---------------------------------
 {
   const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(3));
   (b as any).spawnWave(0);
-  ok(b.rerollOffers() === false && b.toggleBanish() === false, 'tools stay shut off the reward board');
+  ok(b.rerollOffers() === false, 'tools stay shut off the reward board');
   (b as any).enterReward();
   const dealt = b.rewardOffers;
-  ok(dealt.length === 3 && b.tools.roll === 1 && b.tools.ban === 1, 'fresh board, both charges stocked');
+  ok(dealt.length === 3 && b.tools.roll === 1, 'fresh board, the charge stocked');
   ok(b.rerollOffers() === true && b.rewardOffers !== dealt, 'reroll re-deals the offers');
   ok(b.rewardOffers.length === 3 && b.tools.roll === 0, 'reroll spends the roll charge (1 → 0)');
   ok(b.rerollOffers() === false && b.rewardOffers.length === 3, 'out of charges — reroll refuses, board kept');
-  ok(b.toggleBanish() === true && b.banArmed === true, 'banish arms the next card tap');
-  const culled = b.rewardOffers[0].id;
-  ok(b.banishPerk(0) === culled && b.perkBan.has(culled), `banish culls ${culled} from the run's pool`);
-  ok(b.rewardOffers.length === 2 && b.rewardOffers.every((p) => p.id !== culled), 'the card leaves, the rest stay');
-  ok(b.tools.ban === 0 && b.banArmed === false, 'banish spends the charge and disarms');
-  ok(b.toggleBanish() === false, 'out of charges — banish refuses to arm');
-  // emptying the board resolves the reward — they leave empty-handed
-  b.tools.ban = 2;
-  b.toggleBanish();
-  b.banishPerk(0);
-  b.toggleBanish();
-  b.banishPerk(0);
-  ok(b.rewardOffers.length === 0 && b.phase === 'map', 'banishing the whole board exits to the map');
 }
 
-// --- banished perks stay gone: rolls, fresh boards, the save file -----------
+// --- tool charges + bag effects ride the mid-run save; v1 saves re-stock ----
 {
-  // rollPerks honors the ban set directly
-  const ban = new Set(['hpup', 'potion', 'moomoo', 'sash', 'mball']);
-  let rolled = 0,
-    leaked = 0;
-  for (let s = 1; s <= 20; s++) {
-    for (const p of rollPerks(mulberry32(s), 3, 9, undefined, ban)) {
-      rolled++;
-      if (ban.has(p.id)) leaked++;
-    }
-  }
-  ok(rolled > 0 && leaked === 0, `${rolled} rolled cards, ${leaked} banished ids`);
-
-  // enterReward routes through the same filter — a seeded ban survives re-deals
-  const b = new Battle(arena, team(), makeStage(4, 'T'), mulberry32(8));
-  for (const id of ban) b.perkBan.add(id);
-  const seen: string[] = [];
-  for (let i = 0; i < 5; i++) {
-    (b as any).spawnWave(0);
-    (b as any).enterReward();
-    seen.push(...b.rewardOffers.map((p) => p.id));
-    b.advanceReward(); // back to the map — the next wave pays a fresh board
-  }
-  ok(seen.length > 0 && seen.every((id) => !ban.has(id)), `5 re-dealt boards honor the ban list (${seen.length} cards)`);
-
-  // charges + bans ride the mid-run save (v2); v1 saves re-stock the tools
+  // charges bank into the save; a spent roll stays spent on resume
   const a = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(3));
   a.tools.roll = 0;
-  a.perkBan.add('sash');
   const s = JSON.parse(JSON.stringify(a.snapshot()!)); // real serialization
-  ok(s.tools.roll === 0 && s.tools.ban === 1 && s.perkBan.join() === 'sash', 'snapshot banks spent charges + the ban list');
+  ok(s.tools.roll === 0, 'snapshot banks spent charges');
   const c = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(99));
   c.applySnapshot(s);
-  ok(c.tools.roll === 0 && c.tools.ban === 1 && c.perkBan.has('sash'), 'tools + bans survive the resume');
+  ok(c.tools.roll === 0, 'charges survive the resume');
   // the banked ult charge rides the save too; old saves re-arm the counter
   a.ultIn = 4;
   const su = JSON.parse(JSON.stringify(a.snapshot()!));
@@ -2278,10 +2240,9 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   vu.applySnapshot(su);
   ok(vu.ultIn === ULT_SHOTS, 'an older save re-arms the ult counter');
   delete s.tools;
-  delete s.perkBan;
   const v1 = new Battle(arena, team(), makeStage(7, 'T'), mulberry32(7));
   v1.applySnapshot(s);
-  ok(v1.tools.roll === 1 && v1.tools.ban === 1 && v1.perkBan.size === 0, 'a v1 save re-stocks the tools');
+  ok(v1.tools.roll === 1, 'a v1 save re-stocks the tools');
 
   // bag effects ride the same resume: field deltas replay, armed flags keep
   // their exact spent/armed state, and durable items don't double-apply
@@ -3356,6 +3317,23 @@ for (const [seed, asc] of [[99, 0], [2024, 0], [777, 0], [5150, 5]] as const) {
   const dualFoe = (spawned as any).makeEnemy({ def: speciesById(93)!, nx: 0.5, ny: 0.5, lvl: 10 }, 0);
   ok(dualFoe.clocks.length === 2 && dualFoe.clocks[1].move === 'SLUDGE WAVE' && dualFoe.clocks[1].t === dual[1].first,
     'spawned dual-type foe fields both wind-ups');
+
+  // MS "combo just": a bump early in the flight pays the timed-combo bonus
+  const jb = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (jb as any).spawnWave(0);
+  const jp = (jb as any).players[0];
+  jp.cd = 0;
+  (jb as any).shotT = (jb as any).time;
+  (jb as any).bumpAlly(jp, jp);
+  const earlyJust = (jb as any).texts.some((t: any) => t.text === 'JUST!');
+  const lb = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
+  (lb as any).spawnWave(0);
+  const lp = (lb as any).players[0];
+  lp.cd = 0;
+  (lb as any).shotT = (lb as any).time - 99;
+  (lb as any).bumpAlly(lp, lp);
+  ok(earlyJust && !(lb as any).texts.some((t: any) => t.text === 'JUST!'),
+    'early-flight bump pops JUST!, a late bump stays quiet');
 
   const b = new Battle(arena, team(), makeStage(31, 'T'), mulberry32(11));
   (b as any).spawnWave(0);
@@ -5340,8 +5318,7 @@ ok(moveOf(9999, 'fire') === MOVE_NAME.fire, 'unknown id falls back to type move'
   ok(labbed.players[0].maxHp > unlabbed.players[0].maxHp, 'HP UP levels raise fielded maxHp');
   ok(Math.abs(labbed.dmgMult - unlabbed.dmgMult * 1.05) < 1e-9, 'PROTEIN levels raise hit damage');
   ok(labbed.teamLuck() - unlabbed.teamLuck() === 4, 'LUCKY EGG levels feed team luck');
-  ok(labbed.tools.roll - unlabbed.tools.roll === 2 && labbed.tools.ban - unlabbed.tools.ban === 1,
-    'DIRE HIT/QUICK CLAW levels seed tool charges');
+  ok(labbed.tools.roll - unlabbed.tools.roll === 2, 'DIRE HIT levels seed reroll charges');
   ok(labbed.perkOfferN === unlabbed.perkOfferN + 1, 'MASTER BALL deals a fourth perk card');
   ok(labbed.reviveToken && !unlabbed.reviveToken, 'REVIVE level arms the token');
   ok(Math.abs((labbed as any).starMult - 1.1) < 1e-9, 'AMULET COIN levels raise star payout');

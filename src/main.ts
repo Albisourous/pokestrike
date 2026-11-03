@@ -67,7 +67,6 @@ import {
   charmSkipRect,
   charmCardRect,
   TOOL_ROLL,
-  TOOL_BAN,
   drawToolRow,
   REWARD_TEAM,
   REWARD_CATCH,
@@ -192,7 +191,7 @@ const drawFailCard = (c: CanvasRenderingContext2D, title: string, msg: string, r
   c.fillStyle = '#fff';
   // crude mid-word wrap — detail beats pretty on a fail card
   const m = msg.slice(0, 150);
-  for (let i = 0; i < Math.ceil(m.length / 50); i++) c.fillText(m.slice(i * 50, (i + 1) * 50), W / 2, H / 2 - 22 + i * 14);
+  for (let i = 0; i < Math.ceil(m.length / 50); i++) c.fillText(m.slice(i * 50, (i + 1) * 50), W / 2, H / 2 - 22 + i * 18);
   if (retry) {
     c.fillStyle = '#f8d030';
     c.fillRect(BOOT_RETRY.x, BOOT_RETRY.y, BOOT_RETRY.w, BOOT_RETRY.h);
@@ -504,16 +503,6 @@ function draftOffers(): number[] {
 const rewardPick = (i: number) => {
   if (!battle || i >= battle.rewardOffers.length) return;
   const ids = battle.rewardOffers.map((p) => p.id);
-  // an armed banish turns the card tap into a pool kill instead of a pick
-  if (battle.banArmed) {
-    const id = battle.banishPerk(i);
-    if (id != null) {
-      statOffer('perkban', ids, id);
-      sfx('ui');
-      inputLockT = t + 0.25; // an emptied board advances — the next screen owns a beat
-    }
-    return;
-  }
   statOffer('perks', ids, battle.rewardOffers[i].id);
   popPick(perkCardRect(i, battle.rewardOffers.length), t, { perk: battle.rewardOffers[i] });
   battle.pickPerk(i);
@@ -597,7 +586,7 @@ const draftPick = (i: number) => {
     return;
   }
   // the charm pick gates the climb — ASC 3+ pays out a second charm
-  startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes(), undefined, battle.perkOfferN); // lab 'fourth' deals a fourth charm card too
+  startOffers = rollPerks(runRng, 3, rank(), battle.teamTypes(), battle.perkOfferN); // lab 'fourth' deals a fourth charm card too
   charmBonus = battle.asc >= 3;
   charmPicks = charmBonus ? 2 : 1;
   scene = 'charm';
@@ -1560,16 +1549,10 @@ canvas.addEventListener('pointerdown', (e) => {
         sfx('ui', 0.8); // the skip still clicks — low pitch, it cut the show short
         return;
       }
-      // the tool row: reroll re-deals, banish arms a card tap — boards are
-      // pick-one only now, no cash-out
+      // the tool row: reroll re-deals — boards are pick-one only now, no
+      // cash-out
       if (inRect(p.x, p.y, TOOL_ROLL)) {
         rewardReroll();
-        return;
-      }
-      if (inRect(p.x, p.y, TOOL_BAN)) {
-        const wasArmed = battle.banArmed;
-        if (battle.toggleBanish() !== wasArmed) sfx('ui'); // arming and standing down both click
-        else sfx('ui', 0.6); // out of banishes — a denied tap still answers
         return;
       }
       for (let i = 0; i < battle.rewardOffers.length; i++) {
@@ -1861,7 +1844,7 @@ addEventListener('keydown', (e) => {
     return;
   }
   // the dealt boards take keys too — [1..4] picks (the lab's fourth card is
-  // real), or banishes when armed; R rerolls, Z arms banish.
+  // real); R rerolls.
   // The same 250ms lock the pointer layer eats applies here, or a key timed
   // to the board turnover double-fires into the next screen.
   if (t < inputLockT) return;
@@ -1890,11 +1873,6 @@ addEventListener('keydown', (e) => {
     !battle.evoChoice &&
     rewardLanded >= REEL_STOPS.length
   ) {
-    if (e.key === 'Escape' && battle.banArmed) {
-      battle.toggleBanish();
-      sfx('ui');
-      return;
-    }
     const i = ['1', '2', '3', '4'].indexOf(e.key);
     if (i >= 0 && i < battle.rewardOffers.length) {
       rewardPick(i);
@@ -1902,12 +1880,6 @@ addEventListener('keydown', (e) => {
     }
     if (e.key === 'r' || e.key === 'R') {
       rewardReroll();
-      return;
-    }
-    if (e.key === 'z' || e.key === 'Z') {
-      const wasArmed = battle.banArmed;
-      if (battle.toggleBanish() !== wasArmed) sfx('ui'); // arming and standing down both click
-      else sfx('ui', 0.6); // out of banishes — a denied key still answers
       return;
     }
   }
@@ -2462,7 +2434,7 @@ function render() {
             battle.perkIds,
             battle.boxPing,
           );
-          if (!menuOpen && !battle.evoChoice) drawToolRow(ctx, battle.tools, battle.banArmed, t);
+          if (!menuOpen && !battle.evoChoice) drawToolRow(ctx, battle.tools);
           // the capture ritual renders inside battle's own pass — the reward
           // dim swallows it, so replay the ball layer clamped into the open
           // band under the tool row (its anchor sits under the cards)

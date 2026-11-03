@@ -263,15 +263,15 @@ export function charmSkipRect(n: number) {
 export const REWARD_TEAM = { x: W / 2 - 95, y: 872, w: 190, h: 40 };
 // the NEW CATCH card doubles as a button — it opens the team panel
 export const REWARD_CATCH = { x: W / 2 - 190, y: 158, w: 380, h: 78 };
-// offer-tool row under the perk cards — reroll / banish pills. (The old
+// offer-tool row under the perk cards — the lone reroll pill. (The old
 // SKIP pill is gone: every board must be picked.) perkCardRect ends at
 // 580; the held-items strip yields to just below these. The tool row is
 // a thumb target first — 46px tall, hugged under the cards
-export const TOOL_ROLL = { x: 55, y: 588, w: 190, h: 46 };
-export const TOOL_BAN = { x: W - 55 - 190, y: 588, w: 190, h: 46 };
+export const TOOL_ROLL = { x: W / 2 - 95, y: 588, w: 190, h: 46 };
 // The box is a fixed window into a horizontally scrolling row — catches can
-// outgrow 540px, so the row scrolls instead of centering off-screen.
-export const BOX_STRIP = { x: 24, y: 528, w: W - 48, h: 64 };
+// outgrow 540px, so the row scrolls instead of centering off-screen. Inset
+// matches the held-item rows so edge cards clip inside the panel frame.
+export const BOX_STRIP = { x: 40, y: 528, w: W - 80, h: 64 };
 const BOX_SLOT = 64;
 const BOX_GAP = 10;
 export function boxScrollMax(n: number) {
@@ -570,6 +570,22 @@ export function fitFontB(ctx: CanvasRenderingContext2D, label: string, px: numbe
   return size;
 }
 
+// fitFont/fitFontB stop at the PX_MIN legibility floor — a "fitted" label can
+// still be wider than its slot. Squeeze it horizontally into the box rather
+// than let it spill (draws centered; expects textAlign 'center')
+export function fitCenter(ctx: CanvasRenderingContext2D, text: string, cx: number, y: number, maxW: number) {
+  const w = measureW(ctx, text);
+  if (w <= maxW) {
+    ctx.fillText(text, cx, y);
+    return;
+  }
+  ctx.save();
+  ctx.translate(cx, y);
+  ctx.scale(maxW / w, 1);
+  ctx.fillText(text, 0, 0);
+  ctx.restore();
+}
+
 // the stat-derived role as a tag — 'wild' reads BALANCED, the draft cards'
 // word; a flagged medic earns its star wherever the tag shows
 const roleTag = (def: SpeciesDef) => {
@@ -641,10 +657,10 @@ export function button(ctx: CanvasRenderingContext2D, r: { x: number; y: number;
   // fitFont floors at 6px — a still-long label ellipsizes rather than spill
   const fit = fitFont(ctx, label, 13, r.w - 20 - ic);
   let lab = label;
-  if (fit <= 6) while (lab.length > 3 && measureW(ctx, lab + '…') > r.w - 20 - ic) lab = lab.slice(0, -1);
+  if (fit <= 6) while (lab.length > 3 && measureW(ctx, lab.trimEnd() + '…') > r.w - 20 - ic) lab = lab.slice(0, -1);
   ctx.textAlign = 'center';
   ctx.fillStyle = on ? INK : INK_FAINT;
-  ctx.fillText(fit <= 6 && lab !== label ? lab + '…' : label, r.x + ic + (r.w - ic) / 2, r.y + r.h / 2 + 6);
+  ctx.fillText(fit <= 6 && lab !== label ? lab.trimEnd() + '…' : label, r.x + ic + (r.w - ic) / 2, r.y + r.h / 2 + 6);
   if (icon) {
     void loadItem(icon);
     const img = itemSprite(icon);
@@ -777,7 +793,7 @@ export function pill(
   ctx.textAlign = 'center';
   ctx.fillStyle = tc;
   fitFont(ctx, o.label, o.sub ? 9 : 10, r.w - 24 - bw);
-  ctx.fillText(o.label, r.x + r.w / 2 - bw / 2, cy + (o.sub ? -1 : 5));
+  fitCenter(ctx, o.label, r.x + r.w / 2 - bw / 2, cy + (o.sub ? -1 : 5), r.w - 24 - bw);
   if (o.sub) {
     ctx.font = fontB(10);
     ctx.globalAlpha = 0.7;
@@ -786,13 +802,13 @@ export function pill(
   }
   if (o.badge) {
     const bx = r.x + r.w - bw - 8;
-    roundRect(ctx, bx, cy - 7, bw, 14, 7);
+    roundRect(ctx, bx, cy - 9, bw, 18, 9); // 18px: the fontB floor's caps stay inside the chip
     ctx.fillStyle = 'rgba(42,36,64,0.4)';
     ctx.fill();
     ctx.font = fontB(10);
     ctx.fillStyle = tc;
     ctx.textAlign = 'left';
-    ctx.fillText(o.badge, bx + 5, cy + 3.5);
+    ctx.fillText(o.badge, bx + 5, cy + 4.5);
   }
   ctx.textAlign = pa;
 }
@@ -2356,7 +2372,7 @@ export function drawHatch(
   ctx.textAlign = 'center';
   ctx.font = fontB(10);
   ctx.fillStyle = INK_SOFT;
-  ctx.fillText('pulled or sparked mons join the dex + future drafts · tap outside to close', W / 2, r.y + r.h - 12);
+  fitCenter(ctx, 'pulled or sparked mons join the dex + future drafts · tap outside to close', W / 2, r.y + r.h - 12, W - 40);
   }
 
   // the pull show rides on top — dim the shop, modal carries the reveal
@@ -3782,15 +3798,9 @@ export function drawReward(
   }
 }
 
-// The offer-board tool row: REROLL re-deals the offers, BANISH arms then
-// culls the next card tapped — that perk stays out of every board left in
-// the run. Charges are per-run — main.ts hit-tests TOOL_* and owns state.
-export function drawToolRow(
-  ctx: CanvasRenderingContext2D,
-  tools: { roll: number; ban: number },
-  banArmed: boolean,
-  t: number, // frame time in seconds — drives the armed pulse
-) {
+// The offer-board tool row: REROLL re-deals the offers. Charges are
+// per-run — main.ts hit-tests TOOL_* and owns state.
+export function drawToolRow(ctx: CanvasRenderingContext2D, tools: { roll: number }) {
   pill(ctx, TOOL_ROLL, {
     c: '#3a8cff',
     cd: '#2563d8',
@@ -3800,22 +3810,6 @@ export function drawToolRow(
     sub: HAS_KEYS ? '[R]' : undefined,
     disabled: tools.roll <= 0,
   });
-  ctx.save();
-  // armed reads as their .armed state — a pulsing red waiting on a card
-  // tap; the label turns into the instruction so it can't misread
-  if (banArmed) ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 8);
-  pill(ctx, TOOL_BAN, {
-    c: '#ff5a5f',
-    cd: '#e0303e',
-    tc: '#fff',
-    label: banArmed ? 'TAP A CARD' : 'BANISH',
-    badge: banArmed ? undefined : `×${tools.ban}`,
-    sub: banArmed ? 'culls it all run' : HAS_KEYS ? '[Z]' : undefined,
-    disabled: tools.ban <= 0,
-  });
-  // the armed cursor — the handheld's ▶ parked on the hot row
-  if (banArmed) cursorTri(ctx, TOOL_BAN.x + 13, TOOL_BAN.y + TOOL_BAN.h / 2 - 1, t, '#fff');
-  ctx.restore();
 }
 
 // The roster manager — box strip + team slots with tap-to-swap. The
@@ -3899,7 +3893,7 @@ function drawRoster(
     ctx.font = fontB(10);
     ctx.fillStyle = ko ? INK_FAINT : TYPE_COLOR[def.type];
     fitFontB(ctx, def.name, 10, r.w - 6);
-    ctx.fillText(def.name, r.x + r.w / 2, card.y + 58);
+    fitCenter(ctx, def.name, r.x + r.w / 2, card.y + 58, r.w - 6);
     const lvl = boxLvl[i] ?? 1;
     const bl = bondLv(def.id);
     if (lvl > 1 || bl) {
@@ -3948,7 +3942,7 @@ function drawRoster(
     ctx.font = fontB(12);
     ctx.fillStyle = sel ? PARCH : INK;
     fitFontB(ctx, def.name, 12, card.w - 12);
-    ctx.fillText(def.name, card.x + card.w / 2, card.y + 17);
+    fitCenter(ctx, def.name, card.x + card.w / 2, card.y + 17, card.w - 12);
     const patch = { x: card.x + 6, y: card.y + 22, w: card.w - 12, h: 44 };
     drawBackdrop(ctx, patch, 8, 'meadow');
     const cx = card.x + card.w / 2;
@@ -3970,23 +3964,21 @@ function drawRoster(
     hpBar(ctx, card.x + 8, card.y + 70, card.w - 16, teamHp[i] ?? 1);
     const types: PokeType[] = def.type2 ? [def.type, def.type2] : [def.type];
     const typeGap = types.length > 1 ? 4 : 0;
-    const chipW = (card.w - 12 - typeGap) / types.length;
+    const chipW = (card.w - 8 - typeGap) / types.length;
     types.forEach((type, ti) => {
-      const x = card.x + 6 + ti * (chipW + typeGap);
+      const x = card.x + 4 + ti * (chipW + typeGap);
       const y = card.y + 76;
       roundRect(ctx, x, y, chipW, 16, 6);
       ctx.fillStyle = TYPE_COLOR[type];
       ctx.fill();
       ctx.font = fontB(10);
       ctx.fillStyle = '#fff';
-      const label = type.toUpperCase();
-      fitFontB(ctx, label, 10, chipW - 6);
-      ctx.fillText(label, x + chipW / 2, y + 12);
+      fitCenter(ctx, type.toUpperCase(), x + chipW / 2, y + 12, chipW - 6);
     });
     ctx.font = fontB(12);
     ctx.fillStyle = ko ? '#464e6e' : INK_FAINT;
-    fitFontB(ctx, abilityLabel(def), 12, card.w + 4);
-    ctx.fillText(abilityLabel(def), cx, card.y + card.h + 12);
+    fitFontB(ctx, abilityLabel(def), 12, card.w - 8);
+    fitCenter(ctx, abilityLabel(def), cx, card.y + card.h + 12, card.w - 8);
   });
   // the selected mon's super reads here — swapping is a move pick too
   const selDef = selBox >= 0 ? box[selBox] : selTeam >= 0 ? team[selTeam] : null;
@@ -4035,8 +4027,10 @@ export function drawCounterHint(ctx: CanvasRenderingContext2D, gimmick: typeof S
   ctx.restore();
 }
 // bottom row is a centered pair — CLOSE keeps its look, QUIT rides beside it
-export const MENU_CLOSE = { x: W / 2 - 184, y: 788, w: 180, h: 44 };
-export const MENU_QUIT = { x: W / 2 + 12, y: 788, w: 172, h: 44 };
+// QUIT is the wide half — 'QUIT TO TITLE' measures ~182px at the pixel font's
+// 14px floor, so a narrower pill would always spill
+export const MENU_CLOSE = { x: W / 2 - 216, y: 788, w: 200, h: 44 };
+export const MENU_QUIT = { x: W / 2 + 16, y: 788, w: 216, h: 44 };
 
 export function drawTeamMenu(
   ctx: CanvasRenderingContext2D,
@@ -4098,8 +4092,10 @@ export function drawTeamMenu(
     }
     ctx.textAlign = 'left';
     ctx.font = fontB(10);
-    let name = (perk ? perk.name : item).toUpperCase();
-    while (name.length > 3 && ctx.measureText(name + '…').width > r.w - 50) name = name.slice(0, -1);
+    const fullName = (perk ? perk.name : item).toUpperCase();
+    let name = fullName;
+    while (name.length > 3 && ctx.measureText(name.trimEnd() + '…').width > r.w - 50) name = name.slice(0, -1);
+    if (name !== fullName) name = name.trimEnd() + '…';
     const nw = ctx.measureText(name).width;
     ctx.fillStyle = INK;
     ctx.fillText(name, r.x + 42, r.y + 19);
@@ -5199,8 +5195,8 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     ctx.font = fontB(10);
     ctx.fillStyle = v.claimed ? '#464e6e' : ready ? INK_SOFT : INK_FAINT;
     let dsc = v.desc.toUpperCase();
-    while (dsc.length > 3 && ctx.measureText(dsc + '…').width > textR - tx) dsc = dsc.slice(0, -1);
-    ctx.fillText(dsc === v.desc.toUpperCase() ? dsc : dsc + '…', tx, r.y + 43);
+    while (dsc.length > 3 && ctx.measureText(dsc.trimEnd() + '…').width > textR - tx) dsc = dsc.slice(0, -1);
+    ctx.fillText(dsc === v.desc.toUpperCase() ? dsc : dsc.trimEnd() + '…', tx, r.y + 43);
     // the counter rides the label line — the slab is for the state
     const counter = `${v.have}/${v.n}`;
     fitFontB(ctx, counter, 18, 48);
@@ -5211,8 +5207,9 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
 
     // the progress track is the card's foot — a dark groove with the gold
     // ramp and the percent inked inside; it runs under the reward column
-    // but never beneath the slab
-    const br = { x: tx, y: r.y + r.h - 20, w: cr.x - 10 - tx, h: 12 };
+    // but never beneath the slab. 17px tall so the fontB floor's 12px
+    // caps fit inside instead of crowding the desc line above
+    const br = { x: tx, y: r.y + r.h - 25, w: cr.x - 10 - tx, h: 17 };
     roundRect(ctx, br.x, br.y, br.w, br.h, 6);
     ctx.fillStyle = '#0a0d18';
     ctx.fill();
@@ -5236,7 +5233,7 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     ctx.font = fontB(10);
     ctx.textAlign = 'center';
     ctx.fillStyle = frac >= 0.45 ? '#1b2140' : PAPER_HI;
-    ctx.fillText(`${Math.round(frac * 100)}%`, br.x + br.w / 2, br.y + 9);
+    ctx.fillText(`${Math.round(frac * 100)}%`, br.x + br.w / 2, br.y + 13);
     ctx.textAlign = 'left';
 
     // the reward reads as one cluster beside the slab — icon over name,
@@ -5321,10 +5318,10 @@ export function drawTasks(ctx: CanvasRenderingContext2D, views: TaskView[], tab:
     ctx.fillStyle = n > 0 ? INK_SOFT : INK_FAINT;
     // long names clip with an ellipsis — the font floor can't shrink to fit
     let nm = it.name.toUpperCase();
-    while (nm.length > 3 && ctx.measureText(nm + '…').width > r.w - 44) nm = nm.slice(0, -1);
-    ctx.fillText(nm === it.name.toUpperCase() ? nm : nm + '…', r.x + 38, r.y + 19);
+    while (nm.length > 3 && ctx.measureText(nm.trimEnd() + '…').width > r.w - 42) nm = nm.slice(0, -1);
+    ctx.fillText(nm === it.name.toUpperCase() ? nm : nm.trimEnd() + '…', r.x + 38, r.y + 19);
     ctx.fillStyle = n > 0 ? GOLD : INK_FAINT;
-    ctx.fillText(n > 0 ? `×${n}` : '·', r.x + 38, r.y + 33);
+    ctx.fillText(`×${n}`, r.x + 38, r.y + 33);
   }
 
   // the × chip rides centered on the wide close rect — the tap zone

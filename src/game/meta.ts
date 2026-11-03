@@ -835,7 +835,6 @@ export const LAB_UPGRADES: { id: string; name: string; icon: string; max: number
   { id: 'luck', name: 'LUCKY EGG', icon: 'lucky-egg', max: 4, desc: '+2 team luck /level', now: (l) => `+${2 * l} team luck`, costs: [20, 30, 45, 65] },
   { id: 'reroll', name: 'DIRE HIT', icon: 'dire-hit', max: 3, desc: '+1 reroll charge /level', now: (l) => `${1 + l} rerolls each run`, costs: [30, 45, 70] },
   { id: 'earnings', name: 'AMULET COIN', icon: 'amulet-coin', max: 3, desc: '+10% star earnings /level', now: (l) => `+${10 * l}% star earnings`, costs: [35, 50, 75] },
-  { id: 'ban', name: 'QUICK CLAW', icon: 'quick-claw', max: 2, desc: '+1 banish charge /level', now: (l) => `${1 + l} banishes each run`, costs: [30, 45] },
   { id: 'fourth', name: 'MASTER BALL', icon: 'master-ball', max: 1, desc: 'perk boards offer 4 cards', now: () => 'perk boards deal 4 cards', costs: [200] },
   { id: 'revive', name: 'REVIVE', icon: 'revive', max: 1, desc: 'first KO each run revives at 50% HP', now: () => 'first KO revives at 50%', costs: [250] },
 ];
@@ -928,7 +927,7 @@ export function bankBond(entries: { id: number; pts: number }[]): { ups: { id: n
 // --- save versioning: migrate once at boot so readers stay dumb ------------
 // pk_ver stamps the save schema — bump SAVE_VER and add a step whenever a
 // pk_* shape changes, instead of coercing old data on every read.
-// v2: RunSave gains tools/perkBan — reader defaults cover v1 saves,
+// v2: RunSave gains tools — reader defaults cover v1 saves,
 // no data transform needed below
 // v3: RunSave gains eggIn/eggJustLaid — parked runs get defaults below
 // v4: RunSave gains reviveUsed/starsRun — parked runs get defaults below
@@ -1049,23 +1048,22 @@ export const itemTierRoll = (): string | null => {
 interface Stats {
   draft: Record<string, [number, number]>; // species id -> [taken, offered]
   perks: Record<string, [number, number]>; // perk id -> [taken, offered]
-  perkban: Record<string, [number, number]>; // perk id -> [banished, offered] — kept apart so perk pick rates stay clean
   pulls: Record<string, [number, number]>; // species id -> [dupes, total] — the hatcher's dupe rate
   deaths: Record<string, number>; // stage -> runs that ended there
   wins: number;
   runs: number;
 }
-let memStats: Stats = { draft: {}, perks: {}, perkban: {}, pulls: {}, deaths: {}, wins: 0, runs: 0 };
+let memStats: Stats = { draft: {}, perks: {}, pulls: {}, deaths: {}, wins: 0, runs: 0 };
 
 const stats = (): Stats => {
   const raw = load<Stats>('pk_stats');
   if (!raw || typeof raw !== 'object' || !raw.draft || typeof raw.draft !== 'object') return memStats;
   // the draft check only proves the oldest key — stored blobs predate the
-  // ledgers added since (perkban, pulls, deaths, the counters), so every
+  // ledgers added since (pulls, deaths, the counters), so every
   // field a writer touches gets normalized here, once, for all of them.
   // Wrong-type fields (perks: 5, deaths: "x") survive ??= — then a writer's
   // subscript-assign throws on the primitive, so each ledger re-checks type
-  for (const k of ['perks', 'perkban', 'pulls', 'deaths'] as const) {
+  for (const k of ['perks', 'pulls', 'deaths'] as const) {
     const v = raw[k];
     if (!v || typeof v !== 'object') raw[k] = {};
   }
@@ -1075,7 +1073,7 @@ const stats = (): Stats => {
 };
 
 // one call per offer board shown — taken=null when the player skips it
-export function statOffer(kind: 'draft' | 'perks' | 'perkban', offered: (string | number)[], taken: string | number | null) {
+export function statOffer(kind: 'draft' | 'perks', offered: (string | number)[], taken: string | number | null) {
   const s = stats(); // every ledger key is normalized inside stats()
   for (const id of offered) {
     // a stored entry that isn't a [taken, offered] pair ({"25": 5}) re-seats
@@ -1125,8 +1123,7 @@ export interface RunSave {
   boxLvl: number[];
   perks: string[]; // perk ids — re-applied on resume
   heldItems: string[];
-  tools: { roll: number; ban: number }; // offer-tool charges left this run
-  perkBan: string[]; // perk ids banished this run — stay out of every board
+  tools: { roll: number }; // offer-tool charges left this run
   bag?: string[]; // bag item ids replayed on resume (durable ones filtered out)
   masterArmed?: boolean; // armed one-shot flags save verbatim — a spent ball stays spent
   ashArmed?: boolean;
@@ -1214,9 +1211,7 @@ export function runSave(): RunSave | null {
     Array.isArray(s.perks) &&
     Array.isArray(s.heldItems) &&
     (s.bag == null || Array.isArray(s.bag)) &&
-    (s.perkBan == null || Array.isArray(s.perkBan)) &&
-    (s.tools == null ||
-      (typeof s.tools === 'object' && Number.isFinite(s.tools.roll) && Number.isFinite(s.tools.ban))) &&
+    (s.tools == null || (typeof s.tools === 'object' && Number.isFinite(s.tools.roll))) &&
     (s.eggIn == null || Number.isFinite(s.eggIn)) &&
     (s.daycare == null ||
       (typeof s.daycare === 'object' && Number.isFinite(s.daycare.id) && Number.isFinite(s.daycare.back))) &&
