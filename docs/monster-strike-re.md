@@ -11,10 +11,11 @@ We don't port them line for line.
 
 ## Where the RE files live
 
-Everything stays off-repo, on Albin's Mac under `~/Documents/MonsterStrike/`. Reuse it instead of
-re-extracting or re-decompiling.
+Everything lives in the repo at `re/` (gitignored — local machine only, extracted game data never
+commits). Reuse it instead of re-extracting or re-decompiling. The CIA stays at
+`~/Documents/MonsterStrike/Monster Strike (Japan).cia`.
 
-| What | Path (under `~/Documents/MonsterStrike/re/`) |
+| What | Path (under `re/`) |
 |---|---|
 | ExeFS `code.bin` | `exefs/` |
 | RomFS (stage CSVs, `2d/bg/btl*.arc`, `2d/ui/battle*`) | `romfs/` |
