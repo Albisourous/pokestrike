@@ -12,6 +12,12 @@ export interface TraitUnit {
   def: { type: PokeType; type2?: PokeType };
 }
 
+// The live tally — teamTraits is the single writer and battle calls it on
+// every roster shift, so stat formulas can read trait strength without a
+// fresh call site. Anything poking battle.traits directly (smoke) skips it.
+const ACTIVE = new Map<PokeType, number>();
+export const traitTier = (ty: PokeType) => ACTIVE.get(ty) ?? 0;
+
 export function teamTraits(players: TraitUnit[]): Map<PokeType, number> {
   const counts = new Map<PokeType, number>();
   for (const p of players) {
@@ -25,11 +31,14 @@ export function teamTraits(players: TraitUnit[]): Map<PokeType, number> {
     const tier = c >= TRAIT_TIERS[2] ? 3 : c >= TRAIT_TIERS[1] ? 2 : c >= TRAIT_TIERS[0] ? 1 : 0;
     if (tier) out.set(t, tier);
   }
+  ACTIVE.clear();
+  for (const [t, tier] of out) ACTIVE.set(t, tier);
   return out;
 }
 
 // One mechanic per type, scaled by tier — every line lands on an existing
-// battle modifier so traits need no new systems.
+// battle modifier so traits need no new systems. Flying's second string is
+// a team Tailwind folded into launchMult (it reads traitTier, above).
 export const TRAIT_DESC: Record<PokeType, string[]> = {
   fire:     ['+10% damage dealt', '+20% damage dealt', '+30% damage dealt'],
   water:    ['team heals 3% after each shot', 'team heals 6% after each shot', 'team heals 9% after each shot'],
@@ -38,7 +47,7 @@ export const TRAIT_DESC: Record<PokeType, string[]> = {
   psychic:  ['10% of each hit splashes', '20% of each hit splashes', '30% of each hit splashes'],
   rock:     ['team takes 7% less damage', 'team takes 14% less damage', 'team takes 21% less damage'],
   poison:   ['hits 25% chance to poison', 'hits 50% chance to poison', 'hits 75% chance to poison'],
-  flying:   ['7% chance enemy attacks miss', '14% chance enemy attacks miss', '21% chance enemy attacks miss'],
+  flying:   ['foes whiff 7% · launches +5%', 'foes whiff 14% · launches +10%', 'foes whiff 21% · launches +15%'],
   fighting: ['a fallen ally grants +5% power', 'a fallen ally grants +10% power', 'a fallen ally grants +15% power'],
   ghost:    ['execute foes under 6% HP', 'execute foes under 12% HP', 'execute foes under 18% HP'],
   normal:   ['heal 5% when a wave begins', 'heal 10% when a wave begins', 'heal 15% when a wave begins'],

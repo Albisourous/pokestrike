@@ -1,4 +1,5 @@
 import type { PokeType } from './types';
+import { traitTier } from './traits';
 
 // Canonical Pokémon base stats.
 export interface Stats {
@@ -114,10 +115,12 @@ export const enemyHp = (s: Stats) => 50 + Math.round(s.hp * 1.0);
 // fight's difficulty now instead of a long HP wall
 export const bossHp = (s: Stats) => Math.round(s.hp * 2.2);
 
-// MS clamps the speed curve to 0.7..1.4; Spe 75 = 1.0.
+// MS clamps the speed curve to 0.7..1.4; Spe 75 = 1.0. The flying trait is
+// a team Tailwind — its tier multiplies past the clamp so the dodge type
+// also pays on the launch dial (momentum turns raw speed into damage).
 export const launchMult = (s: Stats) => {
   const k = s.spe / 75;
-  return Math.min(1.4, Math.max(0.7, (0.8 + 0.2 * k) * k));
+  return Math.min(1.4, Math.max(0.7, (0.8 + 0.2 * k) * k)) * (1 + traitTier('flying') * 0.05);
 };
 export const enemyDrift = (s: Stats) => 12 + s.spe * 0.22;
 
