@@ -978,6 +978,8 @@ export class Battle {
     return this.region;
   }
   private regionBase: HTMLCanvasElement | null = null; // baked terrain — region never changes
+  private roomLayer: HTMLCanvasElement | null = null; // baked moats + stone cover — re-bakes only on install/smash/shove
+  private roomTheme = ''; // bake key — lair fights reskin the same court
   private pendingNext = 0; // wave the map interstitial leads into
   private mapNote = ''; // stop-flavor line shown on the region map
   private mapWalk: { path: { x: number; y: number }[]; t: number; node: MapNode } | null = null; // overworld walk to a tapped stop
@@ -3328,6 +3330,22 @@ export class Battle {
     cull(this.dashes, (d) => !d.done);
   }
 
+  // moat cells + stone cover are hundreds of atlas-slice blits a frame —
+  // bake them once into an arena-sized layer; only a room swap, a themed
+  // reskin, or a smashed/shoved block asks for another
+  private bakeRoom() {
+    const a = this.arena;
+    const c = (this.roomLayer ??= document.createElement('canvas'));
+    c.width = Math.ceil(a.w) + 16;
+    c.height = Math.ceil(a.h) + 16;
+    const g = c.getContext('2d')!;
+    g.imageSmoothingEnabled = false;
+    g.translate(8 - a.x, 8 - a.y); // draw in live arena coords, blit back at (a-8)
+    this.roomTheme = this.skinTheme;
+    for (const hz of this.hazards) if (hz.moat) this.drawHazard(g, hz);
+    for (const b of this.blocks) this.drawBlock(g, b);
+  }
+
   private drawBlock(ctx: CanvasRenderingContext2D, b: typeof this.blocks[number]) {
     if (b.field) { drawCover(ctx, b, this.skinTheme, []); return; }
     const w = this.arena.w / 9;
@@ -3459,6 +3477,7 @@ export class Battle {
       } else {
         const cut = b.field === 'cut' && (u.def.type === 'grass' || u.def.type2 === 'grass');
         b.hp = cut ? 0 : b.hp! - 1;
+        this.roomLayer = null; // chipped/broken cover redraws
         if (b.hp <= 0) { this.blocks.splice(i--, 1); broken = true; }
       }
       animBurst({ ...recipeFor('rock', 'EARTHQUAKE'), shake: broken ? 3 : 1 }, cx, cy, false);
@@ -3493,6 +3512,7 @@ export class Battle {
     grid[r][c] = '2';
     if (!fieldRoomReachable(grid.map((row) => row.join('')))) return false;
     b.x = x; b.y = y;
+    this.roomLayer = null;
     return true;
   }
 
@@ -6883,6 +6903,7 @@ export class Battle {
       field: b.field,
       hp: b.field === 'smash' ? SMASH_HITS : b.field === 'cut' ? CUT_HITS : undefined,
     }));
+    this.roomLayer = null; // new room — the furniture bake is stale
     for (const p of this.players) {
       if (!p.dead) {
         const at = this.unstick(p.x, p.y, p.r + 2);
@@ -8095,11 +8116,13 @@ export class Battle {
 
     // court gimmicks — the themed hazard zones under everything else
     drawField2Floor(ctx, this.field2, this.time, this.shots);
-    for (const hz of this.hazards) if (!hz.spent) this.drawHazard(ctx, hz);
+    for (const hz of this.hazards) if (!hz.spent && !hz.moat) this.drawHazard(ctx, hz);
     drawField2(ctx, this.field2, this.time);
 
-    // stone blocks — solid cover the ball banks off
-    for (const b of this.blocks) this.drawBlock(ctx, b);
+    // moats + stone cover — the static furniture bakes into one layer;
+    // a smash/cut/strength mutation re-bakes on the next frame
+    if (!this.roomLayer || this.roomTheme !== this.skinTheme) this.bakeRoom();
+    ctx.drawImage(this.roomLayer!, a.x - 8, a.y - 8);
     if (scrolling) {
       ctx.save();
       ctx.translate(0, a.h);
@@ -9286,10 +9309,18 @@ export class Battle {
       const weakTag = !e.boss && !e.def.shielded ? (e.wpHidden ? ' · WEAK HIDDEN' : ' · WEAK ×2') : '';
       const readTag = tag + weakTag;
       const tagPx = fitFontB(ctx, readTag, 10, w - 60);
-      const readout = (e.boss || e.mid) && tagPx < 8
-        ? `ATK ${Math.ceil(e.timer)}${zap} · HEAVY ${Math.ceil(e.bigT)}${heavy}${e.boss ? ' · WEAK ×3' : weakTag}`
+      // the fontB floor can't shrink a long read — ATK abbreviates ATTACKS
+      // IN for everyone now, and a still-spilling line ellipsizes at the
+      // card edge instead of inking past it
+      let readout = tagPx < 8
+        ? e.boss || e.mid
+          ? `ATK ${Math.ceil(e.timer)}${zap} · HEAVY ${Math.ceil(e.bigT)}${heavy}${e.boss ? ' · WEAK ×3' : weakTag}`
+          : `ATK ${Math.ceil(e.timer)}${zap}${weakTag}`
         : readTag;
-      if (readout !== readTag) fitFontB(ctx, readout, 10, w - 60);
+      if (ctx.measureText(readout).width > w - 60) {
+        while (readout.length > 3 && ctx.measureText(readout.trimEnd() + '…').width > w - 60) readout = readout.slice(0, -1);
+        readout = readout.trimEnd() + '…';
+      }
       ctx.fillText(readout, cx + 50, cy + 58);
       ctx.fillStyle = '#8890b8';
       const line0 = tells.length ? tells.slice(0, 2).join(' · ') : 'fires a projectile';
@@ -9748,10 +9779,17 @@ export class Battle {
         // three lines max (name · type · one hint) so nothing draws over the building:
         // the team's counter mons if any, else the court gimmick
         const counters = this.players.filter((p) => !p.dead && countersGimmick(p.def, gimmick));
-        const hint = counters.length
+        let hint = counters.length
           ? `${counters[0].def.name.toUpperCase()}${counters.length > 1 ? ` +${counters.length - 1}` : ''} HELPS`
           : [gimmick.label, ...bulletHints(TYPE_THEME[n.ttype ?? 'normal'], n.ttype ?? 'normal')].join(' · ');
-        fitFontB(ctx, hint, 10, cell * 4.5);
+        ctx.font = fontB(10);
+        // the fontB floor can't shrink a long hint — ellipsize at ~5½ cells
+        // before it inks over a neighbor's sign
+        const hintMax = cell * 5.5;
+        if (ctx.measureText(hint).width > hintMax) {
+          while (hint.length > 3 && ctx.measureText(hint.trimEnd() + '…').width > hintMax) hint = hint.slice(0, -1);
+          hint = hint.trimEnd() + '…';
+        }
         const hintY = flip ? sy + 25 : ny - cell * 0.95 + 25;
         ctx.strokeText(hint, nx, hintY);
         ctx.fillStyle = counters.length ? '#ffd84d' : TYPE_COLOR[gimmick.type];
