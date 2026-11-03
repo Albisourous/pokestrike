@@ -10,3 +10,10 @@ graphify-out/
 .scratch/
 .shots/
 .gstack/
+re/
+*.tmp.mjs
+/.crop.mjs
+/.prev.html
+/.shot.mjs
+/.slice.mjs
+/.win.mjs
