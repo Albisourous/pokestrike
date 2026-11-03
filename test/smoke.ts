@@ -842,6 +842,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   (b as any).enemies = [b.makeEnemy({ def: speciesById(1)!, nx: 0.5, ny: 0.3 }, 0)];
   const thief = (b as any).enemies[0];
   thief.stolen = 'sitrus-berry';
+  thief.shieldN = 0; // dojo theme hands out Reflect — strip it so the KO lands
   (b as any).pickups = [];
   b.hurt(thief, thief.hp + 50, '#fff');
   const re = (b as any).pickups.find((pk: any) => pk.kind === 'sitrus-berry');
@@ -856,7 +857,7 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   (b as any).phase = 'enemy';
   (b as any).enemyPhaseT = 100;
   (b as any).resolveEnemyTurn();
-  b.update(0.4);
+  b.update(1.5);
   ok((b as any).pickups[0].kind === 'oran-berry' && (b as any).phase === 'lost', 'a wiped turn never ripens the field');
 }
 
