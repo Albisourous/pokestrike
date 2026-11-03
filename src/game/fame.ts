@@ -1,11 +1,12 @@
 // Gen 3 Hall of Fame: on a won climb, before the result card, each team mon
-// slides in under a spotlight with its name/Lv/type plate and cry, then the
-// whole team stands with the trainer, the welcome box and the badge row.
+// slides in under its own type-tinted spotlight with name/Lv/type plate and
+// cry, then the whole team stands with the trainer under a landing flash —
+// the welcome box and the badge row below.
 // A tap advances a beat; a second quick tap or a hold skips; reduced motion
 // shows the final frame only.
 import { cry } from '../core/audio';
 import { drawMon, drawNpc, drawShiny, itemSprite, loadItem, loadSprite } from '../core/assets';
-import { badgeOf, trainerPick } from './meta';
+import { badgeOf, settings, trainerPick } from './meta';
 import { TYPE_COLOR, type PokeType } from './types';
 import { font, fontB, uiWindow, GOLD_HI } from './ui';
 import type { Battle } from './battle';
@@ -22,6 +23,7 @@ interface FameMon {
   name: string;
   lvl: number;
   type: PokeType;
+  type2?: PokeType;
   shiny: boolean;
 }
 interface Fame {
@@ -45,7 +47,7 @@ export const fameActive = () => fame !== null;
 export const fameScene = (): Readonly<Fame> | null => fame;
 
 export function startFame(b: Battle) {
-  const team = b.players.map((p) => ({ id: p.def.id, name: p.def.name, lvl: p.lvl, type: p.def.type, shiny: p.shiny }));
+  const team = b.players.map((p) => ({ id: p.def.id, name: p.def.name, lvl: p.lvl, type: p.def.type, type2: p.def.type2, shiny: p.shiny }));
   // this run's leaders: a ranked stop (cleared) whose row fielded a badge boss
   const badges = b.stage.waves.flatMap((w, i) => (b.runRanks[i] ? w.flatMap((s) => (s.boss && badgeOf(s.def.id)?.icon) || []) : []));
   for (const m of team) void loadSprite(m.id).catch(() => null);
@@ -62,8 +64,9 @@ export function tickFame(dt: number): boolean {
   f.t += dt;
   f.clock += dt;
   const i = Math.floor(f.t / f.slot);
-  // the cry lands with the mon, a beat into its slot
-  if (i < f.team.length && i > f.cried && f.t - i * f.slot >= f.slot * 0.45) {
+  // the cry lands with the mon, a beat into its slot — each id owns a
+  // slightly different beat so the roll call doesn't march in lockstep
+  if (i < f.team.length && i > f.cried && f.t - i * f.slot >= f.slot * (0.4 + ((f.team[i].id * 13) % 5) * 0.05)) {
     f.cried = i;
     cry(f.team[i].id, 'catch');
   }
@@ -103,10 +106,17 @@ function mon(ctx: CanvasRenderingContext2D, m: FameMon, x: number, y: number, s:
   }
 }
 
-function beam(ctx: CanvasRenderingContext2D, x: number, top: number, bot: number, w0: number, w1: number, a: number) {
+// hex + alpha → rgba() — TYPE_COLOR arrives as #rrggbb
+const rgba = (hex: string, a: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+
+// the spotlight cone — type-tinted per mon (dual types fade into type2)
+function beam(ctx: CanvasRenderingContext2D, x: number, top: number, bot: number, w0: number, w1: number, a: number, col = '#fff0be', col2 = col) {
   const g = ctx.createLinearGradient(0, top, 0, bot);
-  g.addColorStop(0, `rgba(255,240,190,${0.05 * a})`);
-  g.addColorStop(1, `rgba(255,240,190,${0.22 * a})`);
+  g.addColorStop(0, rgba(col, 0.05 * a));
+  g.addColorStop(1, rgba(col2, 0.22 * a));
   ctx.fillStyle = g;
   ctx.beginPath();
   ctx.moveTo(x - w0 / 2, top);
@@ -115,9 +125,24 @@ function beam(ctx: CanvasRenderingContext2D, x: number, top: number, bot: number
   ctx.lineTo(x - w1 / 2, bot);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = `rgba(255,240,190,${0.18 * a})`;
+  ctx.fillStyle = rgba(col2, 0.18 * a);
   ctx.beginPath();
   ctx.ellipse(x, bot, w1 / 2, w1 * 0.12, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// a four-point twinkle — the team-shot landing burst
+function sparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.lineTo(x + r * 0.25, y - r * 0.25);
+  ctx.lineTo(x + r, y);
+  ctx.lineTo(x + r * 0.25, y + r * 0.25);
+  ctx.lineTo(x, y + r);
+  ctx.lineTo(x - r * 0.25, y + r * 0.25);
+  ctx.lineTo(x - r, y);
+  ctx.lineTo(x - r * 0.25, y - r * 0.25);
+  ctx.closePath();
   ctx.fill();
 }
 
@@ -148,9 +173,21 @@ export function drawFame(ctx: CanvasRenderingContext2D) {
     const i = Math.floor(t / f.slot);
     const m = f.team[i];
     const s = (t - i * f.slot) / f.slot;
-    beam(ctx, W / 2, 130, 520, 90, 300, 1);
-    const x = W / 2 + (1 - ease(s / 0.45)) * (W / 2 + 160);
+    beam(ctx, W / 2, 130, 520, 90, 300, 1, TYPE_COLOR[m.type], TYPE_COLOR[m.type2 ?? m.type]);
+    const dir = i % 2 ? -1 : 1; // entrances alternate off-screen sides
+    const x = W / 2 + dir * (1 - ease(s / 0.45)) * (W / 2 + 160);
     mon(ctx, m, x, 400, 240);
+    // a type-colored ripple spreads under the feet as the slide settles
+    if (s > 0.45 && !REDUCED) {
+      const rp = Math.min(1, (s - 0.45) / 0.3);
+      ctx.globalAlpha = (1 - rp) * 0.55;
+      ctx.strokeStyle = TYPE_COLOR[m.type];
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.ellipse(x, 400 + 240 * 0.4, 60 + rp * 120, (60 + rp * 120) * 0.28, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     const pa = ease((s - 0.4) / 0.25);
     if (pa > 0) {
       ctx.globalAlpha = pa;
@@ -192,6 +229,15 @@ export function drawFame(ctx: CanvasRenderingContext2D) {
         const x = W / 2 + (j - (row.length - 1) / 2) * (s * 0.95);
         const bob = REDUCED ? 0 : Math.sin((t - fin) * 3 + j + r) * 2;
         mon(ctx, m, x, y + bob, s);
+        // the landing burst: a pair of type-colored twinkles off each mon
+        const sp = REDUCED ? 0 : 1 - Math.min(1, (t - fin) / 0.8);
+        if (sp > 0) {
+          ctx.globalAlpha = sp * (0.35 + 0.65 * Math.abs(Math.sin((t - fin) * 8 + j * 1.9 + r)));
+          ctx.fillStyle = m.shiny ? GOLD_HI : TYPE_COLOR[m.type];
+          sparkle(ctx, x - s * 0.42, y + bob - s * 0.36, 5 + 9 * sp);
+          sparkle(ctx, x + s * 0.38, y + bob - s * 0.08, 4 + 7 * sp);
+          ctx.globalAlpha = 1;
+        }
       });
     });
     drawNpc(ctx, `${f.trainer}_down_0`, W / 2, 610, 96);
@@ -210,6 +256,14 @@ export function drawFame(ctx: CanvasRenderingContext2D) {
       });
     }
     ctx.globalAlpha = 1;
+    // the team shot lands on a single combined flash
+    const fl = REDUCED ? 0 : 1 - Math.min(1, (t - fin) / 0.5);
+    if (fl > 0) {
+      ctx.globalAlpha = fl * (settings().flash ? 1 : 0.35);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalAlpha = 1;
+    }
   }
   ctx.font = fontB(15);
   ctx.fillStyle = 'rgba(255,255,255,0.5)';

@@ -4,7 +4,8 @@ import { drawMon, drawShiny, itemSprite, loadGracidea, loadItem, loadSprite } fr
 import { drawBackdrop, type Theme } from './bg';
 import { RANK_BALL, type ClearRank } from './meta';
 import { TOTAL_STAGES, type SpeciesDef } from './data';
-import { INK, PARCH, GOLD, GOLD_HI, INK_FAINT, font, fontB, uiWindow } from './ui';
+import { TYPE_COLOR } from './types';
+import { INK, PARCH, GOLD, GOLD_HI, INK_FAINT, PAPER_HI, font, fontB, rr, uiWindow } from './ui';
 import type { Battle } from './battle';
 import type { RunResult, ShareGrid } from './screens';
 
@@ -62,6 +63,12 @@ function item(ctx: CanvasRenderingContext2D, name: string, x: number, y: number,
   ctx.drawImage(img, x - sz / 2, y - sz / 2, sz, sz);
 }
 
+// hex + alpha → rgba() — TYPE_COLOR arrives as #rrggbb
+const rgba = (hex: string, a: number) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
+
 export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
   const W = CARD_W, H = CARD_H;
   ctx.save();
@@ -76,6 +83,16 @@ export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
   g.addColorStop(1, 'rgba(12,16,36,0.92)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, W, H);
+
+  // the lead's typing keys the card: halo under the squad, edge frame last
+  const lead = c.team[0];
+  const c1 = TYPE_COLOR[lead?.type ?? 'normal'];
+  const c2 = TYPE_COLOR[lead?.type2 ?? lead?.type ?? 'normal'];
+  const halo = ctx.createRadialGradient(W / 2, 430, 40, W / 2, 430, 300);
+  halo.addColorStop(0, rgba(c1, 0.3));
+  halo.addColorStop(1, rgba(c1, 0));
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 110, W, 640);
 
   ctx.textAlign = 'center';
   ctx.font = font(30);
@@ -94,17 +111,17 @@ export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
 
   // the squad on the court: big fronts on grounded shadows, the MVP crowned
   const n = Math.max(1, c.team.length);
-  const sz = Math.min(120, 460 / n);
-  const floorY = 410;
+  const sz = Math.min(150, 470 / n);
+  const floorY = 420;
   c.team.forEach((def, i) => {
-    const x = W / 2 + (i - (n - 1) / 2) * Math.min(130, 480 / n);
-    const y = floorY + (i % 2 ? 18 : 0);
+    const x = W / 2 + (i - (n - 1) / 2) * Math.min(150, 500 / n);
+    const y = floorY + (i % 2 ? 20 : 0);
     ctx.fillStyle = 'rgba(8,12,8,0.45)';
     ctx.beginPath();
     ctx.ellipse(x, y + sz * 0.36, sz * 0.38, sz * 0.1, 0, 0, Math.PI * 2);
     ctx.fill();
     try {
-      (def.shiny ? drawShiny : drawMon)(ctx, def.id, x, y, sz);
+      (def.shiny ? drawShiny : drawMon)(ctx, def.id, x, y, sz * (i === c.mvpIdx ? 1.08 : 1));
     } catch {
       /* sprite still warming */
     }
@@ -112,12 +129,11 @@ export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
     const name = def.name.toUpperCase();
     const nw = ctx.measureText(name).width + 16;
     uiWindow(ctx, { x: x - nw / 2, y: y + sz * 0.42, w: nw, h: 20 }, { dark: true, rad: 6, shadow: false });
-    ctx.fillStyle = def.shiny ? GOLD_HI : PARCH;
+    ctx.fillStyle = TYPE_COLOR[def.type]; // the plate's typing rides its foot
+    ctx.fillRect(x - nw / 2 + 3, y + sz * 0.42 + 18, nw - 6, 3);
+    ctx.fillStyle = def.shiny || i === c.mvpIdx ? GOLD_HI : PARCH;
     ctx.fillText(name, x, y + sz * 0.42 + 14);
-    if (i === c.mvpIdx) {
-      ctx.font = font(14);
-      shadowText(ctx, '★', x, y - sz * 0.48, GOLD_HI);
-    }
+    if (i === c.mvpIdx) item(ctx, 'star-piece', x, y - sz * 0.52, 32); // the crown is a real drop
   });
 
   // gym ranks: the ball each leader was beaten with, blank if never reached
@@ -129,10 +145,25 @@ export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
   GYM_STAGES.forEach((st, i) => {
     const x = W / 2 + (i - 1) * 140;
     const r = c.ranks[st - 1];
+    if (r) {
+      // an earned ball sits in a gold ring — S-rank rings burn brighter
+      ctx.strokeStyle = r === 'S' ? GOLD_HI : GOLD;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, gy + 62, 30, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.save();
     if (!r) ctx.globalAlpha = 0.25;
     item(ctx, r ? RANK_BALL[r] : 'poke-ball', x, gy + 62, 48);
     ctx.restore();
+    if (r) {
+      // the card is a still PNG — the ball's shine is painted in
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.beginPath();
+      ctx.ellipse(x - 9, gy + 49, 13, 5, -0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.font = font(16);
     ctx.fillStyle = r ? (r === 'S' ? GOLD_HI : PARCH) : INK_FAINT;
     ctx.fillText(r ?? '·', x, gy + 106);
@@ -163,20 +194,40 @@ export function drawRunCard(ctx: CanvasRenderingContext2D, c: RunCard) {
     if (icon) item(ctx, icon, x + sw / 2 - vw2 / 2 - 6, y + 55, 28);
   });
 
-  // the receipt: the replay link and the build that ran it
+  // the receipt: the replay link and the build that ran it — the link sits
+  // in its own inset strip so it reads as a field, not loose print
   const link = shareLink(c.base, c.seed);
   uiWindow(ctx, { x: 24, y: 816, w: W - 48, h: 104 }, { dark: true, rad: 10 });
   ctx.font = fontB(11);
   ctx.fillStyle = GOLD;
-  ctx.fillText('REPLAY THIS CLIMB', W / 2, 840);
-  let px = 18;
+  ctx.fillText('REPLAY THIS CLIMB', W / 2, 838);
+  const strip = { x: 44, y: 848, w: W - 88, h: 32 };
+  rr(ctx, strip.x, strip.y, strip.w, strip.h, 8);
+  ctx.fillStyle = '#0a0e20';
+  ctx.fill();
+  ctx.strokeStyle = rgba(c1, 0.7);
+  ctx.lineWidth = 2;
+  rr(ctx, strip.x + 1, strip.y + 1, strip.w - 2, strip.h - 2, 7);
+  ctx.stroke();
+  let px = 20;
   ctx.font = fontB(px);
-  while (px > 9 && ctx.measureText(link).width > W - 80) ctx.font = fontB(--px);
-  ctx.fillStyle = PARCH;
-  ctx.fillText(link, W / 2, 870);
+  while (px > 9 && ctx.measureText(link).width > strip.w - 24) ctx.font = fontB(--px);
+  ctx.fillStyle = PAPER_HI;
+  ctx.fillText(link, W / 2, strip.y + strip.h / 2 + 5);
   ctx.font = fontB(11);
   ctx.fillStyle = INK_FAINT;
   ctx.fillText(`SEED ${c.seed} · ${c.build}`, W / 2, 900);
+
+  // the type-keyed frame edges the whole card — dual types split the rail
+  const fg = ctx.createLinearGradient(0, 0, 0, H);
+  fg.addColorStop(0, c1);
+  fg.addColorStop(1, c2);
+  ctx.strokeStyle = fg;
+  ctx.lineWidth = 10;
+  ctx.strokeRect(5, 5, W - 10, H - 10);
+  ctx.strokeStyle = 'rgba(240,230,200,0.5)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(16, 16, W - 32, H - 32);
   ctx.restore();
 }
 
