@@ -13,6 +13,9 @@ import { GOLD, GOLD_HI, INK, INK_FAINT, INK_SOFT, PAPER_HI, PARCH, fontB, scrim,
 
 const W = 540;
 const H = 960;
+// OS reduced-motion seed (same probe as bg/evolve/fame): the badge case's
+// live bits go steady instead of pulsing.
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 // same frame as the hatcher/dex/tasks panels — main.ts hit-tests HATCH_PANEL
 const P = { x: 30, y: 68, w: W - 60, h: H - 140 };
 // the wide close zone under every overlay; the drawn × chip sits centered on it
@@ -281,18 +284,35 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
   ctx.font = fontB(10);
   ctx.fillStyle = GOLD_HI;
   ctx.fillText(`BADGE CASE ${held.size}/${BADGES.length}`, CASE.x + CASE.w / 2, CASE.y + 24);
+  const t = performance.now() / 1000; // the case's live bits — a phase, never a layout input
+  // the first unearned slot in canon order is the case's next goal — it
+  // gets the only live ring; earned badges take turns catching a glint
+  const nextIdx = BADGES.findIndex((b) => !held.has(b.boss));
+  const heldIdx = BADGES.map((b, i) => (held.has(b.boss) ? i : -1)).filter((i) => i >= 0);
+  const twBadge = !REDUCED && heldIdx.length ? heldIdx[Math.floor(t / 1.8) % heldIdx.length] : -1;
   BADGES.forEach((b, i) => {
     const rowN = Math.min(6, BADGES.length - Math.floor(i / 6) * 6); // center the short last row
     const cx = CASE.x + CASE.w / 2 + ((i % 6) - (rowN - 1) / 2) * 70;
     const cy = CASE.y + 56 + Math.floor(i / 6) * 62;
     const has = held.has(b.boss);
+    const next = i === nextIdx;
     ctx.beginPath();
     ctx.arc(cx, cy, 20, 0, Math.PI * 2);
     ctx.fillStyle = '#1b2140';
     ctx.fill();
-    ctx.strokeStyle = has ? GOLD : '#3a4370';
+    ctx.strokeStyle = has || next ? GOLD : '#3a4370';
     ctx.lineWidth = 2;
     ctx.stroke();
+    if (next) {
+      ctx.save();
+      ctx.globalAlpha = REDUCED ? 0.75 : 0.45 + 0.35 * Math.sin(t * 3);
+      ctx.strokeStyle = GOLD_HI;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 24, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
     const img = itemSprite(`badges/${b.icon}`);
     if (img) {
       ctx.save();
@@ -301,9 +321,17 @@ export function drawAch(ctx: CanvasRenderingContext2D, scroll: number) {
       ctx.drawImage(img, cx - 15, cy - 15, 30, 30);
       ctx.restore();
     }
+    if (i === twBadge) {
+      ctx.save();
+      ctx.fillStyle = '#fff8d8';
+      ctx.translate(cx - 10, cy - 12);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-2.2, -2.2, 4.4, 4.4);
+      ctx.restore();
+    }
     ctx.textAlign = 'center';
     ctx.font = fontB(10);
-    ctx.fillStyle = has ? PARCH : '#6a7298';
+    ctx.fillStyle = has ? PARCH : next ? '#a8b4e0' : '#6a7298';
     ctx.fillText(b.name.replace(' BADGE', ''), cx, cy + 36);
   });
 
@@ -469,7 +497,14 @@ function drawLabCard(ctx: CanvasRenderingContext2D, r: Rect, u: (typeof LAB_UPGR
 
 export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: number) {
   void loadItem('star-piece');
-  frame(ctx, "PROF.'S LAB");
+  const lvls = labLevels();
+  // the band's sub counts what your stars buy right now — the lab's one
+  // live goal, same words the town plate uses
+  const readyN = LAB_UPGRADES.filter((u) => {
+    const lvl = lvls[u.id] ?? 0;
+    return lvl < u.max && stars >= (u.costs[lvl] ?? 0);
+  }).length;
+  frame(ctx, "PROF.'S LAB", readyN ? `${readyN} READY` : undefined);
 
   ctx.textAlign = 'left';
   ctx.font = fontB(10);
@@ -478,7 +513,6 @@ export function drawLab(ctx: CanvasRenderingContext2D, scroll: number, stars: nu
   balanceChip(ctx, { x: P.x + P.w - 176, y: P.y + 44, w: 160, h: 30 }, stars);
 
   const { heads, cards, h } = labLayout();
-  const lvls = labLevels();
   const v = LAB_VIEW;
   ctx.save();
   ctx.beginPath();

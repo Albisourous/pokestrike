@@ -1,7 +1,7 @@
 import { drawMon, drawShiny, gracidea, itemSprite, loadItem, loadSprite, whiteSprite } from '../../core/assets';
 import { abilityLabel, abilityOf } from '../abilities';
 import { DEX_ALL, EVO_LINES, INVADER_IDS, PULLABLE, PULL_PITY, TOTAL_STAGES, setPay, speciesById, tierOf } from '../data';
-import { drawAmbient, drawBackdrop } from '../bg';
+import { drawAmbient, drawBackdrop, hash } from '../bg';
 import { drawTile } from '../map';
 import {
   FLOWER_PINK, FLOWER_WILD, ROCK_SMALL, TREE_PINE, TREE_ROUND, TREE_TEAL,
@@ -11,7 +11,7 @@ import {
   dust, echoIds, gymBadges, nextDexReward, pullCount, runSave, setProgress, setsReady,
   shinyIds, topBond,
 } from '../meta';
-import { dealCost, dealOff, dealPick } from '../tasks';
+import { dealCost, dealOff, dealPick, daySeed } from '../tasks';
 import { moveOf, roleOf, superDesc } from '../stats';
 import { TYPE_COLOR } from '../types';
 import {
@@ -36,6 +36,26 @@ const DEX_HEAD = 66;
 export const DEX_DETAIL_R = { x: 30, y: 84, w: 480, h: 780 };
 
 const STAGE_R = { x: TEAM_BTN.x + 10, y: TEAM_BTN.y + 36, w: TEAM_BTN.w - 20, h: TEAM_BTN.h - 48 };
+
+// OS reduced-motion seed (same probe as bg/evolve/fame): the stray holds
+// its spot on the tree line instead of pacing.
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// the meadow's wild visitor: small pullables only — the day's pick seeds
+// off UTC like the raid boss and rate-up, so it's the field's fauna, never
+// a squad member or a hatcher teaser
+const STRAYS = PULLABLE.filter((d) => tierOf(d) === 0);
+
+// same strider as the climb court's scout: out, dwell, back, dwell
+const patrol01 = (t: number, walk: number, rest: number) => {
+  const P = 2 * (walk + rest);
+  const u = t % P;
+  if (u < walk) return { k: u / walk, dir: 1, walking: true };
+  if (u < walk + rest) return { k: 1, dir: 0, walking: false };
+  if (u < walk + rest + walk) return { k: 1 - (u - walk - rest) / walk, dir: -1, walking: true };
+  return { k: 0, dir: 0, walking: false };
+};
+
 let stageCanvas: HTMLCanvasElement | null = null;
 let detailPlatform: HTMLCanvasElement | null = null;
 let drawnStage: { id: number; x: number; y: number; plate: { x: number; y: number; w: number; h: number } }[] = [];
@@ -137,6 +157,30 @@ export function drawMonsBody(ctx: CanvasRenderingContext2D, t: number) {
     ctx.fillRect(STAGE_R.x, STAGE_R.y, STAGE_R.w, STAGE_R.h);
   }
   drawAmbient(ctx, STAGE_R, 'meadow', t, 0.6);
+  // a wild stray paces the tree line — still inside the stage clip, and the
+  // squad row is drawn after, so the party passes in front of it
+  const stray = STRAYS.length ? STRAYS[Math.floor(hash(daySeed() * 2.71 + 4.7) * STRAYS.length)] : null;
+  if (stray) {
+    const pace = REDUCED ? { k: 0.5, dir: 0, walking: false } : patrol01(t + hash(daySeed() * 1.9) * 13, 7, 1.8);
+    const mx = STAGE_R.x + 44 + pace.k * (STAGE_R.w - 88);
+    const fy = STAGE_R.y + 74;
+    ctx.fillStyle = 'rgba(8,24,8,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(mx, fy, 15, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.save();
+    if (pace.dir < 0) {
+      ctx.translate(mx, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-mx, 0);
+    }
+    try {
+      drawMon(ctx, stray.id, mx, fy - 15 - (pace.walking ? Math.abs(Math.sin(t * 8)) * 2 : 0), 34);
+    } catch {
+      void loadSprite(stray.id).catch(() => {});
+    }
+    ctx.restore();
+  }
   ctx.restore();
 
   drawnStage = [];

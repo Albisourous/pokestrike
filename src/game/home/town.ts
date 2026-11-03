@@ -1,5 +1,6 @@
-import { drawNpc, gracidea } from '../../core/assets';
+import { drawMon, drawNpc, gracidea, loadSprite } from '../../core/assets';
 import { hash } from '../bg';
+import { PULLABLE, tierOf, type SpeciesDef } from '../data';
 import { drawTile } from '../map';
 import {
   ACHIEVEMENTS,
@@ -18,7 +19,7 @@ import {
   TREE_TEAL,
   type TileRect,
 } from '../maptiles';
-import { taskResetsIn } from '../tasks';
+import { daySeed, taskResetsIn } from '../tasks';
 import { INK, INK_SOFT, PAPER, fontB, uiWindow } from '../ui';
 
 const W = 540;
@@ -97,9 +98,27 @@ export const TOWN_FOLK: TownStroll[] = [
   { id: 'norman', seed: 4.2, hx: 190, hy: 746, x0: 170, y0: 742, x1: 210, y1: 750, speed: 24, h: 30, noRight: true },
 ];
 
+// the day's strays: two small pullables seeded like the other dailies —
+// one haunting the fountain plaza's south rim, one striding the south
+// street. Beats reuse the villager shape so they merge into the same
+// y-sorted pass; they stay clear of lots and plates by the same margin.
+const MON_BEATS: TownStroll[] = [
+  { id: 'stray', seed: 12.3, hx: 270, hy: 764, x0: 172, y0: 752, x1: 388, y1: 772, speed: 22, h: 34 },
+  { id: 'stray', seed: 15.7, hx: 410, hy: 604, x0: 64, y0: 600, x1: 476, y1: 606, speed: 30, h: 34 },
+];
+const STRAYS = PULLABLE.filter((d) => tierOf(d) === 0);
+const strayPick = (i: number) => STRAYS[Math.floor(hash(daySeed() * 1.13 + i * 5.77) * STRAYS.length)];
+
+// OS reduced-motion seed (same probe as bg/evolve/fame): the strays hold
+// their home spots instead of roaming.
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 type NpcDir = 'down' | 'up' | 'left' | 'right';
 
-export function townStrollAt(w: TownStroll, t: number): { x: number; y: number; frame: string; flip: boolean } {
+// the shared waypoint walk: home for leg 0, then seeded waypoints inside
+// the beat box on manhattan legs at `speed`, a standing beat between legs.
+// townStrollAt dresses it in npc frames; the strays wear mon fronts.
+function walkAt(w: TownStroll, t: number): { x: number; y: number; dir: NpcDir; walking: boolean } {
   const legT = Math.hypot(w.x1 - w.x0, w.y1 - w.y0) / w.speed + 1.5;
   const k = Math.floor(t / legT);
   let tau = t - k * legT;
@@ -122,6 +141,11 @@ export function townStrollAt(w: TownStroll, t: number): { x: number; y: number; 
     x += dx; y += dy;
     if (dx || dy) dir = dx ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
   }
+  return { x, y, dir, walking };
+}
+
+export function townStrollAt(w: TownStroll, t: number): { x: number; y: number; frame: string; flip: boolean } {
+  const { x, y, dir, walking } = walkAt(w, t);
   const flip = !!w.noRight && dir === 'right';
   const fr = walking ? [0, 1, 0, 2][Math.floor(t * 6) % 4] : 0;
   return { x, y, frame: `${w.id}_${flip ? 'left' : dir}_${fr}`, flip };
@@ -411,10 +435,40 @@ export function drawTownBody(ctx: CanvasRenderingContext2D, t: number, taskN: nu
     ctx.restore();
   }
 
-  const folk = TOWN_FOLK
-    .map((w) => ({ w, s: townStrollAt(w, t) }))
-    .sort((a, b) => a.s.y - b.s.y);
-  for (const { w, s } of folk) drawNpc(ctx, s.frame, s.x, s.y, w.h, s.flip);
+  // villagers and the day's strays share one y-sorted pass — whoever is
+  // further south draws last
+  type Walker =
+    | { kind: 'npc'; w: TownStroll; s: ReturnType<typeof townStrollAt> }
+    | { kind: 'mon'; w: TownStroll; s: ReturnType<typeof walkAt>; def?: SpeciesDef };
+  const walkers: Walker[] = [
+    ...TOWN_FOLK.map((w): Walker => ({ kind: 'npc', w, s: townStrollAt(w, t) })),
+    ...MON_BEATS.map((w, i): Walker => ({ kind: 'mon', w, s: walkAt(w, REDUCED ? 0 : t), def: strayPick(i) })),
+  ].sort((a, b) => a.s.y - b.s.y);
+  for (const e of walkers) {
+    if (e.kind === 'npc') {
+      drawNpc(ctx, e.s.frame, e.s.x, e.s.y, e.w.h, e.s.flip);
+      continue;
+    }
+    if (!e.def) continue;
+    const size = e.w.h + 8;
+    ctx.fillStyle = 'rgba(32,48,28,0.24)';
+    ctx.beginPath();
+    ctx.ellipse(e.s.x, e.s.y - 1, size * 0.4, size * 0.13, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const hop = e.s.walking && !REDUCED ? Math.abs(Math.sin(t * 8)) * 2.5 : 0;
+    ctx.save();
+    if (e.s.dir === 'left') {
+      ctx.translate(e.s.x, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-e.s.x, 0);
+    }
+    try {
+      drawMon(ctx, e.def.id, e.s.x, e.s.y - size * 0.42 - hop, size);
+    } catch {
+      void loadSprite(e.def.id).catch(() => {});
+    }
+    ctx.restore();
+  }
 
   const levels = labLevels();
   const trained = LAB_UPGRADES.filter((u) => (levels[u.id] ?? 0) > 0).length;

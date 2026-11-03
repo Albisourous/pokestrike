@@ -8,6 +8,10 @@ import { INK, PARCH, GOLD_HI, rr, ufit, fontB, uiWindow, type Rect } from '../ui
 import { TYPE_COLOR } from '../types';
 import type { SpeciesDef } from '../data';
 
+// OS reduced-motion seed (same probe as bg/evolve/fame): the counter sheen
+// stays home; the shelf twinkles are blink-in-place so they keep running.
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 const STALL: TileRect = [1315, 657, 89, 62]; // striped market stall; the awning's sign hole keys clear
 const STALL_S = 2.4;
 const SIGN = { x: 35, y: 9, w: 36, h: 18 }; // that hole, stall-local px
@@ -95,13 +99,41 @@ export function drawShopScene(ctx: CanvasRenderingContext2D, r: Rect, t: number,
   ctx.clip();
   drawNpc(ctx, t % 6 < 0.9 ? 'shopkeeper_f_left_0' : 'shopkeeper_f_down_0', sx + s.w * 0.8, top + 22, 66);
   ctx.restore();
-  // prizes on the counter top
+  // prizes on the counter top — each takes a turn catching the light
   ctx.imageSmoothingEnabled = false;
   SHELF.forEach((id, i) => {
     void loadItem(id);
     const spr = itemSprite(id);
     if (spr) ctx.drawImage(spr, sx + 10 + i * 31, top - 24, 28, 28);
+    const tw = Math.sin(t * 2.4 + i * 2.7);
+    if (spr && tw > 0.88) {
+      ctx.save();
+      ctx.globalAlpha = (tw - 0.88) / 0.12;
+      ctx.fillStyle = '#fff8d8';
+      ctx.translate(sx + 10 + i * 31 + 24, top - 24);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-2.4, -2.4, 4.8, 4.8);
+      ctx.restore();
+    }
   });
+  // the counter's glimmer: a sheen sweeps the counter top every few
+  // seconds, fading in and out across the pass
+  if (!REDUCED && t % 7 < 3.5) {
+    const u = (t % 7) / 3.5;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sx, top - 30, s.w, 34);
+    ctx.clip();
+    ctx.translate(sx - 40 + u * (s.w + 80), top - 14);
+    ctx.rotate(-0.35);
+    const grad = ctx.createLinearGradient(-16, 0, 16, 0);
+    grad.addColorStop(0, 'rgba(255,248,216,0)');
+    grad.addColorStop(0.5, `rgba(255,248,216,${(0.22 * Math.sin(Math.PI * u)).toFixed(3)})`);
+    grad.addColorStop(1, 'rgba(255,248,216,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(-16, -46, 32, 92);
+    ctx.restore();
+  }
 
   // the day's rate-up face, big on a type-glow pad
   const cx = r.x + 128, gy = r.y + r.h - 32;

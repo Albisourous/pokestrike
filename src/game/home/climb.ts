@@ -3,7 +3,7 @@
 // the ascension ladder, and two side doors (free pull, today's raid).
 import { drawMon, drawNpc, itemSprite, loadItem, loadSprite } from '../../core/assets';
 import { ASC_MODS, makeStage, speciesById, type StageDef } from '../data';
-import { drawAmbient, drawBackdrop, drawWall, slice, type Theme } from '../bg';
+import { drawAmbient, drawBackdrop, drawWall, hash, slice, type Theme } from '../bg';
 import * as MT from '../maptiles';
 import type { TileRect } from '../maptiles';
 import { INK, INK_SOFT, INK_FAINT, PAPER, GOLD, GOLD_HI, DANGER, font, fontB, uiWindow, uiPanel, cursorTri } from '../ui';
@@ -48,6 +48,21 @@ let stgMemo: { seed: number; stg: StageDef } | null = null;
 const stageFor = (seed: number) => {
   if (stgMemo?.seed !== seed) stgMemo = { seed, stg: makeStage(seed) };
   return stgMemo.stg;
+};
+
+// OS reduced-motion seed (same probe as bg/evolve/fame): the court scout
+// holds its spot mid-field instead of pacing.
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// walk the unit interval out, dwell, back, dwell — the scene fauna's
+// strider. k = position, dir = travel sign (0 while held)
+const patrol01 = (t: number, walk: number, rest: number) => {
+  const P = 2 * (walk + rest);
+  const u = t % P;
+  if (u < walk) return { k: u / walk, dir: 1, walking: true };
+  if (u < walk + rest) return { k: 1, dir: 0, walking: false };
+  if (u < walk + rest + walk) return { k: 1 - (u - walk - rest) / walk, dir: -1, walking: true };
+  return { k: 0, dir: 0, walking: false };
 };
 
 // the fallen team's ghosts loiter on the court's front row; a tap opens their dex card
@@ -134,7 +149,8 @@ function leadId(t: number): number {
 
 function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: number; seed: number } | null) {
   const S = CLIMB_SCENE;
-  const stg = stageFor(cont?.seed ?? climbSeed);
+  const seed = cont?.seed ?? climbSeed;
+  const stg = stageFor(seed);
   ctx.save();
   roundRect(ctx, S.x - 3, S.y - 3, S.w + 6, S.h + 6, 15);
   ctx.fillStyle = INK;
@@ -145,6 +161,27 @@ function drawScene(ctx: CanvasRenderingContext2D, t: number, cont: { stage: numb
   if (c) ctx.drawImage(c, S.x, S.y);
   else drawBackdrop(ctx, S, 12, stg.theme);
   drawAmbient(ctx, { x: S.x, y: S.y - 40, w: S.w, h: S.h + 60 }, stg.theme, t, settings().quality === 'low' ? 0.25 : 0.55);
+
+  // a wild from the stage's own waves paces the mid-field behind the pack —
+  // seeded off the climb seed, so a ?seed= link's diorama scouts the same
+  // court it replays. Drawn first so the pack line passes in front of it.
+  const sps = stg.waves.flat();
+  const scout = sps.length ? sps[Math.floor(hash(seed * 0.37 + 2) * sps.length)] : null;
+  if (scout) {
+    const pace = REDUCED ? { k: 0.5, dir: 0, walking: false } : patrol01(t + hash(seed * 1.7) * 11, 6.5, 1.6);
+    const fx = S.x + 58 + pace.k * (S.w - 116);
+    const fy = S.y + 150;
+    shadow(ctx, fx, fy, 40);
+    ctx.save();
+    if (pace.dir < 0) {
+      ctx.translate(fx, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-fx, 0);
+    }
+    void loadSprite(scout.def.id).catch(() => {});
+    drawMon(ctx, scout.def.id, fx, fy - 17 - (pace.walking ? Math.abs(Math.sin(t * 8.5)) * 2 : 0), 40);
+    ctx.restore();
+  }
 
   // the parked stage's own pack holds the middle band, evenly spread so
   // three foes never fuse — stage.waves only ships the seeded 3, so a deeper

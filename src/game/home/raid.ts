@@ -28,6 +28,10 @@ export function raidRefresh(now: number) {
   return `${Math.floor(minutes / 60)}H ${String(minutes % 60).padStart(2, '0')}M`;
 }
 
+// OS reduced-motion seed (same probe as bg/evolve/fame): the boss holds
+// court center instead of pacing it.
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 const PANEL = { x: 30, y: 108, w: 480, h: 604 };
 const COURT = { x: 42, y: 156, w: 456, h: 200 };
 const courts = new Map<Theme, HTMLCanvasElement>();
@@ -74,10 +78,6 @@ function court(ctx: CanvasRenderingContext2D, theme: Theme) {
       g.fill();
       drawSlice(g, prop, x, y, 48, 48);
     }
-    g.fillStyle = '#10182066';
-    g.beginPath();
-    g.ellipse(COURT.w / 2, 166, 76, 14, 0, 0, Math.PI * 2);
-    g.fill();
     courts.set(theme, layer);
   }
   if (layer) ctx.drawImage(layer, COURT.x, COURT.y);
@@ -104,7 +104,21 @@ export function drawRaidLobby(ctx: CanvasRenderingContext2D, t: number, fight: R
 
   court(ctx, theme);
   drawAmbient(ctx, COURT, theme, t, 0.35);
-  mon(ctx, boss, 270, 252 + Math.sin(t * 2) * 2, 208, true);
+  // the boss paces its court — a slow sine patrol, facing its travel side;
+  // the feet move now so the shadow rides per-frame, not baked in the court
+  const px = 270 + (REDUCED ? 0 : Math.sin(t * 0.45) * 96);
+  ctx.fillStyle = '#10182066';
+  ctx.beginPath();
+  ctx.ellipse(px, 344, 78, 13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.save();
+  if (!REDUCED && Math.cos(t * 0.45) > 0) {
+    ctx.translate(px, 0);
+    ctx.scale(-1, 1);
+    ctx.translate(-px, 0);
+  }
+  mon(ctx, boss, px, 252 + Math.sin(t * 2) * 2, 208, true);
+  ctx.restore();
   uiWindow(ctx, { x: 54, y: 168, w: 142, h: 32 }, { tint: INK, shadow: false });
   item(ctx, 'shiny-charm', 60, 170, 28);
   ctx.textAlign = 'left';
