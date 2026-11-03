@@ -807,3 +807,11 @@ auto-card, HOT tag position); support foes still show ~N on heal turns
 visual pass on the 4 new rooms via ?debug=arena.
 - 4d48ba4 pushed: supp foes (medic/aegis/raider/summon/lay) drop HITS ~N —
   a price on a heal turn lies; the verb carries the read.
+
+## In flight when context reset
+
+- Builder 4b7a54bd "mobile type floor" — user feedback: text too small
+  on phones. Floor: fontB<12→12, font<10→10, player-facing only;
+  decorative/diagnostic exempt. Verify typecheck+smoke, screenshot pass.
+  On return: verify diff (git status), run build+smoke, commit+push,
+  then continue the overnight loop (scouts → builders → verify → commit).
