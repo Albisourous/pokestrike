@@ -1577,6 +1577,7 @@ const HELP_SECTIONS: HelpSection[] = [
     cards: [
       ['shiny-charm', 'gold-tinted foes are rare: KO one and it always joins your box'],
       ['expert-belt', 'perfect releases build a streak · each one hits a bit harder'],
+      ['anims/small_ember', 'a 3+ PERFECT streak arms FEVER · the next launch scores ×1.5'],
     ],
   },
   {
@@ -3198,6 +3199,16 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
   const band = { x: r.x + 7, y: r.y + 7, w: r.w - 14, h: 103 };
 
   stripeBand(ctx, band, TYPE_COLOR[def.type]);
+  // a second typing splits the band's foot — the evo pick's strip signal,
+  // so duals read as two types before the spec line below
+  if (def.type2) {
+    ctx.save();
+    roundRect(ctx, band.x, band.y, band.w, band.h + 9, 9);
+    ctx.clip();
+    ctx.fillStyle = TYPE_COLOR[def.type2];
+    ctx.fillRect(band.x + band.w / 2, band.y + band.h - 4, band.w / 2, 4);
+    ctx.restore();
+  }
   // type chip top-left: light pill, type ink darkened so pale types
   // (electric, ice) still read on it
   chip(ctx, r.x + 10, r.y + 10, def.type.toUpperCase(), {
@@ -3239,7 +3250,9 @@ function drawMonCard(ctx: CanvasRenderingContext2D, r: Rect, def: SpeciesDef, de
 
     ctx.font = fontB(10);
     ctx.fillStyle = TYPE_COLOR[def.type];
-    ctx.fillText(`${def.type.toUpperCase()} · ${roleTag(def)}`, r.x + r.w / 2, r.y + 174);
+    const spec = `${(def.type2 ? `${def.type} · ${def.type2}` : def.type).toUpperCase()} · ${roleTag(def)}`;
+    fitFontB(ctx, spec, 10, r.w - 20);
+    ctx.fillText(spec, r.x + r.w / 2, r.y + 174);
 
     // evolution hint + trait tag sit with the stats — Magikarp is secretly
     // Gyarados; PIERCE/COPY hold the right edge of the same line
