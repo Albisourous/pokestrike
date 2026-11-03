@@ -1238,7 +1238,7 @@ export class Battle {
       this.players.push(this.makeUnit(def, Math.max(1, Math.min(LV_CAP, def.lvl ?? 1)), i, n));
     });
     // bag items field after the team does — persistent consumables earned
-    // on gym wins, picked on the draft screen (≤2)
+    // on gym wins, picked on the draft screen (≤1)
     this.bagIds = bag;
     for (const id of bag) {
       const it = BAG_ITEMS.find((i) => i.id === id);

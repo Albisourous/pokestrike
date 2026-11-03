@@ -551,7 +551,7 @@ export function earnBadge(bossId: number): GymBadge | null {
   return b;
 }
 
-// --- the bag: persistent consumables — banked on gym wins, ≤2 spent at ---
+// --- the bag: persistent consumables — banked on gym wins, ≤1 spent at ---
 // --- run start. Plain pk_bag stock {itemId: count}, unversioned ---------
 // (like pk_settings, not the run save).
 let memBag: Record<string, number> | null = null;

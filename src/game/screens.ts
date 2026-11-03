@@ -98,8 +98,8 @@ export const DRAFT_BACK = { x: 14, y: 30, w: 74, h: 26 };
 export const REEL_STOPS = [0.7, 1.0, 1.3];
 
 // --- bag row: pk_bag consumables ride the band between the draft ---
-// --- subtitle and the offer cards. ≤2 picked into the run.
-export const BAG_MAX = 2;
+// --- subtitle and the offer cards. ≤1 picked into the run.
+export const BAG_MAX = 1;
 const BAG_CHIP_W = 74;
 const BAG_CHIP_H = 46;
 const BAG_CHIP_GAP = 8;
@@ -3116,7 +3116,7 @@ function newTag(ctx: CanvasRenderingContext2D, x: number, y: number, px: number)
   ctx.fillText('NEW', x - tw / 2, y + px * 1.4 + 1);
 }
 
-// the BAG row — card-lite chips of stocked consumables; ≤2 ride into the
+// the BAG row — card-lite chips of stocked consumables; ≤1 rides into the
 // run unasked (gold rim + lift, the shiny-card selection language). `last`
 // is the last tapped chip — its desc sits on one dim line under the row.
 // Empty stock hides the whole thing — no dead UI.

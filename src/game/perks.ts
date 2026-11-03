@@ -803,7 +803,7 @@ function traitPulse(b: Battle) {
 }
 
 // --- bag items: persistent consumables -----------------------------------
-// Banked on gym wins (pk_bag in meta.ts), ≤2 picked at run start, applied
+// Banked on gym wins (pk_bag in meta.ts), ≤1 picked at run start, applied
 // when the Battle constructs — same apply() shape as perks but no rarity:
 // they never appear on the offer boards.
 export interface BagItem {

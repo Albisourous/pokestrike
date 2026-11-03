@@ -263,7 +263,7 @@ let draft: {
 };
 // the run's draft pool — roster plus captured-dex species not already in it
 let draftPool: SpeciesDef[] = [];
-// the run's bag picks — ≤2 pk_bag consumables auto-armed when the draft
+// the run's bag picks — ≤1 pk_bag consumables auto-armed when the draft
 // deals, spent the moment the last pick constructs the Battle (never earlier)
 let bagPick = new Set<string>();
 let bagLast: string | null = null; // last tapped chip — its desc rides the row
@@ -754,7 +754,7 @@ function startDraft() {
     const lvl = 5 + Math.floor(Math.pow(runRng(), 1.8) * 10);
     draft.lvls.set(i, lvl);
   });
-  // the bag rides in unasked — ≤2 stocked consumables auto-arm, seeded-random
+  // the bag rides in unasked — ≤1 stocked consumables auto-arm, seeded-random
   // so the seed still replays the run; chips draw lit, a tap reads its desc
   const stocked = [...bagRowItems()];
   bagPick = new Set<string>();
