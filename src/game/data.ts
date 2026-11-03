@@ -1624,6 +1624,36 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // tide locks — three moat columns split the court into bank lanes; the
+  // two dry lock rows are the only places to change lanes
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '103030301',
+    '103030301',
+    '10S0S0S01',
+    '103030301',
+    '103030301',
+    '10S0S0S01',
+    '100000001',
+    '1000P0001',
+    '111111111',
+  ],
+  // the boards — ice rails hug both walls; a shot ridden along the boards
+  // keeps its speed into the pocketed anchors
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '180S0S081',
+    '18S000S81',
+    '180S0S081',
+    '180000081',
+    '10S0S0S01',
+    '100000001',
+    '100S0S001',
+    '1000P0001',
+    '111111111',
+  ],
   // pincer — mine claws rake both flanks; the center lane stays clean till
   // the blast wall closes it
   [
@@ -1788,9 +1818,24 @@ export const ROOM_LAYOUTS: string[][] = [
     '1000P0001',
     '111111111',
   ],
+  // toll gates — twin battlements with offset ports; no lane runs straight
+  // through, so the spike slots tax every entry that won't bank the pocket
+  [
+    '1111E1111',
+    '1S0S0S0S1',
+    '10S0S0S01',
+    '120505021',
+    '1S0S0S0S1',
+    '152020251',
+    '100000001',
+    '100000001',
+    '100S0S001',
+    '1000P0001',
+    '111111111',
+  ],
 ];
 // The hard tail starts at pincer and only appears from depth 2.
-export const ROOM_HARD = 11;
+export const ROOM_HARD = 12;
 // Gym arenas, one per boss HP bar (MS stage_phase_layouts: each bar is its
 // own battle on its own court). Bar 1 stays open so the leader is the
 // spectacle; bar 2 adds two bank pillars; bar 3 closes in with slabs and
