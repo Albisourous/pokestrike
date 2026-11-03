@@ -329,43 +329,185 @@ export function drawBackdrop(
 const WATER_KEY = [136, 200, 240] as const;
 const SAND_KEY = [216, 184, 96] as const;
 const LAVA_KEY = [200, 48, 0] as const;
-const AMBIENT: Record<Theme, PropSpec & { chroma?: readonly [number, number, number]; n: number; vx: number; vy: number; size: number; alpha: number }> = {
-  grove: { r: MT.FX_LEAF, n: 18, vx: 13, vy: 22, size: 8, alpha: 0.52 },
-  cavern: { r: MT.FX_DUST, chroma: SAND_KEY, t: 'rgba(170,190,238,0.40)', n: 16, vx: 5, vy: 7, size: 4, alpha: 0.35 },
-  volcano: { r: MT.FX_EMBER, chroma: LAVA_KEY, n: 24, vx: 7, vy: -32, size: 7, alpha: 0.70 },
-  sky: { r: MT.FX_SNOW, chroma: WATER_KEY, n: 22, vx: -16, vy: 24, size: 7, alpha: 0.65 },
-  meadow: { r: MT.FX_PETAL, n: 18, vx: 18, vy: 12, size: 6, alpha: 0.55 },
-  shore: { r: MT.FX_BUBBLE, chroma: WATER_KEY, n: 16, vx: -10, vy: -12, size: 7, alpha: 0.40 },
-  plant: { r: MT.FX_EMBER, chroma: LAVA_KEY, t: 'rgba(255,230,110,0.70)', n: 14, vx: 3, vy: -20, size: 4, alpha: 0.50 },
-  marsh: { r: MT.FX_BUBBLE, chroma: WATER_KEY, t: 'rgba(160,208,110,0.35)', n: 16, vx: 5, vy: -9, size: 7, alpha: 0.50 },
-  sanctum: { r: MT.FX_SNOW, chroma: WATER_KEY, t: 'rgba(184,148,240,0.35)', n: 14, vx: 4, vy: -12, size: 5, alpha: 0.45 },
-  dojo: { r: MT.FX_DUST, chroma: SAND_KEY, n: 14, vx: 14, vy: 8, size: 4, alpha: 0.42 },
-  tower: { r: MT.FX_PETAL, t: 'rgba(160,134,238,0.65)', n: 16, vx: 5, vy: -15, size: 6, alpha: 0.55 },
-};
-const ambientTiles = new Map<Theme, HTMLCanvasElement>();
 
-export function drawAmbient(ctx: CanvasRenderingContext2D, a: Rect, theme: Theme, time: number, quality = 1) {
-  const amb = AMBIENT[theme];
-  let tile = ambientTiles.get(theme);
+// OS reduced-motion seed (same probe as evolve/fame): speeds drop to a slow
+// drift and sway/shimmer die down; density stays quality's job.
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Ambient spec — three cheap deterministic layers drawn after the wall:
+// drift[] = seeded atlas sprites wrapping the court (two layers = parallax),
+// glint   = 1-2px procedural twinkles at seeded spots (blink, rise, wander),
+// fringe  = a real-sprite band along the court's foot (sod, reeds) that bobs.
+interface AmbDrift extends PropSpec {
+  chroma?: readonly [number, number, number];
+  n: number; vx: number; vy: number; size: number; alpha: number;
+  sway?: number; // sine wobble amplitude, px
+  wide?: number; // x-stretch — a wide faint strip reads as heat haze
+}
+interface AmbGlint {
+  n: number; color: string; size: number; speed: number; alpha: number;
+  rise?: number;   // slow upward drift px/s — pollen, sparks, fireflies
+  wander?: number; // sine wander px — fireflies
+}
+interface AmbFringe { r: TileRect; t?: string; h: number; gap?: number; alpha?: number }
+interface AmbSpec { drift: AmbDrift[]; glint?: AmbGlint; fringe?: AmbFringe }
+
+const AMBIENT: Record<Theme, AmbSpec> = {
+  grove: {
+    drift: [
+      { r: MT.FX_LEAF, n: 16, vx: 13, vy: 22, size: 8, alpha: 0.5, sway: 16 },
+      { r: MT.FX_PETAL, t: 'rgba(120,200,90,0.45)', n: 7, vx: -7, vy: 9, size: 5, alpha: 0.3, sway: 24 },
+    ],
+    glint: { n: 7, color: '#ffe89a', size: 1.6, speed: 1.1, alpha: 0.5, rise: 3, wander: 12 },
+    fringe: { r: MT.TILE_SOD, t: 'rgba(26,84,40,0.55)', h: 19, alpha: 0.85 },
+  },
+  cavern: {
+    drift: [
+      { r: MT.FX_DUST, chroma: SAND_KEY, t: 'rgba(170,190,238,0.40)', n: 16, vx: 5, vy: 7, size: 4, alpha: 0.35, sway: 8 },
+      { r: MT.FX_BUBBLE, chroma: WATER_KEY, t: 'rgba(150,190,235,0.5)', n: 5, vx: 2, vy: 26, size: 3, alpha: 0.3 },
+    ],
+    glint: { n: 9, color: '#a8e0ff', size: 1.4, speed: 0.7, alpha: 0.55 },
+  },
+  volcano: {
+    drift: [
+      { r: MT.FX_EMBER, chroma: LAVA_KEY, n: 22, vx: 7, vy: -32, size: 7, alpha: 0.7, sway: 12 },
+      { r: MT.FX_EMBER, chroma: LAVA_KEY, t: 'rgba(255,140,64,0.55)', n: 5, vx: 10, vy: -9, size: 5, alpha: 0.16, sway: 26, wide: 9 },
+    ],
+    glint: { n: 6, color: '#ffb050', size: 1.8, speed: 1.6, alpha: 0.6, rise: 8 },
+  },
+  sky: {
+    drift: [
+      { r: MT.FX_SNOW, chroma: WATER_KEY, n: 20, vx: -16, vy: 24, size: 7, alpha: 0.62, sway: 18 },
+      { r: MT.FX_SNOW, chroma: WATER_KEY, n: 10, vx: -8, vy: 13, size: 4, alpha: 0.3, sway: 10 },
+    ],
+    glint: { n: 7, color: '#d8f4ff', size: 1.5, speed: 0.9, alpha: 0.5 },
+  },
+  meadow: {
+    drift: [
+      { r: MT.FX_PETAL, n: 16, vx: 18, vy: 12, size: 6, alpha: 0.55, sway: 20 },
+      { r: MT.FX_LEAF, t: 'rgba(190,220,120,0.5)', n: 6, vx: 9, vy: 7, size: 5, alpha: 0.3, sway: 14 },
+    ],
+    glint: { n: 8, color: '#fff2b0', size: 1.5, speed: 1.0, alpha: 0.45, rise: 4, wander: 14 },
+    fringe: { r: MT.TILE_SOD_BLOOM, h: 22, alpha: 0.9 },
+  },
+  shore: {
+    drift: [
+      { r: MT.FX_BUBBLE, chroma: WATER_KEY, n: 15, vx: -10, vy: -12, size: 7, alpha: 0.4, sway: 10 },
+      { r: MT.FX_BUBBLE, chroma: WATER_KEY, t: 'rgba(220,245,255,0.6)', n: 8, vx: -6, vy: -20, size: 4, alpha: 0.3 },
+    ],
+    glint: { n: 10, color: '#bfeeff', size: 1.6, speed: 2.2, alpha: 0.55 },
+  },
+  plant: {
+    drift: [
+      { r: MT.FX_EMBER, chroma: LAVA_KEY, t: 'rgba(255,230,110,0.70)', n: 13, vx: 3, vy: -20, size: 4, alpha: 0.5, sway: 8 },
+      { r: MT.FX_EMBER, chroma: LAVA_KEY, t: 'rgba(255,240,160,0.5)', n: 5, vx: -4, vy: -13, size: 6, alpha: 0.28, sway: 14 },
+    ],
+    glint: { n: 8, color: '#fff8c0', size: 1.4, speed: 3.4, alpha: 0.6 },
+  },
+  marsh: {
+    drift: [
+      { r: MT.FX_BUBBLE, chroma: WATER_KEY, t: 'rgba(160,208,110,0.35)', n: 14, vx: 5, vy: -9, size: 7, alpha: 0.5 },
+    ],
+    glint: { n: 8, color: '#d8ff78', size: 2, speed: 0.8, alpha: 0.7, rise: 5, wander: 22 },
+    fringe: { r: MT.WALL_REED, h: 21, gap: 64, alpha: 0.8 },
+  },
+  sanctum: {
+    drift: [
+      { r: MT.FX_SNOW, chroma: WATER_KEY, t: 'rgba(184,148,240,0.35)', n: 13, vx: 4, vy: -12, size: 5, alpha: 0.45, sway: 10 },
+      { r: MT.FX_PETAL, t: 'rgba(160,120,230,0.5)', n: 6, vx: -3, vy: -8, size: 6, alpha: 0.3, sway: 16 },
+    ],
+    glint: { n: 8, color: '#d8b8ff', size: 1.5, speed: 0.8, alpha: 0.5 },
+  },
+  dojo: {
+    drift: [
+      { r: MT.FX_DUST, chroma: SAND_KEY, n: 14, vx: 14, vy: 8, size: 4, alpha: 0.42, sway: 10 },
+      { r: MT.FX_LEAF, t: 'rgba(200,150,80,0.55)', n: 5, vx: 10, vy: 12, size: 6, alpha: 0.32, sway: 18 },
+    ],
+    glint: { n: 6, color: '#ffd9a0', size: 1.5, speed: 0.7, alpha: 0.4 },
+  },
+  tower: {
+    drift: [
+      { r: MT.FX_PETAL, t: 'rgba(160,134,238,0.65)', n: 15, vx: 5, vy: -15, size: 6, alpha: 0.55, sway: 14 },
+      { r: MT.FX_SNOW, chroma: WATER_KEY, t: 'rgba(200,180,255,0.5)', n: 7, vx: -4, vy: -8, size: 4, alpha: 0.3 },
+    ],
+    glint: { n: 9, color: '#e8dcff', size: 1.4, speed: 1.0, alpha: 0.55 },
+  },
+};
+const ambientTiles = new Map<string, HTMLCanvasElement>();
+
+function ambTile(key: string, r: TileRect, t?: string, chroma?: readonly [number, number, number]) {
+  let tile = ambientTiles.get(key);
   if (!tile) {
-    const loaded = slice(amb.r, amb.t, amb.chroma);
-    if (!loaded) return;
-    ambientTiles.set(theme, loaded);
+    const loaded = slice(r, t, chroma);
+    if (!loaded) return null;
+    ambientTiles.set(key, loaded);
     tile = loaded;
   }
+  return tile;
+}
+
+export function drawAmbient(ctx: CanvasRenderingContext2D, a: Rect, theme: Theme, time: number, quality = 1) {
+  const spec = AMBIENT[theme];
+  const tseed = THEMES.indexOf(theme) + 1;
+  const spd = REDUCED ? 0.3 : 1;
   ctx.save();
   ctx.beginPath();
   ctx.rect(a.x + 12, a.y + 64, a.w - 24, a.h - 80);
   ctx.clip();
   ctx.imageSmoothingEnabled = false;
-  const n = Math.max(1, Math.round(amb.n * quality));
-  for (let k = 0; k < n; k++) {
-    const phase = time * 1.2 + k * 2.3;
-    const x = a.x + ((k * 97.31 + time * amb.vx + Math.sin(phase) * 16) % a.w + a.w) % a.w;
-    const y = a.y + ((k * 61.7 + time * amb.vy) % a.h + a.h) % a.h;
-    const w = amb.size * (0.7 + (k % 3) * 0.15);
-    ctx.globalAlpha = amb.alpha * (0.55 + 0.45 * Math.sin(phase) ** 2);
-    ctx.drawImage(tile, Math.round(x), Math.round(y), w, w * tile.height / tile.width);
+
+  // drifting sprites, nearest layer last
+  spec.drift.forEach((d, li) => {
+    const tile = ambTile(`${theme}:${li}`, d.r, d.t, d.chroma);
+    if (!tile) return;
+    const n = Math.max(1, Math.round(d.n * quality));
+    const sway = (d.sway ?? 0) * spd;
+    for (let k = 0; k < n; k++) {
+      const phase = time * 1.2 * spd + k * 2.3;
+      const x = a.x + ((k * 97.31 + li * 41.7 + time * d.vx * spd + Math.sin(phase) * sway) % a.w + a.w) % a.w;
+      const y = a.y + ((k * 61.7 + li * 23.3 + time * d.vy * spd) % a.h + a.h) % a.h;
+      const s = d.size * (0.7 + (k % 3) * 0.15);
+      ctx.globalAlpha = d.alpha * (0.55 + 0.45 * Math.sin(phase) ** 2);
+      ctx.drawImage(tile, Math.round(x), Math.round(y), s * (d.wide ?? 1), s * tile.height / tile.width);
+    }
+  });
+
+  // seeded twinkles — water sparkle, crystal glints, fireflies, crackle
+  const gl = spec.glint;
+  if (gl) {
+    const n = Math.max(1, Math.round(gl.n * quality));
+    const span = Math.max(40, a.h - 120);
+    ctx.fillStyle = gl.color;
+    for (let k = 0; k < n; k++) {
+      const hx = hash(k * 5.13 + tseed * 7.7), hy = hash(k * 9.71 + tseed * 3.3);
+      const tw = Math.sin(time * gl.speed * (REDUCED ? 0.4 : 1) + k * 4.7);
+      if (tw <= 0.15) continue;
+      const x = a.x + 18 + hx * (a.w - 36) + (gl.wander ? Math.sin(time * 0.7 * spd + k * 2.13) * gl.wander * spd : 0);
+      const y = gl.rise
+        ? a.y + 70 + ((hy * span - time * gl.rise * spd) % span + span) % span
+        : a.y + 70 + hy * span;
+      ctx.globalAlpha = gl.alpha * tw * tw;
+      const s = gl.size * (0.8 + (k % 2) * 0.4);
+      ctx.fillRect(Math.round(x), Math.round(y), s, s);
+    }
+  }
+
+  // foreground fringe — sod bands tile flush; reeds scatter on their gap
+  const f = spec.fringe;
+  if (f) {
+    const tile = ambTile(`${theme}:F`, f.r, f.t);
+    if (tile) {
+      const h = f.h, w = h * tile.width / tile.height;
+      const gap = f.gap ?? w;
+      const base = a.y + a.h - 16;
+      ctx.globalAlpha = 1;
+      for (let k = 0, x = a.x + 12; x < a.x + a.w - 12; x += gap, k++) {
+        const jx = f.gap ? (hash(k * 3.9 + tseed * 5.1) - 0.5) * 16 : 0;
+        const bob = Math.sin(time * 1.5 * spd + k * 1.9) * 1.2;
+        ctx.globalAlpha = (f.alpha ?? 0.9) * (0.85 + 0.15 * Math.sin(time * 2 * spd + k * 2.7));
+        ctx.drawImage(tile, Math.round(x + jx), Math.round(base - h + bob), w, h);
+      }
+    }
   }
   ctx.restore();
 }

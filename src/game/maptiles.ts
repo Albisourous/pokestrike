@@ -90,3 +90,9 @@ export const FX_DUST: TileRect = [1920, 653, 4, 3];
 export const FX_EMBER: TileRect = [361, 380, 6, 5];
 export const FX_SNOW: TileRect = [1946, 634, 8, 8];
 export const FX_BUBBLE: TileRect = [1966, 634, 8, 8];
+
+// Flowering-sod bands for ambient foreground fringe (the 16px grass tiles at
+// atlas x1660+): ragged sprig tips over solid turf ending on a dark base row.
+// Fully opaque — tile horizontally; slice() keying is a no-op on them.
+export const TILE_SOD: TileRect = [1660, 170, 48, 20]; // turf band, yellow blooms, dark base
+export const TILE_SOD_BLOOM: TileRect = [1660, 162, 48, 27]; // lusher cut — pink + yellow bloom rows
