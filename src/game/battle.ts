@@ -1883,11 +1883,11 @@ export class Battle {
       const label = { swarm: 'SWARM!', hasty: 'HASTY FOES!', volatile: 'VOLATILE PACK!', big: 'A BIG ONE!', gold: 'SOMETHING SHINY GLINTS…', cleric: 'A CLERIC HIDES IN THE PACK!', aegis: 'A GUARDIAN WARDS THE PACK!', zombie: 'THEY WON\'T STAY DOWN!', skull: 'A MARKED FOE · BONUS ON KO!', grav: 'GRAVITY AURA!', power: 'POWER ZONE!', warded: 'WARDED PACK!', sky: 'THEY TAKE WING!', skitter: 'SKITTERING FOES!', hexed: 'HEXED FIELD!', tailwind: 'TAILWIND!', headwind: 'HEADWIND!', slick: 'SLICK COURT!', storm: 'A STORM FRONT ROLLS IN!', thorns: 'THORNS BURST FROM THE FIELD!', armored: 'THE PACK IS PLATED!', slumber: 'THE PACK IS NAPPING…', polarized: 'POLARIZED FIELD!', echo: 'ECHO WALLS!' }[mod] ?? 'MUTATED!';
       this.waveSpecial = this.waveSpecial ? `${this.waveSpecial} · ${label}` : label;
     }
-    // MS-style field pickups: one per wave, two where a boss or elite lurks
+    // MS-style field pickups: one per wave, period — two crowded the court
     this.pickups = [];
     this.stockedBall = null; // the pocket empties with the wave that stocked it
     this.scars = [];
-    const npk = this.enemies.some((e) => e.boss || ELITE_IDS.has(e.def.id)) ? 2 : 1;
+    const npk = 1;
     // a lum cure only rolls when the pack carries a status threat — it
     // never crowds out the heal/atk drops on a clean wave, and keeps the
     // seeded stream identical on threat-free waves
