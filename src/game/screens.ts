@@ -1,7 +1,7 @@
 import { itemSprite, loadItem, loadSprite, drawMon, drawShiny, drawNpc, loadNpcs, gracidea, whiteSprite } from '../core/assets';
 import { drawMissionTicks } from './missions';
 import { isMuted, sfx } from '../core/audio';
-import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, DRAFT_ROUNDS, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
+import { SpeciesDef, TOTAL_STAGES, INVADER_IDS, PULLABLE, DEX_ALL, PULL_COST, PULL10_COST, PULL_PITY, PULL_SHINY, PULL_RATES, shinyOdds, tierOf, speciesById, dustCost, AVATARS, STAGE_GIMMICKS } from './data';
 import { abilityOf, abilityLabel, counterHint, countersGimmick } from './abilities';
 import { gaugeCounter } from './gauge';
 import { PERKS, RARITY_COLOR, BAG_ITEMS } from './perks';
@@ -3430,7 +3430,7 @@ export function drawDraft(
   ctx: CanvasRenderingContext2D,
   offers: SpeciesDef[],
   picked: SpeciesDef[],
-  stageName: string,
+  _stageName: string,
   _t: number,
   rerolls: number,
   spin: { age: number; pool: SpeciesDef[]; idx: number[] },
@@ -3440,7 +3440,7 @@ export function drawDraft(
 
   // a title plate up top; the cards stand on the court itself, and the team
   // so far sits on a dark ledge below so the offer stays the focal pick
-  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 74 }, `DRAFT · PICK ${picked.length + 1} OF ${DRAFT_ROUNDS}`, { sub: stageName });
+  uiPanel(ctx, { x: 14, y: 96, w: W - 28, h: 74 }, 'PICK A STARTER');
   uiWindow(ctx, { x: 30, y: 572, w: W - 60, h: 156 }, { rad: 12, dark: true });
 
   ctx.textAlign = 'center';
@@ -3455,9 +3455,7 @@ export function drawDraft(
     ? `${lastIt!.name.toUpperCase()} · ${bagDesc}`
     : spinning
       ? 'reels rolling · tap to skip'
-      : picked.length === DRAFT_ROUNDS - 1
-        ? 'ace round · a veteran anchors the team'
-        : 'your picks become the balls you sling';
+      : 'pick one · catches fill the rest of the team';
   if (bagDesc) fitFontB(ctx, line.toUpperCase(), 10, W - 40);
   ctx.fillStyle = bagDesc ? INK_SOFT : INK;
   ctx.fillText(bagDesc ? line.toUpperCase() : line, W / 2, 155);

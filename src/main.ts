@@ -9,7 +9,7 @@ import { Battle, PAUSE_QUIT, PAUSE_SETTINGS, TEAM_CAP, debugArena, WEATHER_FOR }
 import { GAUGE_ICON } from './game/gauge';
 import { PERKS, rollPerks } from './game/perks';
 import type { Perk } from './game/perks';
-import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom, ENEMY_THEME, MOAT_HAZARD, GIMMICK, THEME_NAME } from './game/data';
+import { ROSTER, makeStage, draftOrder, DRAFT_ROUNDS, ALL_SPRITE_IDS, TOTAL_STAGES, speciesById, tierOf, pullSpecies, PULL_COST, PULL10_COST, PULL_PITY, DUST_BY_TIER, INVADER_IDS, shinyOdds, AVATARS, raidStage, genRoom, ENEMY_THEME, MOAT_HAZARD, GIMMICK, THEME_NAME, STARTERS } from './game/data';
 import type { SpeciesDef } from './game/data';
 import { THEMES, type Theme } from './game/bg';
 import { dexIds, recordCapture, recordShiny, recordGymWin, rank, echoIds, saveEcho, clearEcho, recordRun, best, shinyCharm, unlockAch, unlockedAch, ACHIEVEMENTS, coachDone, markCoached, resetCoach, BADGES, applyRunRating, recordBoard, migrateSaves, statOffer, statRunEnd, statsDump, saveRun, runSave, clearRun, settings, spendBag, bumpStreaks, streakWins, streakDaily, ascPick, ascCap, setAsc, stars, addStars, starBoost, grantBoost, raidDoneToday, markRaidDone, spendStars, dust, addDust, spendDust, pullCount, bumpPulls, buyLab, statPull, firstWinBonus, grindBonus, freePullLeft, useFreePull, claimDexRewards, rookieCheck, helpSeen, markHelpSeen, setTrainer, setsReady, claimSet, bankBond, board, itemTierRoll, type RunSave } from './game/meta';
@@ -598,10 +598,9 @@ const draftPick = (i: number) => {
   inputLockT = t + 0.25; // the charm board is live — eat this tap's companion
 };
 
-// A run's draft pool is the roster plus everything the dex has caught that
-// isn't already in it — catching mons is how new faces join future drafts.
-// draftOrder only deals roster indices, so the extras get shuffled into the
-// deal here or they'd never be offered.
+// A run's offer board is every starter plus everything the dex has caught
+// — collecting mons is how the board widens (the Clash Royale loop). One
+// pick opens the climb; the rest of the team's open slots get caught.
 // one run setup shared by START CLIMB, RESTART and REMATCH — ?seed=NNN
 // always wins (debug/sharing), else a fresh roll
 let titleSave: RunSave | null = null; // pk_run peek for the title's CONTINUE button
@@ -730,35 +729,21 @@ function startRaid() {
 }
 
 function startDraft() {
-  // Your dex IS the draft pool — hatcher pulls and catches are what widen
-  // it, so collecting is the roster. A fresh save gets the starter trio so
-  // the board always has something to deal.
-  if (!dexIds().length) recordCapture([1, 4, 7]);
-  const owned = dexIds()
-    .map(speciesById)
-    .filter((d): d is SpeciesDef => !!d);
-  // the last pick is the ace board: your deepest-tier mons, distinct types
-  // first — a fat collection still surfaces its anchors
-  const aces: SpeciesDef[] = [];
-  const aceTypes = new Set<string>();
-  for (const d of [...owned].sort((a, b) => tierOf(b) - tierOf(a))) {
-    if (aces.length >= 3) break;
-    if (aceTypes.has(d.type)) continue;
-    aceTypes.add(d.type);
-    aces.push(d);
+  // The climb opens on a single pick: every starter plus whatever the dex
+  // has caught — collecting is what widens the board. The rest of the team
+  // (TEAM_CAP slots) gets caught mid-run and joined from the box.
+  const pool = new Map<number, SpeciesDef>();
+  for (const d of STARTERS) pool.set(d.id, d);
+  for (const id of dexIds()) {
+    const d = speciesById(id);
+    if (d) pool.set(d.id, d);
   }
-  for (const d of owned) {
-    if (aces.length >= 3) break;
-    if (!aces.includes(d)) aces.push(d);
-  }
-  const rest = owned.filter((d) => !aces.includes(d));
-  draftPool = [...rest, ...aces];
+  draftPool = [...pool.values()];
   // TRIPLE CROWN (3 wins) pays a second board reshuffle — the draft gets
   // friendlier once you've proven the climb
   const rerolls = 1 + (unlockedAch().has('triple') ? 1 : 0);
-  draft = { order: draftOrder(runRng, rest), picked: [], shiny: new Set(), lvls: new Map(), rerolls };
+  draft = { order: draftOrder(runRng, draftPool), picked: [], shiny: new Set(), lvls: new Map(), rerolls };
   bagScroll = 0; // a new board re-centers its bag row
-  draft.order.splice((DRAFT_ROUNDS - 1) * 3, 3, ...aces.map((_, k) => rest.length + k));
   // ~1/50 of draft cards roll shiny — a gold card is the run's first
   // high-roll; the Shiny Charm milestone doubles it
   const shinyOdds = 0.02 * (shinyCharm() ? 2 : 1);
@@ -797,13 +782,7 @@ function rerollDraft() {
     return;
   }
   draft.rerolls--;
-  const head = draft.order.slice(0, draft.picked.length * 3);
-  const tail = draft.order.slice(draft.picked.length * 3);
-  for (let i = tail.length - 1; i > 0; i--) {
-    const j = Math.floor(runRng() * (i + 1));
-    [tail[i], tail[j]] = [tail[j], tail[i]];
-  }
-  draft.order = [...head, ...tail];
+  draft.order = draftOrder(runRng, draftPool); // a fresh deal of three, not a shuffle of the same
   offerCache = null;
   respinDraft();
   sfx('ui');

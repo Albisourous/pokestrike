@@ -289,7 +289,7 @@ export const ROSTER: SpeciesDef[] = [
 
 ];
 
-export const DRAFT_ROUNDS = 2;
+export const DRAFT_ROUNDS = 1; // one starter pick opens the climb — catches fill the rest of the team
 const DRAFT_OFFERS = 3;
 
 // Each draft round offers 3 picks with distinct types — encourages a varied
@@ -891,9 +891,12 @@ export const ALL_SPECIES = [...ROSTER, ...ENEMY_DB, ...ELITES, ...EVOS, ...INVAD
 export const speciesById = (id: number): SpeciesDef | undefined =>
   ALL_SPECIES.find((d) => d.id === id);
 
-// The draft's final pick is an ace: a veteran mid-stager that still has a
-// ceiling (it evolves). Three runts and one anchor beats four runts.
-export const ACE_POOL = EVOS.filter((d) => d.evolvesTo != null);
+// The climb opens on pick-1-of-3 off this board: the gens 1-5 starter
+// trios plus the partner picks everyone calls starters (Pikachu, Eevee,
+// Riolu). Gen 6+ starters have no pixel sprites — the pool caps at gen 5.
+export const STARTER_IDS = [1, 4, 7, 152, 155, 158, 252, 255, 258, 387, 390, 393, 495, 498, 501, 25, 133, 447];
+export const STARTERS = STARTER_IDS.map((id) => speciesById(id)!);
+
 
 // Canon levitators/hoverers — cross water zones like water/flying types.
 export const FLOATERS = new Set([

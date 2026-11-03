@@ -5761,6 +5761,24 @@ export class Battle {
     }
     this.phase = 'reward';
     if (!this.waveHadGym) playJingle('clear'); // gyms already played their badge stab
+    // open slots pull from the box before the roster prompt — a catch
+    // fields itself; KO'd catches stay boxed until they're healed
+    while (this.players.length < TEAM_CAP) {
+      const bi = this.boxHp.findIndex((hp) => hp > 0);
+      if (bi < 0) break;
+      const def = this.box[bi];
+      const frac = this.boxHp[bi];
+      const lvl = this.boxLvl[bi] ?? 1;
+      this.box.splice(bi, 1);
+      this.boxHp.splice(bi, 1);
+      this.boxLvl.splice(bi, 1);
+      const u = this.makeUnit({ ...def, joined: this.waveIndex }, lvl, this.players.length, TEAM_CAP);
+      u.hp = Math.max(1, Math.round(u.maxHp * frac));
+      this.players.push(u);
+      this.refreshTraits();
+      this.log(`${def.name.toUpperCase()} JOINED THE TEAM`);
+    }
+    if (!this.box.length) this.boxPing = false; // nothing boxed means nothing to nag about
     // fix the lineup before the item — main opens the roster over the board
     // once; only worth the interruption when there's a mon to swap in
     this.wantMenu = this.box.length > 0;
@@ -10411,6 +10429,14 @@ export class Battle {
       const anim = recipeFor(clk?.type ?? u.def.type, clk?.move);
       if (u.boss) this.drawTelegraph(ctx, u, anim);
       else this.drawFoeTell(ctx, u, anim);
+    }
+    // ally pad — a flat disc under every friendly so your mons read as yours
+    // at a glance; enemies carry their telegraphs instead
+    if (u.side === 'player') {
+      ctx.fillStyle = 'rgba(88,148,250,0.42)';
+      ctx.beginPath();
+      ctx.ellipse(u.x, u.y + u.r * 0.72, u.r * 1.06, u.r * 0.38, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
     // soft shadow grounds the sprite on the court
     ctx.fillStyle = 'rgba(8,10,20,0.3)';
