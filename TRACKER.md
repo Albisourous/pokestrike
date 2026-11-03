@@ -352,3 +352,7 @@ draft/charm/map/wave/pause, wide+mobile letterbox. Zero console errors.
 | 2026-11-02 | `c2ed6a5` | missions/tasks | multiko3/halfpar/clutch goal kinds; scorerun/gymrun/catchrun run-peak task kinds | `git revert c2ed6a5` |
 | 2026-11-02 | `4f29696` | map | seeded landmarks + clearings/groves/islets/dirt, elite guarantee; rest-before-converts mart fix; goldens regen | `git revert 4f29696` |
 | 2026-11-02 | `8617c96` | bg | ambient pass: seeded parallax drift + glints + foot fringe per theme; TILE_SOD/BLOOM rects; reduced-motion honors OS probe | `git revert 8617c96` |
+| 2026-11-02 | `8c545d6` | perks | Iron Ball, Star Piece, Link Cable, Shiny Charm — tradeoff/greed/build-around/niche relics on existing knobs | `git revert 8c545d6` |
+| 2026-11-02 | `cf91553` | celebrations | evo type-colored flash + silhouette lock; fame type spotlights + finale; share card type frame + MVP crown + badge shine | `git revert cf91553` |
+| 2026-11-02 | `1e23977` | home | seeded wild scouts/strays on climb/mons/town, raid boss patrol, shop sheen, trophies next-badge pulse, lab N READY | `git revert 1e23977` |
+| 2026-11-02 | `69becf9` | abilities | ~20 canon abilities wired — counters, pinch/loaf attack mods, weather speeds, launch cleanses | `git revert 69becf9` |
