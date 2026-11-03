@@ -5,6 +5,9 @@
 import { drawMon, itemSprite, loadItem } from '../core/assets';
 import { buzz, sfx, type Sfx } from '../core/audio';
 import { fontB, ufit, GOLD, GOLD_HI, PARCH, type Rect } from './ui';
+import { speciesById } from './data';
+import { settings } from './meta';
+import { TYPE_COLOR } from './types';
 
 export type TelopKind = 'start' | 'boss' | 'phase' | 'weak' | 'shield' | 'combo' | 'speed' | 'clear' | 'over' | 'ult' | 'foe' | 'connect';
 
@@ -54,7 +57,7 @@ export const COMBO_TIERS: [number, string, string][] = [
 ];
 export const comboTier = (n: number) => COMBO_TIERS.find(([at]) => at === n);
 
-type Live = Telop & { wait: number; color?: string };
+type Live = Telop & { wait: number; color?: string; tint?: string };
 
 export class Telops {
   cur: Live | null = null;
@@ -130,48 +133,70 @@ export class Telops {
     if (!b) return;
     const spec = TELOP_SPEC[b.kind];
     const color = b.color ?? spec.color;
+    const still = settings().shake === 0; // reduced-motion seed: new flourishes land settled
+    // hairlines take the portrait's primary type — a foe banner reads its type at a glance
+    if (b.tint === undefined) {
+      const d = b.mon !== undefined ? speciesById(b.mon) : undefined;
+      b.tint = d ? TYPE_COLOR[d.type] : GOLD;
+    }
     const t = this.t;
     const ease = (k: number) => 1 - (1 - Math.min(1, Math.max(0, k))) ** 3;
     const kIn = ease(t / IN);
     const kOut = ease((t - (spec.dur - OUT)) / OUT);
     const slide = (1 - kIn) * -W + kOut * W; // in from the left, out to the right
-    const H = spec.minor ? 78 : 108;
+    const H = spec.minor ? 78 : b.kind === 'boss' ? 120 : 108;
     const cy = Math.round(a.y + a.h * (spec.minor ? 0.3 : 0.47));
     ctx.save();
     ctx.globalAlpha = Math.min(1, kIn * 1.4) * (1 - kOut);
-    // the ribbon: ink band, type-colored rails, gold hairlines
+    // the ribbon: ink band, type-colored rails, type-tinted hairlines
     ctx.translate(slide, 0);
-    ctx.fillStyle = '#101430ee';
+    ctx.fillStyle = b.kind === 'over' ? '#0a0d1af2' : '#101430ee';
     ctx.fillRect(0, cy - H / 2, W, H);
     ctx.fillStyle = color;
     ctx.fillRect(0, cy - H / 2, W, 5);
     ctx.fillRect(0, cy + H / 2 - 5, W, 5);
-    ctx.fillStyle = GOLD;
+    if (b.kind === 'boss') {
+      // hazard tape: dark slashes across the rails mark the boss band
+      ctx.fillStyle = '#101430';
+      for (const ry of [cy - H / 2, cy + H / 2 - 5])
+        for (let x = -8; x < W; x += 24) {
+          ctx.beginPath();
+          ctx.moveTo(x, ry);
+          ctx.lineTo(x + 10, ry);
+          ctx.lineTo(x + 17, ry + 5);
+          ctx.lineTo(x + 7, ry + 5);
+          ctx.fill();
+        }
+    }
+    ctx.fillStyle = b.tint;
     ctx.fillRect(0, cy - H / 2 + 7, W, 2);
     ctx.fillRect(0, cy + H / 2 - 9, W, 2);
-    // speed streaks drift across the band while it holds
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, cy - H / 2 + 9, W, H - 18);
-    ctx.clip();
-    ctx.fillStyle = color;
-    ctx.globalAlpha *= 0.12;
-    for (let i = 0; i < 4; i++) {
-      const x = ((i * 157 + t * 520) % (W + 120)) - 60;
+    // speed streaks drift across the band while it holds — speed runs them hotter, GAME OVER holds them dead still
+    const streak = b.kind === 'over' ? 0 : b.kind === 'speed' ? 1.6 : 1;
+    if (streak) {
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(x, cy + H / 2);
-      ctx.lineTo(x + 26, cy + H / 2);
-      ctx.lineTo(x + 70, cy - H / 2);
-      ctx.lineTo(x + 44, cy - H / 2);
-      ctx.fill();
+      ctx.rect(0, cy - H / 2 + 9, W, H - 18);
+      ctx.clip();
+      ctx.fillStyle = color;
+      ctx.globalAlpha *= 0.12;
+      for (let i = 0; i < 4; i++) {
+        const x = ((i * 157 + t * 520 * streak) % (W + 120)) - 60;
+        ctx.beginPath();
+        ctx.moveTo(x, cy + H / 2);
+        ctx.lineTo(x + 26, cy + H / 2);
+        ctx.lineTo(x + 70, cy - H / 2);
+        ctx.lineTo(x + 44, cy - H / 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
-    ctx.restore();
-    // art rides in a beat behind the band
+    // art rides in a beat behind the band; a boss front bursts the ribbon
     const lag = (1 - ease((t - 0.05) / IN)) * -60;
-    const side = H * 0.92;
+    const side = H * (b.kind === 'boss' ? 1.14 : 0.92);
     const left = b.mon !== undefined ? side + 20 : 24;
     const icon = b.icon ? itemSprite(b.icon) : undefined;
-    const right = icon ? side * 0.7 + 24 : 24;
+    const right = icon ? Math.min(side, H * 0.92) * 0.7 + 24 : 24;
     if (b.mon !== undefined) {
       if (b.kind === 'over') ctx.globalAlpha *= 0.55;
       try {
@@ -180,7 +205,7 @@ export class Telops {
       if (b.kind === 'over') ctx.globalAlpha /= 0.55;
     }
     if (icon && icon.naturalWidth) {
-      const s = side * 0.62;
+      const s = Math.min(side, H * 0.92) * 0.62;
       const k = s / Math.max(icon.naturalWidth, icon.naturalHeight);
       ctx.save();
       ctx.imageSmoothingEnabled = false;
@@ -194,13 +219,18 @@ export class Telops {
     const room = W - left - right;
     ctx.textAlign = 'center';
     ctx.lineJoin = 'round';
-    ufit(ctx, b.title, spec.minor ? 20 : 22, room); // font() scales 1.4×: 20 → 28px, 22 → 31px
+    ufit(ctx, b.title, spec.minor ? 20 : b.kind === 'boss' ? 25 : 22, room); // font() scales 1.4×: 20 → 28px, 22 → 31px
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 6;
     const ty = cy + (b.sub || b.mons ? (spec.minor ? 2 : 4) : 12);
-    ctx.strokeText(b.title, mid, ty);
+    const pop = !still && (b.kind === 'combo' || b.kind === 'connect' || b.kind === 'boss' || b.kind === 'ult') ? 1 + (1 - kIn) * 0.45 : 1;
     ctx.fillStyle = b.kind === 'start' || b.kind === 'ult' || b.kind === 'clear' ? PARCH : color;
-    ctx.fillText(b.title, mid, ty);
+    ctx.save();
+    ctx.translate(mid, ty);
+    if (pop !== 1) ctx.scale(pop, pop);
+    ctx.strokeText(b.title, 0, 0);
+    ctx.fillText(b.title, 0, 0);
+    ctx.restore();
     if (b.sub) {
       let px = 13;
       ctx.font = fontB(px);
@@ -210,9 +240,19 @@ export class Telops {
       ctx.fillStyle = b.kind === 'start' || b.kind === 'ult' || b.kind === 'clear' ? color : PARCH;
       ctx.fillText(b.sub, mid, ty + (spec.minor ? 26 : 32));
     }
+    if (b.mons && b.mons.length > 1) {
+      // ALL CONNECT: the chain literally links the fronts
+      const half = ((b.mons.length - 1) / 2) * 52;
+      ctx.save();
+      ctx.globalAlpha *= 0.55 * (still ? 1 : ease((t - 0.12) / 0.3));
+      ctx.fillStyle = color;
+      ctx.fillRect(mid - half, cy + 26, half * 2, 4);
+      ctx.restore();
+    }
     b.mons?.forEach((id, i, all) => {
+      const d = still ? 0 : (1 - ease((t - 0.04 - i * 0.05) / IN)) * -34;
       try {
-        drawMon(ctx, id, mid + (i - (all.length - 1) / 2) * 52, cy + 28, 40);
+        drawMon(ctx, id, mid + (i - (all.length - 1) / 2) * 52 + d, cy + 28, 40);
       } catch { /* sprite still loading */ }
     });
     ctx.restore();
