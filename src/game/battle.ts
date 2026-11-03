@@ -125,6 +125,7 @@ export interface Unit {
   sumStage: number; // boss bar index (0..2)
   atkN: number; // boss attack count — every 3rd is a teleport, not a blast
   weakA: number; // weak point angle — regular foes ×2, bosses ×3
+  weakA2?: number; // bosses carry a second weak face (MS multi-circle hitboxes)
   wpHidden?: boolean; // MS hidden weak point: unmarked until the first contact
   wpPopT?: number; // reveal time — the WEAK POINT! label fades off it
   shieldA: number; // shelled foes: the shell's facing — front hits glance, back hits flank
@@ -2057,7 +2058,7 @@ export class Battle {
       const t = { sun: 'fire', rain: 'water', sand: 'rock', wind: 'flying', storm: 'electric' }[this.weather] as PokeType | undefined;
       if (t) def = { ...def, type: t };
     }
-    return {
+    const u: Unit = {
       uid: this.uidCtr++,
       def,
       side: 'enemy',
@@ -2126,6 +2127,9 @@ export class Battle {
       atkMul: 1,
       lastStand: false,
     };
+    // the second face sits 120° off the first — a gym ace asks for a second angle
+    if (u.boss) u.weakA2 = (u.weakA + (Math.PI * 2) / 3) % (Math.PI * 2);
+    return u;
   }
 
   // Held-item quirk on a boss — pokelike's curated aces. Rolled on the
@@ -4190,12 +4194,19 @@ export class Battle {
     sfx('boom');
   }
 
-  private weakHit(e: Unit, x: number, y: number): boolean {
-    if (e.dead || (!e.boss && e.def.shielded)) return false;
+  private weakFace(e: Unit, x: number, y: number): number | null {
+    if (e.dead || (!e.boss && e.def.shielded)) return null;
     const a = Math.atan2(y - e.y, x - e.x);
-    let dd = Math.abs(a - e.weakA) % (Math.PI * 2);
-    if (dd > Math.PI) dd = Math.PI * 2 - dd;
-    return dd < (e.boss ? 0.62 : 0.45);
+    for (const face of e.weakA2 === undefined ? [e.weakA] : [e.weakA, e.weakA2]) {
+      let dd = Math.abs(a - face) % (Math.PI * 2);
+      if (dd > Math.PI) dd = Math.PI * 2 - dd;
+      if (dd < (e.boss ? 0.62 : 0.45)) return face;
+    }
+    return null;
+  }
+
+  private weakHit(e: Unit, x: number, y: number): boolean {
+    return this.weakFace(e, x, y) !== null;
   }
 
   // hidden weak point: first contact pops it into view, no banner
@@ -4236,7 +4247,8 @@ export class Battle {
     if (rico && !this.inStatic(shooter.x, shooter.y)) this.onRicochet(e.x, e.y);
     const mult = typeMult(at, e.def) * weatherMult(this.sky, at);
     // read the marked face before damage — every foe has one, except shells
-    const weak = this.weakHit(e, shooter.x, shooter.y);
+    const weakFace = this.weakFace(e, shooter.x, shooter.y);
+    const weak = weakFace !== null;
     // shelled foes face their shell into the fight: hits arriving on it
     // glance to 30%, hits landing behind it pay the flank
     let guarded = false;
@@ -4287,7 +4299,7 @@ export class Battle {
     if (weak) {
       this.stopWeak++;
       this.shotWeak++;
-      this.waves.push({ x: e.x + Math.cos(e.weakA) * e.r * 0.92, y: e.y + Math.sin(e.weakA) * e.r * 0.92, r: 0, maxR: e.r * 1.5, t: 0.22, life: 0.22, color: '#fff3a0', hits: new Set() });
+      this.waves.push({ x: e.x + Math.cos(weakFace) * e.r * 0.92, y: e.y + Math.sin(weakFace) * e.r * 0.92, r: 0, maxR: e.r * 1.5, t: 0.22, life: 0.22, color: '#fff3a0', hits: new Set() });
       if (e.boss) {
         if (!this.weakTelop(e)) this.pushText({ x: e.x, y: e.y - e.r - 44, text: 'WEAK POINT!', t: 1, color: '#ffd84d', big: true });
         this.hitStop = Math.max(this.hitStop, 0.16);
@@ -6966,6 +6978,7 @@ export class Battle {
     boss.x = at.x;
     boss.y = at.y;
     boss.weakA = (boss.weakA + BOSS_WEAK_SHIFT) % (Math.PI * 2);
+    if (boss.weakA2 !== undefined) boss.weakA2 = (boss.weakA2 + BOSS_WEAK_SHIFT) % (Math.PI * 2);
     boss.timer = this.enemyReload(boss);
     boss.bigT = BOSS_BIG_TIMER;
     boss.clocks = foeClocks(boss.def.type, true, boss.sumStage).map(({ kind, move, turn, first, type }) => ({ kind, move,
@@ -10825,13 +10838,12 @@ export class Battle {
       }
       // Weak points hold their face through a bar so the next pull can line up.
       if (!u.dead && !u.wpHidden && (u.boss || !u.def.shielded)) {
-        const wx = u.x + Math.cos(u.weakA) * u.r * 0.92;
-        const wy = u.y + Math.sin(u.weakA) * u.r * 0.92;
         const s = u.boss ? 7 + Math.sin(this.time * 6) * 2 : 5 + Math.sin(this.time * 6) * 1.5;
         const pop = u.wpPopT === undefined ? 0 : Math.max(0, 1 - (this.time - u.wpPopT) / 0.35);
         ctx.fillStyle = '#ffd84d';
         ctx.strokeStyle = '#000';
-        drawStar(ctx, wx, wy, s * (1 + pop * 1.5), 0.4, 2);
+        for (const face of u.weakA2 === undefined ? [u.weakA] : [u.weakA, u.weakA2])
+          drawStar(ctx, u.x + Math.cos(face) * u.r * 0.92, u.y + Math.sin(face) * u.r * 0.92, s * (1 + pop * 1.5), 0.4, 2);
       }
       if (u.boss && !u.dead) {
         // minion guard: while summoned adds live, a shield ring orbits —
