@@ -15,6 +15,9 @@ import { font } from './ui';
 export const SECRET_ODDS: Partial<Record<ClearRank, number>> = { S: 0.35, A: 0.15 };
 export const SECRET_STARS = [40, 60] as const;
 export const SECRET_HP = 1.25;
+export const SECRET_RAGE = 1 / 5; // a seeded minority of lairs wake already enraged
+export const SECRET_RAGE_HP = 0.2; // extra max-HP share over SECRET_HP
+export const SECRET_RAGE_STARS = 20; // extra star pieces for putting it down
 const POOL_0 = [144, 145, 146];
 const POOL_1_A = [243, 244, 245];
 const POOL_1_S = [249, 250, 381];
@@ -42,6 +45,10 @@ export const secretTheme = (theme: Theme, active: boolean): Theme => active ? 's
 
 export const secretRng = (mapSeed: number, row: number) =>
   mulberry32(((mapSeed ^ 0x5ec2e7) + row * 7919) >>> 0);
+
+// the enrage roll rides its own stream — a resumed lair re-derives the same
+// flag from the save's row, never consuming the run rng or the species roll
+const lairRage = (mapSeed: number, row: number) => secretRng(mapSeed ^ 0x1a9e, row)() < SECRET_RAGE;
 
 export function rollSecret(
   mapSeed: number,
@@ -161,6 +168,7 @@ export interface SecretState {
   hpSnap: { hp: number; dead: boolean }[];
   rngSaved: () => number;
   had: boolean;
+  rage: boolean; // enraged lair — tougher legend, richer star payout
 }
 
 const internals = (b: Battle) => b as unknown as SecretBattle;
@@ -186,6 +194,7 @@ export function secretLoad(b: Battle, v: unknown) {
   x.secret = {
     node, gymIdx, def, row, rank, phase: 'open', bossLvl: 1,
     added: secretRoutes.get(node) ?? [], hpSnap: [], rngSaved: x.rng, had: false,
+    rage: lairRage(x.mapSeed, row),
   };
 }
 
@@ -212,8 +221,8 @@ export function maybeSecret(b: Battle) {
   const gymIdx = x.regionMap.nodes.findIndex((n) => n.row === x.waveIndex && n.kind === 'gym');
   if (gymIdx < 0) return;
   const node = placeSecret(x.regionMap, gymIdx);
-  x.secret = { node, gymIdx, def, row: x.waveIndex, rank: card.rank, phase: 'open', bossLvl: 1, added: secretRoutes.get(node) ?? [], hpSnap: [], rngSaved: x.rng, had: false };
-  x.telop.push({ kind: 'phase', title: 'SECRET LAIR', sub: 'A LEGEND STIRS · CHECK THE MAP', icon: 'poke-ball' });
+  x.secret = { node, gymIdx, def, row: x.waveIndex, rank: card.rank, phase: 'open', bossLvl: 1, added: secretRoutes.get(node) ?? [], hpSnap: [], rngSaved: x.rng, had: false, rage: lairRage(x.mapSeed, x.waveIndex) };
+  x.telop.push({ kind: 'phase', title: 'SECRET LAIR', sub: `${x.secret.rage ? 'AN ENRAGED' : 'A'} LEGEND STIRS · CHECK THE MAP`, icon: 'poke-ball' });
 }
 
 export function enterSecret(b: Battle, node: MapNode) {
@@ -227,17 +236,18 @@ export function enterSecret(b: Battle, node: MapNode) {
   s.rngSaved = x.rng;
   x.rng = secretRng(x.mapSeed, s.row + 101);
   x.pendingEventWave = [{ def: s.def, nx: 0.5, ny: 0.28, boss: true }];
-  x.mapNote = `A LEGENDARY ${s.def.name.toUpperCase()} · SECRET LAIR`;
+  x.mapNote = `${s.rage ? 'AN ENRAGED' : 'A LEGENDARY'} ${s.def.name.toUpperCase()} · SECRET LAIR`;
   x.spawnWave(s.row, node);
   const boss = x.enemies.find((e) => e.boss);
   if (boss) {
     s.bossLvl = boss.lvl;
-    boss.maxHp = Math.round(boss.maxHp * SECRET_HP);
+    boss.maxHp = Math.round(boss.maxHp * (SECRET_HP + (s.rage ? SECRET_RAGE_HP : 0)));
     boss.hp = boss.maxHp;
     boss.bars = [0.35, 0.65];
-    // the last-firing clock leads instead — a legend opens on its signature
+    // the last-firing clock leads instead — a legend opens on its signature,
+    // an enraged one nearly fires it out of the gate
     const clock = boss.clocks.slice().sort((a, b) => b.t - a.t)[0];
-    if (clock) { clock.turn = Math.max(2, clock.turn - 1); clock.t = 2; }
+    if (clock) { clock.turn = Math.max(2, clock.turn - (s.rage ? 2 : 1)); clock.t = s.rage ? 1 : 2; }
   }
   x.screenFlash('#ffd84d', 0.28);
   playJingle('invade');
@@ -257,7 +267,7 @@ export function secretWon(b: Battle) {
     if (recordCapture([rec.id])) taskTick({ dex: 1 });
   }
   const tier = s.row >= 3 ? 1 : 0;
-  const pay = x.earnStars(SECRET_STARS[tier]);
+  const pay = x.earnStars(SECRET_STARS[tier] + (s.rage ? SECRET_RAGE_STARS : 0));
   x.eventBox = { note: `${rec.name.toUpperCase()} CAUGHT · +${pay} STAR PIECES`, art: { mon: rec.id } };
   x.log(x.eventBox.note);
   x.boxSel = -1;

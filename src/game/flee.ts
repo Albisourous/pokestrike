@@ -15,6 +15,11 @@ export const FLEE_DEF = 0.3;
 export const FLEE_DUST = 30;
 export const FLEE_STARS = 3;
 export const FLEE_SHINY = 1 / 8;
+export const FLEE_SPOOK = 0.4; // wound it under this share of its own max and it bolts next tick
+export const FLEE_DUST_STEP = 8; // dust steps up per stage past FLEE_FROM
+const WARN = '#ff5f6d';
+// OS reduced-motion seed (same probe as bg/evolve/fame): the warning frame holds steady
+const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 interface FleeUnit {
   uid: number;
@@ -108,13 +113,24 @@ export class Flee {
   }
 
   def(e: FleeUnit, damage: number): number {
-    return this.is(e) ? Math.max(1, Math.round(damage * FLEE_DEF)) : damage;
+    const state = this.units.get(e);
+    if (!state) return damage;
+    const dealt = Math.max(1, Math.round(damage * FLEE_DEF));
+    // spooked: a hit that would drop it under FLEE_SPOOK cuts the countdown to its last tick
+    if (state.left > 1 && e.hp - dealt <= e.maxHp * FLEE_SPOOK) state.left = 1;
+    return dealt;
   }
 
   turn(enemies: FleeUnit[], telop: Telops): void {
     for (const e of enemies) {
       const state = this.units.get(e);
-      if (!state || e.dead || --state.left > 0) continue;
+      if (!state || e.dead) continue;
+      if (--state.left === 1) {
+        // last-tick warning — the chip blinks red until it bolts
+        telop.push({ kind: 'foe', title: `${e.def.name.toUpperCase()} EYES THE EXIT`, mon: e.def.id });
+        sfx('warn');
+      }
+      if (state.left > 0) continue;
       e.dead = true;
       ring(MOVE_ANIM.psychic, e.x, e.y, e.r);
       spawnAnim('wind', e.x, e.y, 0, -24, 1.4, 0.5, 1, 0, 0, 0, 16, false, 0, 0.45);
@@ -127,10 +143,12 @@ export class Flee {
     const state = this.units.get(e);
     if (!state || state.paid) return '';
     state.paid = true;
-    addDust(FLEE_DUST);
-    if (e.def.id !== 113) return `+${FLEE_DUST} DUST`;
-    earnStars(FLEE_STARS);
-    return `+${FLEE_DUST} DUST · +${FLEE_STARS} STAR PIECES`;
+    const dust = FLEE_DUST + Math.max(0, this.stage - FLEE_FROM) * FLEE_DUST_STEP;
+    addDust(dust);
+    // star pieces ride Chansey's pouch and any shiny — the two pulls worth chasing
+    const stars = e.def.id === 113 || e.shiny ? FLEE_STARS : 0;
+    if (stars) earnStars(stars);
+    return stars ? `+${dust} DUST · +${stars} STAR PIECES` : `+${dust} DUST`;
   }
 
   hitSeed(e: FleeUnit, mapSeed: number, waveIndex: number, battle: number): number {
@@ -142,18 +160,20 @@ export class Flee {
 
   draw(ctx: CanvasRenderingContext2D): void {
     ctx.save();
+    const blink = REDUCED || Math.floor(Date.now() / 150) % 2 === 0;
     for (const [e, state] of this.units) {
       if (e.dead || state.left <= 0) continue;
+      const hot = state.left === 1; // last tick — the frame flashes red on and off
       const x = e.x, y = e.y - e.r - 18;
       ctx.fillStyle = 'rgba(8,10,20,0.82)';
       ctx.fillRect(x - 16, y - 7, 32, 14);
-      ctx.strokeStyle = '#f0e6c8';
+      ctx.strokeStyle = hot && blink ? WARN : '#f0e6c8';
       ctx.lineWidth = 1;
       ctx.strokeRect(x - 16, y - 7, 32, 14);
       for (let i = 0; i < FLEE_TURNS; i++) {
         ctx.beginPath();
         ctx.arc(x + (i === 0 ? -6 : 6), y, 3, 0, Math.PI * 2);
-        ctx.fillStyle = i < state.left ? '#ffd84d' : '#8890b8';
+        ctx.fillStyle = i < state.left ? (hot ? WARN : '#ffd84d') : '#8890b8';
         ctx.fill();
       }
     }
