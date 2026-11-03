@@ -559,6 +559,12 @@ const PICKUP_RIPEN: Partial<Record<PickupKind, { to: PickupKind; turns: number }
 const KO_LV_RATE = 0.05;
 const KO_LV_SHARE = 0.5;
 export const ULT_SHOTS = 10; // shots to charge the team ultimate — tap any glowing teammate to spend it
+// FEVER: a deep perfect-release streak arms a fevered NEXT shot — gold
+// court glow, a climbing jingle pitch, and a score premium on its hits
+const FEVER_AT = 3; // perfect-streak length that arms FEVER
+const FEVER_SCORE = 1.5; // score multiplier paid on fever-shot hits
+const FEVER_PITCH = 0.12; // perfect-SFX pitch step per streak past 2, capped
+const FEVER_PITCH_CAP = 6; // streak steps that still raise the pitch — beyond it the jingle squeaks
 
 // ?debug=arena1..11 or ?dev&arena=<name|index> — pin every wave's court
 // for arena review. debugArena() parses once, dev/debug-gated; node-smoke
@@ -786,6 +792,7 @@ let mapVig: CanvasGradient | null = null;
 // the wipe-pressure vignette: same baked gradient every frame, the pulse
 // rides on globalAlpha instead of a rebuilt color stop
 let dangerG: CanvasGradient | null = null;
+let feverG: CanvasGradient | null = null; // FEVER rim — same bake-once pattern
 
 // Shared context for initial text metrics; live widths refresh on font changes.
 const MCTX = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
@@ -916,6 +923,8 @@ export class Battle {
   streak = 0; // consecutive perfect launches — shown in the HUD
   private shotStreak = 1; // this shot's streak damage bonus
   private shotGold = false; // gold-zone release — MS gauge shot: +20% contact this shot
+  private fever = false; // streak armed FEVER — the next launch runs hot
+  private shotFever = false; // this launch is fevered — hits pay FEVER_SCORE
   ultIn = ULT_SHOTS; // shots until the map-wide ultimate — a team charge, tap any teammate to spend it
   private gaugeJit = 0; // per-pull variance: shifts the gold band and sweep pace
   private gaugeJit2 = 0; // per-pull variance: the band's width breathes too
@@ -1500,6 +1509,7 @@ export class Battle {
     this.missions.start(this.mapSeed, i + 1, this.players.map((p) => p.def.type), this.ultIn <= 6, this.time, this.raid || this.coach || !!this.pendingEventWave || !!debugArena());
     this.clearCard = null;
     this.waveFlawless = true;
+    this.fever = this.shotFever = false; // a fresh pack cools the streak's fever
     // ultIn banks across the whole run — pips earned in one fight spend at the next
     this.boxGain = null;
     this.refreshTraits();
@@ -2290,9 +2300,13 @@ export class Battle {
     // hot streak: back-to-back perfects make each shot hit a bit harder —
     // resets the moment a release misses the gold; the coached opener's
     // fiat gold isn't a real release, so it doesn't touch the count
+    this.shotFever = this.fever; // armed on the last release — this launch is fevered
     if (!quiet) this.streak = gold ? this.streak + 1 : 0;
     this.shotStreak = 1 + Math.min(Math.max(this.streak - 1, 0), 4) * 0.07;
     this.shotGold = gold && !quiet;
+    // FEVER arms off the release that hits the streak and rides the next
+    // launch — the arming shot itself is never fevered, a miss disarms it
+    this.fever = !quiet && gold && this.streak >= FEVER_AT;
     if (this.shotGold && gaugeCounter(u.def)) this.gaugeOn(u);
     const speed = BASE_SHOT_SPEED * POWER * launchMult(u.def.stats) * this.launchBoost * (this.curMod === 'tailwind' ? 1.15 : this.curMod === 'headwind' ? 0.85 : 1) * u.launch * (u.paraT > 0 ? 0.65 : 1) * (0.4 + 0.6 * (gold ? 1 : charge)) * this.swiftMult(u);
     u.vx = dir.x * speed;
@@ -2391,9 +2405,14 @@ export class Battle {
       this.burst(u.x, u.y, '#ffd84d', 22, 620, 1.3);
       this.addPunch(0.16);
       this.addShake(10);
-      sfx('perfect');
+      sfx('perfect', 1 + Math.min(Math.max(this.streak - 2, 0), FEVER_PITCH_CAP) * FEVER_PITCH);
       this.award('perfect');
       buzz([30, 40, 60]);
+      if (this.fever && !this.shotFever) {
+        // just armed — the next shot runs hot, the banner says what it pays
+        this.telop.push({ kind: 'ult', title: 'FEVER!', sub: `NEXT SHOT · SCORE ×${FEVER_SCORE}`, mon: u.def.id });
+        playJingle('fever');
+      }
     } else {
       // missed the band — say which side so the next release adjusts
       this.pushText({
@@ -3792,7 +3811,7 @@ export class Battle {
       sfx('invade');
     }
     const ascPremium = this.asc >= 5 ? 0.3 : 0.2; // ASC 5 INFLATION: the score premium deepens
-    const gain = Math.round(d * (1 + this.asc * ascPremium) * this.scoreMult); // ascension pays a score premium; lucky egg stacks on
+    const gain = Math.round(d * (1 + this.asc * ascPremium) * this.scoreMult * (this.shotFever && this.phase === 'shot' ? FEVER_SCORE : 1)); // ascension pays a score premium; lucky egg and fever shots stack on
     this.score += gain;
     // the run just became your best — celebrate mid-flight, not just on the card
     if (!this.bested && this.bestScore > 0 && this.score > this.bestScore) {
@@ -8748,6 +8767,32 @@ export class Battle {
           ctx.globalAlpha = 1;
         }
       }
+    }
+
+    // FEVER tell — while a fever shot is armed (aim) or in flight, gold
+    // bleeds in off the edges and corner ticks breathe over the court.
+    // shake 0 (reduced-motion seed) holds the glow steady instead of pulsing
+    if ((this.phase === 'aim' && this.fever) || (this.phase === 'shot' && this.shotFever)) {
+      const pulse = settings().shake > 0 ? 0.3 + Math.sin(this.time * 6) * 0.14 : 0.28;
+      if (!feverG) {
+        feverG = ctx.createRadialGradient(270, 480, 240, 270, 480, 560);
+        feverG.addColorStop(0, 'rgba(255,216,77,0)');
+        feverG.addColorStop(1, 'rgba(255,216,77,1)');
+      }
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = feverG;
+      ctx.fillRect(0, 0, W_CANVAS_FALLBACK, 2000);
+      ctx.globalAlpha = Math.min(1, pulse + 0.45);
+      ctx.strokeStyle = '#ffd84d';
+      ctx.lineWidth = 5;
+      const o = 10, c = 30;
+      ctx.beginPath();
+      ctx.moveTo(a.x + o, a.y + o + c); ctx.lineTo(a.x + o, a.y + o); ctx.lineTo(a.x + o + c, a.y + o);
+      ctx.moveTo(a.x + a.w - o - c, a.y + o); ctx.lineTo(a.x + a.w - o, a.y + o); ctx.lineTo(a.x + a.w - o, a.y + o + c);
+      ctx.moveTo(a.x + a.w - o, a.y + a.h - o - c); ctx.lineTo(a.x + a.w - o, a.y + a.h - o); ctx.lineTo(a.x + a.w - o - c, a.y + a.h - o);
+      ctx.moveTo(a.x + o + c, a.y + a.h - o); ctx.lineTo(a.x + o, a.y + a.h - o); ctx.lineTo(a.x + o, a.y + a.h - o - c);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
     }
 
     this.drawBattleHud(ctx);

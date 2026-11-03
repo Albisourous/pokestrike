@@ -265,7 +265,7 @@ interface JNote {
 }
 
 export type JingleKind = 'lose' | 'catch' | 'task' | 'gym' | 'item'
-  | 'clear' | 'fail' | 'hatch' | 'rest'
+  | 'clear' | 'fail' | 'hatch' | 'rest' | 'fever'
   | 'gym_forge' | 'gym_shade' | 'gym_earth' | 'gym_gale' | 'invade';
 
 const JINGLES: Record<JingleKind, JNote[]> = {
@@ -331,6 +331,13 @@ const JINGLES: Record<JingleKind, JNote[]> = {
     { m: 79, t: 0.28, d: 0.14, v: 0.09, w: 'sine' },
     { m: 84, t: 0.42, d: 0.34, v: 0.1,  w: 'sine' },
     { m: 88, t: 0.42, d: 0.3,  v: 0.04, w: 'triangle' }, // octave shimmer
+  ],
+  fever: [ // FEVER armed — an E-major run that leaps home and hangs hot
+    { m: 76, t: 0,    d: 0.07, v: 0.1 },
+    { m: 80, t: 0.06, d: 0.07, v: 0.1 },
+    { m: 83, t: 0.12, d: 0.07, v: 0.11 },
+    { m: 88, t: 0.18, d: 0.4,  v: 0.12 },
+    { m: 92, t: 0.18, d: 0.34, v: 0.05, w: 'sine' }, // octave shimmer on the hold
   ],
   // --- gym type stabs (S7): one dark V-hit each, ~0.5s, fired at boss-wave
   // spawn — they layer over the gym theme, family-colored by GYM_STAB below

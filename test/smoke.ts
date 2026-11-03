@@ -1957,6 +1957,55 @@ const speedStats = (spe: number) => ({ hp: 0, atk: 0, def: 0, spa: 0, spd: 0, sp
   ok(b.phase === 'shot' && (b as any).shotGold === true, 'gold release arms the gauge bonus');
 }
 
+// --- FEVER: a perfect streak arms a bonus-score next shot ------------------
+{
+  const b: any = new Battle(arena, team(), makeStage(3, 'T'), mulberry32(2));
+  b.spawnWave(0);
+  b.roomGrid = ROOM_LAYOUTS[3]; // not a gentle opener — releases move the streak
+  b.courtT = -9;
+  const release = () => {
+    const u = b.players[0];
+    b.phase = 'aim';
+    b.activeIdx = 0;
+    b.dragging = false;
+    b.pointerDown({ x: u.x, y: u.y });
+    b.pointerMove({ x: u.x + 60, y: u.y });
+    b.pointerUp();
+  };
+  b.sweetSpot = () => ({ c: b.charge(), hw: 1 }); // every release lands gold
+  release();
+  release();
+  ok(b.streak === 2 && b.fever === false, 'two perfects run the streak without arming FEVER');
+  release();
+  ok(b.streak === 3 && b.fever === true && b.shotFever === false, 'third perfect arms FEVER for the next shot');
+  ok(b.telop.texts().includes('FEVER'), 'FEVER arming pushes the banner');
+  release();
+  ok(b.shotFever === true && b.phase === 'shot', 'the armed launch runs as a fever shot');
+  const e = b.enemies[0];
+  e.dead = false;
+  e.shieldN = 0;
+  e.safeguard = false;
+  e.asleep = false;
+  e.armorN = 0; // a cracking shell would skew the ratio — same shell both hits
+  e.hp = e.maxHp = 100000; // no KO detours — the score read stays clean
+  const s0 = b.score;
+  b.hurt(e, 100, '#ffffff');
+  const feverGain = b.score - s0;
+  b.shotFever = false;
+  e.armorN = 0;
+  const s1 = b.score;
+  b.hurt(e, 100, '#ffffff');
+  const plainGain = b.score - s1;
+  ok(feverGain === Math.round(plainGain * 1.5) && feverGain > plainGain, `fever shot pays +50% score on hits (${plainGain} → ${feverGain})`);
+  b.sweetSpot = () => ({ c: -9, hw: 0 }); // no needle lands the band
+  release();
+  ok(b.streak === 0 && b.fever === false, 'a missed release spends the streak and disarms FEVER');
+  b.streak = 4;
+  b.fever = b.shotFever = true;
+  b.spawnWave(0);
+  ok(b.fever === false && b.shotFever === false, 'a new wave disarms FEVER');
+}
+
 // --- gauge difficulty: stronger species get tighter, drifting windows ------
 {
   const easy = new Battle(arena, [speciesById(129)!, ROSTER[1], ROSTER[2], ROSTER[3]], makeStage(3, 'T'), mulberry32(2));
